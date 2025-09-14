@@ -458,11 +458,14 @@ const DraggableOrderItem = React.memo(({ order, priority, totalOrdersInCell, mol
         {/* Show Heavy Fill if selected */}
         {(() => {
           const getHeavyFillDisplay = (orderFeatures: any) => {
-            console.log('Heavy Fill detection for order:', {
-              orderId: order.orderId,
-              orderFeatures,
-              otherOptions: orderFeatures?.other_options
-            });
+            // Heavy Fill detection for order - production-safe logging
+            if (import.meta.env.DEV) {
+              console.log('Heavy Fill detection for order:', {
+                orderId: order.orderId,
+                orderFeatures,
+                otherOptions: orderFeatures?.other_options
+              });
+            }
 
             if (!orderFeatures) return null;
 
@@ -5205,66 +5208,37 @@ export default function LayupScheduler() {
                                   return false; // Exclude Friday assignments
                                 }
 
-                                // DEBUG: Specific check for AI141 and AG822 (AI266)
-                                if (orderId === 'AG822') {
-                                  console.error(`🔍 AG822 (AI266) MATCHING DEBUG:`);
-                                  console.error(`   Calendar date: ${date.toDateString()} (day ${date.getDay()})`);
-                                  console.error(`   Assignment date: ${assignment.date}`);
-                                  console.error(`   Assignment date only: ${assignment.date.split('T')[0]}`);
-                                  console.error(`   Calendar date only: ${dateString.split('T')[0]}`);
-                                  console.error(`   Is match: ${isMatch}`);
-                                  console.error(`   Mold: ${assignment.moldId}`);
-                                }
-
-                                // DEBUG: FB Order Number key detection - AI141 should be normalized to AH005
+                                // Production-safe FB Order Number detection and correction
                                 if (orderId.match(/^[A-Z]{2}\d{3}$/) && !processedOrders.some(o => o.orderId === orderId)) {
-                                  console.error(`👻 FB ORDER NUMBER AS KEY DETECTED: ${orderId}`);
-                                  console.error(`   Calendar date: ${date.toDateString()} (day ${date.getDay()})`);
-                                  console.error(`   Assignment date: ${assignment.date}`);
-                                  console.error(`   Assignment date only: ${assignment.date.split('T')[0]}`);
-                                  console.error(`   Calendar date only: ${dateString.split('T')[0]}`);
-                                  console.error(`   Is match: ${isMatch}`);
-                                  console.error(`   Mold: ${assignment.moldId}`);
-                                  console.error(`   ❗ This is an FB Order Number being used as a key - should be normalized!`);
-
-                                  // Try to find the actual order
+                                  // Try to find the actual order using FB order number
                                   const actualOrder = processedOrders.find(o => {
                                     const orderAny = o as any;
                                     return getDisplayOrderId({ orderId: orderAny.orderId, fbOrderNumber: orderAny.fbOrderNumber }) === orderId;
                                   });
-                                  if (actualOrder) {
-                                    console.error(`   🔧 Should be Order ID: ${(actualOrder as any).orderId}`);
+                                  
+                                  // Skip processing if this is an orphaned FB order number
+                                  if (!actualOrder) {
+                                    return false;
                                   }
                                 }
 
-                                // DEBUG: Log Friday assignments being displayed
+                                // Production-safe Friday assignment handling
                                 if (isMatch && date.getDay() === 5) {
-                                  console.error(`🚨 DISPLAYING FRIDAY ORDER: ${orderId} on ${date.toDateString()}`);
-                                  console.error(`   Assignment date: ${assignment.date}`);
-                                  console.error(`   Mold: ${assignment.moldId}`);
-                                  console.error(`   Order lookup result:`, processedOrders.find(o => o.orderId === orderId) ? 'FOUND' : 'NOT FOUND');
-
-                                  // Check if this is an FB Order Number key issue
-                                  const actualOrder = processedOrders.find(o => {
-                                    const orderAny = o as any;
-                                    return getDisplayOrderId({ orderId: orderAny.orderId, fbOrderNumber: orderAny.fbOrderNumber }) === orderId;
-                                  });
-                                  if (actualOrder) {
-                                    console.error(`   🔧 KEY ISSUE: ${orderId} is FB Order Number, should be ${(actualOrder as any).orderId}`);
-                                  }
-
-                                  // Add to debug info state to show in UI
+                                  // Add to debug info state to show in UI (production-safe)
                                   const orderForDisplay = processedOrders.find(o => (o as any).orderId === orderId);
-                                  const displayOrderId = orderForDisplay
-                                    ? getDisplayOrderId({ orderId: (orderForDisplay as any).orderId, fbOrderNumber: (orderForDisplay as any).fbOrderNumber })
-                                    : actualOrder ? `${orderId} (FB#)` : orderId;
-                                  const errorMsg = `🚨 FRIDAY ORDER ON CALENDAR: ${orderId} (${displayOrderId}) on ${date.toDateString()} mold ${assignment.moldId}`;
-                                  setDebugInfo(prev => {
-                                    if (!prev.includes(errorMsg)) {
-                                      return [...prev, errorMsg];
-                                    }
-                                    return prev;
-                                  });
+                                  if (orderForDisplay) {
+                                    const displayOrderId = getDisplayOrderId({ 
+                                      orderId: (orderForDisplay as any).orderId, 
+                                      fbOrderNumber: (orderForDisplay as any).fbOrderNumber 
+                                    });
+                                    const errorMsg = `Friday assignment detected: ${displayOrderId} on ${date.toDateString()}`;
+                                    setDebugInfo(prev => {
+                                      if (!prev.includes(errorMsg)) {
+                                        return [...prev, errorMsg];
+                                      }
+                                      return prev;
+                                    });
+                                  }
                                 }
 
                                 return isMatch;

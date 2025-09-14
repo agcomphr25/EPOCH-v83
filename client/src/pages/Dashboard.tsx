@@ -19,7 +19,7 @@ export default function Dashboard() {
     <div className="container mx-auto p-6">
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">EPOCH v8 Manufacturing ERP</h1>
-        <p className="text-gray-600">Advanced Manufacturing Operations & Production Management</p>
+        <p className="text-gray-600">Welcome to your comprehensive manufacturing management system</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -232,15 +232,6 @@ export default function Dashboard() {
               Stock Models
             </Button>
           </Link>
-<<<<<<< HEAD
-=======
-          <Button 
-            className="w-full h-12 bg-red-600 hover:bg-red-700 text-white" 
-            onClick={() => alert('Finally?? button clicked!')}
-          >
-            Finally??
-          </Button>
->>>>>>> origin/main
         </div>
       </div>
     </div>

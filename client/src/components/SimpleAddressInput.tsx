@@ -117,20 +117,9 @@ export default function SimpleAddressInput({ label, value, onChange, required = 
       const data = await response.json();
       console.log('🔧 ZIP code lookup response:', data);
       
-      // Check if we got ZIP code information from either fullAddress response or suggestions
-      if (data.fullAddress && data.fullAddress.components && data.fullAddress.components.zipcode) {
-        parsedAddress.zipCode = data.fullAddress.components.zipcode;
-        console.log('🔧 ZIP code from fullAddress response:', parsedAddress.zipCode);
-      } else if (data.suggestions && data.suggestions.length > 0 && data.suggestions[0].zipCode) {
+      // Check if we got ZIP code information
+      if (data.suggestions && data.suggestions.length > 0 && data.suggestions[0].zipCode) {
         parsedAddress.zipCode = data.suggestions[0].zipCode;
-        console.log('🔧 ZIP code from suggestions response:', parsedAddress.zipCode);
-      } else {
-        // Try to extract ZIP code from the suggestion text itself
-        const zipMatch = suggestion.match(/\b(\d{5}(?:-\d{4})?)\b/);
-        if (zipMatch) {
-          parsedAddress.zipCode = zipMatch[1];
-          console.log('🔧 ZIP code extracted from suggestion text:', parsedAddress.zipCode);
-        }
       }
     } catch (error) {
       console.log('🔧 ZIP code lookup failed, using address without ZIP:', error);

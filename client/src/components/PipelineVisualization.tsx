@@ -6,15 +6,13 @@ import { Progress } from '@/components/ui/progress';
 import { getDisplayOrderId } from '@/lib/orderUtils';
 
 const departments = [
-  { name: 'P1 Production Queue', color: 'bg-[#7BAFD4]' },
-  { name: 'Layup/Plugging', color: 'bg-[#7BAFD4]' },
-  { name: 'Barcode', color: 'bg-[#7BAFD4]' },
+  { name: 'Layup', color: 'bg-[#7BAFD4]' },
+  { name: 'Plugging', color: 'bg-[#7BAFD4]' },
   { name: 'CNC', color: 'bg-[#7BAFD4]' },
-  { name: 'Gunsmith', color: 'bg-[#7BAFD4]' },
   { name: 'Finish', color: 'bg-[#7BAFD4]' },
-  { name: 'Finish QC', color: 'bg-[#7BAFD4]' },
+  { name: 'Gunsmith', color: 'bg-[#7BAFD4]' },
   { name: 'Paint', color: 'bg-[#7BAFD4]' },
-  { name: 'Shipping QC', color: 'bg-[#7BAFD4]' },
+  { name: 'QC', color: 'bg-[#7BAFD4]' },
   { name: 'Shipping', color: 'bg-[#7BAFD4]' }
 ];
 
@@ -113,12 +111,12 @@ const DepartmentVisualization = ({ department, orders, getModelDisplayName }: { 
 };
 
 export default function PipelineVisualization() {
-  const { data: pipelineCounts, isLoading: countsLoading } = useQuery<Record<string, number>>({
+  const { data: pipelineCounts, isLoading: countsLoading } = useQuery({
     queryKey: ['/api/orders/pipeline-counts'],
     refetchInterval: 30000 // Refresh every 30 seconds
   });
 
-  const { data: pipelineDetails, isLoading: detailsLoading } = useQuery<Record<string, OrderDetail[]>>({
+  const { data: pipelineDetails, isLoading: detailsLoading } = useQuery({
     queryKey: ['/api/orders/pipeline-details'],
     refetchInterval: 30000 // Refresh every 30 seconds
   });
@@ -163,16 +161,14 @@ export default function PipelineVisualization() {
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-10 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
           {departments.map((dept) => {
-            // Get count and orders for this department
             const count = pipelineCounts?.[dept.name] || 0;
+            const percentage = totalOrders > 0 ? (count / totalOrders) * 100 : 0;
             const orders = pipelineDetails?.[dept.name] || [];
             
-            const percentage = totalOrders > 0 ? (count / totalOrders) * 100 : 0;
-            
-            // Determine if department should be highlighted (more than 45 stocks)
-            const isOverloaded = count > 45;
+            // Determine if department should be highlighted (more than 25 stocks)
+            const isOverloaded = count > 25;
             
             return (
               <div key={dept.name} className="text-center space-y-2">
@@ -226,7 +222,7 @@ export default function PipelineVisualization() {
           <div className="flex items-center justify-center gap-4 text-xs text-gray-600">
             <div className="flex items-center gap-1">
               <div className="w-3 h-3 rounded" style={{backgroundColor: '#FFFF00'}}></div>
-              <span>Department Card: {'>'}45 Stocks</span>
+              <span>Department Card: {'>'}25 Stocks</span>
             </div>
           </div>
         </div>
@@ -234,7 +230,7 @@ export default function PipelineVisualization() {
         <div className="mt-6 pt-4 border-t">
           <div className="flex items-center justify-between text-sm text-gray-600">
             <span>Pipeline Flow Direction:</span>
-            <div className="flex items-center space-x-2 flex-wrap">
+            <div className="flex items-center space-x-2">
               {departments.map((dept, index) => (
                 <React.Fragment key={dept.name}>
                   <span className="text-xs">{dept.name}</span>

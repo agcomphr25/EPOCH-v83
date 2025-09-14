@@ -16,7 +16,3 @@ export { default as orderAttachmentsRouter } from './routes/orderAttachments';
 export { default as tasksRouter } from './routes/tasks';
 export { default as secureVerificationRouter } from './routes/secureVerification';
 export { default as communicationsRouter } from './routes/communications';
-export { default as paymentsRouter } from './routes/payments';
-export { default as shippingRoutes } from './routes/shipping';
-export { default as shippingPdfRoutes } from './routes/shippingPdf';
-export { default as commercialInvoiceRoutes } from './routes/commercialInvoice';

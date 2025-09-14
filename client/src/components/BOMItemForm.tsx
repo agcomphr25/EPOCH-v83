@@ -116,7 +116,7 @@ export function BOMItemForm({ bomId, item, onSuccess, onCancel }: BOMItemFormPro
 
   // Fetch inventory items
   const { data: inventoryItems, isLoading: isLoadingInventory } = useQuery<InventoryItem[]>({
-    queryKey: ['/api/inventory'],
+    queryKey: ['/api/inventory/items'],
   });
 
   const form = useForm<BomItemFormData>({
@@ -134,12 +134,12 @@ export function BOMItemForm({ bomId, item, onSuccess, onCancel }: BOMItemFormPro
   const mutation = useMutation({
     mutationFn: async (data: BomItemFormData) => {
       if (isEditing) {
-        return apiRequest(`/api/boms/${bomId}/items/${item.id}`, {
+        return apiRequest(`/api/p2-boms/${bomId}/items/${item.id}`, {
           method: "PUT",
           body: data,
         });
       } else {
-        return apiRequest(`/api/boms/${bomId}/items`, {
+        return apiRequest(`/api/p2-boms/${bomId}/items`, {
           method: "POST",
           body: data,
         });

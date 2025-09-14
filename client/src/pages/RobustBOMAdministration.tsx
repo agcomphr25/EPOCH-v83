@@ -66,18 +66,18 @@ export default function RobustBOMAdministration() {
 
   // Fetch all BOMs for robust administration
   const { data: boms = [], isLoading } = useQuery<BomDefinition[]>({
-    queryKey: ["/api/boms"],
+    queryKey: ["/api/p2-boms"],
   });
 
   // Delete BOM mutation
   const deleteBOMMutation = useMutation({
     mutationFn: async (bomId: number) => {
-      await apiRequest(`/api/boms/${bomId}`, {
+      await apiRequest(`/api/p2-boms/${bomId}`, {
         method: "DELETE",
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/boms"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/p2-boms"] });
       toast.success("BOM deleted successfully");
     },
     onError: () => {
@@ -101,13 +101,13 @@ export default function RobustBOMAdministration() {
 
   const handleBOMCreated = () => {
     setIsNewBOMOpen(false);
-    queryClient.invalidateQueries({ queryKey: ["/api/boms"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/p2-boms"] });
     toast.success("BOM created successfully");
   };
 
   const handleBOMUpdated = () => {
     setEditingBOM(null);
-    queryClient.invalidateQueries({ queryKey: ["/api/boms"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/p2-boms"] });
     toast.success("BOM updated successfully");
   };
 

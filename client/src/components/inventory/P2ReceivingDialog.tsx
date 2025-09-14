@@ -18,6 +18,7 @@ interface P2ReceivingData {
   lotNumber: string;
   aluminumHeatNumber: string;
   barcode: string;
+  barcodeQuantity: number;
 }
 
 interface P2ReceivingDialogProps {
@@ -58,7 +59,8 @@ export default function P2ReceivingDialog({ open, onOpenChange, item }: P2Receiv
     batchNumber: '',
     lotNumber: '',
     aluminumHeatNumber: '',
-    barcode: generateBarcode()
+    barcode: generateBarcode(),
+    barcodeQuantity: 30
   });
 
   // Update item code when item changes
@@ -115,7 +117,8 @@ export default function P2ReceivingDialog({ open, onOpenChange, item }: P2Receiv
       batchNumber: '',
       lotNumber: '',
       aluminumHeatNumber: '',
-      barcode: generateBarcode()
+      barcode: generateBarcode(),
+      barcodeQuantity: 30
     });
   };
 
@@ -204,7 +207,7 @@ export default function P2ReceivingDialog({ open, onOpenChange, item }: P2Receiv
             </style>
           </head>
           <body>
-            ${Array.from({ length: 30 }, (_, i) => `
+            ${Array.from({ length: formData.barcodeQuantity }, (_, i) => `
               <div class="barcode-label">
                 <div class="part-info">${formData.itemCode} ${item?.name || 'P2 Product'}</div>
                 <div class="barcode">*${formData.barcode}*</div>
@@ -217,13 +220,13 @@ export default function P2ReceivingDialog({ open, onOpenChange, item }: P2Receiv
                 // Add print instructions for user
                 document.body.insertAdjacentHTML('beforeend', 
                   '<div style="position:fixed;top:10px;left:10px;background:#fff;padding:10px;border:2px solid #000;z-index:1000;font-size:12px;width:300px;" id="print-instructions">' +
-                  '<strong>30 Labels - Print Settings Required:</strong><br/>' +
+                  '<strong>' + formData.barcodeQuantity + ' Labels - Print Settings Required:</strong><br/>' +
                   '• Paper Size: Letter (8.5" x 11")<br/>' +
                   '• Margins: 0.5" top, 0.25" sides/bottom<br/>' +
                   '• Scale: 100%<br/>' +
                   '• Background graphics: ON<br/>' +
                   '• Layout: 3 across × 10 down<br/>' +
-                  '<button onclick="document.getElementById(\'print-instructions\').style.display=\'none\';window.print();">Print 30 Labels</button>' +
+                  '<button onclick="document.getElementById(\'print-instructions\').style.display=\'none\';window.print();">Print ' + formData.barcodeQuantity + ' Labels</button>' +
                   '</div>'
                 );
               }
@@ -284,7 +287,7 @@ export default function P2ReceivingDialog({ open, onOpenChange, item }: P2Receiv
                   </Button>
                   <Button onClick={handlePrintBarcode} variant="outline" size="sm">
                     <Printer className="h-4 w-4 mr-1" />
-                    Print (30x)
+                    Print ({formData.barcodeQuantity}x)
                   </Button>
                 </div>
               </div>
@@ -292,7 +295,7 @@ export default function P2ReceivingDialog({ open, onOpenChange, item }: P2Receiv
           </Card>
 
           {/* Basic Information */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-3 gap-4">
             <div>
               <Label htmlFor="itemCode">Item Code (Auto-filled)</Label>
               <Input
@@ -311,6 +314,19 @@ export default function P2ReceivingDialog({ open, onOpenChange, item }: P2Receiv
                 value={formData.quantity}
                 onChange={(e) => setFormData(prev => ({ ...prev, quantity: parseInt(e.target.value) || 1 }))}
                 min="1"
+                data-testid="input-quantity"
+              />
+            </div>
+            <div>
+              <Label htmlFor="barcodeQuantity">Barcode Labels to Print</Label>
+              <Input
+                id="barcodeQuantity"
+                type="number"
+                value={formData.barcodeQuantity}
+                onChange={(e) => setFormData(prev => ({ ...prev, barcodeQuantity: parseInt(e.target.value) || 1 }))}
+                min="1"
+                max="100"
+                data-testid="input-barcode-quantity"
               />
             </div>
           </div>

@@ -3858,6 +3858,8 @@ export default function LayupScheduler() {
                       <div>
                         <label className="text-sm font-medium mb-1 block">Mold Name</label>
                         <Input
+                          id="new-mold-name-input"
+                          name="moldName"
                           placeholder="e.g., Alpine Hunter, Tactical Hunter, etc."
                           value={newMold.moldName}
                           onChange={(e) => setNewMold(prev => ({...prev, moldName: e.target.value}))}
@@ -3917,6 +3919,8 @@ export default function LayupScheduler() {
                           <div>
                             <label className="text-sm font-medium mb-1 block">Number of Molds</label>
                             <Input
+                              id="bulk-mold-count-input"
+                              name="bulkMoldCount"
                               type="number"
                               placeholder="14"
                               value={bulkMoldCount}
@@ -3936,6 +3940,8 @@ export default function LayupScheduler() {
                           <div>
                             <label className="text-sm font-medium mb-1 block">Instance Number</label>
                             <Input
+                              id="new-mold-instance-number-input"
+                              name="instanceNumber"
                               type="number"
                               placeholder="1"
                               value={newMold.instanceNumber}
@@ -3948,6 +3954,8 @@ export default function LayupScheduler() {
                         <div className={isBulkMode ? 'col-span-2' : ''}>
                           <label className="text-sm font-medium mb-1 block">Daily Capacity</label>
                           <Input
+                            id="new-mold-daily-capacity-input"
+                            name="dailyCapacity"
                             type="number"
                             placeholder="2"
                             value={newMold.multiplier}
@@ -3979,6 +3987,7 @@ export default function LayupScheduler() {
                     molds.map(mold => (
                       <div key={mold.moldId} className="flex items-center space-x-4 p-4 border rounded-lg bg-gray-50 dark:bg-gray-800">
                         <Checkbox
+                          id={`mold-enabled-${mold.moldId}`}
                           checked={pendingMoldChanges[mold.moldId]?.enabled ?? (mold.enabled ?? true)}
                           onCheckedChange={(checked) => {
                             const currentChanges = pendingMoldChanges[mold.moldId] || {};
@@ -3996,6 +4005,8 @@ export default function LayupScheduler() {
                           <div className="flex items-center space-x-2 mb-1">
                             {editingMoldId === mold.moldId ? (
                               <Input
+                                id={`edit-mold-name-${mold.moldId}`}
+                                name="editMoldName"
                                 value={editingMoldName}
                                 onChange={(e) => setEditingMoldName(e.target.value)}
                                 className="font-medium text-base h-6 px-2"
@@ -4118,6 +4129,8 @@ export default function LayupScheduler() {
                         <div className="flex items-center space-x-2">
                           <label className="text-sm font-medium">Daily Capacity:</label>
                           <Input
+                            id={`mold-daily-capacity-${mold.moldId}`}
+                            name="moldDailyCapacity"
                             type="number"
                             value={pendingMoldChanges[mold.moldId]?.multiplier ?? mold.multiplier}
                             min={1}
@@ -4235,6 +4248,8 @@ export default function LayupScheduler() {
                                   </label>
                                   <div className="flex items-center space-x-2">
                                     <Input
+                                      id={`employee-hours-${employee.id}`}
+                                      name="employeeHours"
                                       type="number"
                                       value={pendingEmployeeChanges[employee.id]?.hours ?? (employee.hours || 8)}
                                       min={1}
@@ -4266,6 +4281,8 @@ export default function LayupScheduler() {
                                   </label>
                                   <div className="flex items-center space-x-2">
                                     <Input
+                                      id={`employee-rate-${employee.id}`}
+                                      name="employeeRate"
                                       type="number"
                                       step="0.25"
                                       value={pendingEmployeeChanges[employee.id]?.rate ?? (employee.rate || 1.25)}

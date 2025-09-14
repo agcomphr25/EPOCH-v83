@@ -5028,10 +5028,14 @@ export class DatabaseStorage implements IStorage {
 
   async createBOM(data: InsertBomDefinition): Promise<BomDefinition> {
     try {
+      // Exclude id and timestamps as they are auto-generated
+      const { id, createdAt, updatedAt, ...cleanData } = data as any;
+      
       const [bom] = await db
         .insert(bomDefinitions)
         .values({
-          ...data,
+          ...cleanData,
+          createdAt: new Date(),
           updatedAt: new Date()
         })
         .returning();

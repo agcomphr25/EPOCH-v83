@@ -3572,3 +3572,238 @@ export type MrpCalculationHistory = typeof mrpCalculationHistory.$inferSelect;
 
 export type VendorPart = typeof vendorParts.$inferSelect;
 export type InsertVendorPart = z.infer<typeof insertVendorPartSchema>;
+
+// ============================================================================
+// ENHANCED INVENTORY MANAGEMENT & MRP SYSTEM EXTENSIONS
+// ============================================================================
+
+// Allocation Details - Track specific demand-to-supply pegging
+export const allocationDetails = pgTable('allocation_details', {
+  id: serial('id').primaryKey(),
+  allocationId: text('allocation_id').notNull().unique(), // Auto-generated unique ID
+  
+  // Part and location
+  partId: text('part_id').notNull().references(() => robustParts.id),
+  locationId: text('location_id').notNull().default('MAIN'),
+  
+  // Allocation details
+  allocatedQty: real('allocated_qty').notNull(),
+  consumedQty: real('consumed_qty').notNull().default(0),
+  remainingQty: real('remaining_qty').notNull(), // Calculated field: allocated - consumed
+  
+  // Demand source (what's requesting this allocation)
+  demandType: text('demand_type').notNull(), // CUSTOMER_ORDER, PRODUCTION_ORDER, FORECAST, SAFETY_STOCK
+  demandOrderId: text('demand_order_id'), // Customer order ID driving this demand
+  demandCustomerId: text('demand_customer_id'), // Customer ID for traceability
+  demandDueDate: timestamp('demand_due_date'), // When this allocation is needed
+  demandPriority: integer('demand_priority').default(50), // 1-100, lower = higher priority
+  
+  // Supply source (what's fulfilling this allocation)
+  supplyType: text('supply_type').notNull(), // ON_HAND, PURCHASE_ORDER, PRODUCTION_ORDER, TRANSFER
+  supplyOrderId: text('supply_order_id'), // PO or production order fulfilling this
+  supplyVendorId: text('supply_vendor_id'), // Vendor if from PO
+  supplyAvailableDate: timestamp('supply_available_date'), // When supply becomes available
+  
+  // Lot/Batch tracking for traceability
+  lotNumber: text('lot_number'), // Lot/batch number for tracking
+  serialNumbers: text('serial_numbers').array(), // Array of serial numbers if applicable
+  expirationDate: timestamp('expiration_date'), // For materials with shelf life
+  
+  // Status and lifecycle
+  allocationStatus: text('allocation_status').default('ALLOCATED').notNull(), // ALLOCATED, RESERVED, CONSUMED, RELEASED
+  reservationDate: timestamp('reservation_date'), // When allocation was first reserved
+  consumptionStartDate: timestamp('consumption_start_date'), // When consumption began
+  fullyConsumedDate: timestamp('fully_consumed_date'), // When allocation was fully consumed
+  
+  // Atomicity protection
+  lockVersion: integer('lock_version').default(0).notNull(), // Optimistic locking
+  isLocked: boolean('is_locked').default(false), // Pessimistic locking for critical operations
+  lockedBy: text('locked_by'), // User/process that locked this allocation
+  lockedAt: timestamp('locked_at'), // When the lock was acquired
+  
+  // Audit and tracking
+  createdBy: text('created_by').notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedBy: text('updated_by'),
+  updatedAt: timestamp('updated_at').defaultNow(),
+  notes: text('notes'),
+});
+
+// Vendor Price Breaks - Volume-based pricing from vendors
+export const vendorPriceBreaks = pgTable('vendor_price_breaks', {
+  id: serial('id').primaryKey(),
+  vendorPartId: integer('vendor_part_id').notNull().references(() => vendorParts.id),
+  
+  // Price break tiers
+  minQty: real('min_qty').notNull(), // Minimum quantity for this price
+  maxQty: real('max_qty'), // Maximum quantity (null = unlimited)
+  unitPrice: real('unit_price').notNull(),
+  
+  // Pricing terms
+  currencyCode: text('currency_code').default('USD').notNull(),
+  paymentTerms: text('payment_terms'), // NET30, 2/10 NET30, etc.
+  validFrom: timestamp('valid_from').notNull(),
+  validUntil: timestamp('valid_until'),
+  
+  // Status
+  isActive: boolean('is_active').default(true),
+  notes: text('notes'),
+  
+  // Tracking
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Outside Processing Batches - Enhanced batch management
+export const outsideProcessingBatches = pgTable('outside_processing_batches', {
+  id: serial('id').primaryKey(),
+  batchId: text('batch_id').notNull().unique(), // Auto-generated batch ID
+  
+  // Batch information
+  jobId: text('job_id').notNull().references(() => outsideProcessingJobs.jobId),
+  batchName: text('batch_name').notNull(),
+  processType: text('process_type').notNull(),
+  
+  // Part tracking
+  partId: text('part_id').notNull().references(() => robustParts.id),
+  lotNumber: text('lot_number'),
+  
+  // Quantities
+  plannedQty: integer('planned_qty').notNull(),
+  shippedQty: integer('shipped_qty').default(0),
+  receivedQty: integer('received_qty').default(0),
+  scrapQty: integer('scrap_qty').default(0),
+  
+  // Timing
+  plannedShipDate: timestamp('planned_ship_date').notNull(),
+  actualShipDate: timestamp('actual_ship_date'),
+  plannedReceiveDate: timestamp('planned_receive_date').notNull(),
+  actualReceiveDate: timestamp('actual_receive_date'),
+  
+  // Cost tracking
+  estimatedCostPerPart: real('estimated_cost_per_part').default(0),
+  actualCostPerPart: real('actual_cost_per_part').default(0),
+  setupCost: real('setup_cost').default(0),
+  
+  // Status and tracking
+  status: text('status').default('PLANNED').notNull(), // PLANNED, SHIPPED, IN_PROCESS, PARTIAL_RECEIPT, COMPLETED
+  packingSlipNumber: text('packing_slip_number'),
+  receivingNotes: text('receiving_notes'),
+  
+  // Integration with production
+  wipLocationId: text('wip_location_id'), // Work-in-process location at vendor
+  returnLocationId: text('return_location_id').default('MAIN'), // Where parts return to
+  
+  // Tracking
+  createdBy: text('created_by').notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// MRP Planning Parameters - Enhanced MRP configuration
+export const mrpPlanningParameters = pgTable('mrp_planning_parameters', {
+  id: serial('id').primaryKey(),
+  parameterId: text('parameter_id').notNull().unique(),
+  
+  // Planning scope
+  partId: text('part_id'), // null = global parameters
+  planningGroup: text('planning_group').default('WEEKLY').notNull(), // DAILY, WEEKLY, MONTHLY
+  
+  // Time fencing
+  demandTimeFenceDays: integer('demand_time_fence_days').default(7), // Frozen demand period
+  planningTimeFenceDays: integer('planning_time_fence_days').default(30), // Planning horizon
+  
+  // Lot sizing
+  lotSizingMethod: text('lot_sizing_method').default('LOT_FOR_LOT').notNull(), // LOT_FOR_LOT, EOQ, FIXED_LOT_SIZE, MIN_MAX
+  fixedLotSize: real('fixed_lot_size'), // For FIXED_LOT_SIZE method
+  lotSizeMultiple: real('lot_size_multiple').default(1), // Round lot sizes to multiples
+  
+  // Safety stock
+  safetyStockMethod: text('safety_stock_method').default('FIXED').notNull(), // FIXED, PERCENTAGE, DYNAMIC
+  safetyStockDays: integer('safety_stock_days').default(0),
+  safetyStockPercent: real('safety_stock_percent').default(0),
+  
+  // Planning frequency
+  planningFrequency: text('planning_frequency').default('WEEKLY').notNull(), // DAILY, WEEKLY, MONTHLY
+  lastPlanningRun: timestamp('last_planning_run'),
+  nextPlanningRun: timestamp('next_planning_run'),
+  
+  // Status
+  isActive: boolean('is_active').default(true),
+  effectiveDate: timestamp('effective_date').notNull().defaultNow(),
+  expirationDate: timestamp('expiration_date'),
+  
+  // Tracking
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Insert Schemas for Enhanced System
+export const insertAllocationDetailSchema = createInsertSchema(allocationDetails).omit({
+  id: true,
+  allocationId: true, // Auto-generated
+  remainingQty: true, // Calculated field
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  partId: z.string().min(1, "Part ID is required"),
+  locationId: z.string().min(1, "Location ID is required"),
+  allocatedQty: z.number().positive("Allocated quantity must be positive"),
+  demandType: z.enum(['CUSTOMER_ORDER', 'PRODUCTION_ORDER', 'FORECAST', 'SAFETY_STOCK']),
+  supplyType: z.enum(['ON_HAND', 'PURCHASE_ORDER', 'PRODUCTION_ORDER', 'TRANSFER']),
+  allocationStatus: z.enum(['ALLOCATED', 'RESERVED', 'CONSUMED', 'RELEASED']).default('ALLOCATED'),
+  createdBy: z.string().min(1, "Created by is required"),
+});
+
+export const insertVendorPriceBreakSchema = createInsertSchema(vendorPriceBreaks).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  vendorPartId: z.number().min(1, "Vendor part ID is required"),
+  minQty: z.number().positive("Minimum quantity must be positive"),
+  unitPrice: z.number().min(0, "Unit price must be non-negative"),
+  validFrom: z.coerce.date(),
+});
+
+export const insertOutsideProcessingBatchSchema = createInsertSchema(outsideProcessingBatches).omit({
+  id: true,
+  batchId: true, // Auto-generated
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  jobId: z.string().min(1, "Job ID is required"),
+  batchName: z.string().min(1, "Batch name is required"),
+  processType: z.string().min(1, "Process type is required"),
+  partId: z.string().min(1, "Part ID is required"),
+  plannedQty: z.number().min(1, "Planned quantity must be at least 1"),
+  plannedShipDate: z.coerce.date(),
+  plannedReceiveDate: z.coerce.date(),
+  createdBy: z.string().min(1, "Created by is required"),
+});
+
+export const insertMrpPlanningParametersSchema = createInsertSchema(mrpPlanningParameters).omit({
+  id: true,
+  parameterId: true, // Auto-generated
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  planningGroup: z.enum(['DAILY', 'WEEKLY', 'MONTHLY']).default('WEEKLY'),
+  lotSizingMethod: z.enum(['LOT_FOR_LOT', 'EOQ', 'FIXED_LOT_SIZE', 'MIN_MAX']).default('LOT_FOR_LOT'),
+  safetyStockMethod: z.enum(['FIXED', 'PERCENTAGE', 'DYNAMIC']).default('FIXED'),
+  planningFrequency: z.enum(['DAILY', 'WEEKLY', 'MONTHLY']).default('WEEKLY'),
+  effectiveDate: z.coerce.date(),
+});
+
+// Enhanced Types
+export type AllocationDetail = typeof allocationDetails.$inferSelect;
+export type InsertAllocationDetail = z.infer<typeof insertAllocationDetailSchema>;
+
+export type VendorPriceBreak = typeof vendorPriceBreaks.$inferSelect;
+export type InsertVendorPriceBreak = z.infer<typeof insertVendorPriceBreakSchema>;
+
+export type OutsideProcessingBatch = typeof outsideProcessingBatches.$inferSelect;
+export type InsertOutsideProcessingBatch = z.infer<typeof insertOutsideProcessingBatchSchema>;
+
+export type MrpPlanningParameters = typeof mrpPlanningParameters.$inferSelect;
+export type InsertMrpPlanningParameters = z.infer<typeof insertMrpPlanningParametersSchema>;

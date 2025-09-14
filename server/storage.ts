@@ -23,6 +23,16 @@ import {
   poProducts,
   // Refund requests table
   refundRequests,
+  // Robust Parts and BOM tables
+  robustParts, robustBomLines, partCostHistory, partAuditLog, bomAuditLog,
+  // Inventory Management tables
+  inventoryBalances, inventoryTransactions,
+  // MRP tables
+  mrpRequirements, mrpCalculationHistory,
+  // Outside Processing tables
+  outsideProcessingLocations, outsideProcessingJobs,
+  // Vendor Parts table
+  vendorParts,
   // Types
   type User, type InsertUser, type Order, type InsertOrder, type CSVData, type InsertCSVData,
   type CustomerType, type InsertCustomerType,
@@ -96,6 +106,25 @@ import {
   type RefundRequest, type InsertRefundRequest,
   // Vendor types
   type Vendor, type InsertVendor,
+  // Robust Parts and BOM types
+  type RobustPart, type InsertRobustPart,
+  type RobustBomLine, type InsertRobustBomLine,
+  // Inventory Management types
+  type InventoryBalance, type InsertInventoryBalance,
+  type InventoryTransaction, type InsertInventoryTransaction,
+  // MRP types
+  type MrpRequirement, type InsertMrpRequirement,
+  type MrpCalculationHistory,
+  // Outside Processing types
+  type OutsideProcessingLocation, type InsertOutsideProcessingLocation,
+  type OutsideProcessingJob, type InsertOutsideProcessingJob,
+  // Vendor Parts types
+  type VendorPart, type InsertVendorPart,
+  // Enhanced Inventory Management types
+  type AllocationDetail, type InsertAllocationDetail,
+  type VendorPriceBreak, type InsertVendorPriceBreak,
+  type OutsideProcessingBatch, type InsertOutsideProcessingBatch,
+  type MrpPlanningParameters, type InsertMrpPlanningParameters,
 
 
 } from "./schema";
@@ -637,6 +666,137 @@ export interface IStorage {
   createVendor(data: InsertVendor): Promise<Vendor>;
   updateVendor(id: number, data: Partial<InsertVendor>): Promise<Vendor>;
   deleteVendor(id: number): Promise<void>;
+
+  // ============================================================================
+  // INVENTORY MANAGEMENT & MRP METHODS
+  // ============================================================================
+
+  // Robust Parts Management
+  getAllRobustParts(params?: { q?: string; type?: string; active?: boolean; page?: number; limit?: number }): Promise<{ data: RobustPart[]; total: number }>;
+  getRobustPart(id: string): Promise<RobustPart | undefined>;
+  getRobustPartBySku(sku: string): Promise<RobustPart | undefined>;
+  createRobustPart(data: InsertRobustPart): Promise<RobustPart>;
+  updateRobustPart(id: string, data: Partial<InsertRobustPart>): Promise<RobustPart>;
+  deleteRobustPart(id: string): Promise<void>;
+
+  // Robust BOM Management
+  getBomLinesForPart(partId: string): Promise<RobustBomLine[]>;
+  getBomLinesByParent(parentPartId: string): Promise<RobustBomLine[]>;
+  createBomLine(data: InsertRobustBomLine): Promise<RobustBomLine>;
+  updateBomLine(id: string, data: Partial<InsertRobustBomLine>): Promise<RobustBomLine>;
+  deleteBomLine(id: string): Promise<void>;
+  explodeBom(partId: string, quantity: number): Promise<{ partId: string; totalQtyNeeded: number; level: number }[]>;
+
+  // Inventory Balance Management
+  getInventoryBalance(partId: string, locationId?: string): Promise<InventoryBalance | undefined>;
+  getAllInventoryBalances(params?: { partId?: string; locationId?: string; lowStock?: boolean }): Promise<InventoryBalance[]>;
+  updateInventoryBalance(partId: string, locationId: string, data: Partial<InsertInventoryBalance>): Promise<InventoryBalance>;
+  
+  // Inventory Transaction Management
+  getAllInventoryTransactions(params?: { partId?: string; transactionType?: string; dateFrom?: Date; dateTo?: Date; page?: number; limit?: number }): Promise<{ data: InventoryTransaction[]; total: number }>;
+  getInventoryTransaction(transactionId: string): Promise<InventoryTransaction | undefined>;
+  createInventoryTransaction(data: InsertInventoryTransaction): Promise<InventoryTransaction>;
+  processInventoryTransaction(data: InsertInventoryTransaction): Promise<{ transaction: InventoryTransaction; updatedBalance: InventoryBalance }>;
+
+  // Progressive Allocation Management
+  allocateInventoryToOrder(partId: string, quantity: number, customerOrderId: string): Promise<{ success: boolean; allocated: number; shortage: number }>;
+  commitInventoryFromOrder(partId: string, quantity: number, customerOrderId: string): Promise<void>;
+  consumeAllocatedInventory(partId: string, quantity: number, productionOrderId: string): Promise<void>;
+  releaseAllocatedInventory(partId: string, customerOrderId: string): Promise<void>;
+
+  // MRP Calculation Methods
+  calculateMrpRequirements(scope?: 'ALL' | 'SPECIFIC_PART' | 'SPECIFIC_ORDER', scopeId?: string): Promise<{ calculationId: string; requirementsGenerated: number; shortagesIdentified: number }>;
+  getMrpRequirements(params?: { partId?: string; status?: string; needDateFrom?: Date; needDateTo?: Date }): Promise<MrpRequirement[]>;
+  getMrpShortages(): Promise<MrpRequirement[]>;
+  updateMrpRequirement(requirementId: string, data: Partial<InsertMrpRequirement>): Promise<MrpRequirement>;
+  closeMrpRequirement(requirementId: string): Promise<void>;
+
+  // Outside Processing Management
+  getAllOutsideProcessingLocations(): Promise<OutsideProcessingLocation[]>;
+  getOutsideProcessingLocation(locationId: string): Promise<OutsideProcessingLocation | undefined>;
+  createOutsideProcessingLocation(data: InsertOutsideProcessingLocation): Promise<OutsideProcessingLocation>;
+  updateOutsideProcessingLocation(locationId: string, data: Partial<InsertOutsideProcessingLocation>): Promise<OutsideProcessingLocation>;
+  
+  getAllOutsideProcessingJobs(params?: { vendorId?: string; status?: string; locationId?: string }): Promise<OutsideProcessingJob[]>;
+  getOutsideProcessingJob(jobId: string): Promise<OutsideProcessingJob | undefined>;
+  createOutsideProcessingJob(data: InsertOutsideProcessingJob): Promise<OutsideProcessingJob>;
+  updateOutsideProcessingJob(jobId: string, data: Partial<InsertOutsideProcessingJob>): Promise<OutsideProcessingJob>;
+  returnPartsFromOutsideProcessing(jobId: string, partsReturned: number, scrapQty?: number): Promise<OutsideProcessingJob>;
+
+  // Vendor Parts Management
+  getVendorPartsForPart(partId: string): Promise<VendorPart[]>;
+  getVendorPartsForVendor(vendorId: string): Promise<VendorPart[]>;
+  createVendorPart(data: InsertVendorPart): Promise<VendorPart>;
+  updateVendorPart(id: number, data: Partial<InsertVendorPart>): Promise<VendorPart>;
+  deleteVendorPart(id: number): Promise<void>;
+  getPreferredVendorForPart(partId: string): Promise<VendorPart | undefined>;
+
+  // Purchase Order Suggestions
+  generatePurchaseOrderSuggestions(): Promise<{ partId: string; suggestedQty: number; preferredVendor?: VendorPart; estimatedCost: number }[]>;
+
+  // MRP Calculation History
+  getMrpCalculationHistory(limit?: number): Promise<MrpCalculationHistory[]>;
+
+  // ============================================================================
+  // ENHANCED INVENTORY MANAGEMENT & MRP METHODS
+  // ============================================================================
+
+  // Allocation Detail Management - Demand-to-Supply Pegging
+  getAllAllocationDetails(params?: { partId?: string; demandOrderId?: string; supplyOrderId?: string; status?: string }): Promise<AllocationDetail[]>;
+  getAllocationDetail(allocationId: string): Promise<AllocationDetail | undefined>;
+  createAllocationDetail(data: InsertAllocationDetail): Promise<AllocationDetail>;
+  updateAllocationDetail(allocationId: string, data: Partial<InsertAllocationDetail>): Promise<AllocationDetail>;
+  deleteAllocationDetail(allocationId: string): Promise<void>;
+  consumeAllocation(allocationId: string, consumedQty: number, consumedBy: string): Promise<AllocationDetail>;
+  releaseAllocation(allocationId: string, releasedBy: string): Promise<AllocationDetail>;
+  lockAllocation(allocationId: string, lockedBy: string): Promise<AllocationDetail>;
+  unlockAllocation(allocationId: string, unlockedBy: string): Promise<AllocationDetail>;
+  getAllocationsByDemand(demandOrderId: string): Promise<AllocationDetail[]>;
+  getAllocationsBySupply(supplyOrderId: string): Promise<AllocationDetail[]>;
+  
+  // Enhanced MRP Service Interface
+  runFullMrp(parameters?: { planningHorizonDays?: number; includeForecast?: boolean; includeOnHand?: boolean }): Promise<{ calculationId: string; summary: MrpRunSummary }>;
+  runIncrementalMrp(changedOrderIds: string[]): Promise<{ calculationId: string; summary: MrpRunSummary }>;
+  performMrpNetting(partId: string, requirementDate: Date): Promise<{ netRequirement: number; availableSupply: number; shortage: number }>;
+  createPeggedAllocations(mrpRequirementId: string, supplyOrderId: string, quantity: number): Promise<AllocationDetail[]>;
+  getMrpPeggingDetails(partId: string): Promise<MrpPeggingDetail[]>;
+  optimizeLotSizes(partId?: string): Promise<{ partId: string; originalLotSize: number; optimizedLotSize: number; savings: number }[]>;
+  
+  // Vendor Price Breaks Management
+  getAllVendorPriceBreaks(vendorPartId?: number): Promise<VendorPriceBreak[]>;
+  getVendorPriceBreak(id: number): Promise<VendorPriceBreak | undefined>;
+  createVendorPriceBreak(data: InsertVendorPriceBreak): Promise<VendorPriceBreak>;
+  updateVendorPriceBreak(id: number, data: Partial<InsertVendorPriceBreak>): Promise<VendorPriceBreak>;
+  deleteVendorPriceBreak(id: number): Promise<void>;
+  getBestPriceForQuantity(vendorPartId: number, quantity: number): Promise<{ unitPrice: number; totalPrice: number; priceBreak?: VendorPriceBreak }>;
+  
+  // Enhanced Vendor Selection
+  getPreferredVendorsForPart(partId: string, requiredQty: number): Promise<VendorSelectionResult[]>;
+  calculateVendorScore(vendorPartId: number, evaluationCriteria: VendorEvaluationCriteria): Promise<number>;
+  
+  // Outside Processing Batch Management
+  getAllOutsideProcessingBatches(params?: { jobId?: string; status?: string; partId?: string }): Promise<OutsideProcessingBatch[]>;
+  getOutsideProcessingBatch(batchId: string): Promise<OutsideProcessingBatch | undefined>;
+  createOutsideProcessingBatch(data: InsertOutsideProcessingBatch): Promise<OutsideProcessingBatch>;
+  updateOutsideProcessingBatch(batchId: string, data: Partial<InsertOutsideProcessingBatch>): Promise<OutsideProcessingBatch>;
+  deleteOutsideProcessingBatch(batchId: string): Promise<void>;
+  shipBatch(batchId: string, shippedQty: number, packingSlipNumber?: string): Promise<OutsideProcessingBatch>;
+  receivePartialBatch(batchId: string, receivedQty: number, scrapQty?: number, notes?: string): Promise<OutsideProcessingBatch>;
+  completeBatchReceipt(batchId: string): Promise<OutsideProcessingBatch>;
+  
+  // MRP Planning Parameters
+  getAllMrpPlanningParameters(partId?: string): Promise<MrpPlanningParameters[]>;
+  getMrpPlanningParameters(parameterId: string): Promise<MrpPlanningParameters | undefined>;
+  createMrpPlanningParameters(data: InsertMrpPlanningParameters): Promise<MrpPlanningParameters>;
+  updateMrpPlanningParameters(parameterId: string, data: Partial<InsertMrpPlanningParameters>): Promise<MrpPlanningParameters>;
+  deleteMrpPlanningParameters(parameterId: string): Promise<void>;
+  
+  // Atomicity Protection Methods
+  withInventoryTransaction<T>(operation: (trx: any) => Promise<T>): Promise<T>;
+  checkInventoryAvailability(partId: string, locationId: string, requiredQty: number): Promise<{ available: boolean; shortfall: number }>;
+  reserveInventoryWithLock(partId: string, locationId: string, quantity: number, reservedBy: string): Promise<{ success: boolean; allocationId?: string; error?: string }>;
+  validateAllocationConsistency(partId: string): Promise<{ isConsistent: boolean; discrepancies: AllocationDiscrepancy[] }>;
+  reconcileInventoryBalances(partId?: string): Promise<{ partId: string; balanceBefore: number; balanceAfter: number; adjustmentMade: boolean }[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -6650,6 +6810,63 @@ export class DatabaseStorage implements IStorage {
     await db.delete(vendors).where(eq(vendors.id, id));
   }
 
+}
+
+// Enhanced MRP Types for Storage Interface
+export interface MrpRunSummary {
+  totalPartsProcessed: number;
+  requirementsGenerated: number;
+  shortagesIdentified: number;
+  poSuggestionsCreated: number;
+  allocationsCreated: number;
+  startTime: Date;
+  endTime: Date;
+  duration: number; // in seconds
+}
+
+export interface MrpPeggingDetail {
+  partId: string;
+  demandOrderId: string;
+  demandCustomerId?: string;
+  demandDueDate: Date;
+  demandQty: number;
+  supplyType: string;
+  supplyOrderId?: string;
+  supplyVendorId?: string;
+  supplyAvailableDate?: Date;
+  supplyQty: number;
+  allocationId: string;
+  peggedQty: number;
+}
+
+export interface VendorSelectionResult {
+  vendorPart: VendorPart;
+  priceBreak?: VendorPriceBreak;
+  unitPrice: number;
+  totalPrice: number;
+  leadTimeDays: number;
+  qualityScore: number;
+  deliveryScore: number;
+  overallScore: number;
+  isPreferred: boolean;
+}
+
+export interface VendorEvaluationCriteria {
+  priceWeight: number; // 0-1
+  qualityWeight: number; // 0-1
+  deliveryWeight: number; // 0-1
+  preferenceWeight: number; // 0-1
+  leadTimeWeight: number; // 0-1
+}
+
+export interface AllocationDiscrepancy {
+  partId: string;
+  locationId: string;
+  discrepancyType: 'OVER_ALLOCATION' | 'UNDER_ALLOCATION' | 'NEGATIVE_BALANCE' | 'ORPHANED_ALLOCATION';
+  expectedValue: number;
+  actualValue: number;
+  difference: number;
+  description: string;
 }
 
 export const storage = new DatabaseStorage();

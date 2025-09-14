@@ -2952,3 +2952,241 @@ export const insertVendorSchema = createInsertSchema(vendors).omit({
 // Vendor types
 export type Vendor = typeof vendors.$inferSelect;
 export type InsertVendor = z.infer<typeof insertVendorSchema>;
+
+// ============================================================================
+// ROBUST BOM MANAGEMENT SYSTEM (P2 Enhanced)
+// ============================================================================
+
+// Lifecycle status enum for parts
+export const partLifecycleStatusEnum = pgEnum('part_lifecycle_status', [
+  'ACTIVE', 
+  'OBSOLETE', 
+  'DISCONTINUED', 
+  'PHASE_OUT'
+]);
+
+// Enhanced Parts Master Table with lifecycle management
+export const robustParts = pgTable('robust_parts', {
+  id: text('id').primaryKey().default(sql`gen_random_uuid()`),
+  sku: text('sku').notNull().unique(),
+  name: text('name').notNull(),
+  type: text('type').notNull(), // PURCHASED, MANUFACTURED, PHANTOM
+  uom: text('uom').notNull().default('ea'), // Unit of measure
+  purchaseUom: text('purchase_uom').notNull().default('ea'), // Purchase UoM (can differ from usage UoM)
+  conversionFactor: real('conversion_factor').notNull().default(1), // Conversion from purchase to usage UoM
+  stdCost: real('std_cost').notNull().default(0),
+  revision: text('revision'),
+  description: text('description'),
+  notes: text('notes'),
+  
+  // Lifecycle Management
+  lifecycleStatus: partLifecycleStatusEnum('lifecycle_status').notNull().default('ACTIVE'),
+  obsoleteDate: timestamp('obsolete_date'),
+  replacementPartId: text('replacement_part_id').references(() => robustParts.id),
+  
+  // Validation constraints
+  minQuantity: real('min_quantity').default(0.001),
+  maxQuantity: real('max_quantity').default(999999),
+  decimalPrecision: integer('decimal_precision').default(3),
+  
+  // Status and tracking
+  isActive: boolean('is_active').notNull().default(true),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  createdBy: text('created_by'),
+  updatedBy: text('updated_by'),
+});
+
+// Enhanced BOM Lines Table with hierarchical structure
+export const robustBomLines = pgTable('robust_bom_lines', {
+  id: text('id').primaryKey().default(sql`gen_random_uuid()`),
+  parentPartId: text('parent_part_id').notNull().references(() => robustParts.id, { onDelete: 'cascade' }),
+  childPartId: text('child_part_id').notNull().references(() => robustParts.id, { onDelete: 'restrict' }),
+  qtyPer: real('qty_per').notNull().default(1),
+  uom: text('uom').notNull().default('ea'),
+  scrapPct: real('scrap_pct').notNull().default(0), // Scrap percentage (0-100)
+  notes: text('notes'),
+  
+  // Hierarchical support with depth limit
+  level: integer('level').notNull().default(0), // Tree depth (max 4 levels)
+  sortOrder: integer('sort_order').default(0), // Sort order within parent
+  
+  // Effectivity dating for version control
+  effectiveFrom: timestamp('effective_from'),
+  effectiveTo: timestamp('effective_to'),
+  
+  // Status and tracking
+  isActive: boolean('is_active').notNull().default(true),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  createdBy: text('created_by'),
+  updatedBy: text('updated_by'),
+});
+
+// Cost History Table for audit trail
+export const partCostHistory = pgTable('part_cost_history', {
+  id: text('id').primaryKey().default(sql`gen_random_uuid()`),
+  partId: text('part_id').notNull().references(() => robustParts.id, { onDelete: 'cascade' }),
+  oldCost: real('old_cost'),
+  newCost: real('new_cost').notNull(),
+  changeReason: text('change_reason'), // PURCHASE_ORDER, MANUAL_UPDATE, ROLLUP_CALCULATION
+  sourceReference: text('source_reference'), // PO number, user action, etc.
+  notes: text('notes'),
+  effectiveDate: timestamp('effective_date').notNull().defaultNow(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  createdBy: text('created_by').notNull(),
+});
+
+// Part Change Audit Trail
+export const partAuditLog = pgTable('part_audit_log', {
+  id: text('id').primaryKey().default(sql`gen_random_uuid()`),
+  partId: text('part_id').notNull().references(() => robustParts.id, { onDelete: 'cascade' }),
+  action: text('action').notNull(), // CREATE, UPDATE, DELETE, LIFECYCLE_CHANGE
+  fieldName: text('field_name'), // Which field was changed
+  oldValue: text('old_value'),
+  newValue: text('new_value'),
+  changeReason: text('change_reason'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  createdBy: text('created_by').notNull(),
+});
+
+// BOM Audit Trail
+export const bomAuditLog = pgTable('bom_audit_log', {
+  id: text('id').primaryKey().default(sql`gen_random_uuid()`),
+  bomLineId: text('bom_line_id').references(() => robustBomLines.id, { onDelete: 'cascade' }),
+  parentPartId: text('parent_part_id').notNull().references(() => robustParts.id, { onDelete: 'cascade' }),
+  action: text('action').notNull(), // ADD_LINE, UPDATE_LINE, DELETE_LINE, CLONE_BOM
+  details: jsonb('details'), // Detailed change information
+  changeReason: text('change_reason'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  createdBy: text('created_by').notNull(),
+});
+
+// Robust Parts Relations
+export const robustPartsRelations = relations(robustParts, ({ many, one }) => ({
+  asParentLines: many(robustBomLines, { relationName: 'parentPart' }),
+  asChildLines: many(robustBomLines, { relationName: 'childPart' }),
+  costHistory: many(partCostHistory),
+  auditLog: many(partAuditLog),
+  replacementPart: one(robustParts, { 
+    fields: [robustParts.replacementPartId], 
+    references: [robustParts.id] 
+  }),
+}));
+
+// Robust BOM Lines Relations
+export const robustBomLinesRelations = relations(robustBomLines, ({ one }) => ({
+  parentPart: one(robustParts, { 
+    fields: [robustBomLines.parentPartId], 
+    references: [robustParts.id], 
+    relationName: 'parentPart' 
+  }),
+  childPart: one(robustParts, { 
+    fields: [robustBomLines.childPartId], 
+    references: [robustParts.id], 
+    relationName: 'childPart' 
+  }),
+}));
+
+// Cost History Relations
+export const partCostHistoryRelations = relations(partCostHistory, ({ one }) => ({
+  part: one(robustParts, { 
+    fields: [partCostHistory.partId], 
+    references: [robustParts.id] 
+  }),
+}));
+
+// Audit Log Relations
+export const partAuditLogRelations = relations(partAuditLog, ({ one }) => ({
+  part: one(robustParts, { 
+    fields: [partAuditLog.partId], 
+    references: [robustParts.id] 
+  }),
+}));
+
+export const bomAuditLogRelations = relations(bomAuditLog, ({ one }) => ({
+  bomLine: one(robustBomLines, { 
+    fields: [bomAuditLog.bomLineId], 
+    references: [robustBomLines.id] 
+  }),
+  parentPart: one(robustParts, { 
+    fields: [bomAuditLog.parentPartId], 
+    references: [robustParts.id] 
+  }),
+}));
+
+// Insert Schemas for Robust BOM System
+export const insertRobustPartSchema = createInsertSchema(robustParts).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  sku: z.string().min(1, "SKU is required"),
+  name: z.string().min(1, "Part name is required"),
+  type: z.enum(['PURCHASED', 'MANUFACTURED', 'PHANTOM']),
+  uom: z.string().min(1, "Unit of measure is required"),
+  purchaseUom: z.string().min(1, "Purchase UoM is required"),
+  conversionFactor: z.number().positive("Conversion factor must be positive").default(1),
+  stdCost: z.number().min(0, "Standard cost must be non-negative"),
+  lifecycleStatus: z.enum(['ACTIVE', 'OBSOLETE', 'DISCONTINUED', 'PHASE_OUT']).default('ACTIVE'),
+  minQuantity: z.number().positive("Minimum quantity must be positive").optional(),
+  maxQuantity: z.number().positive("Maximum quantity must be positive").optional(),
+  decimalPrecision: z.number().int().min(0).max(6).default(3),
+});
+
+export const insertRobustBomLineSchema = createInsertSchema(robustBomLines).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  parentPartId: z.string().min(1, "Parent part ID is required"),
+  childPartId: z.string().min(1, "Child part ID is required"),
+  qtyPer: z.number().positive("Quantity per must be positive"),
+  uom: z.string().min(1, "Unit of measure is required"),
+  scrapPct: z.number().min(0).max(100, "Scrap percentage must be between 0 and 100").default(0),
+  level: z.number().int().min(0).max(4, "Maximum BOM depth is 4 levels").default(0),
+});
+
+export const insertPartCostHistorySchema = createInsertSchema(partCostHistory).omit({
+  id: true,
+  createdAt: true,
+}).extend({
+  partId: z.string().min(1, "Part ID is required"),
+  newCost: z.number().min(0, "New cost must be non-negative"),
+  changeReason: z.string().min(1, "Change reason is required"),
+  createdBy: z.string().min(1, "Created by is required"),
+});
+
+export const insertPartAuditLogSchema = createInsertSchema(partAuditLog).omit({
+  id: true,
+  createdAt: true,
+}).extend({
+  partId: z.string().min(1, "Part ID is required"),
+  action: z.string().min(1, "Action is required"),
+  createdBy: z.string().min(1, "Created by is required"),
+});
+
+export const insertBomAuditLogSchema = createInsertSchema(bomAuditLog).omit({
+  id: true,
+  createdAt: true,
+}).extend({
+  parentPartId: z.string().min(1, "Parent part ID is required"),
+  action: z.string().min(1, "Action is required"),
+  createdBy: z.string().min(1, "Created by is required"),
+});
+
+// Types for Robust BOM System
+export type RobustPart = typeof robustParts.$inferSelect;
+export type InsertRobustPart = z.infer<typeof insertRobustPartSchema>;
+
+export type RobustBomLine = typeof robustBomLines.$inferSelect;
+export type InsertRobustBomLine = z.infer<typeof insertRobustBomLineSchema>;
+
+export type PartCostHistory = typeof partCostHistory.$inferSelect;
+export type InsertPartCostHistory = z.infer<typeof insertPartCostHistorySchema>;
+
+export type PartAuditLog = typeof partAuditLog.$inferSelect;
+export type InsertPartAuditLog = z.infer<typeof insertPartAuditLogSchema>;
+
+export type BomAuditLog = typeof bomAuditLog.$inferSelect;
+export type InsertBomAuditLog = z.infer<typeof insertBomAuditLogSchema>;

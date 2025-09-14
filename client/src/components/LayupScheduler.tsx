@@ -1842,6 +1842,12 @@ export default function LayupScheduler() {
     const getOrderStockModelId = (order: any) => {
       // If already has stockModelId, use it
       if (order.stockModelId) return order.stockModelId;
+      
+      // P1 Purchase Order mapping - model "1" = Mesa Universal
+      if ((order.orderId?.startsWith('PO') || order.source === 'production_order' || order.source === 'p1_purchase_order') && (order.modelId === '1' || order.modelId === 1)) {
+        return 'mesa_universal';
+      }
+      
       if (order.modelId) return order.modelId;
 
       // Intelligent detection based on features and action configuration

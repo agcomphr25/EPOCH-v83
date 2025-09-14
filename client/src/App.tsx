@@ -25,6 +25,7 @@ import InventoryScannerPage from "./pages/InventoryScannerPage";
 import InventoryDashboardPage from "./pages/InventoryDashboardPage";
 import InventoryManagerPage from "./pages/InventoryManagerPage";
 import InventoryReceivingPage from "./pages/InventoryReceivingPage";
+import EnhancedInventoryMRPPage from "./pages/EnhancedInventoryMRPPage";
 import QCPage from "./pages/QCPage";
 import MaintenancePage from "./pages/MaintenancePage";
 import EmployeePortalPage from "./pages/EmployeePortalPage";
@@ -225,6 +226,7 @@ function App() {
                   <Route path="/inventory/dashboard" component={InventoryDashboardPage} />
                   <Route path="/inventory/manager" component={InventoryManagerPage} />
                   <Route path="/inventory/receiving" component={InventoryReceivingPage} />
+                  <Route path="/inventory/enhanced-mrp" component={EnhancedInventoryMRPPage} />
 
                   {/* QC and Maintenance Routes */}
                   <Route path="/qc" component={QCPage} />

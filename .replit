@@ -4,7 +4,11 @@ hidden = [".config", ".git", "generated-icon.png", "node_modules", "dist"]
 
 [nix]
 channel = "stable-25_05"
+<<<<<<< HEAD
 packages = ["jq", "postgresql", "cairo", "pango", "libjpeg", "giflib", "librsvg", "pixman", "openssh"]
+=======
+packages = ["jq", "postgresql", "cairo", "pango", "libjpeg", "giflib", "librsvg", "pixman"]
+>>>>>>> origin/main
 
 [deployment]
 deploymentTarget = "autoscale"
@@ -48,6 +52,7 @@ args = "npm run dev"
 localPort = 5000
 externalPort = 80
 
+<<<<<<< HEAD
 [[ports]]
 localPort = 35047
 externalPort = 3000
@@ -57,3 +62,7 @@ localPort = 37257
 externalPort = 3001
 
 [agent]
+=======
+[agent]
+integrations = ["javascript_mem_db==1.0.0"]
+>>>>>>> origin/main

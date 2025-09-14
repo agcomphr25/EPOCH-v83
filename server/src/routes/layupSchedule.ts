@@ -46,6 +46,7 @@ router.post('/save', async (req: Request, res: Response) => {
         // Convert scheduledDate to Date object if it's a string
         const processedScheduledDate = typeof scheduledDate === 'string' ? new Date(scheduledDate) : scheduledDate;
 
+<<<<<<< HEAD
         // Extract business day from scheduled date as YYYY-MM-DD string
         const layupDayStr = new Date(processedScheduledDate).toISOString().slice(0, 10);
 
@@ -67,6 +68,22 @@ router.post('/save', async (req: Request, res: Response) => {
           moldId || 'auto',
           JSON.stringify(employeeAssignments || []),
           true // This is a manual schedule save (preserve is_override on conflict)
+=======
+        // Insert schedule entry
+        await pool.query(`
+          INSERT INTO layup_schedule (
+            order_id, scheduled_date, mold_id, employee_assignments,
+            is_override, created_at, updated_at
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+        `, [
+          orderId,
+          processedScheduledDate,
+          moldId || 'auto',
+          JSON.stringify(employeeAssignments || []),
+          true, // This is a manual schedule save
+          new Date().toISOString(),
+          new Date().toISOString()
+>>>>>>> origin/main
         ]);
 
         savedCount++;

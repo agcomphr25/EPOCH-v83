@@ -30,7 +30,10 @@ interface OrderWithTracking {
   shippingCost?: number;
   labelGenerated?: boolean;
   labelGeneratedAt?: string;
+<<<<<<< HEAD
   fbOrderNumber?: string;
+=======
+>>>>>>> origin/main
 }
 
 export default function ShippingManagement() {
@@ -153,8 +156,12 @@ export default function ShippingManagement() {
   const filteredOrders = (orders as OrderWithTracking[] | undefined)?.filter((order: OrderWithTracking) => {
     const matchesSearch = order.orderId.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          order.customer.toLowerCase().includes(searchTerm.toLowerCase()) ||
+<<<<<<< HEAD
                          (order.trackingNumber && order.trackingNumber.toLowerCase().includes(searchTerm.toLowerCase())) ||
                          (order.fbOrderNumber && order.fbOrderNumber.toLowerCase().includes(searchTerm.toLowerCase()));
+=======
+                         (order.trackingNumber && order.trackingNumber.toLowerCase().includes(searchTerm.toLowerCase()));
+>>>>>>> origin/main
     
     if (filterStatus === 'all') return matchesSearch;
     if (filterStatus === 'shipped') return matchesSearch && order.trackingNumber;
@@ -340,7 +347,11 @@ export default function ShippingManagement() {
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                 <Input
                   id="search"
+<<<<<<< HEAD
                   placeholder="Search by order ID, customer, FB order #, or tracking number..."
+=======
+                  placeholder="Search by order ID, customer, or tracking number..."
+>>>>>>> origin/main
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-10"

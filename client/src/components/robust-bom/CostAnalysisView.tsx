@@ -33,30 +33,15 @@ interface CostAnalysisViewProps {
 }
 
 export function CostAnalysisView({ selectedPart }: CostAnalysisViewProps) {
-  // Get cost rollup data
+  // Get cost rollup data - using authenticated default fetcher
   const { data: costRollup, isLoading: isLoadingCost } = useQuery<CostRollup>({
-    queryKey: ['robust-bom', 'cost-rollup', selectedPart?.id],
-    queryFn: async () => {
-      if (!selectedPart?.id) throw new Error('No part selected');
-      const response = await fetch(`/api/robust-bom/bom/${selectedPart.id}/cost-rollup`);
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Failed to fetch cost rollup');
-      }
-      return response.json();
-    },
+    queryKey: [`/api/robust-bom/bom/${selectedPart?.id}/cost-rollup`],
     enabled: !!selectedPart?.id
   });
 
-  // Get cost history
+  // Get cost history - using authenticated default fetcher
   const { data: costHistory } = useQuery({
-    queryKey: ['robust-bom', 'parts', selectedPart?.id, 'cost-history'],
-    queryFn: async () => {
-      if (!selectedPart?.id) return [];
-      const response = await fetch(`/api/robust-bom/parts/${selectedPart.id}/cost-history?limit=20`);
-      if (!response.ok) throw new Error('Failed to fetch cost history');
-      return response.json();
-    },
+    queryKey: [`/api/robust-bom/parts/${selectedPart?.id}/cost-history?limit=20`],
     enabled: !!selectedPart?.id
   });
 

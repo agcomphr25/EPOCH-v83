@@ -64,24 +64,9 @@ export default function RobustBOMAdministration() {
   const [currentPage, setCurrentPage] = useState(1);
   const queryClient = useQueryClient();
 
-  // Search parts query
+  // Search parts query - using authenticated default fetcher
   const { data: searchResults, isLoading: isSearching } = useQuery<SearchResult>({
-    queryKey: ['robust-bom', 'parts', 'search', searchQuery, typeFilter, lifecycleFilter, currentPage],
-    queryFn: async () => {
-      const params = new URLSearchParams({
-        q: searchQuery,
-        type: typeFilter,
-        lifecycleStatus: lifecycleFilter,
-        page: currentPage.toString(),
-        pageSize: '20'
-      });
-      
-      const response = await fetch(`/api/robust-bom/parts/search?${params}`);
-      if (!response.ok) {
-        throw new Error('Failed to search parts');
-      }
-      return response.json();
-    }
+    queryKey: [`/api/robust-bom/parts/search?q=${searchQuery}&type=${typeFilter}&lifecycleStatus=${lifecycleFilter}&page=${currentPage}&pageSize=20`]
   });
 
   const getLifecycleBadgeColor = (status: string) => {

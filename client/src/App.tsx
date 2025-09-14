@@ -61,6 +61,7 @@ import FALEESHAHTestDashboard from "./pages/FALEESHAHTestDashboard";
 import JOEYBTestDashboard from "./pages/JOEYBTestDashboard";
 import OrderDepartmentTransfer from "./pages/OrderDepartmentTransfer";
 import { BOMAdministration } from "./pages/BOMAdministration";
+import RobustBOMAdministration from "./pages/RobustBOMAdministration";
 import AGBottomMetalReport from "./pages/AGBottomMetalReport";
 import EmployeeDashboard from "./pages/EmployeeDashboard";
 import EmployeeDetail from "./pages/EmployeeDetail";
@@ -213,6 +214,7 @@ function App() {
                   {/* Production and BOM Routes */}
                   <Route path="/production-tracking" component={ProductionTracking} />
                   <Route path="/bom-administration" component={BOMAdministration} />
+                  <Route path="/robust-bom-administration" component={RobustBOMAdministration} />
 
                   {/* Barcode and Scanner Routes */}
                   <Route path="/barcode-scanner" component={BarcodeScannerPage} />

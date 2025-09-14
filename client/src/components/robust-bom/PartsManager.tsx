@@ -190,15 +190,9 @@ export function PartsManager({ part, onClose, onSave }: PartsManagerProps) {
     }
   }, [part, form]);
 
-  // Get part cost history for edit mode
+  // Get part cost history for edit mode - using authenticated default fetcher
   const { data: costHistory } = useQuery({
-    queryKey: ['robust-bom', 'parts', part?.id, 'cost-history'],
-    queryFn: async () => {
-      if (!part?.id) return [];
-      const response = await fetch(`/api/robust-bom/parts/${part.id}/cost-history`);
-      if (!response.ok) throw new Error('Failed to fetch cost history');
-      return response.json();
-    },
+    queryKey: [`/api/robust-bom/parts/${part?.id}/cost-history`],
     enabled: !!part?.id
   });
 

@@ -37,18 +37,9 @@ interface WhereUsedViewProps {
 }
 
 export function WhereUsedView({ selectedPart }: WhereUsedViewProps) {
-  // Get where-used data
+  // Get where-used data - using authenticated default fetcher
   const { data: whereUsed, isLoading, error } = useQuery<WhereUsedItem[]>({
-    queryKey: ['robust-bom', 'where-used', selectedPart?.id],
-    queryFn: async () => {
-      if (!selectedPart?.id) throw new Error('No part selected');
-      const response = await fetch(`/api/robust-bom/parts/${selectedPart.id}/where-used`);
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Failed to fetch where-used data');
-      }
-      return response.json();
-    },
+    queryKey: [`/api/robust-bom/parts/${selectedPart?.id}/where-used`],
     enabled: !!selectedPart?.id
   });
 

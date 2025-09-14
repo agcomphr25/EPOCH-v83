@@ -159,7 +159,6 @@ function App() {
 
                   {/* Production and BOM Routes */}
                   <Route path="/production-tracking" component={ProductionTracking} />
-                  <Route path="/production-queue" component={ProductionQueuePage} />
                   <Route path="/p1-production-queue" component={ProductionQueuePage} />
                   <Route path="/p2-production-queue" component={P2ProductionQueuePage} />
                   <Route path="/bom-administration" component={BOMAdministration} />

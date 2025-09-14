@@ -856,7 +856,7 @@ export class DatabaseStorage implements IStorage {
     const customerMap = new Map(allCustomers.map(c => [c.id.toString(), c.name]));
     
     // Enrich orders with customer names
-    return orders.map(order => ({
+    return ordersData.map(order => ({
       ...order,
       customer: customerMap.get(order.customerId) || 'Unknown Customer'
     })) as OrderDraft[];
@@ -1026,18 +1026,17 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAllOrders(): Promise<OrderDraft[]> {
-    // For now, return from orderDrafts table as it has the order data
-    // In the future, this could be changed to use the main orders table
+    // Use all_orders table to get the complete order data
     
-    // First get all orders
-    const orders = await db.select().from(orderDrafts).orderBy(desc(orderDrafts.updatedAt));
+    // First get all orders from the main orders table
+    const ordersData = await db.select().from(orders).orderBy(desc(orders.updatedAt));
     
     // Get all customers to create a lookup map
     const allCustomers = await db.select().from(customers);
     const customerMap = new Map(allCustomers.map(c => [c.id.toString(), c.name]));
     
     // Enrich orders with customer names
-    return orders.map(order => ({
+    return ordersData.map(order => ({
       ...order,
       customer: customerMap.get(order.customerId) || 'Unknown Customer'
     })) as OrderDraft[];

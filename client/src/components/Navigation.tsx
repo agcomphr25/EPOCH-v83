@@ -302,12 +302,6 @@ export default function Navigation() {
 
   const productionSchedulingItems = [
     {
-      path: '/production-queue',
-      label: 'Production Queue',
-      icon: Factory,
-      description: 'Manage production queue priorities and auto-populate orders'
-    },
-    {
       path: '/p1-production-queue',
       label: 'P1 Production Queue',
       icon: Factory,

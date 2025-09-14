@@ -40,18 +40,9 @@ interface AuditLogViewProps {
 export function AuditLogView({ selectedPart }: AuditLogViewProps) {
   const [actionFilter, setActionFilter] = useState('ALL');
 
-  // Get audit log data
+  // Get audit log data - using authenticated default fetcher
   const { data: auditLog, isLoading } = useQuery<AuditLogEntry[]>({
-    queryKey: ['robust-bom', 'parts', selectedPart?.id, 'audit-log'],
-    queryFn: async () => {
-      if (!selectedPart?.id) throw new Error('No part selected');
-      const response = await fetch(`/api/robust-bom/parts/${selectedPart.id}/audit-log?limit=100`);
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Failed to fetch audit log');
-      }
-      return response.json();
-    },
+    queryKey: [`/api/robust-bom/parts/${selectedPart?.id}/audit-log?limit=100`],
     enabled: !!selectedPart?.id
   });
 

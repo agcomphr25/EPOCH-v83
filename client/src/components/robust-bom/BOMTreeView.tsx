@@ -79,32 +79,15 @@ export function BOMTreeView({ selectedPart }: BOMTreeViewProps) {
   const [targetPartForClone, setTargetPartForClone] = useState('');
   const queryClient = useQueryClient();
 
-  // Get BOM tree data
+  // Get BOM tree data - using authenticated default fetcher
   const { data: bomTree, isLoading: isLoadingTree, error } = useQuery<BOMTree>({
-    queryKey: ['robust-bom', 'tree', selectedPart?.id, includeInactive],
-    queryFn: async () => {
-      if (!selectedPart?.id) throw new Error('No part selected');
-      const params = new URLSearchParams({ includeInactive: includeInactive.toString() });
-      const response = await fetch(`/api/robust-bom/bom/${selectedPart.id}/tree?${params}`);
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Failed to fetch BOM tree');
-      }
-      return response.json();
-    },
+    queryKey: [`/api/robust-bom/bom/${selectedPart?.id}/tree?includeInactive=${includeInactive}`],
     enabled: !!selectedPart?.id
   });
 
-  // Search parts for adding to BOM
+  // Search parts for adding to BOM - using authenticated default fetcher
   const { data: searchResults } = useQuery({
-    queryKey: ['robust-bom', 'parts', 'search', searchPart],
-    queryFn: async () => {
-      if (!searchPart || searchPart.length < 2) return { items: [] };
-      const params = new URLSearchParams({ q: searchPart, pageSize: '10' });
-      const response = await fetch(`/api/robust-bom/parts/search?${params}`);
-      if (!response.ok) throw new Error('Failed to search parts');
-      return response.json();
-    },
+    queryKey: [`/api/robust-bom/parts/search?q=${searchPart}&pageSize=10`],
     enabled: searchPart.length >= 2
   });
 

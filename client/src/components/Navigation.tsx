@@ -157,6 +157,12 @@ export default function Navigation() {
       description: 'Manage Bill of Materials for P2 operations'
     },
     {
+      path: '/robust-bom-administration',
+      label: 'P2 Robust BOM',
+      icon: Factory,
+      description: 'Advanced BOM management with lifecycle tracking and cost analysis'
+    },
+    {
       path: '/barcode-scanner',
       label: 'Barcde Scanner',
       icon: Scan,

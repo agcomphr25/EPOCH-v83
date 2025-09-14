@@ -1,18 +1,14 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Scan, Package, User, Calendar, DollarSign, CreditCard, Settings, Camera, Smartphone, FileText } from 'lucide-react';
+import { Scan, Package, User, Calendar, DollarSign, CreditCard, Settings } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import { useLocation } from 'wouter';
 import { formatOrderDetails } from '@/components/OrderTooltip';
-import { useDeviceDetection } from '@/hooks/useDeviceDetection';
-import { useBarcodeInput } from '@/hooks/useBarcodeInput';
-import { CameraScanner } from '@/components/CameraScanner';
-import { MobileCameraDiagnostic } from '@/components/MobileCameraDiagnostic';
 
 interface LineItem {
   type: string;
@@ -27,7 +23,6 @@ interface DiscountDetail {
   type: string;
   value: number;
   amount: number;
-  description: string;
 }
 
 interface OrderFeature {
@@ -40,27 +35,15 @@ interface OrderFeature {
 interface OrderSummary {
   orderId: string;
   orderDate: string;
-  currentDepartment?: string;
-  dueDate?: string;
   customer: {
     name: string;
     email: string;
-    phone?: string;
-    company?: string;
   } | null;
   baseModel: {
     name: string;
     id: string;
-    price: number;
   } | null;
-  features: Record<string, any> | null;
-  specifications: Record<string, any> | null;
-  productionDetails?: {
-    partName: string;
-    quantity: number;
-    department: string;
-    priority: number;
-  };
+  features: OrderFeature[];
   lineItems: LineItem[];
   pricing: {
     subtotal: number;
@@ -72,123 +55,46 @@ interface OrderSummary {
   };
   paymentStatus: string;
   status: string;
-  notes?: string;
-  displayFeatures?: {
-    model: string;
-    actionLength: string;
-    color: string;
-    finish: string;
-  };
 }
 
-interface BarcodeScannerProps {
-  onOrderScanned?: (orderId: string) => void;
-}
-
-export function BarcodeScanner({ onOrderScanned }: BarcodeScannerProps = {}) {
+export function BarcodeScanner() {
   const [location] = useLocation();
-  const [showCameraScanner, setShowCameraScanner] = useState(false);
-  const [showDiagnostic, setShowDiagnostic] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const processedOrdersRef = useRef<Set<string>>(new Set());
-
-  // Device detection for smart UI
-  const { isMobile, hasCamera } = useDeviceDetection();
-
-  // Unified barcode input handling
-  const {
-    barcode,
-    scannedBarcode,
-    isValidBarcode,
-    barcodeType,
-    setBarcode,
-    handleScan,
-    handleBarcodeDetected,
-    clearScan
-  } = useBarcodeInput();
+  const [barcode, setBarcode] = useState('');
+  const [scannedBarcode, setScannedBarcode] = useState<string | null>(null);
 
   // Check for URL parameter and auto-scan
   useEffect(() => {
     const searchParams = new URLSearchParams(window.location.search);
     const scanParam = searchParams.get('scan');
     if (scanParam) {
-      handleBarcodeDetected(scanParam);
+      setBarcode(scanParam);
+      setScannedBarcode(scanParam);
       // Clear the URL parameter
       window.history.replaceState({}, '', window.location.pathname);
     }
-  }, [location, handleBarcodeDetected]);
+  }, [location]);
 
   // Get stock models for display names
   const { data: stockModels = [] } = useQuery({
     queryKey: ['/api/stock-models'],
   });
 
-  const { data: orderSummary, isLoading, error } = useQuery<OrderSummary>({
+  const { data: orderSummary, isLoading, error } = useQuery({
     queryKey: ['/api/barcode/scan', scannedBarcode],
     enabled: !!scannedBarcode,
     retry: false
   });
 
-  // Auto-select order in department queue when successfully scanned
-  useEffect(() => {
-    if (orderSummary && onOrderScanned) {
-      // Only process if we haven't already processed this order
-      if (!processedOrdersRef.current.has(orderSummary.orderId)) {
-        processedOrdersRef.current.add(orderSummary.orderId);
-        onOrderScanned(orderSummary.orderId);
-      }
+  const handleScan = () => {
+    if (barcode.trim()) {
+      setScannedBarcode(barcode.trim());
     }
-    // Always select the input after any successful scan for quick replacement
-    if (orderSummary) {
-      setTimeout(() => {
-        if (inputRef.current) {
-          inputRef.current.select();
-          inputRef.current.focus();
-        }
-      }, 200);
-    }
-  }, [orderSummary?.orderId, onOrderScanned]);
+  };
 
   const handleInputKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
-      // Clear processed orders when starting a new scan session
-      processedOrdersRef.current.clear();
       handleScan();
-      // Auto-select the input text for quick replacement with next scan
-      setTimeout(() => {
-        if (inputRef.current) {
-          inputRef.current.select();
-          inputRef.current.focus();
-        }
-      }, 100);
     }
-  };
-
-  const handleManualScan = () => {
-    // Clear processed orders when starting a new scan session
-    processedOrdersRef.current.clear();
-    handleScan();
-    // Auto-select the input text for quick replacement with next scan
-    setTimeout(() => {
-      if (inputRef.current) {
-        inputRef.current.select();
-        inputRef.current.focus();
-      }
-    }, 100);
-  };
-
-  const handleCameraScan = (detectedBarcode: string) => {
-    // Clear processed orders when starting a new scan session
-    processedOrdersRef.current.clear();
-    handleBarcodeDetected(detectedBarcode);
-    setShowCameraScanner(false);
-    // Auto-select the input text for quick replacement with next scan
-    setTimeout(() => {
-      if (inputRef.current) {
-        inputRef.current.select();
-        inputRef.current.focus();
-      }
-    }, 500); // Slightly longer delay for camera scanning
   };
 
   const getPaymentStatusColor = (status: string) => {
@@ -212,7 +118,6 @@ export function BarcodeScanner({ onOrderScanned }: BarcodeScannerProps = {}) {
   };
 
   const formatDate = (dateString: string) => {
-    if (!dateString) return 'N/A';
     return new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',
@@ -230,98 +135,21 @@ export function BarcodeScanner({ onOrderScanned }: BarcodeScannerProps = {}) {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
-            {/* Input method selection */}
-            <div className="flex gap-2">
-              <Input
-                ref={inputRef}
-                placeholder="Scan or enter barcode (e.g., P1-AG185)"
-                value={barcode}
-                onChange={(e) => setBarcode(e.target.value)}
-                onKeyPress={handleInputKeyPress}
-                className={`flex-1 ${!isValidBarcode && barcode.length > 0 ? 'border-red-300' : ''}`}
-              />
-              <Button 
-                onClick={handleManualScan} 
-                disabled={!isValidBarcode}
-                variant={isValidBarcode ? "default" : "secondary"}
-              >
-                <Scan className="h-4 w-4 mr-2" />
-                Scan
-              </Button>
-            </div>
-
-            {/* Camera scanning option for mobile devices */}
-            {hasCamera && (
-              <div className="space-y-2">
-                <div className="flex flex-col sm:flex-row gap-2">
-                  <Button
-                    variant="outline"
-                    onClick={() => setShowCameraScanner(true)}
-                    className="flex-1"
-                  >
-                    <Camera className="h-4 w-4 mr-2" />
-                    {isMobile ? 'Use Camera' : 'Camera Scanner'}
-                  </Button>
-                  {isMobile && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setShowDiagnostic(!showDiagnostic)}
-                      className="text-xs"
-                    >
-                      <Settings className="h-3 w-3 mr-1" />
-                      {showDiagnostic ? 'Hide' : 'Camera'} Diagnostics
-                    </Button>
-                  )}
-                </div>
-                {isMobile && (
-                  <div className="flex items-center text-xs text-gray-500 gap-1">
-                    <Smartphone className="h-3 w-3" />
-                    <span>Camera issues? Try the diagnostic tool above</span>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Barcode validation feedback */}
-            {barcode.length > 0 && (
-              <div className="text-xs">
-                {isValidBarcode ? (
-                  <div className="text-green-600 flex items-center gap-1">
-                    <span>✓</span>
-                    <span>Valid {barcodeType?.replace('_', ' ').toLowerCase()} barcode</span>
-                  </div>
-                ) : (
-                  <div className="text-orange-600 flex items-center gap-1">
-                    <span>⚠</span>
-                    <span>Enter a valid barcode (e.g., P1-AG185, PART001)</span>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Clear scan button */}
-            {scannedBarcode && (
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                onClick={clearScan}
-                className="w-fit"
-              >
-                Clear & Scan Again
-              </Button>
-            )}
+          <div className="flex gap-2">
+            <Input
+              placeholder="Scan or enter barcode (e.g., P1-AG185)"
+              value={barcode}
+              onChange={(e) => setBarcode(e.target.value)}
+              onKeyPress={handleInputKeyPress}
+              className="flex-1"
+            />
+            <Button onClick={handleScan} disabled={!barcode.trim()}>
+              <Scan className="h-4 w-4 mr-2" />
+              Scan
+            </Button>
           </div>
         </CardContent>
       </Card>
-
-      {/* Mobile Camera Diagnostic Tool */}
-      {isMobile && showDiagnostic && (
-        <div className="mb-6">
-          <MobileCameraDiagnostic />
-        </div>
-      )}
 
       {isLoading && (
         <Card>
@@ -350,263 +178,127 @@ export function BarcodeScanner({ onOrderScanned }: BarcodeScannerProps = {}) {
 
       {orderSummary && (
         <div className="space-y-6">
-          {/* Action Length - Prominently displayed at top */}
-          {(orderSummary.features?.action_length || orderSummary.specifications?.action_length) && (
-            <Card className="border-blue-200 bg-blue-50">
-              <CardContent className="p-4">
-                <div className="flex items-center justify-center">
-                  <div className="text-center">
-                    <div className="text-sm font-medium text-blue-700 mb-1">Action Length</div>
-                    <Badge variant="default" className="text-lg px-4 py-2 bg-blue-600">
-                      {(orderSummary.features?.action_length || orderSummary.specifications?.action_length)
-                        ?.toString().replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                    </Badge>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Order Header */}
-          <Card>
+          {/* Enhanced Order Display using OrderTooltip style */}
+          <Card className="border-l-4 border-l-blue-500">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Package className="h-5 w-5" />
-                Order Details
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <span className="font-medium">Order ID:</span> {orderSummary.orderId}
-                </div>
-                <div>
-                  <span className="font-medium">Date:</span> {formatDate(orderSummary.orderDate)}
-                </div>
-                <div>
-                  <span className="font-medium">Customer:</span> {orderSummary.customer?.name || 'N/A'}
-                </div>
-                <div>
-                  <span className="font-medium">Status:</span>{' '}
-                  <Badge variant={orderSummary.status === 'COMPLETED' ? 'default' : 'secondary'}>
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2">
+                  <Package className="h-5 w-5" />
+                  Scanned Order: {orderSummary.orderId}
+                </CardTitle>
+                <div className="flex gap-2">
+                  <Badge variant="outline" className={getPaymentStatusColor(orderSummary.paymentStatus)}>
+                    <CreditCard className="h-3 w-3 mr-1" />
+                    {orderSummary.paymentStatus}
+                  </Badge>
+                  <Badge variant="outline">
                     {orderSummary.status}
                   </Badge>
                 </div>
-                {orderSummary.currentDepartment && (
-                  <div>
-                    <span className="font-medium">Current Department:</span>{' '}
-                    <Badge variant="outline">{orderSummary.currentDepartment}</Badge>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg">
+                <div className="font-semibold text-blue-600 dark:text-blue-400 border-b border-gray-200 dark:border-gray-600 pb-2 mb-3">
+                  Order Details
+                </div>
+                <div className="text-sm whitespace-pre-line text-gray-700 dark:text-gray-300 font-mono leading-relaxed">
+                  {formatOrderDetails(orderSummary, stockModels)}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Base Model & Features */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Settings className="h-5 w-5" />
+                Product Configuration
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {/* Base Model */}
+                {orderSummary.baseModel && (
+                  <div className="bg-gray-50 p-3 rounded-lg">
+                    <div className="font-semibold text-blue-900">Base Model</div>
+                    <div className="text-lg font-medium">{orderSummary.baseModel.name}</div>
                   </div>
                 )}
-                {orderSummary.dueDate && (
-                  <div>
-                    <span className="font-medium">Due Date:</span> {formatDate(orderSummary.dueDate)}
+                
+                {/* Features */}
+                {orderSummary.features && orderSummary.features.length > 0 && (
+                  <div className="space-y-2">
+                    <div className="font-semibold text-gray-700 border-b pb-1">Selected Features</div>
+                    {orderSummary.features.map((feature, index) => (
+                      <div key={index} className="flex items-start justify-between py-2 border-b border-gray-100 last:border-0">
+                        <div className="flex-1">
+                          <div className="font-medium text-gray-900">{feature.name}</div>
+                          <div className="text-sm text-gray-600">{feature.value}</div>
+                        </div>
+                        <Badge variant="outline" className="text-xs ml-2">
+                          {feature.type}
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                
+                {(!orderSummary.features || orderSummary.features.length === 0) && (
+                  <div className="text-center text-gray-500 py-4">
+                    No custom features selected
                   </div>
                 )}
               </div>
             </CardContent>
           </Card>
 
-          {/* Customer Information */}
-          {orderSummary.customer && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <User className="h-5 w-5" />
-                  Customer Information
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <span className="font-medium">Name:</span> {orderSummary.customer.name}
-                  </div>
-                  {orderSummary.customer.company && (
-                    <div>
-                      <span className="font-medium">Company:</span> {orderSummary.customer.company}
-                    </div>
-                  )}
-                  {orderSummary.customer.email && (
-                    <div>
-                      <span className="font-medium">Email:</span> {orderSummary.customer.email}
-                    </div>
-                  )}
-                  {orderSummary.customer.phone && (
-                    <div>
-                      <span className="font-medium">Phone:</span> {orderSummary.customer.phone}
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Base Model */}
-          {orderSummary.baseModel && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Package className="h-5 w-5" />
-                  Base Model
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  <div className="text-lg font-semibold">
-                    {orderSummary.baseModel.name}
-                  </div>
-                  <div className="text-sm text-gray-600">
-                    Model ID: {orderSummary.baseModel.id}
-                  </div>
-                  {orderSummary.baseModel.price > 0 && (
-                    <div className="text-sm font-medium text-green-600">
-                      Base Price: {formatCurrency(orderSummary.baseModel.price)}
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Features & Specifications - Complete Display with Proper Names */}
-          {((orderSummary.features && Object.keys(orderSummary.features).length > 0) || 
-            (orderSummary.specifications && Object.keys(orderSummary.specifications).length > 0)) && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Configuration Details</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {orderSummary.features && Object.keys(orderSummary.features).length > 0 && (
-                    <div>
-                      <h4 className="font-medium mb-3">Selected Features:</h4>
-                      <div className="grid grid-cols-1 gap-2">
-                        {Object.entries(orderSummary.features)
-                          .filter(([key]) => key !== 'action_length') // Exclude action_length since it's shown prominently at top
-                          .map(([key, value], index) => {
-                          // Format the display name for the key
-                          const displayKey = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-                          // Format the display value
-                          let displayValue = value;
-                          if (typeof value === 'string') {
-                            displayValue = value.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-                          }
-                          
-                          return (
-                            <div key={index} className="flex justify-between items-center text-sm p-2 bg-gray-50 rounded">
-                              <span className="font-medium">{displayKey}:</span>
-                              <Badge variant="outline" className="ml-2">
-                                {typeof displayValue === 'string' ? displayValue : JSON.stringify(displayValue)}
-                              </Badge>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-
-                  {orderSummary.specifications && Object.keys(orderSummary.specifications).length > 0 && (
-                    <div>
-                      <h4 className="font-medium mb-3">Specifications:</h4>
-                      <div className="grid grid-cols-1 gap-2">
-                        {Object.entries(orderSummary.specifications)
-                          .filter(([key]) => key !== 'action_length') // Exclude action_length since it's shown prominently at top
-                          .map(([key, value], index) => {
-                          // Format the display name for the key
-                          const displayKey = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-                          // Format the display value
-                          let displayValue = value;
-                          if (typeof value === 'string') {
-                            displayValue = value.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-                          }
-                          
-                          return (
-                            <div key={index} className="flex justify-between items-center text-sm p-2 bg-blue-50 rounded">
-                              <span className="font-medium">{displayKey}:</span>
-                              <Badge variant="outline" className="ml-2">
-                                {typeof displayValue === 'string' ? displayValue : JSON.stringify(displayValue)}
-                              </Badge>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Production Details (if applicable) */}
-          {orderSummary.productionDetails && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Package className="h-5 w-5" />
-                  Production Information
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-2 gap-4">
-                  {orderSummary.productionDetails.partName && (
-                    <div>
-                      <span className="font-medium">Part Name:</span> {orderSummary.productionDetails.partName}
-                    </div>
-                  )}
-                  <div>
-                    <span className="font-medium">Quantity:</span> {orderSummary.productionDetails.quantity}
-                  </div>
-                  {orderSummary.productionDetails.department && (
-                    <div>
-                      <span className="font-medium">Department:</span>{' '}
-                      <Badge variant="outline">{orderSummary.productionDetails.department}</Badge>
-                    </div>
-                  )}
-                  <div>
-                    <span className="font-medium">Priority:</span> {orderSummary.productionDetails.priority}/5
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Pricing */}
+          {/* Order Line Items */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <CreditCard className="h-5 w-5" />
-                Pricing
+                <Package className="h-5 w-5" />
+                Order Contents
+                <span className="text-sm font-normal text-gray-500 ml-2">
+                  (Pricing hidden for security)
+                </span>
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                <div className="flex justify-between">
-                  <span>Subtotal:</span>
-                  <span>{formatCurrency(orderSummary.pricing.subtotal)}</span>
-                </div>
-                {orderSummary.pricing.discounts && orderSummary.pricing.discounts.length > 0 && (
-                  <>
-                    <div className="space-y-1">
-                      {orderSummary.pricing.discounts.map((discount, index) => (
-                        <div key={index} className="flex justify-between text-sm text-red-600">
-                          <span>- {discount.description}</span>
-                          <span>-{formatCurrency(discount.amount)}</span>
-                        </div>
-                      ))}
+                {orderSummary.lineItems.map((item, index) => (
+                  <div key={index} className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
+                    <div className="flex-1">
+                      <div className="font-medium">{item.name}</div>
+                      <div className="text-sm text-gray-600">{item.description}</div>
                     </div>
-                    <div className="flex justify-between font-medium">
-                      <span>After Discounts:</span>
-                      <span>{formatCurrency(orderSummary.pricing.afterDiscounts)}</span>
+                    <div className="text-right">
+                      <div className="text-sm text-gray-500">Qty: {item.quantity}</div>
+                      <Badge variant="outline" className="text-xs mt-1">
+                        {item.type}
+                      </Badge>
                     </div>
-                  </>
-                )}
-                <div className="border-t pt-3">
-                  <div className="flex justify-between text-lg font-bold">
-                    <span>Total:</span>
-                    <span className="text-green-600">
-                      {formatCurrency(orderSummary.pricing.total)}
-                    </span>
                   </div>
+                ))}
+                
+                <Separator />
+                
+                <div className="space-y-2 pt-2 text-center text-gray-500">
+                  <div className="flex items-center justify-center gap-2">
+                    <span>💰</span>
+                    <span>Pricing information is hidden for security</span>
+                  </div>
+                  {orderSummary.pricing.discounts && orderSummary.pricing.discounts.length > 0 && (
+                    <div className="text-sm text-blue-600">
+                      ✅ {orderSummary.pricing.discounts.length} discount(s) applied
+                    </div>
+                  )}
+                  {orderSummary.pricing.override && (
+                    <div className="text-sm text-orange-600">
+                      ⚠️ Custom pricing override applied
+                    </div>
+                  )}
                 </div>
               </div>
             </CardContent>
@@ -636,32 +328,8 @@ export function BarcodeScanner({ onOrderScanned }: BarcodeScannerProps = {}) {
               </div>
             </CardContent>
           </Card>
-
-          {/* Notes */}
-          {orderSummary.notes && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <FileText className="h-5 w-5" />
-                  Notes
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-sm whitespace-pre-wrap bg-gray-50 p-3 rounded">
-                  {orderSummary.notes}
-                </div>
-              </CardContent>
-            </Card>
-          )}
         </div>
       )}
-
-      {/* Camera Scanner Modal */}
-      <CameraScanner
-        isOpen={showCameraScanner}
-        onClose={() => setShowCameraScanner(false)}
-        onBarcodeDetected={handleCameraScan}
-      />
     </div>
   );
 }

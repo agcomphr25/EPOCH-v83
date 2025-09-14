@@ -78,20 +78,9 @@ export default function CommunicationCompose({
       });
       onClose();
     } catch (error: any) {
-      console.error('Email send error:', error);
-      let errorMessage = 'Failed to send email';
-      
-      if (error.response?.data?.details) {
-        errorMessage = `SendGrid error: ${JSON.stringify(error.response.data.details)}`;
-      } else if (error.response?.data?.error) {
-        errorMessage = error.response.data.error;
-      } else if (error.message) {
-        errorMessage = error.message;
-      }
-      
       toast({
         title: 'Email Failed',
-        description: errorMessage,
+        description: error.message || 'Failed to send email',
         variant: 'destructive'
       });
     } finally {
@@ -133,20 +122,9 @@ export default function CommunicationCompose({
       });
       onClose();
     } catch (error: any) {
-      console.error('SMS send error:', error);
-      let errorMessage = 'Failed to send SMS';
-      
-      if (error.response?.data?.details) {
-        errorMessage = `Twilio error: ${JSON.stringify(error.response.data.details)}`;
-      } else if (error.response?.data?.error) {
-        errorMessage = error.response.data.error;
-      } else if (error.message) {
-        errorMessage = error.message;
-      }
-      
       toast({
         title: 'SMS Failed',
-        description: errorMessage,
+        description: error.message || 'Failed to send SMS',
         variant: 'destructive'
       });
     } finally {

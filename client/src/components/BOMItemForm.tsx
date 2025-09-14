@@ -155,18 +155,7 @@ export function BOMItemForm({ bomId, item, onSuccess, onCancel }: BOMItemFormPro
   });
 
   const onSubmit = (data: BomItemFormData) => {
-<<<<<<< HEAD
     mutation.mutate(data);
-=======
-    // Ensure numeric fields are actually numbers, not strings
-    const processedData = {
-      ...data,
-      quantity: typeof data.quantity === 'string' ? parseInt(data.quantity) : data.quantity,
-      purchasingUnitConversion: typeof data.purchasingUnitConversion === 'string' ? parseFloat(data.purchasingUnitConversion) : data.purchasingUnitConversion,
-    };
-    
-    mutation.mutate(processedData);
->>>>>>> origin/main
   };
 
   return (
@@ -261,20 +250,7 @@ export function BOMItemForm({ bomId, item, onSuccess, onCancel }: BOMItemFormPro
                     min="1"
                     placeholder="1"
                     {...field}
-<<<<<<< HEAD
                     onChange={(e) => field.onChange(parseInt(e.target.value) || 1)}
-=======
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      if (value === '' || value === '0') {
-                        field.onChange(1);
-                      } else {
-                        const parsed = parseInt(value, 10);
-                        field.onChange(isNaN(parsed) ? 1 : Math.max(1, parsed));
-                      }
-                    }}
-                    value={field.value}
->>>>>>> origin/main
                   />
                 </FormControl>
                 <FormDescription>
@@ -298,20 +274,7 @@ export function BOMItemForm({ bomId, item, onSuccess, onCancel }: BOMItemFormPro
                     min="0.001"
                     placeholder="1.00"
                     {...field}
-<<<<<<< HEAD
                     onChange={(e) => field.onChange(parseFloat(e.target.value) || 1)}
-=======
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      if (value === '') {
-                        field.onChange(1);
-                      } else {
-                        const parsed = parseFloat(value);
-                        field.onChange(isNaN(parsed) ? 1 : Math.max(0.001, parsed));
-                      }
-                    }}
-                    value={field.value}
->>>>>>> origin/main
                   />
                 </FormControl>
                 <FormDescription>

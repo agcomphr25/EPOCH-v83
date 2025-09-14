@@ -180,8 +180,8 @@ export default function ADMINTestDashboard() {
       description: 'Schedule and manage layup production orders'
     },
     {
-      path: '/ag-dashboard',
-      label: 'AG Dashboard',
+      path: '/agtest-dashboard',
+      label: 'AGTEST Dashboard',
       icon: BarChart,
       description: 'Unified production dashboard'
     }

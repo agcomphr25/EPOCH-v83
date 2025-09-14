@@ -1,40 +1,25 @@
+
 import React, { useMemo, useState } from 'react';
 import { BarcodeScanner } from '@/components/BarcodeScanner';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Factory, Calendar, ArrowRight, Package, CheckCircle, AlertTriangle, FileText, Eye } from 'lucide-react';
+import { Factory, Calendar, ArrowRight, Package, CheckCircle } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format, addDays, startOfWeek, eachDayOfInterval, isToday, isPast } from 'date-fns';
 import { getDisplayOrderId } from '@/lib/orderUtils';
-import { useToast } from '@/hooks/use-toast';
-import { useLocation } from 'wouter';
+import { toast } from 'react-hot-toast';
 import { apiRequest } from '@/lib/queryClient';
 import { useUnifiedLayupOrders } from '@/hooks/useUnifiedLayupOrders';
 import { identifyLOPOrders, scheduleLOPAdjustments, getLOPStatus } from '@/utils/lopScheduler';
 
-// Props interface for QueueOrderItem component
-interface QueueOrderItemProps {
-  order: any;
-  getModelDisplayName?: (modelId: string) => string;
-  processedOrders?: any[];
-  hasKickbacks?: (orderId: string) => boolean;
-  getKickbackStatus?: (orderId: string) => string | null;
-  handleKickbackClick?: (orderId: string) => void;
-  handleSalesOrderDownload?: (orderId: string) => void;
-}
-
 // Queue Order Item Component - simplified version of DraggableOrderItem for display only
-function QueueOrderItem({
-  order,
-  getModelDisplayName,
-  processedOrders,
-  hasKickbacks,
-  getKickbackStatus,
-  handleKickbackClick,
-  handleSalesOrderDownload
-}: QueueOrderItemProps) {
+function QueueOrderItem({ order, getModelDisplayName, processedOrders }: { 
+  order: any, 
+  getModelDisplayName?: (modelId: string) => string, 
+  processedOrders?: any[] 
+}) {
   // Determine material type for styling
   const getMaterialType = (modelId: string) => {
     if (modelId.startsWith('cf_')) return 'CF';
@@ -43,10 +28,10 @@ function QueueOrderItem({
     if (modelId.includes('fiberglass')) return 'FG';
     return null;
   };
-
+  
   const modelId = order.stockModelId || order.modelId;
   const materialType = getMaterialType(modelId || '');
-
+  
   // Determine card styling based on source and material
   const getCardStyling = () => {
     if (order.source === 'p1_purchase_order') {
@@ -71,7 +56,7 @@ function QueueOrderItem({
       };
     }
   };
-
+  
   const cardStyling = getCardStyling();
 
   return (
@@ -82,13 +67,13 @@ function QueueOrderItem({
           {order.source === 'p1_purchase_order' && <span className="text-xs ml-1 bg-green-200 dark:bg-green-700 px-1 rounded">P1</span>}
           {order.source === 'production_order' && <span className="text-xs ml-1 bg-orange-200 dark:bg-orange-700 px-1 rounded">PO</span>}
         </div>
-
+        
         {/* Show stock model display name with material type */}
         {(() => {
           if (!getModelDisplayName || !modelId) return null;
-
+          
           const displayName = getModelDisplayName(modelId);
-
+          
           return (
             <div className="text-xs opacity-80 mt-0.5 font-medium">
               {materialType && <span className="bg-gray-200 dark:bg-gray-600 px-1 rounded mr-1 text-xs font-bold">{materialType}</span>}
@@ -96,41 +81,41 @@ function QueueOrderItem({
             </div>
           );
         })()}
-
+        
         {/* Show Action Length Display */}
         {(() => {
           const modelId = order.stockModelId || order.modelId;
           const isAPR = modelId && modelId.toLowerCase().includes('apr');
-
+          
           // For APR orders, show both action type AND action length
           if (isAPR) {
             const getAPRActionDisplay = (orderFeatures: any) => {
               if (!orderFeatures) return null;
-
+              
               let actionType = orderFeatures.action_inlet;
               if (!actionType) {
                 actionType = orderFeatures.action;
               }
-
+              
               let actionLength = orderFeatures.action_length;
               if (!actionLength || actionLength === 'none') {
                 if (actionType && actionType.includes('short')) actionLength = 'SA';
                 else if (actionType && actionType.includes('long')) actionLength = 'LA';
                 else actionLength = 'SA';
               }
-
+              
               const lengthMap: {[key: string]: string} = {
                 'Long': 'LA', 'Medium': 'MA', 'Short': 'SA',
                 'long': 'LA', 'medium': 'MA', 'short': 'SA',
                 'LA': 'LA', 'MA': 'MA', 'SA': 'SA'
               };
-
+              
               const actionLengthAbbr = lengthMap[actionLength] || actionLength;
-
+              
               if (!actionType || actionType === 'none') {
                 return actionLengthAbbr;
               }
-
+              
               const actionMap: {[key: string]: string} = {
                 'anti_ten_hunter_def': 'Anti-X Hunter',
                 'apr': 'APR',
@@ -138,37 +123,37 @@ function QueueOrderItem({
                 'tikka': 'Tikka',
                 'savage': 'Savage'
               };
-
+              
               const actionDisplay = actionMap[actionType] || actionType.replace(/_/g, ' ').toUpperCase();
-
+              
               return `${actionLengthAbbr} ${actionDisplay}`;
             };
-
+            
             const aprActionDisplay = getAPRActionDisplay(order.features);
-
+            
             return aprActionDisplay ? (
               <div className="text-xs opacity-80 mt-0.5 font-medium">
                 {aprActionDisplay}
               </div>
             ) : null;
           }
-
+          
           // For non-APR orders, show action length
           const getActionInletDisplayNonAPR = (orderFeatures: any) => {
             if (!orderFeatures) return null;
-
+            
             let actionLengthValue = orderFeatures.action_length;
-
+            
             if ((!actionLengthValue || actionLengthValue === 'none') && orderFeatures.action_inlet) {
               const actionInlet = orderFeatures.action_inlet;
-
+              
               const inletToLengthMap: {[key: string]: string} = {
                 'anti_ten_hunter_def': 'SA',
                 'remington_700': 'SA',
                 'remington_700_long': 'LA',
                 'rem_700': 'SA',
                 'rem_700_short': 'SA',
-                'rem_700_long': 'LA',
+                'rem_700_long': 'LA', 
                 'tikka_t3': 'SA',
                 'tikka_short': 'SA',
                 'tikka_long': 'LA',
@@ -180,23 +165,23 @@ function QueueOrderItem({
                 'bergara_b14': 'SA',
                 'carbon_six_medium': 'MA'
               };
-
+              
               actionLengthValue = inletToLengthMap[actionInlet] || 'SA';
             }
-
+            
             if (!actionLengthValue || actionLengthValue === 'none') return null;
-
+            
             const displayMap: {[key: string]: string} = {
               'Long': 'LA', 'Medium': 'MA', 'Short': 'SA',
               'long': 'LA', 'medium': 'MA', 'short': 'SA',
               'LA': 'LA', 'MA': 'MA', 'SA': 'SA'
             };
-
+            
             return displayMap[actionLengthValue] || actionLengthValue;
           };
-
+          
           const actionInletDisplayNonAPR = getActionInletDisplayNonAPR(order.features);
-
+          
           return actionInletDisplayNonAPR ? (
             <div className="text-xs opacity-80 mt-0.5 font-medium">
               {actionInletDisplayNonAPR}
@@ -208,13 +193,13 @@ function QueueOrderItem({
         {(() => {
           const lopOrder = processedOrders?.find(o => o.orderId === order.orderId) || identifyLOPOrders([order])[0];
           const lopStatus = getLOPStatus(lopOrder);
-
+          
           if (lopStatus.status === 'none') return null;
-
+          
           return (
             <div className="text-xs mt-1">
               <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${
-                lopStatus.status === 'scheduled'
+                lopStatus.status === 'scheduled' 
                   ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800'
                   : lopStatus.status === 'scheduled'
                   ? 'bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300 border border-orange-200 dark:border-orange-800'
@@ -227,34 +212,34 @@ function QueueOrderItem({
             </div>
           );
         })()}
-
+        
         {/* Show Heavy Fill if selected */}
         {(() => {
           const getHeavyFillDisplay = (orderFeatures: any) => {
             if (!orderFeatures) return null;
-
+            
             const otherOptions = orderFeatures.other_options;
             if (Array.isArray(otherOptions) && otherOptions.includes('heavy_fill')) {
               return 'Heavy Fill';
             }
-
-            const heavyFillValue = orderFeatures.heavy_fill ||
-                                   orderFeatures.heavyFill ||
+            
+            const heavyFillValue = orderFeatures.heavy_fill || 
+                                   orderFeatures.heavyFill || 
                                    orderFeatures.heavy_fill_option ||
                                    orderFeatures['heavy-fill'];
-
-            if (heavyFillValue === 'true' ||
-                heavyFillValue === true ||
+            
+            if (heavyFillValue === 'true' || 
+                heavyFillValue === true || 
                 heavyFillValue === 'yes' ||
                 heavyFillValue === 'heavy_fill') {
               return 'Heavy Fill';
             }
-
+            
             return null;
           };
-
+          
           const heavyFillDisplay = getHeavyFillDisplay(order.features);
-
+          
           return heavyFillDisplay ? (
             <div className="text-xs mt-0.5">
               <span className="bg-orange-200 dark:bg-orange-700 px-1 rounded text-xs font-bold">
@@ -263,25 +248,6 @@ function QueueOrderItem({
             </div>
           ) : null;
         })()}
-
-        {/* Show Kickback Badge */}
-        <div className="text-xs mt-0.5 flex gap-1 flex-wrap">
-          {hasKickbacks && getKickbackStatus && handleKickbackClick && hasKickbacks(order.orderId) && (
-            <Badge
-              variant="destructive"
-              className={`cursor-pointer hover:opacity-80 transition-opacity text-xs ${
-                getKickbackStatus(order.orderId) === 'CRITICAL' ? 'bg-red-600 hover:bg-red-700' :
-                getKickbackStatus(order.orderId) === 'HIGH' ? 'bg-orange-600 hover:bg-orange-700' :
-                getKickbackStatus(order.orderId) === 'MEDIUM' ? 'bg-yellow-600 hover:bg-yellow-700' :
-                'bg-gray-600 hover:bg-gray-700'
-              }`}
-              onClick={() => handleKickbackClick(order.orderId)}
-            >
-              <AlertTriangle className="w-3 h-3 mr-1" />
-              Kickback
-            </Badge>
-          )}
-        </div>
       </div>
     </div>
   );
@@ -289,79 +255,13 @@ function QueueOrderItem({
 
 export default function LayupPluggingQueuePage() {
   const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
-  const [currentWeekOffset, setCurrentWeekOffset] = useState(0); // 0 = current week, 1 = next week, -1 = previous week
   const queryClient = useQueryClient();
-  const [, setLocation] = useLocation();
-
-  // Fetch all kickbacks to determine which orders have kickbacks
-  const { data: allKickbacks = [] } = useQuery({
-    queryKey: ['/api/kickbacks'],
-    refetchInterval: 30000 // Refresh every 30 seconds
-  });
-
-  // Helper function to check if an order has kickbacks
-  const hasKickbacks = (orderId: string) => {
-    return (allKickbacks as any[]).some((kickback: any) => kickback.orderId === orderId);
-  };
-
-  // Helper function to get the most severe kickback status for an order
-  const getKickbackStatus = (orderId: string) => {
-    const orderKickbacks = (allKickbacks as any[]).filter((kickback: any) => kickback.orderId === orderId);
-    if (orderKickbacks.length === 0) return null;
-
-    // Priority order: CRITICAL > HIGH > MEDIUM > LOW
-    const priorities = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'];
-    const highestPriority = orderKickbacks.reduce((highest: string, kickback: any) => {
-      const currentIndex = priorities.indexOf(kickback.priority);
-      const highestIndex = priorities.indexOf(highest);
-      return currentIndex < highestIndex ? kickback.priority : highest;
-    }, 'LOW');
-
-    return highestPriority;
-  };
-
-  // Function to handle kickback badge click
-  const handleKickbackClick = (orderId: string) => {
-    setLocation('/kickback-tracking');
-  };
-
-  // Function to handle sales order download
-  const { toast } = useToast();
-  const handleSalesOrderDownload = (orderId: string) => {
-    window.open(`/api/shipping-pdf/sales-order/${orderId}`, '_blank');
-    toast({
-      title: "Sales order opened",
-      description: `Sales order for ${orderId} opened in new tab for viewing`
-    });
-  };
-
-  // Calculate week info first
-  const weekInfo = useMemo(() => {
-    const today = new Date();
-    const baseStart = startOfWeek(today, { weekStartsOn: 1 });
-    const weekStart = addDays(baseStart, currentWeekOffset * 7);
-    const weekEnd = addDays(weekStart, 4);
-
-    const getWeekLabel = () => {
-      if (currentWeekOffset === 0) return 'Current Week';
-      if (currentWeekOffset === 1) return 'Next Week';
-      if (currentWeekOffset === -1) return 'Previous Week';
-      return `${currentWeekOffset > 0 ? '+' : ''}${currentWeekOffset} weeks`;
-    };
-
-    return {
-      label: getWeekLabel(),
-      start: weekStart,
-      end: weekEnd,
-      dateRange: `${format(weekStart, 'MMM dd')} - ${format(weekEnd, 'MMM dd, yyyy')}`
-    };
-  }, [currentWeekOffset]);
-
-  // Get layup schedule assignments filtered by selected week
+  
+  // Get current week's layup schedule assignments (SCHEDULED orders from Layup Scheduler)
   const { data: currentSchedule = [], isLoading: scheduleLoading } = useQuery({
-    queryKey: ['layup-schedule', currentWeekOffset],
+    queryKey: ['layup-schedule'],
     queryFn: async () => {
-      const response = await fetch(`/api/layup-schedule?weekStart=${weekInfo.start.toISOString()}&weekEnd=${weekInfo.end.toISOString()}`);
+      const response = await fetch('/api/layup-schedule');
       if (!response.ok) {
         throw new Error('Failed to fetch layup schedule');
       }
@@ -369,62 +269,32 @@ export default function LayupPluggingQueuePage() {
     },
     refetchInterval: 30000, // Refresh every 30 seconds
   });
-
+  
   // Get ALL orders to find details for scheduled orders
   const { orders: availableOrders, loading: ordersLoading } = useUnifiedLayupOrders();
-
-  // Build processed orders from BOTH schedule AND department filtering
+  
+  // Build processed orders from the SCHEDULE, not the raw queue
   const processedOrders = useMemo(() => {
-    if (!currentSchedule || currentSchedule.length === 0 || availableOrders.length === 0) {
-      console.log(`📅 LayupPluggingQueuePage: No data available - schedule: ${currentSchedule?.length || 0}, orders: ${availableOrders.length}`);
-      return [];
-    }
-
-    console.log(`📅 LayupPluggingQueuePage: Processing ${currentSchedule.length} scheduled entries with ${availableOrders.length} available orders`);
-
-    // Map scheduled orders to their full order details - include ALL scheduled orders for this week
+    if (!currentSchedule || currentSchedule.length === 0 || availableOrders.length === 0) return [];
+    
+    // Map scheduled orders to their full order details
     const scheduledOrdersWithDetails = currentSchedule.map((scheduleEntry: any) => {
       const orderDetails = availableOrders.find((order: any) => order.orderId === scheduleEntry.orderId);
       if (!orderDetails) {
-        console.warn(`⚠️ Scheduled order ${scheduleEntry.orderId} not found in available orders - creating placeholder`);
-        // Create a placeholder for scheduled orders not found in queue
-        return {
-          orderId: scheduleEntry.orderId,
-          scheduledDate: scheduleEntry.scheduledDate,
-          moldId: scheduleEntry.moldId,
-          employeeAssignments: scheduleEntry.employeeAssignments || [],
-          currentDepartment: 'Scheduled (Missing from Queue)',
-          product: `Scheduled Order: ${scheduleEntry.orderId}`,
-          status: 'scheduled',
-          priorityScore: 1,
-          source: 'layup_schedule'
-        };
+        console.warn(`⚠️ Scheduled order ${scheduleEntry.orderId} not found in available orders`);
+        return null;
       }
-
-      // Include ALL scheduled orders regardless of current department
-      // The fact that they are scheduled means they should appear in the layup/plugging view
-      console.log(`✅ Including scheduled order: ${scheduleEntry.orderId} (dept: ${orderDetails.currentDepartment})`);
-
+      
       return {
         ...orderDetails,
         scheduledDate: scheduleEntry.scheduledDate,
         moldId: scheduleEntry.moldId,
-        employeeAssignments: scheduleEntry.employeeAssignments || []
+        employeeId: scheduleEntry.employeeId,
+        scheduleId: scheduleEntry.id
       };
-    });
-
-    console.log(`📅 LayupPluggingQueuePage: Processed ${scheduledOrdersWithDetails.length} scheduled orders with details`);
-
-    // Log Monday orders specifically to debug the issue
-    const mondayOrders = scheduledOrdersWithDetails.filter(order => {
-      const schedDate = new Date(order.scheduledDate);
-      return schedDate.getDay() === 1; // Monday
-    });
-    console.log(`📅 MONDAY DEBUG: Found ${mondayOrders.length} orders scheduled for Monday`);
-    mondayOrders.forEach((order, index) => {
-      console.log(`   ${index + 1}. ${order.orderId} on ${new Date(order.scheduledDate).toDateString()}`);
-    });
-
+    }).filter(Boolean);
+    
+    console.log(`📋 Department Manager: Found ${scheduledOrdersWithDetails.length} scheduled orders out of ${currentSchedule.length} schedule entries`);
     return scheduledOrdersWithDetails;
   }, [currentSchedule, availableOrders]);
 
@@ -444,21 +314,25 @@ export default function LayupPluggingQueuePage() {
     },
   });
 
-  // Calculate week dates based on current offset (Monday-Friday)
+  // Calculate current week dates (Monday-Friday)
   const currentWeekDates = useMemo(() => {
     const today = new Date();
-    const baseStart = startOfWeek(today, { weekStartsOn: 1 }); // Monday start
-    const start = addDays(baseStart, currentWeekOffset * 7); // Offset by weeks
+    const start = startOfWeek(today, { weekStartsOn: 1 }); // Monday start
     return eachDayOfInterval({ start, end: addDays(start, 4) }); // Mon-Fri
-  }, [currentWeekOffset]);
+  }, []);
 
-
+  // Calculate next week dates
+  const nextWeekDates = useMemo(() => {
+    const today = new Date();
+    const nextWeekStart = addDays(startOfWeek(today, { weekStartsOn: 1 }), 7);
+    return eachDayOfInterval({ start: nextWeekStart, end: addDays(nextWeekStart, 4) });
+  }, []);
 
   // Display orders exactly as scheduled in the layup scheduler
   const currentWeekOrdersByDate = useMemo(() => {
     if (!Array.isArray(currentSchedule) || currentSchedule.length === 0 || !currentWeekDates.length) {
       console.log('🔍 No schedule data available - showing unscheduled orders. Schedule length:', (currentSchedule as any[]).length);
-
+      
       // If no schedule data, return empty - Department Manager only shows SCHEDULED orders
       console.log('📋 No orders scheduled yet. Use Layup Scheduler to schedule orders first.');
       return {};
@@ -468,7 +342,7 @@ export default function LayupPluggingQueuePage() {
       const weekDateStrings = currentWeekDates.map(date => date.toISOString().split('T')[0]);
       console.log('🔍 Week date strings for filtering:', weekDateStrings);
       console.log('🔍 Total schedule entries to process:', currentSchedule.length);
-
+      
       // Process all schedule entries for current week - use actual scheduled dates
       const weekOrders = currentSchedule.map((scheduleItem: any) => {
         if (!scheduleItem?.scheduledDate || !scheduleItem?.orderId) {
@@ -479,7 +353,7 @@ export default function LayupPluggingQueuePage() {
         try {
           const scheduledDate = new Date(scheduleItem.scheduledDate).toISOString().split('T')[0];
           const isInWeek = weekDateStrings.includes(scheduledDate);
-
+          
           if (!isInWeek) {
             return null; // Not in current week
           }
@@ -492,11 +366,11 @@ export default function LayupPluggingQueuePage() {
 
           // Find matching order from processed orders (includes LOP processing)
           const matchingOrder = processedOrders.find((o: any) => o.orderId === scheduleItem.orderId);
-
+          
           if (matchingOrder) {
             // Use the full processed order data with exact schedule date
-            const mergedOrder = {
-              ...matchingOrder,
+            const mergedOrder = { 
+              ...matchingOrder, 
               scheduledDate: scheduleItem.scheduledDate,
               source: matchingOrder.source || 'main_orders'
             };
@@ -512,13 +386,13 @@ export default function LayupPluggingQueuePage() {
             // Fallback to original available orders
             const fallbackOrder = availableOrders.find((o: any) => o.orderId === scheduleItem.orderId);
             if (fallbackOrder) {
-              return {
-                ...fallbackOrder,
+              return { 
+                ...fallbackOrder, 
                 scheduledDate: scheduleItem.scheduledDate,
                 source: fallbackOrder.source || 'main_orders'
               };
             }
-
+            
             // Create a minimal order from schedule data if no match found
             console.log('🔍 No matching order found, creating minimal order for:', scheduleItem.orderId);
             return {
@@ -564,7 +438,7 @@ export default function LayupPluggingQueuePage() {
         count: orders.length,
         orderIds: orders.map(o => o.orderId)
       })));
-
+      
       return grouped;
     } catch (error) {
       console.error('🔍 Error in currentWeekOrdersByDate calculation:', error);
@@ -587,23 +461,23 @@ export default function LayupPluggingQueuePage() {
     console.log('- Schedule loading:', scheduleLoading);
     console.log('- Orders loading:', ordersLoading);
     console.log('- Current week orders calculated:', currentWeekOrders.length);
-
+    
     if (Array.isArray(currentSchedule) && currentSchedule.length > 0) {
       console.log('- Schedule entries sample:', currentSchedule.slice(0, 5).map((s: any) => ({
         orderId: s.orderId,
         scheduledDate: s.scheduledDate,
         dateString: new Date(s.scheduledDate).toISOString().split('T')[0]
       })));
-
+      
       console.log('- All scheduled order IDs:', currentSchedule.map((s: any) => s.orderId));
     } else {
       console.log('- No schedule entries found - users need to assign orders in Layup Scheduler first');
       console.log('- Current schedule data type:', typeof currentSchedule);
       console.log('- Current schedule value:', currentSchedule);
     }
-
+    
     console.log('- Current week date strings:', currentWeekDates.map(d => d.toISOString().split('T')[0]));
-
+    
     if (availableOrders.length > 0) {
       console.log('- Available orders sample:', availableOrders.slice(0, 3).map((o: any) => ({
         orderId: o.orderId,
@@ -611,7 +485,7 @@ export default function LayupPluggingQueuePage() {
         stockModelId: o.stockModelId
       })));
     }
-
+    
     if (processedOrders.length > 0) {
       console.log('- Processed orders sample:', processedOrders.slice(0, 3).map((o: any) => ({
         orderId: o.orderId,
@@ -620,43 +494,46 @@ export default function LayupPluggingQueuePage() {
         needsLOPAdjustment: o.needsLOPAdjustment
       })));
     }
-
+    
     console.log('- Orders by date breakdown:', Object.entries(currentWeekOrdersByDate).map(([date, orders]) => ({
       date,
       count: orders.length,
-      orderIds: orders.map(o => o.orderId)
+      orderIds: orders.map((o: any) => o.orderId)
     })));
   }, [currentSchedule, currentWeekDates, availableOrders, processedOrders, scheduleLoading, ordersLoading, currentWeekOrders, currentWeekOrdersByDate]);
 
-  // Calculate next week layup count (relative to currently viewed week)
+  // Calculate next week layup count
   const nextWeekLayupCount = useMemo(() => {
-    if (!Array.isArray(currentSchedule)) {
+    if (!Array.isArray(currentSchedule) || !nextWeekDates.length) {
       return 0;
     }
 
     try {
-      const today = new Date();
-      const baseStart = startOfWeek(today, { weekStartsOn: 1 });
-      const nextWeekStart = addDays(baseStart, (currentWeekOffset + 1) * 7);
-      const nextWeekDates = eachDayOfInterval({ start: nextWeekStart, end: addDays(nextWeekStart, 4) });
       const nextWeekDateStrings = nextWeekDates.map(date => date.toISOString().split('T')[0]);
-
+      console.log('🔍 Next week date strings:', nextWeekDateStrings);
+      
       const nextWeekOrders = currentSchedule.filter((scheduleItem: any) => {
         if (!scheduleItem?.scheduledDate) return false;
         try {
           const scheduledDate = new Date(scheduleItem.scheduledDate).toISOString().split('T')[0];
-          return nextWeekDateStrings.includes(scheduledDate);
+          const isNextWeek = nextWeekDateStrings.includes(scheduledDate);
+          if (isNextWeek) {
+            console.log('🔍 Found next week order:', scheduleItem.orderId, scheduledDate);
+          }
+          return isNextWeek;
         } catch (dateError) {
+          console.warn('🔍 Date parsing error for next week calculation:', scheduleItem, dateError);
           return false;
         }
       });
 
+      console.log('🔍 Next week layup count:', nextWeekOrders.length);
       return nextWeekOrders.length;
     } catch (error) {
       console.error('🔍 Error calculating next week layup count:', error);
       return 0;
     }
-  }, [currentSchedule, currentWeekOffset]);
+  }, [currentSchedule, nextWeekDates]);
 
   // Calculate barcode queue count (orders that completed layup/plugging)
   const barcodeQueueCount = useMemo(() => {
@@ -664,8 +541,8 @@ export default function LayupPluggingQueuePage() {
       return 0;
     }
     try {
-      return allOrders.filter((order: any) =>
-        order?.currentDepartment === 'Barcode' ||
+      return allOrders.filter((order: any) => 
+        order?.currentDepartment === 'Barcode' || 
         (order?.department === 'Barcode' && order?.status === 'IN_PROGRESS')
       ).length;
     } catch (error) {
@@ -729,50 +606,32 @@ export default function LayupPluggingQueuePage() {
     moveToDepartmentMutation.mutate(selectedOrders);
   };
 
-  // Auto-select order when scanned
-  const handleOrderScanned = (orderId: string) => {
-    // Check if the order exists in the current queue
-    const orderExists = currentWeekOrders.some((order: any) => order.orderId === orderId);
-    if (orderExists) {
-      setSelectedOrders(prev => [...prev, orderId]);
-      toast.success(`Order ${orderId} selected automatically`);
-    } else {
-      toast.error(`Order ${orderId} is not in the Layup/Plugging department`);
-    }
-  };
-
   return (
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex items-center gap-2 mb-6">
         <Factory className="h-6 w-6" />
-<<<<<<< HEAD
         <h1 className="text-3xl font-bold">Layup/Plugging Department Manager</h1>
-=======
-        <h1 className="text-3xl font-bold">Layup/Plugging P1 Department Manager</h1>
->>>>>>> origin/main
       </div>
-
+      
       {/* Barcode Scanner at top */}
-      <BarcodeScanner onOrderScanned={handleOrderScanned} />
-
+      <BarcodeScanner />
+      
       {/* Summary Cards Row */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-        {/* Current View Summary */}
+        {/* Next Week Layup Count - Left Corner as requested */}
         <Card className="bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800">
           <CardHeader className="pb-3">
             <CardTitle className="text-blue-700 dark:text-blue-300 flex items-center gap-2">
               <Calendar className="h-5 w-5" />
-              {currentWeekOffset === 0 ? 'Current Week Schedule' :
-               currentWeekOffset === 1 ? 'Next Week Schedule' :
-               `Week ${currentWeekOffset > 0 ? '+' : ''}${currentWeekOffset}`}
+              Next Week Layup Schedule
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold text-blue-600 dark:text-blue-400">
-              {currentWeekOrders.length}
+              {nextWeekLayupCount}
             </div>
             <p className="text-sm text-blue-600 dark:text-blue-400 mt-1">
-              Orders scheduled for {weekInfo.dateRange}
+              Orders scheduled for {format(nextWeekDates[0], 'MMM d')} - {format(nextWeekDates[4], 'MMM d')}
             </p>
             <div className="text-xs text-blue-500 mt-2">
               Generated from Layup Scheduler
@@ -841,79 +700,45 @@ export default function LayupPluggingQueuePage() {
 
       {/* Spacer for sticky bottom bar */}
       {selectedOrders.length > 0 && <div className="h-24"></div>}
-
-      {/* Week Layup Queue - Day by Day View */}
+      
+      {/* Current Week Layup Queue - Day by Day View */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center justify-between flex-wrap gap-2">
-            <div className="flex items-center gap-3">
-              <span>Layup/Plugging Manager</span>
-              <Badge variant="secondary" className="text-sm">
-                {weekInfo.label}
+            <span>Layup/Plugging Manager - Generated from Scheduler</span>
+            <div className="flex items-center gap-2 flex-wrap">
+              {currentWeekOrders.length > 0 && (
+                <div className="flex items-center gap-2 mr-4">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setSelectedOrders(currentWeekOrders.map(o => o.orderId))}
+                    disabled={selectedOrders.length === currentWeekOrders.length}
+                  >
+                    Select All ({currentWeekOrders.length})
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setSelectedOrders([])}
+                    disabled={selectedOrders.length === 0}
+                  >
+                    Clear ({selectedOrders.length})
+                  </Button>
+                </div>
+              )}
+              <Badge variant="outline" className="text-sm">
+                Week: {format(currentWeekDates[0], 'MMM d')} - {format(currentWeekDates[4], 'MMM d')}
               </Badge>
-            </div>
-
-            {/* Week Navigation Controls */}
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCurrentWeekOffset(currentWeekOffset - 1)}
-                disabled={scheduleLoading}
-              >
-                ← Previous Week
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCurrentWeekOffset(0)}
-                disabled={currentWeekOffset === 0 || scheduleLoading}
-              >
-                Current Week
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCurrentWeekOffset(currentWeekOffset + 1)}
-                disabled={scheduleLoading}
-              >
-                Next Week →
-              </Button>
-            </div>
-          </CardTitle>
-          <p className="text-sm text-muted-foreground mt-2">
-            {weekInfo.dateRange} • Generated from Layup Scheduler
-          </p>
-        </CardHeader>
-        <CardContent>
-          {/* Selection Controls */}
-          {currentWeekOrders.length > 0 && (
-            <div className="flex items-center gap-2 flex-wrap mb-4 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
-              <div className="flex items-center gap-2 mr-4">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setSelectedOrders(currentWeekOrders.map(o => o.orderId))}
-                  disabled={selectedOrders.length === currentWeekOrders.length}
-                >
-                  Select All ({currentWeekOrders.length})
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setSelectedOrders([])}
-                  disabled={selectedOrders.length === 0}
-                >
-                  Clear ({selectedOrders.length})
-                </Button>
-              </div>
               {selectedOrders.length > 0 && (
                 <Badge variant="secondary" className="bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200">
                   {selectedOrders.length} Selected
                 </Badge>
               )}
             </div>
-          )}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
           {currentWeekOrders.length === 0 ? (
             <div className="text-center py-12 text-gray-500">
               <Package className="h-16 w-16 mx-auto mb-4 text-gray-300" />
@@ -942,11 +767,11 @@ export default function LayupPluggingQueuePage() {
                 const dateDisplay = format(date, 'MMM d');
                 const isCurrentDay = isToday(date);
                 const isPastDay = isPast(date) && !isToday(date);
-
+                
                 return (
                   <div key={dateStr} className={`border rounded-lg p-4 ${
-                    isCurrentDay ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200' :
-                    isPastDay ? 'bg-gray-50 dark:bg-gray-800/50 border-gray-200' :
+                    isCurrentDay ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200' : 
+                    isPastDay ? 'bg-gray-50 dark:bg-gray-800/50 border-gray-200' : 
                     'bg-white dark:bg-gray-900 border-gray-200'
                   }`}>
                     <div className="flex items-center justify-between mb-3">
@@ -980,7 +805,7 @@ export default function LayupPluggingQueuePage() {
                         </Badge>
                       </div>
                     </div>
-
+                    
                     {dayOrders.length === 0 ? (
                       <div className="text-center py-4 text-gray-400">
                         No orders scheduled for this day
@@ -989,7 +814,7 @@ export default function LayupPluggingQueuePage() {
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
                         {dayOrders.map((order: any) => {
                           const isSelected = selectedOrders.includes(order.orderId);
-
+                          
                           return (
                             <Card key={order.orderId} className={`relative border-l-4 transition-all cursor-pointer ${
                               order.source === 'p1_purchase_order' ? 'border-l-green-500' :
@@ -1006,29 +831,25 @@ export default function LayupPluggingQueuePage() {
                                   onClick={(e) => e.stopPropagation()}
                                 />
                               </div>
-
+                              
                               <CardContent className="p-0 pr-8">
                                 <QueueOrderItem
                                   order={order}
                                   getModelDisplayName={getModelDisplayName}
                                   processedOrders={processedOrders}
-                                  hasKickbacks={hasKickbacks}
-                                  getKickbackStatus={getKickbackStatus}
-                                  handleKickbackClick={handleKickbackClick}
-                                  handleSalesOrderDownload={handleSalesOrderDownload}
                                 />
-
+                                
                                 {/* Additional queue-specific info */}
                                 <div className="px-3 pb-3 pt-0">
                                   <div className="space-y-1 text-xs text-gray-500">
                                     {order.moldId && (
                                       <div>Mold: {order.moldId}</div>
                                     )}
-
+                                    
                                     {order.customer && (
                                       <div>Customer: {order.customer}</div>
                                     )}
-
+                                    
                                     {order.dueDate && (
                                       <div>Due: {format(new Date(order.dueDate), 'MMM d, yyyy')}</div>
                                     )}

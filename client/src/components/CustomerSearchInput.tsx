@@ -101,7 +101,7 @@ export default function CustomerSearchInput({
 
       const response = await apiRequest('/api/customers/create-bypass', {
         method: 'POST',
-        body: JSON.stringify(cleanedData),
+        body: cleanedData,
       });
 
       // Create customer address if all required fields are present
@@ -109,12 +109,12 @@ export default function CustomerSearchInput({
         try {
           await apiRequest('/api/addresses', {
             method: 'POST',
-            body: JSON.stringify({
+            body: {
               customerId: response.id.toString(),
               ...customerAddress,
               type: 'both',
               isDefault: true,
-            }),
+            },
           });
         } catch (error) {
           console.error('Failed to create customer address:', error);
@@ -267,74 +267,75 @@ export default function CustomerSearchInput({
                     Add New Customer
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="sm:max-w-[800px] max-h-[80vh] overflow-y-auto">
+                <DialogContent className="sm:max-w-[600px] max-h-[80vh] overflow-y-auto">
                   <DialogHeader>
                     <DialogTitle>Add New Customer</DialogTitle>
                   </DialogHeader>
-                  <div className="grid gap-6 py-4">
-                    {/* Name - Full width, larger */}
-                    <div className="space-y-2">
-                      <Label htmlFor="name">Name *</Label>
+                  <div className="grid gap-4 py-4">
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="name" className="text-right">
+                        Name *
+                      </Label>
                       <Input
                         id="name"
                         value={newCustomer.name}
                         onChange={(e) => setNewCustomer(prev => ({ ...prev, name: e.target.value }))}
+                        className="col-span-3"
                         placeholder="John Smith"
-                        className="text-base h-12"
                       />
                     </div>
-                    
-                    {/* Company - Full width, larger */}
-                    <div className="space-y-2">
-                      <Label htmlFor="company">Company</Label>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="company" className="text-right">
+                        Company
+                      </Label>
                       <Input
                         id="company"
                         value={newCustomer.company}
                         onChange={(e) => setNewCustomer(prev => ({ ...prev, company: e.target.value }))}
+                        className="col-span-3"
                         placeholder="ABC Defense"
-                        className="text-base h-12"
                       />
                     </div>
-                    
-                    {/* Email and Phone on same row but wider */}
-                    <div className="grid grid-cols-2 gap-6">
-                      <div className="space-y-2">
-                        <Label htmlFor="email">Email</Label>
-                        <Input
-                          id="email"
-                          type="email"
-                          value={newCustomer.email}
-                          onChange={(e) => setNewCustomer(prev => ({ ...prev, email: e.target.value }))}
-                          placeholder="john@example.com"
-                          className="text-base h-12"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="phone">Phone</Label>
-                        <Input
-                          id="phone"
-                          value={newCustomer.phone}
-                          onChange={(e) => setNewCustomer(prev => ({ ...prev, phone: e.target.value }))}
-                          placeholder="555-0123"
-                          className="text-base h-12"
-                        />
-                      </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="email" className="text-right">
+                        Email
+                      </Label>
+                      <Input
+                        id="email"
+                        type="email"
+                        value={newCustomer.email}
+                        onChange={(e) => setNewCustomer(prev => ({ ...prev, email: e.target.value }))}
+                        className="col-span-3"
+                        placeholder="john@example.com"
+                      />
                     </div>
-                    
-                    {/* Notes full width */}
-                    <div className="space-y-2">
-                      <Label htmlFor="notes">Notes</Label>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="phone" className="text-right">
+                        Phone
+                      </Label>
+                      <Input
+                        id="phone"
+                        value={newCustomer.phone}
+                        onChange={(e) => setNewCustomer(prev => ({ ...prev, phone: e.target.value }))}
+                        className="col-span-3"
+                        placeholder="555-0123"
+                      />
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="notes" className="text-right">
+                        Notes
+                      </Label>
                       <Input
                         id="notes"
                         value={newCustomer.notes}
                         onChange={(e) => setNewCustomer(prev => ({ ...prev, notes: e.target.value }))}
+                        className="col-span-3"
                         placeholder="Additional notes..."
-                        className="text-base h-12"
                       />
                     </div>
 
                     {/* Address Field */}
-                    <div>
+                    <div className="col-span-4">
                       <div className="flex items-center gap-2 mb-2">
                         <MapPin className="h-4 w-4 text-gray-500" />
                         <Label>Address (Optional)</Label>

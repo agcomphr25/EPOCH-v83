@@ -1,10 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-<<<<<<< HEAD
-import { FileText, Download, Printer, ClipboardList, Package, Receipt, Barcode, Calendar, Award, GraduationCap } from "lucide-react";
-=======
 import { FileText, Download, Printer, ClipboardList, Package, Receipt, Barcode, Calendar, Award } from "lucide-react";
->>>>>>> origin/main
 import { Link } from "wouter";
 
 export default function P2Forms() {
@@ -193,50 +189,6 @@ export default function P2Forms() {
             </CardContent>
           </Card>
 
-<<<<<<< HEAD
-          {/* Training Forms */}
-          <Card className="hover:shadow-lg transition-shadow">
-            <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-2">
-                <GraduationCap className="h-5 w-5 text-indigo-600" />
-                Training Forms
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-gray-600 mb-4">
-                Training and procedure documentation forms with digital signatures
-              </p>
-              <div className="space-y-2">
-                <Link href="/enhanced-forms?categoryId=6">
-                  <Button className="w-full justify-start" variant="outline">
-                    <GraduationCap className="h-4 w-4 mr-2" />
-                    Leader Training Forms
-                  </Button>
-                </Link>
-                <Link href="/enhanced-forms?categoryId=6">
-                  <Button className="w-full justify-start" variant="outline">
-                    <ClipboardList className="h-4 w-4 mr-2" />
-                    Shutdown Procedures
-                  </Button>
-                </Link>
-                <Link href="/enhanced-forms?categoryId=6">
-                  <Button className="w-full justify-start" variant="outline">
-                    <FileText className="h-4 w-4 mr-2" />
-                    Training Documentation
-                  </Button>
-                </Link>
-                <Link href="/enhanced-forms?mode=create&categoryId=6">
-                  <Button className="w-full justify-start" variant="outline">
-                    <ClipboardList className="h-4 w-4 mr-2" />
-                    Create Training Form
-                  </Button>
-                </Link>
-              </div>
-            </CardContent>
-          </Card>
-
-=======
->>>>>>> origin/main
           {/* Compliance & Documentation */}
           <Card className="hover:shadow-lg transition-shadow">
             <CardHeader className="pb-3">

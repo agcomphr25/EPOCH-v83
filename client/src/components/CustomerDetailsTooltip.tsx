@@ -12,7 +12,6 @@ interface Customer {
   email?: string;
   phone?: string;
   company: string;
-  contact?: string;
   customerType: string;
   notes: string;
   isActive: boolean;
@@ -95,12 +94,10 @@ export default function CustomerDetailsTooltip({ customerId, customerName, child
               )}
             </div>
 
-            {/* Contact */}
-            {customer?.contact && (
-              <div className="text-sm text-gray-600">
-                Contact: {customer.contact}
-              </div>
-            )}
+            {/* Customer ID */}
+            <div className="text-sm text-gray-600">
+              ID: {customerId}
+            </div>
 
             {/* Company */}
             {customer?.company && (

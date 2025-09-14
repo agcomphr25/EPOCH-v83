@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -8,7 +8,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Truck, Package, X, Mail, Phone } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { useQuery } from '@tanstack/react-query';
 import axios from 'axios';
 
 interface BulkShippingActionsProps {
@@ -44,28 +43,6 @@ export function BulkShippingActions({ selectedOrders, onClearSelection, shipping
     state: '',
     zip: ''
   });
-
-  // Get customers data for auto-populating address
-  const { data: customers = [] } = useQuery({
-    queryKey: ['/api/customers'],
-  });
-
-  // Get the first selected order's customer ID for address lookup
-  const firstOrderCustomerId = selectedOrders.length > 0 
-    ? shippingOrders.find(order => order.orderId === selectedOrders[0])?.customerId 
-    : null;
-
-  // Fetch customer address for the first selected order
-  const { data: customerAddresses = [] } = useQuery({
-    queryKey: ['/api/customers', firstOrderCustomerId, 'addresses'],
-    queryFn: async () => {
-      if (!firstOrderCustomerId) return [];
-      const response = await fetch(`/api/customers/${firstOrderCustomerId}/addresses`);
-      if (!response.ok) return [];
-      return response.json();
-    },
-    enabled: !!firstOrderCustomerId && dialogOpen,
-  });
   
   const [packageDetails, setPackageDetails] = useState<PackageDetails>({
     weight: '',
@@ -79,66 +56,6 @@ export function BulkShippingActions({ selectedOrders, onClearSelection, shipping
   const selectedOrdersData = shippingOrders.filter(order => 
     selectedOrders.includes(order.orderId)
   );
-
-  // Auto-populate shipping address when dialog opens
-  useEffect(() => {
-    if (dialogOpen && customerAddresses.length > 0 && firstOrderCustomerId) {
-      const customersList = customers as any[];
-      const customerInfo = customersList.find((c: any) => c.id.toString() === firstOrderCustomerId.toString());
-      
-      // Find default shipping address or fallback to first address
-      let address = customerAddresses.find((a: any) => 
-        a.type === 'shipping' && a.isDefault
-      );
-      
-      if (!address) {
-        address = customerAddresses.find((a: any) => 
-          a.type === 'both' && a.isDefault
-        );
-      }
-      
-      if (!address) {
-        address = customerAddresses.find((a: any) => a.isDefault);
-      }
-      
-      if (!address && customerAddresses.length > 0) {
-        address = customerAddresses[0];
-      }
-
-      if (address && customerInfo) {
-        setShippingAddress({
-          name: customerInfo.name || '',
-          street: address.street || '',
-          city: address.city || '',
-          state: address.state || '',
-          zip: address.zipCode || ''
-        });
-      }
-    }
-  }, [dialogOpen, customerAddresses, customers, firstOrderCustomerId]);
-
-  const resetForm = () => {
-    setShippingAddress({
-      name: '',
-      street: '',
-      city: '',
-      state: '',
-      zip: ''
-    });
-    setPackageDetails({
-      weight: '',
-      length: '',
-      width: '',
-      height: ''
-    });
-  };
-
-  const handleDialogClose = (open: boolean) => {
-    setDialogOpen(open);
-    if (!open) {
-      resetForm();
-    }
-  };
 
   const downloadPdf = (blob: Blob, filename: string) => {
     const url = window.URL.createObjectURL(blob);
@@ -190,7 +107,7 @@ export function BulkShippingActions({ selectedOrders, onClearSelection, shipping
 
     try {
       // Generate shipping label for bulk shipment
-      const response = await axios.post('/api/shipping-pdf/bulk-shipping-labels', {
+      const response = await axios.post('/api/shipping-pdf/ups-shipping-label/bulk', {
         orderIds: selectedOrders,
         shippingAddress,
         packageDetails,
@@ -231,7 +148,19 @@ export function BulkShippingActions({ selectedOrders, onClearSelection, shipping
       onClearSelection();
       
       // Reset form
-      resetForm();
+      setShippingAddress({
+        name: '',
+        street: '',
+        city: '',
+        state: '',
+        zip: ''
+      });
+      setPackageDetails({
+        weight: '',
+        length: '',
+        width: '',
+        height: ''
+      });
 
     } catch (error) {
       console.error('Error processing bulk shipping:', error);
@@ -273,7 +202,7 @@ export function BulkShippingActions({ selectedOrders, onClearSelection, shipping
           
           {/* Action Buttons */}
           <div className="flex gap-2">
-            <Dialog open={dialogOpen} onOpenChange={handleDialogClose}>
+            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
               <DialogTrigger asChild>
                 <Button className="flex-1">
                   <Truck className="h-4 w-4 mr-2" />
@@ -389,7 +318,7 @@ export function BulkShippingActions({ selectedOrders, onClearSelection, shipping
                   <div className="flex gap-2 pt-4">
                     <Button
                       variant="outline"
-                      onClick={() => handleDialogClose(false)}
+                      onClick={() => setDialogOpen(false)}
                       className="flex-1"
                     >
                       Cancel

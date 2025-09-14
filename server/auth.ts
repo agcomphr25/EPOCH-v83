@@ -9,8 +9,13 @@ const SALT_ROUNDS = 12;
 const MAX_LOGIN_ATTEMPTS = 5;
 const LOCK_TIME = 15 * 60 * 1000; // 15 minutes
 const SESSION_TIMEOUT = 8 * 60 * 60 * 1000; // 8 hours
-const INACTIVITY_TIMEOUT = 2 * 60 * 60 * 1000; // 2 hours of inactivity
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+const JWT_SECRET = process.env.JWT_SECRET;
+
+if (!JWT_SECRET) {
+  console.error('CRITICAL SECURITY ERROR: JWT_SECRET environment variable is not set!');
+  console.error('Please set JWT_SECRET before starting the application.');
+  process.exit(1);
+}
 
 export interface AuthUser {
   id: number;
@@ -49,12 +54,12 @@ export class AuthService {
       employeeId,
       type: 'access'
     };
-    return jwt.sign(payload, JWT_SECRET, { expiresIn: '2h' });
+    return jwt.sign(payload, JWT_SECRET!, { expiresIn: '2h' });
   }
 
   static verifyJWT(token: string): { userId: number; role: string; employeeId: number | null } | null {
     try {
-      const decoded = jwt.verify(token, JWT_SECRET) as any;
+      const decoded = jwt.verify(token, JWT_SECRET!) as any;
       return {
         userId: decoded.userId,
         role: decoded.role,
@@ -68,329 +73,155 @@ export class AuthService {
   static async createSession(userId: number, userType: string, employeeId: number | null, ipAddress: string | null, userAgent: string | null): Promise<string> {
     const sessionToken = this.generateSessionToken();
     const expiresAt = new Date(Date.now() + SESSION_TIMEOUT);
-    const lastActivityAt = new Date();
 
-    try {
-      await db.insert(userSessions).values({
-        userId,
-        sessionToken,
-        employeeId,
-        userType,
-        expiresAt,
-        ipAddress,
-        userAgent,
-        isActive: true,
-      });
-    } catch (error: any) {
-      // During deployment, userSessions table might not exist yet
-      // In this case, we'll rely on JWT tokens only
-      console.warn('Session table not available, using JWT-only mode:', error?.message || error);
-    }
+    await db.insert(userSessions).values({
+      userId,
+      sessionToken,
+      employeeId,
+      userType,
+      expiresAt,
+      ipAddress,
+      userAgent,
+      isActive: true,
+    });
 
     return sessionToken;
   }
 
   static async validateSession(sessionToken: string): Promise<SessionData | null> {
-    // Add timeout wrapper for database operations (longer for deployment)
-    const isProduction = process.env.NODE_ENV === 'production' || 
-                        process.env.REPLIT_DEPLOYMENT === 'true' ||
-                        process.env.REPL_OWNER;
-    const timeoutDuration = isProduction ? 10000 : 2500; // 10s for deployment, 2.5s for dev
+    const [session] = await db
+      .select()
+      .from(userSessions)
+      .where(
+        and(
+          eq(userSessions.sessionToken, sessionToken),
+          eq(userSessions.isActive, true),
+          gt(userSessions.expiresAt, new Date())
+        )
+      );
     
-    const timeoutPromise = new Promise<null>((_, reject) => {
-      setTimeout(() => reject(new Error('Database operation timeout')), timeoutDuration);
-    });
-
-    try {
-      const result = await Promise.race([
-        (async () => {
-          const [session] = await db
-            .select({
-              id: userSessions.id,
-              userId: userSessions.userId,
-              sessionToken: userSessions.sessionToken,
-              userType: userSessions.userType,
-              employeeId: userSessions.employeeId,
-              expiresAt: userSessions.expiresAt,
-              createdAt: userSessions.createdAt
-            })
-            .from(userSessions)
-            .where(
-              and(
-                eq(userSessions.sessionToken, sessionToken),
-                eq(userSessions.isActive, true),
-                gt(userSessions.expiresAt, new Date())
-              )
-            )
-            .limit(1);
-          
-          if (!session) {
-            return null;
-          }
-
-          // Check for inactivity timeout using createdAt as fallback for lastActivityAt
-          const lastActivity = session.createdAt ? new Date(session.createdAt) : new Date();
-          const inactivityDeadline = new Date(Date.now() - INACTIVITY_TIMEOUT);
-          
-          if (lastActivity < inactivityDeadline) {
-            // Session expired due to inactivity - use timeout for update too
-            try {
-              await Promise.race([
-                db.update(userSessions)
-                  .set({ isActive: false })
-                  .where(eq(userSessions.id, session.id)),
-                new Promise((_, reject) => setTimeout(() => reject(new Error('Update timeout')), 1000))
-              ]);
-            } catch (updateError) {
-              console.warn('Failed to update session status:', updateError);
-            }
-            return null;
-          }
-
-          // Extend session (update lastActivityAt only if column exists)
-          const newExpiresAt = new Date(Date.now() + SESSION_TIMEOUT);
-          
-          try {
-            await Promise.race([
-              db.update(userSessions)
-                .set({ expiresAt: newExpiresAt })
-                .where(eq(userSessions.id, session.id)),
-              new Promise((_, reject) => setTimeout(() => reject(new Error('Update timeout')), 1000))
-            ]);
-          } catch (updateError) {
-            console.warn('Failed to extend session:', updateError);
-            // Still return the session even if update fails
-          }
-
-          return {
-            userId: session.userId,
-            sessionToken: session.sessionToken,
-            userType: session.userType,
-            employeeId: session.employeeId,
-            expiresAt: newExpiresAt,
-          };
-        })(),
-        timeoutPromise
-      ]);
-
-      return result;
-    } catch (error: any) {
-      // Enhanced error logging for debugging
-      console.warn('Session validation failed:', {
-        error: error?.message || error,
-        timeout: error?.message === 'Database operation timeout',
-        sessionToken: sessionToken?.substring(0, 8) + '...' // Log partial token for debugging
-      });
+    if (!session) {
       return null;
     }
+
+    // Extend session if still valid
+    const newExpiresAt = new Date(Date.now() + SESSION_TIMEOUT);
+    await db
+      .update(userSessions)
+      .set({ expiresAt: newExpiresAt })
+      .where(eq(userSessions.id, session.id));
+
+    return {
+      userId: session.userId,
+      sessionToken: session.sessionToken,
+      userType: session.userType,
+      employeeId: session.employeeId,
+      expiresAt: newExpiresAt,
+    };
   }
 
   static async invalidateSession(sessionToken: string): Promise<void> {
-    try {
-      await db
-        .update(userSessions)
-        .set({ isActive: false })
-        .where(eq(userSessions.sessionToken, sessionToken));
-    } catch (error: any) {
-      // During deployment, userSessions table might not exist yet
-      console.warn('Session invalidation failed, using JWT-only mode:', error?.message || error);
-    }
+    await db
+      .update(userSessions)
+      .set({ isActive: false })
+      .where(eq(userSessions.sessionToken, sessionToken));
   }
 
   static async invalidateAllUserSessions(userId: number): Promise<void> {
-    try {
-      await db
-        .update(userSessions)
-        .set({ isActive: false })
-        .where(eq(userSessions.userId, userId));
-    } catch (error: any) {
-      // During deployment, userSessions table might not exist yet
-      console.warn('Bulk session invalidation failed, using JWT-only mode:', error?.message || error);
-    }
+    await db
+      .update(userSessions)
+      .set({ isActive: false })
+      .where(eq(userSessions.userId, userId));
   }
 
-  static async authenticate(username: string, password: string, ipAddress: string | null, userAgent: string | null): Promise<{ user: AuthUser; sessionToken: string } | null> {
-    console.log('🔐 AUTH START: Looking up user in database...');
-    
-    // Add timeout wrapper around database operations (longer for deployment)
-    const isProduction = process.env.NODE_ENV === 'production' || 
-                        process.env.REPLIT_DEPLOYMENT === 'true' ||
-                        process.env.REPL_OWNER;
-    const dbTimeoutDuration = isProduction ? 20000 : 5000; // 20s for deployment, 5s for dev
-    
-    const dbTimeoutPromise = new Promise<null>((_, reject) => {
-      setTimeout(() => reject(new Error('Database operation timeout in authenticate')), dbTimeoutDuration);
-    });
+  static async authenticate(username: string, password: string, ipAddress: string | null, userAgent: string | null): Promise<{ user: AuthUser; sessionToken: string; token: string } | null> {
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.username, username));
 
-    try {
-      const userResult = await Promise.race([
-        (async () => {
-          const [user] = await db
-            .select({
-              id: users.id,
-              username: users.username,
-              role: users.role,
-              employeeId: users.employeeId,
-              passwordHash: users.passwordHash,
-              lockedUntil: users.lockedUntil,
-              isActive: users.isActive,
-              failedLoginAttempts: users.failedLoginAttempts,
-              canOverridePrices: users.canOverridePrices
-            })
-            .from(users)
-            .where(eq(users.username, username))
-            .limit(1);
-          return user;
-        })(),
-        dbTimeoutPromise
-      ]);
-
-      if (!userResult) {
-        console.log('❌ AUTH: User not found:', username);
-        return null;
-      }
-
-      console.log('✅ AUTH: User found, checking account status...');
-
-      // Check if account is locked
-      if (userResult.lockedUntil && new Date() < userResult.lockedUntil) {
-        throw new Error('Account is temporarily locked due to too many failed login attempts');
-      }
-
-      // Check if account is active
-      if (!userResult.isActive) {
-        throw new Error('Account is deactivated');
-      }
-
-      console.log('🔍 AUTH: Verifying password...');
-      
-      // Verify password with timeout (longer for deployment)
-      const passwordTimeoutDuration = isProduction ? 15000 : 3000; // 15s for deployment, 3s for dev
-      const passwordResult = await Promise.race([
-        this.verifyPassword(password, userResult.passwordHash || ''),
-        new Promise<boolean>((_, reject) => {
-          setTimeout(() => reject(new Error('Password verification timeout')), passwordTimeoutDuration);
-        })
-      ]);
-
-      console.log('🔍 AUTH: Password verification result:', passwordResult ? 'VALID' : 'INVALID');
-
-      if (!passwordResult) {
-        console.log('❌ AUTH: Invalid password, updating failed attempts...');
-        
-        // Increment failed login attempts (with timeout)
-        const failedAttempts = (userResult.failedLoginAttempts || 0) + 1;
-        const lockUntil = failedAttempts >= MAX_LOGIN_ATTEMPTS ? new Date(Date.now() + LOCK_TIME) : null;
-
-        try {
-          await Promise.race([
-            db.update(users)
-              .set({
-                failedLoginAttempts: failedAttempts,
-                lockedUntil: lockUntil,
-              })
-              .where(eq(users.id, userResult.id)),
-            new Promise((_, reject) => {
-              setTimeout(() => reject(new Error('Failed login update timeout')), 2000);
-            })
-          ]);
-        } catch (updateError) {
-          console.warn('Failed to update login attempts:', updateError);
-        }
-
-        if (lockUntil) {
-          throw new Error(`Account locked for ${LOCK_TIME / 60000} minutes due to too many failed login attempts`);
-        }
-
-        return null;
-      }
-
-      console.log('✅ AUTH: Password valid, resetting failed attempts...');
-
-      // Reset failed login attempts on successful login (with timeout)
-      try {
-        await Promise.race([
-          db.update(users)
-            .set({
-              failedLoginAttempts: 0,
-              lockedUntil: null,
-              lastLoginAt: new Date(),
-            })
-            .where(eq(users.id, userResult.id)),
-          new Promise((_, reject) => {
-            setTimeout(() => reject(new Error('Login reset update timeout')), 2000);
-          })
-        ]);
-      } catch (updateError) {
-        console.warn('Failed to reset login attempts:', updateError);
-        // Continue anyway since authentication succeeded
-      }
-
-      console.log('🔍 AUTH: Creating session...');
-
-      // Create session (with timeout)
-      const sessionToken = await Promise.race([
-        this.createSession(
-          userResult.id,
-          userResult.role,
-          userResult.employeeId,
-          ipAddress,
-          userAgent
-        ),
-        new Promise<string>((_, reject) => {
-          setTimeout(() => reject(new Error('Session creation timeout')), 3000);
-        })
-      ]);
-
-      console.log('✅ AUTH: Session created successfully');
-
-      // Log successful login (fire and forget, don't block on this)
-      if (userResult.employeeId) {
-        try {
-          Promise.race([
-            db.insert(employeeAuditLog).values({
-              employeeId: userResult.employeeId,
-              action: 'LOGIN',
-              details: { loginMethod: 'password' },
-              ipAddress,
-              userAgent,
-            }),
-            new Promise((_, reject) => {
-              setTimeout(() => reject(new Error('Audit log timeout')), 1000);
-            })
-          ]).catch(err => console.warn('Failed to log login:', err));
-        } catch (logError) {
-          console.warn('Audit logging failed:', logError);
-        }
-      }
-
-      console.log('🔍 AUTH: Generating JWT token...');
-
-      // Generate JWT token
-      const jwtToken = this.generateJWT(userResult.id, userResult.role, userResult.employeeId);
-
-      console.log('✅ AUTH COMPLETE: Authentication successful for user:', username);
-
-      return {
-        user: {
-          id: userResult.id,
-          username: userResult.username,
-          role: userResult.role,
-          employeeId: userResult.employeeId,
-          canOverridePrices: userResult.canOverridePrices || false,
-          isActive: userResult.isActive,
-        },
-        sessionToken,
-        token: jwtToken
-      } as any;
-
-    } catch (error: any) {
-      console.error('💥 AUTH ERROR:', error);
-      if (error.message?.includes('timeout')) {
-        throw new Error('Database timeout during authentication');
-      }
-      throw error;
+    if (!user) {
+      return null;
     }
+
+    // Check if account is locked
+    if (user.lockedUntil && new Date() < user.lockedUntil) {
+      throw new Error('Account is temporarily locked due to too many failed login attempts');
+    }
+
+    // Check if account is active
+    if (!user.isActive) {
+      throw new Error('Account is deactivated');
+    }
+
+    // Verify password
+    const isValidPassword = await this.verifyPassword(password, user.passwordHash);
+
+    if (!isValidPassword) {
+      // Increment failed login attempts
+      const failedAttempts = (user.failedLoginAttempts || 0) + 1;
+      const lockUntil = failedAttempts >= MAX_LOGIN_ATTEMPTS ? new Date(Date.now() + LOCK_TIME) : null;
+
+      await db
+        .update(users)
+        .set({
+          failedLoginAttempts: failedAttempts,
+          lockedUntil: lockUntil,
+        })
+        .where(eq(users.id, user.id));
+
+      if (lockUntil) {
+        throw new Error(`Account locked for ${LOCK_TIME / 60000} minutes due to too many failed login attempts`);
+      }
+
+      return null;
+    }
+
+    // Reset failed login attempts on successful login
+    await db
+      .update(users)
+      .set({
+        failedLoginAttempts: 0,
+        lockedUntil: null,
+        lastLoginAt: new Date(),
+      })
+      .where(eq(users.id, user.id));
+
+    // Create session
+    const sessionToken = await this.createSession(
+      user.id,
+      user.role,
+      user.employeeId,
+      ipAddress,
+      userAgent
+    );
+
+    // Log successful login
+    if (user.employeeId) {
+      await db.insert(employeeAuditLog).values({
+        employeeId: user.employeeId,
+        action: 'LOGIN',
+        details: { loginMethod: 'password' },
+        ipAddress,
+        userAgent,
+      });
+    }
+
+    // Generate JWT token
+    const jwtToken = this.generateJWT(user.id, user.role, user.employeeId);
+
+    return {
+      user: {
+        id: user.id,
+        username: user.username,
+        role: user.role,
+        employeeId: user.employeeId,
+        canOverridePrices: user.canOverridePrices ?? false,
+        isActive: user.isActive,
+      },
+      sessionToken,
+      token: jwtToken // Add JWT token to response
+    };
   }
 
   static async changePassword(userId: number, currentPassword: string, newPassword: string): Promise<boolean> {
@@ -403,7 +234,7 @@ export class AuthService {
       return false;
     }
 
-    const isValidCurrentPassword = user.passwordHash ? await this.verifyPassword(currentPassword, user.passwordHash) : false;
+    const isValidCurrentPassword = await this.verifyPassword(currentPassword, user.passwordHash);
     if (!isValidCurrentPassword) {
       return false;
     }
@@ -424,51 +255,23 @@ export class AuthService {
   }
 
   static async getUserById(userId: number): Promise<AuthUser | null> {
-    const timeoutPromise = new Promise<null>((_, reject) => {
-      setTimeout(() => reject(new Error('Database operation timeout')), 2000); // 2 second timeout
-    });
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, userId));
 
-    try {
-      const result = await Promise.race([
-        (async () => {
-          const [user] = await db
-            .select({
-              id: users.id,
-              username: users.username,
-              role: users.role,
-              employeeId: users.employeeId,
-              canOverridePrices: users.canOverridePrices,
-              isActive: users.isActive
-            })
-            .from(users)
-            .where(eq(users.id, userId))
-            .limit(1);
-
-          if (!user || !user.isActive) {
-            return null;
-          }
-
-          return {
-            id: user.id,
-            username: user.username,
-            role: user.role,
-            employeeId: user.employeeId,
-            canOverridePrices: user.canOverridePrices || false,
-            isActive: user.isActive,
-          };
-        })(),
-        timeoutPromise
-      ]);
-
-      return result;
-    } catch (error: any) {
-      console.warn('getUserById failed:', {
-        error: error?.message || error,
-        userId,
-        timeout: error?.message === 'Database operation timeout'
-      });
+    if (!user || !user.isActive) {
       return null;
     }
+
+    return {
+      id: user.id,
+      username: user.username,
+      role: user.role,
+      employeeId: user.employeeId,
+      canOverridePrices: user.canOverridePrices ?? false,
+      isActive: user.isActive,
+    };
   }
 
   static async getUserBySession(sessionToken: string): Promise<AuthUser | null> {
@@ -480,42 +283,59 @@ export class AuthService {
     return this.getUserById(session.userId);
   }
 
+  static async createUser(userData: any): Promise<AuthUser> {
+    const { username, password, role = 'EMPLOYEE', employeeId, isActive = true, canOverridePrices = false } = userData;
+    
+    // Check if username already exists
+    const [existingUser] = await db
+      .select()
+      .from(users)
+      .where(eq(users.username, username));
+    
+    if (existingUser) {
+      throw new Error('Username already exists');
+    }
+
+    // Hash password
+    const passwordHash = await this.hashPassword(password);
+
+    // Insert new user
+    const [newUser] = await db
+      .insert(users)
+      .values({
+        username,
+        passwordHash,
+        role,
+        employeeId: employeeId || null,
+        isActive,
+        canOverridePrices: canOverridePrices || false,
+      })
+      .returning();
+
+    return {
+      id: newUser.id,
+      username: newUser.username,
+      role: newUser.role,
+      employeeId: newUser.employeeId,
+      canOverridePrices: newUser.canOverridePrices ?? false,
+      isActive: newUser.isActive ?? true,
+    };
+  }
+
   static async validatePortalToken(portalToken: string): Promise<{ employeeId: number; isValid: boolean }> {
     const { storage } = await import('./storage');
     return storage.validatePortalToken(portalToken);
   }
 
-  static async createUser(userData: any): Promise<AuthUser> {
-    // Simplified implementation - in production, implement proper user creation
-    return {
-      id: 0,
-      username: userData.username || 'unknown',
-      role: userData.role || 'EMPLOYEE',
-      employeeId: null,
-      canOverridePrices: false,
-      isActive: true
-    };
-  }
-
   static async verifyPortalToken(portalId: string): Promise<any> {
-    // Simplified implementation - in production, implement proper portal verification  
-    return null;
-  }
-
-  static async cleanupExpiredSessions(): Promise<void> {
-    try {
-      await db
-        .update(userSessions)
-        .set({ isActive: false })
-        .where(
-          and(
-            eq(userSessions.isActive, true),
-            lt(userSessions.expiresAt, new Date())
-          )
-        );
-    } catch (error) {
-      console.error('Failed to cleanup expired sessions:', error);
+    // Portal verification logic - for now delegate to validatePortalToken
+    const validation = await this.validatePortalToken(portalId);
+    if (!validation.isValid) {
+      return null;
     }
+    
+    // Return employee data if valid - you may want to expand this
+    return { employeeId: validation.employeeId, isValid: validation.isValid };
   }
 }
 

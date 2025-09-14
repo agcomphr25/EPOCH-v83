@@ -50,9 +50,6 @@ export default function ProductionTracker() {
     queryFn: fetchProductionOrders
   });
 
-  // Ensure orders is always an array
-  const ordersArray = Array.isArray(orders) ? orders : [];
-
   const updateMutation = useMutation({
     mutationFn: ({ id, data }: { id: number; data: ProductionOrderUpdate }) => updateProductionOrder(id, data),
     onSuccess: () => {
@@ -67,7 +64,7 @@ export default function ProductionTracker() {
   });
 
   // Filter orders based on search and status
-  const filteredOrders = ordersArray.filter(order => {
+  const filteredOrders = orders.filter(order => {
     const matchesSearch = !searchTerm || 
       order.orderId.toLowerCase().includes(searchTerm.toLowerCase()) ||
       order.poNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||

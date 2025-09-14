@@ -332,13 +332,13 @@ export default function OrdersList() {
           bValue = getCustomerName(b.customerId);
           break;
         case 'dueDate':
-          aValue = new Date(a.dueDate);
-          bValue = new Date(b.dueDate);
+          aValue = a.dueDate ? new Date(a.dueDate) : new Date(0);
+          bValue = b.dueDate ? new Date(b.dueDate) : new Date(0);
           break;
         case 'orderDate':
         default:
-          aValue = new Date(a.orderDate);
-          bValue = new Date(b.orderDate);
+          aValue = a.orderDate ? new Date(a.orderDate) : new Date(0);
+          bValue = b.orderDate ? new Date(b.orderDate) : new Date(0);
           break;
       }
       
@@ -754,13 +754,13 @@ export default function OrdersList() {
                     <TableCell>
                       <div className="flex items-center gap-2">
                         <CalendarDays className="h-4 w-4 text-gray-400" />
-                        {format(new Date(order.orderDate), 'MMM d, yyyy')}
+                        {order.orderDate ? format(new Date(order.orderDate), 'MMM d, yyyy') : 'N/A'}
                       </div>
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
                         <CalendarDays className="h-4 w-4 text-gray-400" />
-                        {format(new Date(order.dueDate), 'MMM d, yyyy')}
+                        {order.dueDate ? format(new Date(order.dueDate), 'MMM d, yyyy') : 'N/A'}
                       </div>
                     </TableCell>
                     <TableCell>

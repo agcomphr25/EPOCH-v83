@@ -20,6 +20,7 @@ import orderAttachmentsRoutes from './orderAttachments';
 import discountsRoutes from './discounts';
 import bomsRoutes from './boms';
 import robustBomRoutes from './robustBom';
+import p2BomsRoutes from './p2boms';
 import communicationsRoutes from './communications';
 import secureVerificationRoutes from './secureVerification';
 import nonconformanceRoutes from '../../routes/nonconformance';
@@ -97,6 +98,9 @@ export function registerRoutes(app: Express): Server {
   
   // Robust BOM management routes (P2 Enhanced)
   app.use('/api/robust-bom', robustBomRoutes);
+  
+  // P2 BOM management routes (CRUD)
+  app.use('/api/p2-boms', p2BomsRoutes);
 
   // Communications management routes
   app.use('/api/communications', communicationsRoutes);

@@ -19,6 +19,7 @@ import shippingTestRoutes from './shipping-test';
 import orderAttachmentsRoutes from './orderAttachments';
 import discountsRoutes from './discounts';
 import bomsRoutes from './boms';
+import robustBomRoutes from './robustBom';
 import communicationsRoutes from './communications';
 import secureVerificationRoutes from './secureVerification';
 import nonconformanceRoutes from '../../routes/nonconformance';
@@ -92,6 +93,9 @@ export function registerRoutes(app: Express): Server {
 
   // BOM management routes
   app.use('/api/boms', bomsRoutes);
+  
+  // Robust BOM management routes (P2 Enhanced)
+  app.use('/api/robust-bom', robustBomRoutes);
 
   // Communications management routes
   app.use('/api/communications', communicationsRoutes);

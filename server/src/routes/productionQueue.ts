@@ -7,11 +7,7 @@ async function autoMoveInvalidStockModelOrders(storage: any) {
   try {
     const allOrders = await storage.getAllOrders();
     
-<<<<<<< HEAD
-    // Split orders into three categories: those to move to Shipping QC, those needing attention, and valid orders
-=======
     // Split orders into two categories: those to move to Shipping QC vs those needing attention
->>>>>>> origin/main
     const ordersToMoveToShipping = [];
     const ordersNeedingAttention = [];
     
@@ -25,25 +21,12 @@ async function autoMoveInvalidStockModelOrders(storage: any) {
         continue;
       }
       
-<<<<<<< HEAD
-      // Orders with "no_stock" or "None" go directly to Shipping QC (bypass all production)
-      if (stockModel && (stockModel.toLowerCase() === 'no_stock' || stockModel.toLowerCase() === 'none')) {
-        ordersToMoveToShipping.push(order);
-      }
-      // Orders with invalid stock models (numeric IDs, empty, null) need attention
-      else if (!stockModel || stockModel === '' || stockModel.match(/^[0-9]+$/)) {
-        ordersNeedingAttention.push(order);
-      }
-      // Orders missing critical features need attention  
-      else if (!features.action_length || features.action_length === '') {
-=======
       // Orders with "no_stock" or "None" go directly to Shipping QC
       if (stockModel && (stockModel.toLowerCase() === 'no_stock' || stockModel.toLowerCase() === 'none')) {
         ordersToMoveToShipping.push(order);
       }
       // Orders with missing stock model or missing action_length need attention
       else if (!stockModel || stockModel === '' || !features.action_length || features.action_length === '') {
->>>>>>> origin/main
         ordersNeedingAttention.push(order);
       }
     }
@@ -97,11 +80,7 @@ router.post('/auto-populate', async (req: Request, res: Response) => {
   try {
     console.log('🏭 AUTO-POPULATE: Starting production queue auto-population...');
     
-<<<<<<< HEAD
-    // Get all finalized orders with VALID stock models (excluding invalid/problematic ones)
-=======
     // Get all finalized orders with stock models (excluding "None")
->>>>>>> origin/main
     const ordersQuery = `
       SELECT 
         o.order_id as orderId,
@@ -112,21 +91,6 @@ router.post('/auto-populate', async (req: Request, res: Response) => {
         o.current_department as currentDepartment,
         o.status,
         o.features,
-<<<<<<< HEAD
-        o.created_at as createdAt
-      FROM all_orders o
-      WHERE o.status = 'FINALIZED' 
-        AND o.current_department NOT IN ('Shipping', 'Layup/Plugging', 'Barcode', 'CNC', 'Finish', 'Gunsmith', 'Paint', 'Shipping QC')
-        AND o.model_id IS NOT NULL 
-        AND o.model_id != '' 
-        AND o.model_id != 'None' 
-        AND o.model_id != 'no_stock'
-        AND NOT (o.model_id ~ '^[0-9]+$')
-      ORDER BY o.due_date ASC, o.created_at ASC
-    `;
-
-    const eligibleOrders = await pool.query(ordersQuery);
-=======
         o.created_at as createdAt,
         CASE 
           WHEN o.model_id IS NULL OR o.model_id = '' OR o.model_id = 'None' THEN false
@@ -140,8 +104,7 @@ router.post('/auto-populate', async (req: Request, res: Response) => {
     `;
 
     const ordersResult = await pool.query(ordersQuery);
-    const eligibleOrders = Array.isArray(ordersResult) ? ordersResult : (ordersResult.rows || []);
->>>>>>> origin/main
+    const eligibleOrders = Array.isArray(ordersResult) ? ordersResult : ((ordersResult as any).rows || []);
 
     console.log(`📋 Found ${eligibleOrders.length} eligible orders for production queue`);
 
@@ -229,11 +192,7 @@ router.get('/p1-queue', async (req: Request, res: Response) => {
   try {
     console.log('🏭 P1 QUEUE: Fetching P1 production queue...');
     
-<<<<<<< HEAD
-    const orders = await pool.query(`
-=======
     const queueResult = await pool.query(`
->>>>>>> origin/main
       SELECT 
         order_id,
         customer_name,
@@ -248,11 +207,8 @@ router.get('/p1-queue', async (req: Request, res: Response) => {
         AND status = 'IN_PROGRESS'
       ORDER BY due_date ASC, created_at ASC
     `);
-<<<<<<< HEAD
-=======
     
-    const orders = Array.isArray(queueResult) ? queueResult : (queueResult.rows || []);
->>>>>>> origin/main
+    const orders = Array.isArray(queueResult) ? queueResult : ((queueResult as any).rows || []);
 
     // Calculate current priority metrics
     const now = new Date();
@@ -324,12 +280,8 @@ router.get('/prioritized', async (req: Request, res: Response) => {
         o.created_at ASC
     `;
 
-<<<<<<< HEAD
-    const prioritizedQueue = await pool.query(queueQuery);
-=======
     const queueResult = await pool.query(queueQuery);
-    const prioritizedQueue = Array.isArray(queueResult) ? queueResult : (queueResult.rows || []);
->>>>>>> origin/main
+    const prioritizedQueue = Array.isArray(queueResult) ? queueResult : ((queueResult as any).rows || []);
 
     // Calculate current priority metrics
     const now = new Date();
@@ -463,12 +415,8 @@ router.get('/po-items', async (req: Request, res: Response) => {
       ORDER BY po.expected_delivery ASC, po.created_at ASC
     `;
 
-<<<<<<< HEAD
-    const poItems = await pool.query(poItemsQuery);
-=======
     const poItemsResult = await pool.query(poItemsQuery);
-    const poItems = Array.isArray(poItemsResult) ? poItemsResult : (poItemsResult.rows || []);
->>>>>>> origin/main
+    const poItems = Array.isArray(poItemsResult) ? poItemsResult : ((poItemsResult as any).rows || []);
 
     // Calculate priority metrics for each PO item
     const now = new Date();
@@ -561,11 +509,7 @@ router.post('/po-to-layup', async (req: Request, res: Response) => {
         JSON.stringify({ po_item_id: poItem.id, po_number: poItem.poNumber, unit_number: i })
       ]);
 
-<<<<<<< HEAD
-      const orders = orderResult;
-=======
-      const orders = Array.isArray(orderResult) ? orderResult : (orderResult.rows || []);
->>>>>>> origin/main
+      const orders = Array.isArray(orderResult) ? orderResult : ((orderResult as any).rows || []);
       if (orders.length > 0) {
         createdOrders.push(orders[0]);
         console.log(`✅ Created order ${orderId} for PO item ${poItem.itemName} (unit ${i}/${poItem.quantity})`);
@@ -643,11 +587,7 @@ router.post('/po-weeks-to-layup', async (req: Request, res: Response) => {
 
     // Create orders for each selected week
     for (const weekNumber of selectedWeeks) {
-<<<<<<< HEAD
       const weekData = weeklySchedule.find((w: any) => w.week === weekNumber);
-=======
-      const weekData = weeklySchedule.find(w => w.week === weekNumber);
->>>>>>> origin/main
       if (!weekData) {
         console.warn(`⚠️ Week ${weekNumber} not found in schedule`);
         continue;
@@ -700,25 +640,15 @@ router.post('/po-weeks-to-layup', async (req: Request, res: Response) => {
           })
         ]);
 
-<<<<<<< HEAD
-        const orders = orderResult;
-        if (orders.length > 0) {
-          // Store order with week metadata for scheduling  
-=======
-        const orders = Array.isArray(orderResult) ? orderResult : (orderResult.rows || []);
+        const orders = Array.isArray(orderResult) ? orderResult : ((orderResult as any).rows || []);
         if (orders.length > 0) {
           // Store order with week metadata for scheduling
->>>>>>> origin/main
           const orderWithMeta = {
             ...orders[0],
             weekNumber: weekNumber,
             weekDueDate: weekDueDate.toISOString(),
             stockModelId: poItem.stockmodelid
-<<<<<<< HEAD
-          } as any; // Type assertion to maintain access to both original and metadata properties
-=======
           };
->>>>>>> origin/main
           createdOrders.push(orderWithMeta);
           console.log(`✅ Created order ${orderId} for PO item ${poItem.itemname} (week ${weekNumber}, unit ${i}/${unitsThisWeek})`);
         }
@@ -755,59 +685,25 @@ router.post('/po-weeks-to-layup', async (req: Request, res: Response) => {
       `;
       
       const moldResult = await pool.query(moldsQuery, [order.stockModelId]);
-<<<<<<< HEAD
-      const molds = moldResult;
-=======
-      const molds = Array.isArray(moldResult) ? moldResult : (moldResult.rows || []);
->>>>>>> origin/main
+      const molds = Array.isArray(moldResult) ? moldResult : ((moldResult as any).rows || []);
       
       if (molds.length > 0) {
         const mold = molds[0];
         
-<<<<<<< HEAD
-        // Add to layup schedule with layup_day field
-=======
         // Add to layup schedule
->>>>>>> origin/main
         const scheduleQuery = `
           INSERT INTO layup_schedule (
             order_id,
             scheduled_date,
-<<<<<<< HEAD
-            layup_day,
-            mold_id,
-            employee_assignments,
-            is_override,
-=======
             mold_id,
             employee_id,
             priority_score,
             is_locked,
->>>>>>> origin/main
             created_at,
             updated_at
           ) VALUES (
             $1, $2, $3, $4, $5, $6, NOW(), NOW()
           )
-<<<<<<< HEAD
-          ON CONFLICT (layup_day, mold_id) DO UPDATE SET
-            order_id = EXCLUDED.order_id,
-            scheduled_date = EXCLUDED.scheduled_date,
-            employee_assignments = EXCLUDED.employee_assignments,
-            updated_at = NOW()
-        `;
-        
-        // Extract business day from scheduled date as YYYY-MM-DD string
-        const layupDayStr = new Date(weekDueDate).toISOString().slice(0, 10);
-
-        await pool.query(scheduleQuery, [
-          order.order_id,
-          weekDueDate.toISOString(),
-          layupDayStr,
-          mold.mold_id,
-          JSON.stringify([]), // Empty employee assignments array
-          false // is_override
-=======
         `;
         
         await pool.query(scheduleQuery, [
@@ -817,7 +713,6 @@ router.post('/po-weeks-to-layup', async (req: Request, res: Response) => {
           null, // No specific employee assigned yet
           1500, // High priority for PO items
           false
->>>>>>> origin/main
         ]);
         
         console.log(`✅ Added order ${order.order_id} to layup schedule for week ${order.weekNumber} (${weekDueDate.toLocaleDateString()})`);
@@ -884,11 +779,7 @@ router.post('/move-selected-po-items', async (req: Request, res: Response) => {
           `;
           
           const orderIdResult = await pool.query(orderIdQuery);
-<<<<<<< HEAD
-          const nextOrderNumber = orderIdResult[0]?.next_id || 1;
-=======
-          const nextOrderNumber = orderIdResult.rows?.[0]?.next_id || 1;
->>>>>>> origin/main
+          const nextOrderNumber = (orderIdResult as any).rows?.[0]?.next_id || 1;
           const orderId = `AG${nextOrderNumber}`;
 
           // Create order in all_orders table
@@ -929,11 +820,7 @@ router.post('/move-selected-po-items', async (req: Request, res: Response) => {
             item.id
           ]);
 
-<<<<<<< HEAD
-          const createdOrder = orderResult[0];
-=======
-          const createdOrder = orderResult.rows[0];
->>>>>>> origin/main
+          const createdOrder = (orderResult as any).rows[0];
           createdOrders.push(createdOrder);
           totalItemsMoved++;
           
@@ -1028,11 +915,7 @@ router.get('/attention', async (req: Request, res: Response) => {
     `;
 
     const attentionResult = await pool.query(attentionQuery);
-<<<<<<< HEAD
-    const attentionOrders = attentionResult;
-=======
-    const attentionOrders = Array.isArray(attentionResult) ? attentionResult : (attentionResult.rows || []);
->>>>>>> origin/main
+    const attentionOrders = Array.isArray(attentionResult) ? attentionResult : ((attentionResult as any).rows || []);
 
     // Format the response with missing items identified
     const formattedOrders = attentionOrders.map((order: any) => {
@@ -1078,73 +961,4 @@ router.get('/attention', async (req: Request, res: Response) => {
   }
 });
 
-<<<<<<< HEAD
-// Manual cleanup endpoint to fix existing problematic orders
-router.post('/cleanup-invalid-orders', async (req: Request, res: Response) => {
-  try {
-    console.log('🧹 MANUAL CLEANUP: Starting cleanup of invalid orders...');
-    
-    // First, handle orders that should go to Shipping QC
-    const shippingQCQuery = `
-      UPDATE all_orders 
-      SET 
-        current_department = 'Shipping QC',
-        updated_at = NOW()
-      WHERE current_department = 'P1 Production Queue'
-        AND status IN ('FINALIZED', 'Active')
-        AND (model_id = 'no_stock' OR model_id = 'None')
-      RETURNING order_id, model_id
-    `;
-    
-    const shippingQCResult = await pool.query(shippingQCQuery);
-    const movedToShippingQC = shippingQCResult;
-    
-    console.log(`🚀 Moved ${movedToShippingQC.length} orders with no_stock/None to Shipping QC:`, movedToShippingQC.map((o: any) => o.order_id));
-    
-    // Get count of remaining problematic orders that need attention
-    const attentionQuery = `
-      SELECT COUNT(*) as count
-      FROM all_orders 
-      WHERE current_department = 'P1 Production Queue'
-        AND status IN ('FINALIZED', 'Active')
-        AND (
-          model_id IS NULL 
-          OR model_id = '' 
-          OR model_id ~ '^[0-9]+$'
-          OR features IS NULL 
-          OR NOT (features ? 'action_length')
-          OR (features ->> 'action_length') = ''
-        )
-    `;
-    
-    const attentionResult = await pool.query(attentionQuery);
-    const attentionCount = attentionResult[0]?.count || 0;
-    
-    const result = {
-      success: true,
-      message: `Cleanup completed successfully`,
-      movedToShippingQC: movedToShippingQC.length,
-      ordersNeedingAttention: attentionCount,
-      summary: {
-        'Moved to Shipping QC (no_stock/None)': movedToShippingQC.length,
-        'Remaining orders needing attention': attentionCount,
-        'Details': 'Orders needing attention have invalid stock models or missing action_length and are available via /attention endpoint'
-      }
-    };
-
-    console.log('🧹 MANUAL CLEANUP COMPLETE:', result.summary);
-    res.json(result);
-    
-  } catch (error) {
-    console.error('❌ MANUAL CLEANUP: Error during cleanup:', error);
-    res.status(500).json({
-      success: false,
-      error: "Failed to cleanup invalid orders",
-      details: error instanceof Error ? error.message : 'Unknown error'
-    });
-  }
-});
-
-=======
->>>>>>> origin/main
 export default router;

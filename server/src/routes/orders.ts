@@ -19,7 +19,10 @@ const router = Router();
 // Get all orders for All Orders List (root endpoint)
 router.get('/', async (req: Request, res: Response) => {
   try {
+    // Disable caching while debugging
+    res.set('Cache-Control', 'no-store');
     const orders = await storage.getAllOrders();
+    console.log(`[DEBUG] API route returning ${orders.length} orders`);
     res.json(orders);
   } catch (error) {
     console.error('Error retrieving orders:', error);
@@ -158,7 +161,10 @@ router.delete('/draft/:id', async (req: Request, res: Response) => {
 // Get all orders endpoint (backward compatibility)
 router.get('/all', async (req: Request, res: Response) => {
   try {
+    // Disable caching while debugging
+    res.set('Cache-Control', 'no-store');
     const orders = await storage.getAllOrders();
+    console.log(`[DEBUG] /all API route returning ${orders.length} orders`);
     res.json(orders);
   } catch (error) {
     console.error('Error retrieving all orders:', error);

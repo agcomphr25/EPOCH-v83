@@ -170,7 +170,7 @@ export interface IStorage {
   deleteOrderDraft(orderId: string): Promise<void>;
   getAllOrderDrafts(): Promise<OrderDraft[]>;
   getLastOrderId(): Promise<string>;
-  getAllOrders(): Promise<OrderDraft[]>;
+  getAllOrders(): Promise<Order[]>;
   getOrderById(orderId: string): Promise<OrderDraft | undefined>;
   
   // Order ID generation with atomic reservation system
@@ -1025,11 +1025,12 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async getAllOrders(): Promise<OrderDraft[]> {
+  async getAllOrders(): Promise<Order[]> {
     // Use all_orders table to get the complete order data
     
     // First get all orders from the main orders table
     const ordersData = await db.select().from(orders).orderBy(desc(orders.updatedAt));
+    console.log(`[DEBUG] getAllOrders fetched ${ordersData.length} orders from orders table`);
     
     // Get all customers to create a lookup map
     const allCustomers = await db.select().from(customers);
@@ -1039,7 +1040,7 @@ export class DatabaseStorage implements IStorage {
     return ordersData.map(order => ({
       ...order,
       customer: customerMap.get(order.customerId) || 'Unknown Customer'
-    })) as OrderDraft[];
+    })) as Order[];
   }
 
   async getOrderById(orderId: string): Promise<OrderDraft | undefined> {

@@ -6,10 +6,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { 
   Search, 
   Plus, 
@@ -18,37 +16,38 @@ import {
   TreePine, 
   DollarSign, 
   Clock, 
-  AlertTriangle,
   Copy,
   FileText,
-  BarChart3
+  Package,
+  Eye
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import { PartsManager } from '@/components/robust-bom/PartsManager';
 import { BOMTreeView } from '@/components/robust-bom/BOMTreeView';
 import { WhereUsedView } from '@/components/robust-bom/WhereUsedView';
 import { CostAnalysisView } from '@/components/robust-bom/CostAnalysisView';
 import { AuditLogView } from '@/components/robust-bom/AuditLogView';
+import { BOMDefinitionForm } from '../components/BOMDefinitionForm';
+import { BOMDetails } from '../components/BOMDetails';
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogDescription, 
+  DialogHeader, 
+  DialogTitle, 
+  DialogTrigger 
+} from "@/components/ui/dialog";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { BomDefinition } from "@shared/schema";
 
-interface Part {
-  id: string;
-  sku: string;
-  name: string;
-  type: 'PURCHASED' | 'MANUFACTURED' | 'PHANTOM';
-  uom: string;
-  purchaseUom: string;
-  conversionFactor: number;
-  stdCost: number;
-  revision?: string;
-  description?: string;
-  lifecycleStatus: 'ACTIVE' | 'OBSOLETE' | 'DISCONTINUED' | 'PHASE_OUT';
-  isActive: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
-
-interface SearchResult {
-  items: Part[];
+interface BOMSearchResult {
+  items: BomDefinition[];
   total: number;
   page: number;
   pageSize: number;
@@ -56,37 +55,81 @@ interface SearchResult {
 }
 
 export default function RobustBOMAdministration() {
-  const [activeTab, setActiveTab] = useState('parts');
-  const [selectedPart, setSelectedPart] = useState<Part | null>(null);
+  const [activeTab, setActiveTab] = useState('boms');
+  const [selectedBOM, setSelectedBOM] = useState<BomDefinition | null>(null);
+  const [selectedBOMId, setSelectedBOMId] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [typeFilter, setTypeFilter] = useState('ALL');
-  const [lifecycleFilter, setLifecycleFilter] = useState('ALL');
   const [currentPage, setCurrentPage] = useState(1);
+  const [isNewBOMOpen, setIsNewBOMOpen] = useState(false);
+  const [editingBOM, setEditingBOM] = useState<BomDefinition | null>(null);
   const queryClient = useQueryClient();
 
-  // Search parts query - using authenticated default fetcher
-  const { data: searchResults, isLoading: isSearching } = useQuery<SearchResult>({
-    queryKey: [`/api/robust-bom/parts/search?q=${searchQuery}&type=${typeFilter}&lifecycleStatus=${lifecycleFilter}&page=${currentPage}&pageSize=20`]
+  // Fetch all BOMs for robust administration
+  const { data: boms = [], isLoading } = useQuery<BomDefinition[]>({
+    queryKey: ["/api/boms"],
   });
 
-  const getLifecycleBadgeColor = (status: string) => {
-    switch (status) {
-      case 'ACTIVE': return 'bg-green-500';
-      case 'OBSOLETE': return 'bg-red-500';
-      case 'DISCONTINUED': return 'bg-gray-500';
-      case 'PHASE_OUT': return 'bg-yellow-500';
-      default: return 'bg-gray-500';
+  // Delete BOM mutation
+  const deleteBOMMutation = useMutation({
+    mutationFn: async (bomId: number) => {
+      await apiRequest(`/api/boms/${bomId}`, {
+        method: "DELETE",
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/boms"] });
+      toast.success("BOM deleted successfully");
+    },
+    onError: () => {
+      toast.error("Failed to delete BOM");
+    },
+  });
+
+  // Filter BOMs based on search term
+  const filteredBOMs = boms.filter(bom => 
+    bom.modelName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    bom.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    bom.revision.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    bom.sku?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const handleDeleteBOM = (bomId: number) => {
+    if (confirm("Are you sure you want to delete this BOM? This action cannot be undone.")) {
+      deleteBOMMutation.mutate(bomId);
     }
   };
 
-  const getTypeBadgeColor = (type: string) => {
-    switch (type) {
-      case 'PURCHASED': return 'bg-blue-500';
-      case 'MANUFACTURED': return 'bg-purple-500';
-      case 'PHANTOM': return 'bg-orange-500';
-      default: return 'bg-gray-500';
-    }
+  const handleBOMCreated = () => {
+    setIsNewBOMOpen(false);
+    queryClient.invalidateQueries({ queryKey: ["/api/boms"] });
+    toast.success("BOM created successfully");
   };
+
+  const handleBOMUpdated = () => {
+    setEditingBOM(null);
+    queryClient.invalidateQueries({ queryKey: ["/api/boms"] });
+    toast.success("BOM updated successfully");
+  };
+
+  const handleViewBOM = (bom: BomDefinition) => {
+    setSelectedBOM(bom);
+    setSelectedBOMId(bom.id);
+    setActiveTab('bom-tree');
+  };
+
+  // If viewing BOM details, show the details page
+  if (selectedBOMId) {
+    return (
+      <BOMDetails 
+        bomId={selectedBOMId} 
+        onBack={() => {
+          setSelectedBOMId(null);
+          setSelectedBOM(null);
+          setActiveTab('boms');
+        }} 
+      />
+    );
+  }
 
   return (
     <div className="container mx-auto p-6 max-w-7xl" data-testid="page-robust-bom">
@@ -100,10 +143,10 @@ export default function RobustBOMAdministration() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-5 mb-6" data-testid="tabs-main-navigation">
-          <TabsTrigger value="parts" className="flex items-center gap-2" data-testid="tab-parts">
+        <TabsList className="grid w-full grid-cols-4 mb-6" data-testid="tabs-main-navigation">
+          <TabsTrigger value="boms" className="flex items-center gap-2" data-testid="tab-boms">
             <FileText className="h-4 w-4" />
-            Parts Master
+            BOM Master
           </TabsTrigger>
           <TabsTrigger value="bom-tree" className="flex items-center gap-2" data-testid="tab-bom-tree">
             <TreePine className="h-4 w-4" />
@@ -117,188 +160,162 @@ export default function RobustBOMAdministration() {
             <DollarSign className="h-4 w-4" />
             Cost Analysis
           </TabsTrigger>
-          <TabsTrigger value="audit-log" className="flex items-center gap-2" data-testid="tab-audit-log">
-            <Clock className="h-4 w-4" />
-            Audit Trail
-          </TabsTrigger>
         </TabsList>
 
-        {/* Parts Master Tab */}
-        <TabsContent value="parts" className="space-y-6">
-          <Card data-testid="card-parts-master">
+        {/* BOM Master Tab */}
+        <TabsContent value="boms" className="space-y-6">
+          <Card data-testid="card-bom-master">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <FileText className="h-5 w-5" />
-                Parts Master Management
-              </CardTitle>
-              <CardDescription>
-                Manage parts with lifecycle status, UoM handling, and cost tracking
-              </CardDescription>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <FileText className="h-5 w-5" />
+                    BOM Master Management
+                  </CardTitle>
+                  <CardDescription>
+                    Manage Bill of Materials with advanced tracking and cost analysis
+                  </CardDescription>
+                </div>
+                <Dialog open={isNewBOMOpen} onOpenChange={setIsNewBOMOpen}>
+                  <DialogTrigger asChild>
+                    <Button className="bg-blue-600 hover:bg-blue-700" data-testid="button-add-bom">
+                      <Plus className="w-4 h-4 mr-2" />
+                      Add New BOM
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-2xl">
+                    <DialogHeader>
+                      <DialogTitle>Create New BOM</DialogTitle>
+                      <DialogDescription>
+                        Create a new Bill of Materials for a P2 product model
+                      </DialogDescription>
+                    </DialogHeader>
+                    <BOMDefinitionForm 
+                      onSuccess={handleBOMCreated}
+                      onCancel={() => setIsNewBOMOpen(false)}
+                    />
+                  </DialogContent>
+                </Dialog>
+              </div>
             </CardHeader>
             <CardContent>
-              {/* Search and Filter Controls */}
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+              {/* Search Controls */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                 <div className="space-y-2">
-                  <Label htmlFor="search-parts">Search Parts</Label>
+                  <Label htmlFor="search-boms">Search BOMs</Label>
                   <div className="relative">
                     <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                     <Input
-                      id="search-parts"
-                      placeholder="Search by SKU, name, or description..."
+                      id="search-boms"
+                      placeholder="Search by SKU, model, description, or revision..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       className="pl-10"
-                      data-testid="input-search-parts"
+                      data-testid="input-search-boms"
                     />
                   </div>
                 </div>
                 
                 <div className="space-y-2">
-                  <Label htmlFor="filter-type">Part Type</Label>
-                  <Select value={typeFilter} onValueChange={setTypeFilter}>
-                    <SelectTrigger data-testid="select-type-filter">
-                      <SelectValue placeholder="All Types" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="ALL">All Types</SelectItem>
-                      <SelectItem value="PURCHASED">Purchased</SelectItem>
-                      <SelectItem value="MANUFACTURED">Manufactured</SelectItem>
-                      <SelectItem value="PHANTOM">Phantom</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="filter-lifecycle">Lifecycle Status</Label>
-                  <Select value={lifecycleFilter} onValueChange={setLifecycleFilter}>
-                    <SelectTrigger data-testid="select-lifecycle-filter">
-                      <SelectValue placeholder="All Status" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="ALL">All Status</SelectItem>
-                      <SelectItem value="ACTIVE">Active</SelectItem>
-                      <SelectItem value="OBSOLETE">Obsolete</SelectItem>
-                      <SelectItem value="DISCONTINUED">Discontinued</SelectItem>
-                      <SelectItem value="PHASE_OUT">Phase Out</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
                   <Label>&nbsp;</Label>
-                  <Button 
-                    className="w-full" 
-                    onClick={() => setSelectedPart(null)}
-                    data-testid="button-add-part"
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add New Part
-                  </Button>
+                  <div className="text-sm text-gray-600 dark:text-gray-400 pt-3">
+                    {filteredBOMs.length} of {boms.length} BOMs
+                  </div>
                 </div>
               </div>
 
               <Separator className="my-4" />
 
-              {/* Parts List */}
+              {/* BOMs List */}
               <div className="space-y-4">
-                {isSearching ? (
-                  <div className="text-center py-8" data-testid="loading-parts">
+                {isLoading ? (
+                  <div className="text-center py-8" data-testid="loading-boms">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-                    <p className="mt-2 text-gray-500">Searching parts...</p>
+                    <p className="mt-2 text-gray-500">Loading BOMs...</p>
                   </div>
-                ) : searchResults?.items.length === 0 ? (
-                  <div className="text-center py-8" data-testid="no-parts-found">
+                ) : filteredBOMs.length === 0 ? (
+                  <div className="text-center py-8" data-testid="no-boms-found">
                     <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-500">No parts found matching your criteria</p>
-                    <p className="text-sm text-gray-400 mt-1">Try adjusting your search or filters</p>
+                    <p className="text-gray-500">
+                      {searchQuery ? "No BOMs found matching your criteria" : "No BOMs found"}
+                    </p>
+                    <p className="text-sm text-gray-400 mt-1">
+                      {searchQuery ? "Try adjusting your search" : "Get started by creating your first BOM"}
+                    </p>
                   </div>
                 ) : (
-                  <>
-                    <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
-                      {searchResults?.items.map((part) => (
-                        <Card 
-                          key={part.id} 
-                          className="cursor-pointer hover:shadow-md transition-shadow"
-                          onClick={() => setSelectedPart(part)}
-                          data-testid={`card-part-${part.id}`}
-                        >
-                          <CardContent className="p-4">
-                            <div className="flex justify-between items-start mb-2">
-                              <div>
-                                <h3 className="font-semibold text-lg" data-testid={`text-part-sku-${part.id}`}>
-                                  {part.sku}
-                                </h3>
-                                <p className="text-sm text-gray-600 dark:text-gray-300" data-testid={`text-part-name-${part.id}`}>
-                                  {part.name}
-                                </p>
-                              </div>
-                              <div className="flex flex-col gap-1">
-                                <Badge 
-                                  className={`text-white ${getLifecycleBadgeColor(part.lifecycleStatus)}`}
-                                  data-testid={`badge-lifecycle-${part.id}`}
-                                >
-                                  {part.lifecycleStatus}
+                  <Card>
+                    <CardContent>
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>SKU</TableHead>
+                            <TableHead>Model Name</TableHead>
+                            <TableHead>Revision</TableHead>
+                            <TableHead>Description</TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead>Last Updated</TableHead>
+                            <TableHead className="text-right">Actions</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {filteredBOMs.map((bom) => (
+                            <TableRow key={bom.id} className="hover:bg-gray-50 dark:hover:bg-gray-800" data-testid={`row-bom-${bom.id}`}>
+                              <TableCell className="text-sm text-gray-600">
+                                {bom.sku || "—"}
+                              </TableCell>
+                              <TableCell className="font-medium">
+                                {bom.modelName}
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant="outline">{bom.revision}</Badge>
+                              </TableCell>
+                              <TableCell className="max-w-xs truncate">
+                                {bom.description || "No description"}
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant={bom.isActive ? "default" : "secondary"}>
+                                  {bom.isActive ? "Active" : "Inactive"}
                                 </Badge>
-                                <Badge 
-                                  className={`text-white ${getTypeBadgeColor(part.type)}`}
-                                  data-testid={`badge-type-${part.id}`}
-                                >
-                                  {part.type}
-                                </Badge>
-                              </div>
-                            </div>
-                            
-                            <div className="grid grid-cols-2 gap-2 text-sm">
-                              <div>
-                                <span className="text-gray-500">UoM:</span>
-                                <span className="ml-1 font-medium" data-testid={`text-uom-${part.id}`}>
-                                  {part.uom}
-                                </span>
-                              </div>
-                              <div>
-                                <span className="text-gray-500">Cost:</span>
-                                <span className="ml-1 font-medium" data-testid={`text-cost-${part.id}`}>
-                                  ${part.stdCost.toFixed(2)}
-                                </span>
-                              </div>
-                            </div>
-                            
-                            {part.description && (
-                              <p className="text-xs text-gray-500 mt-2 line-clamp-2" data-testid={`text-description-${part.id}`}>
-                                {part.description}
-                              </p>
-                            )}
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </div>
-
-                    {/* Pagination */}
-                    {searchResults && searchResults.totalPages > 1 && (
-                      <div className="flex justify-center items-center gap-4 mt-6">
-                        <Button
-                          variant="outline"
-                          disabled={currentPage === 1}
-                          onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                          data-testid="button-previous-page"
-                        >
-                          Previous
-                        </Button>
-                        <span className="text-sm text-gray-600" data-testid="text-pagination">
-                          Page {currentPage} of {searchResults.totalPages} 
-                          ({searchResults.total} total parts)
-                        </span>
-                        <Button
-                          variant="outline"
-                          disabled={currentPage === searchResults.totalPages}
-                          onClick={() => setCurrentPage(prev => Math.min(searchResults.totalPages, prev + 1))}
-                          data-testid="button-next-page"
-                        >
-                          Next
-                        </Button>
-                      </div>
-                    )}
-                  </>
+                              </TableCell>
+                              <TableCell>
+                                {bom.updatedAt ? new Date(bom.updatedAt).toLocaleDateString() : "—"}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <div className="flex justify-end space-x-2">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleViewBOM(bom)}
+                                    data-testid={`button-view-${bom.id}`}
+                                  >
+                                    <Eye className="w-4 h-4" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => setEditingBOM(bom)}
+                                    data-testid={`button-edit-${bom.id}`}
+                                  >
+                                    <Edit className="w-4 h-4" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleDeleteBOM(bom.id)}
+                                    className="text-red-600 hover:text-red-700"
+                                    data-testid={`button-delete-${bom.id}`}
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </CardContent>
+                  </Card>
                 )}
               </div>
             </CardContent>
@@ -307,37 +324,113 @@ export default function RobustBOMAdministration() {
 
         {/* BOM Tree Tab */}
         <TabsContent value="bom-tree">
-          <BOMTreeView selectedPart={selectedPart} />
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <TreePine className="h-5 w-5" />
+                BOM Tree View
+              </CardTitle>
+              <CardDescription>
+                {selectedBOM ? `Viewing BOM tree for ${selectedBOM.modelName}` : "Select a BOM from the BOM Master tab to view its tree structure"}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {selectedBOM ? (
+                <div className="text-center py-8">
+                  <TreePine className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                  <p className="text-gray-500">BOM Tree view for {selectedBOM.modelName}</p>
+                  <p className="text-sm text-gray-400 mt-1">Component tree structure will be displayed here</p>
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <TreePine className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                  <p className="text-gray-500">No BOM selected</p>
+                  <p className="text-sm text-gray-400 mt-1">Select a BOM from the BOM Master tab to view its structure</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
 
         {/* Where Used Tab */}
         <TabsContent value="where-used">
-          <WhereUsedView selectedPart={selectedPart} />
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Search className="h-5 w-5" />
+                Where Used Analysis
+              </CardTitle>
+              <CardDescription>
+                {selectedBOM ? `Where ${selectedBOM.modelName} is used` : "Select a BOM to see where it's used"}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {selectedBOM ? (
+                <div className="text-center py-8">
+                  <Search className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                  <p className="text-gray-500">Where used analysis for {selectedBOM.modelName}</p>
+                  <p className="text-sm text-gray-400 mt-1">Usage relationships will be displayed here</p>
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <Search className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                  <p className="text-gray-500">No BOM selected</p>
+                  <p className="text-sm text-gray-400 mt-1">Select a BOM to see where it's used</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
 
         {/* Cost Analysis Tab */}
         <TabsContent value="cost-analysis">
-          <CostAnalysisView selectedPart={selectedPart} />
-        </TabsContent>
-
-        {/* Audit Log Tab */}
-        <TabsContent value="audit-log">
-          <AuditLogView selectedPart={selectedPart} />
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <DollarSign className="h-5 w-5" />
+                Cost Analysis
+              </CardTitle>
+              <CardDescription>
+                {selectedBOM ? `Cost breakdown for ${selectedBOM.modelName}` : "Select a BOM to analyze costs"}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {selectedBOM ? (
+                <div className="text-center py-8">
+                  <DollarSign className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                  <p className="text-gray-500">Cost analysis for {selectedBOM.modelName}</p>
+                  <p className="text-sm text-gray-400 mt-1">Cost rollup and analysis will be displayed here</p>
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <DollarSign className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                  <p className="text-gray-500">No BOM selected</p>
+                  <p className="text-sm text-gray-400 mt-1">Select a BOM to analyze costs</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
 
-      {/* Parts Manager Modal/Sidebar */}
-      {selectedPart !== null && (
-        <PartsManager
-          part={selectedPart}
-          onClose={() => setSelectedPart(null)}
-          onSave={() => {
-            setSelectedPart(null);
-            queryClient.invalidateQueries({ queryKey: ['robust-bom', 'parts'] });
-            toast.success('Part saved successfully');
-          }}
-        />
-      )}
+      {/* Edit BOM Dialog */}
+      <Dialog open={!!editingBOM} onOpenChange={() => setEditingBOM(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Edit BOM</DialogTitle>
+            <DialogDescription>
+              Update the Bill of Materials definition
+            </DialogDescription>
+          </DialogHeader>
+          {editingBOM && (
+            <BOMDefinitionForm 
+              bom={editingBOM as any}
+              onSuccess={handleBOMUpdated}
+              onCancel={() => setEditingBOM(null)}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

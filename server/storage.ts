@@ -1025,10 +1025,10 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async getAllOrders(): Promise<Order[]> {
-    // Use all_orders table directly as requested
-    const ordersData = await db.select().from(allOrders).orderBy(desc(allOrders.updatedAt));
-    console.log(`[DEBUG] getAllOrders fetched ${ordersData.length} orders from all_orders table`);
+  async getAllOrders(): Promise<OrderDraft[]> {
+    // Get all draft orders from the order_drafts table
+    const ordersData = await db.select().from(orderDrafts).orderBy(desc(orderDrafts.updatedAt));
+    console.log(`[DEBUG] getAllOrders fetched ${ordersData.length} orders from order_drafts table`);
     
     // Get all customers to create a lookup map
     const allCustomers = await db.select().from(customers);
@@ -1038,7 +1038,7 @@ export class DatabaseStorage implements IStorage {
     return ordersData.map(order => ({
       ...order,
       customer: customerMap.get(order.customerId) || 'Unknown Customer'
-    })) as Order[];
+    })) as OrderDraft[];
   }
 
   async getOrderById(orderId: string): Promise<OrderDraft | undefined> {

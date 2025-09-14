@@ -302,6 +302,24 @@ export default function Navigation() {
 
   const productionSchedulingItems = [
     {
+      path: '/production-queue',
+      label: 'Production Queue',
+      icon: Factory,
+      description: 'Manage production queue priorities and auto-populate orders'
+    },
+    {
+      path: '/p1-production-queue',
+      label: 'P1 Production Queue',
+      icon: Factory,
+      description: 'Manage P1 production queue priorities and order processing'
+    },
+    {
+      path: '/p2-production-queue',
+      label: 'P2 Production Queue',
+      icon: Factory,
+      description: 'Manage P2 production queue and OEM order processing'
+    },
+    {
       path: '/layup-scheduler',
       label: 'P1 Layup Scheduler',
       icon: Calendar,

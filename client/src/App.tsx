@@ -69,6 +69,8 @@ import PaintQueuePage from "./pages/PaintQueuePage";
 import QCShippingQueuePage from "./pages/QCShippingQueuePage";
 import ShippingQueuePage from "./pages/ShippingQueuePage";
 import ShippingManagement from "./pages/ShippingManagement";
+import ProductionQueuePage from "./pages/ProductionQueuePage";
+import P2ProductionQueuePage from "./pages/P2ProductionQueuePage";
 
 import { Toaster as HotToaster } from 'react-hot-toast';
 
@@ -157,6 +159,9 @@ function App() {
 
                   {/* Production and BOM Routes */}
                   <Route path="/production-tracking" component={ProductionTracking} />
+                  <Route path="/production-queue" component={ProductionQueuePage} />
+                  <Route path="/p1-production-queue" component={ProductionQueuePage} />
+                  <Route path="/p2-production-queue" component={P2ProductionQueuePage} />
                   <Route path="/bom-administration" component={BOMAdministration} />
 
                   {/* Barcode and Scanner Routes */}

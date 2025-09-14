@@ -188,14 +188,22 @@ export default function CNCQueuePage() {
     // Check both the modelId and the actual stock model display name
     const modelDisplayName = getModelDisplayName(modelId);
     
+<<<<<<< HEAD
     // Check for adjustable stock models - they ALWAYS go to Gunsmith
+=======
+    // Check for adjustable stock models
+>>>>>>> origin/main
     const isAdjustableModel = modelId.toLowerCase().includes('adjustable') || 
         modelId.toLowerCase().includes('adj') ||
         modelDisplayName.toLowerCase().includes('adjustable') ||
         modelDisplayName.toLowerCase().includes('adj');
     
     if (isAdjustableModel) {
+<<<<<<< HEAD
       return true; // → GUNSMITH (adjustable stocks always go to gunsmith)
+=======
+      return true;
+>>>>>>> origin/main
     }
     
     if (!order.features) return false;
@@ -439,7 +447,11 @@ export default function CNCQueuePage() {
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex items-center gap-2 mb-6">
         <Settings className="h-6 w-6" />
+<<<<<<< HEAD
         <h1 className="text-3xl font-bold">CNC Department Manager</h1>
+=======
+        <h1 className="text-3xl font-bold">CNC P1 Department Manager</h1>
+>>>>>>> origin/main
       </div>
 
       {/* Barcode Scanner at top - With navigation prevention */}
@@ -604,7 +616,11 @@ export default function CNCQueuePage() {
             </div>
           </CardTitle>
           <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
+<<<<<<< HEAD
             Purple borders: Gunsmith required (includes adjustable stocks) • Green borders: Ready for Finish
+=======
+            Purple borders: Gunsmith required • Green borders: Ready for Finish
+>>>>>>> origin/main
           </p>
         </CardHeader>
         <CardContent className="p-4">

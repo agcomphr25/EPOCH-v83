@@ -101,7 +101,10 @@ import { db } from "./db";
 import { eq, desc, asc, and, or, ilike, isNull, sql, ne, like, lt, gt, gte, lte, inArray, getTableColumns, count, sum, max, notInArray } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import bcrypt from 'bcrypt';
+<<<<<<< HEAD
 import axios from 'axios';
+=======
+>>>>>>> origin/main
 import { generateP1OrderId, getCurrentYearMonthPrefix, parseOrderId, formatOrderId } from "./utils/orderIdGenerator";
 
 // modify the interface with any CRUD methods
@@ -226,6 +229,7 @@ export interface IStorage {
   createFormSubmission(data: InsertFormSubmission): Promise<FormSubmission>;
   deleteFormSubmission(id: number): Promise<void>;
 
+<<<<<<< HEAD
   // Enhanced Form Categories CRUD
   getAllEnhancedFormCategories(): Promise<EnhancedFormCategory[]>;
   getEnhancedFormCategory(id: number): Promise<EnhancedFormCategory | undefined>;
@@ -243,6 +247,8 @@ export interface IStorage {
   // Enhanced Form Submissions CRUD
   getFormSubmissions(formId: number): Promise<EnhancedFormSubmission[]>;
 
+=======
+>>>>>>> origin/main
   // Inventory Items CRUD
   getAllInventoryItems(): Promise<InventoryItem[]>;
   getInventoryItem(id: number): Promise<InventoryItem | undefined>;
@@ -437,12 +443,20 @@ export interface IStorage {
 
   // P2 Purchase Order Items CRUD
   getP2PurchaseOrderItems(poId: number): Promise<P2PurchaseOrderItem[]>;
+<<<<<<< HEAD
+=======
+  getAllP2PurchaseOrderItems(): Promise<P2PurchaseOrderItem[]>;
+>>>>>>> origin/main
   createP2PurchaseOrderItem(data: InsertP2PurchaseOrderItem): Promise<P2PurchaseOrderItem>;
   updateP2PurchaseOrderItem(id: number, data: Partial<InsertP2PurchaseOrderItem>): Promise<P2PurchaseOrderItem>;
   deleteP2PurchaseOrderItem(id: number): Promise<void>;
 
   // P2 Production Orders CRUD
   getAllP2ProductionOrders(): Promise<P2ProductionOrder[]>;
+<<<<<<< HEAD
+=======
+  getP2ProductionOrdersWithPurchaseOrderDetails(): Promise<any[]>;
+>>>>>>> origin/main
   getP2ProductionOrdersByPoId(poId: number): Promise<P2ProductionOrder[]>;
   getP2ProductionOrder(id: number): Promise<P2ProductionOrder | undefined>;
   createP2ProductionOrder(data: InsertP2ProductionOrder): Promise<P2ProductionOrder>;
@@ -637,6 +651,16 @@ export interface IStorage {
   createPOProduct(data: InsertPOProduct): Promise<POProduct>;
   updatePOProduct(id: number, data: Partial<InsertPOProduct>): Promise<POProduct>;
   deletePOProduct(id: number): Promise<void>;
+<<<<<<< HEAD
+=======
+
+  // P2 PO Products methods
+  getAllP2POProducts(): Promise<any[]>;
+  getP2POProduct(id: number): Promise<any | undefined>;
+  createP2POProduct(data: any): Promise<any>;
+  updateP2POProduct(id: number, data: any): Promise<any>;
+  deleteP2POProduct(id: number): Promise<void>;
+>>>>>>> origin/main
 }
 
 export class DatabaseStorage implements IStorage {
@@ -2465,6 +2489,7 @@ export class DatabaseStorage implements IStorage {
     await db.delete(formSubmissions).where(eq(formSubmissions.id, id));
   }
 
+<<<<<<< HEAD
   // Enhanced Form Categories CRUD
   async getAllEnhancedFormCategories(): Promise<EnhancedFormCategory[]> {
     return await db.select().from(enhancedFormCategories).orderBy(asc(enhancedFormCategories.name));
@@ -2538,6 +2563,8 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(enhancedFormSubmissions.submittedAt));
   }
 
+=======
+>>>>>>> origin/main
   // Inventory Items CRUD
   async getAllInventoryItems(): Promise<InventoryItem[]> {
     return await db.select().from(inventoryItems).where(eq(inventoryItems.isActive, true)).orderBy(inventoryItems.name);
@@ -5004,6 +5031,7 @@ export class DatabaseStorage implements IStorage {
 
   async addBOMItem(bomId: number, data: InsertBomItem): Promise<BomItem> {
     try {
+<<<<<<< HEAD
       const [item] = await db
         .insert(bomItems)
         .values({
@@ -5012,6 +5040,21 @@ export class DatabaseStorage implements IStorage {
           updatedAt: new Date()
         })
         .returning();
+=======
+      // Remove auto-generated fields if they exist
+      const { id, createdAt, updatedAt, ...insertData } = data as any;
+      
+      const insertValues = {
+        ...insertData,
+        bomId
+      };
+      
+      const [item] = await db
+        .insert(bomItems)
+        .values(insertValues)
+        .returning();
+        
+>>>>>>> origin/main
       return item;
     } catch (error) {
       console.error('Error adding BOM item:', error);
@@ -5153,6 +5196,16 @@ export class DatabaseStorage implements IStorage {
       .orderBy(p2PurchaseOrderItems.createdAt);
   }
 
+<<<<<<< HEAD
+=======
+  async getAllP2PurchaseOrderItems(): Promise<P2PurchaseOrderItem[]> {
+    return await db
+      .select()
+      .from(p2PurchaseOrderItems)
+      .orderBy(p2PurchaseOrderItems.poId, p2PurchaseOrderItems.createdAt);
+  }
+
+>>>>>>> origin/main
   async createP2PurchaseOrderItem(data: InsertP2PurchaseOrderItem): Promise<P2PurchaseOrderItem> {
     const [item] = await db.insert(p2PurchaseOrderItems).values(data).returning();
     return item;
@@ -5189,6 +5242,56 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(p2ProductionOrders.createdAt));
   }
 
+<<<<<<< HEAD
+=======
+  async getP2ProductionOrdersWithPurchaseOrderDetails(): Promise<any[]> {
+    try {
+      return await db
+        .select({
+          // Production order fields
+          id: p2ProductionOrders.id,
+          orderId: p2ProductionOrders.orderId,
+          p2PoId: p2ProductionOrders.p2PoId,
+          p2PoItemId: p2ProductionOrders.p2PoItemId,
+          bomDefinitionId: p2ProductionOrders.bomDefinitionId,
+          bomItemId: p2ProductionOrders.bomItemId,
+          sku: p2ProductionOrders.sku,
+          partName: p2ProductionOrders.partName,
+          quantity: p2ProductionOrders.quantity,
+          department: p2ProductionOrders.department,
+          status: p2ProductionOrders.status,
+          priority: p2ProductionOrders.priority,
+          dueDate: p2ProductionOrders.dueDate,
+          startedAt: p2ProductionOrders.startedAt,
+          completedAt: p2ProductionOrders.completedAt,
+          notes: p2ProductionOrders.notes,
+          createdAt: p2ProductionOrders.createdAt,
+          updatedAt: p2ProductionOrders.updatedAt,
+          // Purchase order fields
+          poNumber: p2PurchaseOrders.poNumber,
+          customerName: p2PurchaseOrders.customerName,
+          poDate: p2PurchaseOrders.poDate,
+          expectedDelivery: p2PurchaseOrders.expectedDelivery,
+          // Purchase order item fields
+          poItemPartName: p2PurchaseOrderItems.partName,
+          poItemPartNumber: p2PurchaseOrderItems.partNumber,
+          poItemQuantity: p2PurchaseOrderItems.quantity,
+          poItemUnitPrice: p2PurchaseOrderItems.unitPrice,
+          poItemTotalPrice: p2PurchaseOrderItems.totalPrice,
+          poItemDueDate: p2PurchaseOrderItems.dueDate,
+          poItemSpecifications: p2PurchaseOrderItems.specifications,
+        })
+        .from(p2ProductionOrders)
+        .leftJoin(p2PurchaseOrders, eq(p2ProductionOrders.p2PoId, p2PurchaseOrders.id))
+        .leftJoin(p2PurchaseOrderItems, eq(p2ProductionOrders.p2PoItemId, p2PurchaseOrderItems.id))
+        .orderBy(desc(p2ProductionOrders.createdAt));
+    } catch (error) {
+      console.error('Error fetching P2 production orders with PO details:', error);
+      throw error;
+    }
+  }
+
+>>>>>>> origin/main
   async getP2ProductionOrdersByPoId(poId: number): Promise<P2ProductionOrder[]> {
     return await db
       .select()
@@ -5234,6 +5337,19 @@ export class DatabaseStorage implements IStorage {
       throw new Error(`No items found for P2 Purchase Order ${poId}`);
     }
 
+<<<<<<< HEAD
+=======
+    // Get the customer information to generate proper order IDs
+    const customer = await this.getP2Customer(po.customerId);
+    if (!customer) {
+      throw new Error(`P2 Customer ${po.customerId} not found`);
+    }
+
+    // Get all existing P2 production order IDs for uniqueness check
+    const existingP2Orders = await db.select({ orderId: p2ProductionOrders.orderId }).from(p2ProductionOrders);
+    const existingOrderIds = existingP2Orders.map(order => order.orderId);
+
+>>>>>>> origin/main
     const productionOrders: P2ProductionOrder[] = [];
 
     // Process each PO item
@@ -5274,10 +5390,19 @@ export class DatabaseStorage implements IStorage {
 
         // Create individual production orders (1 unit each) instead of bulk orders
         for (let unitIndex = 1; unitIndex <= totalQuantity; unitIndex++) {
+<<<<<<< HEAD
           // Generate unique order ID: P2-{PO#}-{item#}-{bomItem#}-{unit#}
           const orderIdSuffix = String(i + 1).padStart(3, '0');
           const unitSuffix = String(unitIndex).padStart(3, '0');
           const orderId = `P2-${po.poNumber}-${poItem.id}-${orderIdSuffix}-${unitSuffix}`;
+=======
+          // Generate unique order ID using customer name + year + sequential format
+          const { generateP2OrderId } = await import('../utils/orderIdGenerator');
+          const orderId = generateP2OrderId(customer.customerName, existingOrderIds);
+          
+          // Add this new order ID to the existing list to ensure uniqueness for subsequent orders
+          existingOrderIds.push(orderId);
+>>>>>>> origin/main
 
           const productionOrderData: InsertP2ProductionOrder = {
             orderId,
@@ -6401,6 +6526,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async fulfillOrder(orderId: string): Promise<AllOrder> {
+<<<<<<< HEAD
     console.log(`🚀 FULFILLMENT START: Processing fulfillment for order ${orderId}`);
     
     // Get the order first to get customer information for notifications
@@ -6412,19 +6538,25 @@ export class DatabaseStorage implements IStorage {
 
     console.log(`📋 ORDER FOUND: Order ${orderId} for customer ${existingOrder.customerId}`);
 
+=======
+>>>>>>> origin/main
     // Update the order to be fulfilled and move to shipping management
     const [order] = await db.update(allOrders)
       .set({ 
         currentDepartment: 'Shipping Management',
         status: 'FULFILLED',
         shippedDate: new Date(), // Set shipped date to current date when fulfilled
+<<<<<<< HEAD
         customerNotified: true, // Set customer notified to true when fulfilled
+=======
+>>>>>>> origin/main
         updatedAt: new Date()
       })
       .where(eq(allOrders.orderId, orderId))
       .returning();
 
     if (!order) {
+<<<<<<< HEAD
       throw new Error(`Order with ID ${orderId} not found after update`);
     }
 
@@ -6459,12 +6591,16 @@ export class DatabaseStorage implements IStorage {
       }
     } else {
       console.log(`⚠️ NO CUSTOMER ID: Order ${orderId} has no customer ID for notifications`);
+=======
+      throw new Error(`Order with ID ${orderId} not found`);
+>>>>>>> origin/main
     }
 
     console.log(`✅ FULFILLED: Order ${orderId} has been marked as fulfilled and moved to shipping management with shipped date: ${new Date().toISOString()}`);
     return order;
   }
 
+<<<<<<< HEAD
   // Helper method to send fulfillment notifications
   private async sendFulfillmentNotifications(orderId: string, customer: Customer): Promise<void> {
     try {
@@ -6585,6 +6721,8 @@ AG Composites Team`;
     }
   }
 
+=======
+>>>>>>> origin/main
   // Sync verification status between draft and finalized orders  
   async syncVerificationStatus(): Promise<{ updatedOrders: number; message: string }> {
     console.log('🔄 Starting verification status sync between draft and finalized orders...');
@@ -6682,6 +6820,56 @@ AG Composites Team`;
       .where(eq(poProducts.id, id));
   }
 
+<<<<<<< HEAD
+=======
+  // P2 PO Products implementation (using temporary storage until proper schema is added)
+  private p2POProducts: any[] = [];
+  private p2POProductIdCounter = 1;
+
+  async getAllP2POProducts(): Promise<any[]> {
+    return this.p2POProducts.filter(p => p.isActive !== false);
+  }
+
+  async getP2POProduct(id: number): Promise<any | undefined> {
+    return this.p2POProducts.find(p => p.id === id && p.isActive !== false);
+  }
+
+  async createP2POProduct(data: any): Promise<any> {
+    const product = {
+      id: this.p2POProductIdCounter++,
+      ...data,
+      isActive: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    this.p2POProducts.push(product);
+    return product;
+  }
+
+  async updateP2POProduct(id: number, data: any): Promise<any> {
+    const index = this.p2POProducts.findIndex(p => p.id === id && p.isActive !== false);
+    if (index === -1) {
+      throw new Error(`P2 PO Product with ID ${id} not found`);
+    }
+    
+    this.p2POProducts[index] = {
+      ...this.p2POProducts[index],
+      ...data,
+      updatedAt: new Date().toISOString(),
+    };
+    
+    return this.p2POProducts[index];
+  }
+
+  async deleteP2POProduct(id: number): Promise<void> {
+    const index = this.p2POProducts.findIndex(p => p.id === id);
+    if (index !== -1) {
+      this.p2POProducts[index].isActive = false;
+      this.p2POProducts[index].updatedAt = new Date().toISOString();
+    }
+  }
+
+>>>>>>> origin/main
 }
 
 export const storage = new DatabaseStorage();

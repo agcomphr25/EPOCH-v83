@@ -244,8 +244,13 @@ export default function EnhancedFormBuilderAdmin() {
           apiRequest('/api/enhanced-forms/categories'),
           apiRequest('/api/enhanced-forms')
         ]);
+<<<<<<< HEAD
         setCategories(Array.isArray(categoriesRes) ? categoriesRes : []);
         setForms(Array.isArray(formsRes) ? formsRes : []);
+=======
+        setCategories(categoriesRes);
+        setForms(formsRes);
+>>>>>>> origin/main
       } catch (error) {
         toast.error('Failed to load data');
       }
@@ -442,7 +447,11 @@ export default function EnhancedFormBuilderAdmin() {
         </CardHeader>
         <CardContent>
           <div className="flex flex-wrap gap-2 mb-4">
+<<<<<<< HEAD
             {(categories || []).map(cat => (
+=======
+            {categories.map(cat => (
+>>>>>>> origin/main
               <Badge key={cat.id} variant="outline" className="flex items-center gap-1">
                 {cat.name}
                 <Button

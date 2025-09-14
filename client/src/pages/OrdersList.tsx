@@ -116,6 +116,10 @@ interface StockModel {
 }
 
 export default function OrdersList() {
+<<<<<<< HEAD
+=======
+  console.log('OrdersList component rendering - with CSV export');
+>>>>>>> origin/main
   
   // Read search parameter from URL
   const searchParams = new URLSearchParams(window.location.search);
@@ -419,6 +423,18 @@ export default function OrdersList() {
       refetchOnReconnect: false, // Disable refetch on network reconnect
     });
 
+<<<<<<< HEAD
+=======
+    // Debug logging to check if isVerified field is present
+    if (orders && orders.length > 0) {
+      const testOrder = orders.find(o => o.orderId === 'AG640');
+      if (testOrder) {
+        console.log('🔍 DEBUG: AG640 order data:', testOrder);
+        console.log('🔍 DEBUG: AG640 isVerified:', testOrder.isVerified);
+        console.log('🔍 DEBUG: AG640 keys:', Object.keys(testOrder));
+      }
+    }
+>>>>>>> origin/main
 
     const { data: customers } = useQuery<Customer[]>({
       queryKey: ['/api/customers'],
@@ -434,6 +450,13 @@ export default function OrdersList() {
       refetchInterval: 60000, // Auto-refresh every 60 seconds
     });
 
+<<<<<<< HEAD
+=======
+    console.log('Orders data:', orders);
+    console.log('Customers data:', customers);
+    console.log('Loading state:', isLoading);
+    console.log('Error state:', error);
+>>>>>>> origin/main
 
   const getCustomerName = (customerId: string) => {
     if (!customers || !customerId) return customerId || '';

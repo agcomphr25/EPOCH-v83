@@ -1,0 +1,20 @@
+Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+942e243a-b51c-492c-aa5c-2c8a538a8bae-00-27c2zrnj3o6hq.riker.replit.dev/api/defrost-schedule:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+942e243a-b51c-492c-aa5c-2c8a538a8bae-00-27c2zrnj3o6hq.riker.replit.dev/api/material-inventory:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+942e243a-b51c-492c-aa5c-2c8a538a8bae-00-27c2zrnj3o6hq.riker.replit.dev/api/defrost-schedule:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+Console.js:61 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+942e243a-b51c-492c-aa5c-2c8a538a8bae-00-27c2zrnj3o6hq.riker.replit.dev/api/packet-cutting-queue/8:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+Console.js:61 Error updating packet progress: Error: Failed to update packet progress
+    at Object.mutationFn (942e243a-b51c-492c-aa5c-2c8a538a8bae-00-27c2zrnj3o6hq.riker.replit.dev/src/pages/CuttingTableQueuePage.tsx:193:31)
+Mt.forEach.n.<computed> @ Console.js:61Understand this error
+942e243a-b51c-492c-aa5c-2c8a538a8bae-00-27c2zrnj3o6hq.riker.replit.dev/api/packet-cutting-queue/8:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+Console.js:61 Error updating packet progress: Error: Failed to update packet progress
+    at Object.mutationFn (942e243a-b51c-492c-aa5c-2c8a538a8bae-00-27c2zrnj3o6hq.riker.replit.dev/src/pages/CuttingTableQueuePage.tsx:193:31)
+Mt.forEach.n.<computed> @ Console.js:61Understand this error
+Console.js:61 Updating packet progress: Object
+942e243a-b51c-492c-aa5c-2c8a538a8bae-00-27c2zrnj3o6hq.riker.replit.dev/api/packet-cutting-queue/8:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+Console.js:61 Update failed: {"error":"Failed to update packet cutting progress","details":"[\n  {\n    \"code\": \"invalid_type\",\n    \"expected\": \"number\",\n    \"received\": \"undefined\",\n    \"path\": [\n      \"queueId\"\n    ],\n    \"message\": \"Required\"\n  },\n  {\n    \"code\": \"invalid_type\",\n    \"expected\": \"number\",\n    \"received\": \"undefined\",\n    \"path\": [\n      \"packetsCut\"\n    ],\n    \"message\": \"Required\"\n  }\n]"}
+Mt.forEach.n.<computed> @ Console.js:61Understand this error
+Console.js:61 Error updating packet progress: Error: Failed to update packet progress
+    at Object.mutationFn (942e243a-b51c-492c-aa5c-2c8a538a8bae-00-27c2zrnj3o6hq.riker.replit.dev/src/pages/CuttingTableQueuePage.tsx?t=1757254339549:198:15)
+Mt.forEach.n.<computed> @ Console.js:61Understand this error

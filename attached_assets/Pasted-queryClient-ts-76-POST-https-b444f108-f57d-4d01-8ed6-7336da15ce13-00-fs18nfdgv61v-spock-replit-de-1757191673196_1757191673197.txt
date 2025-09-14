@@ -1,0 +1,62 @@
+queryClient.ts:76  POST https://b444f108-f57d-4d01-8ed6-7336da15ce13-00-fs18nfdgv61v.spock.replit.dev/api/boms/4/items 400 (Bad Request)
+apiRequest @ queryClient.ts:76
+mutationFn @ BOMItemForm.tsx:142
+fn @ chunk-65LAIXSP.js?v=85170350:1234
+run @ chunk-65LAIXSP.js?v=85170350:507
+start @ chunk-65LAIXSP.js?v=85170350:550
+execute @ chunk-65LAIXSP.js?v=85170350:1270
+await in execute
+mutate @ chunk-65LAIXSP.js?v=85170350:2692
+(anonymous) @ chunk-65LAIXSP.js?v=85170350:3415
+onSubmit @ BOMItemForm.tsx:158
+(anonymous) @ chunk-BN7BYVAH.js?v=85170350:1485
+await in (anonymous)
+callCallback2 @ chunk-276SZO74.js?v=85170350:3674
+invokeGuardedCallbackDev @ chunk-276SZO74.js?v=85170350:3699
+invokeGuardedCallback @ chunk-276SZO74.js?v=85170350:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-276SZO74.js?v=85170350:3736
+executeDispatch @ chunk-276SZO74.js?v=85170350:7014
+processDispatchQueueItemsInOrder @ chunk-276SZO74.js?v=85170350:7034
+processDispatchQueue @ chunk-276SZO74.js?v=85170350:7043
+dispatchEventsForPlugins @ chunk-276SZO74.js?v=85170350:7051
+(anonymous) @ chunk-276SZO74.js?v=85170350:7174
+batchedUpdates$1 @ chunk-276SZO74.js?v=85170350:18913
+batchedUpdates @ chunk-276SZO74.js?v=85170350:3579
+dispatchEventForPluginEventSystem @ chunk-276SZO74.js?v=85170350:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-276SZO74.js?v=85170350:5478
+dispatchEvent @ chunk-276SZO74.js?v=85170350:5472
+dispatchDiscreteEvent @ chunk-276SZO74.js?v=85170350:5449Understand this error
+queryClient.ts:78 ✅ API Response from /api/boms/4/items: 400
+main.tsx:33 💥 API Request failed for /api/boms/4/items: Error: Invalid BOM item data
+    at apiRequest (queryClient.ts:100:13)
+console.error @ main.tsx:33
+apiRequest @ queryClient.ts:117
+await in apiRequest
+mutationFn @ BOMItemForm.tsx:142
+fn @ chunk-65LAIXSP.js?v=85170350:1234
+run @ chunk-65LAIXSP.js?v=85170350:507
+start @ chunk-65LAIXSP.js?v=85170350:550
+execute @ chunk-65LAIXSP.js?v=85170350:1270
+await in execute
+mutate @ chunk-65LAIXSP.js?v=85170350:2692
+(anonymous) @ chunk-65LAIXSP.js?v=85170350:3415
+onSubmit @ BOMItemForm.tsx:158
+(anonymous) @ chunk-BN7BYVAH.js?v=85170350:1485
+await in (anonymous)
+callCallback2 @ chunk-276SZO74.js?v=85170350:3674
+invokeGuardedCallbackDev @ chunk-276SZO74.js?v=85170350:3699
+invokeGuardedCallback @ chunk-276SZO74.js?v=85170350:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-276SZO74.js?v=85170350:3736
+executeDispatch @ chunk-276SZO74.js?v=85170350:7014
+processDispatchQueueItemsInOrder @ chunk-276SZO74.js?v=85170350:7034
+processDispatchQueue @ chunk-276SZO74.js?v=85170350:7043
+dispatchEventsForPlugins @ chunk-276SZO74.js?v=85170350:7051
+(anonymous) @ chunk-276SZO74.js?v=85170350:7174
+batchedUpdates$1 @ chunk-276SZO74.js?v=85170350:18913
+batchedUpdates @ chunk-276SZO74.js?v=85170350:3579
+dispatchEventForPluginEventSystem @ chunk-276SZO74.js?v=85170350:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-276SZO74.js?v=85170350:5478
+dispatchEvent @ chunk-276SZO74.js?v=85170350:5472
+dispatchDiscreteEvent @ chunk-276SZO74.js?v=85170350:5449Understand this error
+main.tsx:33 BOM item operation error: Error: Invalid BOM item data
+    at apiRequest (queryClient.ts:100:13)

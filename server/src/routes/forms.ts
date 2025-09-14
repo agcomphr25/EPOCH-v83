@@ -5,6 +5,7 @@ import {
   insertFormSchema,
   insertFormSubmissionSchema,
   insertPurchaseReviewChecklistSchema,
+<<<<<<< HEAD
   insertManufacturersCertificateSchema,
   insertEnhancedFormCategorySchema
 } from '@shared/schema';
@@ -57,6 +58,13 @@ router.delete('/enhanced/categories/:id', authenticateToken, async (req: Request
   }
 });
 
+=======
+  insertManufacturersCertificateSchema
+} from '@shared/schema';
+
+const router = Router();
+
+>>>>>>> origin/main
 // Enhanced Forms Management
 router.get('/enhanced', async (req: Request, res: Response) => {
   try {
@@ -86,10 +94,14 @@ router.get('/enhanced/:id', async (req: Request, res: Response) => {
 
 router.post('/enhanced', authenticateToken, async (req: Request, res: Response) => {
   try {
+<<<<<<< HEAD
     const formData = insertEnhancedFormSchema.parse(req.body);
     console.log('DEBUG - Parsed form data keys:', Object.keys(formData));
     console.log('DEBUG - schemaConfig type:', typeof formData.schemaConfig);
     console.log('DEBUG - layout type:', typeof formData.layout);
+=======
+    const formData = insertFormSchema.parse(req.body);
+>>>>>>> origin/main
     const newForm = await storage.createEnhancedForm(formData);
     res.status(201).json(newForm);
   } catch (error) {

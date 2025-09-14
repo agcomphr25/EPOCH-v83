@@ -136,7 +136,11 @@ export default function FinishQCQueuePage() {
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex items-center gap-2 mb-6">
         <Shield className="h-6 w-6" />
+<<<<<<< HEAD
         <h1 className="text-3xl font-bold">Finish QC Department Manager</h1>
+=======
+        <h1 className="text-3xl font-bold">Finish QC P1 Department Manager</h1>
+>>>>>>> origin/main
       </div>
 
       {/* Barcode Scanner at top */}
@@ -227,7 +231,11 @@ export default function FinishQCQueuePage() {
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
             <div className="flex items-center gap-4">
+<<<<<<< HEAD
               <span>Finish QC Department Manager</span>
+=======
+              <span>Finish QC P1 Department Manager</span>
+>>>>>>> origin/main
               {filteredOrders.length > 0 && (
                 <div className="flex items-center gap-2">
                   <Checkbox

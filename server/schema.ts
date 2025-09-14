@@ -3552,6 +3552,55 @@ export const insertVendorPartSchema = createInsertSchema(vendorParts).omit({
   leadTimeDays: z.number().min(0, "Lead time must be non-negative"),
 });
 
+// ============================================================================
+// UPDATE SCHEMAS FOR SECURITY VALIDATION
+// ============================================================================
+
+// Update schema for inventory items - allows partial updates while validating types
+export const updateInventoryItemSchema = insertInventoryItemSchema.partial();
+
+// Update schema for inventory balances - partial validation for updateable fields
+export const updateInventoryBalanceSchema = insertInventoryBalanceSchema.partial().omit({
+  partId: true, // Cannot change part ID in updates
+  locationId: true, // Cannot change location ID in updates
+});
+
+// Update schema for inventory transactions - partial validation
+export const updateInventoryTransactionSchema = insertInventoryTransactionSchema.partial().omit({
+  partId: true, // Cannot change part ID in updates
+  transactionType: true, // Cannot change transaction type in updates
+  quantity: true, // Cannot change quantity in updates
+  createdBy: true, // Cannot change creator in updates
+});
+
+// Update schema for parts requests - partial validation for updateable fields
+export const updatePartsRequestSchema = insertPartsRequestSchema.partial();
+
+// Update schema for MRP requirements - partial validation for updateable fields
+export const updateMrpRequirementSchema = insertMrpRequirementSchema.partial().omit({
+  partId: true, // Cannot change part ID in updates
+  requiredQty: true, // Cannot change required quantity in updates
+  sourceType: true, // Cannot change source type in updates
+});
+
+// Update schema for outside processing locations - partial validation
+export const updateOutsideProcessingLocationSchema = insertOutsideProcessingLocationSchema.partial().omit({
+  vendorId: true, // Cannot change vendor ID in updates
+});
+
+// Update schema for outside processing jobs - partial validation for updateable fields
+export const updateOutsideProcessingJobSchema = insertOutsideProcessingJobSchema.partial().omit({
+  locationId: true, // Cannot change location ID in updates
+  vendorId: true, // Cannot change vendor ID in updates
+  createdBy: true, // Cannot change creator in updates
+});
+
+// Update schema for vendor parts - partial validation for updateable fields
+export const updateVendorPartSchema = insertVendorPartSchema.partial().omit({
+  partId: true, // Cannot change part ID in updates
+  vendorId: true, // Cannot change vendor ID in updates
+});
+
 // Types for Inventory & MRP
 export type InventoryBalance = typeof inventoryBalances.$inferSelect;
 export type InsertInventoryBalance = z.infer<typeof insertInventoryBalanceSchema>;
@@ -3572,6 +3621,16 @@ export type MrpCalculationHistory = typeof mrpCalculationHistory.$inferSelect;
 
 export type VendorPart = typeof vendorParts.$inferSelect;
 export type InsertVendorPart = z.infer<typeof insertVendorPartSchema>;
+
+// Update schema types for security validation
+export type UpdateInventoryItem = z.infer<typeof updateInventoryItemSchema>;
+export type UpdateInventoryBalance = z.infer<typeof updateInventoryBalanceSchema>;
+export type UpdateInventoryTransaction = z.infer<typeof updateInventoryTransactionSchema>;
+export type UpdatePartsRequest = z.infer<typeof updatePartsRequestSchema>;
+export type UpdateMrpRequirement = z.infer<typeof updateMrpRequirementSchema>;
+export type UpdateOutsideProcessingLocation = z.infer<typeof updateOutsideProcessingLocationSchema>;
+export type UpdateOutsideProcessingJob = z.infer<typeof updateOutsideProcessingJobSchema>;
+export type UpdateVendorPart = z.infer<typeof updateVendorPartSchema>;
 
 // ============================================================================
 // ENHANCED INVENTORY MANAGEMENT & MRP SYSTEM EXTENSIONS

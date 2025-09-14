@@ -2982,7 +2982,7 @@ export const robustParts = pgTable('robust_parts', {
   // Lifecycle Management
   lifecycleStatus: partLifecycleStatusEnum('lifecycle_status').notNull().default('ACTIVE'),
   obsoleteDate: timestamp('obsolete_date'),
-  replacementPartId: text('replacement_part_id'),
+  replacementPartId: text('replacement_part_id').references(() => robustParts.id),
   
   // Validation constraints
   minQuantity: real('min_quantity').default(0.001),

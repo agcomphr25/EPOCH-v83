@@ -285,10 +285,6 @@ export default function P2ReceivingDialog({ open, onOpenChange, item }: P2Receiv
                     <QrCode className="h-4 w-4 mr-1" />
                     New Code
                   </Button>
-                  <Button onClick={handlePrintBarcode} variant="outline" size="sm">
-                    <Printer className="h-4 w-4 mr-1" />
-                    Print ({formData.barcodeQuantity}x)
-                  </Button>
                 </div>
               </div>
             </CardContent>

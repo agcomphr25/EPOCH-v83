@@ -1,5 +1,5 @@
 import { 
-  users, csvData, customerTypes, persistentDiscounts, shortTermSales, featureCategories, featureSubCategories, features, stockModels, orders, orderDrafts, payments, forms, formSubmissions,
+  users, csvData, customerTypes, persistentDiscounts, shortTermSales, featureCategories, featureSubCategories, features, stockModels, orders, allOrders, orderDrafts, payments, forms, formSubmissions,
   inventoryItems, inventoryScans, partsRequests, employees, qcDefinitions, qcSubmissions, maintenanceSchedules, maintenanceLogs,
   timeClockEntries, checklistItems, onboardingDocs, customers, customerAddresses, communicationLogs, pdfDocuments,
   enhancedFormCategories, enhancedForms, enhancedFormVersions, enhancedFormSubmissions,
@@ -1028,9 +1028,9 @@ export class DatabaseStorage implements IStorage {
   async getAllOrders(): Promise<Order[]> {
     // Use all_orders table to get the complete order data
     
-    // First get all orders from the main orders table
-    const ordersData = await db.select().from(orders).orderBy(desc(orders.updatedAt));
-    console.log(`[DEBUG] getAllOrders fetched ${ordersData.length} orders from orders table`);
+    // First get all orders from the all_orders table (complete dataset)
+    const ordersData = await db.select().from(allOrders).orderBy(desc(allOrders.updatedAt));
+    console.log(`[DEBUG] getAllOrders fetched ${ordersData.length} orders from all_orders table`);
     
     // Get all customers to create a lookup map
     const allCustomers = await db.select().from(customers);

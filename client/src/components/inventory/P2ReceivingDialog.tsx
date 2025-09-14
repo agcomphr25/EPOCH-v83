@@ -218,15 +218,16 @@ export default function P2ReceivingDialog({ open, onOpenChange, item }: P2Receiv
               // Auto-print when page loads with proper settings
               window.onload = function() {
                 // Add print instructions for user
+                const qty = ${formData.barcodeQuantity};
                 document.body.insertAdjacentHTML('beforeend', 
                   '<div style="position:fixed;top:10px;left:10px;background:#fff;padding:10px;border:2px solid #000;z-index:1000;font-size:12px;width:300px;" id="print-instructions">' +
-                  '<strong>' + formData.barcodeQuantity + ' Labels - Print Settings Required:</strong><br/>' +
+                  '<strong>' + qty + ' Labels - Print Settings Required:</strong><br/>' +
                   '• Paper Size: Letter (8.5" x 11")<br/>' +
                   '• Margins: 0.5" top, 0.25" sides/bottom<br/>' +
                   '• Scale: 100%<br/>' +
                   '• Background graphics: ON<br/>' +
                   '• Layout: 3 across × 10 down<br/>' +
-                  '<button onclick="document.getElementById(\'print-instructions\').style.display=\'none\';window.print();">Print ' + formData.barcodeQuantity + ' Labels</button>' +
+                  '<button onclick="document.getElementById(\'print-instructions\').style.display=\'none\';window.print();">Print ' + qty + ' Labels</button>' +
                   '</div>'
                 );
               }
@@ -402,13 +403,23 @@ export default function P2ReceivingDialog({ open, onOpenChange, item }: P2Receiv
         </div>
 
         <DialogFooter>
-          <Button onClick={handleClose} variant="outline">
+          <Button onClick={handleClose} variant="outline" data-testid="button-cancel-receiving">
             Cancel
+          </Button>
+          <Button 
+            onClick={handlePrintBarcode} 
+            variant="outline" 
+            className="ml-2"
+            data-testid="button-print-barcodes"
+          >
+            <Printer className="h-4 w-4 mr-2" />
+            Print ({formData.barcodeQuantity}x)
           </Button>
           <Button 
             onClick={handleSave} 
             disabled={createScanMutation.isPending}
             className="ml-2"
+            data-testid="button-save-p2-record"
           >
             <Save className="h-4 w-4 mr-2" />
             {createScanMutation.isPending ? 'Saving...' : 'Save P2 Record'}

@@ -19,44 +19,10 @@ declare global {
 }
 
 /**
- * Check if we're running in deployment environment
- */
-function isDeploymentEnvironment(req: Request): boolean {
-<<<<<<< HEAD
-=======
-  // In development mode, always bypass authentication regardless of domain
-  if (process.env.NODE_ENV === 'development') {
-    return false;
-  }
-  
->>>>>>> origin/main
-  const host = req.get('host') || '';
-  
-  // Check for production deployment domains
-  return host.includes('.replit.app') || 
-         host.includes('.repl.co') || 
-         process.env.NODE_ENV === 'production';
-}
-
-/**
- * Authentication middleware to verify session tokens (deployment-aware)
+ * Authentication middleware to verify session tokens
  */
 export async function authenticateToken(req: Request, res: Response, next: NextFunction) {
   try {
-    // Skip authentication in development environment
-    if (!isDeploymentEnvironment(req)) {
-      // In development, create a mock user for testing
-      req.user = {
-        id: 999,
-        username: 'dev-user',
-        role: 'ADMIN',
-        employeeId: null,
-        canOverridePrices: true,
-        isActive: true
-      };
-      return next();
-    }
-
     const authHeader = req.headers['authorization'];
     const bearerToken = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
     const cookieToken = req.cookies?.sessionToken;
@@ -166,43 +132,12 @@ export async function authenticatePortalToken(req: Request, res: Response, next:
 }
 
 /**
- * Re-authentication middleware for sensitive actions
- * Requires recent authentication (within 15 minutes) for critical operations
- */
-export function requireRecentAuth(maxAge: number = 15 * 60 * 1000) {
-  return async (req: Request, res: Response, next: NextFunction) => {
-    if (!req.user) {
-      return res.status(401).json({ error: 'Authentication required' });
-    }
-
-    // For now, we'll skip re-auth checks in development
-    // In production, you'd check lastAuthenticationAt timestamp
-    if (process.env.NODE_ENV === 'development') {
-      return next();
-    }
-
-    // In production, implement re-authentication check:
-    // const lastAuth = await AuthService.getLastAuthenticationTime(req.user.id);
-    // if (Date.now() - lastAuth > maxAge) {
-    //   return res.status(401).json({ 
-    //     error: 'Recent authentication required',
-    //     requireReauth: true 
-    //   });
-    // }
-
-    next();
-  };
-}
-
-/**
  * Cleanup expired sessions middleware (run periodically)
  */
 export async function cleanupExpiredSessions() {
   try {
-    const { AuthService } = await import('../auth');
-    // Clean up expired sessions from database
-    await AuthService.cleanupExpiredSessions();
-    console.log('Session cleanup completed');
+    // This would be implemented in the AuthService or storage layer
+    console.log('Session cleanup would run here');
   } catch (error) {
     console.error('Session cleanup error:', error);
   }

@@ -7,29 +7,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Camera, Scan } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { Employee } from '@shared/schema';
-import { useDeviceDetection } from '@/hooks/useDeviceDetection';
-import { useBarcodeInput } from '@/hooks/useBarcodeInput';
-import { CameraScanner } from '@/components/CameraScanner';
 
 export default function InventoryScanner() {
   const scannedCode = useScanner();
   const queryClient = useQueryClient();
-  const [showCameraScanner, setShowCameraScanner] = useState(false);
-  
-  // Device detection for smart UI
-  const { isMobile, hasCamera } = useDeviceDetection();
-  
-  // Unified barcode input handling
-  const {
-    barcode,
-    scannedBarcode,
-    isValidBarcode,
-    handleBarcodeDetected,
-    clearScan
-  } = useBarcodeInput();
   
   const [formData, setFormData] = useState({
     itemCode: '',
@@ -50,33 +33,21 @@ export default function InventoryScanner() {
   // Auto-fill code on scan or redirect to order scanner for P1 barcodes
   useEffect(() => {
     if (scannedCode) {
-      handleBarcodeDetected(scannedCode);
-    }
-  }, [scannedCode, handleBarcodeDetected]);
-
-  // Handle barcode detection from camera or unified input
-  useEffect(() => {
-    if (scannedBarcode) {
       // Check if this is a P1 order barcode
-      if (scannedBarcode.startsWith('P1-')) {
-        toast.success(`P1 Order barcode detected: ${scannedBarcode}`);
+      if (scannedCode.startsWith('P1-')) {
+        toast.success(`P1 Order barcode detected: ${scannedCode}`);
         toast('Redirecting to Order Scanner...', { icon: '🔄' });
         // Redirect to barcode scanner page with the scanned code
         setTimeout(() => {
-          window.location.href = `/barcode-scanner?scan=${encodeURIComponent(scannedBarcode)}`;
+          window.location.href = `/barcode-scanner?scan=${encodeURIComponent(scannedCode)}`;
         }, 1000);
       } else {
         // Regular inventory item
-        setFormData(fd => ({ ...fd, itemCode: scannedBarcode }));
-        toast.success(`Inventory item scanned: ${scannedBarcode}`);
+        setFormData(fd => ({ ...fd, itemCode: scannedCode }));
+        toast.success(`Inventory item scanned: ${scannedCode}`);
       }
     }
-  }, [scannedBarcode]);
-
-  const handleCameraScan = (detectedBarcode: string) => {
-    handleBarcodeDetected(detectedBarcode);
-    setShowCameraScanner(false);
-  };
+  }, [scannedCode]);
 
   const scanMutation = useMutation({
     mutationFn: (data: any) => apiRequest('/api/inventory/scan', {
@@ -123,61 +94,25 @@ export default function InventoryScanner() {
   return (
     <Card className="w-full max-w-2xl mx-auto">
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Scan className="h-5 w-5" />
-          Inventory In Scanner
-        </CardTitle>
+        <CardTitle>Inventory In Scanner</CardTitle>
         <p className="text-sm text-gray-600">
-          {hasCamera && isMobile 
-            ? 'Scan barcodes with your camera or enter manually' 
-            : 'Press Ctrl+S to simulate scanning a barcode'}
+          Press Ctrl+S to simulate scanning a barcode
         </p>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <Label htmlFor="itemCode">Scanned Code</Label>
-              <div className="space-y-2">
-                <Input
-                  id="itemCode"
-                  name="itemCode"
-                  value={formData.itemCode}
-                  onChange={handleChange}
-                  className="bg-gray-50"
-                  placeholder="Scan or enter item code"
-                />
-                
-                {/* Camera scanning option */}
-                {hasCamera && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setShowCameraScanner(true)}
-                    className="w-full"
-                  >
-                    <Camera className="h-4 w-4 mr-2" />
-                    {isMobile ? 'Scan with Camera' : 'Use Camera Scanner'}
-                  </Button>
-                )}
-              </div>
-            </div>
-            
-            <div>
-              <Label htmlFor="quantity">Quantity</Label>
               <Input
-                id="quantity"
-                name="quantity"
-                type="number"
-                min="1"
-                value={formData.quantity}
+                id="itemCode"
+                name="itemCode"
+                value={formData.itemCode}
                 onChange={handleChange}
-                placeholder="Enter quantity"
+                className="bg-gray-50"
+                placeholder="Scan or enter item code"
               />
             </div>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <Label htmlFor="quantity">Quantity</Label>
               <Input
@@ -262,13 +197,6 @@ export default function InventoryScanner() {
           </Button>
         </form>
       </CardContent>
-      
-      {/* Camera Scanner Modal */}
-      <CameraScanner
-        isOpen={showCameraScanner}
-        onClose={() => setShowCameraScanner(false)}
-        onBarcodeDetected={handleCameraScan}
-      />
     </Card>
   );
 }

@@ -29,10 +29,10 @@ import {
   UserPlus,
   UserX,
   AlertCircle,
+
   RefreshCw,
   CheckCircle,
-  FileText,
-  BarChart3
+  FileText
 } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
@@ -42,7 +42,7 @@ type Customer = {
   name: string;
   email?: string;
   phone?: string;
-  contact?: string;
+  company?: string;
   customerType: string;
   preferredCommunicationMethod?: string[]; // Array of "email" and/or "sms"
   notes?: string;
@@ -55,7 +55,6 @@ type CustomerAddress = {
   id: number;
   customerId: string;
   street: string;
-  street2?: string;
   city: string;
   state: string;
   zipCode: string;
@@ -71,14 +70,13 @@ type CustomerFormData = {
   name: string;
   email: string;
   phone: string;
-  contact: string;
+  company: string;
   customerType: string;
   preferredCommunicationMethod: string[]; // Array of "email" and/or "sms"
   notes: string;
   isActive: boolean;
   // Address fields
   street: string;
-  street2: string;
   city: string;
   state: string;
   zipCode: string;
@@ -89,7 +87,6 @@ type CustomerFormData = {
 type AddressFormData = {
   customerId: string;
   street: string;
-  street2: string;
   city: string;
   state: string;
   zipCode: string;
@@ -102,14 +99,13 @@ const initialFormData: CustomerFormData = {
   name: '',
   email: '',
   phone: '',
-  contact: '',
+  company: '',
   customerType: 'standard',
   preferredCommunicationMethod: [],
   notes: '',
   isActive: true,
   // Address defaults
   street: '',
-  street2: '',
   city: '',
   state: '',
   zipCode: '',
@@ -189,6 +185,15 @@ const CustomerFormFields = ({
           )}
         </div>
         
+        <div className="space-y-2">
+          <Label htmlFor="company" className="text-sm font-medium">Company</Label>
+          <Input
+            id="company"
+            value={formData.company}
+            onChange={(e) => setFormData(prev => ({ ...prev, company: e.target.value }))}
+            placeholder="Company name"
+          />
+        </div>
         
         <div className="space-y-2">
           <Label htmlFor="customerType" className="text-sm font-medium">Type</Label>
@@ -382,16 +387,6 @@ const CustomerFormFields = ({
           <p className="text-sm text-red-500">{formErrors.street}</p>
         )}
       </div>
-      
-      <div className="space-y-2">
-        <Label htmlFor="street2" className="text-sm font-medium">Suite/Apt/Unit #</Label>
-        <Input
-          id="street2"
-          value={formData.street2}
-          onChange={(e) => setFormData(prev => ({ ...prev, street2: e.target.value }))}
-          placeholder="Suite 100, Apt 2B, Unit 5"
-        />
-      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="md:col-span-2 space-y-2">
@@ -481,7 +476,6 @@ export default function CustomerManagement() {
   const [addressFormData, setAddressFormData] = useState<AddressFormData>({
     customerId: '',
     street: '',
-    street2: '',
     city: '',
     state: '',
     zipCode: '',
@@ -500,10 +494,10 @@ export default function CustomerManagement() {
   const [isProcessingCSV, setIsProcessingCSV] = useState(false);
   const csvInputRef = useRef<HTMLInputElement>(null);
 
-  // Fetch customers using bypass route
+  // Fetch customers
   const { data: customers = [], isLoading } = useQuery({
-    queryKey: ['/api/customers/bypass'],
-    queryFn: () => apiRequest('/api/customers/bypass'),
+    queryKey: ['/api/customers'],
+    queryFn: () => apiRequest('/api/customers'),
   });
 
   // Fetch all addresses for table display
@@ -522,7 +516,8 @@ export default function CustomerManagement() {
   // Filter customers based on search and status
   const filteredCustomers = customers.filter((customer: Customer) => {
     const matchesSearch = customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         customer.email?.toLowerCase().includes(searchTerm.toLowerCase());
+                         customer.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         customer.company?.toLowerCase().includes(searchTerm.toLowerCase());
     
     const matchesFilter = filterActive === 'all' || 
                          (filterActive === 'active' && customer.isActive) ||
@@ -747,44 +742,41 @@ export default function CustomerManagement() {
   const createCustomerMutation = useMutation({
     mutationFn: async (data: CustomerFormData) => {
       // Create customer first
-      const customer = await apiRequest('/api/customers/create-bypass', {
+      const customer = await apiRequest('/api/customers', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        body: {
           name: data.name,
           email: data.email,
           phone: data.phone,
-          contact: data.contact,
+          company: data.company,
           customerType: data.customerType,
           preferredCommunicationMethod: data.preferredCommunicationMethod,
           notes: data.notes,
           isActive: data.isActive,
-        }),
+        },
       });
 
       // Create address if address fields are provided
       if (data.street && data.city && data.state) {
         await apiRequest('/api/addresses', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
+          body: {
             customerId: customer.id.toString(),
             street: data.street,
-            street2: data.street2,
             city: data.city,
             state: data.state,
             zipCode: data.zipCode || '',
             country: data.country,
             type: data.addressType,
             isDefault: true,
-          }),
+          },
         });
       }
 
       return customer;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/customers/bypass'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
       queryClient.invalidateQueries({ queryKey: ['/api/addresses/all'] });
       setIsCreateDialogOpen(false);
       resetForm();
@@ -805,13 +797,12 @@ export default function CustomerManagement() {
   // Update customer mutation
   const updateCustomerMutation = useMutation({
     mutationFn: ({ id, data }: { id: number; data: Partial<CustomerFormData> }) => 
-      apiRequest(`/api/customers/update-bypass/${id}`, {
+      apiRequest(`/api/customers/${id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
+        body: data,
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/customers/bypass'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
       setIsEditDialogOpen(false);
       resetForm();
       toast({
@@ -830,11 +821,11 @@ export default function CustomerManagement() {
 
   // Delete customer mutation
   const deleteCustomerMutation = useMutation({
-    mutationFn: (id: number) => apiRequest(`/api/customers/delete-bypass/${id}`, {
+    mutationFn: (id: number) => apiRequest(`/api/customers/${id}`, {
       method: 'DELETE',
     }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/customers/bypass'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
       setIsDeleteDialogOpen(false);
       resetForm();
       toast({
@@ -855,8 +846,7 @@ export default function CustomerManagement() {
   const createAddressMutation = useMutation({
     mutationFn: (data: AddressFormData) => apiRequest('/api/addresses', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
+      body: data,
     }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/addresses', selectedCustomer?.id] });
@@ -879,8 +869,7 @@ export default function CustomerManagement() {
   const updateAddressMutation = useMutation({
     mutationFn: (data: AddressFormData & { id: number }) => apiRequest(`/api/addresses/${data.id}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
+      body: data,
     }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/addresses', selectedCustomer?.id] });
@@ -966,7 +955,7 @@ export default function CustomerManagement() {
           name: formData.name,
           email: formData.email,
           phone: formData.phone,
-          contact: formData.contact,
+          company: formData.company,
           customerType: formData.customerType,
           preferredCommunicationMethod: formData.preferredCommunicationMethod,
           notes: formData.notes,
@@ -975,7 +964,7 @@ export default function CustomerManagement() {
       });
       
       // Also handle address update if address fields are filled
-      if (formData.street || formData.street2 || formData.city || formData.state || formData.zipCode) {
+      if (formData.street || formData.city || formData.state || formData.zipCode) {
         try {
           // Find existing address for this customer
           const customerAddresses = addressesData?.filter(addr => {
@@ -988,7 +977,6 @@ export default function CustomerManagement() {
           const addressData = {
             customerId: selectedCustomer.id.toString(),
             street: formData.street,
-            street2: formData.street2,
             city: formData.city,
             state: formData.state,
             zipCode: formData.zipCode,
@@ -999,14 +987,14 @@ export default function CustomerManagement() {
           
           if (existingAddress) {
             // Update existing address
-            await apiRequest(`/api/addresses/${existingAddress.id}`, {
+            await fetch(`/api/addresses/${existingAddress.id}`, {
               method: 'PUT',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(addressData)
             });
           } else {
             // Create new address
-            await apiRequest('/api/addresses', {
+            await fetch('/api/addresses', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(addressData)
@@ -1037,14 +1025,13 @@ export default function CustomerManagement() {
       name: customer.name,
       email: customer.email || '',
       phone: customer.phone || '',
-      contact: customer.contact || '',
+      company: customer.company || '',
       customerType: customer.customerType,
       preferredCommunicationMethod: customer.preferredCommunicationMethod || [],
       notes: customer.notes || '',
       isActive: customer.isActive,
       // Load existing address if available
       street: defaultAddress?.street || '',  
-      street2: defaultAddress?.street2 || '',
       city: defaultAddress?.city || '',
       state: defaultAddress?.state || '',
       zipCode: defaultAddress?.zipCode || '',
@@ -1090,7 +1077,6 @@ export default function CustomerManagement() {
     setAddressFormData({
       customerId: '',
       street: '',
-      street2: '',
       city: '',
       state: '',
       zipCode: '',
@@ -1128,7 +1114,6 @@ export default function CustomerManagement() {
     setAddressFormData({
       customerId: address.customerId.toString(),
       street: address.street,
-      street2: address.street2 || '',
       city: address.city,
       state: address.state,
       zipCode: address.zipCode,
@@ -1166,11 +1151,12 @@ export default function CustomerManagement() {
 
   const exportCustomers = () => {
     const csvContent = [
-      ['Name', 'Email', 'Phone', 'Customer Type', 'Status', 'Notes', 'Created Date'],
+      ['Name', 'Email', 'Phone', 'Company', 'Customer Type', 'Status', 'Notes', 'Created Date'],
       ...filteredCustomers.map((customer: Customer) => [
         customer.name,
         customer.email || '',
         customer.phone || '',
+        customer.company || '',
         customer.customerType,
         customer.isActive ? 'Active' : 'Inactive',
         customer.notes || '',
@@ -1242,15 +1228,14 @@ export default function CustomerManagement() {
         ...csvData.map(row => headers.map(header => row[header] || '').join(','))
       ].join('\n');
 
-      // Send to our customer CSV import bypass endpoint
-      const result = await apiRequest('/api/customers/import-bypass/csv', {
+      // Send to our customer CSV import endpoint
+      const result = await apiRequest('/api/customers/import/csv', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ csvData: csvString }),
+        body: { csvData: csvString },
       });
 
       setIsProcessingCSV(false);
-      queryClient.invalidateQueries({ queryKey: ['/api/customers/bypass'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
 
       let description = '';
       
@@ -1297,15 +1282,7 @@ export default function CustomerManagement() {
         <div className="flex gap-2">
           <Button 
             variant="outline" 
-            onClick={() => window.location.href = '/customer-satisfaction'}
-            className="flex items-center gap-2"
-          >
-            <BarChart3 className="h-4 w-4" />
-            Customer Satisfaction
-          </Button>
-          <Button 
-            variant="outline" 
-            onClick={() => queryClient.invalidateQueries({ queryKey: ['/api/customers/bypass'] })}
+            onClick={() => queryClient.invalidateQueries({ queryKey: ['/api/customers'] })}
           >
             <RefreshCw className="h-4 w-4 mr-2" />
             Refresh
@@ -1437,7 +1414,7 @@ export default function CustomerManagement() {
               <div className="relative">
                 <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                 <Input
-                  placeholder="Search customers by name or email..."
+                  placeholder="Search customers by name, email, or company..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-10"
@@ -1508,23 +1485,12 @@ export default function CustomerManagement() {
                               {customer.phone}
                             </div>
                           )}
-                          {customer.contact && (
-                            <div className="flex items-center gap-1 text-sm text-gray-600">
-                              <span className="font-medium">Contact:</span>
-                              {customer.contact}
-                            </div>
-                          )}
                         </div>
                       </TableCell>
                       <TableCell>
                         {defaultAddress ? (
                           <div className="text-sm">
-                            <div className="font-medium">
-                              {defaultAddress.street}
-                              {defaultAddress.street2 && (
-                                <span>, {defaultAddress.street2}</span>
-                              )}
-                            </div>
+                            <div className="font-medium">{defaultAddress.street}</div>
                             <div className="text-gray-600">{defaultAddress.city}, {defaultAddress.state} {defaultAddress.zipCode}</div>
                             <div className="text-gray-500">{defaultAddress.country}</div>
                             {defaultAddress.type !== 'shipping' && (
@@ -1667,7 +1633,7 @@ export default function CustomerManagement() {
             </DialogTitle>
           </DialogHeader>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Customer Information Section */}
             <div className="space-y-4">
               <h3 className="text-lg font-semibold border-b pb-2">Customer Information</h3>
@@ -1704,11 +1670,100 @@ export default function CustomerManagement() {
                 </div>
 
                 <div>
-                  <Label htmlFor="edit-contact">Contact</Label>
+                  <Label htmlFor="edit-company">Company</Label>
                   <Input
-                    id="edit-contact"
-                    value={formData.contact}
-                    onChange={(e) => setFormData(prev => ({ ...prev, contact: e.target.value }))}
+                    id="edit-company"
+                    value={formData.company}
+                    onChange={(e) => setFormData(prev => ({ ...prev, company: e.target.value }))}
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="edit-customerType">Customer Type</Label>
+                  <Select value={formData.customerType} onValueChange={(value) => setFormData(prev => ({ ...prev, customerType: value }))}>
+                    <SelectTrigger id="edit-customerType">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="standard">Standard</SelectItem>
+                      <SelectItem value="wholesale">Wholesale</SelectItem>
+                      <SelectItem value="dealer">Dealer</SelectItem>
+                      <SelectItem value="oem">OEM</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Preferred Communication Method Section */}
+                <div>
+                  <Label className="text-sm font-medium">Preferred Communication Method</Label>
+                  <div className="flex flex-col space-y-3 mt-2">
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="edit-comm-email"
+                        checked={formData.preferredCommunicationMethod.includes('email')}
+                        onCheckedChange={(checked) => {
+                          const methods = formData.preferredCommunicationMethod;
+                          if (checked) {
+                            setFormData(prev => ({ 
+                              ...prev, 
+                              preferredCommunicationMethod: [...methods, 'email'] 
+                            }));
+                          } else {
+                            setFormData(prev => ({ 
+                              ...prev, 
+                              preferredCommunicationMethod: methods.filter(m => m !== 'email') 
+                            }));
+                          }
+                        }}
+                      />
+                      <div className="flex items-center space-x-2">
+                        <Mail className="h-4 w-4 text-blue-600" />
+                        <Label htmlFor="edit-comm-email" className="text-sm font-medium cursor-pointer">
+                          Email
+                        </Label>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="edit-comm-sms"
+                        checked={formData.preferredCommunicationMethod.includes('sms')}
+                        onCheckedChange={(checked) => {
+                          const methods = formData.preferredCommunicationMethod;
+                          if (checked) {
+                            setFormData(prev => ({ 
+                              ...prev, 
+                              preferredCommunicationMethod: [...methods, 'sms'] 
+                            }));
+                          } else {
+                            setFormData(prev => ({ 
+                              ...prev, 
+                              preferredCommunicationMethod: methods.filter(m => m !== 'sms') 
+                            }));
+                          }
+                        }}
+                      />
+                      <div className="flex items-center space-x-2">
+                        <Phone className="h-4 w-4 text-green-600" />
+                        <Label htmlFor="edit-comm-sms" className="text-sm font-medium cursor-pointer">
+                          SMS
+                        </Label>
+                      </div>
+                    </div>
+                    
+                    {formData.preferredCommunicationMethod.length === 0 && (
+                      <p className="text-sm text-gray-500 italic">No communication method selected</p>
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <Label htmlFor="edit-notes">Notes</Label>
+                  <Textarea
+                    id="edit-notes"
+                    value={formData.notes}
+                    onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
+                    rows={3}
                   />
                 </div>
               </div>
@@ -1750,16 +1805,6 @@ export default function CustomerManagement() {
                       ))}
                     </div>
                   )}
-                </div>
-
-                <div>
-                  <Label htmlFor="edit-street2">Suite/Apt/Unit #</Label>
-                  <Input
-                    id="edit-street2"
-                    value={formData.street2}
-                    onChange={(e) => setFormData(prev => ({ ...prev, street2: e.target.value }))}
-                    placeholder="Suite 100, Apt 2B, Unit 5"
-                  />
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
@@ -1821,101 +1866,6 @@ export default function CustomerManagement() {
                   </Select>
                 </div>
               </div>
-            </div>
-          </div>
-
-          {/* Additional Customer Fields - Full Width */}
-          <div className="space-y-4 pt-4 border-t">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-
-              <div>
-                <Label htmlFor="edit-customerType">Customer Type</Label>
-                <Select value={formData.customerType} onValueChange={(value) => setFormData(prev => ({ ...prev, customerType: value }))}>
-                  <SelectTrigger id="edit-customerType">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="standard">Standard</SelectItem>
-                    <SelectItem value="wholesale">Wholesale</SelectItem>
-                    <SelectItem value="dealer">Dealer</SelectItem>
-                    <SelectItem value="oem">OEM</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            {/* Preferred Communication Method Section */}
-            <div>
-              <Label className="text-sm font-medium">Preferred Communication Method</Label>
-              <div className="flex flex-row space-x-6 mt-2">
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="edit-comm-email"
-                    checked={formData.preferredCommunicationMethod.includes('email')}
-                    onCheckedChange={(checked) => {
-                      const methods = formData.preferredCommunicationMethod;
-                      if (checked) {
-                        setFormData(prev => ({ 
-                          ...prev, 
-                          preferredCommunicationMethod: [...methods, 'email'] 
-                        }));
-                      } else {
-                        setFormData(prev => ({ 
-                          ...prev, 
-                          preferredCommunicationMethod: methods.filter(m => m !== 'email') 
-                        }));
-                      }
-                    }}
-                  />
-                  <div className="flex items-center space-x-2">
-                    <Mail className="h-4 w-4 text-blue-600" />
-                    <Label htmlFor="edit-comm-email" className="text-sm font-medium cursor-pointer">
-                      Email
-                    </Label>
-                  </div>
-                </div>
-                
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="edit-comm-sms"
-                    checked={formData.preferredCommunicationMethod.includes('sms')}
-                    onCheckedChange={(checked) => {
-                      const methods = formData.preferredCommunicationMethod;
-                      if (checked) {
-                        setFormData(prev => ({ 
-                          ...prev, 
-                          preferredCommunicationMethod: [...methods, 'sms'] 
-                        }));
-                      } else {
-                        setFormData(prev => ({ 
-                          ...prev, 
-                          preferredCommunicationMethod: methods.filter(m => m !== 'sms') 
-                        }));
-                      }
-                    }}
-                  />
-                  <div className="flex items-center space-x-2">
-                    <Phone className="h-4 w-4 text-green-600" />
-                    <Label htmlFor="edit-comm-sms" className="text-sm font-medium cursor-pointer">
-                      SMS
-                    </Label>
-                  </div>
-                </div>
-                
-                {formData.preferredCommunicationMethod.length === 0 && (
-                  <p className="text-sm text-gray-500 italic">No communication method selected</p>
-                )}
-              </div>
-            </div>
-
-            <div>
-              <Label htmlFor="edit-notes">Notes</Label>
-              <Textarea
-                id="edit-notes"
-                value={formData.notes}
-                onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
-                rows={3}
-              />
             </div>
           </div>
           

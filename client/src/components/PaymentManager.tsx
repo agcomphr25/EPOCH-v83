@@ -33,7 +33,7 @@ export default function PaymentManager({ orderId, totalAmount, onPaymentsChange,
   const { toast } = useToast();
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [editingPayment, setEditingPayment] = useState<Payment | null>(null);
-
+  
   // Form state
   const [paymentType, setPaymentType] = useState('');
   const [paymentAmount, setPaymentAmount] = useState('');
@@ -301,8 +301,6 @@ export default function PaymentManager({ orderId, totalAmount, onPaymentsChange,
                     <SelectItem value="check">Check</SelectItem>
                     <SelectItem value="cash">Cash</SelectItem>
                     <SelectItem value="ach">ACH</SelectItem>
-                    <SelectItem value="aaaa">AAAA</SelectItem>
-
                   </SelectContent>
                 </Select>
               </div>
@@ -382,7 +380,7 @@ export default function PaymentManager({ orderId, totalAmount, onPaymentsChange,
       </CardHeader>
       <CardContent className="space-y-4">
         {inlineContent}
-
+        
         {/* Payment Modal */}
         <Dialog open={showPaymentModal} onOpenChange={setShowPaymentModal}>
           <DialogContent className="sm:max-w-md">
@@ -405,8 +403,6 @@ export default function PaymentManager({ orderId, totalAmount, onPaymentsChange,
                     <SelectItem value="check">Check</SelectItem>
                     <SelectItem value="cash">Cash</SelectItem>
                     <SelectItem value="ach">ACH</SelectItem>
-                    <SelectItem value="aaaa">AAAA</SelectItem>
-
                   </SelectContent>
                 </Select>
               </div>

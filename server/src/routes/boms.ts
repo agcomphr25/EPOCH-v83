@@ -91,6 +91,7 @@ router.delete('/:id', async (req, res) => {
 // Add BOM item
 router.post('/:id/items', async (req, res) => {
   try {
+<<<<<<< HEAD
     const { id } = req.params;
     const { purchasingUnitConversion, ...restData } = req.body;
     
@@ -100,6 +101,52 @@ router.post('/:id/items', async (req, res) => {
       quantityMultiplier: purchasingUnitConversion || 1,
     });
     
+=======
+    
+    const { id } = req.params;
+    const { purchasingUnitConversion, ...restData } = req.body;
+    
+    // Validate required fields
+    if (!restData.partName || typeof restData.partName !== 'string') {
+      return res.status(400).json({ 
+        error: "Invalid part name", 
+        details: "Part name is required and must be a string" 
+      });
+    }
+
+    // Ensure quantity is at least 1 and is a valid number
+    const quantity = Number(restData.quantity);
+    if (isNaN(quantity) || quantity < 1) {
+      console.log('❌ Quantity validation failed:', { received: restData.quantity, parsed: quantity });
+      return res.status(400).json({ 
+        error: "Invalid quantity", 
+        details: `Quantity must be at least 1, received: ${restData.quantity}` 
+      });
+    }
+    
+    // Ensure purchasing unit conversion is valid
+    const conversionValue = purchasingUnitConversion ? Number(purchasingUnitConversion) : 1;
+    if (isNaN(conversionValue) || conversionValue <= 0) {
+      console.log('❌ Conversion validation failed:', { received: purchasingUnitConversion, parsed: conversionValue });
+      return res.status(400).json({ 
+        error: "Invalid purchasing unit conversion", 
+        details: `Purchasing unit conversion must be greater than 0, received: ${purchasingUnitConversion}` 
+      });
+    }
+
+    // Prepare clean data for Zod validation
+    const cleanData = {
+      partName: restData.partName,
+      quantity: quantity,
+      quantityMultiplier: conversionValue,
+      firstDept: restData.firstDept || 'Layup',
+      itemType: restData.itemType || 'manufactured',
+      isActive: restData.isActive !== false, // Default to true
+    };
+
+    // Map purchasingUnitConversion to quantityMultiplier for database
+    const itemData = insertBomItemSchema.omit({ bomId: true }).parse(cleanData);
+>>>>>>> origin/main
     const item = await storage.addBOMItem(parseInt(id), { ...itemData, bomId: parseInt(id) });
     res.status(201).json(item);
   } catch (error) {

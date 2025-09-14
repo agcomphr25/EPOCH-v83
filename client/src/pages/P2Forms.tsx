@@ -1,6 +1,10 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+<<<<<<< HEAD
 import { FileText, Download, Printer, ClipboardList, Package, Receipt, Barcode, Calendar, Award, GraduationCap } from "lucide-react";
+=======
+import { FileText, Download, Printer, ClipboardList, Package, Receipt, Barcode, Calendar, Award } from "lucide-react";
+>>>>>>> origin/main
 import { Link } from "wouter";
 
 export default function P2Forms() {
@@ -189,6 +193,7 @@ export default function P2Forms() {
             </CardContent>
           </Card>
 
+<<<<<<< HEAD
           {/* Training Forms */}
           <Card className="hover:shadow-lg transition-shadow">
             <CardHeader className="pb-3">
@@ -230,6 +235,8 @@ export default function P2Forms() {
             </CardContent>
           </Card>
 
+=======
+>>>>>>> origin/main
           {/* Compliance & Documentation */}
           <Card className="hover:shadow-lg transition-shadow">
             <CardHeader className="pb-3">

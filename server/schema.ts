@@ -2982,7 +2982,7 @@ export const robustParts = pgTable('robust_parts', {
   // Lifecycle Management
   lifecycleStatus: partLifecycleStatusEnum('lifecycle_status').notNull().default('ACTIVE'),
   obsoleteDate: timestamp('obsolete_date'),
-  replacementPartId: text('replacement_part_id').references(() => robustParts.id),
+  replacementPartId: text('replacement_part_id'),
   
   // Validation constraints
   minQuantity: real('min_quantity').default(0.001),
@@ -3190,3 +3190,385 @@ export type InsertPartAuditLog = z.infer<typeof insertPartAuditLogSchema>;
 
 export type BomAuditLog = typeof bomAuditLog.$inferSelect;
 export type InsertBomAuditLog = z.infer<typeof insertBomAuditLogSchema>;
+
+// ============================================================================
+// INVENTORY MANAGEMENT & MRP SYSTEM
+// ============================================================================
+
+// Inventory transaction types for parts
+export const inventoryTransactionTypeEnum = pgEnum('inventory_transaction_type', [
+  'RECEIPT',           // Parts received from vendor
+  'ISSUE',            // Parts issued to production
+  'CONSUMPTION',      // Parts consumed in production
+  'ADJUSTMENT',       // Inventory adjustments
+  'SCRAP',           // Parts scrapped/wasted
+  'RETURN_TO_VENDOR', // Parts returned to vendor
+  'TRANSFER_OUT',     // Parts sent for outside processing
+  'TRANSFER_IN'       // Parts received back from outside processing
+]);
+
+// Inventory status for progressive allocation
+export const inventoryStatusEnum = pgEnum('inventory_status', [
+  'AVAILABLE',   // Available for allocation
+  'COMMITTED',   // Committed to customer orders
+  'ALLOCATED',   // Allocated to production orders
+  'CONSUMED'     // Consumed in production
+]);
+
+// Inventory Balances - Real-time inventory tracking per part
+export const inventoryBalances = pgTable('inventory_balances', {
+  id: serial('id').primaryKey(),
+  partId: text('part_id').notNull().references(() => robustParts.id),
+  locationId: text('location_id').notNull().default('MAIN'), // MAIN, VENDOR_{vendor_id}, etc.
+  
+  // Quantity tracking
+  onHandQty: real('on_hand_qty').notNull().default(0),
+  committedQty: real('committed_qty').notNull().default(0), // Committed to customer orders
+  allocatedQty: real('allocated_qty').notNull().default(0), // Allocated to production
+  availableQty: real('available_qty').notNull().default(0), // Available = OnHand - Committed - Allocated
+  
+  // Cost tracking
+  unitCost: real('unit_cost').notNull().default(0),
+  totalValue: real('total_value').notNull().default(0),
+  
+  // Safety stock and ordering
+  safetyStock: real('safety_stock').default(0),
+  minOrderQty: real('min_order_qty').default(1),
+  leadTimeDays: integer('lead_time_days').default(7),
+  
+  // Tracking
+  lastTransactionAt: timestamp('last_transaction_at'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Inventory Transactions - All inventory movements
+export const inventoryTransactions = pgTable('inventory_transactions', {
+  id: serial('id').primaryKey(),
+  transactionId: text('transaction_id').notNull().unique(), // Auto-generated unique ID
+  
+  // Part and location
+  partId: text('part_id').notNull().references(() => robustParts.id),
+  locationId: text('location_id').notNull().default('MAIN'),
+  
+  // Transaction details
+  transactionType: inventoryTransactionTypeEnum('transaction_type').notNull(),
+  quantity: real('quantity').notNull(),
+  unitCost: real('unit_cost').notNull().default(0),
+  totalCost: real('total_cost').notNull().default(0),
+  
+  // Reference information
+  orderId: text('order_id'), // Customer order reference
+  poNumber: text('po_number'), // Purchase order reference
+  vendorId: text('vendor_id'), // Vendor reference
+  employeeId: text('employee_id'), // Employee who performed transaction
+  
+  // Progressive allocation tracking
+  allocationStatus: inventoryStatusEnum('allocation_status').default('AVAILABLE'),
+  customerOrderId: text('customer_order_id'), // Specific customer order for allocation
+  productionOrderId: text('production_order_id'), // Production order reference
+  
+  // Outside processing
+  outsideProcessorId: text('outside_processor_id'), // Vendor doing outside processing
+  processingJobId: text('processing_job_id'), // Batch/job number at processor
+  expectedReturnDate: timestamp('expected_return_date'),
+  actualReturnDate: timestamp('actual_return_date'),
+  
+  // Documentation
+  notes: text('notes'),
+  documentUrl: text('document_url'), // Link to supporting documents
+  
+  // Tracking
+  transactionDate: timestamp('transaction_date').notNull().defaultNow(),
+  createdAt: timestamp('created_at').defaultNow(),
+  createdBy: text('created_by').notNull(),
+});
+
+// MRP Material Requirements - Calculated material needs
+export const mrpRequirements = pgTable('mrp_requirements', {
+  id: serial('id').primaryKey(),
+  requirementId: text('requirement_id').notNull().unique(), // Auto-generated unique ID
+  
+  // Part information
+  partId: text('part_id').notNull().references(() => robustParts.id),
+  
+  // Requirement details
+  requiredQty: real('required_qty').notNull(),
+  availableQty: real('available_qty').notNull().default(0),
+  shortageQty: real('shortage_qty').notNull().default(0), // Required - Available
+  
+  // Timing
+  needDate: timestamp('need_date').notNull(),
+  plannedOrderDate: timestamp('planned_order_date'), // When to place order
+  
+  // Source information - what's driving this requirement
+  sourceType: text('source_type').notNull(), // CUSTOMER_ORDER, FORECAST, SAFETY_STOCK
+  sourceOrderId: text('source_order_id'), // Driving customer order
+  sourceCustomerId: text('source_customer_id'), // Customer driving requirement
+  
+  // BOM explosion details
+  bomId: text('bom_id'), // BOM line that created this requirement
+  parentPartId: text('parent_part_id'), // Parent part if from BOM explosion
+  qtyPer: real('qty_per').default(1), // Quantity per parent part
+  
+  // Planning information
+  planningGroup: text('planning_group').default('WEEKLY'), // WEEKLY, MONTHLY
+  priority: integer('priority').default(50), // 1-100, lower = higher priority
+  
+  // Purchase recommendations
+  suggestedPoQty: real('suggested_po_qty').default(0),
+  suggestedVendorId: text('suggested_vendor_id'),
+  estimatedCost: real('estimated_cost').default(0),
+  
+  // Status tracking
+  status: text('status').default('OPEN').notNull(), // OPEN, PO_CREATED, RECEIVED, CLOSED
+  
+  // Tracking
+  calculatedAt: timestamp('calculated_at').notNull().defaultNow(),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Outside Processing Locations - Vendor-specific processing locations
+export const outsideProcessingLocations = pgTable('outside_processing_locations', {
+  id: serial('id').primaryKey(),
+  locationId: text('location_id').notNull().unique(), // VENDOR_{vendor_id}_{location_name}
+  
+  // Vendor information
+  vendorId: text('vendor_id').notNull(), // Reference to vendor
+  vendorName: text('vendor_name').notNull(),
+  locationName: text('location_name').notNull().default('Main'), // Main, Secondary, etc.
+  
+  // Processing capabilities
+  processTypes: text('process_types').array().default([]), // ['ANODIZING', 'PLATING', 'HEAT_TREAT']
+  capacity: text('capacity'), // Description of capacity
+  leadTimeDays: integer('lead_time_days').default(7),
+  
+  // Contact information
+  contactName: text('contact_name'),
+  contactPhone: text('contact_phone'),
+  contactEmail: text('contact_email'),
+  
+  // Address
+  address: text('address'),
+  city: text('city'),
+  state: text('state'),
+  zipCode: text('zip_code'),
+  
+  // Status
+  isActive: boolean('is_active').default(true),
+  notes: text('notes'),
+  
+  // Tracking
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Outside Processing Jobs - Track batches at external processors
+export const outsideProcessingJobs = pgTable('outside_processing_jobs', {
+  id: serial('id').primaryKey(),
+  jobId: text('job_id').notNull().unique(), // Auto-generated job ID
+  
+  // Location and vendor
+  locationId: text('location_id').notNull().references(() => outsideProcessingLocations.locationId),
+  vendorId: text('vendor_id').notNull(),
+  
+  // Job details
+  processType: text('process_type').notNull(), // ANODIZING, PLATING, etc.
+  jobDescription: text('job_description'),
+  
+  // Quantities
+  totalPartsOut: integer('total_parts_out').notNull().default(0), // Parts sent out
+  totalPartsBack: integer('total_parts_back').default(0), // Parts received back
+  scrapQty: integer('scrap_qty').default(0), // Parts scrapped at vendor
+  
+  // Timing
+  dateShipped: timestamp('date_shipped').notNull(),
+  expectedReturn: timestamp('expected_return').notNull(),
+  actualReturn: timestamp('actual_return'),
+  
+  // Cost
+  estimatedCost: real('estimated_cost').default(0),
+  actualCost: real('actual_cost').default(0),
+  
+  // References
+  poNumber: text('po_number'), // PO to vendor for processing
+  packingSlip: text('packing_slip'), // Packing slip reference
+  
+  // Status
+  status: text('status').default('SHIPPED').notNull(), // SHIPPED, IN_PROCESS, COMPLETED, RETURNED
+  
+  // Notes and tracking
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+  createdBy: text('created_by').notNull(),
+});
+
+// MRP Calculations History - Track MRP runs and changes
+export const mrpCalculationHistory = pgTable('mrp_calculation_history', {
+  id: serial('id').primaryKey(),
+  calculationId: text('calculation_id').notNull().unique(),
+  
+  // Calculation details
+  calculationType: text('calculation_type').notNull(), // FULL_RUN, INCREMENTAL, ORDER_CHANGE
+  triggeredBy: text('triggered_by').notNull(), // AUTO, USER, ORDER_CHANGE
+  scope: text('scope').default('ALL'), // ALL, SPECIFIC_PART, SPECIFIC_ORDER
+  
+  // Timing
+  startTime: timestamp('start_time').notNull(),
+  endTime: timestamp('end_time'),
+  duration: integer('duration'), // Duration in seconds
+  
+  // Results
+  partsProcessed: integer('parts_processed').default(0),
+  requirementsGenerated: integer('requirements_generated').default(0),
+  shortagesIdentified: integer('shortages_identified').default(0),
+  poSuggestionsCreated: integer('po_suggestions_created').default(0),
+  
+  // Status
+  status: text('status').default('RUNNING').notNull(), // RUNNING, COMPLETED, FAILED
+  errorMessage: text('error_message'),
+  
+  // Tracking
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// Vendor Part Mapping - Link parts to vendors with pricing
+export const vendorParts = pgTable('vendor_parts', {
+  id: serial('id').primaryKey(),
+  
+  // Part and vendor
+  partId: text('part_id').notNull().references(() => robustParts.id),
+  vendorId: text('vendor_id').notNull(),
+  
+  // Vendor-specific information
+  vendorPartNumber: text('vendor_part_number').notNull(),
+  vendorPartName: text('vendor_part_name'),
+  
+  // Pricing and ordering
+  unitPrice: real('unit_price').notNull().default(0),
+  minOrderQty: real('min_order_qty').default(1),
+  packSize: real('pack_size').default(1), // Vendor's package size
+  leadTimeDays: integer('lead_time_days').default(7),
+  
+  // Vendor metrics
+  isPreferred: boolean('is_preferred').default(false),
+  qualityRating: integer('quality_rating').default(5), // 1-5 scale
+  deliveryRating: integer('delivery_rating').default(5), // 1-5 scale
+  
+  // Price history
+  lastPriceUpdate: timestamp('last_price_update'),
+  priceValidUntil: timestamp('price_valid_until'),
+  
+  // Status
+  isActive: boolean('is_active').default(true),
+  discontinuedDate: timestamp('discontinued_date'),
+  notes: text('notes'),
+  
+  // Tracking
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Insert Schemas for Inventory & MRP
+export const insertInventoryBalanceSchema = createInsertSchema(inventoryBalances).omit({
+  id: true,
+  availableQty: true, // Calculated field
+  totalValue: true, // Calculated field
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  partId: z.string().min(1, "Part ID is required"),
+  locationId: z.string().min(1, "Location ID is required"),
+  onHandQty: z.number().min(0, "On-hand quantity must be non-negative"),
+  committedQty: z.number().min(0, "Committed quantity must be non-negative"),
+  allocatedQty: z.number().min(0, "Allocated quantity must be non-negative"),
+  unitCost: z.number().min(0, "Unit cost must be non-negative"),
+});
+
+export const insertInventoryTransactionSchema = createInsertSchema(inventoryTransactions).omit({
+  id: true,
+  transactionId: true, // Auto-generated
+  createdAt: true,
+}).extend({
+  partId: z.string().min(1, "Part ID is required"),
+  locationId: z.string().min(1, "Location ID is required"),
+  transactionType: z.enum(['RECEIPT', 'ISSUE', 'CONSUMPTION', 'ADJUSTMENT', 'SCRAP', 'RETURN_TO_VENDOR', 'TRANSFER_OUT', 'TRANSFER_IN']),
+  quantity: z.number().refine(val => val !== 0, "Quantity cannot be zero"),
+  unitCost: z.number().min(0, "Unit cost must be non-negative"),
+  createdBy: z.string().min(1, "Created by is required"),
+});
+
+export const insertMrpRequirementSchema = createInsertSchema(mrpRequirements).omit({
+  id: true,
+  requirementId: true, // Auto-generated
+  calculatedAt: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  partId: z.string().min(1, "Part ID is required"),
+  requiredQty: z.number().positive("Required quantity must be positive"),
+  needDate: z.coerce.date(),
+  sourceType: z.enum(['CUSTOMER_ORDER', 'FORECAST', 'SAFETY_STOCK']),
+});
+
+export const insertOutsideProcessingLocationSchema = createInsertSchema(outsideProcessingLocations).omit({
+  id: true,
+  locationId: true, // Auto-generated
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  vendorId: z.string().min(1, "Vendor ID is required"),
+  vendorName: z.string().min(1, "Vendor name is required"),
+  locationName: z.string().min(1, "Location name is required"),
+});
+
+export const insertOutsideProcessingJobSchema = createInsertSchema(outsideProcessingJobs).omit({
+  id: true,
+  jobId: true, // Auto-generated
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  locationId: z.string().min(1, "Location ID is required"),
+  vendorId: z.string().min(1, "Vendor ID is required"),
+  processType: z.string().min(1, "Process type is required"),
+  totalPartsOut: z.number().min(1, "Total parts out must be at least 1"),
+  dateShipped: z.coerce.date(),
+  expectedReturn: z.coerce.date(),
+  createdBy: z.string().min(1, "Created by is required"),
+});
+
+export const insertVendorPartSchema = createInsertSchema(vendorParts).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  partId: z.string().min(1, "Part ID is required"),
+  vendorId: z.string().min(1, "Vendor ID is required"),
+  vendorPartNumber: z.string().min(1, "Vendor part number is required"),
+  unitPrice: z.number().min(0, "Unit price must be non-negative"),
+  minOrderQty: z.number().positive("Minimum order quantity must be positive"),
+  leadTimeDays: z.number().min(0, "Lead time must be non-negative"),
+});
+
+// Types for Inventory & MRP
+export type InventoryBalance = typeof inventoryBalances.$inferSelect;
+export type InsertInventoryBalance = z.infer<typeof insertInventoryBalanceSchema>;
+
+export type InventoryTransaction = typeof inventoryTransactions.$inferSelect;
+export type InsertInventoryTransaction = z.infer<typeof insertInventoryTransactionSchema>;
+
+export type MrpRequirement = typeof mrpRequirements.$inferSelect;
+export type InsertMrpRequirement = z.infer<typeof insertMrpRequirementSchema>;
+
+export type OutsideProcessingLocation = typeof outsideProcessingLocations.$inferSelect;
+export type InsertOutsideProcessingLocation = z.infer<typeof insertOutsideProcessingLocationSchema>;
+
+export type OutsideProcessingJob = typeof outsideProcessingJobs.$inferSelect;
+export type InsertOutsideProcessingJob = z.infer<typeof insertOutsideProcessingJobSchema>;
+
+export type MrpCalculationHistory = typeof mrpCalculationHistory.$inferSelect;
+
+export type VendorPart = typeof vendorParts.$inferSelect;
+export type InsertVendorPart = z.infer<typeof insertVendorPartSchema>;

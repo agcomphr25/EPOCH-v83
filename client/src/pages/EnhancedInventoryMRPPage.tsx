@@ -25,7 +25,6 @@ import InventoryTransactionsCard from '../components/inventory/InventoryTransact
 import ProgressiveAllocationCard from '../components/inventory/ProgressiveAllocationCard';
 import MRPCalculationCard from '../components/inventory/MRPCalculationCard';
 import MRPShortagesCard from '../components/inventory/MRPShortagesCard';
-import RobustPartsIntegrationCard from '../components/inventory/RobustPartsIntegrationCard';
 import OutsideProcessingCard from '../components/inventory/OutsideProcessingCard';
 import VendorPartsCard from '../components/inventory/VendorPartsCard';
 import POSuggestionsCard from '../components/inventory/POSuggestionsCard';
@@ -228,37 +227,14 @@ export default function EnhancedInventoryMRPPage() {
 
       <Separator />
 
-      {/* Integration & Advanced Features Section */}
+      {/* Vendor & Processing Section */}
       <div className="space-y-4">
         <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 flex items-center gap-2">
-          <Users className="h-5 w-5 text-teal-600" />
-          Integration & Advanced Features
+          <Users className="h-5 w-5 text-cyan-600" />
+          Vendor & Processing Management
         </h2>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {/* Robust Parts Integration Card */}
-          <Card 
-            className="cursor-pointer hover:shadow-lg transition-shadow duration-200 border-2 hover:border-teal-500"
-            onClick={() => handleCardClick('robust-parts')}
-            data-testid="card-robust-parts"
-          >
-            <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <Package className="h-5 w-5 text-teal-600" />
-                Robust Parts
-              </CardTitle>
-              <CardDescription>
-                Integration with Robust Parts & BOM system
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center justify-between">
-                <div className="text-2xl font-bold text-teal-600">Parts</div>
-                <Users className="h-4 w-4 text-gray-400" />
-              </div>
-            </CardContent>
-          </Card>
-
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Outside Processing Card */}
           <Card 
             className="cursor-pointer hover:shadow-lg transition-shadow duration-200 border-2 hover:border-cyan-500"
@@ -320,7 +296,6 @@ export default function EnhancedInventoryMRPPage() {
                   {activeCard === 'mrp-calculation' && <><Settings className="h-5 w-5" />MRP Calculation</>}
                   {activeCard === 'mrp-shortages' && <><AlertTriangle className="h-5 w-5" />Material Shortages</>}
                   {activeCard === 'po-suggestions' && <><ShoppingCart className="h-5 w-5" />Purchase Order Suggestions</>}
-                  {activeCard === 'robust-parts' && <><Package className="h-5 w-5" />Robust Parts Integration</>}
                   {activeCard === 'outside-processing' && <><Truck className="h-5 w-5" />Outside Processing</>}
                   {activeCard === 'vendor-parts' && <><Users className="h-5 w-5" />Vendor Parts Management</>}
                 </CardTitle>
@@ -341,7 +316,6 @@ export default function EnhancedInventoryMRPPage() {
               {activeCard === 'mrp-calculation' && <MRPCalculationCard />}
               {activeCard === 'mrp-shortages' && <MRPShortagesCard />}
               {activeCard === 'po-suggestions' && <POSuggestionsCard />}
-              {activeCard === 'robust-parts' && <RobustPartsIntegrationCard />}
               {activeCard === 'outside-processing' && <OutsideProcessingCard />}
               {activeCard === 'vendor-parts' && <VendorPartsCard />}
             </CardContent>

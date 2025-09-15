@@ -35,3 +35,35 @@ export function getOrderDisplayInfo(order: { orderId: string; fbOrderNumber?: st
     tooltipText: `Order ID: ${order.orderId}`
   };
 }
+
+/**
+ * Validates and cleans order assignments to prevent Friday scheduling
+ * @param assignments - Object with orderId keys and assignment values
+ * @param allowManualFriday - If true, allows manual Friday assignments (for drag-and-drop)
+ * @returns Cleaned assignments with Friday assignments removed (unless manually allowed)
+ */
+export function validateNoFridayAssignments(
+  assignments: { [orderId: string]: { moldId: string, date: string } }, 
+  allowManualFriday: boolean = false
+): { [orderId: string]: { moldId: string, date: string } } {
+  const cleanedAssignments: { [orderId: string]: { moldId: string, date: string } } = {};
+  let removedCount = 0;
+  
+  Object.entries(assignments).forEach(([orderId, assignment]) => {
+    const date = new Date(assignment.date);
+    const isFriday = date.getDay() === 5;
+    
+    if (!isFriday || allowManualFriday) {
+      cleanedAssignments[orderId] = assignment;
+    } else {
+      console.warn(`🚫 FRIDAY VALIDATION: Rejected Friday assignment for ${orderId} on ${date.toDateString()}`);
+      removedCount++;
+    }
+  });
+  
+  if (removedCount > 0) {
+    console.log(`🚫 FRIDAY VALIDATION: Removed ${removedCount} Friday assignments`);
+  }
+  
+  return cleanedAssignments;
+}

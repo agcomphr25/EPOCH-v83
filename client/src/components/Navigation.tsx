@@ -1,12 +1,70 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link, useLocation } from 'wouter';
-import { Factory, User, FileText, TrendingDown, Plus, Settings, Package, FilePenLine, ClipboardList, BarChart, ChevronDown, ChevronRight, FormInput, PieChart, Scan, Warehouse, Shield, Wrench, Users, TestTube, DollarSign, Receipt, TrendingUp, List, BookOpen, Calendar, CheckSquare, Truck } from "lucide-react";
+import { Factory, User, FileText, TrendingDown, Plus, Settings, Package, FilePenLine, ClipboardList, BarChart, ChevronDown, ChevronRight, FormInput, PieChart, Scan, Warehouse, Shield, Wrench, Users, TestTube, DollarSign, Receipt, TrendingUp, List, BookOpen, Calendar, CheckSquare, Truck, Mail, MessageSquare, CreditCard, XCircle, Cog, ArrowRight, LogOut, GraduationCap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import InstallPWAButton from "./InstallPWAButton";
+import { useQuery } from '@tanstack/react-query';
+import {
+  NavigationMenu,
+  NavigationMenuItem,
+  NavigationMenuLink,
+  NavigationMenuContent,
+  NavigationMenuTrigger,
+  navigationMenuTriggerStyle,
+  NavigationMenuIndicator,
+  NavigationMenuViewport,
+} from "@/components/ui/navigation-menu"
 
 export default function Navigation() {
   const [location] = useLocation();
+  
+  // Check if we're in deployment environment to show logout button
+  const isDeploymentEnvironment = () => {
+    const hostname = window.location.hostname;
+    const isLocalhost = hostname.includes('localhost') || hostname.includes('127.0.0.1');
+    const isReplitEditor = hostname.includes('replit.dev') && !hostname.includes('.replit.dev');
+    return !isLocalhost && !isReplitEditor;
+  };
+  
+  // Fetch current user data
+  const { data: currentUser } = useQuery({
+    queryKey: ['currentUser'],
+    queryFn: async () => {
+      const token = localStorage.getItem('sessionToken') || localStorage.getItem('jwtToken');
+      if (!token || !isDeploymentEnvironment()) {
+        return null;
+      }
+      
+      try {
+        const response = await fetch('/api/auth/session', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        
+        if (response.ok) {
+          const userData = await response.json();
+          return userData;
+        }
+        return null;
+      } catch (error) {
+        console.error('Failed to fetch user data:', error);
+        return null;
+      }
+    },
+    enabled: isDeploymentEnvironment(),
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    retry: false
+  });
+  
+  // Logout function
+  const handleLogout = () => {
+    localStorage.removeItem('sessionToken');
+    localStorage.removeItem('jwtToken');
+    // Force a complete page reload to trigger authentication check
+    window.location.reload();
+  };
 
   const [verifiedModulesExpanded, setVerifiedModulesExpanded] = useState(false);
   const [formsReportsExpanded, setFormsReportsExpanded] = useState(false);
@@ -14,15 +72,29 @@ export default function Navigation() {
   const [employeesExpanded, setEmployeesExpanded] = useState(false);
   const [qcMaintenanceExpanded, setQcMaintenanceExpanded] = useState(false);
   const [financeExpanded, setFinanceExpanded] = useState(false);
-  const [testDashboardsExpanded, setTestDashboardsExpanded] = useState(false);
+  const [userDashboardsExpanded, setUserDashboardsExpanded] = useState(false);
   const [purchaseOrdersExpanded, setPurchaseOrdersExpanded] = useState(false);
   const [productionSchedulingExpanded, setProductionSchedulingExpanded] = useState(false);
   const [departmentQueueExpanded, setDepartmentQueueExpanded] = useState(false);
 
+  // Helper function to close all dropdowns
+  const closeAllDropdowns = useCallback(() => {
+    setFormsReportsExpanded(false);
+    setInventoryExpanded(false);
+    setQcMaintenanceExpanded(false);
+    setEmployeesExpanded(false);
+    setFinanceExpanded(false);
+    setUserDashboardsExpanded(false);
+    setPurchaseOrdersExpanded(false);
+    setProductionSchedulingExpanded(false);
+    setDepartmentQueueExpanded(false);
+    setVerifiedModulesExpanded(false);
+  }, []);
+
   // Helper function to toggle dropdown
   const toggleDropdown = useCallback((dropdownName: string, isExpanded: boolean, setExpanded: (value: boolean) => void) => {
     setExpanded(!isExpanded);
-    
+
     // Close other dropdowns when opening a new one
     if (!isExpanded) {
       if (dropdownName !== 'formsReports') setFormsReportsExpanded(false);
@@ -30,7 +102,7 @@ export default function Navigation() {
       if (dropdownName !== 'qcMaintenance') setQcMaintenanceExpanded(false);
       if (dropdownName !== 'employees') setEmployeesExpanded(false);
       if (dropdownName !== 'finance') setFinanceExpanded(false);
-      if (dropdownName !== 'testDashboards') setTestDashboardsExpanded(false);
+      if (dropdownName !== 'userDashboards') setUserDashboardsExpanded(false);
       if (dropdownName !== 'purchaseOrders') setPurchaseOrdersExpanded(false);
       if (dropdownName !== 'productionScheduling') setProductionSchedulingExpanded(false);
       if (dropdownName !== 'departmentQueue') setDepartmentQueueExpanded(false);
@@ -57,6 +129,12 @@ export default function Navigation() {
       icon: FilePenLine,
       description: 'Manage saved draft orders'
     },
+    {
+      path: '/cancelled-orders',
+      label: 'Cancelled Orders',
+      icon: XCircle,
+      description: 'View cancelled orders'
+    },
 
     {
       path: '/customers',
@@ -74,7 +152,7 @@ export default function Navigation() {
     },
     {
       path: '/barcode-scanner',
-      label: 'Barcode Scanner',
+      label: 'Barcde Scanner',
       icon: Scan,
       description: 'Scan order barcodes to view pricing summary and payment status'
     },
@@ -119,6 +197,12 @@ export default function Navigation() {
 
   const formsReportsItems = [
     {
+      path: '/orders-management',
+      label: 'Orders Management',
+      icon: ClipboardList,
+      description: 'Comprehensive orders management with filtering and CSV export'
+    },
+    {
       path: '/enhanced-forms',
       label: 'Enhanced Forms',
       icon: FormInput,
@@ -133,8 +217,8 @@ export default function Navigation() {
     {
       path: '/ag-bottom-metal-report',
       label: 'AG Bottom Metal Report',
-      icon: FileText,
-      description: 'Orders with AG bottom metal specifications'
+      icon: DollarSign,
+      description: 'Comprehensive pricing analysis for AG bottom metal orders by price tiers'
     },
     {
       path: '/p2-forms',
@@ -165,6 +249,18 @@ export default function Navigation() {
       label: 'Document Management',
       icon: FileText,
       description: 'Unified document repository with advanced tagging and organization'
+    },
+    {
+      path: '/shutdown-training',
+      label: 'Shutdown Training',
+      icon: GraduationCap,
+      description: 'Presentation-style shutdown procedures training with attendance signatures'
+    },
+    {
+      path: '/fire-safety-training',
+      label: 'Fire Safety Training',
+      icon: GraduationCap,
+      description: 'Presentation-style fire safety training with attendance signatures'
     }
   ];
 
@@ -174,6 +270,12 @@ export default function Navigation() {
       label: 'Quality Control',
       icon: Shield,
       description: 'QC inspections and definitions'
+    },
+    {
+      path: '/nonconformance',
+      label: 'Nonconformance Tracking',
+      icon: ClipboardList,
+      description: 'Track and manage quality issues and dispositions'
     },
     {
       path: '/maintenance',
@@ -189,6 +291,12 @@ export default function Navigation() {
       label: 'Employee Management',
       icon: Users,
       description: 'Manage employee profiles, certifications, and evaluations'
+    },
+    {
+      path: '/user-management',
+      label: 'User Management',
+      icon: User,
+      description: 'Manage usernames, passwords, and user access'
     },
     {
       path: '/employee-portal',
@@ -212,6 +320,24 @@ export default function Navigation() {
       description: 'Financial overview and KPIs'
     },
     {
+      path: '/payment-management',
+      label: 'Payment Management',
+      icon: CreditCard,
+      description: 'Process credit card payments and view transaction history'
+    },
+    {
+      path: '/refund-request',
+      label: 'Refund Request',
+      icon: TrendingDown,
+      description: 'Submit refund requests for customer orders'
+    },
+    {
+      path: '/refund-queue',
+      label: 'Refund Queue',
+      icon: List,
+      description: 'Review and approve pending refund requests'
+    },
+    {
       path: '/finance/ap',
       label: 'AP Journal',
       icon: Receipt,
@@ -231,24 +357,66 @@ export default function Navigation() {
     }
   ];
 
-  const testDashboardsItems = [
+  const userDashboardsItems = [
     {
-      path: '/agtest-dashboard',
-      label: 'AGTEST Dashboard',
+      path: '/ag-dashboard',
+      label: 'AG Dashboard',
       icon: BarChart,
       description: 'Unified dashboard with Pipeline Overview, All Orders, and Layup Scheduler'
     },
     {
-      path: '/admintest-dashboard',
-      label: 'ADMINTEST Dashboard',
+      path: '/admin-dashboard',
+      label: 'ADMIN Dashboard',
       icon: Factory,
       description: 'Complete navigation dashboard for all system sections'
     },
     {
-      path: '/stacitest-dashboard',
-      label: 'STACITEST Dashboard',
-      icon: BarChart,
-      description: 'P1 & P2 production pipeline overview dashboard'
+      path: '/johnl-dashboard',
+      label: 'JOHNL Dashboard',
+      icon: Settings,
+      description: 'CNC Operations dashboard with queue, orders, and employee portal'
+    },
+    {
+      path: '/jens-dashboard',
+      label: 'JENS Dashboard',
+      icon: Shield,
+      description: 'Quality Control dashboard with Finish QC queue, orders, and employee portal'
+    },
+    {
+      path: '/staciw-dashboard',
+      label: 'STACIW Dashboard',
+      icon: Factory,
+      description: 'Comprehensive order and production management dashboard'
+    },
+    {
+      path: '/darleneb-dashboard',
+      label: 'DARLENEB Dashboard',
+      icon: Users,
+      description: 'Order management and customer relations dashboard'
+    },
+    {
+      path: '/tims-dashboard',
+      label: 'TIMS Dashboard',
+      icon: Cog,
+      description: 'CNC operations and maintenance management dashboard'
+    },
+    {
+      path: '/bradw-dashboard',
+      label: 'BRADW Dashboard',
+      icon: Users,
+      description: 'Gunsmith queue, orders, and employee portal dashboard'
+    },
+    {
+      path: '/faleeshah-dashboard',
+      label: 'FALEESHAH Dashboard',
+      icon: Shield,
+      description: 'Quality Control, Shipping & Customer Management dashboard'
+    },
+    {
+      path: '/joeyb-dashboard',
+      label: 'JOEYB Dashboard',
+      icon: Settings,
+      description: 'Cutting Table, CNC & Gunsmith Operations dashboard'
     }
   ];
 
@@ -264,6 +432,12 @@ export default function Navigation() {
       label: 'P2 Purchase Orders',
       icon: FileText,
       description: 'P2 customer management and purchase orders with Part #, Quantity, Price'
+    },
+    {
+      path: '/po-products',
+      label: 'PO Products',
+      icon: Package,
+      description: 'Product configuration for purchase orders'
     }
   ];
 
@@ -297,22 +471,16 @@ export default function Navigation() {
       label: 'Module 8 Test',
       icon: TestTube,
       description: 'Test API integrations and communications'
+    },
+    {
+      path: '/order-department-transfer',
+      label: 'Order Department Transfer',
+      icon: ArrowRight,
+      description: 'Move orders between departments for corrections'
     }
   ];
 
   const productionSchedulingItems = [
-    {
-      path: '/p1-production-queue',
-      label: 'P1 Production Queue',
-      icon: Factory,
-      description: 'Manage P1 production queue priorities and order processing'
-    },
-    {
-      path: '/p2-production-queue',
-      label: 'P2 Production Queue',
-      icon: Factory,
-      description: 'Manage P2 production queue and OEM order processing'
-    },
     {
       path: '/layup-scheduler',
       label: 'P1 Layup Scheduler',
@@ -335,6 +503,12 @@ export default function Navigation() {
 
   const departmentQueueItems = [
     {
+      path: '/department-queue/production-queue',
+      label: 'Production Queue',
+      icon: List,
+      description: 'Production queue department manager'
+    },
+    {
       path: '/department-queue/layup-plugging',
       label: 'Layup/Plugging',
       icon: Factory,
@@ -351,6 +525,18 @@ export default function Navigation() {
       label: 'CNC',
       icon: Settings,
       description: 'CNC machining department manager'
+    },
+    {
+      path: '/department-queue/gunsmith',
+      label: 'Gunsmith',
+      icon: Wrench,
+      description: 'Gunsmith department manager'
+    },
+    {
+      path: '/department-queue/finish',
+      label: 'Finish',
+      icon: CheckSquare,
+      description: 'Finish assignment department manager'
     },
     {
       path: '/department-queue/finish-qc',
@@ -378,7 +564,7 @@ export default function Navigation() {
     },
     {
       path: '/shipping-management',
-      label: 'Shipping Management',
+      label: 'Fulfilled Orders',
       icon: Truck,
       description: 'Manage tracking numbers and customer notifications'
     }
@@ -390,44 +576,53 @@ export default function Navigation() {
   const isQcMaintenanceActive = qcMaintenanceItems.some(item => location === item.path);
   const isEmployeesActive = employeesItems.some(item => location === item.path);
   const isFinanceActive = financeItems.some(item => location === item.path);
-  const isTestDashboardsActive = testDashboardsItems.some(item => location === item.path);
+  const isUserDashboardsActive = userDashboardsItems.some(item => location === item.path);
   const isPurchaseOrdersActive = purchaseOrdersItems.some(item => location === item.path);
   const isProductionSchedulingActive = productionSchedulingItems.some(item => location === item.path);
   const isDepartmentQueueActive = departmentQueueItems.some(item => location === item.path);
 
-  // Auto-expand dropdowns when on those pages
+  // Close all dropdowns when navigating to a new page
   useEffect(() => {
-    if (isVerifiedModulesActive) {
-      setVerifiedModulesExpanded(true);
-    }
-    if (isFormsReportsActive) {
-      setFormsReportsExpanded(true);
-    }
-    if (isInventoryActive) {
-      setInventoryExpanded(true);
-    }
-    if (isQcMaintenanceActive) {
-      setQcMaintenanceExpanded(true);
-    }
-    if (isEmployeesActive) {
-      setEmployeesExpanded(true);
-    }
-    if (isFinanceActive) {
-      setFinanceExpanded(true);
-    }
-    if (isTestDashboardsActive) {
-      setTestDashboardsExpanded(true);
-    }
-    if (isPurchaseOrdersActive) {
-      setPurchaseOrdersExpanded(true);
-    }
-    if (isProductionSchedulingActive) {
-      setProductionSchedulingExpanded(true);
-    }
-    if (isDepartmentQueueActive) {
-      setDepartmentQueueExpanded(true);
-    }
-  }, [isVerifiedModulesActive, isFormsReportsActive, isInventoryActive, isQcMaintenanceActive, isEmployeesActive, isFinanceActive, isTestDashboardsActive, isPurchaseOrdersActive, isProductionSchedulingActive, isDepartmentQueueActive]);
+    closeAllDropdowns();
+  }, [location, closeAllDropdowns]);
+
+  // Auto-expand dropdowns when on those pages (with delay to prevent interference with manual closing)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (isVerifiedModulesActive) {
+        setVerifiedModulesExpanded(true);
+      }
+      if (isFormsReportsActive) {
+        setFormsReportsExpanded(true);
+      }
+      if (isInventoryActive) {
+        setInventoryExpanded(true);
+      }
+      if (isQcMaintenanceActive) {
+        setQcMaintenanceExpanded(true);
+      }
+      if (isEmployeesActive) {
+        setEmployeesExpanded(true);
+      }
+      if (isFinanceActive) {
+        setFinanceExpanded(true);
+      }
+      if (isUserDashboardsActive) {
+        setUserDashboardsExpanded(true);
+      }
+      if (isPurchaseOrdersActive) {
+        setPurchaseOrdersExpanded(true);
+      }
+      if (isProductionSchedulingActive) {
+        setProductionSchedulingExpanded(true);
+      }
+      if (isDepartmentQueueActive) {
+        setDepartmentQueueExpanded(true);
+      }
+    }, 100); // Small delay to prevent conflicts with manual dropdown closing
+
+    return () => clearTimeout(timer);
+  }, [isVerifiedModulesActive, isFormsReportsActive, isInventoryActive, isQcMaintenanceActive, isEmployeesActive, isFinanceActive, isUserDashboardsActive, isPurchaseOrdersActive, isProductionSchedulingActive, isDepartmentQueueActive]);
 
   return (
     <header className="bg-white shadow-sm border-b border-gray-200">
@@ -459,6 +654,18 @@ export default function Navigation() {
                 </Link>
               );
             })}
+
+            {/* Communications Dropdown */}
+            <div className="relative">
+              <Button
+                variant="ghost"
+                className="flex items-center gap-2 text-sm"
+                onClick={() => window.location.href = '/communications/inbox'}
+              >
+                <Mail className="h-4 w-4" />
+                Communications
+              </Button>
+            </div>
 
             {/* Forms & Reports Dropdown */}
             <div className="relative">
@@ -492,7 +699,7 @@ export default function Navigation() {
                             "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
                             isActive && "bg-primary text-white hover:bg-primary"
                           )}
-                          onClick={() => setFormsReportsExpanded(false)}
+                          onClick={closeAllDropdowns}
                         >
                           <Icon className="h-4 w-4" />
                           {item.label}
@@ -514,7 +721,7 @@ export default function Navigation() {
                 )}
                 onClick={() => toggleDropdown('inventory', inventoryExpanded, setInventoryExpanded)}
               >
-                <Package className="h-4 w-4" />
+                <Warehouse className="h-4 w-4" />
                 Inventory
                 {inventoryExpanded ? (
                   <ChevronDown className="h-4 w-4" />
@@ -536,7 +743,7 @@ export default function Navigation() {
                             "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
                             isActive && "bg-primary text-white hover:bg-primary"
                           )}
-                          onClick={() => setInventoryExpanded(false)}
+                          onClick={closeAllDropdowns}
                         >
                           <Icon className="h-4 w-4" />
                           {item.label}
@@ -580,7 +787,7 @@ export default function Navigation() {
                             "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
                             isActive && "bg-primary text-white hover:bg-primary"
                           )}
-                          onClick={() => setQcMaintenanceExpanded(false)}
+                          onClick={closeAllDropdowns}
                         >
                           <Icon className="h-4 w-4" />
                           {item.label}
@@ -624,7 +831,7 @@ export default function Navigation() {
                             "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
                             isActive && "bg-primary text-white hover:bg-primary"
                           )}
-                          onClick={() => setEmployeesExpanded(false)}
+                          onClick={closeAllDropdowns}
                         >
                           <Icon className="h-4 w-4" />
                           {item.label}
@@ -668,51 +875,7 @@ export default function Navigation() {
                             "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
                             isActive && "bg-primary text-white hover:bg-primary"
                           )}
-                          onClick={() => setFinanceExpanded(false)}
-                        >
-                          <Icon className="h-4 w-4" />
-                          {item.label}
-                        </button>
-                      </Link>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-            {/* Test Dashboards Dropdown */}
-            <div className="relative">
-              <Button
-                variant={isTestDashboardsActive ? "default" : "ghost"}
-                className={cn(
-                  "flex items-center gap-2 text-sm",
-                  isTestDashboardsActive && "bg-primary text-white"
-                )}
-                onClick={() => toggleDropdown('testDashboards', testDashboardsExpanded, setTestDashboardsExpanded)}
-              >
-                <TestTube className="h-4 w-4" />
-                Test Dashboards
-                {testDashboardsExpanded ? (
-                  <ChevronDown className="h-4 w-4" />
-                ) : (
-                  <ChevronRight className="h-4 w-4" />
-                )}
-              </Button>
-
-              {testDashboardsExpanded && (
-                <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
-                  {testDashboardsItems.map((item) => {
-                    const Icon = item.icon;
-                    const isActive = location === item.path;
-
-                    return (
-                      <Link key={item.path} href={item.path}>
-                        <button
-                          className={cn(
-                            "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
-                            isActive && "bg-primary text-white hover:bg-primary"
-                          )}
-                          onClick={() => setTestDashboardsExpanded(false)}
+                          onClick={closeAllDropdowns}
                         >
                           <Icon className="h-4 w-4" />
                           {item.label}
@@ -756,7 +919,7 @@ export default function Navigation() {
                             "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
                             isActive && "bg-primary text-white hover:bg-primary"
                           )}
-                          onClick={() => setPurchaseOrdersExpanded(false)}
+                          onClick={closeAllDropdowns}
                         >
                           <Icon className="h-4 w-4" />
                           {item.label}
@@ -800,7 +963,7 @@ export default function Navigation() {
                             "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
                             isActive && "bg-primary text-white hover:bg-primary"
                           )}
-                          onClick={() => setProductionSchedulingExpanded(false)}
+                          onClick={closeAllDropdowns}
                         >
                           <Icon className="h-4 w-4" />
                           {item.label}
@@ -823,7 +986,7 @@ export default function Navigation() {
                 onClick={() => toggleDropdown('departmentQueue', departmentQueueExpanded, setDepartmentQueueExpanded)}
               >
                 <Factory className="h-4 w-4" />
-                Department Manager
+                P1 Department Manager
                 {departmentQueueExpanded ? (
                   <ChevronDown className="h-4 w-4" />
                 ) : (
@@ -844,7 +1007,7 @@ export default function Navigation() {
                             "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
                             isActive && "bg-primary text-white hover:bg-primary"
                           )}
-                          onClick={() => setDepartmentQueueExpanded(false)}
+                          onClick={closeAllDropdowns}
                         >
                           <Icon className="h-4 w-4" />
                           {item.label}
@@ -888,7 +1051,7 @@ export default function Navigation() {
                             "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
                             isActive && "bg-primary text-white hover:bg-primary"
                           )}
-                          onClick={() => setVerifiedModulesExpanded(false)}
+                          onClick={closeAllDropdowns}
                         >
                           <Icon className="h-4 w-4" />
                           {item.label}
@@ -906,6 +1069,23 @@ export default function Navigation() {
           <div className="flex flex-wrap items-center gap-2 lg:gap-4">
             <InstallPWAButton />
             <span className="text-sm text-gray-600">Manufacturing ERP System</span>
+            {isDeploymentEnvironment() && currentUser?.username && (
+              <span className="text-sm font-medium text-gray-700" data-testid="text-username">
+                {currentUser.username}
+              </span>
+            )}
+            {isDeploymentEnvironment() && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleLogout}
+                className="gap-2"
+                data-testid="button-logout"
+              >
+                <LogOut className="h-4 w-4" />
+                Logout
+              </Button>
+            )}
             <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center">
               <User className="h-4 w-4 text-white" />
             </div>
@@ -913,125 +1093,30 @@ export default function Navigation() {
         </div>
       </div>
 
-      {/* Additional Mobile Navigation - Only show dropdowns on smaller screens */}
-      <div className="lg:hidden border-t border-gray-200">
-        <div className="px-4 py-2">
-          <nav className="flex flex-wrap gap-2">
-            {navItems.map((item) => {
-              const Icon = item.icon;
-              const isActive = location === item.path;
-
-              return (
-                <Link key={item.path} href={item.path}>
-                  <Button
-                    variant={isActive ? "default" : "ghost"}
-                    size="sm"
-                    className={cn(
-                      "flex items-center gap-2 text-xs",
-                      isActive && "bg-primary text-white"
-                    )}
-                  >
-                    <Icon className="h-3 w-3" />
-                    {item.label}
-                  </Button>
-                </Link>
-              );
-            })}
-
-            {/* Forms & Reports in Mobile */}
-            <div className="relative">
-              <Button
-                variant={isFormsReportsActive ? "default" : "ghost"}
-                size="sm"
-                className={cn(
-                  "flex items-center gap-2 text-xs",
-                  isFormsReportsActive && "bg-primary text-white"
-                )}
-                onClick={() => toggleDropdown('formsReports', formsReportsExpanded, setFormsReportsExpanded)}
-              >
-                <FormInput className="h-3 w-3" />
-                Forms & Reports
-                {formsReportsExpanded ? (
-                  <ChevronDown className="h-3 w-3" />
-                ) : (
-                  <ChevronRight className="h-3 w-3" />
-                )}
-              </Button>
-
-              {formsReportsExpanded && (
-                <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[150px]">
-                  {formsReportsItems.map((item) => {
-                    const Icon = item.icon;
-                    const isActive = location === item.path;
-
-                    return (
-                      <Link key={item.path} href={item.path}>
-                        <button
-                          className={cn(
-                            "w-full text-left px-3 py-2 text-xs flex items-center gap-2 hover:bg-gray-100",
-                            isActive && "bg-primary text-white hover:bg-primary"
-                          )}
-                          onClick={() => setFormsReportsExpanded(false)}
-                        >
-                          <Icon className="h-3 w-3" />
-                          {item.label}
-                        </button>
-                      </Link>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-            {/* Verified Modules in Mobile */}
-            <div className="relative">
-              <Button
-                variant={isVerifiedModulesActive ? "default" : "ghost"}
-                size="sm"
-                className={cn(
-                  "flex items-center gap-2 text-xs",
-                  isVerifiedModulesActive && "bg-primary text-white"
-                )}
-                onClick={() => toggleDropdown('verifiedModules', verifiedModulesExpanded, setVerifiedModulesExpanded)}
-              >
-                <Settings className="h-3 w-3" />
-                Verified Modules
-                {verifiedModulesExpanded ? (
-                  <ChevronDown className="h-3 w-3" />
-                ) : (
-                  <ChevronRight className="h-3 w-3" />
-                )}
-              </Button>
-
-              {verifiedModulesExpanded && (
-                <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[150px]">
-                  {verifiedModulesItems.map((item) => {
-                    const Icon = item.icon;
-                    const isActive = location === item.path;
-
-                    return (
-                      <Link key={item.path} href={item.path}>
-                        <button
-                          className={cn(
-                            "w-full text-left px-3 py-2 text-xs flex items-center gap-2 hover:bg-gray-100",
-                            isActive && "bg-primary text-white hover:bg-primary"
-                          )}
-                          onClick={() => setVerifiedModulesExpanded(false)}
-                        >
-                          <Icon className="h-3 w-3" />
-                          {item.label}
-                        </button>
-                      </Link>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-
-          </nav>
-        </div>
-      </div>
+      
     </header>
   );
+}
+
+// Helper component for NavigationMenu
+function ListItem(props: { className?: string; title: string; href: string; children: React.ReactNode }) {
+  return (
+    <li>
+      <NavigationMenuLink asChild>
+        <Link href={props.href}>
+          <a
+            className={cn(
+              "block select-none space-y-1 rounded-md p-3 leading-none no-underline outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground",
+              props.className
+            )}
+          >
+            <div className="text-sm font-medium leading-none">{props.title}</div>
+            <p className="line-clamp-2 text-sm leading-snug text-muted-foreground">
+              {props.children}
+            </p>
+          </a>
+        </Link>
+      </NavigationMenuLink>
+    </li>
+  )
 }

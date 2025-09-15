@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { Link } from 'wouter';
+import { Link, useLocation } from 'wouter';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -10,10 +10,26 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { 
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Edit, Eye, Package, CalendarDays, User, FileText, Download, QrCode, ArrowRight, Search, TrendingDown, Plus, CalendarIcon, Mail, MessageSquare } from 'lucide-react';
+import { Edit, Eye, Package, CalendarDays, User, FileText, Download, QrCode, ArrowRight, Search, TrendingDown, Plus, CalendarIcon, Mail, MessageSquare, MoreHorizontal, XCircle, AlertTriangle } from 'lucide-react';
 import { format } from 'date-fns';
 import CustomerDetailsTooltip from '@/components/CustomerDetailsTooltip';
 import OrderSummaryTooltip from '@/components/OrderSummaryTooltip';
@@ -56,6 +72,20 @@ interface Order {
   status: string;
   currentDepartment?: string;
   barcode?: string;
+  // Payment Information
+  isPaid: boolean;
+  paymentType?: string;
+  paymentAmount?: number;
+  paymentDate?: string;
+  paymentTimestamp?: string;
+  paymentTotal?: number;
+  isFullyPaid?: boolean;
+  // Cancellation Information
+  isCancelled?: boolean;
+  cancelledAt?: string;
+  cancelReason?: string;
+  // Verification Information
+  isVerified?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -86,9 +116,13 @@ interface StockModel {
 }
 
 export default function OrdersList() {
-  console.log('OrdersList component rendering - with CSV export');
+  
+  // Read search parameter from URL
+  const searchParams = new URLSearchParams(window.location.search);
+  const initialSearchTerm = searchParams.get('search') || '';
+  
   const [selectedOrderBarcode, setSelectedOrderBarcode] = useState<{orderId: string, barcode: string} | null>(null);
-  const [searchTerm, setSearchTerm] = useState<string>('');
+  const [searchTerm, setSearchTerm] = useState<string>(initialSearchTerm);
   const [selectedOrderForKickback, setSelectedOrderForKickback] = useState<Order | null>(null);
   const [isKickbackDialogOpen, setIsKickbackDialogOpen] = useState(false);
   const [departmentFilter, setDepartmentFilter] = useState<string>('all');
@@ -96,10 +130,20 @@ export default function OrdersList() {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [communicationModal, setCommunicationModal] = useState<{
     isOpen: boolean;
-    customer: { id: string; name: string; email?: string; phone?: string };
+    customer: { id: number; name: string; email?: string; phone?: string };
     orderId?: string;
   } | null>(null);
   const { toast: showToast } = useToast();
+  const [, setLocation] = useLocation();
+
+  // Cancel order state
+  const [cancelReason, setCancelReason] = useState('');
+  const [isCancelDialogOpen, setIsCancelDialogOpen] = useState(false);
+  const [orderToCancel, setOrderToCancel] = useState<string>('');
+
+  // PDF modal state
+  const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
+  const [currentPdfUrl, setCurrentPdfUrl] = useState<string>('');
 
   // Initialize kickback form
   const kickbackForm = useForm<KickbackFormData>({
@@ -112,19 +156,46 @@ export default function OrdersList() {
     },
   });
 
+  // Cancel order mutation
+  const cancelOrderMutation = useMutation({
+    mutationFn: async ({ orderId, reason }: { orderId: string; reason: string }) => {
+      return apiRequest(`/api/orders/cancel/${orderId}`, {
+        method: 'POST',
+        body: JSON.stringify({ reason })
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
+      showToast({
+        title: "Order Cancelled",
+        description: "The order has been cancelled successfully.",
+      });
+      setIsCancelDialogOpen(false);
+      setCancelReason('');
+      setOrderToCancel('');
+    },
+    onError: (error: any) => {
+      showToast({
+        title: "Error",
+        description: "Failed to cancel order: " + (error.message || 'Unknown error'),
+        variant: "destructive",
+      });
+    }
+  });
+
   // Create kickback mutation
   const createKickbackMutation = useMutation({
     mutationFn: async (data: KickbackFormData) => {
       return apiRequest('/api/kickbacks', {
         method: 'POST',
-        body: data,
+        body: JSON.stringify(data),
       });
     },
     onSuccess: () => {
       // Invalidate kickback queries so KickbackTracking component refreshes
       queryClient.invalidateQueries({ queryKey: ['/api/kickbacks'] });
       queryClient.invalidateQueries({ queryKey: ['/api/kickbacks/analytics'] });
-      
+
       showToast({ title: 'Success', description: 'Kickback reported successfully' });
       kickbackForm.reset();
       setIsKickbackDialogOpen(false);
@@ -154,43 +225,111 @@ export default function OrdersList() {
   // Department progression functions
   const getNextDepartment = (currentDepartment: string) => {
     const departmentFlow = [
-      'Layup', 'Plugging', 'CNC', 'Finish', 'Gunsmith', 'Paint', 'QC', 'Shipping'
+      'P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 'Finish', 'Gunsmith', 'Paint', 'Shipping QC', 'Shipping'
     ];
-    const currentIndex = departmentFlow.indexOf(currentDepartment);
+
+    // Handle alternative department names
+    const normalizedDepartment = currentDepartment === 'Layup' ? 'Layup/Plugging' : currentDepartment;
+
+    const currentIndex = departmentFlow.indexOf(normalizedDepartment);
     if (currentIndex >= 0 && currentIndex < departmentFlow.length - 1) {
       return departmentFlow[currentIndex + 1];
     }
     return null;
   };
 
-  // Progress order mutation
+  // Local state for immediate UI updates - using reliable dual approach
+  const [localOrderUpdates, setLocalOrderUpdates] = React.useState<Record<string, string>>({});
+
+  // Track orders being updated to prevent query invalidation interference
+  const [updatingOrders, setUpdatingOrders] = React.useState<Set<string>>(new Set());
+
+  // Progress order mutation with immediate local state update
   const progressOrderMutation = useMutation({
     mutationFn: async ({ orderId, nextDepartment }: { orderId: string, nextDepartment: string }) => {
-      return apiRequest(`/api/orders/${orderId}/progress`, {
+      const requestBody = {
+        orderIds: [orderId],
+        department: nextDepartment,
+        status: 'IN_PROGRESS'
+      };
+
+      const response = await apiRequest('/api/orders/update-department', {
         method: 'POST',
-        body: { nextDepartment }
+        body: JSON.stringify(requestBody)
       });
+      return response;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
-      toast.success('Order progressed successfully');
+    onSuccess: (data, variables) => {
+      console.log(`✅ API Success: ${variables.orderId} -> ${variables.nextDepartment}`);
+      toast.success('Department updated');
+
+      // Cache is already updated from button click - just clean up local state
+      setTimeout(() => {
+        setLocalOrderUpdates(prev => {
+          const newState = { ...prev };
+          delete newState[variables.orderId];
+          return newState;
+        });
+        setUpdatingOrders(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(variables.orderId);
+          return newSet;
+        });
+      }, 1000); // Longer delay to ensure UI stability
     },
-    onError: (error: any) => {
-      toast.error(error?.message || 'Failed to progress order');
+    onError: (err, variables) => {
+      // Remove failed local update and updating flag immediately
+      setLocalOrderUpdates(prev => {
+        const newState = { ...prev };
+        delete newState[variables.orderId];
+        return newState;
+      });
+      setUpdatingOrders(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(variables.orderId);
+        return newSet;
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
+      toast.error('Failed to update department');
     }
   });
 
-  const handleProgressOrder = (orderId: string, nextDepartment: string) => {
-    progressOrderMutation.mutate({ orderId, nextDepartment });
-  };
+  const handleProgressOrder = React.useCallback((orderId: string, currentDepartment: string) => {
+    const nextDepartment = getNextDepartment(currentDepartment);
+    if (!nextDepartment) {
+      toast.error('No next department available');
+      return;
+    }
 
-  const handleOpenCommunication = (order: Order) => {
-    const customer = customers?.find(c => c.id.toString() === order.customerId);
+    console.log(`🔄 Progressing order ${orderId} from ${currentDepartment} to ${nextDepartment}`);
+
+    // IMMEDIATELY update React Query cache - this prevents any reversion
+    queryClient.setQueryData(['/api/orders/with-payment-status', 'v2'], (old: any[]) => {
+      if (!old) return old;
+      const updated = old.map((order: any) => {
+        if (order.orderId === orderId) {
+          console.log(`✅ Cache updated: ${orderId} -> ${nextDepartment}`);
+          return { ...order, currentDepartment: nextDepartment };
+        }
+        return order;
+      });
+      return updated;
+    });
+
+    // Also update local state for redundancy
+    setLocalOrderUpdates(prev => ({ ...prev, [orderId]: nextDepartment }));
+
+    // Make the API call in the background
+    progressOrderMutation.mutate({ orderId, nextDepartment });
+  }, [progressOrderMutation, queryClient]);
+
+  const handleOpenCommunication = (order: Order, customersList: Customer[]) => {
+    const customer = customersList?.find(c => c.id.toString() === order.customerId);
     if (customer) {
       setCommunicationModal({
         isOpen: true,
         customer: {
-          id: customer.id.toString(),
+          id: customer.id,
           name: customer.name,
           email: customer.email,
           phone: customer.phone
@@ -203,14 +342,35 @@ export default function OrdersList() {
   const handleCloseCommunication = () => {
     setCommunicationModal(null);
   };
-  
+
+  const handleKickbackClick = () => {
+    setLocation('/kickback-tracking');
+  };
+
+  // Function to handle sales order view - opens PDF in modal
+  const handleSalesOrderView = (orderId: string) => {
+    setCurrentPdfUrl(`/api/shipping-pdf/sales-order/${orderId}`);
+    setIsPdfModalOpen(true);
+  };
+
+  const handleCancelOrder = (orderId: string) => {
+    setOrderToCancel(orderId);
+    setIsCancelDialogOpen(true);
+  };
+
+  const confirmCancel = () => {
+    if (orderToCancel && cancelReason.trim()) {
+      cancelOrderMutation.mutate({ orderId: orderToCancel, reason: cancelReason });
+    }
+  };
+
   const handleExportCSV = async () => {
     try {
       const response = await fetch('/api/orders/export/csv');
       if (!response.ok) {
         throw new Error('Failed to export CSV');
       }
-      
+
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -226,13 +386,39 @@ export default function OrdersList() {
       alert('Failed to export CSV. Please try again.');
     }
   };
-  
+
+  const handleExportAllCSV = async () => {
+    try {
+      const response = await fetch('/api/orders/export/csv-all');
+      if (!response.ok) {
+        throw new Error('Failed to export all orders CSV');
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.style.display = 'none';
+      a.href = url;
+      a.download = `all_orders_export_${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (error) {
+      console.error('Full CSV export error:', error);
+      alert('Failed to export all orders CSV. Please try again.');
+    }
+  };
+
   try {
     const { data: orders, isLoading, error } = useQuery<Order[]>({
-      queryKey: ['/api/orders/all'],
-      refetchInterval: 30000, // Auto-refresh every 30 seconds
-      refetchOnWindowFocus: true, // Refresh when window regains focus
+      queryKey: ['/api/orders/with-payment-status', 'v2'],
+      queryFn: () => apiRequest('/api/orders/with-payment-status'),
+      refetchInterval: false, // Completely disable automatic refetching
+      refetchOnWindowFocus: false, // Disable refetch on window focus
+      refetchOnReconnect: false, // Disable refetch on network reconnect
     });
+
 
     const { data: customers } = useQuery<Customer[]>({
       queryKey: ['/api/customers'],
@@ -243,15 +429,11 @@ export default function OrdersList() {
     });
 
     // Fetch kickbacks to check for unresolved issues
-    const { data: kickbacks } = useQuery({
+    const { data: kickbacks } = useQuery<any[]>({
       queryKey: ['/api/kickbacks'],
       refetchInterval: 60000, // Auto-refresh every 60 seconds
     });
 
-    console.log('Orders data:', orders);
-    console.log('Customers data:', customers);
-    console.log('Loading state:', isLoading);
-    console.log('Error state:', error);
 
   const getCustomerName = (customerId: string) => {
     if (!customers || !customerId) return customerId || '';
@@ -278,9 +460,12 @@ export default function OrdersList() {
   // Filter and sort orders based on search term, department filter, and sort options
   const filteredOrders = useMemo(() => {
     if (!orders) return [];
-    
+
     let filtered = [...orders];
-    
+
+    // Exclude cancelled orders from main list
+    filtered = filtered.filter((order) => !order.isCancelled && order.status !== 'CANCELLED');
+
     // Apply search filter
     if (searchTerm.trim()) {
       const term = searchTerm.toLowerCase().trim();
@@ -289,23 +474,28 @@ export default function OrdersList() {
         if (order.orderId && order.orderId.toLowerCase().includes(term)) {
           return true;
         }
-        
+
         // Search by Customer Name
         const customerName = getCustomerName(order.customerId);
         if (customerName && customerName.toLowerCase().includes(term)) {
           return true;
         }
-        
+
         // Search by Customer Phone
         const customerPhone = getCustomerPhone(order.customerId);
         if (customerPhone && customerPhone.toLowerCase().includes(term)) {
           return true;
         }
-        
+
+        // Search by FB Order Number
+        if (order.fbOrderNumber && order.fbOrderNumber.toLowerCase().includes(term)) {
+          return true;
+        }
+
         return false;
       });
     }
-    
+
     // Apply department filter
     if (departmentFilter !== 'all') {
       filtered = filtered.filter(order => {
@@ -313,11 +503,11 @@ export default function OrdersList() {
         return dept === departmentFilter;
       });
     }
-    
+
     // Apply sorting
     filtered.sort((a, b) => {
       let aValue: any, bValue: any;
-      
+
       switch (sortBy) {
         case 'department':
           aValue = a.currentDepartment || 'Not Set';
@@ -331,22 +521,30 @@ export default function OrdersList() {
           aValue = getCustomerName(a.customerId);
           bValue = getCustomerName(b.customerId);
           break;
+        case 'model':
+          aValue = a.modelId || '';
+          bValue = b.modelId || '';
+          break;
         case 'dueDate':
-          aValue = a.dueDate ? new Date(a.dueDate) : new Date(0);
-          bValue = b.dueDate ? new Date(b.dueDate) : new Date(0);
+          aValue = new Date(a.dueDate);
+          bValue = new Date(b.dueDate);
+          break;
+        case 'enteredDate':
+          aValue = new Date(a.createdAt);
+          bValue = new Date(b.createdAt);
           break;
         case 'orderDate':
         default:
-          aValue = a.orderDate ? new Date(a.orderDate) : new Date(0);
-          bValue = b.orderDate ? new Date(b.orderDate) : new Date(0);
+          aValue = new Date(a.orderDate);
+          bValue = new Date(b.orderDate);
           break;
       }
-      
+
       if (aValue < bValue) return sortOrder === 'asc' ? -1 : 1;
       if (aValue > bValue) return sortOrder === 'asc' ? 1 : -1;
       return 0;
     });
-    
+
     return filtered;
   }, [orders, customers, searchTerm, departmentFilter, sortBy, sortOrder]);
 
@@ -365,7 +563,7 @@ export default function OrdersList() {
   // Check if an order has unresolved kickbacks
   const hasUnresolvedKickback = (orderId: string) => {
     if (!kickbacks) return false;
-    return kickbacks.some((kickback: any) => 
+    return kickbacks?.some((kickback: any) => 
       kickback.orderId === orderId && 
       kickback.status !== 'RESOLVED' && 
       kickback.status !== 'CLOSED'
@@ -374,10 +572,10 @@ export default function OrdersList() {
 
   const getActionLengthAbbreviation = (features: any) => {
     if (!features || typeof features !== 'object') return '';
-    
+
     const actionLength = features.action_length;
     if (!actionLength) return '';
-    
+
     switch (actionLength.toLowerCase()) {
       case 'long':
         return 'LA';
@@ -392,9 +590,9 @@ export default function OrdersList() {
 
   const getPaintOption = (features: any) => {
     if (!features || typeof features !== 'object') return 'Standard';
-    
+
     const paintOptions = [];
-    
+
     // Check for paint_options_combined first (newer format)
     if (features.paint_options_combined) {
       const combined = features.paint_options_combined;
@@ -405,10 +603,10 @@ export default function OrdersList() {
           const [category, value] = parts;
           // Convert underscore format to display format with proper casing
           let displayValue = value.replace(/_/g, ' ');
-          
+
           // Handle special cases and proper capitalization
           displayValue = displayValue.replace(/\b\w/g, l => l.toUpperCase());
-          
+
           // Fix common formatting issues
           displayValue = displayValue
             .replace(/Rogue/g, 'Rogue')
@@ -416,12 +614,12 @@ export default function OrdersList() {
             .replace(/Web/g, 'Web')
             .replace(/Desert Night/g, 'Desert Night')
             .replace(/Carbon/g, 'Carbon');
-            
+
           paintOptions.push(displayValue);
         }
       }
     }
-    
+
     // Check for individual paint/coating features
     const paintKeys = [
       'cerakote_color', 
@@ -435,7 +633,7 @@ export default function OrdersList() {
       'anodizing',
       'powder_coating'
     ];
-    
+
     for (const key of paintKeys) {
       if (features[key] && features[key] !== '' && features[key] !== 'none') {
         // Convert underscore format to display format
@@ -443,12 +641,12 @@ export default function OrdersList() {
         paintOptions.push(displayValue);
       }
     }
-    
+
     // If no paint options found, return Standard
     if (paintOptions.length === 0) {
       return 'Standard';
     }
-    
+
     // Combine all paint options into a single line
     return paintOptions.join(' + ');
   };
@@ -515,7 +713,16 @@ export default function OrdersList() {
               data-testid="export-csv-button"
             >
               <Download className="h-4 w-4" />
-              Export CSV
+              Export CSV (Active)
+            </Button>
+            <Button 
+              onClick={handleExportAllCSV}
+              variant="outline" 
+              className="flex items-center gap-2"
+              data-testid="export-all-csv-button"
+            >
+              <Download className="h-4 w-4" />
+              Export All CSV
             </Button>
             <Link href="/order-entry">
               <Button className="flex items-center gap-2" data-testid="create-order-button">
@@ -525,7 +732,7 @@ export default function OrdersList() {
             </Link>
           </div>
         </div>
-        
+
         {/* Search and Filter Controls */}
         <div className="flex flex-col gap-4">
           <div className="flex items-center gap-2 max-w-md">
@@ -533,7 +740,7 @@ export default function OrdersList() {
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
               <Input
                 type="text"
-                placeholder="Search by Order ID, Customer Name, or Phone..."
+                placeholder="Search by Order ID, Customer Name, Phone, or FB Order #..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-10"
@@ -550,7 +757,7 @@ export default function OrdersList() {
               </Button>
             )}
           </div>
-          
+
           {/* Filter and Sort Controls */}
           <div className="flex items-center gap-4 flex-wrap">
             {/* Department Filter */}
@@ -572,7 +779,7 @@ export default function OrdersList() {
                 </SelectContent>
               </Select>
             </div>
-            
+
             {/* Sort By */}
             <div className="flex items-center gap-2">
               <Label htmlFor="sort-by" className="text-sm font-medium whitespace-nowrap">
@@ -585,13 +792,15 @@ export default function OrdersList() {
                 <SelectContent>
                   <SelectItem value="orderDate">Order Date</SelectItem>
                   <SelectItem value="dueDate">Due Date</SelectItem>
+                  <SelectItem value="enteredDate">Entered Date</SelectItem>
                   <SelectItem value="orderId">Order ID</SelectItem>
                   <SelectItem value="customer">Customer</SelectItem>
+                  <SelectItem value="model">Model</SelectItem>
                   <SelectItem value="department">Department</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-            
+
             {/* Sort Order */}
             <div className="flex items-center gap-2">
               <Label htmlFor="sort-order" className="text-sm font-medium whitespace-nowrap">
@@ -607,7 +816,7 @@ export default function OrdersList() {
                 </SelectContent>
               </Select>
             </div>
-            
+
             {/* Clear Filters Button */}
             {(departmentFilter !== 'all' || sortBy !== 'orderDate' || sortOrder !== 'desc') && (
               <Button
@@ -670,12 +879,13 @@ export default function OrdersList() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <Table>
+            <Table key={`table-${filteredOrders.length}-${searchTerm}`}>
               <TableHeader>
                 <TableRow>
                   <TableHead>Order ID</TableHead>
                   <TableHead>Current Department</TableHead>
                   <TableHead>Customer</TableHead>
+                  <TableHead>Customer PO</TableHead>
                   <TableHead>Model</TableHead>
                   <TableHead>Order Date</TableHead>
                   <TableHead>Due Date</TableHead>
@@ -685,8 +895,11 @@ export default function OrdersList() {
               <TableBody>
                 {filteredOrders.map((order) => (
                   <TableRow 
-                    key={order.id}
-                    className={order.isCustomOrder === 'yes' ? 'bg-pink-50 hover:bg-pink-100' : ''}
+                    key={`${order.id}-${order.orderId}`}
+                    className={cn(
+                      order.isCustomOrder === 'yes' ? 'bg-pink-50 hover:bg-pink-100' : '',
+                      order.isVerified ? 'bg-green-50 hover:bg-green-100' : ''
+                    )}
                   >
                     <TableCell className="font-medium" title={order.fbOrderNumber ? `FB Order: ${order.fbOrderNumber} (Order ID: ${order.orderId})` : `Order ID: ${order.orderId}`}>
                       <div className="flex items-center gap-2">
@@ -697,17 +910,37 @@ export default function OrdersList() {
                         </OrderSummaryTooltip>
                         {hasUnresolvedKickback(order.orderId) && (
                           <Badge 
-                            className="bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300 text-xs px-1 py-0"
-                            title="This order has unresolved kickbacks"
+                            className="bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300 text-xs px-1 py-0 cursor-pointer hover:bg-red-200 hover:text-red-900 transition-colors"
+                            title="This order has unresolved kickbacks - Click to view Kickback Tracking"
+                            onClick={handleKickbackClick}
                           >
                             KICKBACK
+                          </Badge>
+                        )}
+                        {order.isFullyPaid ? (
+                          <Badge 
+                            className="bg-green-500 hover:bg-green-600 text-white text-xs px-1 py-0"
+                            title={`Paid $${order.paymentAmount || 0} via ${order.paymentType || 'Unknown'} ${order.paymentDate ? `on ${format(new Date(order.paymentDate), 'MMM d, yyyy')}` : ''}`}
+                          >
+                            PAID
+                          </Badge>
+                        ) : (
+                          <Badge 
+                            className="bg-red-500 hover:bg-red-600 text-white text-xs px-1 py-0"
+                          >
+                            NOT PAID
+                          </Badge>
+                        )}
+                        {order.isCancelled && (
+                          <Badge variant="destructive" className="bg-red-100 text-red-800 text-xs px-1 py-0">
+                            CANCELLED
                           </Badge>
                         )}
                       </div>
                     </TableCell>
                     <TableCell>
                       <Badge variant="secondary">
-                        {order.currentDepartment || 'Not Set'}
+                        {localOrderUpdates[order.orderId] || order.currentDepartment || 'Not Set'}
                       </Badge>
                     </TableCell>
                     <TableCell>
@@ -721,14 +954,14 @@ export default function OrdersList() {
                             {getCustomerName(order.customerId) || 'N/A'}
                           </div>
                         </CustomerDetailsTooltip>
-                        
+
                         {/* Communication Buttons - Show on Hover */}
                         <div className="absolute left-0 top-full mt-1 hidden group-hover:flex bg-white border border-gray-200 rounded-md shadow-lg p-1 z-10">
                           <Button
                             size="sm"
                             variant="ghost"
                             className="h-8 w-8 p-0 hover:bg-blue-50"
-                            onClick={() => handleOpenCommunication(order)}
+                            onClick={() => handleOpenCommunication(order, customers || [])}
                             title="Send Email"
                           >
                             <Mail className="h-4 w-4 text-blue-600" />
@@ -737,12 +970,17 @@ export default function OrdersList() {
                             size="sm"
                             variant="ghost"
                             className="h-8 w-8 p-0 hover:bg-green-50"
-                            onClick={() => handleOpenCommunication(order)}
+                            onClick={() => handleOpenCommunication(order, customers || [])}
                             title="Send SMS"
                           >
                             <MessageSquare className="h-4 w-4 text-green-600" />
                           </Button>
                         </div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="text-sm text-gray-600">
+                        {order.customerPO || '-'}
                       </div>
                     </TableCell>
                     <TableCell>
@@ -754,13 +992,13 @@ export default function OrdersList() {
                     <TableCell>
                       <div className="flex items-center gap-2">
                         <CalendarDays className="h-4 w-4 text-gray-400" />
-                        {order.orderDate ? format(new Date(order.orderDate), 'MMM d, yyyy') : 'N/A'}
+                        {format(new Date(order.orderDate), 'MMM d, yyyy')}
                       </div>
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
                         <CalendarDays className="h-4 w-4 text-gray-400" />
-                        {order.dueDate ? format(new Date(order.dueDate), 'MMM d, yyyy') : 'N/A'}
+                        {format(new Date(order.dueDate), 'MMM d, yyyy')}
                       </div>
                     </TableCell>
                     <TableCell>
@@ -772,24 +1010,41 @@ export default function OrdersList() {
                             <Edit className="h-4 w-4" />
                           </Button>
                         </Link>
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          onClick={() => handleReportKickback(order)}
+                        <Badge
+                          variant="outline"
+                          className="cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 text-xs ml-1 border-blue-300 text-blue-700 dark:text-blue-300"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleSalesOrderView(order.orderId);
+                          }}
+                        >
+                          <Eye className="w-3 h-3" />
+                        </Badge>
+                        <Badge
+                          variant="outline"
+                          className="cursor-pointer hover:bg-orange-50 dark:hover:bg-orange-900/20 text-xs ml-1 border-orange-300 text-orange-700 dark:text-orange-300"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleReportKickback(order);
+                          }}
                           title="Report Kickback"
                         >
-                          <TrendingDown className="h-4 w-4" />
-                        </Button>
+                          <AlertTriangle className="w-3 h-3 mr-1" />
+                          Kickback
+                        </Badge>
                         {(() => {
-                          const nextDept = getNextDepartment(order.currentDepartment || '');
-                          const isComplete = order.currentDepartment === 'Shipping';
+                          // Use local update if available, otherwise server data
+                          const displayDepartment = localOrderUpdates[order.orderId] || order.currentDepartment;
+                          const nextDept = getNextDepartment(displayDepartment || '');
+                          const isComplete = displayDepartment === 'Shipping';
                           const isScrapped = order.status === 'SCRAPPED';
-                          
-                          if (!isScrapped && !isComplete && nextDept) {
+                          const isFulfilled = order.status === 'FULFILLED'; // Only exclude FULFILLED, not FINALIZED
+
+                          if (!isScrapped && !isComplete && !isFulfilled && nextDept) {
                             return (
                               <Button
                                 size="sm"
-                                onClick={() => handleProgressOrder(order.orderId, nextDept)}
+                                onClick={() => handleProgressOrder(order.orderId, displayDepartment || '')}
                                 disabled={progressOrderMutation.isPending}
                               >
                                 <ArrowRight className="w-4 h-4 mr-1" />
@@ -801,14 +1056,7 @@ export default function OrdersList() {
                         })()}
                         <Dialog>
                           <DialogTrigger asChild>
-                            <Button 
-                              variant="outline" 
-                              size="sm"
-                              onClick={() => setSelectedOrderBarcode({
-                                orderId: order.orderId,
-                                barcode: order.barcode || `P1-${order.orderId}`
-                              })}
-                            >
+                            <Button variant="outline" size="sm">
                               <QrCode className="h-4 w-4" />
                             </Button>
                           </DialogTrigger>
@@ -832,6 +1080,40 @@ export default function OrdersList() {
                             )}
                           </DialogContent>
                         </Dialog>
+
+                        {/* More Actions Dropdown */}
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" className="h-8 w-8 p-0">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            {!order.isCancelled && (
+                              <DropdownMenuItem 
+                                onClick={() => handleCancelOrder(order.orderId)}
+                                className="text-red-600"
+                              >
+                                <XCircle className="mr-2 h-4 w-4" />
+                                Cancel Order
+                              </DropdownMenuItem>
+                            )}
+                            <DropdownMenuItem 
+                              onClick={() => handleSalesOrderView(order.orderId)}
+                              className="text-blue-600"
+                            >
+                              <FileText className="mr-2 h-4 w-4" />
+                              View Sales Order
+                            </DropdownMenuItem>
+                            <DropdownMenuItem 
+                              onClick={() => handleSalesOrderView(order.orderId)}
+                              className="text-blue-600"
+                            >
+                              <FileText className="mr-2 h-4 w-4" />
+                              Download Sales Order
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -1038,6 +1320,37 @@ export default function OrdersList() {
         </DialogContent>
       </Dialog>
 
+      {/* Cancel Order Dialog */}
+      <AlertDialog open={isCancelDialogOpen} onOpenChange={setIsCancelDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancel Order</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to cancel order {orderToCancel}? This action cannot be undone.
+              Please provide a reason for cancellation.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="my-4">
+            <Textarea
+              placeholder="Enter reason for cancellation..."
+              value={cancelReason}
+              onChange={(e) => setCancelReason(e.target.value)}
+              className="w-full"
+            />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmCancel}
+              disabled={!cancelReason.trim() || cancelOrderMutation.isPending}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {cancelOrderMutation.isPending ? 'Cancelling...' : 'Cancel Order'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* Communication Compose Modal */}
       {communicationModal && (
         <CommunicationCompose
@@ -1047,6 +1360,28 @@ export default function OrdersList() {
           orderId={communicationModal.orderId}
         />
       )}
+
+      {/* Sales Order PDF Modal */}
+      <Dialog open={isPdfModalOpen} onOpenChange={setIsPdfModalOpen}>
+        <DialogContent className="max-w-[90vw] max-h-[90vh] w-full h-full">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileText className="w-5 h-5" />
+              Sales Order PDF
+            </DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 w-full h-[80vh]">
+            {currentPdfUrl && (
+              <iframe
+                src={currentPdfUrl}
+                className="w-full h-full border-0 rounded"
+                title="Sales Order PDF"
+              />
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
     </div>
   );
   } catch (error) {

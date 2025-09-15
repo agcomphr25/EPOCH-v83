@@ -51,12 +51,16 @@ export default function FinanceDashboard() {
 
   // Calculate KPIs from fetched data
   const calculateKPIs = () => {
-    const totalAP = apData.reduce((sum, tx) => sum + tx.amount, 0);
-    const totalAR = arData.reduce((sum, tx) => sum + tx.amount, 0);
+    // Ensure data is array before calling reduce
+    const apDataArray = Array.isArray(apData) ? apData : [];
+    const arDataArray = Array.isArray(arData) ? arData : [];
+    
+    const totalAP = apDataArray.reduce((sum, tx) => sum + tx.amount, 0);
+    const totalAR = arDataArray.reduce((sum, tx) => sum + tx.amount, 0);
     
     // AR Aging buckets (days overdue)
     const today = new Date();
-    const arAging = arData.reduce((buckets, tx) => {
+    const arAging = arDataArray.reduce((buckets, tx) => {
       const txDate = new Date(tx.date);
       const daysOverdue = Math.floor((today - txDate) / (1000 * 60 * 60 * 24));
       
@@ -80,7 +84,9 @@ export default function FinanceDashboard() {
       wipValue,
       scrapPercentage,
       utilizationPercentage,
-      cogsVariance: cogsData.actualCost - cogsData.standardCost
+      cogsVariance: cogsData && typeof cogsData === 'object' 
+        ? (cogsData.actualCost - cogsData.standardCost) 
+        : 0
     };
   };
 

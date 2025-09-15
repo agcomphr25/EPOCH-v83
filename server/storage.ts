@@ -1026,18 +1026,13 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAllOrders(): Promise<Order[]> {
-    // Get all finalized orders from the orders table (not drafts)
+    // Get all finalized orders from the orders table (400 records)
     const ordersData = await db.select().from(orders).orderBy(desc(orders.updatedAt));
-    console.log(`[DEBUG] getAllOrders fetched ${ordersData.length} finalized orders from orders table`);
+    console.log(`[DEBUG] getAllOrders fetched ${ordersData.length} orders from orders table`);
     
     // Get all customers to create a lookup map
     const allCustomers = await db.select().from(customers);
     const customerMap = new Map(allCustomers.map(c => [c.id.toString(), c.name]));
-    
-    // Debug logging
-    console.log(`[DEBUG] Customer map has ${customerMap.size} entries`);
-    console.log(`[DEBUG] First order customerId: "${ordersData[0]?.customerId}" (type: ${typeof ordersData[0]?.customerId})`);
-    console.log(`[DEBUG] Customer map keys sample:`, Array.from(customerMap.keys()).slice(0, 5));
     
     // Enrich orders with customer names
     return ordersData.map(order => ({

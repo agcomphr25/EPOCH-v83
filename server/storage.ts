@@ -310,8 +310,6 @@ export interface IStorage {
 
   // Time Clock CRUD
   getTimeClockStatus(employeeId: string): Promise<{ status: 'IN' | 'OUT'; clockIn: string | null; clockOut: string | null }>;
-  clockIn(employeeId: string, timestamp: string): Promise<void>;
-  clockOut(employeeId: string, timestamp: string): Promise<void>;
   getTimeClockEntries(employeeId?: string, date?: string): Promise<TimeClockEntry[]>;
   createTimeClockEntry(data: InsertTimeClockEntry): Promise<TimeClockEntry>;
   updateTimeClockEntry(id: number, data: Partial<InsertTimeClockEntry>): Promise<TimeClockEntry>;
@@ -1373,17 +1371,18 @@ export class DatabaseStorage implements IStorage {
 
   // Employee Certifications CRUD
   async getEmployeeCertifications(employeeId?: number): Promise<EmployeeCertification[]> {
-    let query = db.select().from(employeeCertifications)
-      .where(eq(employeeCertifications.isActive, true));
+    let whereCondition = eq(employeeCertifications.isActive, true);
     
     if (employeeId) {
-      query = query.where(and(
+      whereCondition = and(
         eq(employeeCertifications.isActive, true),
         eq(employeeCertifications.employeeId, employeeId)
-      ));
+      );
     }
     
-    return await query.orderBy(employeeCertifications.dateObtained);
+    return await db.select().from(employeeCertifications)
+      .where(whereCondition)
+      .orderBy(employeeCertifications.dateObtained);
   }
 
   async getEmployeeCertification(id: number): Promise<EmployeeCertification | undefined> {
@@ -1487,8 +1486,20 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateEvaluation(id: number, data: Partial<InsertEvaluation>): Promise<Evaluation> {
-    // Timestamp fields accept Date objects directly in Drizzle
-    const updateData = { ...data };
+    // Convert Date objects to ISO strings for date fields
+    const updateData: any = { ...data };
+    if (updateData.evaluationPeriodStart instanceof Date) {
+      updateData.evaluationPeriodStart = updateData.evaluationPeriodStart.toISOString().split('T')[0];
+    }
+    if (updateData.evaluationPeriodEnd instanceof Date) {
+      updateData.evaluationPeriodEnd = updateData.evaluationPeriodEnd.toISOString().split('T')[0];
+    }
+    if (updateData.submittedAt instanceof Date) {
+      updateData.submittedAt = updateData.submittedAt.toISOString();
+    }
+    if (updateData.reviewedAt instanceof Date) {
+      updateData.reviewedAt = updateData.reviewedAt.toISOString();
+    }
     
     const [evaluation] = await db.update(evaluations)
       .set({ ...updateData, updatedAt: new Date() })
@@ -1514,9 +1525,18 @@ export class DatabaseStorage implements IStorage {
   }
 
   async reviewEvaluation(id: number, reviewData: Partial<InsertEvaluation>): Promise<Evaluation> {
+    // Convert Date objects to ISO strings for date fields
+    const updateData: any = { ...reviewData };
+    if (updateData.evaluationPeriodStart instanceof Date) {
+      updateData.evaluationPeriodStart = updateData.evaluationPeriodStart.toISOString().split('T')[0];
+    }
+    if (updateData.evaluationPeriodEnd instanceof Date) {
+      updateData.evaluationPeriodEnd = updateData.evaluationPeriodEnd.toISOString().split('T')[0];
+    }
+    
     const [evaluation] = await db.update(evaluations)
       .set({ 
-        ...reviewData,
+        ...updateData,
         status: 'REVIEWED',
         reviewedAt: new Date(),
         updatedAt: new Date()
@@ -1574,17 +1594,18 @@ export class DatabaseStorage implements IStorage {
 
   // Employee Documents CRUD
   async getAllDocuments(employeeId?: number): Promise<EmployeeDocument[]> {
-    let query = db.select().from(employeeDocuments)
-      .where(eq(employeeDocuments.isActive, true));
+    let whereCondition = eq(employeeDocuments.isActive, true);
     
     if (employeeId) {
-      query = query.where(and(
+      whereCondition = and(
         eq(employeeDocuments.isActive, true),
         eq(employeeDocuments.employeeId, employeeId)
-      ));
+      );
     }
     
-    return await query.orderBy(desc(employeeDocuments.createdAt));
+    return await db.select().from(employeeDocuments)
+      .where(whereCondition)
+      .orderBy(desc(employeeDocuments.createdAt));
   }
 
   async getDocument(id: number): Promise<EmployeeDocument | undefined> {
@@ -1594,13 +1615,25 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createDocument(data: InsertEmployeeDocument): Promise<EmployeeDocument> {
-    const [document] = await db.insert(employeeDocuments).values(data).returning();
+    // Convert Date objects to ISO strings for date fields
+    const insertData: any = { ...data };
+    if (insertData.expiryDate instanceof Date) {
+      insertData.expiryDate = insertData.expiryDate.toISOString().split('T')[0];
+    }
+    
+    const [document] = await db.insert(employeeDocuments).values([insertData]).returning();
     return document;
   }
 
   async updateDocument(id: number, data: Partial<InsertEmployeeDocument>): Promise<EmployeeDocument> {
+    // Convert Date objects to ISO strings for date fields
+    const updateData: any = { ...data };
+    if (updateData.expiryDate instanceof Date) {
+      updateData.expiryDate = updateData.expiryDate.toISOString().split('T')[0];
+    }
+    
     const [document] = await db.update(employeeDocuments)
-      .set({ ...data, updatedAt: new Date() })
+      .set({ ...updateData, updatedAt: new Date() })
       .where(eq(employeeDocuments.id, id))
       .returning();
     return document;
@@ -1613,21 +1646,22 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getDocumentsByType(documentType: string, employeeId?: number): Promise<EmployeeDocument[]> {
-    let query = db.select().from(employeeDocuments)
-      .where(and(
-        eq(employeeDocuments.documentType, documentType),
-        eq(employeeDocuments.isActive, true)
-      ));
+    let whereCondition = and(
+      eq(employeeDocuments.documentType, documentType),
+      eq(employeeDocuments.isActive, true)
+    );
     
     if (employeeId) {
-      query = query.where(and(
+      whereCondition = and(
         eq(employeeDocuments.documentType, documentType),
         eq(employeeDocuments.employeeId, employeeId),
         eq(employeeDocuments.isActive, true)
-      ));
+      );
     }
     
-    return await query.orderBy(desc(employeeDocuments.createdAt));
+    return await db.select().from(employeeDocuments)
+      .where(whereCondition)
+      .orderBy(desc(employeeDocuments.createdAt));
   }
 
   async getExpiringDocuments(days: number): Promise<EmployeeDocument[]> {
@@ -1637,15 +1671,15 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(employeeDocuments)
       .where(and(
         eq(employeeDocuments.isActive, true),
-        lte(employeeDocuments.expiryDate, futureDate),
-        gte(employeeDocuments.expiryDate, new Date())
+        lte(employeeDocuments.expiryDate, futureDate.toISOString().split('T')[0]),
+        gte(employeeDocuments.expiryDate, new Date().toISOString().split('T')[0])
       ))
       .orderBy(employeeDocuments.expiryDate);
   }
 
   // Employee Audit Log
   async createAuditLog(data: InsertEmployeeAuditLog): Promise<EmployeeAuditLog> {
-    const [auditLog] = await db.insert(employeeAuditLog).values(data).returning();
+    const [auditLog] = await db.insert(employeeAuditLog).values([data]).returning();
     return auditLog;
   }
 
@@ -1664,21 +1698,22 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAuditLogsByDateRange(startDate: Date, endDate: Date, employeeId?: number): Promise<EmployeeAuditLog[]> {
-    let query = db.select().from(employeeAuditLog)
-      .where(and(
-        gte(employeeAuditLog.timestamp, startDate),
-        lte(employeeAuditLog.timestamp, endDate)
-      ));
+    let whereCondition = and(
+      gte(employeeAuditLog.timestamp, startDate),
+      lte(employeeAuditLog.timestamp, endDate)
+    );
     
     if (employeeId) {
-      query = query.where(and(
+      whereCondition = and(
         gte(employeeAuditLog.timestamp, startDate),
         lte(employeeAuditLog.timestamp, endDate),
         eq(employeeAuditLog.employeeId, employeeId)
-      ));
+      );
     }
     
-    return await query.orderBy(desc(employeeAuditLog.timestamp));
+    return await db.select().from(employeeAuditLog)
+      .where(whereCondition)
+      .orderBy(desc(employeeAuditLog.timestamp));
   }
 
   // QC Definitions CRUD
@@ -1831,51 +1866,9 @@ export class DatabaseStorage implements IStorage {
     };
   }
 
-  async clockIn(employeeId: string, timestamp: string): Promise<void> {
-    const today = new Date().toISOString().split('T')[0];
-    const clockInTime = new Date(timestamp);
+  // Removed duplicate - using portal version with better error handling
 
-    // Check if entry already exists for today
-    const [existing] = await db
-      .select()
-      .from(timeClockEntries)
-      .where(and(eq(timeClockEntries.employeeId, employeeId), eq(timeClockEntries.date, today)))
-      .orderBy(desc(timeClockEntries.id))
-      .limit(1);
-
-    if (existing) {
-      // Update existing entry
-      await db.update(timeClockEntries)
-        .set({ clockIn: clockInTime, clockOut: null })
-        .where(eq(timeClockEntries.id, existing.id));
-    } else {
-      // Create new entry
-      await db.insert(timeClockEntries).values({
-        employeeId,
-        clockIn: clockInTime,
-        clockOut: null,
-        date: today
-      });
-    }
-  }
-
-  async clockOut(employeeId: string, timestamp: string): Promise<void> {
-    const today = new Date().toISOString().split('T')[0];
-    const clockOutTime = new Date(timestamp);
-
-    const [existing] = await db
-      .select()
-      .from(timeClockEntries)
-      .where(and(eq(timeClockEntries.employeeId, employeeId), eq(timeClockEntries.date, today)))
-      .orderBy(desc(timeClockEntries.id))
-      .limit(1);
-
-    if (existing) {
-      await db.update(timeClockEntries)
-        .set({ clockOut: clockOutTime })
-        .where(eq(timeClockEntries.id, existing.id));
-    }
-  }
+  // Removed duplicate - using portal version with better error handling
 
   async getTimeClockEntries(employeeId?: string, date?: string): Promise<TimeClockEntry[]> {
     let query = db.select().from(timeClockEntries);
@@ -1903,10 +1896,10 @@ export class DatabaseStorage implements IStorage {
 
   async updateTimeClockEntry(id: number, data: Partial<InsertTimeClockEntry>): Promise<TimeClockEntry> {
     // Normalize the date to YYYY-MM-DD format if provided
-    const normalizedData = data.date ? {
-      ...data,
-      date: typeof data.date === 'string' ? data.date : new Date(data.date).toISOString().split('T')[0]
-    } : data;
+    const normalizedData: any = { ...data };
+    if (normalizedData.date instanceof Date) {
+      normalizedData.date = normalizedData.date.toISOString().split('T')[0];
+    }
 
     const [entry] = await db.update(timeClockEntries)
       .set(normalizedData)
@@ -1938,7 +1931,7 @@ export class DatabaseStorage implements IStorage {
 
       const createdItems = [];
       for (const item of defaultItems) {
-        const [created] = await db.insert(checklistItems).values(item).returning();
+        const [created] = await db.insert(checklistItems).values([item]).returning();
         createdItems.push(created);
       }
       return createdItems;
@@ -1948,13 +1941,19 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createChecklistItem(data: InsertChecklistItem): Promise<ChecklistItem> {
-    const [item] = await db.insert(checklistItems).values(data).returning();
+    const [item] = await db.insert(checklistItems).values([data]).returning();
     return item;
   }
 
   async updateChecklistItem(id: number, data: Partial<InsertChecklistItem>): Promise<ChecklistItem> {
+    // Convert Date objects to strings if needed
+    const updateData: any = { ...data };
+    if (updateData.date instanceof Date) {
+      updateData.date = updateData.date.toISOString().split('T')[0];
+    }
+    
     const [item] = await db.update(checklistItems)
-      .set(data)
+      .set(updateData)
       .where(eq(checklistItems.id, id))
       .returning();
     return item;
@@ -1988,7 +1987,7 @@ export class DatabaseStorage implements IStorage {
 
       const createdDocs = [];
       for (const doc of defaultDocs) {
-        const [created] = await db.insert(onboardingDocs).values(doc).returning();
+        const [created] = await db.insert(onboardingDocs).values([doc]).returning();
         createdDocs.push(created);
       }
       return createdDocs;
@@ -1998,7 +1997,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createOnboardingDoc(data: InsertOnboardingDoc): Promise<OnboardingDoc> {
-    const [doc] = await db.insert(onboardingDocs).values(data).returning();
+    const [doc] = await db.insert(onboardingDocs).values([data]).returning();
     return doc;
   }
 
@@ -2184,7 +2183,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createPurchaseOrder(data: InsertPurchaseOrder): Promise<PurchaseOrder> {
-    const [po] = await db.insert(purchaseOrders).values(data).returning();
+    const [po] = await db.insert(purchaseOrders).values([data]).returning();
     return po;
   }
 
@@ -2213,7 +2212,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createPurchaseOrderItem(data: InsertPurchaseOrderItem): Promise<PurchaseOrderItem> {
-    const [item] = await db.insert(purchaseOrderItems).values(data).returning();
+    const [item] = await db.insert(purchaseOrderItems).values([data]).returning();
     return item;
   }
 
@@ -2225,7 +2224,7 @@ export class DatabaseStorage implements IStorage {
         const item = currentItem[0];
         const quantity = data.quantity ?? item.quantity;
         const unitPrice = data.unitPrice ?? item.unitPrice;
-        data.totalPrice = quantity * unitPrice;
+        data.totalPrice = quantity * (unitPrice || 0);
       }
     }
 
@@ -2267,7 +2266,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createProductionOrder(data: InsertProductionOrder): Promise<ProductionOrder> {
-    const [order] = await db.insert(productionOrders).values(data).returning();
+    const [order] = await db.insert(productionOrders).values([data]).returning();
     return order;
   }
 
@@ -3263,14 +3262,32 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createP2PurchaseOrder(data: InsertP2PurchaseOrder): Promise<P2PurchaseOrder> {
-    const [po] = await db.insert(p2PurchaseOrders).values(data).returning();
+    // Convert Date objects to ISO strings for date fields
+    const insertData: any = { ...data };
+    if (insertData.expectedDelivery instanceof Date) {
+      insertData.expectedDelivery = insertData.expectedDelivery.toISOString().split('T')[0];
+    }
+    if (insertData.poDate instanceof Date) {
+      insertData.poDate = insertData.poDate.toISOString().split('T')[0];
+    }
+    
+    const [po] = await db.insert(p2PurchaseOrders).values([insertData]).returning();
     return po;
   }
 
   async updateP2PurchaseOrder(id: number, data: Partial<InsertP2PurchaseOrder>): Promise<P2PurchaseOrder> {
+    // Convert Date objects to ISO strings for date fields
+    const updateData: any = { ...data };
+    if (updateData.expectedDelivery instanceof Date) {
+      updateData.expectedDelivery = updateData.expectedDelivery.toISOString().split('T')[0];
+    }
+    if (updateData.poDate instanceof Date) {
+      updateData.poDate = updateData.poDate.toISOString().split('T')[0];
+    }
+    
     const [po] = await db
       .update(p2PurchaseOrders)
-      .set(data)
+      .set(updateData)
       .where(eq(p2PurchaseOrders.id, id))
       .returning();
     return po;
@@ -3290,7 +3307,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createP2PurchaseOrderItem(data: InsertP2PurchaseOrderItem): Promise<P2PurchaseOrderItem> {
-    const [item] = await db.insert(p2PurchaseOrderItems).values(data).returning();
+    const [item] = await db.insert(p2PurchaseOrderItems).values([data]).returning();
     return item;
   }
 
@@ -3302,7 +3319,7 @@ export class DatabaseStorage implements IStorage {
         const item = currentItem[0];
         const quantity = data.quantity ?? item.quantity;
         const unitPrice = data.unitPrice ?? item.unitPrice;
-        data.totalPrice = quantity * unitPrice;
+        data.totalPrice = quantity * (unitPrice || 0);
       }
     }
 

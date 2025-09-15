@@ -856,9 +856,9 @@ export class DatabaseStorage implements IStorage {
     const customerMap = new Map(allCustomers.map(c => [c.id.toString(), c.name]));
     
     // Enrich orders with customer names
-    return ordersData.map(order => ({
+    return orders.map(order => ({
       ...order,
-      customer: customerMap.get(order.customerId) || 'Unknown Customer'
+      customer: (order.customerId ? customerMap.get(order.customerId.toString()) : customerMap.get(order.customerId)) || 'Unknown Customer'
     })) as OrderDraft[];
   }
 
@@ -1034,11 +1034,8 @@ export class DatabaseStorage implements IStorage {
     const allCustomers = await db.select().from(customers);
     const customerMap = new Map(allCustomers.map(c => [c.id.toString(), c.name]));
     
-    // Enrich orders with customer names
-    return ordersData.map(order => ({
-      ...order,
-      customer: customerMap.get(order.customerId?.toString()) || 'Unknown Customer'
-    })) as Order[];
+    // Orders already have customer names, just return them
+    return ordersData;
   }
 
   async getOrderById(orderId: string): Promise<OrderDraft | undefined> {
@@ -1490,23 +1487,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateEvaluation(id: number, data: Partial<InsertEvaluation>): Promise<Evaluation> {
-    // Convert Date objects to ISO strings for date fields
-    const updateData: any = { ...data };
-    if (updateData.evaluationPeriodStart instanceof Date) {
-      updateData.evaluationPeriodStart = updateData.evaluationPeriodStart.toISOString();
-    }
-    if (updateData.evaluationPeriodEnd instanceof Date) {
-      updateData.evaluationPeriodEnd = updateData.evaluationPeriodEnd.toISOString();
-    }
-    if (updateData.submittedAt instanceof Date) {
-      updateData.submittedAt = updateData.submittedAt.toISOString();
-    }
-    if (updateData.reviewedAt instanceof Date) {
-      updateData.reviewedAt = updateData.reviewedAt.toISOString();
-    }
+    // Timestamp fields accept Date objects directly in Drizzle
+    const updateData = { ...data };
     
     const [evaluation] = await db.update(evaluations)
-      .set({ ...updateData, updatedAt: new Date().toISOString() })
+      .set({ ...updateData, updatedAt: new Date() })
       .where(eq(evaluations.id, id))
       .returning();
     return evaluation;
@@ -1520,8 +1505,8 @@ export class DatabaseStorage implements IStorage {
     const [evaluation] = await db.update(evaluations)
       .set({ 
         status: 'SUBMITTED',
-        submittedAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
+        submittedAt: new Date(),
+        updatedAt: new Date()
       })
       .where(eq(evaluations.id, id))
       .returning();
@@ -1533,8 +1518,8 @@ export class DatabaseStorage implements IStorage {
       .set({ 
         ...reviewData,
         status: 'REVIEWED',
-        reviewedAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
+        reviewedAt: new Date(),
+        updatedAt: new Date()
       })
       .where(eq(evaluations.id, id))
       .returning();

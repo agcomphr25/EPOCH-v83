@@ -1407,6 +1407,12 @@ export type InsertFormSubmission = z.infer<typeof insertFormSubmissionSchema>;
 export type FormSubmission = typeof formSubmissions.$inferSelect;
 export type InsertInventoryItem = z.infer<typeof insertInventoryItemSchema>;
 export type InventoryItem = typeof inventoryItems.$inferSelect;
+
+// Enhanced Inventory Types
+export type EnhancedInventoryItem = typeof enhancedInventoryItems.$inferSelect;
+export type InsertEnhancedInventoryItem = z.infer<typeof insertInventoryItemSchema>;
+export type EnhancedInventoryBalance = typeof enhancedInventoryBalances.$inferSelect;
+export type EnhancedInventoryTransaction = typeof enhancedInventoryTransactions.$inferSelect;
 export type InsertInventoryScan = z.infer<typeof insertInventoryScanSchema>;
 export type InventoryScan = typeof inventoryScans.$inferSelect;
 export type InsertEmployee = z.infer<typeof insertEmployeeSchema>;

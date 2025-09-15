@@ -142,7 +142,7 @@ function App() {
                   <Route path="/orders" component={OrdersList} />
                   <Route path="/orders-list" component={OrdersList} />
                   <Route path="/orders-simple" component={OrdersListSimple} />
-                  <Route path="/all-orders" component={OrdersList} />
+                  <Route path="/all-orders" component={AllOrdersPage} />
                   <Route path="/discounts" component={DiscountManagement} />
                   <Route path="/feature-manager" component={FeatureManager} />
                   <Route path="/stock-models" component={StockModels} />

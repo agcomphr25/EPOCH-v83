@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Plus, Edit, Trash2, Download, Upload, Search } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -13,6 +14,7 @@ import type { InventoryItem } from '@shared/schema';
 interface InventoryFormData {
   agPartNumber: string;
   name: string;
+  type: string;
   source: string;
   supplierPartNumber: string;
   costPer: string;
@@ -35,6 +37,7 @@ const InventoryForm = ({
   formData: InventoryFormData;
   onSubmit: (e: React.FormEvent) => void;
   onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
+  onSelectChange: (name: string, value: string) => void;
   editingItem: InventoryItem | null;
   isCreatePending: boolean;
   isUpdatePending: boolean;
@@ -63,6 +66,18 @@ const InventoryForm = ({
           placeholder="Enter item name"
           required
         />
+      </div>
+      <div>
+        <Label htmlFor="type">Type *</Label>
+        <Select value={formData.type} onValueChange={(value) => onSelectChange('type', value)}>
+          <SelectTrigger data-testid="select-type">
+            <SelectValue placeholder="Select type" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="Purchased">Purchased</SelectItem>
+            <SelectItem value="Manufactured">Manufactured</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
     </div>
 
@@ -330,6 +345,7 @@ export default function InventoryItemsCard() {
     setFormData({
       agPartNumber: '',
       name: '',
+      type: 'Purchased',
       source: '',
       supplierPartNumber: '',
       costPer: '',
@@ -345,6 +361,10 @@ export default function InventoryItemsCard() {
     setFormData(prev => ({ ...prev, [name]: value }));
   }, []);
 
+  const handleSelectChange = useCallback((name: string, value: string) => {
+    setFormData(prev => ({ ...prev, [name]: value }));
+  }, []);
+
   const handleSubmit = useCallback((e: React.FormEvent) => {
     e.preventDefault();
     
@@ -356,6 +376,7 @@ export default function InventoryItemsCard() {
     const submitData = {
       agPartNumber: formData.agPartNumber,
       name: formData.name,
+      type: formData.type || 'Purchased',
       source: formData.source || null,
       supplierPartNumber: formData.supplierPartNumber || null,
       costPer: formData.costPer ? parseFloat(formData.costPer) : null,
@@ -377,6 +398,7 @@ export default function InventoryItemsCard() {
     setFormData({
       agPartNumber: item.agPartNumber,
       name: item.name,
+      type: item.type || 'Purchased',
       source: item.source || '',
       supplierPartNumber: item.supplierPartNumber || '',
       costPer: item.costPer ? item.costPer.toString() : '',
@@ -429,6 +451,7 @@ export default function InventoryItemsCard() {
                 formData={formData}
                 onSubmit={handleSubmit}
                 onChange={handleChange}
+                onSelectChange={handleSelectChange}
                 editingItem={editingItem}
                 isCreatePending={createMutation.isPending}
                 isUpdatePending={updateMutation.isPending}
@@ -574,6 +597,7 @@ export default function InventoryItemsCard() {
             formData={formData}
             onSubmit={handleSubmit}
             onChange={handleChange}
+            onSelectChange={handleSelectChange}
             editingItem={editingItem}
             isCreatePending={createMutation.isPending}
             isUpdatePending={updateMutation.isPending}

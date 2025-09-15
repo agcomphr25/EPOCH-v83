@@ -61,7 +61,7 @@ export default function BarcodeQueuePage() {
 
   // Get all orders from production pipeline
   const { data: allOrders = [] } = useQuery({
-    queryKey: ['/api/orders/all'],
+    queryKey: ['/api/orders/with-payment-status'],
   });
 
   // Fetch all kickbacks to determine which orders have kickbacks
@@ -132,7 +132,7 @@ export default function BarcodeQueuePage() {
     },
     onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['/api/kickbacks'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
       setKickbackModalOpen(false);
       kickbackForm.reset();
       
@@ -327,7 +327,7 @@ export default function BarcodeQueuePage() {
       setSelectedOrders(new Set());
       setSelectAll(false);
       // Refetch orders to update the display
-      queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
     },
     onError: (error) => {
       toast({

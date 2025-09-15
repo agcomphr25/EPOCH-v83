@@ -7,9 +7,25 @@ interface DeploymentAuthWrapperProps {
 }
 
 function isDeploymentEnvironment(): boolean {
-  // DEVELOPMENT MODE FORCED - Authentication disabled for all domains
-  console.log('🔧 DEV MODE FORCED: Authentication completely disabled');
-  return false;
+  // Multiple methods to detect deployment environment
+  const hostname = window.location.hostname;
+  
+  // Development overrides - skip auth for development environments
+  const isLocalhost = hostname.includes('localhost') || hostname.includes('127.0.0.1');
+  const isReplitEditor = hostname.includes('replit.dev') && !hostname.includes('.replit.dev');
+  
+  // TEMPORARY: Force development mode for glenn51.repl.co (this development site)
+  const isGlennDevSite = hostname.includes('glenn51.repl.co');
+  
+  // Skip auth for localhost, Replit editor, and this specific development site
+  if (isLocalhost || isReplitEditor || isGlennDevSite) {
+    console.log('🔧 AUTH BYPASS: Development environment - authentication disabled');
+    return false;
+  }
+  
+  // For all other deployed domains (.repl.co, .replit.app, custom domains), require auth
+  console.log('🔧 PRODUCTION MODE: Authentication enabled for deployed site');
+  return true;
 }
 
 export default function DeploymentAuthWrapper({ children }: DeploymentAuthWrapperProps) {

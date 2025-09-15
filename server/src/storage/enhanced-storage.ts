@@ -119,11 +119,11 @@ export class EnhancedStorage {
     return await db
       .select()
       .from(inventoryBalances)
-      .orderBy(inventoryBalances.agPartNumber);
+      .orderBy(inventoryBalances.partId);
   }
 
   async getInventoryBalanceByPart(partId: string, locationId?: string): Promise<InventoryBalance | undefined> {
-    let whereCondition = eq(inventoryBalances.agPartNumber, partId);
+    let whereCondition = eq(inventoryBalances.partId, partId);
     
     if (locationId) {
       whereCondition = and(whereCondition, eq(inventoryBalances.locationId, locationId));
@@ -137,12 +137,12 @@ export class EnhancedStorage {
   }
 
   async updateOrCreateInventoryBalance(
-    agPartNumber: string, 
+    partId: string, 
     locationId: string, 
     quantityChange: number,
-    allocationStatus: 'available' | 'allocated' | 'committed' | 'consumed' = 'available'
+    allocationStatus: 'available' | 'allocated' | 'committed' = 'available'
   ): Promise<InventoryBalance> {
-    const existing = await this.getInventoryBalanceByPart(agPartNumber, locationId);
+    const existing = await this.getInventoryBalanceByPart(partId, locationId);
     
     if (existing) {
       // Update existing balance
@@ -150,16 +150,13 @@ export class EnhancedStorage {
       
       switch (allocationStatus) {
         case 'available':
-          updateData.availableQuantity = existing.availableQuantity + quantityChange;
+          updateData.availableQty = existing.availableQty + quantityChange;
           break;
         case 'allocated':
-          updateData.allocatedQuantity = existing.allocatedQuantity + quantityChange;
+          updateData.allocatedQty = existing.allocatedQty + quantityChange;
           break;
         case 'committed':
-          updateData.committedQuantity = existing.committedQuantity + quantityChange;
-          break;
-        case 'consumed':
-          updateData.consumedQuantity = existing.consumedQuantity + quantityChange;
+          updateData.committedQty = existing.committedQty + quantityChange;
           break;
       }
 
@@ -167,7 +164,7 @@ export class EnhancedStorage {
         .update(inventoryBalances)
         .set(updateData)
         .where(and(
-          eq(inventoryBalances.agPartNumber, agPartNumber),
+          eq(inventoryBalances.partId, partId),
           eq(inventoryBalances.locationId, locationId)
         ))
         .returning();
@@ -175,12 +172,12 @@ export class EnhancedStorage {
     } else {
       // Create new balance
       const newBalance: InsertInventoryBalance = {
-        agPartNumber,
+        partId,
         locationId,
-        availableQuantity: allocationStatus === 'available' ? quantityChange : 0,
-        allocatedQuantity: allocationStatus === 'allocated' ? quantityChange : 0,
-        committedQuantity: allocationStatus === 'committed' ? quantityChange : 0,
-        consumedQuantity: allocationStatus === 'consumed' ? quantityChange : 0,
+        onHandQty: quantityChange,
+        availableQty: allocationStatus === 'available' ? quantityChange : 0,
+        allocatedQty: allocationStatus === 'allocated' ? quantityChange : 0,
+        committedQty: allocationStatus === 'committed' ? quantityChange : 0,
         unitCost: 0, // Default, should be updated separately
       };
 
@@ -217,9 +214,9 @@ export class EnhancedStorage {
 
     // Update inventory balance based on transaction
     await this.updateOrCreateInventoryBalance(
-      transaction.agPartNumber,
+      transaction.partId,
       transaction.locationId || 'MAIN',
-      transaction.transactionType === 'IN' ? transaction.quantity : -transaction.quantity,
+      transaction.transactionType === 'RECEIPT' ? transaction.quantity : -transaction.quantity,
       'available'
     );
 
@@ -233,7 +230,7 @@ export class EnhancedStorage {
     return await db
       .select()
       .from(mrpRequirements)
-      .orderBy(mrpRequirements.requiredDate);
+      .orderBy(mrpRequirements.needDate);
   }
 
   async calculateEnhancedMRP(): Promise<{
@@ -248,22 +245,23 @@ export class EnhancedStorage {
     
     // Enhanced MRP Logic - completely independent from legacy
     const allBalances = await this.getAllInventoryBalances();
-    const lowStockItems = allBalances.filter(b => b.availableQuantity < (b.minStockLevel || 10));
+    const lowStockItems = allBalances.filter(b => b.availableQty < (b.safetyStock || 10));
     
     // Generate requirements for low stock items
     let requirementsGenerated = 0;
     for (const item of lowStockItems) {
-      const orderQuantity = (item.maxStockLevel || 100) - item.availableQuantity;
+      const orderQuantity = Math.max((item.safetyStock || 10) * 2 - item.availableQty, item.minOrderQty || 1);
       
       await db.insert(mrpRequirements).values({
-        id: `${calculationId}-${item.agPartNumber}`,
-        agPartNumber: item.agPartNumber,
-        requiredQuantity: orderQuantity,
-        requiredDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days from now
+        requirementId: `${calculationId}-${item.partId}`,
+        partId: item.partId,
+        requiredQty: orderQuantity,
+        availableQty: item.availableQty,
+        shortageQty: orderQuantity - item.availableQty,
+        needDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days from now
         sourceType: 'enhanced_mrp_calculation',
-        sourceId: calculationId,
-        priority: item.availableQuantity <= 0 ? 'HIGH' : 'MEDIUM',
-        status: 'open'
+        priority: item.availableQty <= 0 ? 1 : 50,
+        status: 'OPEN'
       });
       requirementsGenerated++;
     }
@@ -290,17 +288,17 @@ export class EnhancedStorage {
     
     const shortages = [];
     
-    for (const req of requirements.filter(r => r.status === 'open')) {
-      const balance = balances.find(b => b.agPartNumber === req.agPartNumber);
-      const currentStock = balance?.availableQuantity || 0;
+    for (const req of requirements.filter(r => r.status === 'OPEN')) {
+      const balance = balances.find(b => b.partId === req.partId);
+      const currentStock = balance?.availableQty || 0;
       
-      if (currentStock < req.requiredQuantity) {
+      if (currentStock < req.requiredQty) {
         shortages.push({
-          agPartNumber: req.agPartNumber,
+          agPartNumber: req.partId,
           currentStock,
-          requiredQuantity: req.requiredQuantity,
-          shortageQuantity: req.requiredQuantity - currentStock,
-          priority: req.priority || 'MEDIUM',
+          requiredQuantity: req.requiredQty,
+          shortageQuantity: req.requiredQty - currentStock,
+          priority: req.priority === 1 ? 'HIGH' : req.priority <= 25 ? 'MEDIUM' : 'LOW',
           suggestedAction: currentStock <= 0 ? 'URGENT_ORDER' : 'REORDER_SOON'
         });
       }
@@ -317,7 +315,7 @@ export class EnhancedStorage {
       .select()
       .from(outsideProcessingLocations)
       .where(eq(outsideProcessingLocations.isActive, true))
-      .orderBy(outsideProcessingLocations.locationName);
+      .orderBy(outsideProcessingLocations.vendorName, outsideProcessingLocations.locationName);
   }
 
   async createOutsideProcessingLocation(data: InsertOutsideProcessingLocation): Promise<OutsideProcessingLocation> {
@@ -363,7 +361,7 @@ export class EnhancedStorage {
       .select()
       .from(vendorParts)
       .where(eq(vendorParts.isActive, true))
-      .orderBy(vendorParts.agPartNumber);
+      .orderBy(vendorParts.partId);
   }
 
   async createVendorPart(data: InsertVendorPart): Promise<VendorPart> {
@@ -380,12 +378,12 @@ export class EnhancedStorage {
     return vendorPart;
   }
 
-  async getPreferredVendorForPart(agPartNumber: string): Promise<VendorPart | undefined> {
+  async getPreferredVendorForPart(partId: string): Promise<VendorPart | undefined> {
     const [preferredVendor] = await db
       .select()
       .from(vendorParts)
       .where(and(
-        eq(vendorParts.agPartNumber, agPartNumber),
+        eq(vendorParts.partId, partId),
         eq(vendorParts.isActive, true),
         eq(vendorParts.isPreferred, true)
       ));
@@ -422,7 +420,7 @@ export class EnhancedStorage {
         if (!suggestions.has(vendorKey)) {
           suggestions.set(vendorKey, {
             vendorId: preferredVendor.vendorId,
-            vendorName: preferredVendor.vendorName || 'Unknown Vendor',
+            vendorName: preferredVendor.vendorPartName || 'Unknown Vendor',
             parts: [],
             totalValue: 0,
             urgency: 'LOW' as const
@@ -430,15 +428,15 @@ export class EnhancedStorage {
         }
         
         const suggestion = suggestions.get(vendorKey);
-        const orderQuantity = Math.max(shortage.shortageQuantity, preferredVendor.minimumOrderQuantity || 1);
-        const totalCost = orderQuantity * (preferredVendor.unitCost || 0);
+        const orderQuantity = Math.max(shortage.shortageQuantity, preferredVendor.minOrderQty || 1);
+        const totalCost = orderQuantity * (preferredVendor.unitPrice || 0);
         
         suggestion.parts.push({
           agPartNumber: shortage.agPartNumber,
           suggestedQuantity: orderQuantity,
-          unitCost: preferredVendor.unitCost || 0,
+          unitCost: preferredVendor.unitPrice || 0,
           totalCost,
-          leadTime: preferredVendor.leadTime || 14
+          leadTime: preferredVendor.leadTimeDays || 14
         });
         
         suggestion.totalValue += totalCost;

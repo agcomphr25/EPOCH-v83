@@ -9,8 +9,8 @@ import { toast } from 'react-hot-toast';
 
 export default function POSuggestionsCard() {
   const { data: suggestions = [], isLoading, refetch } = useQuery({
-    queryKey: ['/api/inventory/purchase-order-suggestions'],
-    queryFn: () => apiRequest('/api/inventory/purchase-order-suggestions')
+    queryKey: ['/api/enhanced/po/suggestions'],
+    queryFn: () => apiRequest('/api/enhanced/po/suggestions')
   });
 
   const handleCreatePO = (suggestion: any) => {

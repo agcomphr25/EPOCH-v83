@@ -190,8 +190,8 @@ export default function InventoryItemsCard() {
 
   // Load inventory items
   const { data: allItems = [], isLoading } = useQuery<InventoryItem[]>({
-    queryKey: ['/api/inventory/items'],
-    queryFn: () => apiRequest('/api/inventory/items'),
+    queryKey: ['/api/enhanced/inventory/items'],
+    queryFn: () => apiRequest('/api/enhanced/inventory/items'),
   });
 
   // Filter items based on search term
@@ -220,7 +220,7 @@ export default function InventoryItemsCard() {
       toast.success('Inventory item created successfully');
       setIsCreateOpen(false);
       resetForm();
-      queryClient.invalidateQueries({ queryKey: ['/api/inventory/items'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/enhanced/inventory/items'] });
     },
     onError: () => toast.error('Failed to create inventory item'),
   });
@@ -236,7 +236,7 @@ export default function InventoryItemsCard() {
       setIsEditOpen(false);
       setEditingItem(null);
       resetForm();
-      queryClient.invalidateQueries({ queryKey: ['/api/inventory/items'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/enhanced/inventory/items'] });
     },
     onError: () => toast.error('Failed to update inventory item'),
   });
@@ -248,7 +248,7 @@ export default function InventoryItemsCard() {
     }),
     onSuccess: () => {
       toast.success('Inventory item deleted successfully');
-      queryClient.invalidateQueries({ queryKey: ['/api/inventory/items'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/enhanced/inventory/items'] });
     },
     onError: () => toast.error('Failed to delete inventory item'),
   });
@@ -316,7 +316,7 @@ export default function InventoryItemsCard() {
         if (fileInput) {
           fileInput.value = '';
         }
-        queryClient.invalidateQueries({ queryKey: ['/api/inventory/items'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/enhanced/inventory/items'] });
       } else {
         toast.error('Import failed');
       }

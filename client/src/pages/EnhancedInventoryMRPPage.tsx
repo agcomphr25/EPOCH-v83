@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 
 // Import enhanced inventory components
+import InventoryItemsCard from '../components/inventory/InventoryItemsCard';
 import InventoryBalancesCard from '../components/inventory/InventoryBalancesCard';
 import InventoryTransactionsCard from '../components/inventory/InventoryTransactionsCard';
 import ProgressiveAllocationCard from '../components/inventory/ProgressiveAllocationCard';
@@ -70,6 +71,32 @@ export default function EnhancedInventoryMRPPage() {
         </h2>
         
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {/* Inventory Items Card */}
+          <Card 
+            className="cursor-pointer hover:shadow-lg transition-shadow duration-200 border-2 hover:border-green-500"
+            onClick={() => handleCardClick('inventory-items')}
+            data-testid="card-inventory-items"
+          >
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <Package className="h-5 w-5 text-green-600" />
+                Inventory Items
+              </CardTitle>
+              <CardDescription>
+                Manage inventory items, add new parts, and track item details
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-between">
+                <div className="text-2xl font-bold text-green-600">Items</div>
+                <div className="flex gap-2">
+                  <Package className="h-4 w-4 text-gray-400" />
+                  <Settings className="h-4 w-4 text-green-500" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
           {/* Inventory Balances Card */}
           <Card 
             className="cursor-pointer hover:shadow-lg transition-shadow duration-200 border-2 hover:border-blue-500"
@@ -290,6 +317,7 @@ export default function EnhancedInventoryMRPPage() {
             <CardHeader>
               <div className="flex justify-between items-center">
                 <CardTitle className="text-xl flex items-center gap-2">
+                  {activeCard === 'inventory-items' && <><Package className="h-5 w-5" />Inventory Items Management</>}
                   {activeCard === 'inventory-balances' && <><BarChart3 className="h-5 w-5" />Inventory Balances Management</>}
                   {activeCard === 'inventory-transactions' && <><TrendingUp className="h-5 w-5" />Inventory Transactions</>}
                   {activeCard === 'progressive-allocation' && <><Target className="h-5 w-5" />Progressive Allocation</>}
@@ -310,6 +338,7 @@ export default function EnhancedInventoryMRPPage() {
               </div>
             </CardHeader>
             <CardContent>
+              {activeCard === 'inventory-items' && <InventoryItemsCard />}
               {activeCard === 'inventory-balances' && <InventoryBalancesCard />}
               {activeCard === 'inventory-transactions' && <InventoryTransactionsCard />}
               {activeCard === 'progressive-allocation' && <ProgressiveAllocationCard />}

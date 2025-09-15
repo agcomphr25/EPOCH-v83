@@ -22,26 +22,9 @@ declare global {
  * Check if we're running in deployment environment
  */
 function isDeploymentEnvironment(req: Request): boolean {
-  // Force development mode if environment variable is set
-  if (process.env.FORCE_DEV_MODE === 'true') {
-    console.log('🔧 BACKEND FORCED DEV MODE: Authentication disabled via FORCE_DEV_MODE');
-    return false;
-  }
-  
-  const host = req.get('host') || '';
-  
-  // Check for production deployment domains
-  const isProduction = host.includes('.replit.app') || 
-                      host.includes('.repl.co') || 
-                      process.env.NODE_ENV === 'production';
-  
-  if (isProduction) {
-    console.log('🔧 BACKEND PRODUCTION MODE: Authentication enabled for deployed site');
-    return true;
-  } else {
-    console.log('🔧 BACKEND AUTH BYPASS: Local development - authentication disabled');
-    return false;
-  }
+  // DEVELOPMENT MODE FORCED - Authentication disabled for all domains
+  console.log('🔧 BACKEND DEV MODE FORCED: Authentication completely disabled');
+  return false;
 }
 
 /**

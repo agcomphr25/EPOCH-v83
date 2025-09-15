@@ -38,6 +38,7 @@ import cuttingTableRoutes from './cuttingTable';
 import materialInventoryRoutes from './materialInventory';
 import defrostScheduleRoutes from './defrostSchedule';
 import mrpRoutes from './mrp';
+import enhancedRoutes from './enhanced';
 import { getAccessToken } from '../utils/upsShipping';
 
 export function registerRoutes(app: Express): Server {
@@ -141,8 +142,11 @@ export function registerRoutes(app: Express): Server {
   app.use('/api', materialInventoryRoutes);
   app.use('/api', defrostScheduleRoutes);
   
-  // MRP and advanced inventory management routes
+  // MRP and advanced inventory management routes (legacy)
   app.use('/api/mrp', mrpRoutes);
+
+  // Enhanced system routes (completely separate from legacy)
+  app.use('/api/enhanced', enhancedRoutes);
   
   // UPS Test endpoint
   app.post('/api/test-ups-auth', async (req, res) => {

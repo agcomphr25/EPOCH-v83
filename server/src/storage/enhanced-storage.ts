@@ -1,8 +1,8 @@
 import { db } from '../../db';
 import { 
-  inventoryItems, 
-  inventoryBalances, 
-  inventoryTransactions,
+  enhancedInventoryItems, 
+  enhancedInventoryBalances, 
+  enhancedInventoryTransactions,
   outsideProcessingLocations,
   outsideProcessingJobs,
   vendorParts,
@@ -45,18 +45,18 @@ export class EnhancedStorage {
   async getAllInventoryItems(): Promise<InventoryItem[]> {
     return await db
       .select()
-      .from(inventoryItems)
-      .where(eq(inventoryItems.isActive, true))
-      .orderBy(inventoryItems.agPartNumber);
+      .from(enhancedInventoryItems)
+      .where(eq(enhancedInventoryItems.isActive, true))
+      .orderBy(enhancedInventoryItems.agPartNumber);
   }
 
   async getInventoryItem(id: number): Promise<InventoryItem | undefined> {
     const [item] = await db
       .select()
-      .from(inventoryItems)
+      .from(enhancedInventoryItems)
       .where(and(
-        eq(inventoryItems.id, id),
-        eq(inventoryItems.isActive, true)
+        eq(enhancedInventoryItems.id, id),
+        eq(enhancedInventoryItems.isActive, true)
       ));
     return item;
   }
@@ -64,10 +64,10 @@ export class EnhancedStorage {
   async getInventoryItemByPartNumber(partId: string): Promise<InventoryItem | undefined> {
     const [item] = await db
       .select()
-      .from(inventoryItems)
+      .from(enhancedInventoryItems)
       .where(and(
-        eq(inventoryItems.agPartNumber, partId),
-        eq(inventoryItems.isActive, true)
+        eq(enhancedInventoryItems.agPartNumber, partId),
+        eq(enhancedInventoryItems.isActive, true)
       ));
     return item;
   }
@@ -76,7 +76,7 @@ export class EnhancedStorage {
     const { id, createdAt, updatedAt, ...cleanData } = data as any;
     
     const [item] = await db
-      .insert(inventoryItems)
+      .insert(enhancedInventoryItems)
       .values({
         ...cleanData,
         createdAt: new Date(),
@@ -88,12 +88,12 @@ export class EnhancedStorage {
 
   async updateInventoryItem(id: number, data: Partial<InsertInventoryItem>): Promise<InventoryItem> {
     const [item] = await db
-      .update(inventoryItems)
+      .update(enhancedInventoryItems)
       .set({
         ...data,
         updatedAt: new Date()
       })
-      .where(eq(inventoryItems.id, id))
+      .where(eq(enhancedInventoryItems.id, id))
       .returning();
 
     if (!item) {
@@ -104,12 +104,12 @@ export class EnhancedStorage {
 
   async deleteInventoryItem(id: number): Promise<void> {
     await db
-      .update(inventoryItems)
+      .update(enhancedInventoryItems)
       .set({ 
         isActive: false,
         updatedAt: new Date()
       })
-      .where(eq(inventoryItems.id, id));
+      .where(eq(enhancedInventoryItems.id, id));
   }
 
   // INVENTORY BALANCES (Enhanced Only)
@@ -118,20 +118,20 @@ export class EnhancedStorage {
   async getAllInventoryBalances(): Promise<InventoryBalance[]> {
     return await db
       .select()
-      .from(inventoryBalances)
-      .orderBy(inventoryBalances.partId);
+      .from(enhancedInventoryBalances)
+      .orderBy(enhancedInventoryBalances.partId);
   }
 
   async getInventoryBalanceByPart(partId: string, locationId?: string): Promise<InventoryBalance | undefined> {
-    let whereCondition = eq(inventoryBalances.partId, partId);
+    let whereCondition = eq(enhancedInventoryBalances.partId, partId);
     
     if (locationId) {
-      whereCondition = and(whereCondition, eq(inventoryBalances.locationId, locationId));
+      whereCondition = and(whereCondition, eq(enhancedInventoryBalances.locationId, locationId));
     }
 
     const [balance] = await db
       .select()
-      .from(inventoryBalances)
+      .from(enhancedInventoryBalances)
       .where(whereCondition);
     return balance;
   }
@@ -161,11 +161,11 @@ export class EnhancedStorage {
       }
 
       const [updated] = await db
-        .update(inventoryBalances)
+        .update(enhancedInventoryBalances)
         .set(updateData)
         .where(and(
-          eq(inventoryBalances.partId, partId),
-          eq(inventoryBalances.locationId, locationId)
+          eq(enhancedInventoryBalances.partId, partId),
+          eq(enhancedInventoryBalances.locationId, locationId)
         ))
         .returning();
       return updated;
@@ -182,7 +182,7 @@ export class EnhancedStorage {
       };
 
       const [created] = await db
-        .insert(inventoryBalances)
+        .insert(enhancedInventoryBalances)
         .values(newBalance)
         .returning();
       return created;
@@ -195,15 +195,15 @@ export class EnhancedStorage {
   async getAllInventoryTransactions(): Promise<InventoryTransaction[]> {
     return await db
       .select()
-      .from(inventoryTransactions)
-      .orderBy(desc(inventoryTransactions.transactionDate));
+      .from(enhancedInventoryTransactions)
+      .orderBy(desc(enhancedInventoryTransactions.transactionDate));
   }
 
   async createInventoryTransaction(data: InsertInventoryTransaction): Promise<InventoryTransaction> {
     const { id, createdAt, updatedAt, ...cleanData } = data as any;
     
     const [transaction] = await db
-      .insert(inventoryTransactions)
+      .insert(enhancedInventoryTransactions)
       .values({
         ...cleanData,
         transactionDate: cleanData.transactionDate || new Date(),

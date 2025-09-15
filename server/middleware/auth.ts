@@ -24,19 +24,16 @@ declare global {
 function isDeploymentEnvironment(req: Request): boolean {
   const host = req.get('host') || '';
   
-  // TEMPORARY: Force development mode for glenn51.repl.co (this development site)
-  const isGlennDevSite = host.includes('glenn51.repl.co');
-  
   // Check for production deployment domains
   const isProduction = host.includes('.replit.app') || 
-                      (host.includes('.repl.co') && !isGlennDevSite) || // Exclude glenn51.repl.co
+                      host.includes('.repl.co') || 
                       process.env.NODE_ENV === 'production';
   
   if (isProduction) {
     console.log('🔧 BACKEND PRODUCTION MODE: Authentication enabled for deployed site');
     return true;
   } else {
-    console.log('🔧 BACKEND AUTH BYPASS: Development environment - authentication disabled');
+    console.log('🔧 BACKEND AUTH BYPASS: Local development - authentication disabled');
     return false;
   }
 }

@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { 
   Package, 
   TrendingUp, 
@@ -32,9 +33,14 @@ import POSuggestionsCard from '../components/inventory/POSuggestionsCard';
 
 export default function EnhancedInventoryMRPPage() {
   const [activeCard, setActiveCard] = useState<string | null>(null);
+  const [isInventoryItemsModalOpen, setIsInventoryItemsModalOpen] = useState(false);
 
   const handleCardClick = (cardType: string) => {
-    setActiveCard(activeCard === cardType ? null : cardType);
+    if (cardType === 'inventory-items') {
+      setIsInventoryItemsModalOpen(true);
+    } else {
+      setActiveCard(activeCard === cardType ? null : cardType);
+    }
   };
 
   return (
@@ -310,6 +316,19 @@ export default function EnhancedInventoryMRPPage() {
         </div>
       </div>
 
+      {/* Inventory Items Modal */}
+      <Dialog open={isInventoryItemsModalOpen} onOpenChange={setIsInventoryItemsModalOpen}>
+        <DialogContent className="max-w-7xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-xl">
+              <Package className="h-5 w-5" />
+              Inventory Items Management
+            </DialogTitle>
+          </DialogHeader>
+          <InventoryItemsCard />
+        </DialogContent>
+      </Dialog>
+
       {/* Expanded Card Content */}
       {activeCard && (
         <div className="mt-8">
@@ -317,7 +336,6 @@ export default function EnhancedInventoryMRPPage() {
             <CardHeader>
               <div className="flex justify-between items-center">
                 <CardTitle className="text-xl flex items-center gap-2">
-                  {activeCard === 'inventory-items' && <><Package className="h-5 w-5" />Inventory Items Management</>}
                   {activeCard === 'inventory-balances' && <><BarChart3 className="h-5 w-5" />Inventory Balances Management</>}
                   {activeCard === 'inventory-transactions' && <><TrendingUp className="h-5 w-5" />Inventory Transactions</>}
                   {activeCard === 'progressive-allocation' && <><Target className="h-5 w-5" />Progressive Allocation</>}
@@ -338,7 +356,6 @@ export default function EnhancedInventoryMRPPage() {
               </div>
             </CardHeader>
             <CardContent>
-              {activeCard === 'inventory-items' && <InventoryItemsCard />}
               {activeCard === 'inventory-balances' && <InventoryBalancesCard />}
               {activeCard === 'inventory-transactions' && <InventoryTransactionsCard />}
               {activeCard === 'progressive-allocation' && <ProgressiveAllocationCard />}

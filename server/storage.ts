@@ -1026,9 +1026,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAllOrders(): Promise<Order[]> {
-    // Get all finalized orders from the orders table (400 records)
-    const ordersData = await db.select().from(orders).orderBy(desc(orders.updatedAt));
-    console.log(`[DEBUG] getAllOrders fetched ${ordersData.length} orders from orders table`);
+    // Get all orders from the all_orders table (complete historical dataset)
+    const ordersData = await db.select().from(allOrders).orderBy(desc(allOrders.updatedAt));
+    console.log(`[DEBUG] getAllOrders fetched ${ordersData.length} orders from all_orders table`);
     
     // Get all customers to create a lookup map
     const allCustomers = await db.select().from(customers);

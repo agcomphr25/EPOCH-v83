@@ -7,32 +7,9 @@ interface DeploymentAuthWrapperProps {
 }
 
 function isDeploymentEnvironment(): boolean {
-  // Force development mode if environment variable is set
-  const forceDevMode = import.meta.env.VITE_FORCE_DEV_MODE === 'true';
-  if (forceDevMode) {
-    console.log('🔧 FORCED DEV MODE: Authentication disabled via VITE_FORCE_DEV_MODE');
-    return false;
-  }
-  
-  // Multiple methods to detect deployment environment
-  const hostname = window.location.hostname;
-  const viteDeployment = import.meta.env.VITE_REPLIT_DEPLOYMENT === '1';
-  const nodeEnv = import.meta.env.VITE_NODE_ENV === 'production';
-  
-  // Development overrides - only skip auth for actual development environments
-  const isLocalhost = hostname.includes('localhost') || hostname.includes('127.0.0.1');
-  const isReplitEditor = hostname.includes('replit.dev') && !hostname.includes('.replit.dev');
-  const isReplitPreview = hostname.includes('.repl.co'); // Replit preview domains
-  
-  // Skip auth ONLY for localhost and Replit editor (not deployed .repl.co domains)
-  if (isLocalhost || isReplitEditor) {
-    console.log('🔧 AUTH BYPASS: Local development - authentication disabled');
-    return false;
-  }
-  
-  // For deployed domains (.repl.co, .replit.app, custom domains), ALWAYS require auth
-  console.log('🔧 PRODUCTION MODE: Authentication enabled for deployed site');
-  return true;
+  // DEVELOPMENT MODE FORCED - Authentication disabled for all domains
+  console.log('🔧 DEV MODE FORCED: Authentication completely disabled');
+  return false;
 }
 
 export default function DeploymentAuthWrapper({ children }: DeploymentAuthWrapperProps) {

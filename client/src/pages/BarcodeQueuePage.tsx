@@ -171,45 +171,9 @@ export default function BarcodeQueuePage() {
 
   // Get orders in barcode department
   const barcodeOrders = useMemo(() => {
-    console.log('🔍 BARCODE DEBUG: Total orders received:', allOrders.length);
-    
-    // Check specifically for EI204
-    const ei204 = (allOrders as any[]).find((order: any) => order.orderId === 'EI204');
-    if (ei204) {
-      console.log('🔍 BARCODE DEBUG: Found EI204 in allOrders:', {
-        orderId: ei204.orderId,
-        currentDepartment: ei204.currentDepartment,
-        currentDepartmentType: typeof ei204.currentDepartment,
-        currentDepartmentLength: ei204.currentDepartment?.length,
-        rawDepartment: JSON.stringify(ei204.currentDepartment),
-        status: ei204.status,
-        modelId: ei204.modelId
-      });
-    } else {
-      console.log('🔍 BARCODE DEBUG: EI204 NOT found in allOrders array');
-    }
-    
-    // Show all Barcode department orders
-    const filtered = (allOrders as any[]).filter((order: any) => 
+    return (allOrders as any[]).filter((order: any) => 
       order.currentDepartment === 'Barcode'
     );
-    
-    console.log('🔍 BARCODE DEBUG: Filtered Barcode orders:', filtered.map(o => ({
-      orderId: o.orderId,
-      currentDepartment: o.currentDepartment,
-      status: o.status
-    })));
-    
-    // Test different comparison methods for EI204
-    if (ei204) {
-      console.log('🔍 BARCODE DEBUG: EI204 comparison tests:');
-      console.log('- Exact match:', ei204.currentDepartment === 'Barcode');
-      console.log('- Trimmed match:', ei204.currentDepartment?.trim() === 'Barcode');
-      console.log('- Case insensitive:', ei204.currentDepartment?.toLowerCase() === 'barcode');
-      console.log('- Includes match:', ei204.currentDepartment?.includes('Barcode'));
-    }
-    
-    return filtered;
   }, [allOrders]);
 
   // Count orders in previous department (Layup/Plugging)

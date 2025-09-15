@@ -71,6 +71,157 @@ router.delete('/inventory/items/:id', authenticateToken, async (req: Request, re
   }
 });
 
+// CSV EXPORT/IMPORT ENDPOINTS (Enhanced Only)
+// ===========================================
+
+// GET /api/enhanced/inventory/export/csv - Export enhanced inventory items to CSV
+router.get('/inventory/export/csv', async (req: Request, res: Response) => {
+  try {
+    const items = await enhancedStorage.getAllInventoryItems();
+    
+    if (items.length === 0) {
+      return res.status(404).json({ error: "No inventory items to export" });
+    }
+
+    // Create CSV headers
+    const headers = [
+      'AG Part#',
+      'Name', 
+      'Source',
+      'Supplier Part #',
+      'Cost per',
+      'Order Date',
+      'Dept.',
+      'Secondary Source',
+      'Notes'
+    ];
+
+    // Convert items to CSV format
+    const csvData = [
+      headers.join(','),
+      ...items.map(item => [
+        `"${item.agPartNumber || ''}"`,
+        `"${item.name || ''}"`,
+        `"${item.source || ''}"`,
+        `"${item.supplierPartNumber || ''}"`,
+        item.costPer ? item.costPer.toString() : '',
+        item.orderDate ? new Date(item.orderDate).toISOString().split('T')[0] : '',
+        `"${item.department || ''}"`,
+        `"${item.secondarySource || ''}"`,
+        `"${item.notes || ''}"`
+      ].join(','))
+    ].join('\n');
+
+    // Set headers for file download
+    const timestamp = new Date().toISOString().split('T')[0];
+    const filename = `enhanced_inventory_export_${timestamp}.csv`;
+    
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(csvData);
+  } catch (error) {
+    console.error('Enhanced CSV export error:', error);
+    res.status(500).json({ error: "Failed to export CSV" });
+  }
+});
+
+// POST /api/enhanced/inventory/import/csv - Import CSV data to enhanced inventory items
+router.post('/inventory/import/csv', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { csvData } = req.body;
+    
+    if (!csvData) {
+      return res.status(400).json({ error: 'CSV data is required' });
+    }
+
+    // Parse CSV data (simple implementation)
+    const lines = csvData.split('\n').filter((line: string) => line.trim());
+    if (lines.length === 0) {
+      return res.status(400).json({ error: 'CSV file is empty' });
+    }
+
+    const headers = lines[0].split(',').map((h: string) => h.trim().replace(/"/g, ''));
+    const rows = lines.slice(1);
+    
+    let importedCount = 0;
+    const errors: string[] = [];
+
+    for (let i = 0; i < rows.length; i++) {
+      try {
+        const values = rows[i].split(',').map((v: string) => v.trim().replace(/"/g, ''));
+        
+        if (values.length !== headers.length) {
+          errors.push(`Row ${i + 2}: Column count mismatch`);
+          continue;
+        }
+
+        const itemData: any = {};
+        headers.forEach((header: string, index: number) => {
+          const value = values[index];
+          
+          switch (header.toLowerCase()) {
+            case 'ag part#':
+            case 'agpartnumber':
+              itemData.agPartNumber = value;
+              break;
+            case 'name':
+              itemData.name = value;
+              break;
+            case 'source':
+              itemData.source = value || null;
+              break;
+            case 'supplier part #':
+            case 'supplierpartnumber':
+              itemData.supplierPartNumber = value || null;
+              break;
+            case 'cost per':
+            case 'costper':
+              itemData.costPer = value && !isNaN(parseFloat(value)) ? parseFloat(value) : null;
+              break;
+            case 'order date':
+            case 'orderdate':
+              itemData.orderDate = value || null;
+              break;
+            case 'dept.':
+            case 'dept':
+            case 'department':
+              itemData.department = value || null;
+              break;
+            case 'secondary source':
+            case 'secondarysource':
+              itemData.secondarySource = value || null;
+              break;
+            case 'notes':
+              itemData.notes = value || null;
+              break;
+          }
+        });
+
+        if (!itemData.agPartNumber || !itemData.name) {
+          errors.push(`Row ${i + 2}: Missing required fields (AG Part# and Name)`);
+          continue;
+        }
+
+        // Use enhanced storage for import
+        const validatedData = insertInventoryItemSchema.parse(itemData);
+        await enhancedStorage.createInventoryItem(validatedData);
+        importedCount++;
+      } catch (error) {
+        errors.push(`Row ${i + 2}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+    }
+
+    res.json({
+      success: true,
+      importedCount,
+      errors: errors.length > 0 ? errors : undefined
+    });
+  } catch (error) {
+    console.error('Enhanced CSV import error:', error);
+    res.status(500).json({ error: 'Failed to import CSV' });
+  }
+});
+
 // ENHANCED INVENTORY BALANCES
 // ===========================
 

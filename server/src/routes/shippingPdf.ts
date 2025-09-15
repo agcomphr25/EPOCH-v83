@@ -874,71 +874,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     }
     
     const shippingForPayment = order.shipping || 0;
-    const orderTotalBeforeDiscount = basePriceForPayment + featuresCostForPayment + shippingForPayment;
-    
-    // Apply discount calculations (same logic as Order Entry system) with safe math
-    let discountAmount = 0;
-    let discountDescription = '';
-    
-    // Safely apply discounts only if we have valid numbers
-    if (!isNaN(orderTotalBeforeDiscount) && orderTotalBeforeDiscount > 0) {
-      // Apply persistent discount if present
-      if ((order as any).discountCode && (order as any).discountCode !== 'none') {
-        try {
-          const { storage } = await import('../../storage');
-          const persistentDiscounts = await storage.getAllPersistentDiscounts();
-          
-          if (persistentDiscounts && Array.isArray(persistentDiscounts)) {
-            let discount = null;
-            if ((order as any).discountCode.startsWith('persistent_')) {
-              const discountId = parseInt((order as any).discountCode.replace('persistent_', ''));
-              if (!isNaN(discountId)) {
-                discount = persistentDiscounts.find((d: any) => d && d.id === discountId);
-              }
-            } else {
-              discount = persistentDiscounts.find((d: any) => d && d.name === (order as any).discountCode);
-            }
-            
-            if (discount && discount.discountValue && !isNaN(discount.discountValue)) {
-              if (discount.discountType === 'percent') {
-                const percentDiscount = orderTotalBeforeDiscount * (discount.discountValue / 100);
-                if (!isNaN(percentDiscount)) {
-                  discountAmount += percentDiscount;
-                  discountDescription = `${discount.name} (${discount.discountValue}%)`;
-                }
-              } else {
-                discountAmount += discount.discountValue;
-                discountDescription = `${discount.name} ($${discount.discountValue})`;
-              }
-            }
-          }
-        } catch (error) {
-          console.error('Error applying persistent discount to PDF:', error);
-          // Continue without discount on error
-        }
-      }
-      
-      // Apply custom discount if present
-      if ((order as any).showCustomDiscount && (order as any).customDiscountValue) {
-        const customDiscountValue = Number((order as any).customDiscountValue);
-        if (!isNaN(customDiscountValue) && customDiscountValue > 0) {
-          if ((order as any).customDiscountType === 'percent') {
-            const customPercentDiscount = orderTotalBeforeDiscount * (customDiscountValue / 100);
-            if (!isNaN(customPercentDiscount)) {
-              discountAmount += customPercentDiscount;
-              discountDescription += (discountDescription ? ' + ' : '') + `Custom Discount (${customDiscountValue}%)`;
-            }
-          } else {
-            discountAmount += customDiscountValue;
-            discountDescription += (discountDescription ? ' + ' : '') + `Custom Discount ($${customDiscountValue})`;
-          }
-        }
-      }
-    }
-    
-    // Calculate final order total with discounts applied (ensure no NaN)
-    const finalDiscount = isNaN(discountAmount) ? 0 : discountAmount;
-    const orderTotal = orderTotalBeforeDiscount - finalDiscount;
+    const orderTotal = basePriceForPayment + featuresCostForPayment + shippingForPayment;
     
     // Determine if fully paid (same logic as backend calculation)
     const isFullyPaid = order.paymentAmount !== null ? 
@@ -2003,39 +1939,6 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
 
     summaryLineY -= 25;
 
-    // Show discount information if any discounts were applied
-    if (discountAmount > 0) {
-      page.drawText('Discount:', {
-        x: margin + 10,
-        y: summaryLineY,
-        size: 10,
-        font: boldFont,
-        color: rgb(0, 0.6, 0),
-      });
-
-      page.drawText(`-$${discountAmount.toFixed(2)}`, {
-        x: margin + printableWidth - 80,
-        y: summaryLineY,
-        size: 10,
-        font: boldFont,
-        color: rgb(0, 0.6, 0),
-      });
-
-      // Add discount description on next line if we have one
-      if (discountDescription) {
-        summaryLineY -= 15;
-        page.drawText(`(${discountDescription})`, {
-          x: margin + 30,
-          y: summaryLineY,
-          size: 8,
-          font: font,
-          color: rgb(0.4, 0.4, 0.4),
-        });
-      }
-
-      summaryLineY -= 25;
-    }
-
     // Shipping
     if (order.shipping && order.shipping > 0) {
       page.drawText('Shipping:', {
@@ -2065,8 +1968,8 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
 
     summaryLineY -= 25;
 
-    // Total - Use the discounted orderTotal instead of calculatedSubtotal
-    const finalTotal = orderTotal; // This already includes all discounts applied above
+    // Total
+    const finalTotal = calculatedSubtotal + (order.shipping || 0);
     page.drawText('TOTAL:', {
       x: margin + 10,
       y: summaryLineY,

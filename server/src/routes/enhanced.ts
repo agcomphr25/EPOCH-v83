@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { storage } from '../../storage';
+import { enhancedStorage } from '../storage/enhanced-storage';
 import { authenticateToken } from '../../middleware/auth';
 import {
   insertInventoryItemSchema,
@@ -23,7 +23,7 @@ const router = Router();
 // GET /api/enhanced/inventory/items - List all inventory items
 router.get('/inventory/items', async (req: Request, res: Response) => {
   try {
-    const items = await storage.getAllInventoryItems();
+    const items = await enhancedStorage.getAllInventoryItems();
     res.json(items);
   } catch (error) {
     console.error('Enhanced inventory fetch error:', error);
@@ -35,7 +35,7 @@ router.get('/inventory/items', async (req: Request, res: Response) => {
 router.post('/inventory/items', authenticateToken, async (req: Request, res: Response) => {
   try {
     const itemData = insertInventoryItemSchema.parse(req.body);
-    const newItem = await storage.createInventoryItem(itemData);
+    const newItem = await enhancedStorage.createInventoryItem(itemData);
     res.status(201).json(newItem);
   } catch (error) {
     console.error('Enhanced inventory create error:', error);
@@ -51,7 +51,7 @@ router.put('/inventory/items/:id', authenticateToken, async (req: Request, res: 
   try {
     const itemId = parseInt(req.params.id);
     const updates = updateInventoryItemSchema.parse(req.body);
-    const updatedItem = await storage.updateInventoryItem(itemId, updates);
+    const updatedItem = await enhancedStorage.updateInventoryItem(itemId, updates);
     res.json(updatedItem);
   } catch (error) {
     console.error('Enhanced inventory update error:', error);
@@ -63,7 +63,7 @@ router.put('/inventory/items/:id', authenticateToken, async (req: Request, res: 
 router.delete('/inventory/items/:id', authenticateToken, async (req: Request, res: Response) => {
   try {
     const itemId = parseInt(req.params.id);
-    await storage.deleteInventoryItem(itemId);
+    await enhancedStorage.deleteInventoryItem(itemId);
     res.status(204).send();
   } catch (error) {
     console.error('Enhanced inventory delete error:', error);
@@ -77,7 +77,7 @@ router.delete('/inventory/items/:id', authenticateToken, async (req: Request, re
 // GET /api/enhanced/inventory/balances - Get all inventory balances
 router.get('/inventory/balances', async (req: Request, res: Response) => {
   try {
-    const balances = await storage.getAllInventoryBalances();
+    const balances = await enhancedStorage.getAllInventoryBalances();
     res.json(balances);
   } catch (error) {
     console.error('Enhanced inventory balances fetch error:', error);
@@ -89,8 +89,8 @@ router.get('/inventory/balances', async (req: Request, res: Response) => {
 router.post('/inventory/balances', authenticateToken, async (req: Request, res: Response) => {
   try {
     const transactionData = insertInventoryTransactionSchema.parse(req.body);
-    const result = await storage.processInventoryTransaction(transactionData);
-    res.status(201).json(result.updatedBalance);
+    const newTransaction = await enhancedStorage.createInventoryTransaction(transactionData);
+    res.status(201).json(newTransaction);
   } catch (error) {
     console.error('Enhanced inventory balance create error:', error);
     res.status(500).json({ error: "Failed to process inventory balance" });
@@ -103,7 +103,7 @@ router.post('/inventory/balances', authenticateToken, async (req: Request, res: 
 // GET /api/enhanced/inventory/transactions - Get all transactions
 router.get('/inventory/transactions', async (req: Request, res: Response) => {
   try {
-    const transactions = await storage.getAllInventoryTransactions();
+    const transactions = await enhancedStorage.getAllInventoryTransactions();
     res.json(transactions);
   } catch (error) {
     console.error('Enhanced inventory transactions fetch error:', error);
@@ -115,7 +115,7 @@ router.get('/inventory/transactions', async (req: Request, res: Response) => {
 router.post('/inventory/transactions', authenticateToken, async (req: Request, res: Response) => {
   try {
     const transactionData = insertInventoryTransactionSchema.parse(req.body);
-    const newTransaction = await storage.createInventoryTransaction(transactionData);
+    const newTransaction = await enhancedStorage.createInventoryTransaction(transactionData);
     res.status(201).json(newTransaction);
   } catch (error) {
     console.error('Enhanced inventory transaction create error:', error);
@@ -129,8 +129,7 @@ router.post('/inventory/transactions', authenticateToken, async (req: Request, r
 // POST /api/enhanced/mrp/calculate - Run MRP calculation (placeholder)
 router.post('/mrp/calculate', authenticateToken, async (req: Request, res: Response) => {
   try {
-    // Enhanced MRP calculation - independent of legacy system
-    const result = { status: 'completed', timestamp: new Date(), message: 'Enhanced MRP calculation completed' };
+    const result = await enhancedStorage.calculateEnhancedMRP();
     res.json(result);
   } catch (error) {
     console.error('Enhanced MRP calculation error:', error);
@@ -141,7 +140,7 @@ router.post('/mrp/calculate', authenticateToken, async (req: Request, res: Respo
 // GET /api/enhanced/mrp/requirements - Get MRP requirements
 router.get('/mrp/requirements', async (req: Request, res: Response) => {
   try {
-    const requirements = await storage.getMrpRequirements();
+    const requirements = await enhancedStorage.getAllMRPRequirements();
     res.json(requirements);
   } catch (error) {
     console.error('Enhanced MRP requirements fetch error:', error);
@@ -152,7 +151,7 @@ router.get('/mrp/requirements', async (req: Request, res: Response) => {
 // GET /api/enhanced/mrp/shortages - Get material shortages
 router.get('/mrp/shortages', async (req: Request, res: Response) => {
   try {
-    const shortages = await storage.getMrpShortages();
+    const shortages = await enhancedStorage.getMRPShortages();
     res.json(shortages);
   } catch (error) {
     console.error('Enhanced MRP shortages fetch error:', error);
@@ -166,8 +165,7 @@ router.get('/mrp/shortages', async (req: Request, res: Response) => {
 // GET /api/enhanced/vendors/parts - Get all vendor parts
 router.get('/vendors/parts', async (req: Request, res: Response) => {
   try {
-    // Get all vendor parts - enhanced system only
-    const vendorParts: any[] = []; // Placeholder for enhanced vendor parts
+    const vendorParts = await enhancedStorage.getAllVendorParts();
     res.json(vendorParts);
   } catch (error) {
     console.error('Enhanced vendor parts fetch error:', error);
@@ -179,7 +177,7 @@ router.get('/vendors/parts', async (req: Request, res: Response) => {
 router.post('/vendors/parts', authenticateToken, async (req: Request, res: Response) => {
   try {
     const partData = insertVendorPartSchema.parse(req.body);
-    const newPart = await storage.createVendorPart(partData);
+    const newPart = await enhancedStorage.createVendorPart(partData);
     res.status(201).json(newPart);
   } catch (error) {
     console.error('Enhanced vendor part create error:', error);
@@ -190,7 +188,7 @@ router.post('/vendors/parts', authenticateToken, async (req: Request, res: Respo
 // GET /api/enhanced/processing/locations - Get outside processing locations
 router.get('/processing/locations', async (req: Request, res: Response) => {
   try {
-    const locations = await storage.getAllOutsideProcessingLocations();
+    const locations = await enhancedStorage.getAllOutsideProcessingLocations();
     res.json(locations);
   } catch (error) {
     console.error('Enhanced processing locations fetch error:', error);
@@ -202,7 +200,7 @@ router.get('/processing/locations', async (req: Request, res: Response) => {
 router.post('/processing/locations', authenticateToken, async (req: Request, res: Response) => {
   try {
     const locationData = insertOutsideProcessingLocationSchema.parse(req.body);
-    const newLocation = await storage.createOutsideProcessingLocation(locationData);
+    const newLocation = await enhancedStorage.createOutsideProcessingLocation(locationData);
     res.status(201).json(newLocation);
   } catch (error) {
     console.error('Enhanced processing location create error:', error);
@@ -213,7 +211,7 @@ router.post('/processing/locations', authenticateToken, async (req: Request, res
 // GET /api/enhanced/processing/jobs - Get processing jobs
 router.get('/processing/jobs', async (req: Request, res: Response) => {
   try {
-    const jobs = await storage.getAllOutsideProcessingJobs();
+    const jobs = await enhancedStorage.getAllOutsideProcessingJobs();
     res.json(jobs);
   } catch (error) {
     console.error('Enhanced processing jobs fetch error:', error);
@@ -225,11 +223,22 @@ router.get('/processing/jobs', async (req: Request, res: Response) => {
 router.post('/processing/jobs', authenticateToken, async (req: Request, res: Response) => {
   try {
     const jobData = insertOutsideProcessingJobSchema.parse(req.body);
-    const newJob = await storage.createOutsideProcessingJob(jobData);
+    const newJob = await enhancedStorage.createOutsideProcessingJob(jobData);
     res.status(201).json(newJob);
   } catch (error) {
     console.error('Enhanced processing job create error:', error);
     res.status(500).json({ error: "Failed to create processing job" });
+  }
+});
+
+// GET /api/enhanced/po/suggestions - Get purchase order suggestions
+router.get('/po/suggestions', async (req: Request, res: Response) => {
+  try {
+    const suggestions = await enhancedStorage.generatePOSuggestions();
+    res.json(suggestions);
+  } catch (error) {
+    console.error('Enhanced PO suggestions fetch error:', error);
+    res.status(500).json({ error: "Failed to fetch PO suggestions" });
   }
 });
 

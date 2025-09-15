@@ -220,13 +220,16 @@ function App() {
                   {/* Barcode and Scanner Routes */}
                   <Route path="/barcode-scanner" component={BarcodeScannerPage} />
 
-                  {/* Inventory Routes */}
+                  {/* Inventory Routes (Legacy) */}
                   <Route path="/inventory" component={InventoryManagerPage} />
                   <Route path="/inventory/scanner" component={InventoryScannerPage} />
                   <Route path="/inventory/dashboard" component={InventoryDashboardPage} />
                   <Route path="/inventory/manager" component={InventoryManagerPage} />
                   <Route path="/inventory/receiving" component={InventoryReceivingPage} />
                   <Route path="/inventory/enhanced-mrp" component={EnhancedInventoryMRPPage} />
+                  
+                  {/* Enhanced System Routes (Independent) */}
+                  <Route path="/enhanced-inventory" component={EnhancedInventoryMRPPage} />
 
                   {/* QC and Maintenance Routes */}
                   <Route path="/qc" component={QCPage} />

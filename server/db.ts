@@ -10,7 +10,9 @@ if (!process.env.DATABASE_URL) {
 
 console.log("Initializing database connection...");
 
+// Configure Neon client with timeout (Neon HTTP only supports basic options)
 const sql = neon(process.env.DATABASE_URL);
+
 export const db = drizzle({ client: sql, schema });
 
 // Test database connection

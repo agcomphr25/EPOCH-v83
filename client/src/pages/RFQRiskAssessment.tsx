@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -56,6 +56,43 @@ export default function RFQRiskAssessment() {
     printedName: '',
     signature: ''
   });
+
+  // Effect to handle canvas resizing
+  useEffect(() => {
+    const resizeCanvas = () => {
+      if (signatureCanvasRef.current) {
+        const canvas = signatureCanvasRef.current.getCanvas();
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+        
+        // Store the scale factors for proper mouse coordinate mapping
+        canvas.dataset.scaleX = scaleX.toString();
+        canvas.dataset.scaleY = scaleY.toString();
+      }
+    };
+
+    // Resize on mount and window resize
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
+    
+    return () => {
+      window.removeEventListener('resize', resizeCanvas);
+    };
+  }, []);
+
+  // Effect to handle mitigation actions requirement based on risk score
+  useEffect(() => {
+    if (formData.totalOverallPoints > 16) {
+      // If risk score is above 16 and mitigation actions are empty, set them to "n/a"
+      setFormData(prev => ({
+        ...prev,
+        mitigationActionA: prev.mitigationActionA || 'n/a',
+        mitigationActionB: prev.mitigationActionB || 'n/a',
+        mitigationActionC: prev.mitigationActionC || 'n/a'
+      }));
+    }
+  }, [formData.totalOverallPoints]);
 
   // Risk scoring system
   const getRiskScore = (value: string) => {
@@ -198,6 +235,14 @@ export default function RFQRiskAssessment() {
     }
   };
 
+  // Handle form submission
+  const handleSubmitAssessment = () => {
+    // TODO: Implement form submission logic
+    // For now, just show a placeholder message
+    console.log('RFQ Risk Assessment submitted:', formData);
+    alert('Assessment submission functionality will be implemented soon.');
+  };
+
 
 
   const RiskRadioGroup = ({ 
@@ -234,11 +279,13 @@ export default function RFQRiskAssessment() {
     </div>
   );
 
-  // Validation function for required mitigation actions
+  // Validation function for required mitigation actions (only if risk score > 16)
   const validateForm = () => {
-    if (!formData.mitigationActionA.trim() || !formData.mitigationActionB.trim() || !formData.mitigationActionC.trim()) {
-      alert('All Mitigation Actions are required. Please fill in all three mitigation action fields.');
-      return false;
+    if (formData.totalOverallPoints > 16) {
+      if (!formData.mitigationActionA.trim() || !formData.mitigationActionB.trim() || !formData.mitigationActionC.trim()) {
+        alert('Mitigation Actions are required when the overall risk score is above 16. Please fill in all three mitigation action fields.');
+        return false;
+      }
     }
     return true;
   };
@@ -435,20 +482,29 @@ export default function RFQRiskAssessment() {
         <Card className="mb-6">
           <CardHeader>
             <CardTitle>3. Mitigation Actions and Score Adjustment</CardTitle>
-            <p className="text-sm text-gray-600">All mitigation actions are required. Enter numeric values to reduce overall risk level.</p>
+            {formData.totalOverallPoints > 16 ? (
+              <div className="text-sm bg-orange-50 border border-orange-200 rounded p-3">
+                <div className="text-orange-800 font-medium">⚠️ Mitigation Actions Required</div>
+                <div className="text-orange-700">Risk score is above 16 - all mitigation actions must be completed. Enter numeric values to reduce overall risk level.</div>
+              </div>
+            ) : (
+              <p className="text-sm text-gray-600">Risk score is 16 or below - mitigation actions are optional. Enter numeric values to reduce overall risk level if desired.</p>
+            )}
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex gap-4 items-start">
               <div className="flex-1">
-                <Label htmlFor="mitigationA" className="text-red-500">a. * (Required)</Label>
+                <Label htmlFor="mitigationA" className={formData.totalOverallPoints > 16 ? "text-red-500" : "text-gray-700"}>
+                  a. {formData.totalOverallPoints > 16 ? "* (Required)" : "(Optional)"}
+                </Label>
                 <Textarea
                   id="mitigationA"
                   value={formData.mitigationActionA}
                   onChange={(e) => handleInputChange('mitigationActionA', e.target.value)}
                   rows={2}
                   className="mt-1"
-                  placeholder="Describe mitigation action..."
-                  required
+                  placeholder={formData.totalOverallPoints > 16 ? "Describe mitigation action..." : "Describe mitigation action (optional)..."}
+                  required={formData.totalOverallPoints > 16}
                 />
               </div>
               <div className="w-24">
@@ -468,15 +524,17 @@ export default function RFQRiskAssessment() {
             
             <div className="flex gap-4 items-start">
               <div className="flex-1">
-                <Label htmlFor="mitigationB" className="text-red-500">b. * (Required)</Label>
+                <Label htmlFor="mitigationB" className={formData.totalOverallPoints > 16 ? "text-red-500" : "text-gray-700"}>
+                  b. {formData.totalOverallPoints > 16 ? "* (Required)" : "(Optional)"}
+                </Label>
                 <Textarea
                   id="mitigationB"
                   value={formData.mitigationActionB}
                   onChange={(e) => handleInputChange('mitigationActionB', e.target.value)}
                   rows={2}
                   className="mt-1"
-                  placeholder="Describe mitigation action..."
-                  required
+                  placeholder={formData.totalOverallPoints > 16 ? "Describe mitigation action..." : "Describe mitigation action (optional)..."}
+                  required={formData.totalOverallPoints > 16}
                 />
               </div>
               <div className="w-24">
@@ -496,15 +554,17 @@ export default function RFQRiskAssessment() {
             
             <div className="flex gap-4 items-start">
               <div className="flex-1">
-                <Label htmlFor="mitigationC" className="text-red-500">c. * (Required)</Label>
+                <Label htmlFor="mitigationC" className={formData.totalOverallPoints > 16 ? "text-red-500" : "text-gray-700"}>
+                  c. {formData.totalOverallPoints > 16 ? "* (Required)" : "(Optional)"}
+                </Label>
                 <Textarea
                   id="mitigationC"
                   value={formData.mitigationActionC}
                   onChange={(e) => handleInputChange('mitigationActionC', e.target.value)}
                   rows={2}
                   className="mt-1"
-                  placeholder="Describe mitigation action..."
-                  required
+                  placeholder={formData.totalOverallPoints > 16 ? "Describe mitigation action..." : "Describe mitigation action (optional)..."}
+                  required={formData.totalOverallPoints > 16}
                 />
               </div>
               <div className="w-24">
@@ -606,14 +666,19 @@ export default function RFQRiskAssessment() {
             
             <div className="mt-6">
               <Label className="block mb-2">Digital Signature</Label>
-              <div className="border border-gray-300 rounded-md p-2 bg-white">
+              <div className="border border-gray-300 rounded-md p-2 bg-white" style={{ width: '100%', maxWidth: '500px' }}>
                 <SignatureCanvas
                   ref={signatureCanvasRef}
                   penColor="black"
                   canvasProps={{
-                    width: 400,
-                    height: 150,
-                    className: 'signature-canvas border rounded w-full'
+                    width: 500,
+                    height: 200,
+                    style: {
+                      width: '100%',
+                      height: '200px',
+                      border: '1px solid #e5e7eb',
+                      borderRadius: '4px'
+                    }
                   }}
                   onEnd={saveSignature}
                 />
@@ -629,6 +694,17 @@ export default function RFQRiskAssessment() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Submit Button */}
+        <div className="flex justify-center mb-6">
+          <Button 
+            onClick={handleSubmitAssessment}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 text-lg font-medium"
+            size="lg"
+          >
+            Submit Assessment
+          </Button>
+        </div>
 
         {/* Footer */}
         <div className="text-center text-sm text-gray-500 mb-8">

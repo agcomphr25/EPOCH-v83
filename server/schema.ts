@@ -1,11 +1,13 @@
-import { pgTable, text, serial, integer, timestamp, jsonb, boolean, json, real, date, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, timestamp, jsonb, boolean, json, real, date, pgEnum, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+import { relations } from "drizzle-orm";
 
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   username: text("username").notNull().unique(),
-  passwordHash: text("password_hash").notNull(),
+  password: text("password").notNull(),
+  passwordHash: text("password_hash"),
   role: text("role").notNull().default("EMPLOYEE"), // ADMIN, HR, MANAGER, EMPLOYEE
   canOverridePrices: boolean("can_override_prices").default(false),
   employeeId: integer("employee_id").references(() => employees.id),
@@ -13,11 +15,107 @@ export const users = pgTable("users", {
   lastLoginAt: timestamp("last_login_at"),
   passwordChangedAt: timestamp("password_changed_at").defaultNow(),
   failedLoginAttempts: integer("failed_login_attempts").default(0),
+  accountLockedUntil: timestamp("account_locked_until"),
   lockedUntil: timestamp("locked_until"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// All finalized orders - production table
+export const allOrders = pgTable("all_orders", {
+  id: serial("id").primaryKey(),
+  orderId: text("order_id").notNull().unique(),
+  orderDate: timestamp("order_date").notNull(),
+  dueDate: timestamp("due_date").notNull(),
+  customerId: text("customer_id"),
+  customerPO: text("customer_po"),
+  fbOrderNumber: text("fb_order_number"),
+  agrOrderDetails: text("agr_order_details"),
+  isFlattop: boolean("is_flattop").default(false),
+  isCustomOrder: text("is_custom_order"), // "yes", "no", or null
+  modelId: text("model_id"),
+  handedness: text("handedness"),
+  shankLength: text("shank_length"),
+  features: jsonb("features"),
+  featureQuantities: jsonb("feature_quantities"),
+  discountCode: text("discount_code"),
+  notes: text("notes"), // Order notes/special instructions
+  customDiscountType: text("custom_discount_type").default("percent"),
+  customDiscountValue: real("custom_discount_value").default(0),
+  showCustomDiscount: boolean("show_custom_discount").default(false),
+  priceOverride: real("price_override"), // Manual price override for stock model
+  shipping: real("shipping").default(0),
+  tikkaOption: text("tikka_option"),
+  status: text("status").default("FINALIZED"),
+  barcode: text("barcode").unique(), // Code 39 barcode for order identification
+  // Department Progression Fields
+  currentDepartment: text("current_department").default("Layup"),
+  departmentHistory: jsonb("department_history").default('[]'),
+  scrappedQuantity: integer("scrapped_quantity").default(0),
+  totalProduced: integer("total_produced").default(0),
+  // Department Completion Timestamps
+  layupCompletedAt: timestamp("layup_completed_at"),
+  pluggingCompletedAt: timestamp("plugging_completed_at"),
+  cncCompletedAt: timestamp("cnc_completed_at"),
+  finishCompletedAt: timestamp("finish_completed_at"),
+  gunsmithCompletedAt: timestamp("gunsmith_completed_at"),
+  paintCompletedAt: timestamp("paint_completed_at"),
+  qcCompletedAt: timestamp("qc_completed_at"),
+  shippingCompletedAt: timestamp("shipping_completed_at"),
+  // Scrap Information
+  scrapDate: timestamp("scrap_date"),
+  scrapReason: text("scrap_reason"),
+  scrapDisposition: text("scrap_disposition"),
+  scrapAuthorization: text("scrap_authorization"),
+  // Replacement Information
+  isReplacement: boolean("is_replacement").default(false),
+  replacedOrderId: text("replaced_order_id"),
+  // Payment Information
+  isPaid: boolean("is_paid").default(false),
+  paymentType: text("payment_type"), // cash, credit, check, etc.
+  paymentAmount: real("payment_amount"),
+  paymentDate: timestamp("payment_date"),
+  paymentTimestamp: timestamp("payment_timestamp"),
+  // Shipping and Tracking Information
+  trackingNumber: text("tracking_number"),
+  shippingCarrier: text("shipping_carrier").default("UPS"),
+  shippingMethod: text("shipping_method").default("Ground"),
+  shippedDate: timestamp("shipped_date"),
+  estimatedDelivery: timestamp("estimated_delivery"),
+  shippingLabelGenerated: boolean("shipping_label_generated").default(false),
+  customerNotified: boolean("customer_notified").default(false),
+  notificationMethod: text("notification_method"), // email, sms, both
+  notificationSentAt: timestamp("notification_sent_at"),
+  deliveryConfirmed: boolean("delivery_confirmed").default(false),
+  deliveryConfirmedAt: timestamp("delivery_confirmed_at"),
+  // Cancellation Information
+  isCancelled: boolean("is_cancelled").default(false),
+  cancelledAt: timestamp("cancelled_at"),
+  cancelReason: text("cancel_reason"),
+  // Verification Information
+  isVerified: boolean("is_verified").default(false),
+  // Date Tracking Information  
+  isManualDueDate: boolean("is_manual_due_date").default(false),
+  isManualOrderDate: boolean("is_manual_order_date").default(false),
+  // Alt Ship To Address Information
+  hasAltShipTo: boolean("has_alt_ship_to").default(false),
+  altShipToCustomerId: text("alt_ship_to_customer_id"), // Reference to existing customer
+  altShipToName: text("alt_ship_to_name"), // Manual entry name
+  altShipToCompany: text("alt_ship_to_company"), // Manual entry company
+  altShipToEmail: text("alt_ship_to_email"), // Manual entry email
+  altShipToPhone: text("alt_ship_to_phone"), // Manual entry phone
+  altShipToAddress: jsonb("alt_ship_to_address"), // Manual entry address object
+  // Special Shipping Instructions
+  specialShippingInternational: boolean("special_shipping_international").default(false),
+  specialShippingNextDayAir: boolean("special_shipping_next_day_air").default(false),
+  specialShippingBillToReceiver: boolean("special_shipping_bill_to_receiver").default(false),
+  // Technician Assignment
+  assignedTechnician: text("assigned_technician"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Legacy orders table - keeping for compatibility
 export const orders = pgTable("orders", {
   id: serial("id").primaryKey(),
   orderId: text("order_id").notNull().unique(),
@@ -26,12 +124,18 @@ export const orders = pgTable("orders", {
   quantity: integer("quantity").notNull(),
   status: text("status").notNull(),
   date: timestamp("date").notNull(),
+  orderDate: timestamp("order_date"),
   // Department progression fields
   currentDepartment: text("current_department").default("Layup").notNull(),
   isOnSchedule: boolean("is_on_schedule").default(true),
   priorityScore: integer("priority_score").default(50), // Lower = higher priority
   rushTier: text("rush_tier"), // e.g., "STANDARD", "RUSH", "EXPEDITE"
-  poId: text("po_id"), // Reference to purchase order
+  poId: integer("po_id"), // Reference to purchase order
+  itemId: text("item_id"), // Item identifier
+  stockModelId: text("stock_model_id"), // Stock model reference
+  customerId: text("customer_id"), // Customer identifier
+  notes: text("notes"), // Order notes
+  shippedAt: timestamp("shipped_at"), // Shipping timestamp
   dueDate: timestamp("due_date"),
   // Track department completion timestamps
   layupCompletedAt: timestamp("layup_completed_at"),
@@ -49,6 +153,57 @@ export const orders = pgTable("orders", {
   scrapAuthorization: text("scrap_authorization"), // CUSTOMER, AG, MATT, GLENN, LAURIE
   isReplacement: boolean("is_replacement").default(false),
   replacedOrderId: text("replaced_order_id"), // Reference to original order if this is a replacement
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Dedicated cancelled orders table - stores archived cancelled orders
+export const cancelledOrders = pgTable("cancelled_orders", {
+  id: serial("id").primaryKey(),
+  orderId: text("order_id").notNull().unique(),
+  orderDate: timestamp("order_date").notNull(),
+  dueDate: timestamp("due_date").notNull(),
+  customerId: text("customer_id"),
+  customerPO: text("customer_po"),
+  fbOrderNumber: text("fb_order_number"),
+  agrOrderDetails: text("agr_order_details"),
+  isFlattop: boolean("is_flattop").default(false),
+  isCustomOrder: text("is_custom_order"), // "yes", "no", or null
+  modelId: text("model_id"),
+  handedness: text("handedness"),
+  shankLength: text("shank_length"),
+  features: jsonb("features"),
+  featureQuantities: jsonb("feature_quantities"),
+  discountCode: text("discount_code"),
+  notes: text("notes"), // Order notes/special instructions
+  customDiscountType: text("custom_discount_type").default("percent"),
+  customDiscountValue: real("custom_discount_value").default(0),
+  showCustomDiscount: boolean("show_custom_discount").default(false),
+  priceOverride: real("price_override"), // Manual price override for stock model
+  shipping: real("shipping").default(0),
+  tikkaOption: text("tikka_option"),
+  status: text("status").default("CANCELLED"),
+  barcode: text("barcode"), // Code 39 barcode for order identification
+  // Department Progression Fields at time of cancellation
+  currentDepartment: text("current_department"),
+  departmentHistory: jsonb("department_history").default('[]'),
+  scrappedQuantity: integer("scrapped_quantity").default(0),
+  totalProduced: integer("total_produced").default(0),
+  // Payment Information at time of cancellation
+  isPaid: boolean("is_paid").default(false),
+  paymentType: text("payment_type"),
+  paymentAmount: real("payment_amount"),
+  paymentDate: timestamp("payment_date"),
+  paymentTimestamp: timestamp("payment_timestamp"),
+  // Cancellation Information
+  cancelledAt: timestamp("cancelled_at").notNull(),
+  cancelReason: text("cancel_reason").notNull(),
+  cancelledBy: text("cancelled_by"), // User who cancelled the order
+  // Original Order Information
+  originalCreatedAt: timestamp("original_created_at"),
+  originalUpdatedAt: timestamp("original_updated_at"),
+  // Archive Information
+  archivedAt: timestamp("archived_at").defaultNow(),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -137,6 +292,7 @@ export const stockModels = pgTable("stock_models", {
   displayName: text("display_name").notNull(),
   price: real("price").notNull(),
   description: text("description"),
+  handedness: text("handedness"), // "LH", "RH", null for ambidextrous
   isActive: boolean("is_active").default(true),
   sortOrder: integer("sort_order").default(0),
   createdAt: timestamp("created_at").defaultNow(),
@@ -164,6 +320,7 @@ export const orderDrafts = pgTable("order_drafts", {
   customerPO: text("customer_po"),
   fbOrderNumber: text("fb_order_number"),
   agrOrderDetails: text("agr_order_details"),
+  isFlattop: boolean("is_flattop").default(false),
   isCustomOrder: text("is_custom_order"), // "yes", "no", or null
   modelId: text("model_id"),
   handedness: text("handedness"),
@@ -220,6 +377,23 @@ export const orderDrafts = pgTable("order_drafts", {
   notificationSentAt: timestamp("notification_sent_at"),
   deliveryConfirmed: boolean("delivery_confirmed").default(false),
   deliveryConfirmedAt: timestamp("delivery_confirmed_at"),
+  // Verification Information
+  isVerified: boolean("is_verified").default(false),
+  // Date Tracking Information  
+  isManualDueDate: boolean("is_manual_due_date").default(false),
+  isManualOrderDate: boolean("is_manual_order_date").default(false),
+  // Alt Ship To Address Information
+  hasAltShipTo: boolean("has_alt_ship_to").default(false),
+  altShipToCustomerId: text("alt_ship_to_customer_id"), // Reference to existing customer
+  altShipToName: text("alt_ship_to_name"), // Manual entry name
+  altShipToCompany: text("alt_ship_to_company"), // Manual entry company
+  altShipToEmail: text("alt_ship_to_email"), // Manual entry email
+  altShipToPhone: text("alt_ship_to_phone"), // Manual entry phone
+  altShipToAddress: jsonb("alt_ship_to_address"), // Manual entry address object
+  // Special Shipping Instructions
+  specialShippingInternational: boolean("special_shipping_international").default(false),
+  specialShippingNextDayAir: boolean("special_shipping_next_day_air").default(false),
+  specialShippingBillToReceiver: boolean("special_shipping_bill_to_receiver").default(false),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -234,6 +408,70 @@ export const payments = pgTable("payments", {
   notes: text("notes"), // Optional notes for the payment
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Credit card transactions table for payment gateway integration (Authorize.Net and Accept.blue)
+export const creditCardTransactions = pgTable("credit_card_transactions", {
+  id: serial("id").primaryKey(),
+  paymentId: integer("payment_id").references(() => payments.id).notNull(),
+  orderId: text("order_id").notNull(),
+  transactionId: text("transaction_id").notNull().unique(), // Gateway transaction ID
+  gateway: text("gateway").notNull().default("authorize_net"), // authorize_net, accept_blue
+  authCode: text("auth_code"), // Authorization code
+  responseCode: text("response_code"), // Gateway response code
+  responseReasonCode: text("response_reason_code"), // Detailed reason code
+  responseReasonText: text("response_reason_text"), // Human readable response
+  avsResult: text("avs_result"), // Address Verification Service result
+  cvvResult: text("cvv_result"), // Card Verification Value result
+  cardType: text("card_type"), // Visa, MasterCard, etc.
+  lastFourDigits: text("last_four_digits"), // Last 4 digits of card number
+  amount: real("amount").notNull(),
+  taxAmount: real("tax_amount").default(0),
+  shippingAmount: real("shipping_amount").default(0),
+  customerEmail: text("customer_email"),
+  billingFirstName: text("billing_first_name"),
+  billingLastName: text("billing_last_name"),
+  billingAddress: text("billing_address"),
+  billingCity: text("billing_city"),
+  billingState: text("billing_state"),
+  billingZip: text("billing_zip"),
+  billingCountry: text("billing_country").default("US"),
+  isTest: boolean("is_test").default(false), // Track if this was a test transaction
+  rawResponse: jsonb("raw_response"), // Store full gateway response for debugging
+  status: text("status").default("pending"), // pending, completed, failed, refunded, voided
+  refundedAmount: real("refunded_amount").default(0),
+  voidedAt: timestamp("voided_at"),
+  refundedAt: timestamp("refunded_at"),
+  processedAt: timestamp("processed_at").defaultNow(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Refund requests table for two-tiered refund system
+export const refundRequests = pgTable("refund_requests", {
+  id: serial("id").primaryKey(),
+  orderId: text("order_id").notNull(), // Reference to order
+  refundType: text("refund_type"), // ORDER_TIME or POST_DELIVERY
+  amount: real("amount"), // Alternative amount field
+  reason: text("reason").notNull(), // Free-form reason for refund
+  notes: text("notes"), // Additional notes
+  status: text("status").default("PENDING").notNull(), // PENDING, APPROVED, REJECTED, PROCESSED
+  requestedBy: text("requested_by").notNull(), // CSR username who requested refund
+  requestedAt: timestamp("requested_at").defaultNow(), // When request was made
+  approvedBy: text("approved_by"), // Manager username who approved/rejected
+  approvedAt: timestamp("approved_at"), // When approved/rejected
+  processedBy: text("processed_by"), // Who processed the refund
+  processedAt: timestamp("processed_at"), // When refund was processed
+  transactionId: text("transaction_id"), // Transaction ID
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+  customerId: text("customer_id"), // Reference to customer (nullable for compatibility)
+  refundAmount: real("refund_amount"), // Amount to be refunded
+  rejectionReason: text("rejection_reason"), // Reason for rejection if applicable
+  gatewayTransactionId: text("gateway_transaction_id"), // Gateway refund transaction ID
+  gatewayRefundId: text("gateway_refund_id"), // Gateway refund reference
+  gateway: text("gateway").default("authorize_net"), // authorize_net, accept_blue
+  originalTransactionId: text("original_transaction_id"), // Original transaction being refunded
 });
 
 export const forms = pgTable("forms", {
@@ -388,9 +626,9 @@ export const evaluations = pgTable("evaluations", {
 // User Sessions for Authentication
 export const userSessions = pgTable("user_sessions", {
   id: serial("id").primaryKey(),
-  userId: integer("user_id").references(() => users.id).notNull(),
+  userId: integer("user_id").notNull(),
   sessionToken: text("session_token").notNull().unique(),
-  employeeId: integer("employee_id").references(() => employees.id),
+  employeeId: integer("employee_id"),
   userType: text("user_type").notNull(), // ADMIN, EMPLOYEE, MANAGER
   expiresAt: timestamp("expires_at").notNull(),
   ipAddress: text("ip_address"),
@@ -524,10 +762,11 @@ export const insertUserSchema = createInsertSchema(users).omit({
   lastLoginAt: true,
   passwordChangedAt: true,
   failedLoginAttempts: true,
+  accountLockedUntil: true,
   lockedUntil: true,
 }).extend({
   username: z.string().min(3, "Username must be at least 3 characters"),
-  password: z.string().min(8, "Password must be at least 8 characters"),
+  password: z.string().min(4, "Password must be at least 4 characters"),
   role: z.enum(['ADMIN', 'HR', 'MANAGER', 'EMPLOYEE']).default('EMPLOYEE'),
   employeeId: z.number().optional().nullable(),
   isActive: z.boolean().default(true),
@@ -588,6 +827,19 @@ export const insertShortTermSaleSchema = z.object({
   startDate: z.coerce.date(),
   endDate: z.coerce.date(),
   isActive: z.number().default(1),
+});
+
+export const insertCancelledOrderSchema = createInsertSchema(cancelledOrders).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  archivedAt: true,
+}).extend({
+  orderId: z.string().min(1, "Order ID is required"),
+  orderDate: z.coerce.date(),
+  dueDate: z.coerce.date(),
+  cancelledAt: z.coerce.date(),
+  cancelReason: z.string().min(1, "Cancellation reason is required"),
 });
 
 export const insertFeatureCategorySchema = createInsertSchema(featureCategories).omit({
@@ -681,6 +933,39 @@ export const insertOrderDraftSchema = createInsertSchema(orderDrafts).omit({
   paymentAmount: z.number().min(0).optional().nullable(),
   paymentDate: z.coerce.date().optional().nullable(),
   paymentTimestamp: z.coerce.date().optional().nullable(),
+  // Verification field
+  isVerified: z.boolean().default(false),
+});
+
+export const insertAllOrderSchema = createInsertSchema(allOrders).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  orderId: z.string().min(1, "Order ID is required"),
+  orderDate: z.coerce.date(),
+  dueDate: z.coerce.date(),
+  customerId: z.string().optional().nullable(),
+  customerPO: z.string().optional().nullable(),
+  fbOrderNumber: z.string().optional().nullable(),
+  agrOrderDetails: z.string().optional().nullable(),
+  isCustomOrder: z.enum(['yes', 'no']).optional().nullable(),
+  modelId: z.string().optional().nullable(),
+  handedness: z.string().optional().nullable(),
+  features: z.record(z.any()).optional().nullable(),
+  featureQuantities: z.record(z.any()).optional().nullable(),
+  discountCode: z.string().optional().nullable(),
+  shipping: z.number().min(0).default(0),
+  tikkaOption: z.string().optional().nullable(),
+  status: z.string().default("FINALIZED"),
+  // Payment fields
+  isPaid: z.boolean().default(false),
+  paymentType: z.string().optional().nullable(),
+  paymentAmount: z.number().min(0).optional().nullable(),
+  paymentDate: z.coerce.date().optional().nullable(),
+  paymentTimestamp: z.coerce.date().optional().nullable(),
+  // Verification field
+  isVerified: z.boolean().default(false),
 });
 
 export const insertPaymentSchema = createInsertSchema(payments).omit({
@@ -689,10 +974,30 @@ export const insertPaymentSchema = createInsertSchema(payments).omit({
   updatedAt: true,
 }).extend({
   orderId: z.string().min(1, "Order ID is required"),
-  paymentType: z.enum(['credit_card', 'agr', 'check', 'cash', 'ach']),
+  paymentType: z.enum(['credit_card', 'agr', 'check', 'cash', 'ach', 'aaaa']),
   paymentAmount: z.number().min(0.01, "Payment amount must be greater than 0"),
   paymentDate: z.coerce.date(),
   notes: z.string().optional().nullable(),
+});
+
+export const insertCreditCardTransactionSchema = createInsertSchema(creditCardTransactions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  processedAt: true,
+}).extend({
+  paymentId: z.number().min(1, "Payment ID is required"),
+  orderId: z.string().min(1, "Order ID is required"),
+  transactionId: z.string().min(1, "Transaction ID is required"),
+  responseCode: z.string().min(1, "Response code is required"),
+  amount: z.number().min(0.01, "Amount must be greater than 0"),
+  customerEmail: z.string().email().optional().nullable(),
+  billingFirstName: z.string().min(1, "First name is required"),
+  billingLastName: z.string().min(1, "Last name is required"),
+  billingAddress: z.string().min(1, "Address is required"),
+  billingCity: z.string().min(1, "City is required"),
+  billingState: z.string().min(1, "State is required"),
+  billingZip: z.string().min(1, "ZIP code is required"),
 });
 
 export const insertFormSchema = createInsertSchema(forms).omit({
@@ -1019,6 +1324,10 @@ export type InsertStockModel = z.infer<typeof insertStockModelSchema>;
 export type StockModel = typeof stockModels.$inferSelect;
 export type InsertOrderDraft = z.infer<typeof insertOrderDraftSchema>;
 export type OrderDraft = typeof orderDrafts.$inferSelect;
+export type InsertAllOrder = z.infer<typeof insertAllOrderSchema>;
+export type AllOrder = typeof allOrders.$inferSelect;
+export type InsertCancelledOrder = z.infer<typeof insertCancelledOrderSchema>;
+export type CancelledOrder = typeof cancelledOrders.$inferSelect;
 export type InsertForm = z.infer<typeof insertFormSchema>;
 export type Form = typeof forms.$inferSelect;
 export type InsertFormSubmission = z.infer<typeof insertFormSubmissionSchema>;
@@ -1145,7 +1454,7 @@ export const employeeLayupSettings = pgTable("employee_layup_settings", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-export const layupOrders = pgTable("layup_orders", {
+export const productionQueue = pgTable("production_queue", {
   id: serial("id").primaryKey(),
   orderId: text("order_id").notNull().unique(),
   orderDate: timestamp("order_date").notNull(),
@@ -1169,8 +1478,9 @@ export const layupOrders = pgTable("layup_orders", {
 
 export const layupSchedule = pgTable("layup_schedule", {
   id: serial("id").primaryKey(),
-  orderId: text("order_id").references(() => layupOrders.orderId).notNull(),
+  orderId: text("order_id").references(() => productionQueue.orderId).notNull(),
   scheduledDate: timestamp("scheduled_date").notNull(),
+  layupDay: date("layup_day").notNull(), // Dedicated DATE column for business day
   moldId: text("mold_id").references(() => molds.moldId).notNull(),
   employeeAssignments: jsonb("employee_assignments").notNull().default('[]'), // Array of {employeeId, workload}
   isOverride: boolean("is_override").default(false), // Manual override flag
@@ -1178,7 +1488,10 @@ export const layupSchedule = pgTable("layup_schedule", {
   overriddenBy: text("overridden_by"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-});
+}, (table) => ({
+  // Unique constraint: exactly one order per mold per day
+  uniqueMoldPerDay: uniqueIndex("ux_layup_mold_day").on(table.layupDay, table.moldId),
+}));
 
 // Insert schemas for Layup Scheduler
 export const insertMoldSchema = createInsertSchema(molds).omit({
@@ -1206,7 +1519,7 @@ export const insertEmployeeLayupSettingsSchema = createInsertSchema(employeeLayu
   isActive: z.boolean().default(true),
 });
 
-export const insertLayupOrderSchema = createInsertSchema(layupOrders).omit({
+export const insertProductionQueueSchema = createInsertSchema(productionQueue).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
@@ -1236,6 +1549,7 @@ export const insertLayupScheduleSchema = createInsertSchema(layupSchedule).omit(
 }).extend({
   orderId: z.string().min(1, "Order ID is required"),
   scheduledDate: z.coerce.date(),
+  layupDay: z.coerce.date(), // Dedicated DATE field for business day constraint
   moldId: z.string().min(1, "Mold ID is required"),
   employeeAssignments: z.array(z.object({
     employeeId: z.string(),
@@ -1250,30 +1564,32 @@ export type InsertMold = z.infer<typeof insertMoldSchema>;
 export type Mold = typeof molds.$inferSelect;
 export type InsertEmployeeLayupSettings = z.infer<typeof insertEmployeeLayupSettingsSchema>;
 export type EmployeeLayupSettings = typeof employeeLayupSettings.$inferSelect;
-export type InsertLayupOrder = z.infer<typeof insertLayupOrderSchema>;
-export type LayupOrder = typeof layupOrders.$inferSelect;
+export type InsertProductionQueue = z.infer<typeof insertProductionQueueSchema>;
+export type ProductionQueue = typeof productionQueue.$inferSelect;
 export type InsertLayupSchedule = z.infer<typeof insertLayupScheduleSchema>;
 export type LayupSchedule = typeof layupSchedule.$inferSelect;
 
 // Module 8: API Integrations & Communications
-export const customers = pgTable("customers", {
-  id: serial("id").primaryKey(),
-  name: text("name").notNull(),
-  email: text("email"),
-  phone: text("phone"),
-  company: text("company"),
-  customerType: text("customer_type").default("standard"),
-  preferredCommunicationMethod: json("preferred_communication_method"), // Array of strings: ["email", "sms"]
-  notes: text("notes"),
-  isActive: boolean("is_active").default(true),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+export const customers = pgTable('customers', {
+  id: serial('id').primaryKey(),
+  name: text('name').notNull(),
+  email: text('email'),
+  phone: text('phone'),
+  company: text('company'),
+  contact: text('contact'),
+  customerType: text('customer_type').default('standard'),
+  preferredCommunicationMethod: json('preferred_communication_method'), // Array of strings: ["email", "sms"]
+  notes: text('notes'),
+  isActive: boolean('is_active').default(true),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
 
 export const customerAddresses = pgTable("customer_addresses", {
   id: serial("id").primaryKey(),
   customerId: text("customer_id").notNull(),
   street: text("street").notNull(),
+  street2: text("street2"), // Suite, Apt, Unit number
   city: text("city").notNull(),
   state: text("state").notNull(),
   zipCode: text("zip_code").notNull(),
@@ -1287,18 +1603,42 @@ export const customerAddresses = pgTable("customer_addresses", {
 
 export const communicationLogs = pgTable("communication_logs", {
   id: serial("id").primaryKey(),
-  orderId: text("order_id").notNull(),
+  orderId: text("order_id"), // Made nullable for general communications
   customerId: text("customer_id").notNull(),
   type: text("type").notNull(), // order-confirmation, shipping-notification, quality-alert
   method: text("method").notNull(), // email, sms
   recipient: text("recipient").notNull(), // email address or phone number
+  sender: text("sender"), // sender email/phone for inbound messages
   subject: text("subject"),
   message: text("message"),
-  status: text("status").notNull().default("pending"), // pending, sent, failed
+  status: text("status").notNull().default("pending"), // pending, sent, failed, received
   error: text("error"),
+  direction: text("direction").default("outbound"), // inbound, outbound
+  externalId: text("external_id"), // External message ID from Twilio/SendGrid
+  isRead: boolean("is_read").default(false), // Whether message has been read
   sentAt: timestamp("sent_at"),
+  receivedAt: timestamp("received_at"), // For inbound messages
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
+
+// New table for customer communications to record both incoming and outgoing messages
+export const customerCommunications = pgTable("customer_communications", {
+  id: serial("id").primaryKey(),
+  customerId: text("customer_id").notNull(),
+  communicationLogId: integer("communication_log_id").references(() => communicationLogs.id), // Link to the actual log entry
+  threadId: text("thread_id"), // For grouping related messages
+  direction: text("direction").notNull(), // 'inbound' or 'outbound'
+  type: text("type").notNull(), // e.g., 'inquiry', 'response', 'support-ticket', 'feedback'
+  subject: text("subject"),
+  message: text("message").notNull(),
+  priority: text("priority").default("normal").notNull(), // 'low', 'normal', 'high', 'urgent'
+  assignedTo: text("assigned_to"), // User responsible for handling the communication
+  status: text("status").default("open").notNull(), // 'open', 'in-progress', 'resolved', 'closed'
+  externalId: text("external_id"), // ID from external communication system (e.g., email thread ID)
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
 
 export const pdfDocuments = pgTable("pdf_documents", {
   id: serial("id").primaryKey(),
@@ -1372,14 +1712,17 @@ export const insertCommunicationLogSchema = createInsertSchema(communicationLogs
   id: true,
   createdAt: true,
 }).extend({
-  orderId: z.string().min(1, "Order ID is required"),
+  orderId: z.string().optional(),
   customerId: z.string().min(1, "Customer ID is required"),
-  type: z.enum(['order-confirmation', 'shipping-notification', 'quality-alert']),
+  type: z.enum(['order-confirmation', 'shipping-notification', 'quality-alert', 'customer-inquiry', 'customer-response', 'general']),
   method: z.enum(['email', 'sms']),
+  direction: z.enum(['inbound', 'outbound']),
   recipient: z.string().min(1, "Recipient is required"),
+  sender: z.string().optional(),
   subject: z.string().optional(),
-  message: z.string().optional(),
-  status: z.enum(['pending', 'sent', 'failed']).default('pending'),
+  message: z.string().min(1, "Message is required"),
+  status: z.enum(['pending', 'sent', 'failed', 'received']).default('pending'),
+  externalId: z.string().optional(),
 });
 
 export const insertPdfDocumentSchema = createInsertSchema(pdfDocuments).omit({
@@ -1394,6 +1737,47 @@ export const insertPdfDocumentSchema = createInsertSchema(pdfDocuments).omit({
   path: z.string().min(1, "Path is required"),
 });
 
+// Nonconformance Tracking - Module 17
+export const nonconformanceRecords = pgTable("nonconformance_records", {
+  id: serial("id").primaryKey(),
+  orderId: text("order_id"),
+  serialNumber: text("serial_number"),
+  customerName: text("customer_name"),
+  poNumber: text("po_number"),
+  stockModel: text("stock_model"),
+  quantity: integer("quantity").default(1),
+  issueCause: text("issue_cause").notNull(),
+  manufacturerDefect: boolean("manufacturer_defect").default(false),
+  disposition: text("disposition").notNull(),
+  authorization: text("auth_person").notNull(),
+  dispositionDate: date("disposition_date").notNull(),
+  notes: text("notes"),
+  status: text("status").default("Open"), // Open, Resolved
+  resolvedAt: timestamp("resolved_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertNonconformanceRecordSchema = createInsertSchema(nonconformanceRecords).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  orderId: z.string().optional(),
+  serialNumber: z.string().optional(),
+  customerName: z.string().optional(),
+  poNumber: z.string().optional(),
+  stockModel: z.string().optional(),
+  quantity: z.number().min(1).default(1),
+  issueCause: z.string().min(1, "Issue cause is required"),
+  manufacturerDefect: z.boolean().default(false),
+  disposition: z.string().min(1, "Disposition is required"),
+  authorization: z.string().min(1, "Authorization is required"),
+  dispositionDate: z.string().min(1, "Disposition date is required"),
+  notes: z.string().optional(),
+  status: z.enum(['Open', 'Resolved']).default('Open'),
+});
+
 // Types for Module 8
 export type InsertCustomer = z.infer<typeof insertCustomerSchema>;
 export type Customer = typeof customers.$inferSelect;
@@ -1401,6 +1785,10 @@ export type InsertCustomerAddress = z.infer<typeof insertCustomerAddressSchema>;
 export type CustomerAddress = typeof customerAddresses.$inferSelect;
 export type InsertCommunicationLog = z.infer<typeof insertCommunicationLogSchema>;
 export type CommunicationLog = typeof communicationLogs.$inferSelect;
+
+// Types for Module 17 - Nonconformance
+export type InsertNonconformanceRecord = z.infer<typeof insertNonconformanceRecordSchema>;
+export type NonconformanceRecord = typeof nonconformanceRecords.$inferSelect;
 export type InsertPdfDocument = z.infer<typeof insertPdfDocumentSchema>;
 export type PdfDocument = typeof pdfDocuments.$inferSelect;
 
@@ -1418,11 +1806,12 @@ export const enhancedForms = pgTable('enhanced_forms', {
   name: text('name').notNull(),
   description: text('description'),
   categoryId: integer('category_id').references(() => enhancedFormCategories.id),
-  tableName: text('table_name'),
-  layout: jsonb('layout').notNull(),
-  version: integer('version').default(1),
+  schemaConfig: jsonb('schema_config').notNull(),
   createdAt: timestamp('created_at').defaultNow(),
-  updatedAt: timestamp('updated_at').defaultNow()
+  updatedAt: timestamp('updated_at').defaultNow(),
+  tableName: text('table_name'),
+  layout: jsonb('layout'),
+  version: integer('version').default(1)
 });
 
 export const enhancedFormVersions = pgTable('enhanced_form_versions', {
@@ -1448,6 +1837,7 @@ export const purchaseOrders = pgTable('purchase_orders', {
   poNumber: text('po_number').notNull().unique(),
   customerId: text('customer_id').notNull(),
   customerName: text('customer_name').notNull(), // Denormalized for performance
+  itemType: text('item_type').notNull().default('single'), // single, multiple
   poDate: date('po_date').notNull(),
   expectedDelivery: date('expected_delivery').notNull(),
   status: text('status').notNull().default('OPEN'), // OPEN, CLOSED, CANCELED
@@ -1469,7 +1859,7 @@ export const purchaseOrderItems = pgTable('purchase_order_items', {
   notes: text('notes'),
   orderCount: integer('order_count').default(0), // Number of orders generated from this item
   createdAt: timestamp('created_at').defaultNow(),
-  updatedAt: timestamp('updated_at').defaultNow()
+  updatedAt: timestamp('updated_at').defaultNow(),
 });
 
 // P2 Customer Management - separate customer database for P2 operations
@@ -1514,7 +1904,7 @@ export const p2PurchaseOrderItems = pgTable('p2_purchase_order_items', {
   specifications: text('specifications'), // Part specifications
   notes: text('notes'),
   createdAt: timestamp('created_at').defaultNow(),
-  updatedAt: timestamp('updated_at').defaultNow()
+  updatedAt: timestamp('updated_at').defaultNow(),
 });
 
 // Production Orders - separate from regular orders for PO tracking
@@ -1526,7 +1916,7 @@ export const productionOrders = pgTable('production_orders', {
   customerId: text('customer_id').notNull(),
   customerName: text('customer_name').notNull(),
   poNumber: text('po_number').notNull(),
-  itemType: text('item_type').notNull(), // 'stock_model', 'custom_model', 'feature_item'
+  itemType: text('item_type').notNull(),
   itemId: text('item_id').notNull(),
   itemName: text('item_name').notNull(),
   specifications: jsonb('specifications'), // Product specifications
@@ -1538,7 +1928,7 @@ export const productionOrders = pgTable('production_orders', {
   shippedAt: timestamp('shipped_at'),
   notes: text('notes'),
   createdAt: timestamp('created_at').defaultNow(),
-  updatedAt: timestamp('updated_at').defaultNow()
+  updatedAt: timestamp('updated_at').defaultNow(),
 });
 
 // Enhanced Form Insert Schemas
@@ -1560,7 +1950,8 @@ export const insertEnhancedFormSchema = createInsertSchema(enhancedForms).omit({
   description: z.string().optional(),
   categoryId: z.number().optional(),
   tableName: z.string().optional(),
-  layout: z.any(),
+  schemaConfig: z.any().optional(),
+  layout: z.any().optional(),
   version: z.number().default(1),
 });
 
@@ -1592,6 +1983,7 @@ export const insertPurchaseOrderSchema = createInsertSchema(purchaseOrders).omit
   poNumber: z.string().min(1, "PO Number is required"),
   customerId: z.string().min(1, "Customer ID is required"),
   customerName: z.string().min(1, "Customer Name is required"),
+  itemType: z.enum(['single', 'multiple']).default('single'),
   poDate: z.coerce.date(),
   expectedDelivery: z.coerce.date(),
   status: z.enum(['OPEN', 'CLOSED', 'CANCELED']).default('OPEN'),
@@ -1861,12 +2253,12 @@ export const taskItems = pgTable('task_items', {
   category: text('category'), // Optional category/project grouping
   priority: text('priority').default('Medium').notNull(), // Low, Medium, High, Critical
   dueDate: timestamp('due_date'),
-  
+
   // Status checkboxes
   gjStatus: boolean('gj_status').default(false).notNull(), // GJ checkbox
   tmStatus: boolean('tm_status').default(false).notNull(), // TM checkbox
   finishedStatus: boolean('finished_status').default(false).notNull(), // Finished checkbox
-  
+
   // Tracking fields
   assignedTo: text('assigned_to'), // Who is responsible
   createdBy: text('created_by').notNull(), // Who created the task
@@ -1876,7 +2268,7 @@ export const taskItems = pgTable('task_items', {
   tmCompletedAt: timestamp('tm_completed_at'), // When TM was checked
   finishedCompletedBy: text('finished_completed_by'), // Who marked as finished
   finishedCompletedAt: timestamp('finished_completed_at'), // When marked as finished
-  
+
   notes: text('notes'), // Additional notes/comments
   isActive: boolean('is_active').default(true).notNull(), // For soft delete
   createdAt: timestamp('created_at').defaultNow().notNull(),
@@ -1928,7 +2320,7 @@ export const insertKickbackSchema = createInsertSchema(kickbacks).omit({
   updatedAt: true,
 }).extend({
   orderId: z.string().min(1, "Order ID is required"),
-  kickbackDept: z.enum(['Layup', 'Plugging', 'CNC', 'Finish', 'Gunsmith', 'Paint', 'QC', 'Shipping']),
+  kickbackDept: z.enum(['CNC', 'Finish', 'Gunsmith', 'Paint']),
   reasonCode: z.enum(['MATERIAL_DEFECT', 'OPERATOR_ERROR', 'MACHINE_FAILURE', 'DESIGN_ISSUE', 'QUALITY_ISSUE', 'PROCESS_ISSUE', 'SUPPLIER_ISSUE', 'OTHER']),
   reasonText: z.string().optional().nullable(),
   kickbackDate: z.coerce.date(),
@@ -2057,3 +2449,198 @@ export type DocumentCollection = typeof documentCollections.$inferSelect;
 
 export type InsertPayment = z.infer<typeof insertPaymentSchema>;
 export type Payment = typeof payments.$inferSelect;
+
+// New validation schema for Customer Communications
+export const insertCustomerCommunicationSchema = createInsertSchema(customerCommunications).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  customerId: z.string().min(1, "Customer ID is required"),
+  communicationLogId: z.number().optional(),
+  threadId: z.string().optional(),
+  priority: z.enum(['low', 'normal', 'high', 'urgent']).default('normal'),
+  assignedTo: z.string().optional(),
+  // Include fields from communicationLogs that might be relevant here, if needed
+  // This depends on how customerCommunications is intended to be used alongside communicationLogs
+  // For now, assuming it augments communicationLogs with customer-specific context
+});
+
+export const orderAttachmentsRelations = relations(orderAttachments, ({ one }) => ({
+  order: one(orderDrafts, { fields: [orderAttachments.orderId], references: [orderDrafts.orderId] })
+}));
+
+// Gateway Reports temporarily removed for deployment - will be re-added later
+
+// Customer Satisfaction Survey tables
+export const customerSatisfactionSurveys = pgTable("customer_satisfaction_surveys", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  description: text("description"),
+  isActive: boolean("is_active").default(true),
+  // Survey questions stored as JSON
+  questions: jsonb("questions").notNull().default('[]'),
+  // Survey configuration settings
+  settings: jsonb("settings").default('{}'),
+  createdBy: integer("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const customerSatisfactionResponses = pgTable("customer_satisfaction_responses", {
+  id: serial("id").primaryKey(),
+  surveyId: integer("survey_id").references(() => customerSatisfactionSurveys.id).notNull(),
+  customerId: integer("customer_id").references(() => customers.id).notNull(),
+  orderId: text("order_id"), // Optional - link to specific order
+  // Survey responses stored as JSON
+  responses: jsonb("responses").notNull().default('{}'),
+  // Calculated scores
+  overallSatisfaction: integer("overall_satisfaction"), // 1-5 scale
+  npsScore: integer("nps_score"), // 0-10 scale for Net Promoter Score
+  // Additional metadata
+  responseTimeSeconds: integer("response_time_seconds"), // Time to complete survey
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  csrName: text("csr_name"), // Customer Service Representative name
+  // Status tracking
+  isComplete: boolean("is_complete").default(false),
+  submittedAt: timestamp("submitted_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Insert schemas for Customer Satisfaction
+export const insertCustomerSatisfactionSurveySchema = createInsertSchema(customerSatisfactionSurveys).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  title: z.string().min(1, "Survey title is required"),
+  description: z.string().optional().nullable(),
+  isActive: z.boolean().default(true),
+  questions: z.array(z.object({
+    id: z.string(),
+    type: z.enum(['rating', 'multiple_choice', 'text', 'textarea', 'yes_no', 'nps']),
+    question: z.string().min(1, "Question text is required"),
+    required: z.boolean().default(false),
+    options: z.array(z.string()).optional(), // For multiple choice questions
+    scale: z.object({
+      min: z.number(),
+      max: z.number(),
+      minLabel: z.string().optional(),
+      maxLabel: z.string().optional(),
+    }).optional(), // For rating questions
+  })).default([]),
+  settings: z.object({
+    allowAnonymous: z.boolean().default(false),
+    sendEmailReminders: z.boolean().default(true),
+    showProgressBar: z.boolean().default(true),
+    autoSave: z.boolean().default(true),
+  }).default({}),
+  createdBy: z.number().optional().nullable(),
+});
+
+export const insertCustomerSatisfactionResponseSchema = createInsertSchema(customerSatisfactionResponses).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  surveyId: z.number().min(1, "Survey ID is required"),
+  customerId: z.number().min(1, "Customer ID is required"),
+  orderId: z.string().optional().nullable(),
+  responses: z.record(z.any()).default({}), // Question ID to response mapping
+  overallSatisfaction: z.number().min(1).max(5).optional().nullable(),
+  npsScore: z.number().min(0).max(10).optional().nullable(),
+  responseTimeSeconds: z.number().optional().nullable(),
+  ipAddress: z.string().optional().nullable(),
+  userAgent: z.string().optional().nullable(),
+  csrName: z.string().optional().nullable(), // Customer Service Representative name
+  isComplete: z.boolean().default(false),
+  submittedAt: z.string().optional().nullable(), // ISO date string
+});
+
+// Types for Customer Satisfaction
+export type InsertCustomerSatisfactionSurvey = z.infer<typeof insertCustomerSatisfactionSurveySchema>;
+export type CustomerSatisfactionSurvey = typeof customerSatisfactionSurveys.$inferSelect;
+export type InsertCustomerSatisfactionResponse = z.infer<typeof insertCustomerSatisfactionResponseSchema>;
+export type CustomerSatisfactionResponse = typeof customerSatisfactionResponses.$inferSelect;
+
+// PO Products table for Purchase Order product configurations
+export const poProducts = pgTable("po_products", {
+  id: serial("id").primaryKey(),
+  customerName: text("customer_name").notNull(),
+  productName: text("product_name").notNull(),
+  productType: text("product_type"), // stock, AG-M5-SA, AG-M5-LA, etc.
+  material: text("material"), // carbon_fiber, fiberglass
+  handedness: text("handedness"), // right, left
+  stockModel: text("stock_model"),
+  actionLength: text("action_length"),
+  actionInlet: text("action_inlet"),
+  bottomMetal: text("bottom_metal"),
+  barrelInlet: text("barrel_inlet"),
+  qds: text("qds"), // none, 2_on_left, 2_on_right
+  swivelStuds: text("swivel_studs"), // none, 3_ah, 2_privateer
+  paintOptions: text("paint_options"),
+  texture: text("texture"), // none, grip_forend
+  flatTop: boolean("flat_top").default(false),
+  price: real("price"),
+  notes: text("notes"), // Optional notes field
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Insert schema for PO Products
+export const insertPOProductSchema = createInsertSchema(poProducts).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  customerName: z.string().min(1, "Customer name is required"),
+  productName: z.string().min(1, "Product name is required"),
+  material: z.string().optional().nullable(),
+  handedness: z.string().optional().nullable(),
+  stockModel: z.string().optional().nullable(),
+  actionLength: z.string().optional().nullable(),
+  actionInlet: z.string().optional().nullable(),
+  bottomMetal: z.string().optional().nullable(),
+  barrelInlet: z.string().optional().nullable(),
+  qds: z.string().optional().nullable(),
+  swivelStuds: z.string().optional().nullable(),
+  paintOptions: z.string().optional().nullable(),
+  texture: z.string().optional().nullable(),
+  flatTop: z.boolean().default(false),
+  price: z.number().min(0, "Price must be positive").optional().nullable(),
+  notes: z.string().optional().nullable(),
+  isActive: z.boolean().default(true),
+});
+
+// Types for PO Products
+export type InsertPOProduct = z.infer<typeof insertPOProductSchema>;
+export type POProduct = typeof poProducts.$inferSelect;
+
+// Insert schema for Refund Requests
+export const insertRefundRequestSchema = createInsertSchema(refundRequests).omit({
+  id: true,
+  status: true,
+  approvedBy: true,
+  approvedAt: true,
+  processedAt: true,
+  rejectionReason: true,
+  gatewayTransactionId: true,
+  gatewayRefundId: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  orderId: z.string().min(1, "Order ID is required"),
+  customerId: z.string().min(1, "Customer ID is required"),
+  requestedBy: z.string().min(1, "Requested by is required"),
+  refundAmount: z.number().min(0.01, "Refund amount must be greater than 0"),
+  reason: z.string().min(1, "Reason is required"),
+  originalTransactionId: z.string().optional().nullable(),
+  notes: z.string().optional().nullable(),
+});
+
+// Types for Refund Requests
+export type InsertRefundRequest = z.infer<typeof insertRefundRequestSchema>;
+export type RefundRequest = typeof refundRequests.$inferSelect;

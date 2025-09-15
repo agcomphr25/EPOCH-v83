@@ -3,39 +3,168 @@ import { z } from 'zod';
 import cookieParser from 'cookie-parser';
 import { AuthService } from '../../auth';
 import { authenticateToken, authenticatePortalToken } from '../../middleware/auth';
-import { loginSchema, changePasswordSchema, insertUserSchema } from '@shared/schema';
+import { loginSchema, changePasswordSchema, insertUserSchema } from '../../schema';
 
 const router = Router();
 
-// POST /api/auth/login
-router.post('/login', async (req: Request, res: Response) => {
+// GET /api/auth/test - Simple test endpoint
+router.get('/test', async (req: Request, res: Response) => {
   try {
-    const { username, password } = loginSchema.parse(req.body);
-    const ipAddress = req.ip || req.connection.remoteAddress || null;
-    const userAgent = req.get('User-Agent') || null;
-
-    const result = await AuthService.authenticate(username, password, ipAddress, userAgent);
-    
-    if (!result) {
-      return res.status(401).json({ error: "Invalid username or password" });
-    }
-
-    // Set secure cookie
-    res.cookie('sessionToken', result.sessionToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge: 8 * 60 * 60 * 1000, // 8 hours
-    });
-
     res.json({
       success: true,
-      user: result.user,
-      sessionToken: result.sessionToken
+      message: "Auth endpoint is working",
+      timestamp: new Date().toISOString(),
+      environment: process.env.NODE_ENV || 'unknown'
     });
   } catch (error) {
-    console.error('Login error:', error);
+    res.status(500).json({ error: "Test endpoint failed" });
+  }
+});
+
+// GET /api/auth/health - Database health check
+router.get('/health', async (req: Request, res: Response) => {
+  const healthTimeout = setTimeout(() => {
+    console.error('🚨 HEALTH CHECK TIMEOUT: Database health check took longer than 5 seconds');
+    if (!res.headersSent) {
+      res.status(408).json({ 
+        healthy: false, 
+        error: "Database health check timeout",
+        timestamp: new Date().toISOString()
+      });
+    }
+  }, 5000);
+
+  try {
+    const { testDatabaseConnection } = await import('../../db');
+    const isHealthy = await testDatabaseConnection();
+    
+    clearTimeout(healthTimeout);
+    res.json({
+      healthy: isHealthy,
+      database: isHealthy ? "connected" : "disconnected",
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Health check failed:', error);
+    clearTimeout(healthTimeout);
+    res.status(500).json({ 
+      healthy: false, 
+      error: "Health check failed",
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+// POST /api/auth/login (with aggressive timeout protection)
+router.post('/login', async (req: Request, res: Response) => {
+  // Add timeout wrapper around entire login process (longer for deployment)
+  const isDeployment = req.get('host')?.includes('.replit.app') || 
+                      req.get('host')?.includes('.repl.co') ||
+                      req.get('host')?.includes('agcompepoch.xyz');
+  const loginTimeoutDuration = isDeployment ? 30000 : 10000; // 30s for deployment, 10s for dev
+  
+  const loginTimeout = setTimeout(() => {
+    console.error(`🚨 LOGIN TIMEOUT: Login process took longer than ${loginTimeoutDuration}ms (deployment: ${isDeployment})`);
+    if (!res.headersSent) {
+      res.status(408).json({ error: "Login request timed out - possible database connectivity issues" });
+    }
+  }, loginTimeoutDuration);
+
+  try {
+    console.log('🔐 LOGIN START: Login attempt with username:', req.body?.username);
+    
+    // Basic validation first
+    if (!req.body || typeof req.body !== 'object') {
+      clearTimeout(loginTimeout);
+      return res.status(400).json({ error: "Invalid request body" });
+    }
+
+    if (!req.body.username || !req.body.password) {
+      clearTimeout(loginTimeout);
+      return res.status(400).json({ error: "Username and password are required" });
+    }
+
+    const username = String(req.body.username).trim();
+    const password = String(req.body.password);
+
+    if (!username || !password) {
+      clearTimeout(loginTimeout);
+      return res.status(400).json({ error: "Username and password cannot be empty" });
+    }
+
+    console.log('🔍 LOGIN STEP 1: Basic validation passed for user:', username);
+    
+    const ipAddress = req.ip || req.connection.remoteAddress || null;
+    const userAgent = req.get('User-Agent') || null;
+    
+    console.log('🔍 LOGIN STEP 2: About to call AuthService.authenticate...');
+    
+    try {
+      // Add timeout wrapper around authentication (longer for deployment)
+      const authTimeoutDuration = isDeployment ? 25000 : 8000; // 25s for deployment, 8s for dev
+      const authPromise = AuthService.authenticate(username, password, ipAddress, userAgent);
+      const authTimeoutPromise = new Promise<null>((_, reject) => {
+        setTimeout(() => reject(new Error('Authentication timeout')), authTimeoutDuration);
+      });
+
+      const result = await Promise.race([authPromise, authTimeoutPromise]) as { user: any; sessionToken: string } | null;
+      
+      console.log('🔍 LOGIN STEP 3: AuthService.authenticate completed');
+      
+      if (!result) {
+        console.log('❌ LOGIN FAILED: Authentication failed for user:', username);
+        clearTimeout(loginTimeout);
+        return res.status(401).json({ error: "Invalid username or password" });
+      }
+
+      console.log('✅ LOGIN STEP 4: Authentication successful for user:', username);
+      console.log('🔍 LOGIN STEP 5: About to set cookie and send response...');
+
+      // Set secure cookie with enhanced security
+      res.cookie('sessionToken', result.sessionToken, {
+        httpOnly: true,
+        secure: true, // Always use secure cookies
+        sameSite: 'strict',
+        maxAge: 8 * 60 * 60 * 1000, // 8 hours
+        path: '/', // Explicit path
+      });
+
+      console.log('🔍 LOGIN STEP 6: Cookie set, about to send JSON response...');
+
+      const responseData = {
+        success: true,
+        user: result.user,
+        sessionToken: result.sessionToken,
+        token: result.sessionToken // Use session token for client-side storage
+      };
+
+      console.log('✅ LOGIN COMPLETE: Sending successful response for user:', username);
+      clearTimeout(loginTimeout);
+      res.json(responseData);
+      
+    } catch (authError: any) {
+      console.error('💥 LOGIN ERROR: AuthService.authenticate error:', authError);
+      clearTimeout(loginTimeout);
+      
+      // Handle specific auth errors
+      if (authError instanceof Error) {
+        if (authError.message === 'Authentication timeout') {
+          return res.status(408).json({ error: "Authentication timed out - possible database issues" });
+        }
+        if (authError.message.includes('locked') || authError.message.includes('deactivated')) {
+          return res.status(401).json({ error: authError.message });
+        }
+        // For any other auth service errors, return a generic message
+        return res.status(401).json({ error: "Authentication failed" });
+      }
+      
+      return res.status(500).json({ error: "Authentication service error" });
+    }
+  } catch (error) {
+    console.error('💥 LOGIN OUTER ERROR:', error);
+    clearTimeout(loginTimeout);
     if (error instanceof Error) {
+      console.log('Error message:', error.message);
       return res.status(400).json({ error: error.message });
     }
     res.status(500).json({ error: "Login failed" });
@@ -59,61 +188,81 @@ router.post('/logout', authenticateToken, async (req: Request, res: Response) =>
   }
 });
 
-// GET /api/auth/session - Check current session (no auth required for manufacturing system)
+// GET /api/auth/session - Check current session (enhanced timeout handling)
 router.get('/session', async (req: Request, res: Response) => {
-  try {
-    // Try to get authenticated user first
-    const authHeader = req.headers['authorization'];
-    const bearerToken = authHeader && authHeader.split(' ')[1];
-    const cookieToken = req.cookies?.sessionToken;
-    const token = bearerToken || cookieToken;
+  // Timeout adjusted for deployment environments
+  const isDeployment = req.get('host')?.includes('.replit.app') || 
+                      req.get('host')?.includes('.repl.co') ||
+                      req.get('host')?.includes('agcompepoch.xyz');
+  const sessionTimeoutDuration = isDeployment ? 15000 : 3000; // 15s for deployment, 3s for dev
+  
+  const timeoutPromise = new Promise((_, reject) => {
+    setTimeout(() => reject(new Error('Session check timeout')), sessionTimeoutDuration);
+  });
 
-    if (token) {
-      try {
-        let user = null;
+  try {
+    await Promise.race([
+      (async () => {
+        console.log('Session check starting...');
         
-        // Try JWT authentication first
-        if (bearerToken) {
-          const jwtPayload = AuthService.verifyJWT(bearerToken);
-          if (jwtPayload) {
-            const dbUser = await AuthService.getUserById(jwtPayload.userId);
-            if (dbUser && dbUser.isActive) {
-              user = dbUser;
+        // Try to get authenticated user first
+        const authHeader = req.headers['authorization'];
+        const bearerToken = authHeader && authHeader.split(' ')[1];
+        const cookieToken = req.cookies?.sessionToken;
+        const token = bearerToken || cookieToken;
+
+        if (token) {
+          try {
+            let user = null;
+            
+            console.log('Attempting session-based auth...');
+            // Try session-based authentication first (session tokens from login)
+            user = await AuthService.getUserBySession(token);
+            
+            // Fallback to JWT authentication if session fails
+            if (!user && bearerToken) {
+              console.log('Session auth failed, trying JWT fallback...');
+              try {
+                const jwtPayload = AuthService.verifyJWT(bearerToken);
+                if (jwtPayload) {
+                  const dbUser = await AuthService.getUserById(jwtPayload.userId);
+                  if (dbUser && dbUser.isActive) {
+                    user = dbUser;
+                  }
+                }
+              } catch (jwtError) {
+                console.log('JWT verification failed:', jwtError);
+              }
             }
+
+            if (user) {
+              console.log('Session check successful for user:', user.username);
+              return res.json({
+                id: user.id,
+                username: user.username,
+                role: user.role,
+                employeeId: user.employeeId,
+                isActive: user.isActive,
+                canOverridePrices: user.canOverridePrices
+              });
+            }
+          } catch (authError) {
+            console.log('Authentication failed:', authError);
           }
         }
 
-        // Fallback to session-based authentication
-        if (!user && cookieToken) {
-          user = await AuthService.getUserBySession(cookieToken);
-        }
-
-        if (user) {
-          return res.json({
-            id: user.id,
-            username: user.username,
-            role: user.role,
-            employeeId: user.employeeId,
-            isActive: user.isActive,
-            canOverridePrices: user.canOverridePrices
-          });
-        }
-      } catch (authError) {
-        console.log('Authentication failed, returning anonymous user:', authError);
-      }
-    }
-
-    // Return anonymous user for manufacturing system access
-    res.json({
-      id: 0,
-      username: 'anonymous',
-      role: 'OPERATOR',
-      employeeId: null,
-      isActive: true,
-      canOverridePrices: false
-    });
+        console.log('No valid authentication found, returning 401');
+        // Return 401 for unauthenticated users in deployment
+        return res.status(401).json({ error: "Authentication required" });
+      })(),
+      timeoutPromise
+    ]);
   } catch (error) {
     console.error('Session check error:', error);
+    if (error instanceof Error && error.message === 'Session check timeout') {
+      console.error('Session validation timed out - this indicates database connectivity issues');
+      return res.status(408).json({ error: "Session validation timeout" });
+    }
     res.status(500).json({ error: "Session check failed" });
   }
 });

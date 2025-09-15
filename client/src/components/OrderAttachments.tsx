@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Upload, X, File, Image, FileText, Download, Trash2 } from 'lucide-react';
+import { Upload, X, File, Image, FileText, Download, Trash2, Eye } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
 
@@ -176,6 +176,12 @@ export function OrderAttachments({ orderId, readonly = false }: OrderAttachments
   };
 
   const handleDownload = (attachment: OrderAttachment) => {
+    // For download, we'll force download by adding a download parameter
+    window.open(`/api/order-attachments/download/${attachment.id}?download=true`, '_blank');
+  };
+
+  const handleView = (attachment: OrderAttachment) => {
+    // For viewing, open without download parameter to display inline
     window.open(`/api/order-attachments/download/${attachment.id}`, '_blank');
   };
 
@@ -280,10 +286,22 @@ export function OrderAttachments({ orderId, readonly = false }: OrderAttachments
                     </div>
                   </div>
                   <div className="flex items-center space-x-2">
+                    {/* Show View button for PDFs */}
+                    {attachment.mimeType === 'application/pdf' && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleView(attachment)}
+                        title="View PDF"
+                      >
+                        <Eye className="h-4 w-4" />
+                      </Button>
+                    )}
                     <Button
                       variant="ghost"
                       size="sm"
                       onClick={() => handleDownload(attachment)}
+                      title="Download file"
                     >
                       <Download className="h-4 w-4" />
                     </Button>
@@ -293,6 +311,7 @@ export function OrderAttachments({ orderId, readonly = false }: OrderAttachments
                         size="sm"
                         onClick={() => handleDelete(attachment.id)}
                         disabled={deleteMutation.isPending}
+                        title="Delete attachment"
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>

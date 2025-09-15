@@ -128,7 +128,6 @@ export function calculateDailyCapacity(
     return sum + emp.rate;
   }, 0);
   
-<<<<<<< HEAD
   // Calculate total mold capacity per day
   const totalMoldDailyCapacity = activeMolds.reduce((sum, mold) => {
     return sum + (mold.dailyCapacity ?? 1); // Default to 1 order per mold per day
@@ -146,17 +145,6 @@ export function calculateDailyCapacity(
   });
   
   return Math.floor(effectiveDailyCapacity);
-=======
-  console.log(`👥 DAILY CAPACITY CALCULATION:`, {
-    activeEmployees: activeEmployees.map(e => ({ id: e.employeeId, rate: e.rate })),
-    totalEmployeeDailyCapacity,
-    activeMolds: activeMolds.length
-  });
-  
-  // For now, use employee capacity as the limiting factor
-  // Molds are generally not the constraint in layup operations
-  return Math.floor(totalEmployeeDailyCapacity);
->>>>>>> origin/main
 }
 
 /**
@@ -288,7 +276,6 @@ export function generateScheduleAllocations(
           continue; // This day is at capacity
         }
         
-<<<<<<< HEAD
         // Find molds with remaining capacity for this day
         const availableMolds = compatibleMolds.filter(mold => {
           if (!mold.enabled) return false;
@@ -305,11 +292,6 @@ export function generateScheduleAllocations(
         
         // Find the best mold for this day (least used available mold)
         const bestMold = availableMolds
-=======
-        // Find the best mold for this day (least used compatible mold)
-        const bestMold = compatibleMolds
-          .filter(mold => mold.enabled)
->>>>>>> origin/main
           .sort((a, b) => {
             const usageA = moldDailyUsage.get(a.moldId)?.get(dateKey) || 0;
             const usageB = moldDailyUsage.get(b.moldId)?.get(dateKey) || 0;
@@ -331,7 +313,6 @@ export function generateScheduleAllocations(
         }
         
         if (bestMold) {
-<<<<<<< HEAD
           // Safety guard: Double-check capacity before final allocation
           const currentMoldUsage = moldDailyUsage.get(bestMold.moldId)?.get(dateKey) || 0;
           const moldCapacity = bestMold.dailyCapacity ?? 1;
@@ -341,8 +322,6 @@ export function generateScheduleAllocations(
             continue; // Skip to next date
           }
           
-=======
->>>>>>> origin/main
           // Allocate this order
           allocations.push({
             orderId: order.orderId,
@@ -355,13 +334,9 @@ export function generateScheduleAllocations(
           // Update tracking
           dailyAllocations.set(dateKey, currentDayAllocations + 1);
           const moldUsage = moldDailyUsage.get(bestMold.moldId)!;
-<<<<<<< HEAD
           moldUsage.set(dateKey, currentMoldUsage + 1);
           
           console.log(`✅ Allocated ${order.orderId} to mold ${bestMold.moldId} on ${dateKey} (${currentMoldUsage + 1}/${moldCapacity})`);
-=======
-          moldUsage.set(dateKey, (moldUsage.get(dateKey) || 0) + 1);
->>>>>>> origin/main
           
           allocated = true;
           break;
@@ -376,7 +351,6 @@ export function generateScheduleAllocations(
   
   console.log(`✅ Algorithm complete: ${allocations.length} orders allocated`);
   
-<<<<<<< HEAD
   // Post-generation validation: Check for capacity violations
   const capacityViolations: { moldId: string; date: string; usage: number; capacity: number }[] = [];
   
@@ -402,8 +376,6 @@ export function generateScheduleAllocations(
     console.log('✅ No capacity violations detected - all molds within limits');
   }
   
-=======
->>>>>>> origin/main
   return allocations.sort((a, b) => 
     new Date(a.scheduledDate).getTime() - new Date(b.scheduledDate).getTime()
   );

@@ -19,38 +19,111 @@ export default function LoginPage() {
 
   const loginMutation = useMutation({
     mutationFn: async (credentials: typeof formData) => {
-      const response = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(credentials),
-      });
+      console.log('🔐 Starting login attempt for:', credentials.username);
       
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Login failed');
+      // Ultra-aggressive timeout for deployment environments
+      const isDeployment = window.location.hostname.includes('.replit.app') || 
+                          window.location.hostname.includes('.repl.co') ||
+                          window.location.hostname.includes('agcompepoch.xyz');
+      
+      const timeoutDuration = isDeployment ? 30000 : 30000; // 30 seconds for deployment
+      console.log(`🌐 Login timeout set to ${timeoutDuration}ms (deployment: ${isDeployment})`);
+      
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => {
+        console.error('🚨 LOGIN TIMEOUT: Request cancelled after', timeoutDuration, 'ms');
+        controller.abort();
+      }, timeoutDuration);
+
+      try {
+        const response = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(credentials),
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeoutId);
+        console.log('✅ Login response received:', response.status);
+
+        if (!response.ok) {
+          const error = await response.json();
+          console.error('❌ Login failed:', error);
+          // Ensure error message is properly extracted
+          const errorMessage = error.error || error.message || 'Login failed';
+          throw new Error(errorMessage);
+        }
+        
+        const data = await response.json();
+        console.log('✅ Login successful for user:', data.user?.username);
+        console.log('🔍 Login response data:', data);
+        return data;
+      } catch (error: any) {
+        clearTimeout(timeoutId);
+        console.error('💥 Login error:', error);
+        
+        if (error.name === 'AbortError') {
+          throw new Error(isDeployment 
+            ? 'Login timed out after 30 seconds. There may be database connectivity issues on the deployed site.' 
+            : 'Login request timed out. Please try again.'
+          );
+        }
+        
+        throw error;
       }
-      
-      return response.json();
     },
     onSuccess: (data) => {
+      // Store both session token and JWT token
+      if (data.sessionToken) {
+        localStorage.setItem('sessionToken', data.sessionToken);
+      }
+      if (data.token) {
+        localStorage.setItem('jwtToken', data.token);
+      }
+      
       toast({
         title: "Login Successful",
-        description: `Welcome back, ${data.user?.name || 'User'}!`,
+        description: `Welcome back, ${data.user?.username || 'User'}!`,
       });
       
-      // Redirect based on role
+      // Determine redirect URL based on user role and username
+      let redirectUrl = '/';
+      
       if (data.user?.role === 'ADMIN' || data.user?.role === 'HR Manager') {
-        setLocation('/employee');
+        redirectUrl = '/employee';
       } else {
-        setLocation('/dashboard');
+        // All other users go to root dashboard
+        redirectUrl = '/';
       }
+      
+      console.log('🎯 About to redirect to:', redirectUrl);
+      
+      // Force page reload to trigger authentication re-check
+      setTimeout(() => {
+        console.log('🚀 EXECUTING REDIRECT NOW to:', redirectUrl);
+        window.location.href = redirectUrl;
+      }, 1000);
     },
     onError: (error: Error) => {
+      console.error('Login error:', error);
+      
+      // Enhanced error message handling with timeout detection
+      let errorMessage = error.message;
+      if (errorMessage === 'Account is deactivated') {
+        errorMessage = 'Your account has been deactivated. Please contact an administrator.';
+      } else if (errorMessage.includes('timeout') || errorMessage.includes('timed out')) {
+        errorMessage = 'Login is taking too long. There may be connectivity issues. Please try again.';
+      } else if (errorMessage.includes('fetch') || error.name === 'AbortError') {
+        errorMessage = 'Unable to connect to the server. Please check your internet connection and try again.';
+      } else if (!errorMessage || errorMessage === 'Failed to fetch') {
+        errorMessage = 'Login failed. Please check your credentials and try again.';
+      }
+      
       toast({
         title: "Login Failed",
-        description: error.message,
+        description: errorMessage,
         variant: "destructive",
       });
     },
@@ -95,17 +168,15 @@ export default function LoginPage() {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <Label htmlFor="username">Username</Label>
-                <Input
-                  id="username"
-                  type="text"
-                  value={formData.username}
-                  onChange={(e) => handleInputChange('username', e.target.value)}
-                  placeholder="Enter your username"
-                  autoComplete="username"
-                />
-              </div>
+              <Label htmlFor="username">Username</Label>
+              <Input
+                id="username"
+                type="text"
+                value={formData.username}
+                onChange={(e) => handleInputChange('username', e.target.value)}
+                placeholder="Enter your username"
+                autoComplete="username"
+              />
 
               <div>
                 <Label htmlFor="password">Password</Label>

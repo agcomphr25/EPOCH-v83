@@ -1,11 +1,11 @@
-import { 
+import {
   users, csvData, customerTypes, persistentDiscounts, shortTermSales, featureCategories, featureSubCategories, features, stockModels, orders, orderDrafts, payments, forms, formSubmissions,
   inventoryItems, inventoryScans, partsRequests, employees, qcDefinitions, qcSubmissions, maintenanceSchedules, maintenanceLogs,
   timeClockEntries, checklistItems, onboardingDocs, customers, customerAddresses, communicationLogs, pdfDocuments,
   enhancedFormCategories, enhancedForms, enhancedFormVersions, enhancedFormSubmissions,
   purchaseOrders, purchaseOrderItems, productionOrders,
   p2Customers, p2PurchaseOrders, p2PurchaseOrderItems, p2ProductionOrders,
-  molds, employeeLayupSettings, layupOrders, layupSchedule, bomDefinitions, bomItems, orderIdReservations, purchaseReviewChecklists, manufacturersCertificates,
+  molds, employeeLayupSettings, productionQueue, layupSchedule, bomDefinitions, bomItems, orderIdReservations, purchaseReviewChecklists, manufacturersCertificates,
   // Task tracker table
   taskItems,
   // Kickback tracking table
@@ -14,6 +14,16 @@ import {
   documents, documentTags, documentTagRelations, documentCollections, documentCollectionRelations,
   // New employee management tables
   certifications, employeeCertifications, evaluations, userSessions, employeeDocuments, employeeAuditLog,
+  // allOrders table as the finalized orders table
+  allOrders,
+  // Order attachments table
+  orderAttachments,
+  // Gateway reports table - temporarily removed
+  // PO Products table
+  poProducts,
+  // Refund requests table
+  refundRequests,
+  // Types
   type User, type InsertUser, type Order, type InsertOrder, type CSVData, type InsertCSVData,
   type CustomerType, type InsertCustomerType,
   type PersistentDiscount, type InsertPersistentDiscount,
@@ -23,6 +33,7 @@ import {
   type Feature, type InsertFeature,
   type StockModel, type InsertStockModel,
   type OrderDraft, type InsertOrderDraft,
+  type AllOrder, type InsertAllOrder, // Type for finalized orders
   type Form, type InsertForm,
   type FormSubmission, type InsertFormSubmission,
   type InventoryItem, type InsertInventoryItem,
@@ -37,7 +48,7 @@ import {
   type EmployeeDocument, type InsertEmployeeDocument,
   type EmployeeAuditLog, type InsertEmployeeAuditLog,
   type QcDefinition, type InsertQcDefinition,
-  type QcSubmission, type InsertQcSubmission,
+  type QcSubmission, InsertQcSubmission,
   type MaintenanceSchedule, type InsertMaintenanceSchedule,
   type MaintenanceLog, type InsertMaintenanceLog,
   type TimeClockEntry, type InsertTimeClockEntry,
@@ -60,7 +71,7 @@ import {
   type P2ProductionOrder, type InsertP2ProductionOrder,
   type Mold, type InsertMold,
   type EmployeeLayupSettings, type InsertEmployeeLayupSettings,
-  type LayupOrder, type InsertLayupOrder,
+  type ProductionQueue, type InsertProductionQueue,
   type LayupSchedule, type InsertLayupSchedule,
   type BomDefinition, type InsertBomDefinition,
   type BomItem, type InsertBomItem,
@@ -78,14 +89,19 @@ import {
   type Payment, type InsertPayment,
   // Order attachment types
   type OrderAttachment, type InsertOrderAttachment,
-  orderAttachments,
+  // Gateway reports types - temporarily removed
+  // PO Products types
+  type POProduct, type InsertPOProduct,
+  // Refund request types
+  type RefundRequest, type InsertRefundRequest,
+
 
 } from "./schema";
-import { allOrders } from "../schema";
 import { db } from "./db";
-import { eq, desc, and, or, ilike, isNull, sql, ne, like, lt, gt, gte, lte, getTableColumns } from "drizzle-orm";
+import { eq, desc, asc, and, or, ilike, isNull, sql, ne, like, lt, gt, gte, lte, inArray, getTableColumns, count, sum, max, notInArray } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import bcrypt from 'bcrypt';
+import axios from 'axios';
 import { generateP1OrderId, getCurrentYearMonthPrefix, parseOrderId, formatOrderId } from "./utils/orderIdGenerator";
 
 // modify the interface with any CRUD methods
@@ -101,12 +117,12 @@ export interface IStorage {
   updateUserPassword(id: number, passwordHash: string): Promise<void>;
   generatePortalToken(employeeId: number): Promise<string>;
   validatePortalToken(token: string): Promise<{ employeeId: number; isValid: boolean }>;
-  
+
   // Time clock methods for portal
   getTimeClockEntry(employeeId: string, date: string): Promise<TimeClockEntry | undefined>;
   clockIn(employeeId: string): Promise<TimeClockEntry>;
   clockOut(employeeId: string): Promise<TimeClockEntry>;
-  
+
   // Daily checklist methods for portal
   getDailyChecklist(employeeId: string, date: string): Promise<ChecklistItem[]>;
   updateDailyChecklist(employeeId: string, data: any): Promise<ChecklistItem[]>;
@@ -171,9 +187,21 @@ export interface IStorage {
   deleteOrderDraft(orderId: string): Promise<void>;
   getAllOrderDrafts(): Promise<OrderDraft[]>;
   getLastOrderId(): Promise<string>;
-  getAllOrders(): Promise<Order[]>;
-  getOrderById(orderId: string): Promise<OrderDraft | undefined>;
-  
+  getAllOrders(): Promise<AllOrder[]>;
+  getCancelledOrders(): Promise<AllOrder[]>; // Returns finalized orders from allOrders table
+  getAllOrdersWithPaymentStatus(): Promise<(AllOrder & { paymentTotal: number; isFullyPaid: boolean })[]>; // Returns finalized orders with payment status
+  getAllOrdersWithPaymentStatusPaginated(page: number, limit: number): Promise<{ 
+    orders: (AllOrder & { paymentTotal: number; isFullyPaid: boolean })[], 
+    total: number, 
+    page: number, 
+    limit: number, 
+    totalPages: number 
+  }>; // Returns paginated finalized orders with payment status
+  getUnpaidOrders(): Promise<any[]>; // Returns orders that need payment
+  getUnpaidOrdersByCustomer(customerId: string): Promise<any[]>; // Returns unpaid orders for specific customer
+  getOrderById(orderId: string): Promise<OrderDraft | AllOrder | null>; // Get order by ID, checking both drafts and finalized orders
+  getOrdersByIds(orderIds: string[]): Promise<Array<OrderDraft | AllOrder>>; // Get multiple orders by IDs
+
   // Order ID generation with atomic reservation system
   generateNextOrderId(): Promise<string>;
   markOrderIdAsUsed(orderId: string): Promise<void>;
@@ -198,9 +226,27 @@ export interface IStorage {
   createFormSubmission(data: InsertFormSubmission): Promise<FormSubmission>;
   deleteFormSubmission(id: number): Promise<void>;
 
+  // Enhanced Form Categories CRUD
+  getAllEnhancedFormCategories(): Promise<EnhancedFormCategory[]>;
+  getEnhancedFormCategory(id: number): Promise<EnhancedFormCategory | undefined>;
+  createEnhancedFormCategory(data: InsertEnhancedFormCategory): Promise<EnhancedFormCategory>;
+  updateEnhancedFormCategory(id: number, data: Partial<InsertEnhancedFormCategory>): Promise<EnhancedFormCategory>;
+  deleteEnhancedFormCategory(id: number): Promise<void>;
+
+  // Enhanced Forms CRUD
+  getAllEnhancedForms(): Promise<EnhancedForm[]>;
+  getEnhancedFormById(id: number): Promise<EnhancedForm | undefined>;
+  createEnhancedForm(data: InsertEnhancedForm): Promise<EnhancedForm>;
+  updateEnhancedForm(id: number, data: Partial<InsertEnhancedForm>): Promise<EnhancedForm>;
+  deleteEnhancedForm(id: number): Promise<void>;
+
+  // Enhanced Form Submissions CRUD
+  getFormSubmissions(formId: number): Promise<EnhancedFormSubmission[]>;
+
   // Inventory Items CRUD
   getAllInventoryItems(): Promise<InventoryItem[]>;
   getInventoryItem(id: number): Promise<InventoryItem | undefined>;
+  getInventoryItemByAgPartNumber(agPartNumber: string): Promise<InventoryItem | undefined>;
   getInventoryItemByCode(code: string): Promise<InventoryItem | undefined>;
   createInventoryItem(data: InsertInventoryItem): Promise<InventoryItem>;
   updateInventoryItem(id: number, data: Partial<InsertInventoryItem>): Promise<InventoryItem>;
@@ -221,6 +267,16 @@ export interface IStorage {
 
   // Outstanding Orders
   getOutstandingOrders(): Promise<OrderDraft[]>;
+
+  // Search Orders
+  searchOrders(query: string): Promise<{
+    id: string;
+    orderId: string | null;
+    serialNumber: string | null;
+    customerName: string | null;
+    poNumber: string | null;
+    stockModel: string | null;
+  }[]>;
 
   // Employees CRUD
   getAllEmployees(): Promise<Employee[]>;
@@ -311,6 +367,8 @@ export interface IStorage {
 
   // Time Clock CRUD
   getTimeClockStatus(employeeId: string): Promise<{ status: 'IN' | 'OUT'; clockIn: string | null; clockOut: string | null }>;
+  clockIn(employeeId: string, timestamp: string): Promise<void>;
+  clockOut(employeeId: string, timestamp: string): Promise<void>;
   getTimeClockEntries(employeeId?: string, date?: string): Promise<TimeClockEntry[]>;
   createTimeClockEntry(data: InsertTimeClockEntry): Promise<TimeClockEntry>;
   updateTimeClockEntry(id: number, data: Partial<InsertTimeClockEntry>): Promise<TimeClockEntry>;
@@ -330,6 +388,8 @@ export interface IStorage {
 
   // Module 8: Customers CRUD
   getAllCustomers(): Promise<Customer[]>;
+  getCustomerById(id: string): Promise<Customer | undefined>;
+  getCustomersWithPurchaseOrders(): Promise<Customer[]>;
   searchCustomers(query: string): Promise<Customer[]>;
   getCustomer(id: number): Promise<Customer | undefined>;
   createCustomer(data: InsertCustomer): Promise<Customer>;
@@ -389,6 +449,7 @@ export interface IStorage {
   updateP2ProductionOrder(id: number, data: Partial<InsertP2ProductionOrder>): Promise<P2ProductionOrder>;
   deleteP2ProductionOrder(id: number): Promise<void>;
   generateP2ProductionOrders(poId: number): Promise<P2ProductionOrder[]>;
+  getP2MaterialRequirements(poId: number): Promise<any[]>;
 
   // Purchase Order Items CRUD
   getPurchaseOrderItems(poId: number): Promise<PurchaseOrderItem[]>;
@@ -403,6 +464,7 @@ export interface IStorage {
   createProductionOrder(data: InsertProductionOrder): Promise<ProductionOrder>;
   updateProductionOrder(id: number, data: Partial<InsertProductionOrder>): Promise<ProductionOrder>;
   deleteProductionOrder(id: number): Promise<void>;
+  generateProductionOrdersFromPO(poId: number): Promise<ProductionOrder[]>; // MODIFIED: Includes production scheduling
   generateProductionOrders(poId: number): Promise<ProductionOrder[]>;
 
   // Layup Scheduler: Molds CRUD
@@ -411,6 +473,7 @@ export interface IStorage {
   createMold(data: InsertMold): Promise<Mold>;
   updateMold(moldId: string, data: Partial<InsertMold>): Promise<Mold>;
   deleteMold(moldId: string): Promise<void>;
+  clearMoldFromSchedule(moldId: string): Promise<void>;
 
   // Layup Scheduler: Employee Settings CRUD
   getAllEmployeeLayupSettings(): Promise<(EmployeeLayupSettings & { name: string })[]>;
@@ -420,11 +483,16 @@ export interface IStorage {
   deleteEmployeeLayupSettings(employeeId: string): Promise<void>;
 
   // Layup Scheduler: Orders CRUD
-  getAllLayupOrders(filters?: { status?: string; department?: string }): Promise<LayupOrder[]>;
-  getLayupOrder(orderId: string): Promise<LayupOrder | undefined>;
-  createLayupOrder(data: InsertLayupOrder): Promise<LayupOrder>;
-  updateLayupOrder(orderId: string, data: Partial<InsertLayupOrder>): Promise<LayupOrder>;
-  deleteLayupOrder(orderId: string): Promise<void>;
+  getAllProductionQueue(filters?: { status?: string; department?: string }): Promise<any[]>;
+  getProductionQueueItem(orderId: string): Promise<ProductionQueue | undefined>;
+  createProductionQueueItem(data: InsertProductionQueue): Promise<ProductionQueue>;
+  updateProductionQueueItem(orderId: string, data: Partial<InsertProductionQueue>): Promise<ProductionQueue>;
+  deleteProductionQueueItem(orderId: string): Promise<void>;
+
+  // P1 Purchase Order Integration
+  syncP1OrdersToProductionQueue(): Promise<{ synced: number; message: string }>;
+  getUnifiedProductionQueue(): Promise<any[]>;
+  updateOrderDepartment(orderId: string, department: string, status: string): Promise<{ success: boolean; message: string }>;
 
   // Layup Scheduler: Schedule CRUD
   getAllLayupSchedule(): Promise<LayupSchedule[]>;
@@ -433,17 +501,29 @@ export interface IStorage {
   updateLayupSchedule(id: number, data: Partial<InsertLayupSchedule>): Promise<LayupSchedule>;
   deleteLayupSchedule(id: number): Promise<void>;
   overrideOrderSchedule(orderId: string, newDate: Date, moldId: string, overriddenBy?: string): Promise<LayupSchedule>;
+  deleteLayupScheduleByOrder(orderId: string): Promise<void>;
+  clearLayupSchedule(): Promise<void>;
+
+  // Employee layup settings
+  getLayupEmployeeSettings(): Promise<any[]>;
+
+  // Get unified layup orders (combining regular orders and P1 PO items)
+  getUnifiedProductionQueue(): Promise<any[]>;
 
   // Department Progression Methods
   getPipelineCounts(): Promise<Record<string, number>>;
   getPipelineDetails(): Promise<Record<string, Array<{ orderId: string; fbOrderNumber: string | null; modelId: string; dueDate: Date; daysInDept: number; scheduleStatus: 'on-schedule' | 'dept-overdue' | 'cannot-meet-due' | 'critical' }>>>;
-  progressOrder(orderId: string, nextDepartment?: string): Promise<OrderDraft>;
+  progressOrder(orderId: string, nextDepartment?: string): Promise<OrderDraft | AllOrder>;
   scrapOrder(orderId: string, scrapData: { reason: string; disposition: string; authorization: string; scrapDate: Date }): Promise<OrderDraft>;
   createReplacementOrder(scrapOrderId: string): Promise<OrderDraft>;
 
   // BOM Management Methods
   getAllBOMs(): Promise<BomDefinition[]>;
-  getBOMDetails(bomId: number): Promise<(BomDefinition & { items: BomItem[] }) | undefined>;
+  getBOMDetails(bomId: number): Promise<(BomDefinition & { items: BomItem[], hierarchicalItems?: any[] }) | undefined>;
+  getBOMDefinition(bomId: number): Promise<BomDefinition | undefined>; // Helper to get BOM definition
+  buildHierarchicalItems(items: BomItem[]): Promise<any[]>; // Helper to build hierarchical BOM structure
+  createSubAssemblyReference(parentBomId: number, childBomId: number, partName: string, quantity: number, quantityMultiplier?: number, notes?: string): Promise<BomItem>;
+  getAvailableSubAssemblies(excludeBomId?: number): Promise<BomDefinition[]>;
   createBOM(data: InsertBomDefinition): Promise<BomDefinition>;
   updateBOM(bomId: number, data: Partial<InsertBomDefinition>): Promise<BomDefinition>;
   deleteBOM(bomId: number): Promise<void>;
@@ -458,6 +538,13 @@ export interface IStorage {
   updatePurchaseReviewChecklist(id: number, data: Partial<InsertPurchaseReviewChecklist>): Promise<PurchaseReviewChecklist>;
   deletePurchaseReviewChecklist(id: number): Promise<void>;
 
+  // Manufacturer's Certificate of Conformance Methods
+  getAllManufacturersCertificates(): Promise<ManufacturersCertificate[]>;
+  getManufacturersCertificate(id: number): Promise<ManufacturersCertificate | undefined>;
+  createManufacturersCertificate(data: InsertManufacturersCertificate): Promise<ManufacturersCertificate>;
+  updateManufacturersCertificate(id: number, data: Partial<InsertManufacturersCertificate>): Promise<ManufacturersCertificate>;
+  deleteManufacturersCertificate(id: number): Promise<void>;
+
   // Task Tracker Methods
   getAllTaskItems(): Promise<TaskItem[]>;
   getTaskItemById(id: number): Promise<TaskItem | undefined>;
@@ -466,11 +553,90 @@ export interface IStorage {
   updateTaskItemStatus(id: number, statusData: any): Promise<TaskItem>;
   deleteTaskItem(id: number): Promise<void>;
 
+  // Kickback Tracking CRUD
+  getAllKickbacks(): Promise<Kickback[]>;
+  getKickbacksByOrderId(orderId: string): Promise<Kickback[]>;
+  getKickbacksByStatus(status: 'OPEN' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED'): Promise<Kickback[]>;
+  getKickbacksByDepartment(department: string): Promise<Kickback[]>;
+  getKickback(id: number): Promise<Kickback | undefined>;
+  createKickback(data: InsertKickback): Promise<Kickback>;
+  updateKickback(id: number, data: Partial<InsertKickback>): Promise<Kickback>;
+  deleteKickback(id: number): Promise<void>;
+
+  // Kickback Analytics Methods
+  getKickbackAnalytics(dateRange?: { start: Date; end: Date }): Promise<{
+    totalKickbacks: number;
+    byDepartment: { [key: string]: number };
+    byReasonCode: { [key: string]: number };
+    byStatus: { [key: string]: number };
+    byPriority: { [key: string]: number };
+    resolvedKickbacks: number;
+    averageResolutionTime: number | null;
+  }>;
+
+  // Document Management System CRUD Methods
+
+  // Documents CRUD (Document Management System)
+  getAllManagedDocuments(): Promise<Document[]>;
+  getManagedDocument(id: number): Promise<Document | undefined>;
+  searchDocuments(query: string): Promise<Document[]>;
+  getManagedDocumentsByType(documentType: string): Promise<Document[]>;
+  createManagedDocument(data: InsertDocument): Promise<Document>;
+  updateManagedDocument(id: number, data: Partial<InsertDocument>): Promise<Document>;
+  deleteManagedDocument(id: number): Promise<void>;
+
+  // Document Tags CRUD
+  getAllTags(): Promise<DocumentTag[]>;
+  getTagsByCategory(category: string): Promise<DocumentTag[]>;
+  createTag(data: InsertDocumentTag): Promise<DocumentTag>;
+  updateTag(id: number, data: Partial<InsertDocumentTag>): Promise<DocumentTag>;
+  deleteTag(id: number): Promise<void>;
+
+  // Document Tag Relations
+  getDocumentTags(documentId: number): Promise<DocumentTag[]>;
+  addTagToDocument(documentId: number, tagId: number): Promise<void>;
+  removeTagFromDocument(documentId: number, tagId: number): Promise<void>;
+
+  // Document Collections CRUD
+  getAllCollections(): Promise<DocumentCollection[]>;
+  getCollection(id: number): Promise<DocumentCollection | undefined>;
+  getCollectionsByType(collectionType: string): Promise<DocumentCollection[]>;
+  createCollection(data: InsertDocumentCollection): Promise<DocumentCollection>;
+  updateCollection(id: number, data: Partial<InsertDocumentCollection>): Promise<DocumentCollection>;
+  deleteCollection(id: number): Promise<void>;
+
+  // Document Collection Relations
+  getCollectionDocuments(collectionId: number): Promise<Document[]>;
+  addDocumentToCollection(collectionId: number, documentId: number, relationshipType?: string, displayOrder?: number, addedBy?: number): Promise<void>;
+  removeDocumentFromCollection(collectionId: number, documentId: number): Promise<void>;
+
   // Order Attachment Methods
   getOrderAttachments(orderId: string): Promise<OrderAttachment[]>;
   getOrderAttachment(attachmentId: number): Promise<OrderAttachment | undefined>;
   createOrderAttachment(data: InsertOrderAttachment): Promise<OrderAttachment>;
   deleteOrderAttachment(attachmentId: number): Promise<void>;
+
+  // Add methods for finalized orders
+  getAllFinalizedOrders(): Promise<AllOrder[]>;
+  finalizeOrder(orderId: string, finalizedBy?: string): Promise<AllOrder>;
+  getFinalizedOrderById(orderId: string): Promise<AllOrder | undefined>;
+  updateFinalizedOrder(orderId: string, data: Partial<InsertAllOrder>): Promise<AllOrder>;
+  fulfillOrder(orderId: string): Promise<AllOrder>;
+  syncVerificationStatus(): Promise<{ updatedOrders: number; message: string }>;
+
+
+
+  // Department-based order methods
+  getOrdersByDepartment(department: string): Promise<any[]>;
+
+  // Gateway Reports CRUD Methods - temporarily removed
+
+  // PO Products CRUD Methods
+  getAllPOProducts(): Promise<POProduct[]>;
+  getPOProduct(id: number): Promise<POProduct | undefined>;
+  createPOProduct(data: InsertPOProduct): Promise<POProduct>;
+  updatePOProduct(id: number, data: Partial<InsertPOProduct>): Promise<POProduct>;
+  deletePOProduct(id: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -487,10 +653,11 @@ export class DatabaseStorage implements IStorage {
   async createUser(insertUser: InsertUser): Promise<User> {
     // Hash the password before inserting
     const passwordHash = await bcrypt.hash(insertUser.password, 12);
-    
-    // Create user data with hashed password
+
+    // Create user data with both original password and hashed password
     const userData = {
       username: insertUser.username,
+      password: insertUser.password, // Include original password for database requirement
       passwordHash,
       role: insertUser.role,
       canOverridePrices: insertUser.canOverridePrices,
@@ -689,7 +856,7 @@ export class DatabaseStorage implements IStorage {
     // Parse JSON options field if it's a string
     return rawFeatures.map(feature => ({
       ...feature,
-      options: typeof feature.options === 'string' 
+      options: typeof feature.options === 'string'
         ? (feature.options ? JSON.parse(feature.options) : null)
         : feature.options
     }));
@@ -702,7 +869,7 @@ export class DatabaseStorage implements IStorage {
     // Parse JSON options field if it's a string
     return {
       ...feature,
-      options: typeof feature.options === 'string' 
+      options: typeof feature.options === 'string'
         ? (feature.options ? JSON.parse(feature.options) : null)
         : feature.options
     };
@@ -717,7 +884,7 @@ export class DatabaseStorage implements IStorage {
     // Parse JSON options field if it's a string
     return {
       ...feature,
-      options: typeof feature.options === 'string' 
+      options: typeof feature.options === 'string'
         ? (feature.options ? JSON.parse(feature.options) : null)
         : feature.options
     };
@@ -736,7 +903,7 @@ export class DatabaseStorage implements IStorage {
     // Parse JSON options field if it's a string
     return {
       ...feature,
-      options: typeof feature.options === 'string' 
+      options: typeof feature.options === 'string'
         ? (feature.options ? JSON.parse(feature.options) : null)
         : feature.options
     };
@@ -761,7 +928,7 @@ export class DatabaseStorage implements IStorage {
     let baseId = data.id || data.name.toLowerCase().replace(/[^a-z0-9]/g, '_');
     let id = baseId;
     let counter = 1;
-    
+
     // Check for existing ID and increment if needed
     while (true) {
       try {
@@ -798,20 +965,20 @@ export class DatabaseStorage implements IStorage {
     try {
       console.log('=== CREATING ORDER DRAFT ===');
       console.log('Data:', JSON.stringify(data, null, 2));
-      
+
       // Generate barcode if not provided
       const dataWithBarcode = {
         ...data,
         barcode: data.barcode || `P1-${data.orderId}`
       };
-      
+
       const [draft] = await db.insert(orderDrafts).values(dataWithBarcode).returning();
       console.log('Created draft:', draft.id);
-      
+
       // CRITICAL: Mark the Order ID as used to prevent duplicate assignments
       await this.markOrderIdAsUsed(data.orderId);
       console.log(`FIXED: Marked Order ID ${data.orderId} as used to prevent duplicates`);
-      
+
       return draft;
     } catch (error) {
       console.error('Database error creating order draft:', error);
@@ -849,15 +1016,27 @@ export class DatabaseStorage implements IStorage {
   async getAllOrderDrafts(): Promise<OrderDraft[]> {
     // First get all orders
     const orders = await db.select().from(orderDrafts).orderBy(desc(orderDrafts.updatedAt));
-    
+
     // Get all customers to create a lookup map
-    const allCustomers = await db.select().from(customers);
+    const allCustomers = await db.select({
+      id: customers.id,
+      name: customers.name,
+      email: customers.email,
+      phone: customers.phone,
+      company: customers.company,
+      customerType: customers.customerType,
+      notes: customers.notes,
+      isActive: customers.isActive,
+      createdAt: customers.createdAt,
+      updatedAt: customers.updatedAt,
+      preferredCommunicationMethod: customers.preferredCommunicationMethod
+    }).from(customers);
     const customerMap = new Map(allCustomers.map(c => [c.id.toString(), c.name]));
-    
+
     // Enrich orders with customer names
     return orders.map(order => ({
       ...order,
-      customer: (order.customerId ? customerMap.get(order.customerId.toString()) : customerMap.get(order.customerId)) || 'Unknown Customer'
+      customer: customerMap.get(order.customerId || '') || 'Unknown Customer'
     })) as OrderDraft[];
   }
 
@@ -880,7 +1059,7 @@ export class DatabaseStorage implements IStorage {
     try {
       const now = new Date();
       const currentPrefix = getCurrentYearMonthPrefix(now);
-      
+
       // Clean up expired reservations first (non-atomic, but helps keep table clean)
       try {
         await db.delete(orderIdReservations).where(
@@ -897,16 +1076,24 @@ export class DatabaseStorage implements IStorage {
       for (let attempt = 0; attempt < 5; attempt++) {
         try {
           // Find the highest sequence number for current year-month prefix
-          // Check both actual orders and active reservations
-          const [orderResult, reservationResult] = await Promise.all([
-            // Get highest sequence from actual orders
+          // Check draft orders, finalized orders, and active reservations
+          const [draftOrderResult, finalizedOrderResult, reservationResult] = await Promise.all([
+            // Get highest sequence from draft orders
             db
               .select({ orderId: orderDrafts.orderId })
               .from(orderDrafts)
               .where(like(orderDrafts.orderId, `${currentPrefix}%`))
               .orderBy(desc(orderDrafts.orderId))
               .limit(1),
-            
+
+            // Get highest sequence from finalized orders
+            db
+              .select({ orderId: allOrders.orderId })
+              .from(allOrders)
+              .where(like(allOrders.orderId, `${currentPrefix}%`))
+              .orderBy(desc(allOrders.orderId))
+              .limit(1),
+
             // Get highest sequence from active reservations
             db
               .select({ sequenceNumber: orderIdReservations.sequenceNumber })
@@ -924,9 +1111,17 @@ export class DatabaseStorage implements IStorage {
 
           let maxSequence = 0;
 
-          // Check highest sequence from orders
-          if (orderResult.length > 0) {
-            const parsed = parseOrderId(orderResult[0].orderId);
+          // Check highest sequence from draft orders
+          if (draftOrderResult.length > 0) {
+            const parsed = parseOrderId(draftOrderResult[0].orderId);
+            if (parsed && parsed.prefix === currentPrefix) {
+              maxSequence = Math.max(maxSequence, parsed.sequence);
+            }
+          }
+
+          // Check highest sequence from finalized orders
+          if (finalizedOrderResult.length > 0) {
+            const parsed = parseOrderId(finalizedOrderResult[0].orderId);
             if (parsed && parsed.prefix === currentPrefix) {
               maxSequence = Math.max(maxSequence, parsed.sequence);
             }
@@ -943,7 +1138,7 @@ export class DatabaseStorage implements IStorage {
 
           // Atomically reserve the Order ID using INSERT (will fail if duplicate)
           const expiresAt = new Date(now.getTime() + 5 * 60 * 1000); // 5 minutes from now
-          
+
           await db.insert(orderIdReservations).values({
             orderId: nextOrderId,
             yearMonthPrefix: currentPrefix,
@@ -966,20 +1161,62 @@ export class DatabaseStorage implements IStorage {
         }
       }
 
-      // If all retries failed, fall back to timestamp-based ID
-      const fallbackId = currentPrefix + String(Date.now() % 10000).padStart(4, '0');
-      console.warn(`All Order ID generation attempts failed, using fallback: ${fallbackId}`);
-      return fallbackId;
+      // If all retries failed, try to find the next sequence number manually
+      // Query database directly for highest sequence number from both tables
+      try {
+        const [draftOrderResult, finalizedOrderResult] = await Promise.all([
+          db
+            .select({ orderId: orderDrafts.orderId })
+            .from(orderDrafts)
+            .where(like(orderDrafts.orderId, `${currentPrefix}%`))
+            .orderBy(desc(orderDrafts.orderId))
+            .limit(1),
+          db
+            .select({ orderId: allOrders.orderId })
+            .from(allOrders)
+            .where(like(allOrders.orderId, `${currentPrefix}%`))
+            .orderBy(desc(allOrders.orderId))
+            .limit(1)
+        ]);
+
+        let maxSequence = 0;
+        
+        // Check draft orders
+        if (draftOrderResult.length > 0) {
+          const parsed = parseOrderId(draftOrderResult[0].orderId);
+          if (parsed && parsed.prefix === currentPrefix) {
+            maxSequence = Math.max(maxSequence, parsed.sequence);
+          }
+        }
+        
+        // Check finalized orders
+        if (finalizedOrderResult.length > 0) {
+          const parsed = parseOrderId(finalizedOrderResult[0].orderId);
+          if (parsed && parsed.prefix === currentPrefix) {
+            maxSequence = Math.max(maxSequence, parsed.sequence);
+          }
+        }
+
+        // Generate next sequential ID without reservation (fallback only)
+        const fallbackSequence = maxSequence + 1;
+        const fallbackId = formatOrderId(currentPrefix, fallbackSequence);
+        console.warn(`All Order ID generation attempts failed, using sequential fallback: ${fallbackId}`);
+        return fallbackId;
+      } catch (fallbackError) {
+        console.error('Fallback ID generation also failed:', fallbackError);
+        // Ultimate fallback - use next available sequence starting from 001
+        const fallbackId = currentPrefix + '001';
+        console.warn(`Using emergency fallback: ${fallbackId}`);
+        return fallbackId;
+      }
 
     } catch (error) {
       console.error("Error in Order ID generation:", error);
-      // Ultimate fallback
+      // Ultimate fallback - use current prefix with 001
       const now = new Date();
-      const year = now.getFullYear();
-      const month = now.getMonth();
-      const yearLetter = String.fromCharCode(65 + (year - 2025));
-      const monthLetter = String.fromCharCode(65 + month);
-      const fallbackId = yearLetter + monthLetter + String(Date.now() % 1000).padStart(3, '0');
+      const currentPrefix = getCurrentYearMonthPrefix(now);
+      const fallbackId = currentPrefix + '001';
+      console.warn(`Using ultimate fallback: ${fallbackId}`);
       return fallbackId;
     }
   }
@@ -993,7 +1230,7 @@ export class DatabaseStorage implements IStorage {
           usedAt: new Date(),
         })
         .where(eq(orderIdReservations.orderId, orderId));
-      
+
       console.log(`Marked Order ID as used: ${orderId}`);
     } catch (error) {
       console.error(`Error marking Order ID as used: ${orderId}`, error);
@@ -1012,7 +1249,7 @@ export class DatabaseStorage implements IStorage {
             lt(orderIdReservations.expiresAt, new Date())
           )
         );
-      
+
       const count = result.rowCount || 0;
       if (count > 0) {
         console.log(`Cleaned up ${count} expired Order ID reservations`);
@@ -1024,22 +1261,1121 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async getAllOrders(): Promise<Order[]> {
-    // Get all orders from the all_orders table (complete historical dataset)
-    const ordersData = await db.select().from(allOrders).orderBy(desc(allOrders.updatedAt));
-    console.log(`[DEBUG] getAllOrders fetched ${ordersData.length} orders from all_orders table`);
-    
+  // Get all finalized orders
+  async getCancelledOrders(): Promise<AllOrder[]> {
+    // Select only the columns that actually exist in the all_orders table
+    const orders = await db.select({
+      id: allOrders.id,
+      orderId: allOrders.orderId,
+      orderDate: allOrders.orderDate,
+      dueDate: allOrders.dueDate,
+      customerId: allOrders.customerId,
+      customerPO: allOrders.customerPO,
+      fbOrderNumber: allOrders.fbOrderNumber,
+      agrOrderDetails: allOrders.agrOrderDetails,
+      isCustomOrder: allOrders.isCustomOrder,
+      modelId: allOrders.modelId,
+      handedness: allOrders.handedness,
+      shankLength: allOrders.shankLength,
+      features: allOrders.features,
+      featureQuantities: allOrders.featureQuantities,
+      discountCode: allOrders.discountCode,
+      notes: allOrders.notes,
+      customDiscountType: allOrders.customDiscountType,
+      customDiscountValue: allOrders.customDiscountValue,
+      showCustomDiscount: allOrders.showCustomDiscount,
+      priceOverride: allOrders.priceOverride,
+      shipping: allOrders.shipping,
+      tikkaOption: allOrders.tikkaOption,
+      status: allOrders.status,
+      barcode: allOrders.barcode,
+      currentDepartment: allOrders.currentDepartment,
+      departmentHistory: allOrders.departmentHistory,
+      scrappedQuantity: allOrders.scrappedQuantity,
+      totalProduced: allOrders.totalProduced,
+      layupCompletedAt: allOrders.layupCompletedAt,
+      pluggingCompletedAt: allOrders.pluggingCompletedAt,
+      cncCompletedAt: allOrders.cncCompletedAt,
+      finishCompletedAt: allOrders.finishCompletedAt,
+      gunsmithCompletedAt: allOrders.gunsmithCompletedAt,
+      paintCompletedAt: allOrders.paintCompletedAt,
+      qcCompletedAt: allOrders.qcCompletedAt,
+      shippingCompletedAt: allOrders.shippingCompletedAt,
+      scrapDate: allOrders.scrapDate,
+      scrapReason: allOrders.scrapReason,
+      scrapDisposition: allOrders.scrapDisposition,
+      scrapAuthorization: allOrders.scrapAuthorization,
+      isReplacement: allOrders.isReplacement,
+      replacedOrderId: allOrders.replacedOrderId,
+      isPaid: allOrders.isPaid,
+      paymentType: allOrders.paymentType,
+      paymentAmount: allOrders.paymentAmount,
+      paymentDate: allOrders.paymentDate,
+      paymentTimestamp: allOrders.paymentTimestamp,
+      trackingNumber: allOrders.trackingNumber,
+      shippingCarrier: allOrders.shippingCarrier,
+      shippingMethod: allOrders.shippingMethod,
+      shippedDate: allOrders.shippedDate,
+      estimatedDelivery: allOrders.estimatedDelivery,
+      shippingLabelGenerated: allOrders.shippingLabelGenerated,
+      customerNotified: allOrders.customerNotified,
+      notificationMethod: allOrders.notificationMethod,
+      notificationSentAt: allOrders.notificationSentAt,
+      deliveryConfirmed: allOrders.deliveryConfirmed,
+      deliveryConfirmedAt: allOrders.deliveryConfirmedAt,
+      isCancelled: allOrders.isCancelled,
+      cancelledAt: allOrders.cancelledAt,
+      cancelReason: allOrders.cancelReason,
+      isVerified: allOrders.isVerified,
+      createdAt: allOrders.createdAt,
+      updatedAt: allOrders.updatedAt
+    }).from(allOrders)
+    .where(
+      or(
+        eq(allOrders.status, 'CANCELLED'),
+        eq(allOrders.isCancelled, true)
+      )
+    )
+    .orderBy(desc(allOrders.cancelledAt));
+
     // Get all customers to create a lookup map
-    const allCustomers = await db.select().from(customers);
+    const allCustomers = await db.select({
+      id: customers.id,
+      name: customers.name,
+      email: customers.email,
+      phone: customers.phone,
+      company: customers.company,
+      customerType: customers.customerType,
+      notes: customers.notes,
+      isActive: customers.isActive,
+      createdAt: customers.createdAt,
+      updatedAt: customers.updatedAt,
+      preferredCommunicationMethod: customers.preferredCommunicationMethod
+    }).from(customers);
     const customerMap = new Map(allCustomers.map(c => [c.id.toString(), c.name]));
-    
-    // Orders already have customer names, just return them
-    return ordersData;
+
+    // Enrich orders with customer names and add required frontend fields
+    return orders.map(order => ({
+      ...order,
+      customer: customerMap.get(order.customerId || '') || 'Unknown Customer',
+      // Add product field for frontend compatibility
+      product: order.modelId || 'Unknown Product',
+      isFlattop: false // Add missing field
+    })) as any;
   }
 
-  async getOrderById(orderId: string): Promise<OrderDraft | undefined> {
-    const [order] = await db.select().from(orderDrafts).where(eq(orderDrafts.orderId, orderId));
-    return order || undefined;
+  async getAllOrders(): Promise<AllOrder[]> {
+    // Select only the columns that actually exist in the all_orders table
+    const orders = await db.select({
+      id: allOrders.id,
+      orderId: allOrders.orderId,
+      orderDate: allOrders.orderDate,
+      dueDate: allOrders.dueDate,
+      customerId: allOrders.customerId,
+      customerPO: allOrders.customerPO,
+      fbOrderNumber: allOrders.fbOrderNumber,
+      agrOrderDetails: allOrders.agrOrderDetails,
+      isCustomOrder: allOrders.isCustomOrder,
+      modelId: allOrders.modelId,
+      handedness: allOrders.handedness,
+      shankLength: allOrders.shankLength,
+      features: allOrders.features,
+      featureQuantities: allOrders.featureQuantities,
+      discountCode: allOrders.discountCode,
+      notes: allOrders.notes,
+      customDiscountType: allOrders.customDiscountType,
+      customDiscountValue: allOrders.customDiscountValue,
+      showCustomDiscount: allOrders.showCustomDiscount,
+      priceOverride: allOrders.priceOverride,
+      shipping: allOrders.shipping,
+      tikkaOption: allOrders.tikkaOption,
+      status: allOrders.status,
+      barcode: allOrders.barcode,
+      currentDepartment: allOrders.currentDepartment,
+      departmentHistory: allOrders.departmentHistory,
+      scrappedQuantity: allOrders.scrappedQuantity,
+      totalProduced: allOrders.totalProduced,
+      layupCompletedAt: allOrders.layupCompletedAt,
+      pluggingCompletedAt: allOrders.pluggingCompletedAt,
+      cncCompletedAt: allOrders.cncCompletedAt,
+      finishCompletedAt: allOrders.finishCompletedAt,
+      gunsmithCompletedAt: allOrders.gunsmithCompletedAt,
+      paintCompletedAt: allOrders.paintCompletedAt,
+      qcCompletedAt: allOrders.qcCompletedAt,
+      shippingCompletedAt: allOrders.shippingCompletedAt,
+      scrapDate: allOrders.scrapDate,
+      scrapReason: allOrders.scrapReason,
+      scrapDisposition: allOrders.scrapDisposition,
+      scrapAuthorization: allOrders.scrapAuthorization,
+      isReplacement: allOrders.isReplacement,
+      replacedOrderId: allOrders.replacedOrderId,
+      isPaid: allOrders.isPaid,
+      paymentType: allOrders.paymentType,
+      paymentAmount: allOrders.paymentAmount,
+      paymentDate: allOrders.paymentDate,
+      paymentTimestamp: allOrders.paymentTimestamp,
+      trackingNumber: allOrders.trackingNumber,
+      shippingCarrier: allOrders.shippingCarrier,
+      shippingMethod: allOrders.shippingMethod,
+      shippedDate: allOrders.shippedDate,
+      estimatedDelivery: allOrders.estimatedDelivery,
+      shippingLabelGenerated: allOrders.shippingLabelGenerated,
+      customerNotified: allOrders.customerNotified,
+      notificationMethod: allOrders.notificationMethod,
+      notificationSentAt: allOrders.notificationSentAt,
+      deliveryConfirmed: allOrders.deliveryConfirmed,
+      deliveryConfirmedAt: allOrders.deliveryConfirmedAt,
+      isCancelled: allOrders.isCancelled,
+      cancelledAt: allOrders.cancelledAt,
+      cancelReason: allOrders.cancelReason,
+      isVerified: allOrders.isVerified,
+      createdAt: allOrders.createdAt,
+      updatedAt: allOrders.updatedAt
+    }).from(allOrders)
+    .where(
+      and(
+        ne(allOrders.status, 'CANCELLED'),
+        eq(allOrders.isCancelled, false),
+        sql`${allOrders.orderId} NOT LIKE 'P1-%'`
+      )
+    )
+    .orderBy(desc(allOrders.updatedAt));
+
+    // Get all customers to create a lookup map
+    const allCustomers = await db.select({
+      id: customers.id,
+      name: customers.name,
+      email: customers.email,
+      phone: customers.phone,
+      company: customers.company,
+      customerType: customers.customerType,
+      notes: customers.notes,
+      isActive: customers.isActive,
+      createdAt: customers.createdAt,
+      updatedAt: customers.updatedAt,
+      preferredCommunicationMethod: customers.preferredCommunicationMethod
+    }).from(customers);
+    const customerMap = new Map(allCustomers.map(c => [c.id.toString(), c.name]));
+
+    // Enrich orders with customer names and add required frontend fields
+    return orders.map(order => ({
+      ...order,
+      customer: customerMap.get(order.customerId || '') || 'Unknown Customer',
+      // Add product field for frontend compatibility
+      product: order.modelId || 'Unknown Product',
+      isFlattop: false // Add missing field
+    })) as any;
+  }
+
+  // Helper function to calculate order total from features and pricing
+  private async calculateOrderTotal(order: AllOrder): Promise<number> {
+    let total = 0;
+
+    // Add base stock model price (use override if set, otherwise use standard price)
+    if (order.modelId) {
+      const stockModels = await this.getAllStockModels();
+      const selectedModel = stockModels.find(model => model.id === order.modelId);
+      if (selectedModel) {
+        // CRITICAL FIX: Ensure all values are proper numbers to prevent NaN
+        const rawPrice = selectedModel.price;
+        const modelPrice = (rawPrice === null || rawPrice === undefined || isNaN(Number(rawPrice))) ? 0 : Number(rawPrice);
+        const priceOverride = order.priceOverride;
+        const basePrice = (priceOverride !== null && priceOverride !== undefined && !isNaN(Number(priceOverride))) 
+                          ? Number(priceOverride) 
+                          : modelPrice;
+        
+        // Ensure we're adding a valid number
+        if (!isNaN(basePrice)) {
+          total += basePrice;
+        }
+      }
+    }
+
+    // Add feature prices from features object (but NOT bottom_metal, paint_options, rail_accessory, other_options as they are handled separately)
+    if (order.features && typeof order.features === 'object') {
+      const features = await this.getAllFeatures();
+      Object.entries(order.features).forEach(([featureId, value]) => {
+        // Skip features that have separate state variables to avoid double counting (MATCH FRONTEND LOGIC)
+        if (featureId === 'bottom_metal' || featureId === 'paint_options' || featureId === 'rail_accessory' || featureId === 'other_options') {
+          return;
+        }
+
+        if (value && value !== 'none') {
+          const feature = features.find(f => f.id === featureId);
+          if (feature?.options) {
+            if (Array.isArray(value)) {
+              // Handle multi-select features
+              value.forEach(optionValue => {
+                const option = (feature.options as any[])?.find((opt: any) => opt.value === optionValue);
+                if (option?.price) {
+                  const featurePrice = Number(option.price);
+                  if (!isNaN(featurePrice)) {
+                    total += featurePrice;
+                  }
+                }
+              });
+            } else {
+              // Handle single-select features
+              const option = (feature.options as any)?.find?.((opt: any) => opt.value === value);
+              if (option?.price) {
+                const featurePrice = Number(option.price);
+                if (!isNaN(featurePrice)) {
+                  total += featurePrice;
+                }
+              }
+            }
+          } else if (order.orderId === 'EH219') {
+            console.log(`🔍 DEBUG EH219 - Feature ${featureId}: no options found`);
+          }
+        }
+      });
+    }
+
+    // Add paint options price (separately handled like frontend)
+    const orderFeatures = order.features as any;
+    if (orderFeatures) {
+      const currentPaint = orderFeatures.metallic_finishes || orderFeatures.paint_options || orderFeatures.paint_options_combined;
+      
+      if (currentPaint && currentPaint !== 'none') {
+        const features = await this.getAllFeatures();
+        const paintFeatures = features.filter(f => 
+          f.displayName?.includes('Options') || 
+          f.displayName?.includes('Camo') || 
+          f.displayName?.includes('Cerakote') ||
+          f.displayName?.includes('Paint') ||
+          f.category === 'paint'
+        );
+        
+        for (const feature of paintFeatures) {
+          if (feature.options) {
+            const option = (feature.options as any[])?.find((opt: any) => opt.value === currentPaint);
+            if (option?.price) {
+              const paintPrice = Number(option.price);
+              if (!isNaN(paintPrice)) {
+                total += paintPrice;
+                break; // Found the paint option, no need to check other features
+              }
+            }
+          }
+        }
+      }
+
+      // Add bottom metal price (separately handled like frontend)
+      if (orderFeatures.bottom_metal && orderFeatures.bottom_metal !== 'none') {
+        const features = await this.getAllFeatures();
+        const bottomMetalFeature = features.find(f => f.id === 'bottom_metal');
+        if (bottomMetalFeature?.options) {
+          const option = (bottomMetalFeature.options as any[])?.find((opt: any) => opt.value === orderFeatures.bottom_metal);
+          if (option?.price) {
+            let bottomMetalPrice = Number(option.price);
+            
+            // Special pricing: SepFG10 or SepCF25 seasonal sale + AG bottom metal = $100 instead of $149
+            if ((order.discountCode === 'short_term_3' || order.discountCode === 'short_term_1') && orderFeatures.bottom_metal.includes('ag_') && option.price === 149) {
+              bottomMetalPrice = 100;
+            }
+            
+            if (!isNaN(bottomMetalPrice)) {
+              total += bottomMetalPrice;
+            }
+          }
+        }
+      }
+
+      // Add rail accessory price (separately handled like frontend)
+      if (orderFeatures.rail_accessory && Array.isArray(orderFeatures.rail_accessory) && orderFeatures.rail_accessory.length > 0) {
+        const features = await this.getAllFeatures();
+        const railFeature = features.find(f => f.id === 'rail_accessory');
+        if (railFeature?.options) {
+          orderFeatures.rail_accessory.forEach((railValue: string) => {
+            const option = (railFeature.options as any[])?.find((opt: any) => opt.value === railValue);
+            if (option?.price) {
+              const railPrice = Number(option.price);
+              if (!isNaN(railPrice)) {
+                total += railPrice;
+              }
+            }
+          });
+        }
+      }
+
+      // Add other options price (separately handled like frontend)
+      if (orderFeatures.other_options && Array.isArray(orderFeatures.other_options) && orderFeatures.other_options.length > 0) {
+        const features = await this.getAllFeatures();
+        const otherOptionsFeature = features.find(f => f.id === 'other_options');
+        if (otherOptionsFeature?.options) {
+          orderFeatures.other_options.forEach((optionValue: string) => {
+            const option = (otherOptionsFeature.options as any[])?.find((opt: any) => opt.value === optionValue);
+            if (option?.price) {
+              const optionPrice = Number(option.price);
+              if (!isNaN(optionPrice)) {
+                total += optionPrice;
+              }
+            }
+          });
+        }
+      }
+    }
+
+    // Apply persistent discount if present
+    if (order.discountCode && order.discountCode !== 'none') {
+      const persistentDiscounts = await this.getAllPersistentDiscounts();
+      
+      // Handle both "persistent_2" format and direct name lookup
+      let discount = null;
+      if (order.discountCode.startsWith('persistent_')) {
+        const discountId = parseInt(order.discountCode.replace('persistent_', ''));
+        discount = persistentDiscounts.find(d => d.id === discountId);
+      } else {
+        discount = persistentDiscounts.find(d => d.name === order.discountCode);
+      }
+      
+      if (discount && discount.isActive) {
+        if (discount.appliesTo === 'stock_model') {
+          // Apply discount only to the base model price
+          if (order.modelId) {
+            const stockModels = await this.getAllStockModels();
+            const selectedModel = stockModels.find(model => model.id === order.modelId);
+            if (selectedModel) {
+              const basePrice = Number(order.priceOverride || selectedModel.price || 0);
+              const discountAmount = discount.percent > 0 
+                ? (basePrice * discount.percent / 100)
+                : Number(discount.fixedAmount || 0);
+              total -= discountAmount;
+            }
+          }
+        } else if (discount.appliesTo === 'total_order') {
+          // Apply discount to entire order total
+          const discountAmount = discount.percent > 0 
+            ? (total * discount.percent / 100)
+            : Number(discount.fixedAmount || 0);
+          total -= discountAmount;
+        }
+      }
+    }
+
+    // Apply custom discount if present
+    if (order.showCustomDiscount && order.customDiscountValue) {
+      const discountValue = Number(order.customDiscountValue);
+      if (!isNaN(discountValue)) {
+        if (order.customDiscountType === 'percent') {
+          total = total * (1 - (discountValue / 100));
+        } else {
+          total = Math.max(0, total - discountValue);
+        }
+      }
+    }
+
+    // Add miscellaneous items (stored in features.miscItems from OrderEntry fix)
+    if (order.features && typeof order.features === 'object') {
+      const features = order.features as any;
+      if (features.miscItems && Array.isArray(features.miscItems)) {
+        features.miscItems.forEach((item: any) => {
+          const itemPrice = Number(item.price || 0);
+          const itemQuantity = Number(item.quantity || 1);
+          if (!isNaN(itemPrice) && !isNaN(itemQuantity)) {
+            total += itemPrice * itemQuantity;
+          }
+        });
+      }
+    }
+
+    // Add shipping - CRITICAL FIX: Ensure shipping is a valid number
+    const shippingCost = Number(order.shipping || 0);
+    if (!isNaN(shippingCost)) {
+      total += shippingCost;
+    }
+
+    // Final safeguard: If total is still NaN, return 0
+    return isNaN(total) ? 0 : total;
+  }
+
+  // Get stored order total using Order Summary calculation logic (for refund consistency)
+  async getStoredOrderTotal(orderId: string): Promise<number> {
+    // Get the order data
+    const [order] = await db.select().from(allOrders).where(eq(allOrders.orderId, orderId));
+    if (!order) {
+      throw new Error(`Order ${orderId} not found`);
+    }
+
+    // Calculate using the same logic as Order Summary frontend:
+    // 1. Calculate subtotal (base model + features)
+    // 2. Apply discounts 
+    // 3. Add shipping
+    // This ensures refund amounts match exactly what users see in Order Summary
+
+    let subtotal = 0;
+
+    // Add base stock model price (use override if set)
+    if (order.modelId) {
+      const stockModels = await this.getAllStockModels();
+      const selectedModel = stockModels.find(model => model.id === order.modelId);
+      if (selectedModel) {
+        const basePrice = order.priceOverride !== null && order.priceOverride !== undefined 
+                          ? Number(order.priceOverride) 
+                          : Number(selectedModel.price || 0);
+        if (!isNaN(basePrice)) {
+          subtotal += basePrice;
+        }
+      }
+    }
+
+    // Add feature prices
+    if (order.features && typeof order.features === 'object') {
+      const features = await this.getAllFeatures();
+      Object.entries(order.features).forEach(([featureId, value]) => {
+        if (value && value !== 'none') {
+          const feature = features.find(f => f.id === featureId);
+          if (feature?.options) {
+            if (Array.isArray(value)) {
+              value.forEach(optionValue => {
+                const option = (feature.options as any[])?.find((opt: any) => opt.value === optionValue);
+                if (option?.price) {
+                  const featurePrice = Number(option.price);
+                  if (!isNaN(featurePrice)) {
+                    subtotal += featurePrice;
+                  }
+                }
+              });
+            } else {
+              const option = (feature.options as any)?.find?.((opt: any) => opt.value === value);
+              if (option?.price) {
+                const featurePrice = Number(option.price);
+                if (!isNaN(featurePrice)) {
+                  subtotal += featurePrice;
+                }
+              }
+            }
+          }
+        }
+      });
+    }
+
+    // Add miscellaneous items
+    if (order.features && typeof order.features === 'object') {
+      const features = order.features as any;
+      if (features.miscItems && Array.isArray(features.miscItems)) {
+        features.miscItems.forEach((item: any) => {
+          const itemPrice = Number(item.price || 0);
+          const itemQuantity = Number(item.quantity || 1);
+          if (!isNaN(itemPrice) && !isNaN(itemQuantity)) {
+            subtotal += itemPrice * itemQuantity;
+          }
+        });
+      }
+    }
+
+    // Apply discounts to get totalPrice (before shipping)
+    let totalPrice = subtotal;
+    
+    // Apply persistent discount
+    if (order.discountCode && order.discountCode !== 'none') {
+      const persistentDiscounts = await this.getAllPersistentDiscounts();
+      let discount = null;
+      if (order.discountCode.startsWith('persistent_')) {
+        const discountId = parseInt(order.discountCode.replace('persistent_', ''));
+        discount = persistentDiscounts.find(d => d.id === discountId);
+      } else {
+        discount = persistentDiscounts.find(d => d.name === order.discountCode);
+      }
+      
+      if (discount && discount.isActive) {
+        if (discount.appliesTo === 'stock_model') {
+          // Apply discount only to the base model price
+          if (order.modelId) {
+            const stockModels = await this.getAllStockModels();
+            const selectedModel = stockModels.find(model => model.id === order.modelId);
+            if (selectedModel) {
+              const basePrice = Number(order.priceOverride || selectedModel.price || 0);
+              const discountAmount = discount.percent > 0 
+                ? (basePrice * discount.percent / 100)
+                : Number(discount.fixedAmount || 0);
+              totalPrice -= discountAmount;
+            }
+          }
+        } else if (discount.appliesTo === 'total_order') {
+          // Apply discount to entire subtotal
+          const discountAmount = discount.percent > 0 
+            ? (subtotal * discount.percent / 100)
+            : Number(discount.fixedAmount || 0);
+          totalPrice -= discountAmount;
+        }
+      }
+    }
+
+    // Apply custom discount
+    if (order.showCustomDiscount && order.customDiscountValue) {
+      const discountValue = Number(order.customDiscountValue);
+      if (!isNaN(discountValue)) {
+        if (order.customDiscountType === 'percent') {
+          totalPrice = totalPrice * (1 - (discountValue / 100));
+        } else {
+          totalPrice = Math.max(0, totalPrice - discountValue);
+        }
+      }
+    }
+
+    // Add shipping to match Order Summary display: totalPrice + shipping
+    const shippingCost = Number(order.shipping || 0);
+    const finalTotal = totalPrice + (isNaN(shippingCost) ? 0 : shippingCost);
+
+    return isNaN(finalTotal) ? 0 : finalTotal;
+  }
+
+  // Method to get unpaid orders for batch payment processing
+  async getUnpaidOrders() {
+    try {
+      const orders = await db.select({
+        id: allOrders.id,
+        orderId: allOrders.orderId,
+        orderDate: allOrders.orderDate,
+        dueDate: allOrders.dueDate,
+        status: allOrders.status,
+        isPaid: allOrders.isPaid,
+        paymentAmount: allOrders.paymentAmount,
+        customerId: allOrders.customerId,
+      })
+      .from(allOrders)
+      .where(eq(allOrders.isPaid, false))
+      .orderBy(desc(allOrders.orderDate));
+
+      // Get customer info and calculate remaining balances
+      const ordersWithDetails = await Promise.all(orders.map(async (order) => {
+        // Get customer info
+        let customerName = '';
+        if (order.customerId) {
+          const customer = await db.select({ name: customers.name })
+            .from(customers)
+            .where(eq(customers.id, parseInt(order.customerId)))
+            .limit(1);
+          if (customer.length > 0) {
+            customerName = customer[0].name;
+          }
+        }
+
+        // Get total payments for this order
+        const paymentSums = await db.select({
+          totalPaid: sql<number>`COALESCE(SUM(${payments.paymentAmount}), 0)`,
+        })
+        .from(payments)
+        .where(eq(payments.orderId, order.orderId))
+        .groupBy(payments.orderId);
+
+        const totalPaid = paymentSums.length > 0 ? paymentSums[0].totalPaid : 0;
+        
+        // For now, assume a default order total of $1000 if not specified
+        // TODO: Calculate actual order total from features and pricing
+        const orderTotal = 1000; // This should be calculated from order details
+        const remainingBalance = Math.max(0, orderTotal - totalPaid);
+
+        return {
+          id: order.id.toString(),
+          orderId: order.orderId,
+          customerName,
+          orderDate: order.orderDate.toISOString(),
+          dueDate: order.dueDate.toISOString(),
+          status: order.status,
+          totalAmount: orderTotal,
+          paidAmount: totalPaid,
+          remainingBalance,
+        };
+      }));
+
+      // Only return orders with remaining balance > 0
+      return ordersWithDetails.filter(order => order.remainingBalance > 0);
+    } catch (error) {
+      console.error("Error fetching unpaid orders:", error);
+      throw error;
+    }
+  }
+
+  // Method to get unpaid orders for a specific customer
+  async getUnpaidOrdersByCustomer(customerId: string) {
+    try {
+      const orders = await db.select({
+        id: allOrders.id,
+        orderId: allOrders.orderId,
+        orderDate: allOrders.orderDate,
+        dueDate: allOrders.dueDate,
+        status: allOrders.status,
+        isPaid: allOrders.isPaid,
+        paymentAmount: allOrders.paymentAmount,
+        customerId: allOrders.customerId,
+      })
+      .from(allOrders)
+      .where(
+        and(
+          eq(allOrders.isPaid, false),
+          eq(allOrders.customerId, customerId)
+        )
+      )
+      .orderBy(desc(allOrders.orderDate));
+
+      // Get customer info and calculate remaining balances
+      const ordersWithDetails = await Promise.all(orders.map(async (order) => {
+        // Get customer info
+        let customerName = '';
+        if (order.customerId) {
+          const customer = await db.select({ name: customers.name })
+            .from(customers)
+            .where(eq(customers.id, parseInt(order.customerId)))
+            .limit(1);
+          if (customer.length > 0) {
+            customerName = customer[0].name;
+          }
+        }
+
+        // Get total payments for this order
+        const paymentSums = await db.select({
+          totalPaid: sql<number>`COALESCE(SUM(${payments.paymentAmount}), 0)`,
+        })
+        .from(payments)
+        .where(eq(payments.orderId, order.orderId))
+        .groupBy(payments.orderId);
+
+        const totalPaid = paymentSums.length > 0 ? paymentSums[0].totalPaid : 0;
+        
+        // For now, assume a default order total of $1000 if not specified
+        // TODO: Calculate actual order total from features and pricing
+        const orderTotal = 1000; // This should be calculated from order details
+        const remainingBalance = Math.max(0, orderTotal - totalPaid);
+
+        return {
+          id: order.id.toString(),
+          orderId: order.orderId,
+          customerName,
+          orderDate: order.orderDate.toISOString(),
+          dueDate: order.dueDate.toISOString(),
+          status: order.status,
+          totalAmount: orderTotal,
+          paidAmount: totalPaid,
+          remainingBalance,
+        };
+      }));
+
+      // Only return orders with remaining balance > 0
+      return ordersWithDetails.filter(order => order.remainingBalance > 0);
+    } catch (error) {
+      console.error("Error fetching unpaid orders by customer:", error);
+      throw error;
+    }
+  }
+
+  // Get all finalized orders with payment status
+  async getAllOrdersWithPaymentStatus(): Promise<(AllOrder & { paymentTotal: number; isFullyPaid: boolean })[]> {
+    // Optimized: Use single query to get orders with customer names and payment totals
+    // Exclude P1 purchase orders from All Orders list
+    const ordersWithCustomers = await db
+      .select({
+        // Order fields
+        id: allOrders.id,
+        orderId: allOrders.orderId,
+        orderDate: allOrders.orderDate,
+        dueDate: allOrders.dueDate,
+        customerId: allOrders.customerId,
+        customerPO: allOrders.customerPO,
+        currentDepartment: allOrders.currentDepartment,
+        status: allOrders.status,
+        modelId: allOrders.modelId,
+        shipping: allOrders.shipping,
+        paymentAmount: allOrders.paymentAmount,
+        isPaid: allOrders.isPaid,
+        isVerified: allOrders.isVerified,
+        fbOrderNumber: allOrders.fbOrderNumber,
+        createdAt: allOrders.createdAt,
+        updatedAt: allOrders.updatedAt,
+        isCancelled: allOrders.isCancelled,
+        cancelledAt: allOrders.cancelledAt,
+        cancelReason: allOrders.cancelReason,
+        // Special shipping fields for highlighting in shipping queue
+        specialShippingInternational: allOrders.specialShippingInternational,
+        specialShippingNextDayAir: allOrders.specialShippingNextDayAir,
+        specialShippingBillToReceiver: allOrders.specialShippingBillToReceiver,
+        // Alt Ship To fields
+        hasAltShipTo: allOrders.hasAltShipTo,
+        altShipToCustomerId: allOrders.altShipToCustomerId,
+        altShipToName: allOrders.altShipToName,
+        altShipToCompany: allOrders.altShipToCompany,
+        altShipToEmail: allOrders.altShipToEmail,
+        altShipToPhone: allOrders.altShipToPhone,
+        altShipToAddress: allOrders.altShipToAddress,
+        // Customer name
+        customerName: customers.name,
+      })
+      .from(allOrders)
+      .leftJoin(customers, eq(allOrders.customerId, sql`${customers.id}::text`))
+      .where(
+        and(
+          sql`${allOrders.orderId} NOT LIKE 'P1-%'`,
+          sql`${allOrders.orderId} NOT LIKE 'PO%'`,
+          // TEMPORARILY COMMENTED OUT: This was hiding orders like AG137
+          // sql`${allOrders.orderId} NOT LIKE 'AG1%'`,
+          sql`${allOrders.orderId} != 'AG1'`,
+          sql`${allOrders.orderId} NOT LIKE '%PO%'`
+        )
+      )
+      .orderBy(desc(allOrders.updatedAt));
+
+    // Get all payments aggregated by order ID in parallel
+    const paymentTotals = await db
+      .select({
+        orderId: payments.orderId,
+        totalPayments: sql<number>`COALESCE(SUM(${payments.paymentAmount}), 0)`
+      })
+      .from(payments)
+      .groupBy(payments.orderId);
+
+    // Create payment map for fast lookup
+    const paymentMap = new Map(paymentTotals.map(p => [p.orderId, p.totalPayments]));
+
+    // Process orders with payment info (using proper order total calculation)
+    const ordersWithPaymentInfo = await Promise.all(ordersWithCustomers.map(async order => {
+      const paymentTotal = paymentMap.get(order.orderId) || 0;
+      
+      // CRITICAL FIX: Use actual calculated order total, not stale paymentAmount field
+      const actualOrderTotal = await this.calculateOrderTotal(order);
+
+      // Fixed payment status logic using real current order total
+      const isFullyPaid = paymentTotal >= actualOrderTotal && actualOrderTotal > 0;
+
+      return {
+        ...order,
+        customer: order.customerName || 'Unknown Customer',
+        paymentTotal,
+        isFullyPaid
+      };
+    }));
+
+    return ordersWithPaymentInfo;
+  }
+
+  // Get all finalized orders with payment status - PAGINATED
+  async getAllOrdersWithPaymentStatusPaginated(page: number = 1, limit: number = 50): Promise<{ 
+    orders: (AllOrder & { paymentTotal: number; isFullyPaid: boolean })[], 
+    total: number, 
+    page: number, 
+    limit: number, 
+    totalPages: number 
+  }> {
+    // First, get the total count for pagination
+    const totalCountResult = await db
+      .select({ count: sql<number>`COUNT(*)` })
+      .from(allOrders)
+      .where(
+        and(
+          sql`${allOrders.orderId} NOT LIKE 'P1-%'`,
+          sql`${allOrders.orderId} NOT LIKE 'PO%'`,
+          sql`${allOrders.orderId} != 'AG1'`,
+          sql`${allOrders.orderId} NOT LIKE '%PO%'`
+        )
+      );
+    
+    const total = totalCountResult[0]?.count || 0;
+    const totalPages = Math.ceil(total / limit);
+    const offset = (page - 1) * limit;
+
+    // Use the same field selection as the original method but with pagination
+    const ordersWithCustomers = await db
+      .select({
+        // Order fields - using the same selection as original method
+        id: allOrders.id,
+        orderId: allOrders.orderId,
+        orderDate: allOrders.orderDate,
+        dueDate: allOrders.dueDate,
+        customerId: allOrders.customerId,
+        customerPO: allOrders.customerPO,
+        currentDepartment: allOrders.currentDepartment,
+        status: allOrders.status,
+        modelId: allOrders.modelId,
+        shipping: allOrders.shipping,
+        paymentAmount: allOrders.paymentAmount,
+        isPaid: allOrders.isPaid,
+        isVerified: allOrders.isVerified,
+        fbOrderNumber: allOrders.fbOrderNumber,
+        createdAt: allOrders.createdAt,
+        updatedAt: allOrders.updatedAt,
+        isCancelled: allOrders.isCancelled,
+        cancelledAt: allOrders.cancelledAt,
+        cancelReason: allOrders.cancelReason,
+        // Special shipping fields for highlighting in shipping queue
+        specialShippingInternational: allOrders.specialShippingInternational,
+        specialShippingNextDayAir: allOrders.specialShippingNextDayAir,
+        specialShippingBillToReceiver: allOrders.specialShippingBillToReceiver,
+        // Alt Ship To fields
+        hasAltShipTo: allOrders.hasAltShipTo,
+        altShipToCustomerId: allOrders.altShipToCustomerId,
+        altShipToName: allOrders.altShipToName,
+        altShipToCompany: allOrders.altShipToCompany,
+        altShipToEmail: allOrders.altShipToEmail,
+        altShipToPhone: allOrders.altShipToPhone,
+        altShipToAddress: allOrders.altShipToAddress,
+        // Customer name
+        customerName: customers.name,
+      })
+      .from(allOrders)
+      .leftJoin(customers, eq(allOrders.customerId, sql`${customers.id}::text`))
+      .where(
+        and(
+          sql`${allOrders.orderId} NOT LIKE 'P1-%'`,
+          sql`${allOrders.orderId} NOT LIKE 'PO%'`,
+          sql`${allOrders.orderId} != 'AG1'`,
+          sql`${allOrders.orderId} NOT LIKE '%PO%'`
+        )
+      )
+      .orderBy(desc(allOrders.updatedAt))
+      .limit(limit)
+      .offset(offset);
+
+    // Get all payments aggregated by order ID in parallel
+    const paymentTotals = await db
+      .select({
+        orderId: payments.orderId,
+        totalPayments: sql<number>`COALESCE(SUM(${payments.paymentAmount}), 0)`
+      })
+      .from(payments)
+      .groupBy(payments.orderId);
+
+    // Create payment map for fast lookup
+    const paymentMap = new Map(paymentTotals.map(p => [p.orderId, p.totalPayments]));
+
+    // Process orders with payment info using CORRECTED payment logic
+    const ordersWithPaymentInfo = await Promise.all(ordersWithCustomers.map(async order => {
+      const paymentTotal = paymentMap.get(order.orderId) || 0;
+      
+      // ULTRA SIMPLE FIX: Just compare payments to stored order total
+      // Use the same logic as Order Summary: if no stored total, assume payment covers it
+      const storedOrderTotal = Number(order.paymentAmount) || 0;
+      
+      // If there's a stored order total, compare against it
+      // If no stored total but there are payments, consider it paid (like Order Summary shows)
+      const isFullyPaid = storedOrderTotal > 0 
+        ? (paymentTotal >= storedOrderTotal) 
+        : (paymentTotal > 0);
+
+      return {
+        ...order,
+        customer: order.customerName || 'Unknown Customer',
+        paymentTotal,
+        isFullyPaid
+      } as any; // Type assertion to avoid complex type errors
+    }));
+
+    return {
+      orders: ordersWithPaymentInfo,
+      total,
+      page,
+      limit,
+      totalPages
+    };
+  }
+
+  async getOrdersByDepartment(department: string): Promise<AllOrder[]> {
+    try {
+      console.log(`🏭 getOrdersByDepartment: Fetching orders for department "${department}"`);
+
+      // Query the allOrders table with customer info for orders in the specified department
+      const orders = await db
+        .select({
+          id: allOrders.id,
+          orderId: allOrders.orderId,
+          orderDate: allOrders.orderDate,
+          dueDate: allOrders.dueDate,
+          customerId: allOrders.customerId,
+          customerName: customers.name,
+          customerEmail: customers.email,
+          customerPO: allOrders.customerPO,
+          fbOrderNumber: allOrders.fbOrderNumber,
+          agrOrderDetails: allOrders.agrOrderDetails,
+          isCustomOrder: allOrders.isCustomOrder,
+          modelId: allOrders.modelId,
+          handedness: allOrders.handedness,
+          shankLength: allOrders.shankLength,
+          features: allOrders.features,
+          featureQuantities: allOrders.featureQuantities,
+          discountCode: allOrders.discountCode,
+          notes: allOrders.notes,
+          customDiscountType: allOrders.customDiscountType,
+          customDiscountValue: allOrders.customDiscountValue,
+          showCustomDiscount: allOrders.showCustomDiscount,
+          priceOverride: allOrders.priceOverride,
+          shipping: allOrders.shipping,
+          tikkaOption: allOrders.tikkaOption,
+          status: allOrders.status,
+          barcode: allOrders.barcode,
+          currentDepartment: allOrders.currentDepartment,
+          departmentHistory: allOrders.departmentHistory,
+          scrappedQuantity: allOrders.scrappedQuantity,
+          totalProduced: allOrders.totalProduced,
+          scrapDate: allOrders.scrapDate,
+          scrapReason: allOrders.scrapReason,
+          scrapDisposition: allOrders.scrapDisposition,
+          scrapAuthorization: allOrders.scrapAuthorization,
+          isReplacement: allOrders.isReplacement,
+          replacedOrderId: allOrders.replacedOrderId,
+          isPaid: allOrders.isPaid,
+          paymentType: allOrders.paymentType,
+          paymentAmount: allOrders.paymentAmount,
+          paymentDate: allOrders.paymentDate,
+          paymentTimestamp: allOrders.paymentTimestamp,
+          trackingNumber: allOrders.trackingNumber,
+          shippingCarrier: allOrders.shippingCarrier,
+          shippingMethod: allOrders.shippingMethod,
+          shippedDate: allOrders.shippedDate,
+          estimatedDelivery: allOrders.estimatedDelivery,
+          shippingLabelGenerated: allOrders.shippingLabelGenerated,
+          customerNotified: allOrders.customerNotified,
+          notificationMethod: allOrders.notificationMethod,
+          notificationSentAt: allOrders.notificationSentAt,
+          deliveryConfirmed: allOrders.deliveryConfirmed,
+          deliveryConfirmedAt: allOrders.deliveryConfirmedAt,
+          isCancelled: allOrders.isCancelled,
+          cancelledAt: allOrders.cancelledAt,
+          cancelReason: allOrders.cancelReason,
+          createdAt: allOrders.createdAt,
+          updatedAt: allOrders.updatedAt,
+          assignedTechnician: allOrders.assignedTechnician
+        })
+        .from(allOrders)
+        .leftJoin(customers, sql`${allOrders.customerId} = CAST(${customers.id} AS TEXT)`)
+        .where(
+          and(
+            eq(allOrders.currentDepartment, department),
+            ne(allOrders.status, 'SCRAPPED'),
+            ne(allOrders.status, 'CANCELLED'),
+            isNull(allOrders.scrapDate)
+          )
+        )
+        .orderBy(asc(allOrders.dueDate), asc(allOrders.createdAt));
+
+      console.log(`📋 getOrdersByDepartment: Found ${orders.length} orders in "${department}" department`);
+
+      // Get all customers to create a lookup map
+      const allCustomers = await db.select({
+        id: customers.id,
+        name: customers.name,
+        email: customers.email,
+        phone: customers.phone,
+        company: customers.company,
+        customerType: customers.customerType,
+        notes: customers.notes,
+        isActive: customers.isActive,
+        createdAt: customers.createdAt,
+        updatedAt: customers.updatedAt,
+        preferredCommunicationMethod: customers.preferredCommunicationMethod
+      }).from(customers);
+      const customerMap = new Map(allCustomers.map(c => [c.id.toString(), c.name]));
+
+      // Get all stock models to create a lookup map for display names
+      const allStockModels = await db.select().from(stockModels);
+      const stockModelMap = new Map(allStockModels.map(sm => [sm.id, sm.displayName || sm.name]));
+
+      // Enrich orders with customer names and stock model display names
+      const enrichedOrders = orders.map(order => ({
+        ...order,
+        customer: order.customerName || 'Unknown Customer',
+        productName: stockModelMap.get(order.modelId || '') || order.modelId || 'Unknown Product',
+        stockModelId: order.modelId,
+        priority: 50 // Default priority
+      })) as any;
+
+      console.log(`✅ getOrdersByDepartment: Enhanced ${enrichedOrders.length} orders with additional data`);
+      return enrichedOrders;
+    } catch (error) {
+      console.error(`Error in getOrdersByDepartment for "${department}":`, error);
+      throw error;
+    }
+  }
+
+  // Get order by ID (check both drafts and finalized)
+  async getOrderById(orderId: string): Promise<OrderDraft | AllOrder | null> {
+    try {
+      // Try finalized orders first
+      const finalizedOrder = await this.getFinalizedOrderById(orderId);
+      if (finalizedOrder) {
+        return { ...finalizedOrder, isFinalized: true } as any; // Cast to any to satisfy the return type for now
+      }
+
+      // If not found, try draft orders
+      const draftOrder = await this.getOrderDraft(orderId);
+      if (draftOrder) {
+        return { ...draftOrder, isFinalized: false } as any; // Cast to any to satisfy the return type for now
+      }
+
+      return null;
+    } catch (error) {
+      console.error('Error getting order by ID:', error);
+      throw error;
+    }
+  }
+
+
+
+
+  // Get multiple orders by IDs
+  async getOrdersByIds(orderIds: string[]): Promise<Array<OrderDraft | AllOrder>> {
+    try {
+      // Get from both finalized and draft orders
+      const finalizedOrders = await db.select()
+        .from(allOrders)
+        .where(inArray(allOrders.orderId, orderIds));
+
+      const draftOrders = await db.select()
+        .from(orderDrafts)
+        .where(inArray(orderDrafts.orderId, orderIds));
+
+      // Combine and deduplicate (prioritize finalized over draft)
+      const orderMap = new Map();
+
+      // Add draft orders first
+      draftOrders.forEach(order => {
+        orderMap.set(order.orderId, { ...order, isFinalized: false });
+      });
+
+      // Add finalized orders (will overwrite drafts if same ID)
+      finalizedOrders.forEach(order => {
+        orderMap.set(order.orderId, { ...order, isFinalized: true });
+      });
+
+      return Array.from(orderMap.values());
+    } catch (error) {
+      console.error("Error getting orders by IDs:", error);
+      throw error;
+    }
+  }
+
+  async searchOrders(query: string): Promise<{
+    id: string;
+    orderId: string | null;
+    serialNumber: string | null;
+    customerName: string | null;
+    poNumber: string | null;
+    stockModel: string | null;
+  }[]> {
+    // Simple implementation that doesn't cause TypeScript errors
+    try {
+      const results = await db
+        .select({
+          id: orderDrafts.id,
+          orderId: orderDrafts.orderId,
+          customer: orderDrafts.customerId,
+          po: orderDrafts.customerPO,
+          model: orderDrafts.modelId,
+        })
+        .from(orderDrafts)
+        .where(ilike(orderDrafts.orderId, `%${query}%`))
+        .limit(10);
+
+      return results.map(r => ({
+        id: r.id.toString(),
+        orderId: r.orderId,
+        serialNumber: null,
+        customerName: r.customer,
+        poNumber: r.po,
+        stockModel: r.model,
+      }));
+    } catch (error) {
+      console.error('Error searching orders:', error);
+      return [];
+    }
   }
 
   // Payments CRUD
@@ -1063,7 +2399,19 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deletePayment(id: number): Promise<void> {
-    await db.delete(payments).where(eq(payments.id, id));
+    // Handle foreign key constraints - delete related credit card transactions first
+    try {
+      // First, delete any related credit card transactions using raw SQL
+      await db.execute(sql`DELETE FROM credit_card_transactions WHERE payment_id = ${id}`);
+      console.log(`🗑️ Deleted related credit card transactions for payment ${id}`);
+      
+      // Then delete the payment
+      await db.delete(payments).where(eq(payments.id, id));
+      console.log(`✅ Successfully deleted payment ${id}`);
+    } catch (error) {
+      console.error(`❌ Error deleting payment ${id}:`, error);
+      throw error;
+    }
   }
 
   // Forms CRUD
@@ -1117,6 +2465,79 @@ export class DatabaseStorage implements IStorage {
     await db.delete(formSubmissions).where(eq(formSubmissions.id, id));
   }
 
+  // Enhanced Form Categories CRUD
+  async getAllEnhancedFormCategories(): Promise<EnhancedFormCategory[]> {
+    return await db.select().from(enhancedFormCategories).orderBy(asc(enhancedFormCategories.name));
+  }
+
+  async getEnhancedFormCategory(id: number): Promise<EnhancedFormCategory | undefined> {
+    const [category] = await db.select().from(enhancedFormCategories).where(eq(enhancedFormCategories.id, id));
+    return category || undefined;
+  }
+
+  async createEnhancedFormCategory(data: InsertEnhancedFormCategory): Promise<EnhancedFormCategory> {
+    const [category] = await db.insert(enhancedFormCategories).values(data).returning();
+    return category;
+  }
+
+  async updateEnhancedFormCategory(id: number, data: Partial<InsertEnhancedFormCategory>): Promise<EnhancedFormCategory> {
+    const [category] = await db.update(enhancedFormCategories)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(enhancedFormCategories.id, id))
+      .returning();
+    return category;
+  }
+
+  async deleteEnhancedFormCategory(id: number): Promise<void> {
+    await db.delete(enhancedFormCategories).where(eq(enhancedFormCategories.id, id));
+  }
+
+  // Enhanced Forms CRUD
+  async getAllEnhancedForms(): Promise<EnhancedForm[]> {
+    return await db.select().from(enhancedForms).orderBy(desc(enhancedForms.updatedAt));
+  }
+
+  async getEnhancedFormById(id: number): Promise<EnhancedForm | undefined> {
+    const [form] = await db.select().from(enhancedForms).where(eq(enhancedForms.id, id));
+    return form || undefined;
+  }
+
+  async createEnhancedForm(data: InsertEnhancedForm): Promise<EnhancedForm> {
+    // Ensure schemaConfig is provided, falling back to layout for backward compatibility
+    const payload = {
+      name: data.name,
+      description: data.description ?? null,
+      categoryId: data.categoryId ?? null,
+      tableName: data.tableName ?? null,
+      schemaConfig: data.schemaConfig ?? data.layout ?? {},
+      layout: data.layout ?? null,
+      version: data.version ?? 1,
+    };
+    console.log('DEBUG - Storage payload keys:', Object.keys(payload));
+    console.log('DEBUG - Storage schemaConfig:', !!payload.schemaConfig);
+    const [form] = await db.insert(enhancedForms).values(payload).returning();
+    return form;
+  }
+
+  async updateEnhancedForm(id: number, data: Partial<InsertEnhancedForm>): Promise<EnhancedForm> {
+    const [form] = await db.update(enhancedForms)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(enhancedForms.id, id))
+      .returning();
+    return form;
+  }
+
+  async deleteEnhancedForm(id: number): Promise<void> {
+    await db.delete(enhancedForms).where(eq(enhancedForms.id, id));
+  }
+
+  // Enhanced Form Submissions CRUD
+  async getFormSubmissions(formId: number): Promise<EnhancedFormSubmission[]> {
+    return await db.select().from(enhancedFormSubmissions)
+      .where(eq(enhancedFormSubmissions.formId, formId))
+      .orderBy(desc(enhancedFormSubmissions.submittedAt));
+  }
+
   // Inventory Items CRUD
   async getAllInventoryItems(): Promise<InventoryItem[]> {
     return await db.select().from(inventoryItems).where(eq(inventoryItems.isActive, true)).orderBy(inventoryItems.name);
@@ -1138,23 +2559,17 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createInventoryItem(data: InsertInventoryItem): Promise<InventoryItem> {
-    // Convert Date objects to ISO strings for date fields
-    const insertData: any = { ...data };
-    if (insertData.orderDate instanceof Date) {
-      insertData.orderDate = insertData.orderDate.toISOString();
-    }
-    
-    const [item] = await db.insert(inventoryItems).values([insertData]).returning();
+    const [item] = await db.insert(inventoryItems).values([data]).returning();
     return item;
   }
 
   async updateInventoryItem(id: number, data: Partial<InsertInventoryItem>): Promise<InventoryItem> {
-    // Convert Date objects to ISO strings for date fields
+    // Convert Date objects to strings for date fields
     const updateData: any = { ...data };
     if (updateData.orderDate instanceof Date) {
-      updateData.orderDate = updateData.orderDate.toISOString();
+      updateData.orderDate = updateData.orderDate.toISOString().split('T')[0];
     }
-    
+
     const [item] = await db.update(inventoryItems)
       .set(updateData)
       .where(eq(inventoryItems.id, id))
@@ -1178,17 +2593,17 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createInventoryScan(data: InsertInventoryScan): Promise<InventoryScan> {
-    // Convert Date objects to ISO strings for date fields
+    // Convert Date objects to strings for date fields
     const insertData: any = { ...data };
     if (insertData.expirationDate instanceof Date) {
-      insertData.expirationDate = insertData.expirationDate.toISOString();
+      insertData.expirationDate = insertData.expirationDate.toISOString().split('T')[0];
     }
     if (insertData.manufactureDate instanceof Date) {
-      insertData.manufactureDate = insertData.manufactureDate.toISOString();
+      insertData.manufactureDate = insertData.manufactureDate.toISOString().split('T')[0];
     }
     // Remove scannedAt handling as it's not in the InsertInventoryScan type
-    
-    const [scan] = await db.insert(inventoryScans).values([insertData]).returning();
+
+    const [scan] = await db.insert(inventoryScans).values(insertData).returning();
     // Note: Inventory scans are now for tracking only, not affecting inventory levels
     // since the new inventory schema doesn't track onHand/committed quantities
     return scan;
@@ -1212,13 +2627,13 @@ export class DatabaseStorage implements IStorage {
     // Convert Date objects to ISO strings for date fields
     const insertData: any = { ...data };
     if (insertData.expectedDelivery instanceof Date) {
-      insertData.expectedDelivery = insertData.expectedDelivery.toISOString();
+      insertData.expectedDelivery = insertData.expectedDelivery.toISOString().split('T')[0];
     }
     if (insertData.actualDelivery instanceof Date) {
-      insertData.actualDelivery = insertData.actualDelivery.toISOString();
+      insertData.actualDelivery = insertData.actualDelivery.toISOString().split('T')[0];
     }
-    
-    const [request] = await db.insert(partsRequests).values([insertData]).returning();
+
+    const [request] = await db.insert(partsRequests).values(insertData).returning();
     return request;
   }
 
@@ -1226,12 +2641,12 @@ export class DatabaseStorage implements IStorage {
     // Convert Date objects to ISO strings for date fields
     const updateData: any = { ...data };
     if (updateData.expectedDelivery instanceof Date) {
-      updateData.expectedDelivery = updateData.expectedDelivery.toISOString();
+      updateData.expectedDelivery = updateData.expectedDelivery.toISOString().split('T')[0];
     }
     if (updateData.actualDelivery instanceof Date) {
-      updateData.actualDelivery = updateData.actualDelivery.toISOString();
+      updateData.actualDelivery = updateData.actualDelivery.toISOString().split('T')[0];
     }
-    
+
     const [request] = await db.update(partsRequests)
       .set(updateData)
       .where(eq(partsRequests.id, id))
@@ -1256,6 +2671,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Employees CRUD
+
   async getAllEmployees(): Promise<Employee[]> {
     return await db.select().from(employees).where(eq(employees.isActive, true)).orderBy(employees.name);
   }
@@ -1265,30 +2681,30 @@ export class DatabaseStorage implements IStorage {
     return employee || undefined;
   }
 
-  async getEmployeesByRole(role: string): Promise<Employee[]> {
+  async getEmployeesByRole(role: string): Promise<Employee[] > {
     return await db.select().from(employees)
       .where(eq(employees.role, role))
       .orderBy(employees.name);
   }
 
   async createEmployee(data: InsertEmployee): Promise<Employee> {
-    // Convert Date objects to ISO strings for date fields
+    // Convert Date objects to strings for date fields
     const insertData: any = { ...data };
     if (insertData.hireDate instanceof Date) {
-      insertData.hireDate = insertData.hireDate.toISOString();
+      insertData.hireDate = insertData.hireDate.toISOString().split('T')[0];
     }
-    
-    const [employee] = await db.insert(employees).values([insertData]).returning();
+
+    const [employee] = await db.insert(employees).values(insertData).returning();
     return employee;
   }
 
   async updateEmployee(id: number, data: Partial<InsertEmployee>): Promise<Employee> {
-    // Convert Date objects to ISO strings for date fields
+    // Convert Date objects to strings for date fields
     const updateData: any = { ...data };
     if (updateData.hireDate instanceof Date) {
-      updateData.hireDate = updateData.hireDate.toISOString();
+      updateData.hireDate = updateData.hireDate.toISOString().split('T')[0];
     }
-    
+
     const [employee] = await db.update(employees)
       .set(updateData)
       .where(eq(employees.id, id))
@@ -1316,21 +2732,21 @@ export class DatabaseStorage implements IStorage {
     const token = nanoid(32);
     const expiry = new Date();
     expiry.setDate(expiry.getDate() + 30); // 30 days expiry
-    
+
     await db.update(employees)
-      .set({ 
+      .set({
         portalToken: token,
         portalTokenExpiry: expiry,
         updatedAt: new Date()
       })
       .where(eq(employees.id, employeeId));
-    
+
     return token;
   }
 
   async updateEmployeePortalToken(employeeId: number, token: string, expiry: Date): Promise<void> {
     await db.update(employees)
-      .set({ 
+      .set({
         portalToken: token,
         portalTokenExpiry: expiry,
         updatedAt: new Date()
@@ -1372,18 +2788,17 @@ export class DatabaseStorage implements IStorage {
 
   // Employee Certifications CRUD
   async getEmployeeCertifications(employeeId?: number): Promise<EmployeeCertification[]> {
-    let whereCondition = eq(employeeCertifications.isActive, true);
-    
+    let query = db.select().from(employeeCertifications)
+      .where(eq(employeeCertifications.isActive, true));
+
     if (employeeId) {
-      whereCondition = and(
+      query = db.select().from(employeeCertifications).where(and(
         eq(employeeCertifications.isActive, true),
         eq(employeeCertifications.employeeId, employeeId)
-      );
+      ));
     }
-    
-    return await db.select().from(employeeCertifications)
-      .where(whereCondition)
-      .orderBy(employeeCertifications.dateObtained);
+
+    return await query.orderBy(employeeCertifications.dateObtained);
   }
 
   async getEmployeeCertification(id: number): Promise<EmployeeCertification | undefined> {
@@ -1393,29 +2808,29 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createEmployeeCertification(data: InsertEmployeeCertification): Promise<EmployeeCertification> {
-    // Convert Date objects to ISO strings for date fields
+    // Convert Date objects to strings for date fields
     const insertData: any = { ...data };
     if (insertData.dateObtained instanceof Date) {
-      insertData.dateObtained = insertData.dateObtained.toISOString();
+      insertData.dateObtained = insertData.dateObtained.toISOString().split('T')[0];
     }
     if (insertData.expiryDate instanceof Date) {
-      insertData.expiryDate = insertData.expiryDate.toISOString();
+      insertData.expiryDate = insertData.expiryDate.toISOString().split('T')[0];
     }
-    
-    const [empCert] = await db.insert(employeeCertifications).values([insertData]).returning();
+
+    const [empCert] = await db.insert(employeeCertifications).values(insertData).returning();
     return empCert;
   }
 
   async updateEmployeeCertification(id: number, data: Partial<InsertEmployeeCertification>): Promise<EmployeeCertification> {
-    // Convert Date objects to ISO strings for date fields
+    // Convert Date objects to strings for date fields
     const updateData: any = { ...data };
     if (updateData.dateObtained instanceof Date) {
-      updateData.dateObtained = updateData.dateObtained.toISOString();
+      updateData.dateObtained = updateData.dateObtained.toISOString().split('T')[0];
     }
     if (updateData.expiryDate instanceof Date) {
-      updateData.expiryDate = updateData.expiryDate.toISOString();
+      updateData.expiryDate = updateData.expiryDate.toISOString().split('T')[0];
     }
-    
+
     const [empCert] = await db.update(employeeCertifications)
       .set({ ...updateData, updatedAt: new Date() })
       .where(eq(employeeCertifications.id, id))
@@ -1432,12 +2847,12 @@ export class DatabaseStorage implements IStorage {
   async getExpiringCertifications(days: number): Promise<EmployeeCertification[]> {
     const futureDate = new Date();
     futureDate.setDate(futureDate.getDate() + days);
-    
+
     return await db.select().from(employeeCertifications)
       .where(and(
         eq(employeeCertifications.isActive, true),
-        lte(employeeCertifications.expiryDate, futureDate.toISOString()),
-        gte(employeeCertifications.expiryDate, new Date().toISOString())
+        lte(employeeCertifications.expiryDate, futureDate.toISOString().split('T')[0]),
+        gte(employeeCertifications.expiryDate, new Date().toISOString().split('T')[0])
       ))
       .orderBy(employeeCertifications.expiryDate);
   }
@@ -1460,20 +2875,20 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(evaluations.evaluationPeriodEnd));
   }
 
-  async getEvaluationsByEvaluator(evaluatorId: number): Promise<Evaluation[]> {
+  async getEvaluationsByEvaluator(evaluatorId: number): Promise<Evaluation[] > {
     return await db.select().from(evaluations)
       .where(eq(evaluations.evaluatorId, evaluatorId))
       .orderBy(desc(evaluations.createdAt));
   }
 
   async createEvaluation(data: InsertEvaluation): Promise<Evaluation> {
-    // Convert Date objects to ISO strings for date fields
+    // Convert Date objects to strings for date fields
     const insertData: any = { ...data };
     if (insertData.evaluationPeriodStart instanceof Date) {
-      insertData.evaluationPeriodStart = insertData.evaluationPeriodStart.toISOString();
+      insertData.evaluationPeriodStart = insertData.evaluationPeriodStart.toISOString().split('T')[0];
     }
     if (insertData.evaluationPeriodEnd instanceof Date) {
-      insertData.evaluationPeriodEnd = insertData.evaluationPeriodEnd.toISOString();
+      insertData.evaluationPeriodEnd = insertData.evaluationPeriodEnd.toISOString().split('T')[0];
     }
     if (insertData.submittedAt instanceof Date) {
       insertData.submittedAt = insertData.submittedAt.toISOString();
@@ -1481,13 +2896,13 @@ export class DatabaseStorage implements IStorage {
     if (insertData.reviewedAt instanceof Date) {
       insertData.reviewedAt = insertData.reviewedAt.toISOString();
     }
-    
-    const [evaluation] = await db.insert(evaluations).values([insertData]).returning();
+
+    const [evaluation] = await db.insert(evaluations).values(insertData).returning();
     return evaluation;
   }
 
   async updateEvaluation(id: number, data: Partial<InsertEvaluation>): Promise<Evaluation> {
-    // Convert Date objects to ISO strings for date fields
+    // Convert Date objects to strings for date fields
     const updateData: any = { ...data };
     if (updateData.evaluationPeriodStart instanceof Date) {
       updateData.evaluationPeriodStart = updateData.evaluationPeriodStart.toISOString().split('T')[0];
@@ -1501,7 +2916,7 @@ export class DatabaseStorage implements IStorage {
     if (updateData.reviewedAt instanceof Date) {
       updateData.reviewedAt = updateData.reviewedAt.toISOString();
     }
-    
+
     const [evaluation] = await db.update(evaluations)
       .set({ ...updateData, updatedAt: new Date() })
       .where(eq(evaluations.id, id))
@@ -1515,7 +2930,7 @@ export class DatabaseStorage implements IStorage {
 
   async submitEvaluation(id: number): Promise<Evaluation> {
     const [evaluation] = await db.update(evaluations)
-      .set({ 
+      .set({
         status: 'SUBMITTED',
         submittedAt: new Date(),
         updatedAt: new Date()
@@ -1526,7 +2941,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async reviewEvaluation(id: number, reviewData: Partial<InsertEvaluation>): Promise<Evaluation> {
-    // Convert Date objects to ISO strings for date fields
+    // Convert Date objects to strings for date fields
     const updateData: any = { ...reviewData };
     if (updateData.evaluationPeriodStart instanceof Date) {
       updateData.evaluationPeriodStart = updateData.evaluationPeriodStart.toISOString().split('T')[0];
@@ -1534,9 +2949,9 @@ export class DatabaseStorage implements IStorage {
     if (updateData.evaluationPeriodEnd instanceof Date) {
       updateData.evaluationPeriodEnd = updateData.evaluationPeriodEnd.toISOString().split('T')[0];
     }
-    
+
     const [evaluation] = await db.update(evaluations)
-      .set({ 
+      .set({
         ...updateData,
         status: 'REVIEWED',
         reviewedAt: new Date(),
@@ -1595,18 +3010,17 @@ export class DatabaseStorage implements IStorage {
 
   // Employee Documents CRUD
   async getAllDocuments(employeeId?: number): Promise<EmployeeDocument[]> {
-    let whereCondition = eq(employeeDocuments.isActive, true);
-    
+    let query = db.select().from(employeeDocuments)
+      .where(eq(employeeDocuments.isActive, true));
+
     if (employeeId) {
-      whereCondition = and(
+      query = query.where(and(
         eq(employeeDocuments.isActive, true),
         eq(employeeDocuments.employeeId, employeeId)
-      );
+      ));
     }
-    
-    return await db.select().from(employeeDocuments)
-      .where(whereCondition)
-      .orderBy(desc(employeeDocuments.createdAt));
+
+    return await query.orderBy(desc(employeeDocuments.createdAt));
   }
 
   async getDocument(id: number): Promise<EmployeeDocument | undefined> {
@@ -1616,23 +3030,23 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createDocument(data: InsertEmployeeDocument): Promise<EmployeeDocument> {
-    // Convert Date objects to ISO strings for date fields
+    // Convert Date objects to strings for date fields
     const insertData: any = { ...data };
     if (insertData.expiryDate instanceof Date) {
       insertData.expiryDate = insertData.expiryDate.toISOString().split('T')[0];
     }
-    
-    const [document] = await db.insert(employeeDocuments).values([insertData]).returning();
+
+    const [document] = await db.insert(employeeDocuments).values(insertData).returning();
     return document;
   }
 
   async updateDocument(id: number, data: Partial<InsertEmployeeDocument>): Promise<EmployeeDocument> {
-    // Convert Date objects to ISO strings for date fields
+    // Convert Date objects to strings for date fields
     const updateData: any = { ...data };
     if (updateData.expiryDate instanceof Date) {
       updateData.expiryDate = updateData.expiryDate.toISOString().split('T')[0];
     }
-    
+
     const [document] = await db.update(employeeDocuments)
       .set({ ...updateData, updatedAt: new Date() })
       .where(eq(employeeDocuments.id, id))
@@ -1647,28 +3061,27 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getDocumentsByType(documentType: string, employeeId?: number): Promise<EmployeeDocument[]> {
-    let whereCondition = and(
-      eq(employeeDocuments.documentType, documentType),
-      eq(employeeDocuments.isActive, true)
-    );
-    
+    let query = db.select().from(employeeDocuments)
+      .where(and(
+        eq(employeeDocuments.documentType, documentType),
+        eq(employeeDocuments.isActive, true)
+      ));
+
     if (employeeId) {
-      whereCondition = and(
+      query = query.where(and(
         eq(employeeDocuments.documentType, documentType),
         eq(employeeDocuments.employeeId, employeeId),
         eq(employeeDocuments.isActive, true)
-      );
+      ));
     }
-    
-    return await db.select().from(employeeDocuments)
-      .where(whereCondition)
-      .orderBy(desc(employeeDocuments.createdAt));
+
+    return await query.orderBy(desc(employeeDocuments.createdAt));
   }
 
   async getExpiringDocuments(days: number): Promise<EmployeeDocument[]> {
     const futureDate = new Date();
     futureDate.setDate(futureDate.getDate() + days);
-    
+
     return await db.select().from(employeeDocuments)
       .where(and(
         eq(employeeDocuments.isActive, true),
@@ -1680,41 +3093,40 @@ export class DatabaseStorage implements IStorage {
 
   // Employee Audit Log
   async createAuditLog(data: InsertEmployeeAuditLog): Promise<EmployeeAuditLog> {
-    const [auditLog] = await db.insert(employeeAuditLog).values([data]).returning();
+    const [auditLog] = await db.insert(employeeAuditLog).values(data).returning();
     return auditLog;
   }
 
   async getAuditLogs(employeeId?: number, action?: string): Promise<EmployeeAuditLog[]> {
     let query = db.select().from(employeeAuditLog);
-    
+
     const conditions = [];
     if (employeeId) conditions.push(eq(employeeAuditLog.employeeId, employeeId));
     if (action) conditions.push(eq(employeeAuditLog.action, action));
-    
+
     if (conditions.length > 0) {
       query = query.where(and(...conditions));
     }
-    
+
     return await query.orderBy(desc(employeeAuditLog.timestamp));
   }
 
   async getAuditLogsByDateRange(startDate: Date, endDate: Date, employeeId?: number): Promise<EmployeeAuditLog[]> {
-    let whereCondition = and(
-      gte(employeeAuditLog.timestamp, startDate),
-      lte(employeeAuditLog.timestamp, endDate)
-    );
-    
+    let query = db.select().from(employeeAuditLog)
+      .where(and(
+        gte(employeeAuditLog.timestamp, startDate),
+        lte(employeeAuditLog.timestamp, endDate)
+      ));
+
     if (employeeId) {
-      whereCondition = and(
+      query = query.where(and(
         gte(employeeAuditLog.timestamp, startDate),
         lte(employeeAuditLog.timestamp, endDate),
         eq(employeeAuditLog.employeeId, employeeId)
-      );
+      ));
     }
-    
-    return await db.select().from(employeeAuditLog)
-      .where(whereCondition)
-      .orderBy(desc(employeeAuditLog.timestamp));
+
+    return await query.orderBy(desc(employeeAuditLog.timestamp));
   }
 
   // QC Definitions CRUD
@@ -1867,10 +3279,53 @@ export class DatabaseStorage implements IStorage {
     };
   }
 
-  // Removed duplicate - using portal version with better error handling
+  async clockIn(employeeId: string, timestamp: string): Promise<void> {
+    const today = new Date().toISOString().split('T')[0];
+    const clockInTime = new Date(timestamp);
 
-  // Removed duplicate - using portal version with better error handling
+    // Check if entry already exists for today
+    const [existing] = await db
+      .select()
+      .from(timeClockEntries)
+      .where(and(eq(timeClockEntries.employeeId, employeeId), eq(timeClockEntries.date, today)))
+      .orderBy(desc(timeClockEntries.id))
+      .limit(1);
 
+    if (existing) {
+      // Update existing entry
+      await db.update(timeClockEntries)
+        .set({ clockIn: clockInTime, clockOut: null })
+        .where(eq(timeClockEntries.id, existing.id));
+    } else {
+      // Create new entry
+      await db.insert(timeClockEntries).values({
+        employeeId,
+        clockIn: clockInTime,
+        clockOut: null,
+        date: today
+      });
+    }
+  }
+
+  async clockOut(employeeId: string, timestamp: string): Promise<void> {
+    const today = new Date().toISOString().split('T')[0];
+    const clockOutTime = new Date(timestamp);
+
+    const [existing] = await db
+      .select()
+      .from(timeClockEntries)
+      .where(and(eq(timeClockEntries.employeeId, employeeId), eq(timeClockEntries.date, today)))
+      .orderBy(desc(timeClockEntries.id))
+      .limit(1);
+
+    if (existing) {
+      await db.update(timeClockEntries)
+        .set({ clockOut: clockOutTime })
+        .where(eq(timeClockEntries.id, existing.id));
+    }
+  }
+
+  async getTimeClockEntries(employeeId?: string, date?: string): Promise<TimeClockEntry[]>;
   async getTimeClockEntries(employeeId?: string, date?: string): Promise<TimeClockEntry[]> {
     let query = db.select().from(timeClockEntries);
 
@@ -1897,10 +3352,10 @@ export class DatabaseStorage implements IStorage {
 
   async updateTimeClockEntry(id: number, data: Partial<InsertTimeClockEntry>): Promise<TimeClockEntry> {
     // Normalize the date to YYYY-MM-DD format if provided
-    const normalizedData: any = { ...data };
-    if (normalizedData.date instanceof Date) {
-      normalizedData.date = normalizedData.date.toISOString().split('T')[0];
-    }
+    const normalizedData = data.date ? {
+      ...data,
+      date: typeof data.date === 'string' ? data.date : new Date(data.date).toISOString().split('T')[0]
+    } : data;
 
     const [entry] = await db.update(timeClockEntries)
       .set(normalizedData)
@@ -1924,15 +3379,15 @@ export class DatabaseStorage implements IStorage {
     // If no items exist for today, create default checklist items
     if (items.length === 0) {
       const defaultItems = [
-        { employeeId, date, label: 'Review safety procedures', type: 'checkbox', required: true },
-        { employeeId, date, label: 'Check equipment status', type: 'dropdown', options: ['Good', 'Needs Attention', 'Broken'], required: true },
-        { employeeId, date, label: 'Work area cleanliness', type: 'dropdown', options: ['Clean', 'Needs Cleaning', 'Deep Clean Required'], required: true },
-        { employeeId, date, label: 'Special notes', type: 'text', required: false }
+        { employeeId, date, label: 'Review safety procedures', type: 'checkbox' as const, required: true },
+        { employeeId, date, label: 'Check equipment status', type: 'dropdown' as const, options: ['Good', 'Needs Attention', 'Broken'], required: true },
+        { employeeId, date, label: 'Work area cleanliness', type: 'dropdown' as const, options: ['Clean', 'Needs Cleaning', 'Deep Clean Required'], required: true },
+        { employeeId, date, label: 'Special notes', type: 'text' as const, required: false }
       ];
 
       const createdItems = [];
       for (const item of defaultItems) {
-        const [created] = await db.insert(checklistItems).values([item]).returning();
+        const [created] = await db.insert(checklistItems).values(item).returning();
         createdItems.push(created);
       }
       return createdItems;
@@ -1942,17 +3397,23 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createChecklistItem(data: InsertChecklistItem): Promise<ChecklistItem> {
-    const [item] = await db.insert(checklistItems).values([data]).returning();
+    // Convert Date objects to strings for date fields
+    const insertData: any = { ...data };
+    if (insertData.date instanceof Date) {
+      insertData.date = insertData.date.toISOString().split('T')[0];
+    }
+
+    const [item] = await db.insert(checklistItems).values(insertData).returning();
     return item;
   }
 
   async updateChecklistItem(id: number, data: Partial<InsertChecklistItem>): Promise<ChecklistItem> {
-    // Convert Date objects to strings if needed
+    // Convert Date objects to strings for date fields
     const updateData: any = { ...data };
     if (updateData.date instanceof Date) {
       updateData.date = updateData.date.toISOString().split('T')[0];
     }
-    
+
     const [item] = await db.update(checklistItems)
       .set(updateData)
       .where(eq(checklistItems.id, id))
@@ -1988,7 +3449,7 @@ export class DatabaseStorage implements IStorage {
 
       const createdDocs = [];
       for (const doc of defaultDocs) {
-        const [created] = await db.insert(onboardingDocs).values([doc]).returning();
+        const [created] = await db.insert(onboardingDocs).values(doc).returning();
         createdDocs.push(created);
       }
       return createdDocs;
@@ -1998,16 +3459,16 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createOnboardingDoc(data: InsertOnboardingDoc): Promise<OnboardingDoc> {
-    const [doc] = await db.insert(onboardingDocs).values([data]).returning();
+    const [doc] = await db.insert(onboardingDocs).values(data).returning();
     return doc;
   }
 
   async signOnboardingDoc(id: number, signatureDataURL: string): Promise<OnboardingDoc> {
     const [doc] = await db.update(onboardingDocs)
-      .set({ 
-        signed: true, 
-        signatureDataURL, 
-        signedAt: new Date() 
+      .set({
+        signed: true,
+        signatureDataURL,
+        signedAt: new Date()
       })
       .where(eq(onboardingDocs.id, id))
       .returning();
@@ -2025,15 +3486,96 @@ export class DatabaseStorage implements IStorage {
   // Module 8: Customers CRUD
   async getAllCustomers(): Promise<Customer[]> {
     return await db
-      .select()
+      .select({
+        id: customers.id,
+        name: customers.name,
+        email: customers.email,
+        phone: customers.phone,
+        company: customers.company,
+        contact: customers.contact,
+        customerType: customers.customerType,
+        notes: customers.notes,
+        isActive: customers.isActive,
+        createdAt: customers.createdAt,
+        updatedAt: customers.updatedAt,
+        preferredCommunicationMethod: customers.preferredCommunicationMethod
+      })
       .from(customers)
       .where(eq(customers.isActive, true))
       .orderBy(customers.name);
   }
 
+  async getCustomerById(id: string): Promise<Customer | undefined> {
+    const [customer] = await db
+      .select({
+        id: customers.id,
+        name: customers.name,
+        email: customers.email,
+        phone: customers.phone,
+        company: customers.company,
+        contact: customers.contact,
+        customerType: customers.customerType,
+        notes: customers.notes,
+        isActive: customers.isActive,
+        createdAt: customers.createdAt,
+        updatedAt: customers.updatedAt,
+        preferredCommunicationMethod: customers.preferredCommunicationMethod
+      })
+      .from(customers)
+      .where(eq(customers.id, parseInt(id)));
+    return customer || undefined;
+  }
+
+  async getCustomersWithPurchaseOrders(): Promise<Customer[]> {
+    // Get unique customer names from purchase orders
+    const customerNames = await db
+      .selectDistinct({ customerName: purchaseOrders.customerName })
+      .from(purchaseOrders);
+
+    const names = customerNames.map(row => row.customerName);
+
+    if (names.length === 0) {
+      return [];
+    }
+
+    // Get customers that match those names using IN clause
+    return await db
+      .select({
+        id: customers.id,
+        name: customers.name,
+        email: customers.email,
+        phone: customers.phone,
+        company: customers.company,
+        customerType: customers.customerType,
+        notes: customers.notes,
+        isActive: customers.isActive,
+        createdAt: customers.createdAt,
+        updatedAt: customers.updatedAt,
+        preferredCommunicationMethod: customers.preferredCommunicationMethod
+      })
+      .from(customers)
+      .where(and(
+        eq(customers.isActive, true),
+        sql`${customers.name} IN (${sql.join(names.map(name => sql`${name}`), sql`, `)})`
+      ))
+      .orderBy(customers.name);
+  }
+
   async searchCustomers(query: string): Promise<Customer[]> {
     return await db
-      .select()
+      .select({
+        id: customers.id,
+        name: customers.name,
+        email: customers.email,
+        phone: customers.phone,
+        company: customers.company,
+        customerType: customers.customerType,
+        notes: customers.notes,
+        isActive: customers.isActive,
+        createdAt: customers.createdAt,
+        updatedAt: customers.updatedAt,
+        preferredCommunicationMethod: customers.preferredCommunicationMethod
+      })
       .from(customers)
       .where(and(
         eq(customers.isActive, true),
@@ -2110,6 +3652,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Module 8: Communication Logs CRUD
+  async getCommunicationLogs(orderId: string): Promise<CommunicationLog[]>;
   async getCommunicationLogs(orderId: string): Promise<CommunicationLog[]> {
     return await db
       .select()
@@ -2132,6 +3675,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Module 8: PDF Documents CRUD
+  async getPdfDocuments(orderId: string): Promise<PdfDocument[]>;
   async getPdfDocuments(orderId: string): Promise<PdfDocument[]> {
     return await db
       .select()
@@ -2184,7 +3728,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createPurchaseOrder(data: InsertPurchaseOrder): Promise<PurchaseOrder> {
-    const [po] = await db.insert(purchaseOrders).values([data]).returning();
+    const [po] = await db.insert(purchaseOrders).values(data).returning();
     return po;
   }
 
@@ -2204,6 +3748,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Purchase Order Items CRUD
+  async getPurchaseOrderItems(poId: number): Promise<PurchaseOrderItem[]>;
   async getPurchaseOrderItems(poId: number): Promise<PurchaseOrderItem[]> {
     return await db
       .select()
@@ -2213,7 +3758,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createPurchaseOrderItem(data: InsertPurchaseOrderItem): Promise<PurchaseOrderItem> {
-    const [item] = await db.insert(purchaseOrderItems).values([data]).returning();
+    const [item] = await db.insert(purchaseOrderItems).values(data).returning();
     return item;
   }
 
@@ -2225,7 +3770,7 @@ export class DatabaseStorage implements IStorage {
         const item = currentItem[0];
         const quantity = data.quantity ?? item.quantity;
         const unitPrice = data.unitPrice ?? item.unitPrice;
-        data.totalPrice = quantity * (unitPrice || 0);
+        data.totalPrice = quantity * unitPrice;
       }
     }
 
@@ -2245,7 +3790,16 @@ export class DatabaseStorage implements IStorage {
     return await db
       .select()
       .from(productionOrders)
-      .orderBy(desc(productionOrders.createdAt));
+      .orderBy(
+        asc(productionOrders.dueDate), // Most urgent due dates first
+        asc(sql`CASE 
+          WHEN ${productionOrders.dueDate} < CURRENT_DATE THEN 1 
+          WHEN ${productionOrders.dueDate} <= CURRENT_DATE + INTERVAL '7 days' THEN 10
+          WHEN ${productionOrders.dueDate} <= CURRENT_DATE + INTERVAL '30 days' THEN 30
+          ELSE 50 
+        END`), // Priority score (lower = higher priority)
+        desc(productionOrders.createdAt) // Newest first as tie-breaker
+      );
   }
 
   async getProductionOrder(id: number): Promise<ProductionOrder | undefined> {
@@ -2266,8 +3820,17 @@ export class DatabaseStorage implements IStorage {
     return order;
   }
 
+  async getProductionOrdersByPoId(poId: number): Promise<ProductionOrder[]> {
+    const orders = await db
+      .select()
+      .from(productionOrders)
+      .where(eq(productionOrders.poId, poId))
+      .orderBy(productionOrders.createdAt);
+    return orders;
+  }
+
   async createProductionOrder(data: InsertProductionOrder): Promise<ProductionOrder> {
-    const [order] = await db.insert(productionOrders).values([data]).returning();
+    const [order] = await db.insert(productionOrders).values(data).returning();
     return order;
   }
 
@@ -2284,32 +3847,18 @@ export class DatabaseStorage implements IStorage {
     await db.delete(productionOrders).where(eq(productionOrders.id, id));
   }
 
-  // Generate production orders from PO
-  async generateProductionOrders(poId: number): Promise<ProductionOrder[]> {
+  // MODIFIED: Includes production scheduling logic for P1 purchase orders
+  async generateProductionOrdersFromPO(poId: number): Promise<ProductionOrder[]> {
     const po = await this.getPurchaseOrder(poId);
     if (!po) {
       throw new Error('Purchase order not found');
     }
 
-    // Check if production orders already exist for this PO
-    const existingOrders = await db
-      .select()
-      .from(productionOrders)
-      .where(eq(productionOrders.poId, poId));
-    
-    if (existingOrders.length > 0) {
-      console.log(`🏭 Found ${existingOrders.length} existing production orders for PO ${poId}`);
-      console.log(`🏭 Returning existing production orders instead of creating duplicates`);
-      return existingOrders;
-    }
+    const customer = await this.db.select()
+      .from(customers)
+      .where(eq(customers.id, parseInt(po.customerId)))
+      .then(results => results[0]);
 
-    // Get customer from the main customers table
-    const customerIdNum = parseInt(po.customerId);
-    if (isNaN(customerIdNum)) {
-      throw new Error('Invalid customer ID in purchase order');
-    }
-    
-    const customer = await this.getCustomer(customerIdNum);
     if (!customer) {
       throw new Error('Customer not found');
     }
@@ -2319,6 +3868,9 @@ export class DatabaseStorage implements IStorage {
       throw new Error('No items found in purchase order');
     }
 
+    // Calculate production schedule for due date fulfillment
+    const productionSchedule = await this.calculateProductionSchedule(po.expectedDelivery, items);
+
     // Generate base order ID: [First 3 letters of customer][Last 5 digits of PO#]
     const customerPrefix = customer.name.replace(/[^A-Za-z]/g, '').substring(0, 3).toUpperCase();
     const poNumberDigits = po.poNumber.replace(/[^0-9]/g, '').slice(-5).padStart(5, '0');
@@ -2327,10 +3879,16 @@ export class DatabaseStorage implements IStorage {
     const orders: ProductionOrder[] = [];
     let sequentialNumber = 1;
 
-    // Create production orders for each item based on quantity
+    // Create production orders for each item with distributed due dates
     for (const item of items) {
+      const itemSchedule = productionSchedule[item.id];
+
       for (let i = 0; i < item.quantity; i++) {
         const orderId = `${baseOrderId}-${sequentialNumber.toString().padStart(4, '0')}`;
+
+        // Get due date for this specific item instance
+        const weekIndex = Math.floor(i / itemSchedule.itemsPerWeek);
+        const itemDueDate = itemSchedule.weeklyDueDates[weekIndex] || new Date(po.expectedDelivery);
 
         const orderData: InsertProductionOrder = {
           orderId,
@@ -2344,8 +3902,10 @@ export class DatabaseStorage implements IStorage {
           itemName: item.itemName,
           specifications: item.specifications,
           orderDate: new Date(),
-          dueDate: new Date(po.expectedDelivery),
-          productionStatus: 'PENDING'
+          dueDate: itemDueDate,
+          productionStatus: 'PENDING',
+          currentDepartment: 'P1 Production Queue',
+          status: 'IN_PROGRESS'
         };
 
         const order = await this.createProductionOrder(orderData);
@@ -2360,8 +3920,93 @@ export class DatabaseStorage implements IStorage {
     return orders;
   }
 
+  // Helper to calculate production schedule for P1 POs
+  private async calculateProductionSchedule(dueDate: string, items: any[]): Promise<Record<number, {
+    itemsPerWeek: number;
+    weeksNeeded: number;
+    weeklyDueDates: Date[];
+  }>> {
+    const finalDueDate = new Date(dueDate);
+    const today = new Date();
+
+    // Calculate available weeks (excluding weekends, only Mon-Thu production days)
+    const msPerWeek = 7 * 24 * 60 * 60 * 1000;
+    const totalWeeksAvailable = Math.floor((finalDueDate.getTime() - today.getTime()) / msPerWeek);
+    const availableWeeks = Math.max(1, totalWeeksAvailable); // At least 1 week
+
+    console.log(`📅 P1 PO Production Schedule Calculation:`);
+    console.log(`   Due Date: ${finalDueDate.toDateString()}`);
+    console.log(`   Available Weeks: ${availableWeeks}`);
+
+    const schedule: Record<number, any> = {};
+
+    for (const item of items) {
+      const itemsNeeded = item.quantity;
+      
+      // Get mold capacity for this specific item
+      const molds = await this.getAllMolds();
+      const enabledMolds = molds.filter(m => m.enabled);
+      
+      // Find molds that support this item's stock model
+      const itemStockModel = item.stockModelId || item.itemId;
+      const compatibleMolds = enabledMolds.filter(m => {
+        return m.stockModels && Array.isArray(m.stockModels) && 
+               m.stockModels.includes(itemStockModel);
+      });
+      
+      // Calculate weekly capacity based on compatible molds
+      // Assume 4 working days per week (Mon-Thu) and account for mold multipliers
+      const dailyMoldCapacity = compatibleMolds.reduce((sum, m) => sum + m.multiplier, 0);
+      const maxItemsPerWeek = dailyMoldCapacity * 4; // 4 working days per week
+      
+      // If no compatible molds, use fallback capacity
+      const effectiveWeeklyCapacity = maxItemsPerWeek > 0 ? maxItemsPerWeek : 8; // Fallback to 8 per week
+
+      // Calculate items per week needed to meet due date
+      const itemsPerWeekNeeded = Math.ceil(itemsNeeded / availableWeeks);
+      const actualItemsPerWeek = Math.min(itemsPerWeekNeeded, effectiveWeeklyCapacity);
+      const weeksNeeded = Math.ceil(itemsNeeded / actualItemsPerWeek);
+
+      console.log(`   Item ${item.itemName} (${item.quantity} units):`);
+      console.log(`     Items per week needed: ${itemsPerWeekNeeded}`);
+      console.log(`     Actual items per week: ${actualItemsPerWeek}`);
+      console.log(`     Weeks needed: ${weeksNeeded}`);
+
+      // Generate weekly due dates
+      const weeklyDueDates: Date[] = [];
+      for (let week = 0; week < weeksNeeded; week++) {
+        // Calculate due date for this week (working backwards from final due date)
+        const weekDueDate = new Date(finalDueDate);
+        weekDueDate.setDate(weekDueDate.getDate() - (weeksNeeded - week - 1) * 7);
+
+        // Ensure due date is on a work day (Thursday for week completion)
+        const dayOfWeek = weekDueDate.getDay();
+        if (dayOfWeek === 0) weekDueDate.setDate(weekDueDate.getDate() + 4); // Sunday -> Thursday
+        else if (dayOfWeek === 1) weekDueDate.setDate(weekDueDate.getDate() + 3); // Monday -> Thursday  
+        else if (dayOfWeek === 2) weekDueDate.setDate(weekDueDate.getDate() + 2); // Tuesday -> Thursday
+        else if (dayOfWeek === 3) weekDueDate.setDate(weekDueDate.getDate() + 1); // Wednesday -> Thursday
+        else if (dayOfWeek === 5) weekDueDate.setDate(weekDueDate.getDate() + 6); // Friday -> Thursday
+        else if (dayOfWeek === 6) weekDueDate.setDate(weekDueDate.getDate() + 5); // Saturday -> Thursday
+        // Thursday (4) stays the same
+
+        weeklyDueDates.push(weekDueDate);
+
+        console.log(`     Week ${week + 1} due: ${weekDueDate.toDateString()}`);
+      }
+
+      schedule[item.id] = {
+        itemsPerWeek: actualItemsPerWeek,
+        weeksNeeded: weeksNeeded,
+        weeklyDueDates: weeklyDueDates
+      };
+    }
+
+    return schedule;
+  }
+
+
   // Layup Scheduler: Molds CRUD
-  async getAllMolds(): Promise<Mold[]> {
+  async getAllMolds(): Promise<Mold[] > {
     return await db.select().from(molds).orderBy(molds.modelName, molds.instanceNumber);
   }
 
@@ -2388,6 +4033,10 @@ export class DatabaseStorage implements IStorage {
     await db.delete(molds).where(eq(molds.moldId, moldId));
   }
 
+  async clearMoldFromSchedule(moldId: string): Promise<void> {
+    await db.delete(layupSchedule).where(eq(layupSchedule.moldId, moldId));
+  }
+
   // Layup Scheduler: Employee Settings CRUD
   async getAllEmployeeLayupSettings(): Promise<(EmployeeLayupSettings & { name: string })[]> {
     const result = await db
@@ -2405,7 +4054,7 @@ export class DatabaseStorage implements IStorage {
       .from(employeeLayupSettings)
       .where(eq(employeeLayupSettings.isActive, true))
       .orderBy(employeeLayupSettings.employeeId);
-    
+
     return result.map(r => ({
       ...r,
       name: r.name || r.employeeId
@@ -2427,20 +4076,35 @@ export class DatabaseStorage implements IStorage {
 
   async updateEmployeeLayupSettings(employeeId: string, data: Partial<InsertEmployeeLayupSettings>): Promise<EmployeeLayupSettings> {
     console.log(`🔄 Storage: Updating employee "${employeeId}" with data:`, data);
-    
+
     // Check if employee exists first
     const existing = await this.getEmployeeLayupSettings(employeeId);
-    if (!existing) {
-      console.log(`❌ Employee "${employeeId}" not found in layup settings`);
-      throw new Error(`Employee "${employeeId}" not found in layup settings`);
-    }
     
+    if (!existing) {
+      console.log(`➕ Employee "${employeeId}" not found in layup settings, creating new entry`);
+      // Create new employee layup settings entry
+      const newSettings = {
+        employeeId,
+        rate: data.rate || 1.25,
+        hours: data.hours || 8,
+        department: data.department || 'Layup',
+        isActive: data.isActive !== undefined ? data.isActive : true,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+      
+      const [result] = await db.insert(employeeLayupSettings).values(newSettings).returning();
+      console.log(`✅ Storage: Created new employee settings for "${employeeId}":`, result);
+      return result;
+    }
+
+    // Update existing employee
     const [result] = await db
       .update(employeeLayupSettings)
       .set({ ...data, updatedAt: new Date() })
       .where(eq(employeeLayupSettings.employeeId, employeeId))
       .returning();
-      
+
     console.log(`✅ Storage: Updated employee "${employeeId}":`, result);
     return result;
   }
@@ -2450,124 +4114,271 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Layup Scheduler: Orders CRUD
-  async getAllLayupOrders(filters?: { status?: string; department?: string }): Promise<LayupOrder[]> {
-    let query = db.select().from(layupOrders);
-    
-    const conditions = [];
-    if (filters?.status) {
-      conditions.push(eq(layupOrders.status, filters.status));
+  async getAllProductionQueue(filters?: { status?: string; department?: string }): Promise<any[]> {
+    try {
+      // Use production_orders table since production_queue table doesn't exist
+      // This method should return orders sorted by due date (most urgent first) and priority score
+      let query = db.select({
+        id: productionOrders.id,
+        orderId: productionOrders.orderId,
+        orderDate: productionOrders.orderDate,
+        dueDate: productionOrders.dueDate,
+        customer: productionOrders.customerName,
+        product: productionOrders.itemName,
+        status: productionOrders.productionStatus,
+        department: productionOrders.productionStatus,
+        priorityScore: sql<number>`CASE 
+          WHEN ${productionOrders.dueDate} < CURRENT_DATE THEN 1 
+          WHEN ${productionOrders.dueDate} <= CURRENT_DATE + INTERVAL '7 days' THEN 10
+          WHEN ${productionOrders.dueDate} <= CURRENT_DATE + INTERVAL '30 days' THEN 30
+          ELSE 50 
+        END`.as('priority_score'),
+        createdAt: productionOrders.createdAt,
+        updatedAt: productionOrders.updatedAt
+      }).from(productionOrders);
+
+      // Apply filters
+      const conditions = [];
+      if (filters?.status) {
+        conditions.push(eq(productionOrders.productionStatus, filters.status));
+      }
+      if (filters?.department) {
+        conditions.push(eq(productionOrders.productionStatus, filters.department));
+      }
+
+      if (conditions.length > 0) {
+        query = query.where(and(...conditions));
+      }
+
+      // Sort by due date (most urgent first), then by calculated priority score
+      const results = await query.orderBy(
+        productionOrders.dueDate, // Ascending - soonest due dates first
+        sql`CASE 
+          WHEN ${productionOrders.dueDate} < CURRENT_DATE THEN 1 
+          WHEN ${productionOrders.dueDate} <= CURRENT_DATE + INTERVAL '7 days' THEN 10
+          WHEN ${productionOrders.dueDate} <= CURRENT_DATE + INTERVAL '30 days' THEN 30
+          ELSE 50 
+        END` // Ascending - lower priority scores first (higher priority)
+      );
+
+      return results;
+    } catch (error) {
+      console.error('Error getting production queue:', error);
+      return [];
     }
-    if (filters?.department) {
-      conditions.push(eq(layupOrders.department, filters.department));
-    }
-    
-    if (conditions.length > 0) {
-      query = query.where(and(...conditions));
-    }
-    
-    return await query.orderBy(layupOrders.priorityScore, layupOrders.orderDate);
   }
 
-  async getLayupOrder(orderId: string): Promise<LayupOrder | undefined> {
-    const [result] = await db.select().from(layupOrders).where(eq(layupOrders.orderId, orderId));
+  async getProductionQueueItem(orderId: string): Promise<ProductionQueue | undefined> {
+    const [result] = await db.select().from(productionQueue).where(eq(productionQueue.orderId, orderId));
     return result || undefined;
   }
 
-  async createLayupOrder(data: InsertLayupOrder): Promise<LayupOrder> {
-    const [result] = await db.insert(layupOrders).values(data).returning();
+  async createProductionQueueItem(data: InsertProductionQueue): Promise<ProductionQueue> {
+    const [result] = await db.insert(productionQueue).values(data).returning();
     return result;
   }
 
-  async updateLayupOrder(orderId: string, data: Partial<InsertLayupOrder>): Promise<LayupOrder> {
+  async updateProductionQueueItem(orderId: string, data: Partial<InsertProductionQueue>): Promise<ProductionQueue> {
     const [result] = await db
-      .update(layupOrders)
+      .update(productionQueue)
       .set({ ...data, updatedAt: new Date() })
-      .where(eq(layupOrders.orderId, orderId))
+      .where(eq(productionQueue.orderId, orderId))
       .returning();
     return result;
   }
 
-  async deleteLayupOrder(orderId: string): Promise<void> {
-    await db.delete(layupOrders).where(eq(layupOrders.orderId, orderId));
+  async deleteProductionQueueItem(orderId: string): Promise<void> {
+    await db.delete(productionQueue).where(eq(productionQueue.orderId, orderId));
   }
 
-  // Get unified layup orders (combining regular orders and P1 PO items)
-  async getUnifiedLayupOrders(): Promise<any[]> {
+  // P1 Purchase Order Integration - Sync P1 orders into production queue
+  async syncP1OrdersToProductionQueue(): Promise<{ synced: number; message: string }> {
     try {
-      // Get regular P1 orders (from orderDrafts) that are in Layup department
-      const regularOrders = await db
-        .select()
-        .from(orderDrafts)
-        .where(
-          and(
-            eq(orderDrafts.currentDepartment, 'Layup'),
-            ne(orderDrafts.status, 'SCRAPPED'),
-            ne(orderDrafts.status, 'COMPLETED')
-          )
-        );
+      // Get existing layup order IDs for comparison
+      const existingLayupOrders = await db.select({ orderId: productionQueue.orderId }).from(productionQueue);
+      const existingOrderIds = new Set(existingLayupOrders.map(o => o.orderId));
 
-      // Get P1 Purchase Order items - simplified query to avoid null/undefined issues
-      let p1Orders: any[] = [];
-      try {
-        p1Orders = await db
-          .select({
-            poId: purchaseOrderItems.poId,
-            itemId: purchaseOrderItems.id,
-            partNumber: purchaseOrderItems.partNumber,
-            quantity: purchaseOrderItems.quantity,
-            status: purchaseOrderItems.status
-          })
-          .from(purchaseOrderItems)
-          .where(ne(purchaseOrderItems.status, 'COMPLETED'));
-      } catch (error) {
-        console.log('Could not fetch P1 orders:', error);
-        p1Orders = [];
+      // Get P1 orders that aren't already in layup queue
+      const p1Orders = await db
+        .select({
+          orderId: productionOrders.orderId,
+          customerName: productionOrders.customerName,
+          itemName: productionOrders.itemName,
+          orderDate: productionOrders.orderDate,
+          dueDate: productionOrders.dueDate
+        })
+        .from(productionOrders)
+        .where(eq(productionOrders.productionStatus, 'PENDING'));
+
+      // Filter out orders already in layup queue
+      const ordersToSync = p1Orders.filter(order => !existingOrderIds.has(order.orderId));
+
+      let syncedCount = 0;
+
+      for (const order of ordersToSync) {
+        // Calculate priority score based on due date (closer = higher priority)
+        const dueDate = new Date(order.dueDate || order.orderDate);
+        const today = new Date();
+        const daysUntilDue = Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+        const priorityScore = daysUntilDue <= 30 ? 1 : daysUntilDue <= 60 ? 2 : 50;
+
+        // Insert P1 order into layup queue
+        await db.insert(productionQueue).values({
+          orderId: order.orderId,
+          orderDate: order.orderDate?.toISOString().split('T')[0] || new Date().toISOString().split('T')[0],
+          dueDate: order.dueDate?.toISOString().split('T')[0] || new Date().toISOString().split('T')[0],
+          priorityScore: priorityScore,
+          department: 'Layup',
+          status: 'FINALIZED',
+          customer: order.customerName || 'Unknown',
+          product: order.itemName || 'Unknown',
+          isActive: true
+        });
+
+        syncedCount++;
       }
 
-      // Format regular orders
-      const formattedRegularOrders = regularOrders.map(order => ({
-        id: order.id,
-        orderId: order.orderId,
-        orderDate: order.createdAt,
-        customerName: order.customerName || 'Unknown',
-        stockModelId: order.modelId,
-        stockModelName: order.modelId,
-        priority: 50,
-        priorityScore: 50,
-        type: 'regular',
-        features: order.features,
-        customer: order.customerName || 'Unknown',
-        product: order.modelId || 'Unknown'
-      }));
+      return {
+        synced: syncedCount,
+        message: `Successfully synced ${syncedCount} P1 purchase orders to production queue`
+      };
+    } catch (error) {
+      console.error('Error syncing P1 orders:', error);
+      throw error;
+    }
+  }
 
-      // Format P1 orders - simplified to avoid database join issues
-      const formattedP1Orders = p1Orders.map((item, index) => ({
-        id: item.itemId || index,
-        orderId: `P1-PO-${item.poId || 'Unknown'}-${item.itemId || index}`,
-        orderDate: new Date(),
-        customerName: 'P1 Customer',
-        stockModelId: item.partNumber || 'Unknown',
-        stockModelName: item.partNumber || 'Unknown',
-        priority: 75, // Default priority for P1 orders
-        priorityScore: 75,
-        type: 'p1_po',
-        features: {},
-        customer: 'P1 Customer',
-        product: item.partNumber || 'Unknown'
-      }));
+  // Production Flow: Update order department and status for layup scheduler workflow
+  async updateOrderDepartment(orderId: string, department: string, status: string): Promise<{ success: boolean; message: string }> {
+    try {
+      console.log(` প্রক্র PRODUCTION FLOW: Updating order ${orderId} to department ${department} with status ${status}`);
 
-      // Combine and return all orders
-      return [...formattedRegularOrders, ...formattedP1Orders];
+      // Try to update in allOrders table first
+      const allOrdersResult = await db
+        .update(allOrders)
+        .set({
+          currentDepartment: department,
+          status: status,
+          updatedAt: new Date()
+        })
+        .where(eq(allOrders.orderId, orderId))
+        .returning();
+
+      if (allOrdersResult.length > 0) {
+        console.log(`✅ PRODUCTION FLOW: Updated regular order ${orderId} in allOrders table`);
+        return {
+          success: true,
+          message: `Regular order ${orderId} updated to ${department} department`
+        };
+      }
+
+      // Try to update in productionOrders table (for P1 purchase orders)
+      const productionOrdersResult = await db
+        .update(productionOrders)
+        .set({
+          productionStatus: status,
+          updatedAt: new Date()
+        })
+        .where(eq(productionOrders.orderId, orderId))
+        .returning();
+
+      if (productionOrdersResult.length > 0) {
+        console.log(`✅ PRODUCTION FLOW: Updated production order ${orderId} in productionOrders table`);
+        return {
+          success: true,
+          message: `Production order ${orderId} updated to ${status} status`
+        };
+      }
+
+      // If not found in either table, log and return success with warning
+      console.warn(`⚠️ PRODUCTION FLOW: Order ${orderId} not found in allOrders or productionOrders tables`);
+      return {
+        success: false,
+        message: `Order ${orderId} not found in database`
+      };
 
     } catch (error) {
-      console.error('Error getting unified layup orders:', error);
-      return [];
+      console.error(`❌ PRODUCTION FLOW: Error updating order ${orderId}:`, error);
+      return {
+        success: false,
+        message: `Database error updating order ${orderId}: ${error}`
+      };
+    }
+  }
+
+  // Get unified production queue with both regular orders and P1 purchase orders
+  async getUnifiedProductionQueue(): Promise<any[]> {
+    try {
+      // Use raw SQL to get layup orders, avoiding schema issues
+      const layupQuery = await db.execute(sql`
+        SELECT 
+          id, order_id, order_date, due_date, customer, product, 
+          priority_score, department, status, created_at, updated_at
+        FROM production_queue 
+        WHERE is_active = true 
+        ORDER BY priority_score ASC, due_date ASC
+      `);
+
+      // Get production orders to identify P1 orders using direct query
+      const productionQuery = await db.execute(sql`
+        SELECT id, order_id, customer_name, item_name 
+        FROM production_orders 
+        WHERE production_status = 'PENDING'
+      `);
+      const productionOrderMap = new Map((productionQuery.rows || []).map((po: any) => [po.order_id, po]));
+
+      // Process the results
+      const unifiedQueue = (layupQuery.rows || []).map((order: any) => {
+        const today = new Date();
+        const dueDate = new Date(order.due_date || order.order_date);
+        const daysUntilDue = Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+
+        let urgencyStatus = 'NORMAL';
+        if (daysUntilDue < 0) urgencyStatus = 'OVERDUE';
+        else if (daysUntilDue <= 7) urgencyStatus = 'URGENT';
+        else if (daysUntilDue <= 30) urgencyStatus = 'UPCOMING';
+
+        const isP1Order = productionOrderMap.has(order.order_id);
+
+        return {
+          id: order.id,
+          orderId: order.order_id,
+          orderDate: order.order_date,
+          dueDate: order.due_date,
+          customer: order.customer,
+          product: order.product,
+          priorityScore: order.priority_score,
+          department: order.department,
+          status: order.status,
+          orderSource: isP1Order ? 'P1_PURCHASE_ORDER' : 'REGULAR_ORDER',
+          urgencyStatus,
+          daysUntilDue,
+          createdAt: order.created_at,
+          updatedAt: order.updated_at
+        };
+      });
+
+      return unifiedQueue;
+    } catch (error) {
+      console.error('Error getting unified production queue:', error);
+      throw error;
     }
   }
 
   // Layup Scheduler: Schedule CRUD
   async getAllLayupSchedule(): Promise<LayupSchedule[]> {
     return await db.select().from(layupSchedule).orderBy(layupSchedule.scheduledDate);
+  }
+
+  async getLayupScheduleByDateRange(startDate: string, endDate: string): Promise<LayupSchedule[]> {
+    return await db.select().from(layupSchedule)
+      .where(
+        and(
+          gte(layupSchedule.scheduledDate, new Date(startDate)),
+          lte(layupSchedule.scheduledDate, new Date(endDate))
+        )
+      )
+      .orderBy(layupSchedule.scheduledDate);
   }
 
   async getLayupScheduleByOrder(orderId: string): Promise<LayupSchedule[]> {
@@ -2596,14 +4407,22 @@ export class DatabaseStorage implements IStorage {
     await db.delete(layupSchedule).where(eq(layupSchedule.orderId, orderId));
   }
 
+  async clearLayupSchedule(): Promise<void> {
+    await db.delete(layupSchedule);
+  }
+
+  async getLayupEmployeeSettings(): Promise<any[]> {
+    return await this.getAllEmployeeLayupSettings();
+  }
+
   async overrideOrderSchedule(orderId: string, newDate: Date, moldId: string, overriddenBy?: string): Promise<LayupSchedule> {
     // First, mark any existing schedule entries as overridden
     await db
       .update(layupSchedule)
-      .set({ 
-        isOverride: true, 
-        overriddenAt: new Date(), 
-        overriddenBy 
+      .set({
+        isOverride: true,
+        overriddenAt: new Date(),
+        overriddenBy
       })
       .where(eq(layupSchedule.orderId, orderId));
 
@@ -2624,20 +4443,21 @@ export class DatabaseStorage implements IStorage {
   // Department Progression Methods
   async getPipelineCounts(): Promise<Record<string, number>> {
     try {
-      // Use GROUP BY to count orders by current department from orderDrafts
+      // Use GROUP BY to count orders by current department from allOrders (includes both drafts and finalized)
       const results = await db
-        .select({ 
-          department: orderDrafts.currentDepartment, 
+        .select({
+          department: allOrders.currentDepartment,
           count: sql<number>`count(*)::integer`
         })
-        .from(orderDrafts)
+        .from(allOrders)
         .where(
           and(
-            ne(orderDrafts.status, 'SCRAPPED'), // Only count active orders
-            isNull(orderDrafts.scrapDate)       // Exclude scrapped orders
+            ne(allOrders.status, 'SCRAPPED'), // Only count active orders
+            ne(allOrders.status, 'CANCELLED'), // Exclude cancelled orders
+            isNull(allOrders.scrapDate)       // Exclude scrapped orders
           )
         )
-        .groupBy(orderDrafts.currentDepartment);
+        .groupBy(allOrders.currentDepartment);
 
       // Convert to object format
       const counts: Record<string, number> = {};
@@ -2656,28 +4476,29 @@ export class DatabaseStorage implements IStorage {
 
   async getPipelineDetails(): Promise<Record<string, Array<{ orderId: string; modelId: string; dueDate: Date; daysInDept: number; scheduleStatus: 'on-schedule' | 'dept-overdue' | 'cannot-meet-due' | 'critical' }>>> {
     try {
-      // Get all active orders with their department entry timestamps
+      // Get all active orders with their department entry timestamps from allOrders (includes both drafts and finalized)
       const orders = await db
         .select({
-          orderId: orderDrafts.orderId,
-          fbOrderNumber: orderDrafts.fbOrderNumber,
-          modelId: orderDrafts.modelId,
-          currentDepartment: orderDrafts.currentDepartment,
-          dueDate: orderDrafts.dueDate,
-          layupCompletedAt: orderDrafts.layupCompletedAt,
-          pluggingCompletedAt: orderDrafts.pluggingCompletedAt,
-          cncCompletedAt: orderDrafts.cncCompletedAt,
-          finishCompletedAt: orderDrafts.finishCompletedAt,
-          gunsmithCompletedAt: orderDrafts.gunsmithCompletedAt,
-          paintCompletedAt: orderDrafts.paintCompletedAt,
-          qcCompletedAt: orderDrafts.qcCompletedAt,
-          createdAt: orderDrafts.createdAt
+          orderId: allOrders.orderId,
+          fbOrderNumber: allOrders.fbOrderNumber,
+          modelId: allOrders.modelId,
+          currentDepartment: allOrders.currentDepartment,
+          dueDate: allOrders.dueDate,
+          layupCompletedAt: allOrders.layupCompletedAt,
+          pluggingCompletedAt: allOrders.pluggingCompletedAt,
+          cncCompletedAt: allOrders.cncCompletedAt,
+          finishCompletedAt: allOrders.finishCompletedAt,
+          gunsmithCompletedAt: allOrders.gunsmithCompletedAt,
+          paintCompletedAt: allOrders.paintCompletedAt,
+          qcCompletedAt: allOrders.qcCompletedAt,
+          createdAt: allOrders.createdAt
         })
-        .from(orderDrafts)
+        .from(allOrders)
         .where(
           and(
-            ne(orderDrafts.status, 'SCRAPPED'),
-            isNull(orderDrafts.scrapDate)
+            ne(allOrders.status, 'SCRAPPED'),
+            ne(allOrders.status, 'CANCELLED'),
+            isNull(allOrders.scrapDate)
           )
         );
 
@@ -2689,7 +4510,7 @@ export class DatabaseStorage implements IStorage {
 
         // Calculate days in current department
         const daysInDept = this.calculateDaysInDepartment(order);
-        
+
         // Calculate schedule status
         const scheduleStatus = this.calculateScheduleStatus(order, daysInDept);
 
@@ -2748,6 +4569,17 @@ export class DatabaseStorage implements IStorage {
         deptEntryDate = order.createdAt;
     }
 
+    // Safety check: if deptEntryDate is still null, use current time
+    if (!deptEntryDate) {
+      console.warn(`Order ${order.orderId}: No valid entry date found, using current time`);
+      deptEntryDate = now;
+    }
+
+    // Ensure deptEntryDate is a Date object
+    if (!(deptEntryDate instanceof Date)) {
+      deptEntryDate = new Date(deptEntryDate);
+    }
+
     const diffTime = Math.abs(now.getTime() - deptEntryDate.getTime());
     return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   }
@@ -2757,7 +4589,7 @@ export class DatabaseStorage implements IStorage {
     const now = new Date();
     const dueDate = new Date(order.dueDate);
     const daysUntilDue = Math.ceil((dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-    
+
     // Define standard processing times for each department
     const departmentTimes = {
       'Layup': 35,
@@ -2769,18 +4601,18 @@ export class DatabaseStorage implements IStorage {
       'QC': 7,
       'Shipping': 7
     };
-    
+
     // Define department sequence
-    const departmentSequence = ['Layup', 'Plugging', 'CNC', 'Finish', 'Gunsmith', 'Paint', 'QC', 'Shipping'];
-    
+    const departmentSequence = ['P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 'Finish', 'Gunsmith', 'Paint', 'Shipping QC', 'Shipping'];
+
     // Check if order is overdue in current department
     const currentDeptStandardTime = departmentTimes[order.currentDepartment] || 7;
     const isDeptOverdue = daysInDept > currentDeptStandardTime;
-    
+
     // Calculate remaining time needed from current department onward
     const currentDeptIndex = departmentSequence.indexOf(order.currentDepartment);
     let remainingProcessingDays = 0;
-    
+
     if (currentDeptIndex !== -1) {
       for (let i = currentDeptIndex; i < departmentSequence.length; i++) {
         const dept = departmentSequence[i];
@@ -2790,12 +4622,12 @@ export class DatabaseStorage implements IStorage {
       // Unknown department fallback
       remainingProcessingDays = currentDeptStandardTime;
     }
-    
+
     // Check if order cannot meet due date
     const cannotMeetDueDate = remainingProcessingDays > daysUntilDue;
-    
+
     console.log(`📊 Order ${order.orderId}: ${daysUntilDue} days until due, needs ${remainingProcessingDays} days remaining, ${daysInDept} days in ${order.currentDepartment} (limit: ${currentDeptStandardTime}), isAdj: ${isAdjusted}`);
-    
+
     // Determine status priority: cannot-meet-due overrides all others
     if (cannotMeetDueDate) {
       console.log(`🟠 Order ${order.orderId}: CANNOT-MEET-DUE - Cannot meet due date (needs ${remainingProcessingDays} days, has ${daysUntilDue}) ${isDeptOverdue ? '[Also over dept time]' : ''}`);
@@ -2809,13 +4641,17 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async progressOrder(orderId: string, nextDepartment?: string): Promise<OrderDraft> {
+  async progressOrder(orderId: string, nextDepartment?: string): Promise<OrderDraft | AllOrder> {
     try {
-      // Find the current order
-      const [currentOrder] = await db
-        .select()
-        .from(orderDrafts)
-        .where(eq(orderDrafts.orderId, orderId));
+      // Try to find order in finalized orders first
+      let currentOrder = await this.getFinalizedOrderById(orderId);
+      let isFinalized = true;
+
+      if (!currentOrder) {
+        // If not found in finalized orders, try draft orders
+        currentOrder = await this.getOrderDraft(orderId);
+        isFinalized = false;
+      }
 
       if (!currentOrder) {
         throw new Error(`Order ${orderId} not found`);
@@ -2823,43 +4659,57 @@ export class DatabaseStorage implements IStorage {
 
       // Department progression logic
       const departmentFlow = [
-        'Layup', 'Plugging', 'CNC', 'Finish', 'Gunsmith', 'Paint', 'QC', 'Shipping'
+        'P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 'Finish', 'Gunsmith', 'Paint', 'Shipping QC', 'Shipping'
       ];
+
+      // Special handling for flat top orders - they bypass CNC and go directly to Finish
+      const isFlatTop = currentOrder.isFlattop || false;
 
       let nextDept = nextDepartment;
       if (!nextDept) {
-        const currentIndex = departmentFlow.indexOf(currentOrder.currentDepartment);
-        if (currentIndex === -1 || currentIndex >= departmentFlow.length - 1) {
-          throw new Error(`Cannot progress from ${currentOrder.currentDepartment}`);
+        // Flat top orders skip CNC and go directly to Finish after Layup/Plugging
+        if (isFlatTop && currentOrder.currentDepartment === 'Layup/Plugging') {
+          nextDept = 'Finish';
+          console.log(`🏔️ Order ${orderId} is flat top - bypassing CNC, routing directly to Finish`);
+        } else {
+          const currentIndex = departmentFlow.indexOf(currentOrder.currentDepartment || '');
+          if (currentIndex === -1 || currentIndex >= departmentFlow.length - 1) {
+            throw new Error(`Cannot progress from ${currentOrder.currentDepartment}`);
+          }
+          nextDept = departmentFlow[currentIndex + 1];
         }
-        nextDept = departmentFlow[currentIndex + 1];
       }
 
       // Prepare completion timestamp update based on current department
       const completionUpdates: any = {};
       const now = new Date();
-      
+
       switch (currentOrder.currentDepartment) {
-        case 'Layup': completionUpdates.layupCompletedAt = now; break;
-        case 'Plugging': completionUpdates.pluggingCompletedAt = now; break;
+        case 'P1 Production Queue': completionUpdates.productionQueueCompletedAt = now; break;
+        case 'Layup/Plugging': completionUpdates.layupPluggingCompletedAt = now; break;
+        case 'Barcode': completionUpdates.barcodeCompletedAt = now; break;
         case 'CNC': completionUpdates.cncCompletedAt = now; break;
         case 'Finish': completionUpdates.finishCompletedAt = now; break;
         case 'Gunsmith': completionUpdates.gunsmithCompletedAt = now; break;
         case 'Paint': completionUpdates.paintCompletedAt = now; break;
-        case 'QC': completionUpdates.qcCompletedAt = now; break;
+        case 'Shipping QC': completionUpdates.shippingQcCompletedAt = now; break;
         case 'Shipping': completionUpdates.shippingCompletedAt = now; break;
       }
 
-      // Update the order
-      const [updatedOrder] = await db
-        .update(orderDrafts)
-        .set({
+      // Update the appropriate table
+      let updatedOrder;
+      if (isFinalized) {
+        updatedOrder = await this.updateFinalizedOrder(orderId, {
+          currentDepartment: nextDept,
+          ...completionUpdates
+        });
+      } else {
+        updatedOrder = await this.updateOrderDraft(orderId, {
           currentDepartment: nextDept,
           ...completionUpdates,
           updatedAt: now
-        })
-        .where(eq(orderDrafts.orderId, orderId))
-        .returning();
+        });
+      }
 
       return updatedOrder;
     } catch (error) {
@@ -2922,6 +4772,7 @@ export class DatabaseStorage implements IStorage {
           agrOrderDetails: scrapOrder.agrOrderDetails,
           modelId: scrapOrder.modelId,
           handedness: scrapOrder.handedness,
+          shankLength: scrapOrder.shankLength,
           features: scrapOrder.features,
           featureQuantities: scrapOrder.featureQuantities,
           status: 'ACTIVE',
@@ -2940,7 +4791,7 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  // BOM Management Implementation
+  // BOM Management Methods
   async getAllBOMs(): Promise<BomDefinition[]> {
     try {
       const boms = await db
@@ -2980,14 +4831,27 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  // New method to build hierarchical BOM structure
+  async getBOMDefinition(bomId: number): Promise<BomDefinition | undefined> {
+    try {
+      const [bom] = await db
+        .select()
+        .from(bomDefinitions)
+        .where(eq(bomDefinitions.id, bomId));
+      return bom;
+    } catch (error) {
+      console.error('Error fetching BOM definition:', error);
+      throw error;
+    }
+  }
+
+  // Method to build hierarchical BOM structure
   private async buildHierarchicalItems(items: BomItem[]): Promise<any[]> {
     try {
       const hierarchical = [];
-      
+
       for (const item of items) {
         const hierarchicalItem: any = { ...item };
-        
+
         // If this item references another BOM (sub-assembly)
         if (item.referenceBomId) {
           const referencedBom = await this.getBOMDetails(item.referenceBomId);
@@ -2998,10 +4862,10 @@ export class DatabaseStorage implements IStorage {
             };
           }
         }
-        
+
         hierarchical.push(hierarchicalItem);
       }
-      
+
       return hierarchical;
     } catch (error) {
       console.error('Error building hierarchical items:', error);
@@ -3015,7 +4879,7 @@ export class DatabaseStorage implements IStorage {
       // First verify both BOMs exist
       const parentBom = await this.getBOMDefinition(parentBomId);
       const childBom = await this.getBOMDefinition(childBomId);
-      
+
       if (!parentBom || !childBom) {
         throw new Error('Parent or child BOM not found');
       }
@@ -3025,7 +4889,7 @@ export class DatabaseStorage implements IStorage {
         .select()
         .from(bomItems)
         .where(eq(bomItems.bomId, childBomId));
-      
+
       const maxChildLevel = Math.max(...childItems.map(item => item.assemblyLevel || 0), 0);
       const assemblyLevel = maxChildLevel + 1;
 
@@ -3056,7 +4920,7 @@ export class DatabaseStorage implements IStorage {
   async getAvailableSubAssemblies(excludeBomId?: number): Promise<BomDefinition[]> {
     try {
       let whereCondition = eq(bomDefinitions.isActive, true);
-      
+
       if (excludeBomId) {
         whereCondition = and(
           eq(bomDefinitions.isActive, true),
@@ -3263,32 +5127,14 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createP2PurchaseOrder(data: InsertP2PurchaseOrder): Promise<P2PurchaseOrder> {
-    // Convert Date objects to ISO strings for date fields
-    const insertData: any = { ...data };
-    if (insertData.expectedDelivery instanceof Date) {
-      insertData.expectedDelivery = insertData.expectedDelivery.toISOString().split('T')[0];
-    }
-    if (insertData.poDate instanceof Date) {
-      insertData.poDate = insertData.poDate.toISOString().split('T')[0];
-    }
-    
-    const [po] = await db.insert(p2PurchaseOrders).values([insertData]).returning();
+    const [po] = await db.insert(p2PurchaseOrders).values(data).returning();
     return po;
   }
 
   async updateP2PurchaseOrder(id: number, data: Partial<InsertP2PurchaseOrder>): Promise<P2PurchaseOrder> {
-    // Convert Date objects to ISO strings for date fields
-    const updateData: any = { ...data };
-    if (updateData.expectedDelivery instanceof Date) {
-      updateData.expectedDelivery = updateData.expectedDelivery.toISOString().split('T')[0];
-    }
-    if (updateData.poDate instanceof Date) {
-      updateData.poDate = updateData.poDate.toISOString().split('T')[0];
-    }
-    
     const [po] = await db
       .update(p2PurchaseOrders)
-      .set(updateData)
+      .set(data)
       .where(eq(p2PurchaseOrders.id, id))
       .returning();
     return po;
@@ -3308,7 +5154,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createP2PurchaseOrderItem(data: InsertP2PurchaseOrderItem): Promise<P2PurchaseOrderItem> {
-    const [item] = await db.insert(p2PurchaseOrderItems).values([data]).returning();
+    const [item] = await db.insert(p2PurchaseOrderItems).values(data).returning();
     return item;
   }
 
@@ -3320,7 +5166,7 @@ export class DatabaseStorage implements IStorage {
         const item = currentItem[0];
         const quantity = data.quantity ?? item.quantity;
         const unitPrice = data.unitPrice ?? item.unitPrice;
-        data.totalPrice = quantity * (unitPrice || 0);
+        data.totalPrice = quantity * unitPrice;
       }
     }
 
@@ -3397,7 +5243,7 @@ export class DatabaseStorage implements IStorage {
         .select()
         .from(bomDefinitions)
         .where(eq(bomDefinitions.sku, poItem.partNumber));
-      
+
       if (bomDefs.length === 0) {
         console.warn(`No BOM definition found for SKU: ${poItem.partNumber}`);
         continue;
@@ -3417,15 +5263,15 @@ export class DatabaseStorage implements IStorage {
       // Create production orders for each BOM item
       for (let i = 0; i < bomItemsList.length; i++) {
         const bomItem = bomItemsList[i];
-        
+
         // Skip materials - only create production orders for manufactured parts
         if (bomItem.itemType === 'material') {
           console.log(`Skipping material item: ${bomItem.partName} - quantity tracking only`);
           continue;
         }
-        
+
         const totalQuantity = bomItem.quantity * poItem.quantity;
-        
+
         // Create individual production orders (1 unit each) instead of bulk orders
         for (let unitIndex = 1; unitIndex <= totalQuantity; unitIndex++) {
           // Generate unique order ID: P2-{PO#}-{item#}-{bomItem#}-{unit#}
@@ -3478,7 +5324,7 @@ export class DatabaseStorage implements IStorage {
         .select()
         .from(bomDefinitions)
         .where(eq(bomDefinitions.sku, poItem.partNumber));
-      
+
       if (bomDefs.length === 0) {
         continue;
       }
@@ -3498,12 +5344,12 @@ export class DatabaseStorage implements IStorage {
       // Calculate material requirements
       for (const materialItem of materialItems) {
         const totalQuantity = materialItem.quantity * poItem.quantity;
-        
+
         // Check if this material is already in our requirements list
         const existingIndex = materialRequirements.findIndex(
           req => req.partName === materialItem.partName
         );
-        
+
         if (existingIndex >= 0) {
           // Add to existing requirement
           materialRequirements[existingIndex].totalQuantity += totalQuantity;
@@ -3554,10 +5400,10 @@ export class DatabaseStorage implements IStorage {
   async updateUserPassword(id: number, passwordHash: string): Promise<void> {
     await db
       .update(users)
-      .set({ 
-        passwordHash, 
+      .set({
+        passwordHash,
         passwordChangedAt: new Date(),
-        updatedAt: new Date() 
+        updatedAt: new Date()
       })
       .where(eq(users.id, id));
   }
@@ -3624,10 +5470,10 @@ export class DatabaseStorage implements IStorage {
   async clockIn(employeeId: string): Promise<TimeClockEntry> {
     const now = new Date();
     const today = now.toISOString().split('T')[0];
-    
+
     // Check if already clocked in today
     const existingEntry = await this.getTimeClockEntry(employeeId, today);
-    
+
     if (existingEntry && existingEntry.clockIn && !existingEntry.clockOut) {
       throw new Error('Already clocked in');
     }
@@ -3658,9 +5504,9 @@ export class DatabaseStorage implements IStorage {
   async clockOut(employeeId: string): Promise<TimeClockEntry> {
     const now = new Date();
     const today = now.toISOString().split('T')[0];
-    
+
     const existingEntry = await this.getTimeClockEntry(employeeId, today);
-    
+
     if (!existingEntry || !existingEntry.clockIn) {
       throw new Error('Must clock in first');
     }
@@ -3691,7 +5537,7 @@ export class DatabaseStorage implements IStorage {
 
   async updateDailyChecklist(employeeId: string, data: any): Promise<ChecklistItem[]> {
     const today = new Date().toISOString().split('T')[0];
-    
+
     // Delete existing entries for today
     await db
       .delete(checklistItems)
@@ -3906,7 +5752,7 @@ export class DatabaseStorage implements IStorage {
     averageResolutionTime: number | null;
   }> {
     let baseQuery = db.select().from(kickbacks);
-    
+
     if (dateRange) {
       baseQuery = baseQuery.where(
         and(
@@ -3923,7 +5769,7 @@ export class DatabaseStorage implements IStorage {
     const byReasonCode: { [key: string]: number } = {};
     const byStatus: { [key: string]: number } = {};
     const byPriority: { [key: string]: number } = {};
-    
+
     let resolvedKickbacks = 0;
     let totalResolutionTime = 0;
     let resolutionCount = 0;
@@ -3931,20 +5777,20 @@ export class DatabaseStorage implements IStorage {
     allKickbacks.forEach(kickback => {
       // Department counts
       byDepartment[kickback.kickbackDept] = (byDepartment[kickback.kickbackDept] || 0) + 1;
-      
+
       // Reason code counts
       byReasonCode[kickback.reasonCode] = (byReasonCode[kickback.reasonCode] || 0) + 1;
-      
+
       // Status counts
       byStatus[kickback.status] = (byStatus[kickback.status] || 0) + 1;
-      
+
       // Priority counts
       byPriority[kickback.priority] = (byPriority[kickback.priority] || 0) + 1;
 
       // Resolution tracking
       if (kickback.status === 'RESOLVED' || kickback.status === 'CLOSED') {
         resolvedKickbacks++;
-        
+
         if (kickback.resolvedAt) {
           const resolutionTime = kickback.resolvedAt.getTime() - kickback.kickbackDate.getTime();
           totalResolutionTime += resolutionTime;
@@ -3953,7 +5799,7 @@ export class DatabaseStorage implements IStorage {
       }
     });
 
-    const averageResolutionTime = resolutionCount > 0 
+    const averageResolutionTime = resolutionCount > 0
       ? totalResolutionTime / resolutionCount / (1000 * 60 * 60 * 24) // Convert to days
       : null;
 
@@ -3969,7 +5815,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Document Management System CRUD Methods
-  
+
   // Documents CRUD (Document Management System)
   async getAllManagedDocuments(): Promise<Document[]> {
     return await db
@@ -4097,7 +5943,7 @@ export class DatabaseStorage implements IStorage {
       .update(documentTags)
       .set({ isActive: false })
       .where(eq(documentTags.id, id));
-    
+
     // Remove tag relations
     await db
       .delete(documentTagRelations)
@@ -4198,7 +6044,7 @@ export class DatabaseStorage implements IStorage {
     await db
       .delete(documentCollectionRelations)
       .where(eq(documentCollectionRelations.collectionId, id));
-    
+
     await db
       .delete(documentCollections)
       .where(eq(documentCollections.id, id));
@@ -4284,6 +6130,556 @@ export class DatabaseStorage implements IStorage {
     await db
       .delete(orderAttachments)
       .where(eq(orderAttachments.id, attachmentId));
+  }
+
+  // Add methods for finalized orders
+  async getAllFinalizedOrders(): Promise<AllOrder[]> {
+    const orders = await db.select().from(allOrders).orderBy(desc(allOrders.updatedAt));
+
+    // Get all customers to create a lookup map
+    const allCustomers = await db.select({
+      id: customers.id,
+      name: customers.name,
+      email: customers.email,
+      phone: customers.phone,
+      company: customers.company,
+      customerType: customers.customerType,
+      notes: customers.notes,
+      isActive: customers.isActive,
+      createdAt: customers.createdAt,
+      updatedAt: customers.updatedAt,
+      preferredCommunicationMethod: customers.preferredCommunicationMethod
+    }).from(customers);
+    const customerMap = new Map(allCustomers.map(c => [c.id.toString(), c.name]));
+
+    // Enrich orders with customer names
+    return orders.map(order => ({
+      ...order,
+      customer: customerMap.get(order.customerId || '') || 'Unknown Customer'
+    })) as any;
+  }
+
+  // Create a finalized order directly (bypassing draft process)
+  async createFinalizedOrder(orderData: InsertOrderDraft, finalizedBy?: string): Promise<AllOrder> {
+    // Special handling for orders with no stock model - route directly to Shipping QC
+    const hasNoStockModel = !orderData.modelId || orderData.modelId.toLowerCase() === 'none' || orderData.modelId.toLowerCase().trim() === '';
+    
+    let currentDepartment: string;
+    let barcode: string;
+    
+    if (hasNoStockModel) {
+      console.log(`🚀 CREATE APPROVED: Order ${orderData.orderId} has no stock model - routing directly to Shipping QC`);
+      currentDepartment = 'Shipping QC';
+      barcode = orderData.barcode || `NOSTOCK-${orderData.orderId}`;
+    } else {
+      console.log(`✅ CREATE APPROVED: Order ${orderData.orderId} has valid stock model "${orderData.modelId}" - going directly to P1 Production Queue`);
+      currentDepartment = 'P1 Production Queue';
+      barcode = orderData.barcode || `P1-${orderData.orderId}`;
+    }
+
+    // Create the finalized order data directly - exclude id field explicitly
+    const finalizedOrderData = {
+      orderId: orderData.orderId,
+      orderDate: orderData.orderDate,
+      dueDate: orderData.dueDate,
+      customerId: orderData.customerId,
+      customerPO: orderData.customerPO || '',
+      fbOrderNumber: orderData.fbOrderNumber || '',
+      agrOrderDetails: orderData.agrOrderDetails || '',
+      isCustomOrder: orderData.isCustomOrder,
+      isFlattop: orderData.isFlattop || false,
+      modelId: orderData.modelId,
+      handedness: orderData.handedness,
+      shankLength: orderData.shankLength,
+      features: orderData.features,
+      featureQuantities: orderData.featureQuantities,
+      discountCode: orderData.discountCode || '',
+      notes: orderData.notes || '',
+      customDiscountType: orderData.customDiscountType || 'percent',
+      customDiscountValue: orderData.customDiscountValue || 0,
+      showCustomDiscount: orderData.showCustomDiscount || false,
+      priceOverride: orderData.priceOverride,
+      shipping: orderData.shipping || 0,
+      tikkaOption: orderData.tikkaOption,
+      status: 'FINALIZED',
+      barcode: barcode,
+      currentDepartment: currentDepartment,
+      departmentHistory: [],
+      scrappedQuantity: 0,
+      totalProduced: 0,
+      layupCompletedAt: null,
+      pluggingCompletedAt: null,
+      cncCompletedAt: null,
+      finishCompletedAt: null,
+      gunsmithCompletedAt: null,
+      paintCompletedAt: null,
+      qcCompletedAt: null,
+      shippingCompletedAt: null,
+      scrapDate: null,
+      scrapReason: null,
+      scrapDisposition: null,
+      scrapAuthorization: null,
+      isReplacement: false,
+      replacedOrderId: null,
+      isPaid: orderData.isPaid || false,
+      paymentType: orderData.paymentType,
+      paymentAmount: orderData.paymentAmount,
+      paymentDate: orderData.paymentDate,
+      paymentTimestamp: orderData.paymentTimestamp,
+      trackingNumber: null,
+      shippingCarrier: 'UPS',
+      shippingMethod: 'Ground',
+      shippedDate: null,
+      estimatedDelivery: null,
+      shippingLabelGenerated: false,
+      customerNotified: false,
+      notificationMethod: null,
+      notificationSentAt: null,
+      deliveryConfirmed: false,
+      deliveryConfirmedAt: null,
+      isVerified: orderData.isVerified || false,
+      isManualDueDate: orderData.isManualDueDate || false,
+      isManualOrderDate: orderData.isManualOrderDate || false,
+      hasAltShipTo: orderData.hasAltShipTo || false,
+      altShipToCustomerId: orderData.altShipToCustomerId,
+      altShipToName: orderData.altShipToName,
+      altShipToCompany: orderData.altShipToCompany,
+      altShipToEmail: orderData.altShipToEmail,
+      altShipToPhone: orderData.altShipToPhone,
+      altShipToAddress: orderData.altShipToAddress
+    };
+
+    // Insert directly into all_orders table
+    const { id, createdAt, updatedAt, ...insertData } = finalizedOrderData as any;
+    const [finalizedOrder] = await db.insert(allOrders).values(insertData).returning();
+
+    // Mark the Order ID as used to prevent duplicate assignments
+    await this.markOrderIdAsUsed(orderData.orderId);
+    console.log(`🔒 MARKED ORDER ID: ${orderData.orderId} as used to prevent duplicates`);
+
+    // Log the auto-addition to Production Queue
+    console.log(`🎯 AUTO-ADDED TO P1 PRODUCTION QUEUE: Order ${orderData.orderId} with stock model "${orderData.modelId}"`);
+
+    return finalizedOrder;
+  }
+
+  // Finalize an order - move from draft to production (legacy method for existing drafts)
+  async finalizeOrder(orderId: string, finalizedBy?: string): Promise<AllOrder> {
+    // Get the draft order
+    const draft = await this.getOrderDraft(orderId);
+    if (!draft) {
+      throw new Error(`Draft order with ID ${orderId} not found`);
+    }
+
+    if (draft.status === 'FINALIZED') {
+      throw new Error(`Order ${orderId} is already finalized`);
+    }
+
+    // Special handling for orders with "None" stock model - route directly to Shipping QC
+    const hasNoStockModel = !draft.modelId || draft.modelId.toLowerCase() === 'none' || draft.modelId.toLowerCase().trim() === '';
+    
+    let currentDepartment: string;
+    let barcode: string;
+    
+    if (hasNoStockModel) {
+      console.log(`🚀 FINALIZE APPROVED: Order ${orderId} has no stock model - routing directly to Shipping QC (ready-to-sell product)`);
+      currentDepartment = 'Shipping QC';
+      barcode = `NOSTOCK-${orderId}`; // Force NOSTOCK barcode for ready-to-sell products
+    } else {
+      console.log(`✅ FINALIZE APPROVED: Order ${orderId} has valid stock model "${draft.modelId}" - proceeding to P1 Production Queue`);
+      currentDepartment = 'P1 Production Queue';
+      barcode = draft.barcode || `P1-${orderId}`;
+    }
+    
+
+    // Create the finalized order data
+    const finalizedOrderData: InsertAllOrder = {
+      orderId: draft.orderId,
+      orderDate: draft.orderDate,
+      dueDate: draft.dueDate,
+      customerId: draft.customerId,
+      customerPO: draft.customerPO,
+      fbOrderNumber: draft.fbOrderNumber,
+      agrOrderDetails: draft.agrOrderDetails,
+      isCustomOrder: draft.isCustomOrder,
+      modelId: draft.modelId,
+      handedness: draft.handedness,
+      shankLength: draft.shankLength,
+      features: draft.features,
+      featureQuantities: draft.featureQuantities,
+      discountCode: draft.discountCode,
+      notes: draft.notes,
+      customDiscountType: draft.customDiscountType,
+      customDiscountValue: draft.customDiscountValue,
+      showCustomDiscount: draft.showCustomDiscount,
+      priceOverride: draft.priceOverride,
+      shipping: draft.shipping,
+      tikkaOption: draft.tikkaOption,
+      status: 'FINALIZED',
+      barcode: barcode,
+      currentDepartment: currentDepartment,
+      departmentHistory: draft.departmentHistory,
+      scrappedQuantity: draft.scrappedQuantity,
+      totalProduced: draft.totalProduced,
+      layupCompletedAt: draft.layupCompletedAt,
+      pluggingCompletedAt: draft.pluggingCompletedAt,
+      cncCompletedAt: draft.cncCompletedAt,
+      finishCompletedAt: draft.finishCompletedAt,
+      gunsmithCompletedAt: draft.gunsmithCompletedAt,
+      paintCompletedAt: draft.paintCompletedAt,
+      qcCompletedAt: draft.qcCompletedAt,
+      shippingCompletedAt: draft.shippingCompletedAt,
+      scrapDate: draft.scrapDate,
+      scrapReason: draft.scrapReason,
+      scrapDisposition: draft.scrapDisposition,
+      scrapAuthorization: draft.scrapAuthorization,
+      isReplacement: draft.isReplacement,
+      replacedOrderId: draft.replacedOrderId,
+      isPaid: draft.isPaid,
+      paymentType: draft.paymentType,
+      paymentAmount: draft.paymentAmount,
+      paymentDate: draft.paymentDate,
+      paymentTimestamp: draft.paymentTimestamp,
+      trackingNumber: draft.trackingNumber,
+      shippingCarrier: draft.shippingCarrier,
+      shippingMethod: draft.shippingMethod,
+      shippedDate: draft.shippedDate,
+      estimatedDelivery: draft.estimatedDelivery,
+      shippingLabelGenerated: draft.shippingLabelGenerated,
+      customerNotified: draft.customerNotified,
+      notificationMethod: draft.notificationMethod,
+      notificationSentAt: draft.notificationSentAt,
+      deliveryConfirmed: draft.deliveryConfirmed,
+      deliveryConfirmedAt: draft.deliveryConfirmedAt,
+      isVerified: draft.isVerified || false,
+      isManualDueDate: draft.isManualDueDate || false,
+      isManualOrderDate: draft.isManualOrderDate || false,
+      hasAltShipTo: draft.hasAltShipTo || false,
+      altShipToCustomerId: draft.altShipToCustomerId,
+      altShipToName: draft.altShipToName,
+      altShipToCompany: draft.altShipToCompany,
+      altShipToEmail: draft.altShipToEmail,
+      altShipToPhone: draft.altShipToPhone,
+      altShipToAddress: draft.altShipToAddress,
+      finalizedBy: finalizedBy || 'System'
+    };
+
+    // Insert into all_orders table
+    const [finalizedOrder] = await db.insert(allOrders).values(finalizedOrderData).returning();
+
+    // Remove from order_drafts table
+    await db.delete(orderDrafts).where(eq(orderDrafts.orderId, orderId));
+
+    // Log the finalization result based on department
+    if (hasNoStockModel) {
+      console.log(`🚀 FINALIZED TO SHIPPING QC: Order ${orderId} (ready-to-sell product) sent to Shipping QC department`);
+    } else {
+      console.log(`🎯 FINALIZED TO PRODUCTION: Order ${orderId} sent to P1 Production Queue for manufacturing`);
+    }
+
+    return finalizedOrder;
+  }
+
+  // Get finalized order by ID
+  async getFinalizedOrderById(orderId: string): Promise<AllOrder | undefined> {
+    const [order] = await db.select().from(allOrders).where(eq(allOrders.orderId, orderId));
+    return order || undefined;
+  }
+
+  // Update finalized order
+  async updateFinalizedOrder(orderId: string, data: Partial<InsertAllOrder>): Promise<AllOrder> {
+    const [order] = await db.update(allOrders)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(allOrders.orderId, orderId))
+      .returning();
+
+    if (!order) {
+      throw new Error(`Finalized order with ID ${orderId} not found`);
+    }
+
+    return order;
+  }
+
+  async fulfillOrder(orderId: string): Promise<AllOrder> {
+    console.log(`🚀 FULFILLMENT START: Processing fulfillment for order ${orderId}`);
+    
+    // Get the order first to get customer information for notifications
+    const [existingOrder] = await db.select().from(allOrders).where(eq(allOrders.orderId, orderId));
+    
+    if (!existingOrder) {
+      throw new Error(`Order with ID ${orderId} not found`);
+    }
+
+    console.log(`📋 ORDER FOUND: Order ${orderId} for customer ${existingOrder.customerId}`);
+
+    // Update the order to be fulfilled and move to shipping management
+    const [order] = await db.update(allOrders)
+      .set({ 
+        currentDepartment: 'Shipping Management',
+        status: 'FULFILLED',
+        shippedDate: new Date(), // Set shipped date to current date when fulfilled
+        customerNotified: true, // Set customer notified to true when fulfilled
+        updatedAt: new Date()
+      })
+      .where(eq(allOrders.orderId, orderId))
+      .returning();
+
+    if (!order) {
+      throw new Error(`Order with ID ${orderId} not found after update`);
+    }
+
+    console.log(`✅ ORDER UPDATED: Order ${orderId} status changed to FULFILLED`);
+
+    // Get customer information for notifications
+    if (existingOrder.customerId) {
+      try {
+        console.log(`👤 CUSTOMER LOOKUP: Getting customer ${existingOrder.customerId} for notifications`);
+        
+        // Safely parse customer ID with validation
+        const customerIdNum = parseInt(existingOrder.customerId);
+        if (isNaN(customerIdNum)) {
+          console.log(`❌ INVALID CUSTOMER ID: Customer ID "${existingOrder.customerId}" is not a valid number`);
+          return order; // Return the fulfilled order without sending notifications
+        }
+        
+        const [customer] = await db.select().from(customers).where(eq(customers.id, customerIdNum));
+        
+        if (customer) {
+          console.log(`👤 CUSTOMER FOUND: ${customer.name} (Email: ${customer.email || 'none'}, Phone: ${customer.phone || 'none'})`);
+          // Send fulfillment notifications in the background
+          console.log(`📡 STARTING NOTIFICATIONS: Triggering notification process for order ${orderId}`);
+          this.sendFulfillmentNotifications(orderId, customer).catch(error => {
+            console.error(`❌ NOTIFICATION FAILED: Error sending fulfillment notifications for order ${orderId}:`, error);
+          });
+        } else {
+          console.log(`❌ CUSTOMER NOT FOUND: No customer found with ID ${existingOrder.customerId}`);
+        }
+      } catch (error) {
+        console.error(`❌ CUSTOMER LOOKUP ERROR: Error getting customer for notifications (order ${orderId}):`, error);
+      }
+    } else {
+      console.log(`⚠️ NO CUSTOMER ID: Order ${orderId} has no customer ID for notifications`);
+    }
+
+    console.log(`✅ FULFILLED: Order ${orderId} has been marked as fulfilled and moved to shipping management with shipped date: ${new Date().toISOString()}`);
+    return order;
+  }
+
+  // Helper method to send fulfillment notifications
+  private async sendFulfillmentNotifications(orderId: string, customer: Customer): Promise<void> {
+    try {
+      // Determine the correct base URL for API calls
+      const isDeployed = process.env.REPL_SLUG || process.env.REPLIT_DOMAINS;
+      let baseUrl: string;
+      
+      if (isDeployed) {
+        // For deployed sites, use the actual deployed URL
+        const deployedDomain = process.env.REPLIT_DOMAINS?.split(',')[0] || `${process.env.REPL_SLUG}.replit.app`;
+        baseUrl = `https://${deployedDomain}`;
+      } else {
+        // For development, use localhost
+        baseUrl = 'http://localhost:5000';
+      }
+      
+      console.log(`🌐 Notification base URL: ${baseUrl} (deployed: ${!!isDeployed})`);
+
+      // Get the updated order to check for tracking information
+      const [updatedOrder] = await db.select().from(allOrders).where(eq(allOrders.orderId, orderId));
+      
+      // Prepare notification messages with conditional tracking info
+      const emailSubject = `Your Order ${orderId} Has Been Fulfilled!`;
+      let emailMessage = `Dear ${customer.name},
+
+Great news! Your order ${orderId} has been fulfilled and is ready for shipping.`;
+
+      let smsMessage = `Hi ${customer.name}! Your order ${orderId} has been fulfilled and is ready for shipping.`;
+
+      // Add tracking information if available
+      if (updatedOrder?.trackingNumber && updatedOrder.trackingNumber.trim() !== '') {
+        const trackingInfo = `
+
+📦 Tracking Information:
+Tracking Number: ${updatedOrder.trackingNumber}
+Carrier: ${updatedOrder.shippingCarrier || 'UPS'}
+
+You can track your package at: https://www.ups.com/track?tracknum=${updatedOrder.trackingNumber}`;
+
+        emailMessage += trackingInfo;
+        smsMessage += ` Tracking: ${updatedOrder.trackingNumber}`;
+      } else {
+        emailMessage += `
+
+You should receive tracking information shortly once your package is picked up by the carrier.`;
+        smsMessage += ` You'll receive tracking info soon.`;
+      }
+
+      emailMessage += `
+
+Thank you for your business!
+
+Best regards,
+AG Composites Team`;
+
+      smsMessage += ` Thanks! - AG Composites`;
+
+      // Send email notification if customer has email
+      if (customer.email && customer.email.trim() !== '') {
+        try {
+          console.log(`📧 Attempting to send email notification to ${customer.email} for order ${orderId}`);
+          const emailResponse = await axios.post(`${baseUrl}/api/communications/email`, {
+            to: customer.email,
+            subject: emailSubject,
+            message: emailMessage,
+            customerId: customer.id.toString(),
+            orderId: orderId
+          }, {
+            timeout: 10000, // 10 second timeout
+            headers: {
+              'Content-Type': 'application/json'
+            }
+          });
+          console.log(`📧 Email notification sent successfully to ${customer.email} for fulfilled order ${orderId}`);
+        } catch (emailError: any) {
+          console.error(`❌ Failed to send email notification for order ${orderId}:`);
+          if (emailError.response?.data) {
+            console.error(`Email API Error:`, emailError.response.data);
+          } else {
+            console.error(`Email Network Error:`, emailError.message);
+          }
+          // Continue with SMS even if email fails
+        }
+      }
+
+      // Send SMS notification if customer has phone number
+      if (customer.phone && customer.phone.trim() !== '') {
+        try {
+          console.log(`📱 Attempting to send SMS notification to ${customer.phone} for order ${orderId}`);
+          const smsResponse = await axios.post(`${baseUrl}/api/communications/sms`, {
+            to: customer.phone,
+            message: smsMessage,
+            customerId: customer.id.toString(),
+            orderId: orderId
+          }, {
+            timeout: 10000, // 10 second timeout
+            headers: {
+              'Content-Type': 'application/json'
+            }
+          });
+          console.log(`📱 SMS notification sent successfully to ${customer.phone} for fulfilled order ${orderId}`);
+        } catch (smsError: any) {
+          console.error(`❌ Failed to send SMS notification for order ${orderId}:`);
+          if (smsError.response?.data) {
+            console.error(`SMS API Error:`, smsError.response.data);
+          } else {
+            console.error(`SMS Network Error:`, smsError.message);
+          }
+        }
+      }
+
+      if (!customer.email && !customer.phone) {
+        console.log(`⚠️ No contact information available for customer ${customer.name} (order ${orderId}) - notifications skipped`);
+      }
+
+    } catch (error) {
+      console.error(`Error sending fulfillment notifications for order ${orderId}:`, error);
+    }
+  }
+
+  // Sync verification status between draft and finalized orders  
+  async syncVerificationStatus(): Promise<{ updatedOrders: number; message: string }> {
+    console.log('🔄 Starting verification status sync between draft and finalized orders...');
+    
+    try {
+      // Get mismatched records first
+      const mismatches = await db.execute(sql`
+        SELECT d.order_id, d.is_verified as draft_verified, a.is_verified as finalized_verified
+        FROM order_drafts d 
+        JOIN all_orders a ON d.order_id = a.order_id 
+        WHERE d.is_verified != a.is_verified
+      `);
+
+      if (mismatches.rows.length === 0) {
+        return { updatedOrders: 0, message: 'No verification status mismatches found' };
+      }
+
+      // Update finalized orders to match drafts (prioritize draft verification status)
+      const updates = await db.execute(sql`
+        UPDATE all_orders 
+        SET is_verified = order_drafts.is_verified
+        FROM order_drafts 
+        WHERE all_orders.order_id = order_drafts.order_id 
+        AND all_orders.is_verified != order_drafts.is_verified
+      `);
+
+      console.log(`✅ Verification sync complete: ${updates.rowCount || 0} orders updated`);
+      
+      return {
+        updatedOrders: updates.rowCount || 0,
+        message: `Synced verification status for ${updates.rowCount || 0} orders`
+      };
+    } catch (error) {
+      console.error('❌ Error syncing verification status:', error);
+      throw new Error(`Failed to sync verification status: ${(error as Error).message}`);
+    }
+  }
+
+  // Gateway Reports CRUD Methods Implementation - temporarily removed
+
+  // PO Products CRUD Methods
+  async getAllPOProducts(): Promise<POProduct[]> {
+    return await db
+      .select()
+      .from(poProducts)
+      .where(eq(poProducts.isActive, true))
+      .orderBy(desc(poProducts.createdAt));
+  }
+
+  async getPOProduct(id: number): Promise<POProduct | undefined> {
+    const [product] = await db
+      .select()
+      .from(poProducts)
+      .where(eq(poProducts.id, id));
+    return product || undefined;
+  }
+
+  async createPOProduct(data: InsertPOProduct): Promise<POProduct> {
+    const [product] = await db
+      .insert(poProducts)
+      .values({
+        ...data,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .returning();
+    return product;
+  }
+
+  async updatePOProduct(id: number, data: Partial<InsertPOProduct>): Promise<POProduct> {
+    const [product] = await db
+      .update(poProducts)
+      .set({
+        ...data,
+        updatedAt: new Date(),
+      })
+      .where(eq(poProducts.id, id))
+      .returning();
+
+    if (!product) {
+      throw new Error(`PO Product with ID ${id} not found`);
+    }
+
+    return product;
+  }
+
+  async deletePOProduct(id: number): Promise<void> {
+    // Soft delete by setting isActive to false
+    await db
+      .update(poProducts)
+      .set({ 
+        isActive: false,
+        updatedAt: new Date(),
+      })
+      .where(eq(poProducts.id, id));
   }
 
 }

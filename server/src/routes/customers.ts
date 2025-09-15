@@ -76,6 +76,19 @@ router.delete('/p2-purchase-orders-bypass/:id', async (req: Request, res: Respon
   }
 });
 
+// Bypass route to get all customers (without authentication)
+router.get('/bypass', async (req: Request, res: Response) => {
+  try {
+    console.log('🔧 CUSTOMERS BYPASS ROUTE CALLED');
+    const customers = await storage.getAllCustomers();
+    console.log('🔧 Found customers:', customers.length);
+    res.json(customers);
+  } catch (error) {
+    console.error('🔧 Get customers bypass error:', error);
+    res.status(500).json({ error: "Failed to fetch customers via bypass route" });
+  }
+});
+
 // Regular Customers Management
 router.get('/', async (req: Request, res: Response) => {
   try {
@@ -84,6 +97,16 @@ router.get('/', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Get customers error:', error);
     res.status(500).json({ error: "Failed to fetch customers" });
+  }
+});
+
+router.get('/with-pos', async (req: Request, res: Response) => {
+  try {
+    const customers = await storage.getCustomersWithPurchaseOrders();
+    res.json(customers);
+  } catch (error) {
+    console.error('Get customers with POs error:', error);
+    res.status(500).json({ error: "Failed to fetch customers with purchase orders" });
   }
 });
 
@@ -135,6 +158,42 @@ router.post('/create-bypass', async (req: Request, res: Response) => {
       return res.status(400).json({ error: error.message });
     }
     res.status(500).json({ error: "Failed to create customer" });
+  }
+});
+
+// Customer update without authentication (for Customer Management)
+router.put('/update-bypass/:id', async (req: Request, res: Response) => {
+  try {
+    console.log('🔧 BYPASS CUSTOMER UPDATE ROUTE CALLED');
+    console.log('🔧 Customer ID:', req.params.id);
+    console.log('🔧 Request body:', req.body);
+    
+    const customerId = parseInt(req.params.id);
+    const updates = req.body;
+    const updatedCustomer = await storage.updateCustomer(customerId, updates);
+    
+    console.log('🔧 Customer updated successfully:', updatedCustomer.id);
+    res.json(updatedCustomer);
+  } catch (error) {
+    console.error('Update customer error:', error);
+    res.status(500).json({ error: "Failed to update customer" });
+  }
+});
+
+// Customer delete without authentication (for Customer Management)
+router.delete('/delete-bypass/:id', async (req: Request, res: Response) => {
+  try {
+    console.log('🔧 BYPASS CUSTOMER DELETE ROUTE CALLED');
+    console.log('🔧 Customer ID:', req.params.id);
+    
+    const customerId = parseInt(req.params.id);
+    await storage.deleteCustomer(customerId);
+    
+    console.log('🔧 Customer deleted successfully:', customerId);
+    res.status(204).end();
+  } catch (error) {
+    console.error('Delete customer error:', error);
+    res.status(500).json({ error: "Failed to delete customer" });
   }
 });
 
@@ -231,7 +290,7 @@ router.post('/:id/communications', authenticateToken, async (req: Request, res: 
 
 
 
-router.post('/customers', authenticateToken, async (req: Request, res: Response) => {
+router.post('/customers', async (req: Request, res: Response) => {
   try {
     const customerData = insertP2CustomerSchema.parse(req.body);
     const newCustomer = await storage.createP2Customer(customerData);
@@ -245,7 +304,7 @@ router.post('/customers', authenticateToken, async (req: Request, res: Response)
   }
 });
 
-router.put('/customers/:id', authenticateToken, async (req: Request, res: Response) => {
+router.put('/customers/:id', async (req: Request, res: Response) => {
   try {
     const customerId = parseInt(req.params.id);
     const updates = req.body;
@@ -257,11 +316,11 @@ router.put('/customers/:id', authenticateToken, async (req: Request, res: Respon
   }
 });
 
-router.delete('/customers/:id', authenticateToken, async (req: Request, res: Response) => {
+router.delete('/customers/:id', async (req: Request, res: Response) => {
   try {
     const customerId = parseInt(req.params.id);
     await storage.deleteP2Customer(customerId);
-    res.status(204).end();
+    res.json({ success: true, message: "Customer deleted successfully" });
   } catch (error) {
     console.error('Delete P2 customer error:', error);
     res.status(500).json({ error: "Failed to delete P2 customer" });
@@ -303,12 +362,25 @@ router.post('/address-autocomplete-bypass', async (req: Request, res: Response) 
       
       // Parse the complete address for Street API
       const addressParts = search.split(', ');
-      if (addressParts.length >= 3) {
+      if (addressParts.length >= 2) {
         const street = addressParts[0];
-        const city = addressParts[1];
-        const state = addressParts[2];
+        let city, state;
+        
+        if (addressParts.length >= 3) {
+          city = addressParts[1];
+          state = addressParts[2];
+        } else {
+          // Handle "City State" format
+          const cityStateParts = addressParts[1].split(' ');
+          state = cityStateParts.pop(); // Last part is state
+          city = cityStateParts.join(' '); // Rest is city
+        }
+        
+        console.log('🔧 Street API params:', { street, city, state });
         
         const streetUrl = `https://us-street.api.smartystreets.com/street-address?auth-id=${authId}&auth-token=${authToken}&street=${encodeURIComponent(street)}&city=${encodeURIComponent(city)}&state=${encodeURIComponent(state)}`;
+        
+        console.log('🔧 Street API URL:', streetUrl);
         
         const streetResponse = await fetch(streetUrl, {
           method: 'GET',
@@ -317,23 +389,46 @@ router.post('/address-autocomplete-bypass', async (req: Request, res: Response) 
           }
         });
         
+        console.log('🔧 Street API response status:', streetResponse.status);
+        
         if (streetResponse.ok) {
           const streetData = await streetResponse.json();
           console.log('🔧 Street API response:', streetData);
           
           if (streetData && streetData.length > 0) {
             const result = streetData[0];
-            const suggestion = {
-              text: `${result.delivery_line_1}, ${result.components.city_name}, ${result.components.state_abbreviation} ${result.components.zipcode}`,
-              streetLine: result.delivery_line_1,
-              city: result.components.city_name,
-              state: result.components.state_abbreviation,
-              zipCode: result.components.zipcode + (result.components.plus4_code ? '-' + result.components.plus4_code : ''),
-              entries: 1
+            const fullAddress = {
+              delivery_line_1: result.delivery_line_1,
+              components: {
+                city_name: result.components.city_name,
+                state_abbreviation: result.components.state_abbreviation,
+                zipcode: result.components.zipcode + (result.components.plus4_code ? '-' + result.components.plus4_code : '')
+              }
             };
             
-            console.log('🔧 Street API suggestion with ZIP:', suggestion);
-            return res.json({ suggestions: [suggestion] });
+            console.log('🔧 Returning full address with ZIP:', fullAddress);
+            return res.json({ fullAddress: fullAddress });
+          } else {
+            console.log('🔧 Street API returned empty results, falling back to autocomplete');
+          }
+        } else {
+          const errorText = await streetResponse.text();
+          console.log('🔧 Street API error:', streetResponse.status, errorText);
+          
+          // If Street API fails (like 402 subscription error), try to extract ZIP from the search text
+          const zipMatch = search.match(/\b(\d{5}(?:-\d{4})?)\b/);
+          if (zipMatch) {
+            console.log('🔧 Extracted ZIP code from search text:', zipMatch[1]);
+            return res.json({ 
+              fullAddress: {
+                delivery_line_1: street,
+                components: {
+                  city_name: city,
+                  state_abbreviation: state,
+                  zipcode: zipMatch[1]
+                }
+              }
+            });
           }
         }
       }
@@ -363,14 +458,25 @@ router.post('/address-autocomplete-bypass', async (req: Request, res: Response) 
     console.log('🔧 SmartyStreets raw response:', data);
     
     // Transform SmartyStreets autocomplete response
-    const suggestions = data.suggestions?.map((item: any) => ({
-      text: item.text,
-      streetLine: item.street_line,
-      city: item.city,
-      state: item.state,
-      zipCode: item.zipcode,
-      entries: item.entries
-    })) || [];
+    const suggestions = data.suggestions?.map((item: any) => {
+      // Extract ZIP code from text if zipcode field is empty but text contains it
+      let zipCode = item.zipcode;
+      if (!zipCode && item.text) {
+        const zipMatch = item.text.match(/\b(\d{5}(?:-\d{4})?)\b/);
+        if (zipMatch) {
+          zipCode = zipMatch[1];
+        }
+      }
+      
+      return {
+        text: item.text,
+        streetLine: item.street_line,
+        city: item.city,
+        state: item.state,
+        zipCode: zipCode,
+        entries: item.entries
+      };
+    }) || [];
     
     console.log('🔧 Transformed suggestions:', suggestions);
     console.log('🔧 Sending response with suggestions count:', suggestions.length);

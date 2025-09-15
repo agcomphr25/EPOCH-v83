@@ -1,4 +1,7 @@
 import { Router, Request, Response } from 'express';
+import { db } from '../../db';
+import { payments, allOrders } from '../../../shared/schema';
+import { eq, sql } from 'drizzle-orm';
 import { storage } from '../../storage';
 import { generateP1OrderId } from '../../utils/orderIdGenerator';
 import { authenticateToken } from '../../middleware/auth';
@@ -19,14 +22,154 @@ const router = Router();
 // Get all orders for All Orders List (root endpoint)
 router.get('/', async (req: Request, res: Response) => {
   try {
-    // Disable caching while debugging
-    res.set('Cache-Control', 'no-store');
     const orders = await storage.getAllOrders();
-    console.log(`[DEBUG] API route returning ${orders.length} orders`);
     res.json(orders);
   } catch (error) {
     console.error('Error retrieving orders:', error);
     res.status(500).json({ error: "Failed to fetch order", details: (error as any).message });
+  }
+});
+
+// Get all orders with payment status for All Orders List with payment column
+router.get('/with-payment-status', async (req: Request, res: Response) => {
+  try {
+    // Add basic caching headers to reduce server load
+    res.set({
+      'Cache-Control': 'public, max-age=30, stale-while-revalidate=60',
+      'ETag': `"orders-${Date.now()}"`
+    });
+    
+    const orders = await storage.getAllOrdersWithPaymentStatus();
+    res.json(orders);
+  } catch (error) {
+    console.error('Error retrieving orders with payment status:', error);
+    res.status(500).json({ error: "Failed to fetch orders with payment status", details: (error as any).message });
+  }
+});
+
+// Get paginated orders with payment status for improved performance
+router.get('/with-payment-status/paginated', async (req: Request, res: Response) => {
+  try {
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = Math.min(parseInt(req.query.limit as string) || 50, 100); // Max 100 per page
+    
+    // Add basic caching headers
+    res.set({
+      'Cache-Control': 'public, max-age=30, stale-while-revalidate=60',
+      'ETag': `"orders-paginated-${page}-${limit}-${Date.now()}"`
+    });
+    
+    const result = await storage.getAllOrdersWithPaymentStatusPaginated(page, limit);
+    res.json(result);
+  } catch (error) {
+    console.error('Error retrieving paginated orders with payment status:', error);
+    res.status(500).json({ error: "Failed to fetch paginated orders with payment status", details: (error as any).message });
+  }
+});
+
+// Get unpaid/partially paid orders for batch payment processing
+router.get('/unpaid', async (req: Request, res: Response) => {
+  try {
+    const unpaidOrders = await storage.getUnpaidOrders();
+    res.json(unpaidOrders);
+  } catch (error) {
+    console.error('Error retrieving unpaid orders:', error);
+    res.status(500).json({ error: "Failed to fetch unpaid orders", details: (error as any).message });
+  }
+});
+
+// Get unpaid orders for a specific customer
+router.get('/unpaid/customer/:customerId', async (req: Request, res: Response) => {
+  try {
+    const { customerId } = req.params;
+    const unpaidOrders = await storage.getUnpaidOrdersByCustomer(customerId);
+    res.json(unpaidOrders);
+  } catch (error) {
+    console.error('Error retrieving unpaid orders by customer:', error);
+    res.status(500).json({ error: "Failed to fetch unpaid orders for customer", details: (error as any).message });
+  }
+});
+
+// Get all orders for a specific customer (for refund system)
+router.get('/customer/:customerId', async (req: Request, res: Response) => {
+  try {
+    const { customerId } = req.params;
+    console.log(`Getting all orders for customer ${customerId}`);
+    
+    // Get orders from allOrders table with payment information
+    const orders = await db.select({
+      id: allOrders.id,
+      orderId: allOrders.orderId,
+      orderDate: allOrders.orderDate,
+      dueDate: allOrders.dueDate,
+      fbOrderNumber: allOrders.fbOrderNumber,
+      currentDepartment: allOrders.currentDepartment,
+      status: allOrders.status,
+      modelId: allOrders.modelId,
+      shipping: allOrders.shipping,
+      paymentAmount: allOrders.paymentAmount,
+      isPaid: allOrders.isPaid,
+      customerPO: allOrders.customerPO,
+      discountCode: allOrders.discountCode,
+      features: allOrders.features,
+      priceOverride: allOrders.priceOverride,
+      showCustomDiscount: allOrders.showCustomDiscount,
+      customDiscountValue: allOrders.customDiscountValue,
+      customDiscountType: allOrders.customDiscountType,
+    })
+    .from(allOrders)
+    .where(eq(allOrders.customerId, customerId));
+
+    // Calculate payment totals for each order using CORRECTED payment logic
+    const ordersWithPaymentTotals = await Promise.all(
+      orders.map(async (order) => {
+        // Get total payments for this order
+        const paymentResults = await db.select({
+          total: sql`SUM(${payments.paymentAmount})`.as('total')
+        })
+        .from(payments)
+        .where(eq(payments.orderId, order.orderId));
+
+        const paymentTotal = Number(paymentResults[0]?.total || 0);
+        
+        // FIXED: Use the exact same calculation logic as Order Summary
+        // This ensures refund amounts match exactly what's shown in Order Summary
+        let actualOrderTotal;
+        try {
+          // Use the exact same data source as Order Summary: /api/orders/:id endpoint
+          const orderSummaryData = await storage.getOrderById(order.orderId);
+          if (orderSummaryData && orderSummaryData.totalAmount) {
+            actualOrderTotal = Number(orderSummaryData.totalAmount);
+          } else {
+            // Calculate using same logic as Order Summary (includes paint, bottom metal, etc.)
+            actualOrderTotal = await storage.calculateOrderTotal(order);
+          }
+          
+          // Fallback to shipping cost if calculation fails
+          if (actualOrderTotal === null || actualOrderTotal === undefined || isNaN(actualOrderTotal)) {
+            actualOrderTotal = Number(order.shipping) || 0;
+          }
+        } catch (error) {
+          console.error(`❌ Error getting Order Summary data for ${order.orderId}:`, error);
+          actualOrderTotal = Number(order.shipping) || 0;
+        }
+        const balanceDue = Math.max(0, actualOrderTotal - paymentTotal);
+        
+        return {
+          ...order,
+          paymentTotal,
+          orderTotal: actualOrderTotal,
+          balanceDue,
+          isFullyPaid: paymentTotal >= actualOrderTotal && actualOrderTotal > 0,
+        };
+      })
+    );
+
+    console.log(`Found ${ordersWithPaymentTotals.length} orders for customer ${customerId}`);
+    res.json(ordersWithPaymentTotals);
+  } catch (error) {
+    console.error('❌ Error retrieving orders by customer:', error);
+    res.status(500).json({ error: "Failed to fetch orders for customer", details: (error as any).message });
   }
 });
 
@@ -63,14 +206,44 @@ router.get('/outstanding', async (req: Request, res: Response) => {
   }
 });
 
+// Get orders by department (must be before :orderId route)
+router.get('/department/:department', async (req: Request, res: Response) => {
+  try {
+    const { department } = req.params;
+    const decodedDepartment = decodeURIComponent(department);
+    const orders = await storage.getOrdersByDepartment(decodedDepartment);
+    res.json(orders);
+  } catch (error) {
+    console.error("Get orders by department error:", error);
+    res.status(500).json({ error: "Failed to get orders by department" });
+  }
+});
 
+
+
+// Search orders - must be before :orderId route
+router.get('/search', async (req: Request, res: Response) => {
+  try {
+    const { query } = req.query;
+
+    if (!query || typeof query !== 'string' || query.length < 2) {
+      return res.json([]);
+    }
+
+    const results = await storage.searchOrders(query as string);
+    res.json(results);
+  } catch (error) {
+    console.error('Error searching orders:', error);
+    res.status(500).json({ error: 'Failed to search orders' });
+  }
+});
 
 // Order Draft Management
 router.get('/drafts', async (req: Request, res: Response) => {
   try {
     const excludeFinalized = req.query.excludeFinalized === 'true';
     const drafts = await storage.getAllOrderDrafts();
-    
+
     if (excludeFinalized) {
       const filteredDrafts = drafts.filter(draft => draft.status !== 'FINALIZED');
       res.json(filteredDrafts);
@@ -85,32 +258,87 @@ router.get('/drafts', async (req: Request, res: Response) => {
 
 router.get('/draft/:id', async (req: Request, res: Response) => {
   try {
-    const draftId = req.params.id;
-    let draft;
-    
+    const orderId = req.params.id;
+    console.log('Fetching order for ID:', orderId);
+
     // Check if the ID is a number (database ID) or string (order ID like AG422)
-    if (/^\d+$/.test(draftId)) {
-      // It's a numeric database ID
-      draft = await storage.getOrderDraftById(parseInt(draftId));
+    if (/^\d+$/.test(orderId)) {
+      // It's a numeric database ID - try draft first
+      try {
+        const draft = await storage.getOrderDraftById(parseInt(orderId));
+        console.log('Found draft by database ID:', orderId);
+        return res.json(draft);
+      } catch (draftError) {
+        console.log('No draft found by database ID, checking finalized orders...');
+        try {
+          const finalizedOrder = await storage.getOrderById(orderId);
+          if (finalizedOrder) {
+            console.log('Found finalized order by database ID:', orderId);
+            return res.json(finalizedOrder);
+          }
+        } catch (finalizedError) {
+          console.error('Order not found by database ID:', finalizedError);
+        }
+      }
     } else {
-      // It's an order ID like AG422
-      draft = await storage.getOrderDraft(draftId);
+      // It's an order ID like AG422 - try draft first, then finalized
+      try {
+        const draft = await storage.getOrderDraft(orderId);
+        if (draft) {
+          console.log('Found draft order:', orderId);
+          return res.json(draft);
+        }
+      } catch (draftError) {
+        console.log('Draft not found, checking finalized orders...');
+      }
+      
+      // Try finalized orders
+      try {
+        const finalizedOrder = await storage.getFinalizedOrderById(orderId);
+        if (finalizedOrder) {
+          console.log('Found finalized order:', orderId);
+          return res.json(finalizedOrder);
+        }
+      } catch (finalizedError) {
+        console.error('Order not found in either table:', finalizedError);
+      }
     }
-    
-    if (!draft) {
-      return res.status(404).json({ error: "Order draft not found" });
-    }
-    
-    res.json(draft);
+
+    return res.status(404).json({ error: `Order ${orderId} not found` });
   } catch (error) {
-    console.error('Get draft error:', error);
-    res.status(500).json({ error: "Failed to fetch order draft" });
+    console.error('Get order error:', error);
+    res.status(500).json({ error: "Failed to fetch order" });
   }
 });
 
+// Create finalized order directly (new streamlined process)
+router.post('/finalized', async (req: Request, res: Response) => {
+  try {
+    const orderData = insertOrderDraftSchema.parse(req.body);
+    const finalizedOrder = await storage.createFinalizedOrder(orderData, req.body.finalizedBy);
+    res.status(201).json(finalizedOrder);
+  } catch (error) {
+    console.error('Create finalized order error:', error);
+    if (error instanceof Error) {
+      return res.status(400).json({ error: error.message });
+    }
+    res.status(500).json({ error: "Failed to create finalized order" });
+  }
+});
+
+// Create draft order (legacy method for special cases)
 router.post('/draft', async (req: Request, res: Response) => {
   try {
     const orderData = insertOrderDraftSchema.parse(req.body);
+    
+    // Check if this should be a finalized order instead
+    if (orderData.status === 'FINALIZED') {
+      console.log(`🔄 REDIRECTING: Order ${orderData.orderId} marked as FINALIZED - creating directly in production queue`);
+      const finalizedOrder = await storage.createFinalizedOrder(orderData, req.body.finalizedBy);
+      return res.status(201).json(finalizedOrder);
+    }
+    
+    // Only create draft for non-finalized orders
     const draft = await storage.createOrderDraft(orderData);
     res.status(201).json(draft);
   } catch (error) {
@@ -124,23 +352,49 @@ router.post('/draft', async (req: Request, res: Response) => {
 
 router.put('/draft/:id', async (req: Request, res: Response) => {
   try {
-    const draftId = req.params.id;
-    console.log('Update draft endpoint called for ID:', draftId);
+    const orderId = req.params.id;
+    console.log('Update order endpoint called for ID:', orderId);
     console.log('Update data received:', req.body);
-    
+
     // Validate the input data using the schema
     const updates = insertOrderDraftSchema.partial().parse(req.body);
     console.log('Validated updates:', updates);
-    
-    const updatedDraft = await storage.updateOrderDraft(draftId, updates);
-    console.log('Update successful, returning:', updatedDraft);
-    res.json(updatedDraft);
+
+    // CRITICAL SERVER-SIDE VALIDATION: Prevent null/empty modelId for non-custom orders
+    if (updates.isCustomOrder === 'no' && (!updates.modelId || updates.modelId.trim() === '')) {
+      return res.status(400).json({ 
+        error: "Stock model is required for non-custom orders" 
+      });
+    }
+
+    // CRITICAL FIX: Try to update draft order first since this is the /draft endpoint
+    let updatedOrder;
+    try {
+      console.log('Attempting to update draft order first...');
+      updatedOrder = await storage.updateOrderDraft(orderId, updates);
+      console.log('Updated draft order successfully:', updatedOrder);
+      return res.json(updatedOrder);
+    } catch (draftError) {
+      console.log('Draft order not found, attempting finalized order update...');
+      console.log('Draft error:', (draftError as Error).message);
+      
+      // If draft update fails, try to update as a finalized order
+      try {
+        console.log('Calling updateFinalizedOrder...');
+        updatedOrder = await storage.updateFinalizedOrder(orderId, updates);
+        console.log('Updated finalized order successfully:', updatedOrder);
+        return res.json(updatedOrder);
+      } catch (finalizedError) {
+        console.error('Finalized order update failed:', (finalizedError as Error).message);
+        return res.status(404).json({ error: `Order ${orderId} not found in drafts or finalized orders` });
+      }
+    }
   } catch (error) {
-    console.error('Update draft error:', error);
+    console.error('Update order error:', error);
     if (error instanceof Error) {
       return res.status(400).json({ error: error.message });
     }
-    res.status(500).json({ error: "Failed to update order draft" });
+    res.status(500).json({ error: "Failed to update order" });
   }
 });
 
@@ -161,10 +415,7 @@ router.delete('/draft/:id', async (req: Request, res: Response) => {
 // Get all orders endpoint (backward compatibility)
 router.get('/all', async (req: Request, res: Response) => {
   try {
-    // Disable caching while debugging
-    res.set('Cache-Control', 'no-store');
     const orders = await storage.getAllOrders();
-    console.log(`[DEBUG] /all API route returning ${orders.length} orders`);
     res.json(orders);
   } catch (error) {
     console.error('Error retrieving all orders:', error);
@@ -172,23 +423,138 @@ router.get('/all', async (req: Request, res: Response) => {
   }
 });
 
-router.get('/:id', async (req: Request, res: Response) => {
+router.get('/cancelled', async (req: Request, res: Response) => {
   try {
-    const orderId = req.params.id;
-    const order = await storage.getOrderById(orderId);
-    
-    if (!order) {
-      return res.status(404).json({ error: "Order not found" });
-    }
-    
-    res.json(order);
+    console.log('🔍 Fetching cancelled orders...');
+    const cancelledOrders = await storage.getCancelledOrders();
+    console.log(`🔍 Found ${cancelledOrders.length} cancelled orders`);
+    res.json(cancelledOrders);
   } catch (error) {
-    console.error('Get order error:', error);
-    res.status(500).json({ error: "Failed to fetch order" });
+    console.error('Error fetching cancelled orders:', error);
+    res.status(500).json({ error: 'Failed to fetch cancelled orders' });
   }
 });
 
-// Order ID Generation
+// Get all finalized orders
+router.get('/finalized', async (req: Request, res: Response) => {
+  try {
+    const orders = await storage.getAllFinalizedOrders();
+    res.json(orders);
+  } catch (error) {
+    console.error('Error retrieving finalized orders:', error);
+    res.status(500).json({ error: "Failed to fetch finalized orders", details: (error as any).message });
+  }
+});
+
+// Finalize an order (move from draft to production)
+router.post('/draft/:id/finalize', async (req: Request, res: Response) => {
+  try {
+    const orderId = req.params.id;
+    const { finalizedBy } = req.body;
+
+    const finalizedOrder = await storage.finalizeOrder(orderId, finalizedBy);
+    res.json({ 
+      success: true, 
+      message: "Order finalized successfully",
+      order: finalizedOrder 
+    });
+  } catch (error) {
+    console.error('Finalize order error:', error);
+    if (error instanceof Error) {
+      return res.status(400).json({ error: error.message });
+    }
+    res.status(500).json({ error: "Failed to finalize order" });
+  }
+});
+
+// Get finalized order by ID
+router.get('/finalized/:id', async (req: Request, res: Response) => {
+  try {
+    const orderId = req.params.id;
+    const order = await storage.getFinalizedOrderById(orderId);
+
+    if (!order) {
+      return res.status(404).json({ error: "Finalized order not found" });
+    }
+
+    res.json(order);
+  } catch (error) {
+    console.error('Get finalized order error:', error);
+    res.status(500).json({ error: "Failed to fetch finalized order" });
+  }
+});
+
+// Update finalized order
+router.put('/finalized/:id', async (req: Request, res: Response) => {
+  try {
+    const orderId = req.params.id;
+    const updates = req.body;
+
+    const updatedOrder = await storage.updateFinalizedOrder(orderId, updates);
+    res.json(updatedOrder);
+  } catch (error) {
+    console.error('Update finalized order error:', error);
+    if (error instanceof Error) {
+      return res.status(400).json({ error: error.message });
+    }
+    res.status(500).json({ error: "Failed to update finalized order" });
+  }
+});
+
+// Fulfill an order (move to shipping management with fulfilled badge)
+router.post('/fulfill', async (req: Request, res: Response) => {
+  try {
+    console.log(`🎯 FULFILL ENDPOINT CALLED: Request received`);
+    const { orderId } = req.body;
+
+    if (!orderId) {
+      console.log(`❌ FULFILL ERROR: No order ID provided in request`);
+      return res.status(400).json({ error: "Order ID is required" });
+    }
+
+    console.log(`🎯 FULFILL REQUEST: Processing fulfillment for order ${orderId}`);
+
+    // Update the order to be fulfilled and move to shipping management
+    const updatedOrder = await storage.fulfillOrder(orderId);
+    
+    console.log(`✅ FULFILL SUCCESS: Order ${orderId} fulfilled successfully`);
+    res.json({ 
+      success: true, 
+      message: "Order fulfilled successfully",
+      order: updatedOrder 
+    });
+  } catch (error) {
+    console.error('❌ FULFILL ENDPOINT ERROR:', error);
+    if (error instanceof Error) {
+      return res.status(400).json({ error: error.message });
+    }
+    res.status(500).json({ error: "Failed to fulfill order" });
+  }
+});
+
+// Production Orders (must be before :id route)
+router.get('/production-orders', async (req: Request, res: Response) => {
+  try {
+    const productionOrders = await storage.getAllProductionOrders();
+    res.json(productionOrders);
+  } catch (error) {
+    console.error('Get production orders error:', error);
+    res.status(500).json({ error: "Failed to fetch production orders" });
+  }
+});
+
+router.post('/production-orders/generate/:purchaseOrderId', async (req: Request, res: Response) => {
+  try {
+    const purchaseOrderId = parseInt(req.params.purchaseOrderId);
+    const productionOrders = await storage.generateP2ProductionOrders(purchaseOrderId);
+    res.status(201).json(productionOrders);
+  } catch (error) {
+    console.error('Generate production orders error:', error);
+    res.status(500).json({ error: "Failed to generate production orders" });
+  }
+});
+
+// Order ID Generation - MUST be before parameterized routes
 router.get('/last-id', async (req: Request, res: Response) => {
   try {
     const lastOrder = await storage.getLastOrderId();
@@ -220,6 +586,23 @@ router.post('/generate-id', async (req: Request, res: Response) => {
   }
 });
 
+// Parameterized route - MUST be after specific routes
+router.get('/:id', async (req: Request, res: Response) => {
+  try {
+    const orderId = req.params.id;
+    const order = await storage.getOrderById(orderId);
+
+    if (!order) {
+      return res.status(404).json({ error: "Order not found" });
+    }
+
+    res.json(order);
+  } catch (error) {
+    console.error('Get order error:', error);
+    res.status(500).json({ error: "Failed to fetch order" });
+  }
+});
+
 // Pipeline Management
 router.get('/pipeline-counts', async (req: Request, res: Response) => {
   try {
@@ -241,17 +624,20 @@ router.get('/pipeline-details', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/:id/progress', async (req: Request, res: Response) => {
-  try {
-    const orderId = req.params.id;
-    const { nextDepartment } = req.body;
-    const updatedOrder = await storage.progressOrder(orderId, nextDepartment);
-    res.json(updatedOrder);
-  } catch (error) {
-    console.error('Progress order error:', error);
-    res.status(500).json({ error: "Failed to progress order" });
-  }
-});
+// This route seems to be duplicated, keeping the first instance.
+// router.post('/:id/progress', async (req: Request, res: Response) => {
+//   try {
+//     const orderId = req.params.id;
+//     const { nextDepartment } = req.body;
+//     const updatedOrder = await storage.progressOrder(orderId, nextDepartment);
+//     res.json(updatedOrder);
+//   } catch (error) {
+//     console.error('Progress order error:', error);
+//     res.status(500).json({ error: "Failed to progress order" });
+//   }
+// });
+
+
 
 router.post('/:id/scrap', async (req: Request, res: Response) => {
   try {
@@ -262,6 +648,84 @@ router.post('/:id/scrap', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Scrap order error:', error);
     res.status(500).json({ error: "Failed to scrap order" });
+  }
+});
+
+// Move order back to draft for editing
+router.post('/:id/move-to-draft', async (req: Request, res: Response) => {
+  try {
+    const orderId = req.params.id;
+    
+    // Get the current order
+    const currentOrder = await storage.getOrderById(orderId);
+    if (!currentOrder) {
+      return res.status(404).json({ error: "Order not found" });
+    }
+
+    // Move order back to draft status by copying to order_drafts table
+    const draftData = {
+      orderId: currentOrder.orderId,
+      customerId: currentOrder.customerId,
+      orderDate: currentOrder.orderDate,
+      dueDate: currentOrder.dueDate,
+      modelId: currentOrder.modelId,
+      features: currentOrder.features as Record<string, any> | null,
+      handedness: currentOrder.handedness,
+      notes: currentOrder.notes,
+      status: 'DRAFT',
+      paymentAmount: currentOrder.paymentAmount,
+      paymentDate: currentOrder.paymentDate,
+      paymentType: currentOrder.paymentType,
+      discountCode: currentOrder.discountCode,
+      customDiscountType: currentOrder.customDiscountType,
+      customDiscountValue: currentOrder.customDiscountValue,
+      showCustomDiscount: currentOrder.showCustomDiscount,
+      priceOverride: currentOrder.priceOverride,
+      shipping: currentOrder.shipping || 0,
+      isPaid: currentOrder.isPaid || false,
+      isVerified: currentOrder.isVerified || false,
+      isFlattop: currentOrder.isFlattop || false
+    };
+
+    // Create draft order
+    const draftOrder = await storage.createOrderDraft(draftData);
+    
+    // Remove from finalized orders (allOrders table) - commented out for now
+    // await storage.deleteFinalizedOrderById(orderId);
+
+    res.json({ 
+      success: true, 
+      message: "Order moved to draft for editing",
+      draftOrder 
+    });
+  } catch (error) {
+    console.error('Move to draft error:', error);
+    res.status(500).json({ error: "Failed to move order to draft" });
+  }
+});
+
+// Progress order to next department
+router.post('/:id/progress', async (req: Request, res: Response) => {
+  try {
+    const orderId = req.params.id;
+    const { nextDepartment } = req.body;
+    
+    const updatedOrder = await storage.progressOrder(orderId, nextDepartment);
+    res.json(updatedOrder);
+  } catch (error) {
+    console.error('Progress order error:', error);
+    res.status(500).json({ error: "Failed to progress order" });
+  }
+});
+
+// Sync verification status between draft and finalized orders
+router.post('/sync-verification', async (req: Request, res: Response) => {
+  try {
+    const result = await storage.syncVerificationStatus();
+    res.json(result);
+  } catch (error) {
+    console.error('Sync verification status error:', error);
+    res.status(500).json({ error: "Failed to sync verification status", details: (error as Error).message });
   }
 });
 
@@ -287,34 +751,19 @@ router.post('/purchase-orders', async (req: Request, res: Response) => {
   }
 });
 
-// Production Orders
-router.get('/production-orders', async (req: Request, res: Response) => {
-  try {
-    const productionOrders = await storage.getAllProductionOrders();
-    res.json(productionOrders);
-  } catch (error) {
-    console.error('Get production orders error:', error);
-    res.status(500).json({ error: "Failed to fetch production orders" });
-  }
-});
 
-router.post('/production-orders/generate/:purchaseOrderId', async (req: Request, res: Response) => {
-  try {
-    const purchaseOrderId = parseInt(req.params.purchaseOrderId);
-    const productionOrders = await storage.generateProductionOrdersFromPO(purchaseOrderId);
-    res.status(201).json(productionOrders);
-  } catch (error) {
-    console.error('Generate production orders error:', error);
-    res.status(500).json({ error: "Failed to generate production orders" });
-  }
-});
 
 // Payment Management Routes
 // Get all payments for an order
 router.get('/:orderId/payments', async (req: Request, res: Response) => {
   try {
     const orderId = req.params.orderId;
+    console.log('Fetching payments for order:', orderId);
+    
+    // Get payments from separate payments table
     const payments = await storage.getPaymentsByOrderId(orderId);
+    console.log('Found payments:', payments);
+    
     res.json(payments);
   } catch (error) {
     console.error('Get payments error:', error);
@@ -326,11 +775,19 @@ router.get('/:orderId/payments', async (req: Request, res: Response) => {
 router.post('/:orderId/payments', async (req: Request, res: Response) => {
   try {
     const orderId = req.params.orderId;
+    console.log('Creating payment for order:', orderId);
+    console.log('Payment data received:', req.body);
+    
     const paymentData = insertPaymentSchema.parse({ ...req.body, orderId });
+    console.log('Validated payment data:', paymentData);
+    
     const newPayment = await storage.createPayment(paymentData);
+    console.log('Payment created successfully:', newPayment);
+    
     res.status(201).json(newPayment);
   } catch (error) {
     console.error('Create payment error:', error);
+    console.error('Error details:', (error as Error).message);
     res.status(400).json({ error: "Failed to create payment", details: (error as any).message });
   }
 });
@@ -352,11 +809,686 @@ router.put('/payments/:paymentId', async (req: Request, res: Response) => {
 router.delete('/payments/:paymentId', async (req: Request, res: Response) => {
   try {
     const paymentId = parseInt(req.params.paymentId);
+    
+    // Validate payment ID
+    if (isNaN(paymentId)) {
+      console.error('Invalid payment ID:', req.params.paymentId);
+      return res.status(400).json({ error: "Invalid payment ID" });
+    }
+    
+    console.log(`🗑️ Attempting to delete payment ID: ${paymentId}`);
+    
+    // Check if payment exists by trying to get it directly
+    try {
+      const result = await db.select().from(payments).where(eq(payments.id, paymentId)).limit(1);
+      if (result.length === 0) {
+        console.error('Payment not found:', paymentId);
+        return res.status(404).json({ error: "Payment not found" });
+      }
+      console.log(`✅ Payment found: ${paymentId}, orderId: ${result[0].orderId}`);
+    } catch (checkError) {
+      console.error('Error checking payment existence:', checkError);
+      return res.status(500).json({ error: "Error validating payment" });
+    }
+    
     await storage.deletePayment(paymentId);
+    console.log(`✅ Successfully deleted payment ID: ${paymentId}`);
     res.json({ success: true });
   } catch (error) {
     console.error('Delete payment error:', error);
-    res.status(500).json({ error: "Failed to delete payment" });
+    console.error('Error details:', {
+      message: error.message,
+      stack: error.stack,
+      paymentId: req.params.paymentId
+    });
+    res.status(500).json({ 
+      error: "Failed to delete payment", 
+      details: error.message 
+    });
+  }
+});
+
+// Progress order to next department
+router.post('/:orderId/progress', async (req: Request, res: Response) => {
+  try {
+    const { orderId } = req.params;
+    const { nextDepartment } = req.body;
+
+    console.log(`🏭 Progressing order ${orderId} to ${nextDepartment || 'next department'}`);
+
+    // Try to find order in different order tables
+    let existingOrder = await storage.getFinalizedOrderById(orderId);
+    let isFinalized = true;
+    let isP2Order = false;
+
+    if (!existingOrder) {
+      // Try P2 finalized orders
+      try {
+        existingOrder = await storage.getFinalizedOrderById(orderId);
+        isP2Order = true;
+        isFinalized = true;
+        console.log(`📋 Found P2 finalized order: ${orderId}`);
+      } catch (error) {
+        // P2 method might not exist, continue to draft orders
+      }
+    }
+
+    if (!existingOrder) {
+      // Try P1 draft orders
+      const draftOrder = await storage.getOrderDraft(orderId);
+      if (draftOrder) {
+        existingOrder = draftOrder;
+        isFinalized = false;
+        console.log(`📋 Found P1 draft order: ${orderId}`);
+      }
+    }
+
+    if (!existingOrder) {
+      // Try P2 draft orders
+      try {
+        const p2DraftOrder = await storage.getOrderDraft(orderId);
+        if (p2DraftOrder) {
+          existingOrder = p2DraftOrder;
+          isFinalized = false;
+          isP2Order = true;
+          console.log(`📋 Found P2 draft order: ${orderId}`);
+        }
+      } catch (error) {
+        // P2 method might not exist
+      }
+    }
+
+    if (!existingOrder) {
+      console.error(`❌ Order ${orderId} not found in either finalized or draft orders`);
+      return res.status(404).json({ error: `Order ${orderId} not found` });
+    }
+
+    console.log(`📋 Found order ${orderId} in department: ${existingOrder.currentDepartment} (${isFinalized ? 'finalized' : 'draft'}, ${isP2Order ? 'P2' : 'P1'})`);
+
+    // Prepare completion timestamp update based on current department
+    const completionUpdates: any = {};
+    const now = new Date();
+
+    switch (existingOrder.currentDepartment) {
+      case 'P1 Production Queue': completionUpdates.productionQueueCompletedAt = now; break;
+      case 'P2 Production Queue': completionUpdates.productionQueueCompletedAt = now; break;
+      case 'Layup/Plugging': completionUpdates.layupPluggingCompletedAt = now; break;
+      case 'Barcode': completionUpdates.barcodeCompletedAt = now; break;
+      case 'CNC': completionUpdates.cncCompletedAt = now; break;
+      case 'Finish': completionUpdates.finishCompletedAt = now; break;
+      case 'Gunsmith': completionUpdates.gunsmithCompletedAt = now; break;
+      case 'Paint': completionUpdates.paintCompletedAt = now; break;
+      case 'Shipping QC': completionUpdates.shippingQcCompletedAt = now; break;
+      case 'Shipping': completionUpdates.shippingCompletedAt = now; break;
+    }
+
+    // Define the departments sequence for automatic progression
+    const departments = [
+      'P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 
+      'Finish', 'Gunsmith', 'Paint', 'Shipping QC', 'Shipping'
+    ];
+
+    // CRITICAL SAFEGUARD: Prevent backwards department progression
+    if (nextDepartment) {
+      const currentIndex = departments.indexOf(existingOrder.currentDepartment);
+      const targetIndex = departments.indexOf(nextDepartment);
+      
+      // Allow backwards movement only for specific administrative cases
+      if (targetIndex < currentIndex && targetIndex >= 0 && currentIndex >= 0) {
+        console.log(`⚠️  WARNING: Attempting to move order ${orderId} backwards from ${existingOrder.currentDepartment} to ${nextDepartment}`);
+        
+        // Log this as a potential issue for investigation
+        const backwardsMovement = {
+          orderId,
+          fromDepartment: existingOrder.currentDepartment,
+          toDepartment: nextDepartment,
+          timestamp: new Date().toISOString(),
+          reason: 'Manual backwards progression detected'
+        };
+        console.error('🚨 BACKWARDS PROGRESSION DETECTED:', backwardsMovement);
+        
+        // For now, allow it but log heavily - in future this could be blocked
+        // return res.status(400).json({ 
+        //   error: `Cannot move order backwards from ${existingOrder.currentDepartment} to ${nextDepartment}. This could cause data loss.` 
+        // });
+      }
+    }
+    
+    // Special handling for orders with no stock model - they bypass manufacturing and go to Shipping QC
+    const hasNoStockModel = !existingOrder.modelId || existingOrder.modelId.trim() === '';
+    
+    // Special handling for flat top orders - they bypass CNC and go directly to Finish
+    const isFlatTop = existingOrder.isFlattop || false;
+    
+    // If no nextDepartment provided, calculate it automatically
+    let targetDepartment = nextDepartment;
+    if (!targetDepartment) {
+      // Orders with no stock model should skip manufacturing departments
+      if (hasNoStockModel && existingOrder.currentDepartment === 'P1 Production Queue') {
+        targetDepartment = 'Shipping QC';
+        console.log(`🚀 Order ${orderId} has no stock model - routing directly to Shipping QC`);
+      } 
+      // Flat top orders skip CNC and go directly to Finish after Layup/Plugging
+      else if (isFlatTop && existingOrder.currentDepartment === 'Layup/Plugging') {
+        targetDepartment = 'Finish';
+        console.log(`🏔️ Order ${orderId} is flat top - bypassing CNC, routing directly to Finish`);
+      }
+      // Regular progression for all other cases
+      else {
+        const currentIndex = departments.indexOf(existingOrder.currentDepartment);
+        if (currentIndex >= 0 && currentIndex < departments.length - 1) {
+          targetDepartment = departments[currentIndex + 1];
+        } else {
+          console.error(`❌ Cannot determine next department for ${existingOrder.currentDepartment}`);
+          return res.status(400).json({ error: `Invalid current department: ${existingOrder.currentDepartment}` });
+        }
+      }
+    }
+
+    console.log(`🎯 Target department: ${targetDepartment}`);
+
+    // Update the appropriate table
+    let updatedOrder;
+    if (isFinalized && isP2Order) {
+      console.log(`🔄 Updating P2 finalized order ${orderId} in P2 allOrders table`);
+      console.log(`🔄 Update data:`, { currentDepartment: targetDepartment, ...completionUpdates });
+      try {
+        updatedOrder = await storage.updateFinalizedOrder(orderId, {
+          currentDepartment: targetDepartment,
+          ...completionUpdates
+        });
+        console.log(`✅ Updated P2 finalized order result:`, updatedOrder?.currentDepartment);
+      } catch (error) {
+        console.error(`❌ P2 update method not available, falling back to P1 update:`, error);
+        updatedOrder = await storage.updateFinalizedOrder(orderId, {
+          currentDepartment: targetDepartment,
+          ...completionUpdates
+        });
+      }
+    } else if (isFinalized) {
+      console.log(`🔄 Updating P1 finalized order ${orderId} in allOrders table`);
+      console.log(`🔄 Update data:`, { currentDepartment: targetDepartment, ...completionUpdates });
+      updatedOrder = await storage.updateFinalizedOrder(orderId, {
+        currentDepartment: targetDepartment,
+        ...completionUpdates
+      });
+      console.log(`✅ Updated P1 finalized order result:`, updatedOrder?.currentDepartment);
+    } else if (isP2Order) {
+      console.log(`🔄 Updating P2 draft order ${orderId} in P2 orderDrafts table`);
+      console.log(`🔄 Update data:`, { currentDepartment: targetDepartment, ...completionUpdates });
+      try {
+        updatedOrder = await storage.updateOrderDraft(orderId, {
+          currentDepartment: targetDepartment,
+          ...completionUpdates
+        });
+        console.log(`✅ Updated P2 draft order result:`, updatedOrder?.currentDepartment);
+      } catch (error) {
+        console.error(`❌ P2 update method not available, falling back to P1 update:`, error);
+        updatedOrder = await storage.updateOrderDraft(orderId, {
+          currentDepartment: targetDepartment,
+          ...completionUpdates
+        });
+      }
+    } else {
+      console.log(`🔄 Updating P1 draft order ${orderId} in orderDrafts table`);
+      console.log(`🔄 Update data:`, { currentDepartment: targetDepartment, ...completionUpdates });
+      updatedOrder = await storage.updateOrderDraft(orderId, {
+        currentDepartment: targetDepartment,
+        ...completionUpdates
+      });
+      console.log(`✅ Updated P1 draft order result:`, updatedOrder?.currentDepartment);
+    }
+
+    console.log(`✅ Successfully progressed order ${orderId} from ${existingOrder.currentDepartment} to ${targetDepartment}`);
+    console.log(`✅ Final order department: ${updatedOrder?.currentDepartment}`);
+    
+    // Verify the update succeeded
+    if (updatedOrder?.currentDepartment !== targetDepartment) {
+      console.error(`❌ Update failed: Expected ${targetDepartment}, got ${updatedOrder?.currentDepartment}`);
+      return res.status(500).json({ error: `Department update failed` });
+    }
+    
+    res.json({ success: true, order: updatedOrder });
+  } catch (error) {
+    console.error('Progress order error:', error);
+    res.status(500).json({ error: "Failed to progress order", details: (error as any).message });
+  }
+});
+
+// Complete QC and move to shipping
+router.post('/complete-qc/:orderId', async (req: Request, res: Response) => {
+  try {
+    const { orderId } = req.params;
+    const { qcNotes, qcPassedAll } = req.body;
+
+    const updateData = {
+      currentDepartment: qcPassedAll ? 'Shipping' : 'QC',
+      qcCompletedAt: qcPassedAll ? new Date() : null,
+      qcNotes: qcNotes || null,
+      qcPassed: qcPassedAll,
+      status: qcPassedAll ? 'Ready for Shipping' : 'In QC'
+    };
+
+    // Try to update in finalized orders first
+    let updatedOrder;
+    try {
+      updatedOrder = await storage.updateFinalizedOrder(orderId, updateData);
+    } catch (error) {
+      // If not found in finalized orders, try draft orders
+      updatedOrder = await storage.updateOrderDraft(orderId, updateData);
+    }
+
+    res.json({ 
+      success: true, 
+      message: qcPassedAll ? 'Order moved to shipping' : 'QC notes updated',
+      order: updatedOrder 
+    });
+
+  } catch (error) {
+    console.error('Error completing QC:', error);
+    res.status(500).json({ error: 'Failed to complete QC process' });
+  }
+});
+
+// Undo cancellation of an order (restore order)
+router.post('/undo-cancel/:orderId', async (req: Request, res: Response) => {
+  try {
+    const { orderId } = req.params;
+
+    console.log('🔄 UNDO CANCEL ORDER ROUTE CALLED');
+    console.log('🔄 Order ID:', orderId);
+
+    // Check if the order exists and is cancelled
+    const order = await storage.getOrderById(orderId);
+    if (!order) {
+      console.log('🔄 Order not found:', orderId);
+      return res.status(404).json({ error: 'Order not found' });
+    }
+
+    if (!order.isCancelled) {
+      console.log('🔄 Order is not cancelled:', orderId);
+      return res.status(400).json({ error: 'Order is not cancelled' });
+    }
+
+    console.log('🔄 Found cancelled order:', order.id, order.status);
+
+    // Restore the order by removing cancellation information
+    const updateData = {
+      isCancelled: false,
+      cancelledAt: null,
+      cancelReason: null,
+      status: 'FINALIZED', // Restore to finalized status
+      currentDepartment: 'P1 Production Queue', // Put back in production queue
+      updatedAt: new Date()
+    };
+
+    console.log('🔄 Restoring order with data:', updateData);
+
+    const updatedOrder = await storage.updateFinalizedOrder(orderId, updateData);
+    
+    if (!updatedOrder) {
+      console.log('🔄 Failed to restore order:', orderId);
+      return res.status(404).json({ error: 'Failed to restore order' });
+    }
+
+    console.log('🔄 Order restored successfully:', updatedOrder.orderId);
+
+    res.json({ 
+      success: true, 
+      message: 'Order restored successfully and returned to production queue',
+      order: updatedOrder
+    });
+
+  } catch (error) {
+    console.error('🔄 Error restoring order:', error);
+    res.status(500).json({ error: 'Failed to restore order' });
+  }
+});
+
+// Cancel an order
+router.post('/cancel/:orderId', async (req: Request, res: Response) => {
+  try {
+    const { orderId } = req.params;
+    const { reason } = req.body;
+
+    console.log('🔧 CANCEL ORDER ROUTE CALLED');
+    console.log('🔧 Order ID:', orderId);
+    console.log('🔧 Cancel reason:', reason);
+
+    // Try to cancel the order (check if it exists first)
+    const order = await storage.getOrderById(orderId);
+    if (!order) {
+      console.log('🔧 Order not found:', orderId);
+      return res.status(404).json({ error: 'Order not found' });
+    }
+
+    console.log('🔧 Found order:', order.id, order.status);
+
+    // Update the order with cancellation information
+    const updateData = {
+      isCancelled: true,
+      cancelledAt: new Date(),
+      cancelReason: reason || 'No reason provided',
+      status: 'CANCELLED',
+      currentDepartment: null, // Remove from all department queues
+      updatedAt: new Date()
+    };
+
+    let updatedOrder;
+    try {
+      // Try updating in finalized orders first
+      updatedOrder = await storage.updateFinalizedOrder(orderId, updateData);
+      console.log('🔧 Updated finalized order successfully');
+    } catch (finalizedError) {
+      console.log('🔧 Failed to update finalized order, trying draft orders:', finalizedError);
+      try {
+        // If not found in finalized orders, try draft orders
+        updatedOrder = await storage.updateOrderDraft(orderId, updateData);
+        console.log('🔧 Updated draft order successfully');
+      } catch (draftError) {
+        console.error('🔧 Failed to update both finalized and draft orders:', draftError);
+        throw new Error('Order not found in either finalized or draft orders');
+      }
+    }
+
+    // Remove order from layup queue if it exists there
+    try {
+      // await storage.deleteLayupQueueItem(orderId); // Method not available
+      console.log('🔧 Removed order from layup queue:', orderId);
+    } catch (layupQueueError) {
+      console.log('🔧 Order was not in layup queue or removal failed:', layupQueueError);
+      // Don't fail the cancellation if layup queue removal fails
+    }
+
+    console.log('🔧 Order cancelled successfully:', updatedOrder.orderId);
+
+    res.json({ 
+      success: true, 
+      message: 'Order cancelled successfully and removed from production queue',
+      order: updatedOrder
+    });
+
+  } catch (error) {
+    console.error('🔧 Error cancelling order:', error);
+    res.status(500).json({ error: 'Failed to cancel order' });
+  }
+});
+
+// PATCH route for updating order department progression
+router.patch('/:orderId', async (req: Request, res: Response) => {
+  try {
+    const orderId = req.params.orderId;
+    const updates = req.body;
+    
+    console.log(`📋 PATCH /${orderId} - Department progression update`);
+    console.log('📋 Update data:', updates);
+    
+    // Try to find and update the order in finalized orders first
+    let updatedOrder;
+    try {
+      updatedOrder = await storage.updateFinalizedOrder(orderId, updates);
+      console.log(`✅ Updated finalized order ${orderId}`);
+    } catch (finalizedError) {
+      console.log(`📋 Order not found in finalized orders, trying drafts...`);
+      try {
+        updatedOrder = await storage.updateOrderDraft(orderId, updates);
+        console.log(`✅ Updated draft order ${orderId}`);
+      } catch (draftError) {
+        console.error(`❌ Order ${orderId} not found in either table`);
+        return res.status(404).json({ error: `Order ${orderId} not found` });
+      }
+    }
+    
+    res.json(updatedOrder);
+  } catch (error) {
+    console.error(`❌ PATCH /${req.params.orderId} error:`, error);
+    res.status(500).json({ error: 'Failed to update order' });
+  }
+});
+
+// Specific endpoint for department transfers with validation
+router.patch('/:orderId/department', async (req: Request, res: Response) => {
+  try {
+    const { orderId } = req.params;
+    const { department } = req.body;
+    
+    console.log(`🔄 Department Transfer Request: ${orderId} → ${department}`);
+    
+    if (!department) {
+      return res.status(400).json({ error: 'Department is required' });
+    }
+    
+    // Validate department name
+    const validDepartments = [
+      'P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 
+      'Gunsmith', 'Finish', 'Finish QC', 'Paint', 'Shipping QC', 
+      'Shipping', 'Fulfilled'
+    ];
+    
+    if (!validDepartments.includes(department)) {
+      return res.status(400).json({ error: 'Invalid department name' });
+    }
+    
+    // Try to find and update the order
+    let updatedOrder;
+    let orderType = '';
+    
+    try {
+      updatedOrder = await storage.updateFinalizedOrder(orderId, { 
+        currentDepartment: department
+      });
+      orderType = 'finalized';
+      console.log(`✅ Updated finalized order ${orderId} to ${department}`);
+    } catch (finalizedError) {
+      try {
+        updatedOrder = await storage.updateOrderDraft(orderId, { 
+          currentDepartment: department
+        });
+        orderType = 'draft';
+        console.log(`✅ Updated draft order ${orderId} to ${department}`);
+      } catch (draftError) {
+        console.error(`❌ Order ${orderId} not found in either table`);
+        return res.status(404).json({ error: `Order ${orderId} not found` });
+      }
+    }
+    
+    // Log the manual transfer for audit purposes
+    console.log(`📋 MANUAL TRANSFER: ${orderId} (${orderType}) moved to ${department} via Department Transfer Tool`);
+    
+    res.json({
+      success: true,
+      message: `Order ${orderId} successfully transferred to ${department}`,
+      order: updatedOrder,
+      auditInfo: {
+        transferType: 'manual',
+        orderType,
+        timestamp: new Date(),
+        targetDepartment: department
+      }
+    });
+    
+  } catch (error) {
+    console.error(`❌ Department transfer error for ${req.params.orderId}:`, error);
+    res.status(500).json({ error: 'Failed to transfer order to department' });
+  }
+});
+
+// CSV Export endpoint for orders (active orders only)
+router.get('/export/csv', async (req: Request, res: Response) => {
+  try {
+    const allOrders = await storage.getAllOrdersWithPaymentStatus();
+    
+    // Filter out fulfilled and cancelled orders
+    const orders = allOrders.filter(order => 
+      order.status !== 'FULFILLED' && 
+      order.status !== 'CANCELLED'
+    );
+    
+    // CSV headers
+    const csvHeaders = [
+      'Order ID',
+      'Order Date', 
+      'Due Date',
+      'Customer ID',
+      'Customer Name',
+      'Product/Model',
+      'Current Department',
+      'Status',
+      'Payment Status',
+      'Payment Total',
+      'FB Order Number',
+      'Handedness',
+      'Created At',
+      'Updated At'
+    ].join(',');
+
+    // Convert orders to CSV rows
+    const csvRows = orders.map(order => {
+      // Helper function to safely format dates
+      const formatDate = (date: any) => {
+        if (!date) return '';
+        try {
+          return new Date(date).toLocaleDateString('en-US');
+        } catch {
+          return '';
+        }
+      };
+
+      // Helper function to safely escape CSV values
+      const escapeCSV = (value: any) => {
+        if (value === null || value === undefined) return '';
+        const str = String(value);
+        // Escape quotes and wrap in quotes if contains comma, quote, or newline
+        if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+          return `"${str.replace(/"/g, '""')}"`;
+        }
+        return str;
+      };
+
+      // Get payment status
+      const getPaymentStatus = (order: any) => {
+        if (order.isFullyPaid) return 'Fully Paid';
+        if (order.isPaid) return 'Partially Paid';
+        return 'Unpaid';
+      };
+
+      return [
+        escapeCSV(order.orderId),
+        escapeCSV(formatDate(order.orderDate)),
+        escapeCSV(formatDate(order.dueDate)),
+        escapeCSV((order as any).customerId),
+        escapeCSV((order as any).customer || 'N/A'),
+        escapeCSV((order as any).product || order.modelId || 'N/A'),
+        escapeCSV(order.currentDepartment),
+        escapeCSV(order.status),
+        escapeCSV(getPaymentStatus(order)),
+        escapeCSV(order.paymentTotal || '0'),
+        escapeCSV(order.fbOrderNumber || ''),
+        escapeCSV(order.handedness || ''),
+        escapeCSV(formatDate(order.createdAt)),
+        escapeCSV(formatDate(order.updatedAt))
+      ].join(',');
+    });
+
+    // Combine headers and rows
+    const csvContent = [csvHeaders, ...csvRows].join('\n');
+
+    // Set headers for file download
+    const timestamp = new Date().toISOString().split('T')[0];
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="orders_export_${timestamp}.csv"`);
+    
+    res.send(csvContent);
+  } catch (error) {
+    console.error('CSV export error:', error);
+    res.status(500).json({ error: 'Failed to export orders to CSV' });
+  }
+});
+
+// CSV Export endpoint for ALL orders (including fulfilled and cancelled)
+router.get('/export/csv-all', async (req: Request, res: Response) => {
+  try {
+    // Get all orders without any filtering
+    const orders = await storage.getAllOrdersWithPaymentStatus();
+    
+    // CSV headers
+    const csvHeaders = [
+      'Order ID',
+      'Order Date', 
+      'Due Date',
+      'Customer ID',
+      'Customer Name',
+      'Product/Model',
+      'Current Department',
+      'Status',
+      'Payment Status',
+      'Payment Total',
+      'FB Order Number',
+      'Handedness',
+      'Created At',
+      'Updated At'
+    ].join(',');
+
+    // Convert orders to CSV rows
+    const csvRows = orders.map(order => {
+      // Helper function to safely format dates
+      const formatDate = (date: any) => {
+        if (!date) return '';
+        try {
+          return new Date(date).toLocaleDateString('en-US');
+        } catch {
+          return '';
+        }
+      };
+
+      // Helper function to safely escape CSV values
+      const escapeCSV = (value: any) => {
+        if (value === null || value === undefined) return '';
+        const str = String(value);
+        // Escape quotes and wrap in quotes if contains comma, quote, or newline
+        if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+          return `"${str.replace(/"/g, '""')}"`;
+        }
+        return str;
+      };
+
+      // Get payment status
+      const getPaymentStatus = (order: any) => {
+        if (order.isFullyPaid) return 'Fully Paid';
+        if (order.isPaid) return 'Partially Paid';
+        return 'Unpaid';
+      };
+
+      return [
+        escapeCSV(order.orderId),
+        escapeCSV(formatDate(order.orderDate)),
+        escapeCSV(formatDate(order.dueDate)),
+        escapeCSV((order as any).customerId),
+        escapeCSV((order as any).customer || 'N/A'),
+        escapeCSV((order as any).product || order.modelId || 'N/A'),
+        escapeCSV(order.currentDepartment),
+        escapeCSV(order.status),
+        escapeCSV(getPaymentStatus(order)),
+        escapeCSV(order.paymentTotal || '0'),
+        escapeCSV(order.fbOrderNumber || ''),
+        escapeCSV(order.handedness || ''),
+        escapeCSV(formatDate(order.createdAt)),
+        escapeCSV(formatDate(order.updatedAt))
+      ].join(',');
+    });
+
+    // Combine headers and rows
+    const csvContent = [csvHeaders, ...csvRows].join('\n');
+
+    // Set headers for file download
+    const timestamp = new Date().toISOString().split('T')[0];
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="all_orders_export_${timestamp}.csv"`);
+    
+    res.send(csvContent);
+  } catch (error) {
+    console.error('Full CSV export error:', error);
+    res.status(500).json({ error: 'Failed to export all orders to CSV' });
   }
 });
 

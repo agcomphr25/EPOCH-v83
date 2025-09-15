@@ -80,7 +80,10 @@ export default function InventoryManager() {
       
       const response = await apiRequest('/api/inventory/import/csv', {
         method: 'POST',
-        body: { csvData }
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ csvData })
       });
 
       console.log('Import response:', response);

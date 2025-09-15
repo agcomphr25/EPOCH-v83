@@ -1,6 +1,6 @@
 import express, { type Request, Response, NextFunction } from "express";
 import path from "path";
-import { registerRoutes } from "./src/routes";
+import { registerRoutes } from "./src/routes/index";
 import { setupVite, serveStatic, log } from "./vite";
 
 // Validate required environment variables
@@ -65,6 +65,10 @@ app.use((req, res, next) => {
     }
     
     const server = await registerRoutes(app);
+    
+    // Log payment gateway configuration
+    const { logPaymentGatewayConfig } = await import("./src/config/paymentGatewayConfig");
+    logPaymentGatewayConfig();
 
     app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
       const status = err.status || err.statusCode || 500;
@@ -114,6 +118,7 @@ app.use((req, res, next) => {
       console.log(`- Port: ${port}`);
       console.log(`- Host: 0.0.0.0`);
       console.log(`- Environment: ${process.env.NODE_ENV || 'development'}`);
+      console.log(`- Server accessible at: https://${process.env.REPL_ID || 'localhost'}.${process.env.REPL_OWNER || 'local'}.repl.co`);
       log(`serving on port ${port}`);
     });
   } catch (error) {

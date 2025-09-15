@@ -1,453 +1,316 @@
-import { useState, useEffect } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { 
-  fetchPOItems, 
-  createPOItem, 
-  updatePOItem, 
-  deletePOItem, 
+import React, { useState } from 'react';
+import { useQuery, useMutation } from '@tanstack/react-query';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Package, Plus, Trash2, Edit2, Eye } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { useToast } from '@/hooks/use-toast';
+import { apiRequest, queryClient } from '@/lib/queryClient';
 
-  fetchStockModels,
-  fetchFeatures,
-  type PurchaseOrderItem, 
-  type CreatePurchaseOrderItemData,
-  type StockModel,
-  type Feature
-} from '@/lib/poUtils';
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
-import { Plus, Edit, Trash2, Package, Settings } from 'lucide-react';
-import { toast } from 'react-hot-toast';
+interface POItem {
+  id: number;
+  poId: number;
+  itemType: string;
+  itemId: string;
+  itemName: string;
+  quantity: number;
+  unitPrice: number;
+  totalPrice: number;
+  specifications?: any;
+  notes?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+interface POProduct {
+  id: number;
+  customerName: string;
+  productName: string;
+  productType: string;
+  material: string;
+  handedness: string;
+  stockModel: string;
+  actionLength: string;
+  actionInlet: string;
+  bottomMetal: string;
+  barrelInlet: string;
+  qds: string;
+  swivelStuds: string;
+  paintOptions: string;
+  texture: string;
+  flatTop: boolean;
+  price: number;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
 
 interface POItemsManagerProps {
   poId: number;
-  poNumber: string;
-  customerId: string;
+  customerName: string;
+  onAddItem: () => void;
 }
 
-export default function POItemsManager({ poId, poNumber, customerId }: POItemsManagerProps) {
+export default function POItemsManager({ poId, customerName, onAddItem }: POItemsManagerProps) {
+  const [selectedItem, setSelectedItem] = useState<POItem | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingItem, setEditingItem] = useState<PurchaseOrderItem | null>(null);
-  const queryClient = useQueryClient();
+  const { toast } = useToast();
 
-  // Form state
-  const [formData, setFormData] = useState({
-    itemType: 'stock_model' as 'stock_model' | 'custom_model' | 'feature_item',
-    itemId: '',
-    itemName: '',
-    quantity: 1,
-    unitPrice: 0,
-    totalPrice: 0,
-    specifications: {},
-    notes: ''
-  });
-
-  // Data queries
-  const { data: items = [], isLoading: itemsLoading, refetch: refetchItems } = useQuery({
-    queryKey: ['/api/pos', poId, 'items'],
-    queryFn: () => fetchPOItems(poId)
-  });
-
-  const { data: stockModels = [], isLoading: stockModelsLoading } = useQuery({
-    queryKey: ['/api/stock-models'],
-    queryFn: fetchStockModels
-  });
-
-  const { data: features = [], isLoading: featuresLoading } = useQuery({
-    queryKey: ['/api/features'],
-    queryFn: fetchFeatures
-  });
-
-  // Mutations
-  const createItemMutation = useMutation({
-    mutationFn: (data: CreatePurchaseOrderItemData) => createPOItem(poId, data),
-    onSuccess: () => {
-      toast.success('Item added successfully');
-      queryClient.invalidateQueries({ queryKey: ['/api/pos', poId, 'items'] });
-      setIsDialogOpen(false);
-      resetForm();
+  // Fetch PO items
+  const { data: poItems = [], isLoading, error } = useQuery<POItem[]>({
+    queryKey: [`/api/pos/${poId}/items`],
+    queryFn: async () => {
+      const result = await apiRequest(`/api/pos/${poId}/items`);
+      return result;
     },
-    onError: () => {
-      toast.error('Failed to add item');
-    }
   });
 
-  const updateItemMutation = useMutation({
-    mutationFn: ({ itemId, data }: { itemId: number; data: Partial<CreatePurchaseOrderItemData> }) => 
-      updatePOItem(poId, itemId, data),
-    onSuccess: () => {
-      toast.success('Item updated successfully');
-      queryClient.invalidateQueries({ queryKey: ['/api/pos', poId, 'items'] });
-      setIsDialogOpen(false);
-      resetForm();
+  // Fetch PO Products for product type lookup
+  const { data: poProducts = [] } = useQuery<POProduct[]>({
+    queryKey: ['/api/po-products'],
+    queryFn: async () => {
+      const result = await apiRequest('/api/po-products');
+      return result;
     },
-    onError: () => {
-      toast.error('Failed to update item');
-    }
+    enabled: poItems.some(item => item.itemType === 'custom_model'),
   });
 
-  const deleteItemMutation = useMutation({
-    mutationFn: (itemId: number) => deletePOItem(poId, itemId),
-    onSuccess: () => {
-      toast.success('Item deleted successfully');
-      queryClient.invalidateQueries({ queryKey: ['/api/pos', poId, 'items'] });
+  // Delete mutation
+  const deleteMutation = useMutation({
+    mutationFn: async (itemId: number) => {
+      await apiRequest(`/api/pos/${poId}/items/${itemId}`, {
+        method: 'DELETE',
+      });
     },
-    onError: () => {
-      toast.error('Failed to delete item');
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/pos/${poId}/items`] });
+      toast({
+        title: "Item Deleted",
+        description: "Purchase order item has been removed successfully.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete item",
+        variant: "destructive",
+      });
     }
   });
 
-
-
-  const resetForm = () => {
-    setFormData({
-      itemType: 'stock_model',
-      itemId: '',
-      itemName: '',
-      quantity: 1,
-      unitPrice: 0,
-      totalPrice: 0,
-      specifications: {},
-      notes: ''
-    });
-    setEditingItem(null);
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!formData.itemId || !formData.itemName || formData.quantity <= 0) {
-      toast.error('Please fill in all required fields');
-      return;
-    }
-
-    const data: CreatePurchaseOrderItemData = {
-      itemType: formData.itemType,
-      itemId: formData.itemId,
-      itemName: formData.itemName,
-      quantity: formData.quantity,
-      unitPrice: formData.unitPrice,
-      totalPrice: formData.quantity * formData.unitPrice,
-      specifications: formData.itemType === 'custom_model' ? formData.specifications : undefined,
-      notes: formData.notes || undefined
-    };
-
-    if (editingItem) {
-      updateItemMutation.mutate({ itemId: editingItem.id, data });
-    } else {
-      createItemMutation.mutate(data);
-    }
-  };
-
-  const handleEdit = (item: PurchaseOrderItem) => {
-    setEditingItem(item);
-    setFormData({
-      itemType: item.itemType,
-      itemId: item.itemId,
-      itemName: item.itemName,
-      quantity: item.quantity,
-      unitPrice: item.unitPrice,
-      totalPrice: item.totalPrice,
-      specifications: item.specifications || {},
-      notes: item.notes || ''
-    });
+  const handleViewItem = (item: POItem) => {
+    setSelectedItem(item);
     setIsDialogOpen(true);
   };
 
-  const handleDelete = (itemId: number) => {
-    if (window.confirm('Are you sure you want to delete this item?')) {
-      deleteItemMutation.mutate(itemId);
+  const handleDeleteItem = async (itemId: number) => {
+    if (confirm('Are you sure you want to delete this item?')) {
+      deleteMutation.mutate(itemId);
     }
   };
 
-  const handleItemSelection = (itemType: string, itemId: string) => {
-    let selectedItem = null;
-    let price = 0;
+  const handleCloseDialog = () => {
+    setIsDialogOpen(false);
+    setSelectedItem(null);
+  };
 
-    if (itemType === 'stock_model') {
-      selectedItem = stockModels.find(model => model.id === itemId);
-      price = selectedItem?.price || 0;
-    } else if (itemType === 'feature_item') {
-      selectedItem = features.find(feature => feature.id === itemId);
-      price = selectedItem?.price || 0;
+  const formatPrice = (price: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD'
+    }).format(price);
+  };
+
+  const getTotalValue = () => {
+    return poItems.reduce((sum, item) => sum + item.totalPrice, 0);
+  };
+
+  const getProductTypeForItem = (item: POItem) => {
+    if (item.itemType === 'custom_model') {
+      const poProduct = poProducts.find(product => product.id.toString() === item.itemId);
+      return poProduct?.productType || item.itemType;
     }
-
-    if (selectedItem) {
-      setFormData(prev => ({
-        ...prev,
-        itemType: itemType as 'stock_model' | 'custom_model' | 'feature_item',
-        itemId: itemId,
-        itemName: selectedItem.displayName || selectedItem.name,
-        unitPrice: price,
-        totalPrice: prev.quantity * price
-      }));
-    }
+    return item.itemType;
   };
 
-  const handleQuantityChange = (quantity: number) => {
-    setFormData(prev => ({
-      ...prev,
-      quantity,
-      totalPrice: quantity * prev.unitPrice
-    }));
-  };
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-8">
+        <div className="text-center">
+          <Package className="h-8 w-8 text-gray-400 mx-auto mb-2" />
+          <p className="text-gray-500">Loading purchase order items...</p>
+        </div>
+      </div>
+    );
+  }
 
-  const handleUnitPriceChange = (unitPrice: number) => {
-    setFormData(prev => ({
-      ...prev,
-      unitPrice,
-      totalPrice: prev.quantity * unitPrice
-    }));
-  };
-
-  const totalPOValue = items.reduce((sum, item) => sum + item.totalPrice, 0);
+  if (error) {
+    return (
+      <Card>
+        <CardContent className="py-8">
+          <div className="text-center">
+            <Package className="h-12 w-12 text-red-400 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">Error Loading Items</h3>
+            <p className="text-red-600 mb-4">
+              Failed to load purchase order items.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h3 className="text-lg font-semibold">PO Items - {poNumber}</h3>
-          <p className="text-sm text-gray-600">Customer: {customerId}</p>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Package className="h-5 w-5 text-primary" />
+          <h2 className="text-xl font-semibold">Purchase Order Items</h2>
         </div>
-        <div className="flex gap-2">
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger asChild>
-              <Button onClick={resetForm}>
-                <Plus className="w-4 h-4 mr-2" />
-                Add Item
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-2xl">
-              <DialogHeader>
-                <DialogTitle>
-                  {editingItem ? 'Edit Item' : 'Add New Item'}
-                </DialogTitle>
-              </DialogHeader>
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div>
-                  <Label htmlFor="itemType">Item Type</Label>
-                  <Select 
-                    value={formData.itemType} 
-                    onValueChange={(value) => setFormData(prev => ({...prev, itemType: value as any, itemId: '', itemName: ''}))}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="stock_model">Pre-Defined Stock Model</SelectItem>
-                      <SelectItem value="feature_item">Feature Item</SelectItem>
-                      <SelectItem value="custom_model">Stock Model</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {formData.itemType === 'stock_model' && (
-                  <div>
-                    <Label htmlFor="stockModel">Stock Model</Label>
-                    <Select 
-                      value={formData.itemId} 
-                      onValueChange={(value) => handleItemSelection('stock_model', value)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select a stock model" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {stockModels.map(model => (
-                          <SelectItem key={model.id} value={model.id}>
-                            {model.displayName} - ${model.price}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
-
-                {formData.itemType === 'feature_item' && (
-                  <div>
-                    <Label htmlFor="feature">Feature Item</Label>
-                    <Select 
-                      value={formData.itemId} 
-                      onValueChange={(value) => handleItemSelection('feature_item', value)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select a feature item" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {features.map(feature => (
-                          <SelectItem key={feature.id} value={feature.id}>
-                            {feature.displayName} - ${feature.price}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
-
-                {formData.itemType === 'custom_model' && (
-                  <div className="space-y-2">
-                    <Label htmlFor="customName">Stock Model Name</Label>
-                    <Input
-                      id="customName"
-                      value={formData.itemName}
-                      onChange={(e) => setFormData(prev => ({...prev, itemName: e.target.value, itemId: e.target.value}))}
-                      placeholder="Enter stock model name"
-                      required
-                    />
-                  </div>
-                )}
-
-                <div className="grid grid-cols-3 gap-4">
-                  <div>
-                    <Label htmlFor="quantity">Quantity</Label>
-                    <Input
-                      id="quantity"
-                      type="number"
-                      min="1"
-                      value={formData.quantity}
-                      onChange={(e) => handleQuantityChange(parseInt(e.target.value) || 1)}
-                      required
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="unitPrice">Unit Price</Label>
-                    <Input
-                      id="unitPrice"
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={formData.unitPrice}
-                      onChange={(e) => handleUnitPriceChange(parseFloat(e.target.value) || 0)}
-                      required
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="totalPrice">Total Price</Label>
-                    <Input
-                      id="totalPrice"
-                      type="number"
-                      step="0.01"
-                      value={formData.totalPrice}
-                      readOnly
-                      className="bg-gray-50"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <Label htmlFor="notes">Notes</Label>
-                  <Textarea
-                    id="notes"
-                    value={formData.notes}
-                    onChange={(e) => setFormData(prev => ({...prev, notes: e.target.value}))}
-                    rows={3}
-                    placeholder="Optional notes about this item"
-                  />
-                </div>
-
-                <div className="flex justify-end space-x-2">
-                  <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
-                    Cancel
-                  </Button>
-                  <Button type="submit" disabled={createItemMutation.isPending || updateItemMutation.isPending}>
-                    {editingItem ? 'Update' : 'Add'} Item
-                  </Button>
-                </div>
-              </form>
-            </DialogContent>
-          </Dialog>
+        <div className="flex items-center gap-4">
+          <Badge variant="outline">
+            {poItems.length} Item{poItems.length !== 1 ? 's' : ''}
+          </Badge>
+          <Badge variant="secondary">
+            Total: {formatPrice(getTotalValue())}
+          </Badge>
+          <Button onClick={onAddItem} className="flex items-center gap-2">
+            <Plus className="h-4 w-4" />
+            Add Item
+          </Button>
         </div>
       </div>
 
-      <div className="grid gap-4">
-        {itemsLoading ? (
-          <div className="text-center py-8">Loading items...</div>
-        ) : items.length === 0 ? (
-          <div className="text-center py-8 text-gray-500">
-            No items added yet. Click "Add Item" to get started.
-          </div>
-        ) : (
-          <>
-            {items.map((item) => (
-              <Card key={item.id}>
-                <CardHeader className="pb-3">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <CardTitle className="text-lg">{item.itemName}</CardTitle>
-                      <div className="flex gap-2 mt-2">
-                        <Badge variant="secondary">
-                          {item.itemType === 'stock_model' && <Package className="w-3 h-3 mr-1" />}
-                          {item.itemType === 'feature_item' && <Settings className="w-3 h-3 mr-1" />}
-                          {item.itemType === 'custom_model' && <Edit className="w-3 h-3 mr-1" />}
-                          {item.itemType.replace('_', ' ').toUpperCase()}
-                        </Badge>
-                        {item.orderCount > 0 && (
-                          <Badge variant="outline">
-                            {item.orderCount} orders generated
-                          </Badge>
-                        )}
-                      </div>
+      {poItems.length === 0 ? (
+        <Card>
+          <CardContent className="py-8">
+            <div className="text-center">
+              <Package className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No Items Added</h3>
+              <p className="text-gray-500">
+                This purchase order doesn't have any items yet. Use the "Add Item" button above to get started.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <CardHeader>
+            <CardTitle>Order Items</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {poItems.map((item) => (
+                <div
+                  key={item.id}
+                  className="flex items-center justify-between p-4 border rounded-lg hover:shadow-sm transition-shadow"
+                >
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3">
+                      <h3 className="font-medium text-gray-900">{item.itemName}</h3>
+                      <Badge variant="outline" className="text-xs">
+                        {getProductTypeForItem(item)}
+                      </Badge>
                     </div>
-                    <div className="flex gap-2">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleEdit(item)}
-                      >
-                        <Edit className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleDelete(item.id)}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
+                    <div className="mt-1 text-sm text-gray-600">
+                      <span>Qty: {item.quantity}</span>
+                      <span className="mx-2">•</span>
+                      <span>Unit Price: {formatPrice(item.unitPrice)}</span>
+                      <span className="mx-2">•</span>
+                      <span className="font-medium">Total: {formatPrice(item.totalPrice)}</span>
                     </div>
+                    {item.notes && (
+                      <p className="mt-1 text-xs text-gray-500">{item.notes}</p>
+                    )}
                   </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-4 gap-4 text-sm">
-                    <div>
-                      <span className="font-medium">Quantity:</span> {item.quantity}
-                    </div>
-                    <div>
-                      <span className="font-medium">Unit Price:</span> ${item.unitPrice.toFixed(2)}
-                    </div>
-                    <div>
-                      <span className="font-medium">Total:</span> ${item.totalPrice.toFixed(2)}
-                    </div>
-                    <div>
-                      <span className="font-medium">Item ID:</span> {item.itemId}
-                    </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleViewItem(item)}
+                      className="h-8 w-8 p-0"
+                    >
+                      <Eye className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleDeleteItem(item.id)}
+                      className="h-8 w-8 p-0 text-red-600 hover:text-red-700"
+                      disabled={deleteMutation.isPending}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                   </div>
-                  {item.notes && (
-                    <div className="mt-3 pt-3 border-t">
-                      <span className="font-medium text-sm">Notes:</span> {item.notes}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            ))}
-            
-            <Separator />
-            
-            <div className="flex justify-between items-center py-4">
-              <div className="text-lg font-semibold">
-                Total Items: {items.reduce((sum, item) => sum + item.quantity, 0)}
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Item Details Dialog */}
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Item Details</DialogTitle>
+          </DialogHeader>
+          
+          {selectedItem && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Item Name</label>
+                  <p className="mt-1 text-sm text-gray-900">{selectedItem.itemName}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Product Type</label>
+                  <p className="mt-1 text-sm text-gray-900">{getProductTypeForItem(selectedItem)}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Quantity</label>
+                  <p className="mt-1 text-sm text-gray-900">{selectedItem.quantity}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Unit Price</label>
+                  <p className="mt-1 text-sm text-gray-900">{formatPrice(selectedItem.unitPrice)}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Total Price</label>
+                  <p className="mt-1 text-sm text-gray-900 font-medium">{formatPrice(selectedItem.totalPrice)}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Item ID</label>
+                  <p className="mt-1 text-sm text-gray-900">{selectedItem.itemId}</p>
+                </div>
               </div>
-              <div className="text-lg font-semibold">
-                Total Value: ${totalPOValue.toFixed(2)}
+
+              {selectedItem.specifications && (
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Specifications</label>
+                  <div className="mt-1 p-3 bg-gray-50 rounded border">
+                    <pre className="text-xs text-gray-700 whitespace-pre-wrap">
+                      {JSON.stringify(selectedItem.specifications, null, 2)}
+                    </pre>
+                  </div>
+                </div>
+              )}
+
+              {selectedItem.notes && (
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Notes</label>
+                  <p className="mt-1 text-sm text-gray-900">{selectedItem.notes}</p>
+                </div>
+              )}
+
+              <div className="flex justify-end">
+                <Button onClick={handleCloseDialog}>Close</Button>
               </div>
             </div>
-          </>
-        )}
-      </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

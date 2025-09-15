@@ -284,10 +284,7 @@ async function processTransactionResult(data: {
     paymentId: payment.id,
     orderId: data.orderId,
     transactionId: data.transactionId,
-<<<<<<< HEAD
     gateway: 'authorize_net', // Explicitly set the gateway
-=======
->>>>>>> origin/main
     authCode: data.authCode,
     responseCode: data.responseCode,
     responseReasonCode: data.responseReasonCode,

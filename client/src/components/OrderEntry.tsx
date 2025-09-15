@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 
 import { useToast } from '@/hooks/use-toast';
 import { Package, Users, ChevronDown, Send, CheckCircle, Check, ChevronsUpDown } from 'lucide-react';
@@ -56,7 +57,7 @@ interface MiscItem {
 export default function OrderEntry() {
   console.log("OrderEntry component rendering...");
   const { toast } = useToast();
-  const [location] = useLocation();
+  const [location, setLocation] = useLocation();
 
   // Form state
   const [customer, setCustomer] = useState<Customer | null>(null);
@@ -68,7 +69,7 @@ export default function OrderEntry() {
   const [discountOptions, setDiscountOptions] = useState<{value: string; label: string}[]>([]);
 
   const [orderDate, setOrderDate] = useState(new Date());
-  const [dueDate, setDueDate] = useState(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)); // 30 days from now
+  const [dueDate, setDueDate] = useState(new Date(Date.now() + 98 * 24 * 60 * 60 * 1000)); // 98 days from now (default)
   const [orderId, setOrderId] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -77,6 +78,12 @@ export default function OrderEntry() {
   const [fbOrderNumber, setFbOrderNumber] = useState('');
   const [hasAGROrder, setHasAGROrder] = useState(false);
   const [agrOrderDetails, setAgrOrderDetails] = useState('');
+  const [isFlattop, setIsFlattop] = useState(false);
+  
+  // Track if we're editing an existing order (needs to be early for useEffect dependencies)
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
+  const [isLoadingOrder, setIsLoadingOrder] = useState(false);
 
   // Note: All feature data is now stored in the unified features object
   // Legacy separate state variables removed to prevent data consistency issues
@@ -96,12 +103,151 @@ export default function OrderEntry() {
   const [shipping, setShipping] = useState(36.95);
   const [isCustomOrder, setIsCustomOrder] = useState(false);
   const [notes, setNotes] = useState('');
+  const [isVerified, setIsVerified] = useState(false);
 
   // Payment state - simplified for multiple payments
   const [orderPayments, setOrderPayments] = useState<any[]>([]);
   
   // Miscellaneous items state
   const [miscItems, setMiscItems] = useState<MiscItem[]>([]);
+  
+  // Other options quantities - tracks qty for options that don't include "No"
+  const [otherOptionsQuantities, setOtherOptionsQuantities] = useState<Record<string, number>>({});
+
+  // Special Shipping Instructions state
+  const [specialShipping, setSpecialShipping] = useState({
+    international: false,
+    nextDayAir: false,
+    billToReceiver: false
+  });
+
+  // Track base due date for rush fee calculations
+  const [baseDueDate, setBaseDueDate] = useState(new Date(Date.now() + 98 * 24 * 60 * 60 * 1000));
+  
+  // Track whether user has manually set the due date
+  const [isManualDueDate, setIsManualDueDate] = useState(false);
+  // Track whether user has manually set the order date
+  const [isManualOrderDate, setIsManualOrderDate] = useState(false);
+
+  // Alt Ship To Address state
+  const [hasAltShipTo, setHasAltShipTo] = useState(false);
+  const [altShipToMode, setAltShipToMode] = useState<'existing' | 'manual'>('existing');
+  const [altShipToCustomer, setAltShipToCustomer] = useState<Customer | null>(null);
+  const [altShipToCustomerId, setAltShipToCustomerId] = useState<string>('');
+  const [altShipToName, setAltShipToName] = useState('');
+  const [altShipToCompany, setAltShipToCompany] = useState('');
+  const [altShipToEmail, setAltShipToEmail] = useState('');
+  const [altShipToPhone, setAltShipToPhone] = useState('');
+  const [altShipToAddress, setAltShipToAddress] = useState({
+    street: '',
+    city: '',
+    state: '',
+    zipCode: '',
+    country: 'United States'
+  });
+
+  // Calculate base due date based on stock model
+  const calculateBaseDueDate = useCallback(() => {
+    const selectedModel = modelOptions.find(m => m.id === modelId);
+    const modelName = selectedModel?.displayName || selectedModel?.name || '';
+    const isAdjModel = modelName.toLowerCase().includes('adj');
+    const daysFromNow = isAdjModel ? 112 : 98;
+    return new Date(Date.now() + daysFromNow * 24 * 60 * 60 * 1000);
+  }, [modelId, modelOptions]);
+
+  // Update base due date when stock model changes (only for new orders, not when editing existing ones)
+  useEffect(() => {
+    if (modelId && modelOptions.length > 0 && !isEditMode && !isManualDueDate && editingOrderId === null && !isLoadingOrder) {
+      const newBaseDueDate = calculateBaseDueDate();
+      setBaseDueDate(newBaseDueDate);
+      
+      // Only update actual due date if no rush fees are currently selected and user hasn't manually set date
+      const otherOptions = features.other_options || [];
+      const hasAnyRushFee = otherOptions.some((option: string) => 
+        option.toLowerCase().includes('rush') && option.toLowerCase().includes('fee')
+      );
+      
+      if (!hasAnyRushFee && !isManualDueDate) {
+        setDueDate(newBaseDueDate);
+      }
+    }
+  }, [modelId, modelOptions, calculateBaseDueDate, features.other_options, isEditMode, isManualDueDate, isLoadingOrder]);
+
+  // Auto-adjust due date based on rush fee selections (only for new orders, not when editing existing ones)
+  useEffect(() => {
+    // Skip auto-adjustment for existing orders being edited or manually set due dates
+    if (isEditMode || isManualDueDate || editingOrderId !== null || isLoadingOrder) return;
+    
+    const otherOptions = features.other_options || [];
+    
+    // Check for rush fee options
+    const hasRushFee1 = otherOptions.some((option: string) => 
+      option.toLowerCase().includes('rush') && option.toLowerCase().includes('fee') && option.includes('1')
+    );
+    const hasRushFee2 = otherOptions.some((option: string) => 
+      option.toLowerCase().includes('rush') && option.toLowerCase().includes('fee') && option.includes('2')
+    );
+
+    let adjustedDate = new Date(baseDueDate);
+    
+    if (hasRushFee2) {
+      // Rush Fee 2: reduce by 42 days (6 weeks)
+      adjustedDate.setDate(adjustedDate.getDate() - 42);
+    } else if (hasRushFee1) {
+      // Rush Fee 1: reduce by 28 days (4 weeks)
+      adjustedDate.setDate(adjustedDate.getDate() - 28);
+    }
+
+    // Only update if the calculated date is different from current due date and user hasn't manually set it
+    if (adjustedDate.getTime() !== dueDate.getTime() && !isManualDueDate) {
+      setDueDate(adjustedDate);
+      
+      // Show user feedback about the date change
+      const selectedModel = modelOptions.find(m => m.id === modelId);
+      const modelName = selectedModel?.displayName || selectedModel?.name || '';
+      const isAdjModel = modelName.toLowerCase().includes('adj');
+      const baseWeeks = isAdjModel ? 16 : 14; // 112 days = 16 weeks, 98 days = 14 weeks
+
+      if (hasRushFee2) {
+        const finalWeeks = baseWeeks - 6; // 42 days = 6 weeks
+        toast({
+          title: "Due Date Updated",
+          description: `Due date reduced from ${baseWeeks} weeks to ${finalWeeks} weeks due to Rush Fee 2 selection`,
+          duration: 3000,
+        });
+      } else if (hasRushFee1) {
+        const finalWeeks = baseWeeks - 4; // 28 days = 4 weeks
+        toast({
+          title: "Due Date Updated", 
+          description: `Due date reduced from ${baseWeeks} weeks to ${finalWeeks} weeks due to Rush Fee 1 selection`,
+          duration: 3000,
+        });
+      } else {
+        toast({
+          title: "Due Date Reset",
+          description: `Due date restored to ${baseWeeks} weeks (${isAdjModel ? 'Adj model' : 'Standard model'})`,
+          duration: 3000,
+        });
+      }
+    }
+  }, [features.other_options, baseDueDate, toast, modelId, isEditMode, isManualDueDate, isLoadingOrder]); // Include modelId to recalculate when model changes
+
+  // Update base due date when user manually changes due date (and no rush fees are selected)
+  useEffect(() => {
+    const otherOptions = features.other_options || [];
+    const hasAnyRushFee = otherOptions.some((option: string) => 
+      option.toLowerCase().includes('rush') && option.toLowerCase().includes('fee')
+    );
+    
+    // Only update base due date if no rush fees are currently selected
+    // Add a small delay to prevent immediate recalculation cycles
+    if (!hasAnyRushFee) {
+      const timeoutId = setTimeout(() => {
+        setBaseDueDate(new Date(dueDate));
+      }, 100);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [dueDate, features.other_options]);
 
   // Miscellaneous items functions
   const addMiscItem = () => {
@@ -135,12 +281,18 @@ export default function OrderEntry() {
 
   // Unified price calculation function
   const calculateTotalPrice = useCallback(() => {
+    // If price override is set, use that as the subtotal (APR Price Override behavior)
+    if (priceOverride !== null) {
+      console.log('💰 Price calculation - Using APR Price Override as subtotal:', priceOverride);
+      return priceOverride;
+    }
+
     let total = 0;
 
-    // Add stock model price (use override if set, otherwise use standard price)
+    // Add stock model price (normal calculation when no override)
     const selectedModel = modelOptions.find(model => model.id === modelId);
     if (selectedModel) {
-      const basePrice = priceOverride !== null ? priceOverride : (selectedModel.price || 0);
+      const basePrice = selectedModel.price || 0;
       total += basePrice;
       console.log('💰 Price calculation - Base price:', basePrice);
     }
@@ -180,8 +332,17 @@ export default function OrderEntry() {
       if (bottomMetalFeature?.options) {
         const option = bottomMetalFeature.options.find(opt => opt.value === features.bottom_metal);
         if (option?.price) {
-          total += option.price;
-          console.log('💰 Price calculation - Bottom metal:', features.bottom_metal, 'price:', option.price);
+          let bottomMetalPrice = option.price;
+          
+          // Special pricing: SepFG10 or SepCF25 seasonal sale + AG bottom metal = $100 instead of $149
+          if ((discountCode === 'short_term_3' || discountCode === 'short_term_1') && features.bottom_metal.includes('ag_') && option.price === 149) {
+            bottomMetalPrice = 100;
+            const saleName = discountCode === 'short_term_3' ? 'SepFG10' : 'SepCF25';
+            console.log(`💰 Special pricing applied: ${saleName} + AG bottom metal - price changed from $149 to $100`);
+          }
+          
+          total += bottomMetalPrice;
+          console.log('💰 Price calculation - Bottom metal:', features.bottom_metal, 'price:', bottomMetalPrice);
         }
       }
     }
@@ -227,7 +388,7 @@ export default function OrderEntry() {
     }
 
     // Add rail accessory prices (from features object)
-    const currentRails = features.rail_accessory || [];
+    const currentRails = Array.isArray(features.rail_accessory) ? features.rail_accessory : [];
     if (currentRails && currentRails.length > 0) {
       console.log('💰 Rails calculation - current rails:', currentRails);
       const railFeature = featureDefs.find(f => f.id === 'rail_accessory');
@@ -254,19 +415,22 @@ export default function OrderEntry() {
       console.log('💰 Rails calculation - No rails selected');
     }
 
-    // Add other options prices (from features object)
-    if (features.other_options && features.other_options.length > 0) {
+    // Add other options prices with quantities (from features object)
+    const currentOtherOptions = Array.isArray(features.other_options) ? features.other_options : [];
+    if (currentOtherOptions && currentOtherOptions.length > 0) {
       const otherFeature = featureDefs.find(f => f.id === 'other_options');
       if (otherFeature?.options) {
         let otherTotal = 0;
-        features.other_options.forEach((optionValue: string) => {
+        currentOtherOptions.forEach((optionValue: string) => {
           const option = otherFeature.options!.find(opt => opt.value === optionValue);
           if (option?.price) {
-            otherTotal += option.price;
-            total += option.price;
+            const quantity = otherOptionsQuantities[optionValue] || 1;
+            const optionTotal = option.price * quantity;
+            otherTotal += optionTotal;
+            total += optionTotal;
           }
         });
-        console.log('💰 Price calculation - Other options total:', otherTotal, 'from', features.other_options);
+        console.log('💰 Price calculation - Other options total:', otherTotal, 'from', currentOtherOptions, 'with quantities:', otherOptionsQuantities);
       }
     }
 
@@ -277,7 +441,7 @@ export default function OrderEntry() {
 
     console.log('💰 Price calculation - Final total:', total);
     return total;
-  }, [modelOptions, modelId, priceOverride, featureDefs, features, miscItems]);
+  }, [modelOptions, modelId, priceOverride, featureDefs, features, miscItems, otherOptionsQuantities, discountCode]);
 
   // Store discount details for appliesTo logic
   const [discountDetails, setDiscountDetails] = useState<any>(null);
@@ -399,16 +563,13 @@ export default function OrderEntry() {
   // Extract order ID from URL if editing existing order
   const getOrderIdFromUrl = () => {
     const urlParams = new URLSearchParams(window.location.search);
-    return urlParams.get('draft');
+    return urlParams.get('draft') || urlParams.get('edit');
   };
 
   // Track loading state to ensure proper order
   const [initialDataLoaded, setInitialDataLoaded] = useState(false);
   // Force component re-render when loading existing order
   const [renderKey, setRenderKey] = useState(0);
-  // Track if we're editing an existing order
-  const [isEditMode, setIsEditMode] = useState(false);
-  const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
 
   // Load initial data first
   useEffect(() => {
@@ -430,15 +591,19 @@ export default function OrderEntry() {
 
     const editOrderId = getOrderIdFromUrl();
     if (editOrderId) {
-      setIsEditMode(true);
-      setEditingOrderId(editOrderId);
-      loadExistingOrder(editOrderId);
+      // Only load existing order if we have model options
+      if (modelOptions.length > 0) {
+        setIsEditMode(true);
+        setEditingOrderId(editOrderId);
+        console.log('🔄 Loading existing order with model options available:', modelOptions.length);
+        loadExistingOrder(editOrderId);
+      }
     } else {
       setIsEditMode(false);
       setEditingOrderId(null);
-      generateOrderId();
+      generateOrderId(); // Generate order ID even without stock models
     }
-  }, [initialDataLoaded]);
+  }, [initialDataLoaded, modelOptions.length]); // Wait for initial data, but don't block on model options
 
   // Clear Medium action length when switching to Ferrata/Armor models and LOP for CAT/Visigoth models
   useEffect(() => {
@@ -484,17 +649,143 @@ export default function OrderEntry() {
     }
   }, [modelId, modelOptions, features.action_length, features.length_of_pull, toast]);
 
+  // Business rule: Impact Action Inlet + Long Action Length cannot have Left handedness
+  useEffect(() => {
+    const hasImpactInlet = features.action_inlet && features.action_inlet.toLowerCase().includes('impact');
+    const isLongAction = features.action_length === 'long';
+    const isLeftHanded = features.handedness === 'left';
+    
+    if (hasImpactInlet && isLongAction && isLeftHanded) {
+      setFeatures(prev => ({ 
+        ...prev, 
+        handedness: undefined // Clear the left handedness selection
+      }));
+      toast({
+        title: "Handedness Updated",
+        description: "Left handedness is not available for Impact Action Inlet with Long Action Length.",
+        variant: "default",
+      });
+    }
+  }, [features.action_inlet, features.action_length, features.handedness, toast]);
+
+  // Business rule: Clear Impact Action Inlet when Long Action Length + Left Handedness is selected
+  useEffect(() => {
+    const isLongAction = features.action_length === 'long';
+    const isLeftHanded = features.handedness === 'left';
+    const hasImpactInlet = features.action_inlet && 
+                          (features.action_inlet.toLowerCase().includes('impact'));
+
+    if (isLongAction && isLeftHanded && hasImpactInlet) {
+      setFeatures(prev => ({
+        ...prev,
+        action_inlet: undefined // Clear the Impact action inlet selection
+      }));
+      toast({
+        title: "Action Inlet Updated",
+        description: "Impact Action Inlet is not available for Long Action Length with Left handedness.",
+        variant: "default",
+      });
+    }
+  }, [features.action_length, features.handedness, features.action_inlet, toast]);
+
+  // Business rule: Clear restricted bottom metals when Medium Action Length is selected
+  useEffect(() => {
+    const isMediumAction = features.action_length === 'medium';
+    const restrictedBottomMetals = ['ag_m5_sa', 'ag_m5_la', 'ag_m5_la_cip', 'ag_bdl_sa', 'ag_bdl_la'];
+    const hasRestrictedBottomMetal = features.bottom_metal && 
+                                   restrictedBottomMetals.includes(features.bottom_metal);
+
+    if (isMediumAction && hasRestrictedBottomMetal) {
+      setFeatures(prev => ({
+        ...prev,
+        bottom_metal: undefined // Clear the restricted bottom metal selection
+      }));
+      toast({
+        title: "Bottom Metal Updated",
+        description: "The selected bottom metal is not available for Medium Action Length.",
+        variant: "default",
+      });
+    }
+  }, [features.action_length, features.bottom_metal, toast]);
+
   // Load existing order data for editing
   const loadExistingOrder = async (orderIdToEdit: string) => {
     try {
       console.log('Loading existing order:', orderIdToEdit);
-      const order = await apiRequest(`/api/orders/draft/${orderIdToEdit}`);
+      setIsLoadingOrder(true);
+      
+      // First try to load as draft order
+      let order = null;
+      try {
+        order = await apiRequest(`/api/orders/draft/${orderIdToEdit}`);
+        console.log('Found draft order:', order);
+      } catch (draftError) {
+        console.log('Order not found in drafts, trying finalized orders...');
+        
+        // If not found as draft, try to load as finalized order
+        try {
+          const allOrders = await apiRequest('/api/orders/all');
+          order = allOrders.find((o: any) => o.orderId === orderIdToEdit);
+          if (order) {
+            console.log('Found finalized order:', order);
+            toast({
+              title: "Notice",
+              description: `Loading finalized order ${orderIdToEdit} for reference. Changes will create a new draft.`,
+              variant: "default",
+            });
+          }
+        } catch (finalizedError) {
+          console.log('Order not found in finalized orders either');
+          throw new Error(`Order ${orderIdToEdit} not found in drafts or finalized orders`);
+        }
+      }
+      
       console.log('Received order data:', order);
       if (order) {
         // Populate form with existing order data
         setOrderId(order.orderId);
         setOrderDate(new Date(order.orderDate));
-        setDueDate(new Date(order.dueDate));
+        const loadedDueDate = new Date(order.dueDate);
+        setDueDate(loadedDueDate);
+        
+        // Calculate what the base due date should be for this model (without rush fees)
+        let calculatedBaseDueDate = loadedDueDate;
+        let shouldBeManual = false;
+        
+        if (order.modelId) {
+          const selectedModel = modelOptions.find(m => m.id === order.modelId);
+          const modelName = selectedModel?.displayName || selectedModel?.name || '';
+          const isAdjModel = modelName.toLowerCase().includes('adj');
+          const orderDate = new Date(order.orderDate);
+          const daysFromOrder = isAdjModel ? 112 : 98;
+          calculatedBaseDueDate = new Date(orderDate.getTime() + daysFromOrder * 24 * 60 * 60 * 1000);
+          
+          // Check if loaded due date differs from auto-calculated date (allowing for rush fees)
+          const loadedTime = loadedDueDate.getTime();
+          const baseTime = calculatedBaseDueDate.getTime();
+          const rushFee1Time = new Date(calculatedBaseDueDate.getTime() - 28 * 24 * 60 * 60 * 1000).getTime();
+          const rushFee2Time = new Date(calculatedBaseDueDate.getTime() - 42 * 24 * 60 * 60 * 1000).getTime();
+          
+          // If the loaded date doesn't match any expected calculated date, it's manual
+          if (loadedTime !== baseTime && loadedTime !== rushFee1Time && loadedTime !== rushFee2Time) {
+            shouldBeManual = true;
+          }
+          
+          // Check for explicit isManualDueDate flag in the order (if saved from newer versions)
+          if (order.isManualDueDate !== undefined) {
+            shouldBeManual = order.isManualDueDate;
+          }
+        }
+        
+        // Similar logic for order date persistence
+        let shouldOrderDateBeManual = false;
+        if (order.isManualOrderDate !== undefined) {
+          shouldOrderDateBeManual = order.isManualOrderDate;
+        }
+        
+        setBaseDueDate(calculatedBaseDueDate);
+        setIsManualDueDate(shouldBeManual);
+        setIsManualOrderDate(shouldOrderDateBeManual);
 
         if (order.customerId) {
           // Load customer data
@@ -505,13 +796,12 @@ export default function OrderEntry() {
           }
         }
 
-        console.log('Setting modelId:', order.modelId || '');
-        console.log('Current modelOptions available:', modelOptions.length);
-        console.log('Available model IDs:', modelOptions.map(m => m.id));
-        console.log('Looking for model ID:', order.modelId);
+        console.log('🔧 Loading order modelId:', order.modelId);
         const modelExists = modelOptions.find(m => m.id === order.modelId);
-        console.log('Model exists in options:', !!modelExists, modelExists?.displayName);
+        console.log('🔧 Model found in options:', !!modelExists, modelExists?.displayName);
+        
         setModelId(order.modelId || '');
+        setRenderKey(prev => prev + 1);
         // CRITICAL: Only use the features object - don't set separate state variables
         console.log('✅ Setting features object:', order.features || {});
         const featuresObj = order.features || {};
@@ -531,6 +821,15 @@ export default function OrderEntry() {
         // Set ONLY the features object - all form controls now read from this
         setFeatures(featuresObj);
 
+        // Load miscellaneous items from features object
+        if (featuresObj.miscItems && Array.isArray(featuresObj.miscItems)) {
+          setMiscItems(featuresObj.miscItems);
+          console.log('✅ Loading miscellaneous items:', featuresObj.miscItems);
+        } else {
+          setMiscItems([]);
+          console.log('✅ No miscellaneous items found in order data');
+        }
+
         // Force component re-render by incrementing render key
         setRenderKey(prev => prev + 1);
 
@@ -539,7 +838,8 @@ export default function OrderEntry() {
         setFbOrderNumber(order.fbOrderNumber || '');
         setAgrOrderDetails(order.agrOrderDetails || '');
         setHasAGROrder(!!order.agrOrderDetails);
-        setShipping(order.shipping || 36.95);
+        setIsFlattop(order.isFlattop || false);
+        setShipping(order.shipping || 0);
         setIsCustomOrder(order.isCustomOrder === 'yes');
         // Load notes from either the dedicated notes column or features.specialInstructions for backward compatibility
         const notesFromField = order.notes || '';
@@ -547,12 +847,80 @@ export default function OrderEntry() {
         const finalNotes = notesFromField || notesFromFeatures;
         setNotes(finalNotes);
         console.log('✅ Loading notes:', { notesFromField, notesFromFeatures, finalNotes });
+        
+        // Load other options quantities from featureQuantities field
+        if (order.featureQuantities) {
+          setOtherOptionsQuantities(order.featureQuantities);
+          console.log('✅ Loading feature quantities:', order.featureQuantities);
+        } else {
+          setOtherOptionsQuantities({});
+        }
         setDiscountCode(order.discountCode || '');
         setCustomDiscountType(order.customDiscountType || 'percent');
         setCustomDiscountValue(order.customDiscountValue || 0);
         setShowCustomDiscount(order.showCustomDiscount || false);
         setPriceOverride(order.priceOverride);
         setShowPriceOverride(!!order.priceOverride);
+        setIsVerified(order.isVerified || false);
+
+        // Load special shipping state from saved order data
+        setSpecialShipping({
+          international: order.specialShippingInternational || false,
+          nextDayAir: order.specialShippingNextDayAir || false,
+          billToReceiver: order.specialShippingBillToReceiver || false
+        });
+
+        // Load Alt Ship To data
+        setHasAltShipTo(order.hasAltShipTo || false);
+        if (order.hasAltShipTo) {
+          if (order.altShipToCustomerId) {
+            setAltShipToMode('existing');
+            setAltShipToCustomerId(order.altShipToCustomerId);
+            
+            // Load the customer object for the alt ship to customer
+            const loadAltShipToCustomer = async () => {
+              try {
+                const customers = await apiRequest('/api/customers');
+                const altCustomer = customers.find((c: any) => c.id.toString() === order.altShipToCustomerId.toString());
+                if (altCustomer) {
+                  setAltShipToCustomer(altCustomer);
+                }
+              } catch (error) {
+                console.error('Failed to load alt ship to customer:', error);
+              }
+            };
+            loadAltShipToCustomer();
+            
+            // Clear manual fields
+            setAltShipToName('');
+            setAltShipToCompany('');
+            setAltShipToEmail('');
+            setAltShipToPhone('');
+            setAltShipToAddress({
+              street: '',
+              city: '',
+              state: '',
+              zipCode: '',
+              country: 'United States'
+            });
+          } else if (order.altShipToAddress) {
+            setAltShipToMode('manual');
+            setAltShipToName(order.altShipToName || '');
+            setAltShipToCompany(order.altShipToCompany || '');
+            setAltShipToEmail(order.altShipToEmail || '');
+            setAltShipToPhone(order.altShipToPhone || '');
+            setAltShipToAddress(order.altShipToAddress || {
+              street: '',
+              city: '',
+              state: '',
+              zipCode: '',
+              country: 'United States'
+            });
+            // Clear existing customer
+            setAltShipToCustomer(null);
+            setAltShipToCustomerId('');
+          }
+        }
 
         // CRITICAL FIX: Load discount details after setting discount code
         if (order.discountCode && order.discountCode !== 'none') {
@@ -606,6 +974,8 @@ export default function OrderEntry() {
         variant: "destructive",
       });
       generateOrderId(); // Fallback to new order
+    } finally {
+      setIsLoadingOrder(false);
     }
   };
 
@@ -661,6 +1031,181 @@ export default function OrderEntry() {
       setFeatureDefs([]); // Set empty array on error
     }
   };
+
+  // Set default texture value for new orders
+  useEffect(() => {
+    // Only set defaults for new orders (not editing existing orders)
+    if (!isEditMode && featureDefs.length > 0 && !features.texture_options) {
+      const textureFeature = featureDefs.find(f => 
+        f.id === 'texture_options' || 
+        f.name === 'texture_options' || 
+        f.id?.toLowerCase().includes('texture') ||
+        f.name?.toLowerCase().includes('texture') ||
+        f.displayName?.toLowerCase().includes('texture')
+      );
+
+      if (textureFeature?.options) {
+        // Find "No Texture" option (check various possible values)
+        const noTextureOption = textureFeature.options.find(option => 
+          option.label?.toLowerCase().includes('no texture') ||
+          option.value?.toLowerCase().includes('no_texture') ||
+          option.value?.toLowerCase().includes('none') ||
+          option.label?.toLowerCase() === 'none'
+        );
+
+        if (noTextureOption) {
+          setFeatures(prev => ({
+            ...prev,
+            texture_options: noTextureOption.value
+          }));
+          console.log('✅ Set default texture to:', noTextureOption.label, 'with value:', noTextureOption.value);
+        }
+      }
+    }
+  }, [featureDefs, isEditMode, features.texture_options]);
+
+  // Set default swivel studs value for new orders
+  useEffect(() => {
+    // Only set defaults for new orders (not editing existing orders)
+    if (!isEditMode && featureDefs.length > 0 && !features.swivel_studs) {
+      const swivelStudsFeature = featureDefs.find(f => 
+        f.id === 'swivel_studs' || 
+        f.name === 'swivel_studs' || 
+        f.id?.toLowerCase().includes('swivel') ||
+        f.name?.toLowerCase().includes('swivel') ||
+        f.displayName?.toLowerCase().includes('swivel')
+      );
+
+      if (swivelStudsFeature?.options) {
+        // Find "Standard Swivel Studs" option (check various possible values)
+        const standardSwivelOption = swivelStudsFeature.options.find(option => 
+          option.label?.toLowerCase().includes('standard swivel studs') ||
+          option.value?.toLowerCase().includes('standard_swivel_studs') ||
+          option.label?.toLowerCase().includes('standard swivel') ||
+          option.value?.toLowerCase().includes('standard_swivel')
+        );
+
+        if (standardSwivelOption) {
+          setFeatures(prev => ({
+            ...prev,
+            swivel_studs: standardSwivelOption.value
+          }));
+          console.log('✅ Set default swivel studs to:', standardSwivelOption.label, 'with value:', standardSwivelOption.value);
+        }
+      }
+    }
+  }, [featureDefs, isEditMode, features.swivel_studs]);
+
+  // Set default rail accessory value for new orders
+  useEffect(() => {
+    // Only set defaults for new orders (not editing existing orders)
+    if (!isEditMode && featureDefs.length > 0 && (!features.rail_accessory || features.rail_accessory.length === 0)) {
+      const railFeature = featureDefs.find(f => 
+        f.id === 'rail_accessory' || 
+        f.name === 'rail_accessory' || 
+        f.id?.toLowerCase().includes('rail') ||
+        f.name?.toLowerCase().includes('rail') ||
+        f.displayName?.toLowerCase().includes('rail')
+      );
+
+      if (railFeature?.options) {
+        // Find "No Rail" option (check various possible values)
+        const noRailOption = railFeature.options.find(option => 
+          option.label?.toLowerCase().includes('no rail') ||
+          option.value?.toLowerCase().includes('no_rail') ||
+          option.label?.toLowerCase() === 'none' ||
+          option.value?.toLowerCase() === 'none'
+        );
+
+        if (noRailOption) {
+          setFeatures(prev => ({
+            ...prev,
+            rail_accessory: [noRailOption.value] // Rails is an array field
+          }));
+          console.log('✅ Set default rail accessory to:', noRailOption.label, 'with value:', noRailOption.value);
+        }
+      }
+    }
+  }, [featureDefs, isEditMode, features.rail_accessory]);
+
+  // Set default length of pull (LOP) value for new orders
+  useEffect(() => {
+    // Only set defaults for new orders (not editing existing orders)
+    if (!isEditMode && featureDefs.length > 0 && !features.length_of_pull) {
+      console.log('🔍 Looking for LOP feature in featureDefs:', featureDefs.map(f => ({ id: f.id, name: f.name, displayName: f.displayName })));
+      
+      const lopFeature = featureDefs.find(f => 
+        f.id === 'length_of_pull' || 
+        f.name === 'length_of_pull' || 
+        f.id?.toLowerCase().includes('length') ||
+        f.name?.toLowerCase().includes('length') ||
+        f.displayName?.toLowerCase().includes('length') ||
+        f.displayName?.toLowerCase().includes('lop')
+      );
+
+      console.log('🔍 Found LOP feature:', lopFeature);
+
+      if (lopFeature?.options) {
+        console.log('🔍 LOP feature options:', lopFeature.options);
+        
+        // Find "No Extra Length (STD 13.5")" option (check various possible values)
+        const standardLopOption = lopFeature.options.find(option => 
+          option.label?.includes('No Extra Length (STD 13.5")') ||
+          option.label?.toLowerCase().includes('no extra length') ||
+          option.value?.toLowerCase().includes('no_lop_change') ||
+          option.label?.toLowerCase().includes('std 13.5') ||
+          (option.label?.toLowerCase().includes('no') && option.label?.toLowerCase().includes('13.5'))
+        );
+
+        console.log('🔍 Found LOP default option:', standardLopOption);
+
+        if (standardLopOption) {
+          setFeatures(prev => ({
+            ...prev,
+            length_of_pull: standardLopOption.value
+          }));
+          console.log('✅ Set default length of pull to:', standardLopOption.label, 'with value:', standardLopOption.value);
+        } else {
+          console.log('❌ Could not find LOP default option');
+        }
+      } else {
+        console.log('❌ LOP feature has no options');
+      }
+    }
+  }, [featureDefs, isEditMode, features.length_of_pull]);
+
+  // Set default QD accessory value for new orders
+  useEffect(() => {
+    // Only set defaults for new orders (not editing existing orders)
+    if (!isEditMode && featureDefs.length > 0 && !features.qd_accessory) {
+      const qdFeature = featureDefs.find(f => 
+        f.id === 'qd_accessory' || 
+        f.name === 'qd_accessory' || 
+        f.id?.toLowerCase().includes('qd') ||
+        f.name?.toLowerCase().includes('qd') ||
+        f.displayName?.toLowerCase().includes('qd') ||
+        f.displayName?.toLowerCase().includes('quick detach')
+      );
+
+      if (qdFeature?.options) {
+        // Find "No QD" option (check various possible values)
+        const noQdOption = qdFeature.options.find(option => 
+          option.label?.toLowerCase().includes('no qd') ||
+          option.value?.toLowerCase().includes('no_qd') ||
+          option.label?.toLowerCase() === 'none' ||
+          option.value?.toLowerCase() === 'none'
+        );
+
+        if (noQdOption) {
+          setFeatures(prev => ({
+            ...prev,
+            qd_accessory: noQdOption.value
+          }));
+          console.log('✅ Set default QD accessory to:', noQdOption.label, 'with value:', noQdOption.value);
+        }
+      }
+    }
+  }, [featureDefs, isEditMode, features.qd_accessory]);
 
   const loadDiscountCodes = async () => {
     try {
@@ -731,8 +1276,8 @@ export default function OrderEntry() {
         method: 'POST'
       });
 
-      // Validate the generated ID format (e.g., AG001)
-      const orderIdPattern = /^[A-Z]{1,2}[A-Z]\d{3,}$/;
+      // Validate the generated ID format (e.g., EH001, AG001)
+      const orderIdPattern = /^[A-Z]{1,3}\d{3,}$/;
       if (!orderIdPattern.test(response.orderId)) {
         throw new Error('Invalid Order ID format generated');
       }
@@ -752,7 +1297,7 @@ export default function OrderEntry() {
 
   // Use unified pricing calculation (calculated above with discount already included)
 
-  const handleSubmit = async (e?: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e?: React.FormEvent<HTMLFormElement>, saveAsDraft: boolean = false) => {
     if (e) {
       e.preventDefault();
     }
@@ -773,19 +1318,20 @@ export default function OrderEntry() {
       }
 
       // Validate Order ID format
-      const orderIdPattern = /^[A-Z]{1,2}[A-Z]\d{3,}$/;
+      const orderIdPattern = /^[A-Z]{1,3}\d{3,}$/;
       if (!orderIdPattern.test(orderId)) {
         setErrors(prev => ({ ...prev, orderId: 'Invalid Order ID format' }));
         return;
       }
 
-      if (!modelId) {
+      // CRITICAL VALIDATION: Prevent saving orders with null/empty modelId
+      if (!modelId || modelId.trim() === '') {
         setErrors(prev => ({ ...prev, modelId: 'Stock model is required' }));
-        return;
-      }
-
-      if (!orderId) {
-        setErrors(prev => ({ ...prev, orderId: 'Order ID is required' }));
+        toast({
+          title: "Stock Model Required",
+          description: "Please select a stock model before saving the order",
+          variant: "destructive"
+        });
         return;
       }
 
@@ -793,7 +1339,8 @@ export default function OrderEntry() {
       // No need to merge separate state variables since handedness, action_inlet, etc. 
       // are directly updated in features by their respective form controls
       const completeFeatures = {
-        ...features
+        ...features,
+        miscItems: miscItems  // Include miscellaneous items for persistence
       };
 
       console.log('Complete features being saved:', completeFeatures);
@@ -808,8 +1355,9 @@ export default function OrderEntry() {
         customerPO: hasCustomerPO ? customerPO : '',
         fbOrderNumber,
         agrOrderDetails: hasAGROrder ? agrOrderDetails : '',
+        isFlattop,
         shipping,
-        status: 'FINALIZED',
+        status: saveAsDraft ? 'DRAFT' : 'FINALIZED',
         isCustomOrder: isCustomOrder ? 'yes' : 'no',
         notes,
         discountCode,
@@ -818,6 +1366,21 @@ export default function OrderEntry() {
         showCustomDiscount,
         priceOverride,
         miscItems: miscItems,
+        featureQuantities: otherOptionsQuantities,
+        isVerified,
+        isManualDueDate, // Save the manual due date flag
+        isManualOrderDate, // Save the manual order date flag
+        hasAltShipTo,
+        altShipToCustomerId: hasAltShipTo && altShipToMode === 'existing' ? altShipToCustomerId : null,
+        altShipToName: hasAltShipTo && altShipToMode === 'manual' ? altShipToName : null,
+        altShipToCompany: hasAltShipTo && altShipToMode === 'manual' ? altShipToCompany : null,
+        altShipToEmail: hasAltShipTo && altShipToMode === 'manual' ? altShipToEmail : null,
+        altShipToPhone: hasAltShipTo && altShipToMode === 'manual' ? altShipToPhone : null,
+        altShipToAddress: hasAltShipTo && altShipToMode === 'manual' ? altShipToAddress : null,
+        // Special Shipping Instructions
+        specialShippingInternational: specialShipping.international,
+        specialShippingNextDayAir: specialShipping.nextDayAir,
+        specialShippingBillToReceiver: specialShipping.billToReceiver
         // Payment fields removed - now handled by PaymentManager
       };
 
@@ -827,32 +1390,49 @@ export default function OrderEntry() {
         // Update existing order
         response = await apiRequest(`/api/orders/draft/${editingOrderId}`, {
           method: 'PUT',
-          body: orderData
+          body: JSON.stringify(orderData)
         });
 
         toast({
           title: "Success",
-          description: "Order updated successfully",
+          description: saveAsDraft ? "Order saved as draft" : "Order updated successfully",
         });
       } else {
-        // Create new order
-        response = await apiRequest('/api/orders/draft', {
+        // Create new order - use finalized endpoint for completed orders
+        const endpoint = saveAsDraft ? '/api/orders/draft' : '/api/orders/finalized';
+        response = await apiRequest(endpoint, {
           method: 'POST',
-          body: orderData
+          body: JSON.stringify(orderData)
         });
 
         toast({
           title: "Success", 
-          description: "Order created successfully",
+          description: saveAsDraft ? "Order saved as draft" : "Order created and added to P1 Production Queue",
         });
       }
 
-      // Invalidate drafts cache so Draft Orders page updates immediately
-      queryClient.invalidateQueries({ queryKey: ['/api/orders/drafts', 'excludeFinalized'] });
+      // Invalidate relevant caches based on whether it was saved as draft or finalized
+      if (saveAsDraft) {
+        queryClient.invalidateQueries({ queryKey: ['/api/orders/drafts', 'excludeFinalized'] });
+      } else {
+        // Finalized orders appear in the main All Orders list and Production Queue
+        queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/orders/pipeline-counts'] });
+      }
       queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
 
-      // Reset form
-      resetForm();
+      // Navigate to All Orders page after successful creation (not for drafts or edits)
+      if (!saveAsDraft && !isEditMode) {
+        // Small delay to ensure toast is visible before navigation
+        setTimeout(() => {
+          setLocation('/orders-list');
+        }, 1000);
+      }
+
+      // Reset form only if not editing
+      if (!isEditMode) {
+        resetForm();
+      }
 
     } catch (error: any) {
       console.error('Submit error:', error);
@@ -872,12 +1452,15 @@ export default function OrderEntry() {
     setModelOpen(false);
     setFeatures({});
     setOrderDate(new Date());
-    setDueDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000));
+    const defaultDueDate = new Date(Date.now() + 98 * 24 * 60 * 60 * 1000); // Default to 98 days
+    setDueDate(defaultDueDate);
+    setBaseDueDate(defaultDueDate);
     setHasCustomerPO(false);
     setCustomerPO('');
     setFbOrderNumber('');
     setHasAGROrder(false);
     setAgrOrderDetails('');
+    setIsFlattop(false);
     setDiscountCode('');
     setCustomDiscountType('percent');
     setCustomDiscountValue(0);
@@ -894,6 +1477,13 @@ export default function OrderEntry() {
     // Reset payment state - payments now handled by PaymentManager
     setOrderPayments([]);
     setMiscItems([]);
+    setOtherOptionsQuantities({});
+    setSpecialShipping({
+      international: false,
+      nextDayAir: false,
+      billToReceiver: false
+    });
+    setIsManualDueDate(false); // Reset manual due date flag
     generateOrderId();
   };
 
@@ -934,19 +1524,67 @@ export default function OrderEntry() {
                     id="orderDate"
                     name="orderDate"
                     type="date"
-                    value={orderDate.toISOString().split('T')[0]}
-                    onChange={(e) => setOrderDate(new Date(e.target.value))}
+                    value={orderDate && !isNaN(orderDate.getTime()) ? orderDate.toISOString().split('T')[0] : ''}
+                    onChange={(e) => {
+                      const dateValue = e.target.value;
+                      if (dateValue) {
+                        const newDate = new Date(dateValue);
+                        if (!isNaN(newDate.getTime())) {
+                          setOrderDate(newDate);
+                          setIsManualOrderDate(true); // Mark as manually set
+                          // Don't auto-update due date if user has manually set it
+                          if (!isManualDueDate) {
+                            // Update due date based on new order date and current model
+                            const selectedModel = modelOptions.find(m => m.id === modelId);
+                            const modelName = selectedModel?.displayName || selectedModel?.name || '';
+                            const isAdjModel = modelName.toLowerCase().includes('adj');
+                            const daysFromOrder = isAdjModel ? 112 : 98;
+                            const newDueDate = new Date(newDate.getTime() + daysFromOrder * 24 * 60 * 60 * 1000);
+                            setDueDate(newDueDate);
+                            setBaseDueDate(newDueDate);
+                          }
+                        }
+                      } else {
+                        setOrderDate(new Date());
+                        setIsManualOrderDate(false); // Reset manual flag when cleared
+                      }
+                    }}
                   />
                 </div>
                 <div>
-                  <Label htmlFor="dueDate">Estimated Completion Date</Label>
+                  <Label htmlFor="dueDate" className="flex items-center gap-2">
+                    Estimated Completion Date
+                    {isManualDueDate && (
+                      <Badge variant="secondary" className="text-xs">
+                        Custom
+                      </Badge>
+                    )}
+                  </Label>
                   <Input
                     id="dueDate"
                     name="dueDate"
                     type="date"
-                    value={dueDate.toISOString().split('T')[0]}
-                    onChange={(e) => setDueDate(new Date(e.target.value))}
+                    value={dueDate && !isNaN(dueDate.getTime()) ? dueDate.toISOString().split('T')[0] : ''}
+                    onChange={(e) => {
+                      const dateValue = e.target.value;
+                      if (dateValue) {
+                        const newDate = new Date(dateValue);
+                        if (!isNaN(newDate.getTime())) {
+                          setDueDate(newDate);
+                          setIsManualDueDate(true); // Mark as manually set
+                        }
+                      } else {
+                        // If cleared, set to default 98 days from now
+                        setDueDate(new Date(Date.now() + 98 * 24 * 60 * 60 * 1000));
+                        setIsManualDueDate(false); // Reset manual flag when cleared
+                      }
+                    }}
                   />
+                  {isManualDueDate && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Due date manually set - will not auto-adjust for stock model or rush fees
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -1041,12 +1679,267 @@ export default function OrderEntry() {
                 </div>
               </div>
 
-              {/* Order Attachments */}
-              {orderId && (
-                <div className="mt-6">
-                  <OrderAttachments orderId={orderId} />
-                </div>
-              )}
+              {/* Shipping Options & Address - Combined Accordion */}
+              <div className="mt-6 border rounded-lg p-4 bg-blue-50">
+                <Accordion type="single" collapsible className="w-full">
+                  <AccordionItem value="shipping-options">
+                    <AccordionTrigger className="text-left">
+                      <span className="font-medium">Shipping Options & Address</span>
+                    </AccordionTrigger>
+                    <AccordionContent>
+                      <div className="space-y-6">
+                        {/* Special Shipping Instructions */}
+                        <div>
+                          <Label className="text-base font-medium mb-3 block">Special Shipping Instructions</Label>
+                          <div className="space-y-3">
+                            <div className="flex items-center space-x-2">
+                              <Checkbox
+                                id="international"
+                                checked={specialShipping.international}
+                                onCheckedChange={(checked) =>
+                                  setSpecialShipping(prev => ({ ...prev, international: !!checked }))
+                                }
+                              />
+                              <Label htmlFor="international" className="text-sm font-medium">
+                                International
+                              </Label>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <Checkbox
+                                id="next-day-air"
+                                checked={specialShipping.nextDayAir}
+                                onCheckedChange={(checked) =>
+                                  setSpecialShipping(prev => ({ ...prev, nextDayAir: !!checked }))
+                                }
+                              />
+                              <Label htmlFor="next-day-air" className="text-sm font-medium">
+                                Next Day Air
+                              </Label>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <Checkbox
+                                id="bill-to-receiver"
+                                checked={specialShipping.billToReceiver}
+                                onCheckedChange={(checked) =>
+                                  setSpecialShipping(prev => ({ ...prev, billToReceiver: !!checked }))
+                                }
+                              />
+                              <Label htmlFor="bill-to-receiver" className="text-sm font-medium">
+                                Bill to Receiver
+                              </Label>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Ship to Different Address */}
+                        <div className="border-t pt-6">
+                          <div className="flex items-center space-x-2 mb-4">
+                            <Checkbox 
+                              id="alt-ship-to-checkbox"
+                              checked={hasAltShipTo}
+                              onCheckedChange={(checked) => {
+                                setHasAltShipTo(!!checked);
+                                if (!checked) {
+                                  // Clear all alt ship to data when disabled
+                                  setAltShipToCustomer(null);
+                                  setAltShipToCustomerId('');
+                                  setAltShipToName('');
+                                  setAltShipToCompany('');
+                                  setAltShipToEmail('');
+                                  setAltShipToPhone('');
+                                  setAltShipToAddress({
+                                    street: '',
+                                    city: '',
+                                    state: '',
+                                    zipCode: '',
+                                    country: 'United States'
+                                  });
+                                }
+                              }}
+                            />
+                            <Label 
+                              htmlFor="alt-ship-to-checkbox" 
+                              className="text-base font-medium"
+                            >
+                              Ship to Different Address
+                            </Label>
+                          </div>
+
+                          {hasAltShipTo && (
+                            <div className="space-y-4">
+                              {/* Mode Selection */}
+                              <div>
+                                <Label className="text-sm font-medium">Address Type</Label>
+                                <div className="flex gap-4 mt-2">
+                                  <div className="flex items-center space-x-2">
+                                    <input
+                                      type="radio"
+                                      id="existing-customer"
+                                      name="alt-ship-mode"
+                                      value="existing"
+                                      checked={altShipToMode === 'existing'}
+                                      onChange={(e) => setAltShipToMode(e.target.value as 'existing' | 'manual')}
+                                    />
+                                    <Label htmlFor="existing-customer" className="text-sm">Existing Customer</Label>
+                                  </div>
+                                  <div className="flex items-center space-x-2">
+                                    <input
+                                      type="radio"
+                                      id="manual-address"
+                                      name="alt-ship-mode"
+                                      value="manual"
+                                      checked={altShipToMode === 'manual'}
+                                      onChange={(e) => setAltShipToMode(e.target.value as 'existing' | 'manual')}
+                                    />
+                                    <Label htmlFor="manual-address" className="text-sm">Manual Entry</Label>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {altShipToMode === 'existing' ? (
+                                <div>
+                                  <CustomerSearchInput
+                                    value={altShipToCustomer}
+                                    onValueChange={(selectedCustomer) => {
+                                      setAltShipToCustomer(selectedCustomer);
+                                      if (selectedCustomer) {
+                                        setAltShipToCustomerId(selectedCustomer.id.toString());
+                                        // Clear manual fields when selecting existing customer
+                                        setAltShipToName('');
+                                        setAltShipToCompany('');
+                                        setAltShipToEmail('');
+                                        setAltShipToPhone('');
+                                        setAltShipToAddress({
+                                          street: '',
+                                          city: '',
+                                          state: '',
+                                          zipCode: '',
+                                          country: 'United States'
+                                        });
+                                      } else {
+                                        setAltShipToCustomerId('');
+                                      }
+                                    }}
+                                    placeholder="Search for existing customer..."
+                                  />
+                                </div>
+                              ) : (
+                                <div className="grid grid-cols-2 gap-4">
+                                  <div>
+                                    <Label>Name *</Label>
+                                    <Input
+                                      value={altShipToName}
+                                      onChange={(e) => setAltShipToName(e.target.value)}
+                                      placeholder="Enter recipient name"
+                                    />
+                                  </div>
+                                  <div>
+                                    <Label>Company</Label>
+                                    <Input
+                                      value={altShipToCompany}
+                                      onChange={(e) => setAltShipToCompany(e.target.value)}
+                                      placeholder="Enter company name"
+                                    />
+                                  </div>
+                                  <div>
+                                    <Label>Email</Label>
+                                    <Input
+                                      type="email"
+                                      value={altShipToEmail}
+                                      onChange={(e) => setAltShipToEmail(e.target.value)}
+                                      placeholder="Enter email address"
+                                    />
+                                  </div>
+                                  <div>
+                                    <Label>Phone</Label>
+                                    <Input
+                                      value={altShipToPhone}
+                                      onChange={(e) => setAltShipToPhone(e.target.value)}
+                                      placeholder="Enter phone number"
+                                    />
+                                  </div>
+                                  <div className="col-span-2">
+                                    <Label>Street Address *</Label>
+                                    <Input
+                                      value={altShipToAddress.street}
+                                      onChange={(e) => setAltShipToAddress(prev => ({ ...prev, street: e.target.value }))}
+                                      placeholder="Enter street address"
+                                    />
+                                  </div>
+                                  <div>
+                                    <Label>City *</Label>
+                                    <Input
+                                      value={altShipToAddress.city}
+                                      onChange={(e) => setAltShipToAddress(prev => ({ ...prev, city: e.target.value }))}
+                                      placeholder="Enter city"
+                                    />
+                                  </div>
+                                  <div>
+                                    <Label>State *</Label>
+                                    <Input
+                                      value={altShipToAddress.state}
+                                      onChange={(e) => setAltShipToAddress(prev => ({ ...prev, state: e.target.value }))}
+                                      placeholder="Enter state"
+                                    />
+                                  </div>
+                                  <div>
+                                    <Label>ZIP Code *</Label>
+                                    <Input
+                                      value={altShipToAddress.zipCode}
+                                      onChange={(e) => setAltShipToAddress(prev => ({ ...prev, zipCode: e.target.value }))}
+                                      placeholder="Enter ZIP code"
+                                    />
+                                  </div>
+                                  <div>
+                                    <Label>Country</Label>
+                                    <Input
+                                      value={altShipToAddress.country}
+                                      onChange={(e) => setAltShipToAddress(prev => ({ ...prev, country: e.target.value }))}
+                                      placeholder="United States"
+                                    />
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
+                </Accordion>
+              </div>
+
+              {/* Flattop Option */}
+              <div className="flex items-center space-x-2 p-3 border rounded-lg bg-yellow-50">
+                <Checkbox 
+                  id="flattop-checkbox"
+                  checked={isFlattop}
+                  onCheckedChange={(checked) => {
+                    setIsFlattop(!!checked);
+                    if (checked) {
+                      // Clear features that are not available for flattop
+                      setFeatures(prev => ({
+                        ...prev,
+                        action_length: undefined,
+                        action_inlet: undefined,
+                        bottom_metal: undefined,
+                        barrel_inlet: undefined
+                      }));
+                    }
+                  }}
+                />
+                <Label 
+                  htmlFor="flattop-checkbox" 
+                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                >
+                  Flattop
+                </Label>
+                <span className="text-xs text-muted-foreground">
+                  (Stock not machined for Action Length, Action Inlet, Bottom Metal, or Barrel Inlet)
+                </span>
+              </div>
+
+
 
               {/* Stock Model Selection and Price Override Row */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -1184,19 +2077,33 @@ export default function OrderEntry() {
                   {/* Handedness */}
                   <div>
                     <Label>Handedness</Label>
-                    <Select 
-                      key={`handedness-${renderKey}-${features.handedness || 'empty'}`}
-                      value={features.handedness || undefined} 
-                      onValueChange={(value) => setFeatures(prev => ({ ...prev, handedness: value }))}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select handedness..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="right">Right</SelectItem>
-                        <SelectItem value="left">Left</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    {(() => {
+                      // Business rule: Impact Action Inlet + Long Action Length cannot have Left handedness
+                      const hasImpactInlet = features.action_inlet && features.action_inlet.toLowerCase().includes('impact');
+                      const isLongAction = features.action_length === 'long';
+                      const shouldRestrictLeft = hasImpactInlet && isLongAction;
+                      
+                      return (
+                        <Select 
+                          key={`handedness-${renderKey}-${features.handedness || 'empty'}`}
+                          value={features.handedness || undefined} 
+                          onValueChange={(value) => setFeatures(prev => ({ ...prev, handedness: value }))}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select handedness..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="right">Right</SelectItem>
+                            {!shouldRestrictLeft && <SelectItem value="left">Left</SelectItem>}
+                            {shouldRestrictLeft && (
+                              <div className="px-2 py-1.5 text-sm text-gray-500 italic">
+                                Left not available for Impact Inlet + Long Action
+                              </div>
+                            )}
+                          </SelectContent>
+                        </Select>
+                      );
+                    })()}
                   </div>
 
                   {/* Action Inlet */}
@@ -1206,14 +2113,30 @@ export default function OrderEntry() {
                       key={`action-inlet-${renderKey}-${features.action_inlet || 'empty'}`}
                       value={features.action_inlet || undefined} 
                       onValueChange={(value) => setFeatures(prev => ({ ...prev, action_inlet: value }))}
+                      disabled={isFlattop}
                     >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select..." />
+                      <SelectTrigger className={isFlattop ? "opacity-50 cursor-not-allowed" : ""}>
+                        <SelectValue placeholder={isFlattop ? "Not Available (Flattop)" : "Select..."} />
                       </SelectTrigger>
                       <SelectContent>
                         {featureDefs
                           .find(f => f.name === 'action_inlet' || f.id === 'action_inlet')
-                          ?.options?.filter(option => option.value && option.value.trim() !== '')
+                          ?.options?.filter(option => {
+                            // Filter out empty options
+                            if (!option.value || option.value.trim() === '') return false;
+                            
+                            // Business rule: Filter out Impact options when Action Length is "Long" and Handedness is "Left"
+                            const isLongAction = features.action_length === 'long';
+                            const isLeftHanded = features.handedness === 'left';
+                            const isImpactOption = option.value.toLowerCase().includes('impact') || 
+                                                 option.label.toLowerCase().includes('impact');
+                            
+                            if (isLongAction && isLeftHanded && isImpactOption) {
+                              return false;
+                            }
+                            
+                            return true;
+                          })
                           ?.map((option) => (
                             <SelectItem key={option.value} value={option.value}>
                               {option.label}
@@ -1229,9 +2152,10 @@ export default function OrderEntry() {
                     <Select 
                       value={features.barrel_inlet || undefined} 
                       onValueChange={(value) => setFeatures(prev => ({ ...prev, barrel_inlet: value }))}
+                      disabled={isFlattop}
                     >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select..." />
+                      <SelectTrigger className={isFlattop ? "opacity-50 cursor-not-allowed" : ""}>
+                        <SelectValue placeholder={isFlattop ? "Not Available (Flattop)" : "Select..."} />
                       </SelectTrigger>
                       <SelectContent>
                         {featureDefs
@@ -1353,53 +2277,126 @@ export default function OrderEntry() {
                   {/* Other Options */}
                   <div>
                     <Label>Other Options</Label>
-                    <div className="space-y-2 max-h-48 overflow-y-auto border rounded-md p-3">
-                      {(() => {
-                        const otherOptionsFeature = featureDefs.find(f => f.id === 'other_options');
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button variant="outline" role="combobox" className="w-full justify-between">
+                          {(() => {
+                            const selectedCount = (features.other_options || []).length;
+                            if (selectedCount === 0) return "Select options...";
+                            if (selectedCount === 1) return "1 option selected";
+                            return `${selectedCount} options selected`;
+                          })()}
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-full p-0" align="start">
+                        <Command>
+                          <CommandInput placeholder="Search options..." />
+                          <CommandEmpty>No options found.</CommandEmpty>
+                          <CommandGroup>
+                            <CommandList className="max-h-48 overflow-y-auto">
+                              {(() => {
+                                const otherOptionsFeature = featureDefs.find(f => f.id === 'other_options');
 
-                        if (!otherOptionsFeature || !otherOptionsFeature.options) {
-                          return <div className="text-gray-500 text-sm">
-                            No Other Options available (Features loaded: {featureDefs.length}, Looking for: other_options)
-                            {featureDefs.length > 0 && (
-                              <div className="text-xs mt-1">
-                                Available feature IDs: {featureDefs.map(f => f.id).join(', ')}
-                              </div>
-                            )}
-                          </div>;
-                        }
-
-                        return otherOptionsFeature.options
-                          .filter(option => option.value && option.value.trim() !== '')
-                          .map((option) => (
-                          <div key={option.value} className="flex items-center space-x-2">
-                            <Checkbox
-                              id={`other-option-${option.value}`}
-                              checked={(features.other_options || []).includes(option.value)}
-                              onCheckedChange={(checked) => {
-                                const currentOther = features.other_options || [];
-                                if (checked) {
-                                  setFeatures(prev => ({ ...prev, other_options: [...currentOther, option.value] }));
-                                } else {
-                                  setFeatures(prev => ({ ...prev, other_options: currentOther.filter((item: string) => item !== option.value) }));
+                                if (!otherOptionsFeature || !otherOptionsFeature.options) {
+                                  return (
+                                    <div className="text-gray-500 text-sm p-3">
+                                      No Other Options available
+                                    </div>
+                                  );
                                 }
-                              }}
-                            />
-                            <label
-                              htmlFor={`other-option-${option.value}`}
-                              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer flex-1"
+
+                                return otherOptionsFeature.options
+                                  .filter(option => option.value && option.value.trim() !== '')
+                                  .map((option) => {
+                                    const isChecked = (features.other_options || []).includes(option.value);
+                                    const showQuantity = isChecked && !option.label?.toLowerCase().includes('no');
+                                    const quantity = otherOptionsQuantities[option.value] || 1;
+                                    
+                                    return (
+                                      <CommandItem
+                                        key={option.value}
+                                        onSelect={() => {
+                                          const currentOther = features.other_options || [];
+                                          if (isChecked) {
+                                            setFeatures(prev => ({ ...prev, other_options: currentOther.filter((item: string) => item !== option.value) }));
+                                            // Remove quantity when unchecked
+                                            setOtherOptionsQuantities(prev => {
+                                              const newQuantities = { ...prev };
+                                              delete newQuantities[option.value];
+                                              return newQuantities;
+                                            });
+                                          } else {
+                                            setFeatures(prev => ({ ...prev, other_options: [...currentOther, option.value] }));
+                                            // Set default quantity to 1 for new selections
+                                            setOtherOptionsQuantities(prev => ({ ...prev, [option.value]: 1 }));
+                                          }
+                                        }}
+                                        className="cursor-pointer"
+                                      >
+                                        <div className="flex items-center space-x-2 w-full">
+                                          <Checkbox
+                                            checked={isChecked}
+                                            onChange={() => {}} // Handled by onSelect
+                                            className="pointer-events-none"
+                                          />
+                                          <div className="flex-1 space-y-1">
+                                            <div className="text-sm font-medium">
+                                              {option.label}
+                                              {option.price && option.price > 0 && (
+                                                <span className="ml-2 text-blue-600 font-bold">
+                                                  +${option.price.toFixed(2)}{showQuantity && ` x ${quantity}`}
+                                                </span>
+                                              )}
+                                            </div>
+                                            {showQuantity && (
+                                              <div className="flex items-center space-x-2">
+                                                <Label className="text-xs text-gray-600">Qty:</Label>
+                                                <Input
+                                                  type="number"
+                                                  min="1"
+                                                  value={quantity}
+                                                  onChange={(e) => {
+                                                    const newQuantity = Math.max(1, parseInt(e.target.value) || 1);
+                                                    setOtherOptionsQuantities(prev => ({ ...prev, [option.value]: newQuantity }));
+                                                  }}
+                                                  className="w-16 h-6 text-xs"
+                                                  onClick={(e) => e.stopPropagation()}
+                                                />
+                                              </div>
+                                            )}
+                                          </div>
+                                        </div>
+                                      </CommandItem>
+                                    );
+                                  });
+                              })()}
+                            </CommandList>
+                          </CommandGroup>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                    {/* Display selected options as badges */}
+                    {features.other_options && features.other_options.length > 0 && (
+                      <div className="mt-2 flex flex-wrap gap-1">
+                        {features.other_options.map((optionValue: string) => {
+                          const otherOptionsFeature = featureDefs.find(f => f.id === 'other_options');
+                          const option = otherOptionsFeature?.options?.find(o => o.value === optionValue);
+                          const quantity = otherOptionsQuantities[optionValue] || 1;
+                          const showQuantity = !option?.label?.toLowerCase().includes('no');
+                          
+                          return (
+                            <Badge 
+                              key={optionValue}
+                              variant="secondary" 
+                              className="text-xs px-2 py-1"
                             >
-                              {option.label}
-                              {option.price && option.price > 0 && (
-                                <span className="ml-2 text-blue-600 font-bold">+${option.price.toFixed(2)}</span>
-                              )}
-                            </label>
-                          </div>
-                        ));
-                      })()}
-                      {(!features.other_options || features.other_options.length === 0) && (
-                        <div className="text-gray-400 text-sm italic">No options selected</div>
-                      )}
-                    </div>
+                              {option?.label}{showQuantity && ` (${quantity})`}
+                            </Badge>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -1412,9 +2409,10 @@ export default function OrderEntry() {
                       key={`action-length-${renderKey}-${features.action_length || 'empty'}`}
                       value={features.action_length || undefined} 
                       onValueChange={(value) => setFeatures(prev => ({ ...prev, action_length: value }))}
+                      disabled={isFlattop}
                     >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Short" />
+                      <SelectTrigger className={isFlattop ? "opacity-50 cursor-not-allowed" : ""}>
+                        <SelectValue placeholder={isFlattop ? "Not Available (Flattop)" : "Short"} />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="short">Short</SelectItem>
@@ -1444,14 +2442,28 @@ export default function OrderEntry() {
                       key={`bottom-metal-${renderKey}-${features.bottom_metal || 'empty'}`}
                       value={features.bottom_metal || undefined} 
                       onValueChange={(value) => setFeatures(prev => ({ ...prev, bottom_metal: value }))}
+                      disabled={isFlattop}
                     >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select..." />
+                      <SelectTrigger className={isFlattop ? "opacity-50 cursor-not-allowed" : ""}>
+                        <SelectValue placeholder={isFlattop ? "Not Available (Flattop)" : "Select..."} />
                       </SelectTrigger>
                       <SelectContent>
                         {featureDefs
                           .find(f => f.name === 'bottom_metal' || f.id === 'bottom_metal')
-                          ?.options?.filter(option => option.value && option.value.trim() !== '')
+                          ?.options?.filter(option => {
+                            // Filter out empty options
+                            if (!option.value || option.value.trim() === '') return false;
+                            
+                            // Business rule: Filter out specific bottom metals when Action Length is "Medium"
+                            const isMediumAction = features.action_length === 'medium';
+                            const restrictedBottomMetals = ['ag_m5_sa', 'ag_m5_la', 'ag_m5_la_cip', 'ag_bdl_sa', 'ag_bdl_la'];
+                            
+                            if (isMediumAction && restrictedBottomMetals.includes(option.value)) {
+                              return false;
+                            }
+                            
+                            return true;
+                          })
                           ?.map((option) => (
                             <SelectItem key={option.value} value={option.value}>
                               {option.label}
@@ -1463,7 +2475,19 @@ export default function OrderEntry() {
 
                   {/* QD Quick Detach Cups */}
                   <div>
-                    <Label>QD Quick Detach Cups</Label>
+                    <Label className="flex items-center gap-2">
+                      QD Quick Detach Cups
+                      {(() => {
+                        const selectedModel = modelOptions.find(m => m.id === modelId);
+                        const isChalkModel = selectedModel?.displayName?.toLowerCase().includes('chalk') || 
+                                           selectedModel?.name?.toLowerCase().includes('chalk');
+                        return isChalkModel && (
+                          <span className="text-xs bg-orange-100 text-orange-800 px-2 py-1 rounded-full">
+                            Chalk Model - Limited Options
+                          </span>
+                        );
+                      })()}
+                    </Label>
                     <Select 
                       key={`qd-accessory-${renderKey}-${features.qd_accessory || 'empty'}`}
                       value={features.qd_accessory || undefined} 
@@ -1487,9 +2511,29 @@ export default function OrderEntry() {
                             return null;
                           }
 
-                          return qdFeature.options
-                            .filter(option => option.value && option.value.trim() !== '')
-                            .map((option) => (
+                          // Check if selected model contains "Chalk" in the name
+                          const selectedModel = modelOptions.find(m => m.id === modelId);
+                          const isChalkModel = selectedModel?.displayName?.toLowerCase().includes('chalk') || 
+                                             selectedModel?.name?.toLowerCase().includes('chalk');
+                          
+                          // Define limited QD options for Chalk models (based on actual database values)
+                          const chalkQDOptions = ['no_qds', 'qd_1_right_butt', 'qd_1_left_butt'];
+                          
+                          // Filter options based on model type
+                          let availableOptions = qdFeature.options.filter(option => option.value && option.value.trim() !== '');
+                          
+                          if (isChalkModel) {
+                            console.log('🎯 Chalk model detected for QDs:', selectedModel?.displayName);
+                            console.log('🎯 Original QD options:', availableOptions.map(o => o.label));
+                            
+                            availableOptions = availableOptions.filter(option => 
+                              chalkQDOptions.includes(option.value)
+                            );
+                            
+                            console.log('🎯 Filtered QD options for Chalk:', availableOptions.map(o => o.label));
+                          }
+
+                          return availableOptions.map((option) => (
                               <SelectItem key={option.value} value={option.value}>
                                 {option.label}
                               </SelectItem>
@@ -1501,54 +2545,132 @@ export default function OrderEntry() {
 
                   {/* Rails */}
                   <div>
-                    <Label>Rails</Label>
-                    <div className="space-y-2 max-h-48 overflow-y-auto border rounded-md p-3">
+                    <Label className="flex items-center gap-2">
+                      Rails
                       {(() => {
-                        const railsFeature = featureDefs.find(f => f.id === 'rail_accessory');
-
-                        if (!railsFeature || !railsFeature.options) {
-                          return <div className="text-gray-500 text-sm">
-                            No Rails options available (Features loaded: {featureDefs.length}, Looking for: rail_accessory)
-                            {featureDefs.length > 0 && (
-                              <div className="text-xs mt-1">
-                                Available feature IDs: {featureDefs.map(f => f.id).join(', ')}
-                              </div>
-                            )}
-                          </div>;
-                        }
-
-                        return railsFeature.options
-                          .filter(option => option.value && option.value.trim() !== '')
-                          .map((option) => (
-                          <div key={option.value} className="flex items-center space-x-2">
-                            <Checkbox
-                              id={`rail-option-${option.value}`}
-                              checked={(features.rail_accessory || []).includes(option.value)}
-                              onCheckedChange={(checked) => {
-                                const currentRails = features.rail_accessory || [];
-                                if (checked) {
-                                  setFeatures(prev => ({ ...prev, rail_accessory: [...currentRails, option.value] }));
-                                } else {
-                                  setFeatures(prev => ({ ...prev, rail_accessory: currentRails.filter((item: string) => item !== option.value) }));
-                                }
-                              }}
-                            />
-                            <label
-                              htmlFor={`rail-option-${option.value}`}
-                              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer flex-1"
-                            >
-                              {option.label}
-                              {option.price && option.price > 0 && (
-                                <span className="ml-2 text-blue-600 font-bold">+${option.price.toFixed(2)}</span>
-                              )}
-                            </label>
-                          </div>
-                        ));
+                        const selectedModel = modelOptions.find(m => m.id === modelId);
+                        const isChalkModel = selectedModel?.displayName?.toLowerCase().includes('chalk') || 
+                                           selectedModel?.name?.toLowerCase().includes('chalk');
+                        return isChalkModel && (
+                          <span className="text-xs bg-orange-100 text-orange-800 px-2 py-1 rounded-full">
+                            Chalk Model - Limited Options
+                          </span>
+                        );
                       })()}
-                      {(!features.rail_accessory || features.rail_accessory.length === 0) && (
-                        <div className="text-gray-400 text-sm italic">No options selected</div>
-                      )}
-                    </div>
+                    </Label>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button variant="outline" role="combobox" className="w-full justify-between">
+                          {(() => {
+                            const selectedCount = (features.rail_accessory || []).length;
+                            if (selectedCount === 0) return "Select rails...";
+                            if (selectedCount === 1) return "1 rail selected";
+                            return `${selectedCount} rails selected`;
+                          })()}
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-full p-0" align="start">
+                        <Command>
+                          <CommandInput placeholder="Search rails..." />
+                          <CommandEmpty>No rails found.</CommandEmpty>
+                          <CommandGroup>
+                            <CommandList className="max-h-48 overflow-y-auto">
+                              {(() => {
+                                const railsFeature = featureDefs.find(f => f.id === 'rail_accessory');
+
+                                if (!railsFeature || !railsFeature.options) {
+                                  return (
+                                    <div className="text-gray-500 text-sm p-3">
+                                      No Rails options available
+                                    </div>
+                                  );
+                                }
+
+                                // Check if selected model contains "Chalk" in the name
+                                const selectedModel = modelOptions.find(m => m.id === modelId);
+                                const isChalkModel = selectedModel?.displayName?.toLowerCase().includes('chalk') || 
+                                                   selectedModel?.name?.toLowerCase().includes('chalk');
+                                
+                                // Define limited Rails options for Chalk models (based on actual database values)
+                                const chalkRailsOptions = ['arca_4', 'pic_rail', 'pic_intgrated_stud'];
+                                
+                                // Filter options based on model type
+                                let availableOptions = railsFeature.options.filter(option => option.value && option.value.trim() !== '');
+                                
+                                if (isChalkModel) {
+                                  console.log('🎯 Chalk model detected:', selectedModel?.displayName);
+                                  console.log('🎯 Original Rails options:', availableOptions.map(o => o.label));
+                                  
+                                  availableOptions = availableOptions.filter(option => 
+                                    chalkRailsOptions.includes(option.value) ||
+                                    option.label?.toLowerCase().includes('4" arca rail') ||
+                                    option.label?.toLowerCase().includes('ag pic') ||
+                                    option.label?.toLowerCase().includes('ag pic w/int stud')
+                                  );
+                                  
+                                  console.log('🎯 Filtered Rails options for Chalk:', availableOptions.map(o => o.label));
+                                }
+                                
+                                return availableOptions.map((option) => {
+                                  const isChecked = Array.isArray(features.rail_accessory) ? features.rail_accessory.includes(option.value) : false;
+                                  
+                                  return (
+                                    <CommandItem
+                                      key={option.value}
+                                      onSelect={() => {
+                                        const currentRails = Array.isArray(features.rail_accessory) ? features.rail_accessory : [];
+                                        if (isChecked) {
+                                          setFeatures(prev => ({ ...prev, rail_accessory: currentRails.filter((item: string) => item !== option.value) }));
+                                        } else {
+                                          setFeatures(prev => ({ ...prev, rail_accessory: [...currentRails, option.value] }));
+                                        }
+                                      }}
+                                      className="cursor-pointer"
+                                    >
+                                      <div className="flex items-center space-x-2 w-full">
+                                        <Checkbox
+                                          checked={isChecked}
+                                          onChange={() => {}} // Handled by onSelect
+                                          className="pointer-events-none"
+                                        />
+                                        <div className="flex-1">
+                                          <div className="text-sm font-medium">
+                                            {option.label}
+                                            {option.price && option.price > 0 && (
+                                              <span className="ml-2 text-blue-600 font-bold">+${option.price.toFixed(2)}</span>
+                                            )}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </CommandItem>
+                                  );
+                                });
+                              })()}
+                            </CommandList>
+                          </CommandGroup>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                    {/* Display selected rails as badges */}
+                    {features.rail_accessory && Array.isArray(features.rail_accessory) && features.rail_accessory.length > 0 && (
+                      <div className="mt-2 flex flex-wrap gap-1">
+                        {features.rail_accessory.map((optionValue: string) => {
+                          const railsFeature = featureDefs.find(f => f.id === 'rail_accessory');
+                          const option = railsFeature?.options?.find(o => o.value === optionValue);
+                          
+                          return (
+                            <Badge 
+                              key={optionValue}
+                              variant="secondary" 
+                              className="text-xs px-2 py-1"
+                            >
+                              {option?.label}
+                            </Badge>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
 
                   {/* Swivel Studs */}
@@ -1741,6 +2863,21 @@ export default function OrderEntry() {
                 )}
               </div>
 
+              {/* Order Attachments */}
+              {orderId && (
+                <div className="mt-6">
+                  <Accordion type="single" collapsible className="w-full">
+                    <AccordionItem value="attachments">
+                      <AccordionTrigger className="text-left">
+                        <span className="font-medium">Order Attachments</span>
+                      </AccordionTrigger>
+                      <AccordionContent>
+                        <OrderAttachments orderId={orderId} />
+                      </AccordionContent>
+                    </AccordionItem>
+                  </Accordion>
+                </div>
+              )}
 
               </form>
             </CardContent>
@@ -1848,7 +2985,14 @@ export default function OrderEntry() {
                     <span className="text-blue-600 font-bold">${features.bottom_metal ? (() => {
                       const feature = featureDefs.find(f => f.id === 'bottom_metal');
                       const option = feature?.options?.find(opt => opt.value === features.bottom_metal);
-                      return (option?.price || 0).toFixed(2);
+                      let displayPrice = option?.price || 0;
+                      
+                      // Special pricing: SepFG10 or SepCF25 seasonal sale + AG bottom metal = $100 instead of $149
+                      if ((discountCode === 'short_term_3' || discountCode === 'short_term_1') && features.bottom_metal.includes('ag_') && option?.price === 149) {
+                        displayPrice = 100;
+                      }
+                      
+                      return displayPrice.toFixed(2);
                     })() : '0.00'}</span>
                   </div>
                 </div>
@@ -1936,11 +3080,11 @@ export default function OrderEntry() {
                           console.log('🔧 Rails feature found but no options:', feature);
                           return currentRails.join(', ');
                         }
-                        const labels = currentRails.map((optionValue: string) => {
+                        const labels = Array.isArray(currentRails) ? currentRails.map((optionValue: string) => {
                           const option = feature.options!.find(opt => opt.value === optionValue);
                           console.log('🔧 Rails option lookup:', optionValue, '→', option?.label);
                           return option?.label || optionValue;
-                        });
+                        }) : [];
                         return labels.join(', ');
                       }
                       return 'Not selected';
@@ -1951,10 +3095,10 @@ export default function OrderEntry() {
                       if (currentRails && currentRails.length > 0) {
                         const feature = featureDefs.find(f => f.id === 'rail_accessory');
                         if (!feature?.options) return '0.00';
-                        const totalPrice = currentRails.reduce((sum: number, optionValue: string) => {
+                        const totalPrice = Array.isArray(currentRails) ? currentRails.reduce((sum: number, optionValue: string) => {
                           const option = feature.options!.find(opt => opt.value === optionValue);
                           return sum + (option?.price || 0);
-                        }, 0);
+                        }, 0) : 0;
                         return totalPrice.toFixed(2);
                       }
                       return '0.00';
@@ -2014,7 +3158,10 @@ export default function OrderEntry() {
                       if (!feature?.options) return features.other_options.join(', ');
                       const labels = features.other_options.map((optionValue: string) => {
                         const option = feature.options!.find(opt => opt.value === optionValue);
-                        return option?.label || optionValue;
+                        const quantity = otherOptionsQuantities[optionValue] || 1;
+                        const baseLabel = option?.label || optionValue;
+                        const showQuantity = !option?.label?.toLowerCase().includes('no');
+                        return showQuantity && quantity > 1 ? `${baseLabel} (${quantity})` : baseLabel;
                       });
                       return labels.join(', ');
                     })() : 'Not selected'}</span>
@@ -2023,7 +3170,8 @@ export default function OrderEntry() {
                       if (!feature?.options) return '0.00';
                       const totalPrice = features.other_options.reduce((sum: number, optionValue: string) => {
                         const option = feature.options!.find(opt => opt.value === optionValue);
-                        return sum + (option?.price || 0);
+                        const quantity = otherOptionsQuantities[optionValue] || 1;
+                        return sum + ((option?.price || 0) * quantity);
                       }, 0);
                       return totalPrice.toFixed(2);
                     })() : '0.00'}</span>
@@ -2292,14 +3440,28 @@ export default function OrderEntry() {
                 </div>
               )}
 
+              {/* Verified Checkbox */}
+              <div className="flex items-center space-x-2 pt-4 pb-2">
+                <input
+                  type="checkbox"
+                  id="verified-checkbox"
+                  checked={isVerified}
+                  onChange={(e) => setIsVerified(e.target.checked)}
+                  className="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 rounded"
+                />
+                <label htmlFor="verified-checkbox" className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                  Verified against previous ERP
+                </label>
+              </div>
+
               {/* Action Buttons */}
-              <div className="space-y-2 pt-4">
+              <div className="space-y-2">
                 <Button
                   type="button"
                   className="w-full"
                   variant="outline"
                   disabled={isSubmitting}
-                  onClick={() => handleSubmit()}
+                  onClick={() => handleSubmit(undefined, true)}
                 >
                   {isSubmitting ? "Saving..." : "Save as Draft"}
                 </Button>
@@ -2308,11 +3470,12 @@ export default function OrderEntry() {
                   className="w-full"
                   variant="default"
                   disabled={isSubmitting}
-                  onClick={() => handleSubmit()}
+                  onClick={() => handleSubmit(undefined, false)}
                 >
                   {isSubmitting ? "Processing..." : (isEditMode ? "Update Order" : "Create Order")}
                 </Button>
               </div>
+
 
             </CardContent>
           </Card>

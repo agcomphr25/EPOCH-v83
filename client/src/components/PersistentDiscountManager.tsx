@@ -154,6 +154,9 @@ export default function PersistentDiscountManager() {
   };
 
   const getCustomerTypeName = (customerTypeId: number) => {
+    if (!Array.isArray(customerTypes)) {
+      return 'Loading...';
+    }
     const customerType = customerTypes.find((ct: CustomerType) => ct.id === customerTypeId);
     return customerType?.name || 'Unknown';
   };

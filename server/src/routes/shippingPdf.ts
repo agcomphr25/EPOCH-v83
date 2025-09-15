@@ -874,7 +874,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     }
     
     const shippingForPayment = order.shipping || 0;
-    let orderTotal = basePriceForPayment + featuresCostForPayment + shippingForPayment;
+    const orderTotalBeforeDiscount = basePriceForPayment + featuresCostForPayment + shippingForPayment;
     
     // Apply discount calculations (same logic as Order Entry system)
     let discountAmount = 0;
@@ -896,13 +896,13 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
         
         if (discount) {
           if (discount.discountType === 'percent') {
-            discountAmount = orderTotal * (discount.discountValue / 100);
+            const percentDiscount = orderTotalBeforeDiscount * (discount.discountValue / 100);
+            discountAmount += percentDiscount;
             discountDescription = `${discount.name} (${discount.discountValue}%)`;
           } else {
-            discountAmount = discount.discountValue;
+            discountAmount += discount.discountValue;
             discountDescription = `${discount.name} ($${discount.discountValue})`;
           }
-          orderTotal -= discountAmount;
         }
       } catch (error) {
         console.error('Error applying persistent discount to PDF:', error);
@@ -913,18 +913,19 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     if ((order as any).showCustomDiscount && (order as any).customDiscountValue) {
       const customDiscountValue = Number((order as any).customDiscountValue);
       if (!isNaN(customDiscountValue)) {
-        let customDiscountAmount = 0;
         if ((order as any).customDiscountType === 'percent') {
-          customDiscountAmount = orderTotal * (customDiscountValue / 100);
+          const customPercentDiscount = orderTotalBeforeDiscount * (customDiscountValue / 100);
+          discountAmount += customPercentDiscount;
           discountDescription += (discountDescription ? ' + ' : '') + `Custom Discount (${customDiscountValue}%)`;
         } else {
-          customDiscountAmount = customDiscountValue;
+          discountAmount += customDiscountValue;
           discountDescription += (discountDescription ? ' + ' : '') + `Custom Discount ($${customDiscountValue})`;
         }
-        discountAmount += customDiscountAmount;
-        orderTotal -= customDiscountAmount;
       }
     }
+    
+    // Calculate final order total with discounts applied
+    const orderTotal = orderTotalBeforeDiscount - discountAmount;
     
     // Determine if fully paid (same logic as backend calculation)
     const isFullyPaid = order.paymentAmount !== null ? 

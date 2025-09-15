@@ -81,6 +81,7 @@ import {
   orderAttachments,
 
 } from "./schema";
+import { allOrders } from "../schema";
 import { db } from "./db";
 import { eq, desc, and, or, ilike, isNull, sql, ne, like, lt, gt, gte, lte, getTableColumns } from "drizzle-orm";
 import { nanoid } from "nanoid";
@@ -1025,7 +1026,7 @@ export class DatabaseStorage implements IStorage {
 
   async getAllOrders(): Promise<Order[]> {
     // Get all orders from the all_orders table (complete historical dataset)
-    const ordersData = await db.select().from(orders).orderBy(desc(orders.updatedAt));
+    const ordersData = await db.select().from(allOrders).orderBy(desc(allOrders.updatedAt));
     console.log(`[DEBUG] getAllOrders fetched ${ordersData.length} orders from all_orders table`);
     
     // Get all customers to create a lookup map

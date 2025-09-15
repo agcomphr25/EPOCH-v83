@@ -876,56 +876,69 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     const shippingForPayment = order.shipping || 0;
     const orderTotalBeforeDiscount = basePriceForPayment + featuresCostForPayment + shippingForPayment;
     
-    // Apply discount calculations (same logic as Order Entry system)
+    // Apply discount calculations (same logic as Order Entry system) with safe math
     let discountAmount = 0;
     let discountDescription = '';
     
-    // Apply persistent discount if present
-    if ((order as any).discountCode && (order as any).discountCode !== 'none') {
-      try {
-        const { storage } = await import('../../storage');
-        const persistentDiscounts = await storage.getAllPersistentDiscounts();
-        
-        let discount = null;
-        if ((order as any).discountCode.startsWith('persistent_')) {
-          const discountId = parseInt((order as any).discountCode.replace('persistent_', ''));
-          discount = persistentDiscounts.find((d: any) => d.id === discountId);
-        } else {
-          discount = persistentDiscounts.find((d: any) => d.name === (order as any).discountCode);
+    // Safely apply discounts only if we have valid numbers
+    if (!isNaN(orderTotalBeforeDiscount) && orderTotalBeforeDiscount > 0) {
+      // Apply persistent discount if present
+      if ((order as any).discountCode && (order as any).discountCode !== 'none') {
+        try {
+          const { storage } = await import('../../storage');
+          const persistentDiscounts = await storage.getAllPersistentDiscounts();
+          
+          if (persistentDiscounts && Array.isArray(persistentDiscounts)) {
+            let discount = null;
+            if ((order as any).discountCode.startsWith('persistent_')) {
+              const discountId = parseInt((order as any).discountCode.replace('persistent_', ''));
+              if (!isNaN(discountId)) {
+                discount = persistentDiscounts.find((d: any) => d && d.id === discountId);
+              }
+            } else {
+              discount = persistentDiscounts.find((d: any) => d && d.name === (order as any).discountCode);
+            }
+            
+            if (discount && discount.discountValue && !isNaN(discount.discountValue)) {
+              if (discount.discountType === 'percent') {
+                const percentDiscount = orderTotalBeforeDiscount * (discount.discountValue / 100);
+                if (!isNaN(percentDiscount)) {
+                  discountAmount += percentDiscount;
+                  discountDescription = `${discount.name} (${discount.discountValue}%)`;
+                }
+              } else {
+                discountAmount += discount.discountValue;
+                discountDescription = `${discount.name} ($${discount.discountValue})`;
+              }
+            }
+          }
+        } catch (error) {
+          console.error('Error applying persistent discount to PDF:', error);
+          // Continue without discount on error
         }
-        
-        if (discount) {
-          if (discount.discountType === 'percent') {
-            const percentDiscount = orderTotalBeforeDiscount * (discount.discountValue / 100);
-            discountAmount += percentDiscount;
-            discountDescription = `${discount.name} (${discount.discountValue}%)`;
+      }
+      
+      // Apply custom discount if present
+      if ((order as any).showCustomDiscount && (order as any).customDiscountValue) {
+        const customDiscountValue = Number((order as any).customDiscountValue);
+        if (!isNaN(customDiscountValue) && customDiscountValue > 0) {
+          if ((order as any).customDiscountType === 'percent') {
+            const customPercentDiscount = orderTotalBeforeDiscount * (customDiscountValue / 100);
+            if (!isNaN(customPercentDiscount)) {
+              discountAmount += customPercentDiscount;
+              discountDescription += (discountDescription ? ' + ' : '') + `Custom Discount (${customDiscountValue}%)`;
+            }
           } else {
-            discountAmount += discount.discountValue;
-            discountDescription = `${discount.name} ($${discount.discountValue})`;
+            discountAmount += customDiscountValue;
+            discountDescription += (discountDescription ? ' + ' : '') + `Custom Discount ($${customDiscountValue})`;
           }
         }
-      } catch (error) {
-        console.error('Error applying persistent discount to PDF:', error);
       }
     }
     
-    // Apply custom discount if present
-    if ((order as any).showCustomDiscount && (order as any).customDiscountValue) {
-      const customDiscountValue = Number((order as any).customDiscountValue);
-      if (!isNaN(customDiscountValue)) {
-        if ((order as any).customDiscountType === 'percent') {
-          const customPercentDiscount = orderTotalBeforeDiscount * (customDiscountValue / 100);
-          discountAmount += customPercentDiscount;
-          discountDescription += (discountDescription ? ' + ' : '') + `Custom Discount (${customDiscountValue}%)`;
-        } else {
-          discountAmount += customDiscountValue;
-          discountDescription += (discountDescription ? ' + ' : '') + `Custom Discount ($${customDiscountValue})`;
-        }
-      }
-    }
-    
-    // Calculate final order total with discounts applied
-    const orderTotal = orderTotalBeforeDiscount - discountAmount;
+    // Calculate final order total with discounts applied (ensure no NaN)
+    const finalDiscount = isNaN(discountAmount) ? 0 : discountAmount;
+    const orderTotal = orderTotalBeforeDiscount - finalDiscount;
     
     // Determine if fully paid (same logic as backend calculation)
     const isFullyPaid = order.paymentAmount !== null ? 

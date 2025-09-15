@@ -13,7 +13,7 @@ UI Performance: Department progression buttons use cache-first approach with dis
 Default shipping charge: Should be 36.95 for new orders.
 Critical requirement: All completed functionality must be hard-coded to prevent loss of features and data.
 Shipping Label System: Successfully converted from problematic modal to dedicated page approach with enhanced customer data loading and UPS API integration (August 21, 2025).
-Authentication: Enabled for deployed sites (.replit.app/.repl.co domains and production mode) with user-based login credentials. Development environment bypasses authentication for easier testing.
+Authentication: Properly configured with environment-based detection - localhost/replit.dev bypasses auth for development, while .repl.co/.replit.app domains require authentication and use production database. Fixed September 15, 2025: Resolved forced development mode issue that was causing deployed sites to use development database instead of production data.
 Navigation enhancement: STACITEST Dashboard includes 5 color-coded navigation cards for quick access to core functions.
 
 ## System Architecture

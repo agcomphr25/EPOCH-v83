@@ -534,7 +534,23 @@ export default function BarcodeQueuePage() {
                     {orders.map((order: any) => {
                       const isSelected = selectedOrders.has(order.orderId);
                       const isOverdue = isAfter(new Date(), new Date(order.dueDate));
-                      const actionLength = order.features?.action_length || 'unknown';
+                      
+                      // Debug features object for EI204
+                      if (order.orderId === 'EI204') {
+                        console.log('🔍 EI204 FEATURES DEBUG:', {
+                          orderId: order.orderId,
+                          features: order.features,
+                          featuresType: typeof order.features,
+                          featuresKeys: order.features ? Object.keys(order.features) : 'null',
+                          actionLengthValue: order.features?.action_length,
+                          shortActionValue: order.features?.short_action,
+                          allOrderKeys: Object.keys(order)
+                        });
+                      }
+                      
+                      const actionLength = order.features?.action_length || 
+                                           order.features?.short_action || 
+                                           'unknown';
                       // Determine material type from stock model ID
                       const materialType = order.modelId?.startsWith('cf_') ? 'Carbon Fiber' : 
                                          order.modelId?.startsWith('fg_') ? 'Fiberglass' : 

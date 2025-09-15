@@ -15,7 +15,7 @@ export default function MRPCalculationCard() {
   // Run MRP calculation
   const runMrpMutation = useMutation({
     mutationFn: async (data: { scope: string; scopeId?: string }) => {
-      return await apiRequest('/api/mrp/calculate', {
+      return await apiRequest('/api/enhanced/mrp/calculate', {
         method: 'POST',
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },
@@ -23,8 +23,8 @@ export default function MRPCalculationCard() {
     },
     onSuccess: (result) => {
       toast.success(`MRP calculated: ${result.requirementsGenerated} requirements, ${result.shortagesIdentified} shortages`);
-      queryClient.invalidateQueries({ queryKey: ['/api/mrp/requirements'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/mrp/shortages'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/enhanced/mrp/requirements'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/enhanced/mrp/shortages'] });
     },
     onError: (error: any) => {
       toast.error(`MRP calculation failed: ${error.message}`);
@@ -33,8 +33,8 @@ export default function MRPCalculationCard() {
 
   // Get MRP history
   const { data: history = [] } = useQuery({
-    queryKey: ['/api/mrp/calculation-history'],
-    queryFn: () => apiRequest('/api/mrp/calculation-history?limit=5')
+    queryKey: ['/api/enhanced/mrp/calculation-history'],
+    queryFn: () => apiRequest('/api/enhanced/mrp/calculation-history?limit=5')
   });
 
   const handleRunMRP = () => {

@@ -212,7 +212,7 @@ export default function InventoryItemsCard() {
 
   // Create mutation
   const createMutation = useMutation({
-    mutationFn: (data: any) => apiRequest('/api/inventory', {
+    mutationFn: (data: any) => apiRequest('/api/enhanced/inventory/items', {
       method: 'POST',
       body: data
     }),
@@ -227,7 +227,7 @@ export default function InventoryItemsCard() {
 
   // Update mutation
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: number; data: any }) => apiRequest(`/api/inventory/${id}`, {
+    mutationFn: ({ id, data }: { id: number; data: any }) => apiRequest(`/api/enhanced/inventory/items/${id}`, {
       method: 'PUT',
       body: data
     }),
@@ -243,7 +243,7 @@ export default function InventoryItemsCard() {
 
   // Delete mutation
   const deleteMutation = useMutation({
-    mutationFn: (id: number) => apiRequest(`/api/inventory/${id}`, {
+    mutationFn: (id: number) => apiRequest(`/api/enhanced/inventory/items/${id}`, {
       method: 'DELETE'
     }),
     onSuccess: () => {
@@ -256,7 +256,7 @@ export default function InventoryItemsCard() {
   // Export CSV functionality
   const handleExportCSV = async () => {
     try {
-      const response = await fetch('/api/inventory/export/csv');
+      const response = await fetch('/api/enhanced/inventory/export/csv');
       if (!response.ok) {
         throw new Error('Failed to export CSV');
       }
@@ -295,7 +295,7 @@ export default function InventoryItemsCard() {
     try {
       const csvData = await importFile.text();
       
-      const response = await apiRequest('/api/inventory/import/csv', {
+      const response = await apiRequest('/api/enhanced/inventory/import/csv', {
         method: 'POST',
         body: { csvData }
       });

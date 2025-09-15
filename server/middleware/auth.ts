@@ -22,6 +22,12 @@ declare global {
  * Check if we're running in deployment environment
  */
 function isDeploymentEnvironment(req: Request): boolean {
+  // Force development mode if environment variable is set
+  if (process.env.FORCE_DEV_MODE === 'true') {
+    console.log('🔧 BACKEND FORCED DEV MODE: Authentication disabled via FORCE_DEV_MODE');
+    return false;
+  }
+  
   const host = req.get('host') || '';
   
   // Check for production deployment domains

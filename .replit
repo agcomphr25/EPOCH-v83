@@ -57,11 +57,11 @@ localPort = 35131
 externalPort = 3002
 
 [[ports]]
-localPort = 39795
-externalPort = 3001
+localPort = 36101
+externalPort = 3003
 
 [[ports]]
-localPort = 44433
-externalPort = 3003
+localPort = 39795
+externalPort = 3001
 
 [agent]

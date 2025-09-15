@@ -60,7 +60,7 @@ export default function InventoryBalancesCard() {
 
   // Fetch inventory balances
   const { data: balances = [], isLoading, refetch } = useQuery<InventoryBalance[]>({
-    queryKey: ['/api/inventory/balances', { 
+    queryKey: ['/api/enhanced/inventory/balances', { 
       partId: searchQuery, 
       locationId: selectedLocationFilter, 
       lowStock: showLowStockOnly 
@@ -71,7 +71,7 @@ export default function InventoryBalancesCard() {
       if (selectedLocationFilter) params.append('locationId', selectedLocationFilter);
       if (showLowStockOnly) params.append('lowStock', 'true');
       
-      const response = await apiRequest(`/api/inventory/balances?${params.toString()}`);
+      const response = await apiRequest(`/api/enhanced/inventory/balances?${params.toString()}`);
       return response;
     }
   });
@@ -83,7 +83,7 @@ export default function InventoryBalancesCard() {
       locationId: string; 
       data: UpdateBalanceData 
     }) => {
-      return await apiRequest(`/api/inventory/balances/${partId}/${locationId}`, {
+      return await apiRequest(`/api/enhanced/inventory/balances/${partId}/${locationId}`, {
         method: 'PUT',
         body: JSON.stringify(data),
         headers: {
@@ -92,7 +92,7 @@ export default function InventoryBalancesCard() {
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/inventory/balances'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/enhanced/inventory/balances'] });
       toast.success('Inventory balance updated successfully');
       setIsEditDialogOpen(false);
       setEditingBalance(null);

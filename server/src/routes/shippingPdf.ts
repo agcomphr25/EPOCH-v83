@@ -874,7 +874,57 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     }
     
     const shippingForPayment = order.shipping || 0;
-    const orderTotal = basePriceForPayment + featuresCostForPayment + shippingForPayment;
+    let orderTotal = basePriceForPayment + featuresCostForPayment + shippingForPayment;
+    
+    // Apply discount calculations (same logic as Order Entry system)
+    let discountAmount = 0;
+    let discountDescription = '';
+    
+    // Apply persistent discount if present
+    if ((order as any).discountCode && (order as any).discountCode !== 'none') {
+      try {
+        const { storage } = await import('../../storage');
+        const persistentDiscounts = await storage.getAllPersistentDiscounts();
+        
+        let discount = null;
+        if ((order as any).discountCode.startsWith('persistent_')) {
+          const discountId = parseInt((order as any).discountCode.replace('persistent_', ''));
+          discount = persistentDiscounts.find((d: any) => d.id === discountId);
+        } else {
+          discount = persistentDiscounts.find((d: any) => d.name === (order as any).discountCode);
+        }
+        
+        if (discount) {
+          if (discount.discountType === 'percent') {
+            discountAmount = orderTotal * (discount.discountValue / 100);
+            discountDescription = `${discount.name} (${discount.discountValue}%)`;
+          } else {
+            discountAmount = discount.discountValue;
+            discountDescription = `${discount.name} ($${discount.discountValue})`;
+          }
+          orderTotal -= discountAmount;
+        }
+      } catch (error) {
+        console.error('Error applying persistent discount to PDF:', error);
+      }
+    }
+    
+    // Apply custom discount if present
+    if ((order as any).showCustomDiscount && (order as any).customDiscountValue) {
+      const customDiscountValue = Number((order as any).customDiscountValue);
+      if (!isNaN(customDiscountValue)) {
+        let customDiscountAmount = 0;
+        if ((order as any).customDiscountType === 'percent') {
+          customDiscountAmount = orderTotal * (customDiscountValue / 100);
+          discountDescription += (discountDescription ? ' + ' : '') + `Custom Discount (${customDiscountValue}%)`;
+        } else {
+          customDiscountAmount = customDiscountValue;
+          discountDescription += (discountDescription ? ' + ' : '') + `Custom Discount ($${customDiscountValue})`;
+        }
+        discountAmount += customDiscountAmount;
+        orderTotal -= customDiscountAmount;
+      }
+    }
     
     // Determine if fully paid (same logic as backend calculation)
     const isFullyPaid = order.paymentAmount !== null ? 
@@ -1939,6 +1989,39 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
 
     summaryLineY -= 25;
 
+    // Show discount information if any discounts were applied
+    if (discountAmount > 0) {
+      page.drawText('Discount:', {
+        x: margin + 10,
+        y: summaryLineY,
+        size: 10,
+        font: boldFont,
+        color: rgb(0, 0.6, 0),
+      });
+
+      page.drawText(`-$${discountAmount.toFixed(2)}`, {
+        x: margin + printableWidth - 80,
+        y: summaryLineY,
+        size: 10,
+        font: boldFont,
+        color: rgb(0, 0.6, 0),
+      });
+
+      // Add discount description on next line if we have one
+      if (discountDescription) {
+        summaryLineY -= 15;
+        page.drawText(`(${discountDescription})`, {
+          x: margin + 30,
+          y: summaryLineY,
+          size: 8,
+          font: font,
+          color: rgb(0.4, 0.4, 0.4),
+        });
+      }
+
+      summaryLineY -= 25;
+    }
+
     // Shipping
     if (order.shipping && order.shipping > 0) {
       page.drawText('Shipping:', {
@@ -1968,8 +2051,8 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
 
     summaryLineY -= 25;
 
-    // Total
-    const finalTotal = calculatedSubtotal + (order.shipping || 0);
+    // Total - Use the discounted orderTotal instead of calculatedSubtotal
+    const finalTotal = orderTotal; // This already includes all discounts applied above
     page.drawText('TOTAL:', {
       x: margin + 10,
       y: summaryLineY,

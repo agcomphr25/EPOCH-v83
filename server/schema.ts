@@ -505,6 +505,80 @@ export const inventoryItems = pgTable("inventory_items", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// ENHANCED INVENTORY SYSTEM - Completely Separate Tables
+// =====================================================
+
+export const enhancedInventoryItems = pgTable("enhanced_inventory_items", {
+  id: serial("id").primaryKey(),
+  agPartNumber: text("ag_part_number").notNull().unique(), // AG Part#
+  name: text("name").notNull(), // Name
+  source: text("source"), // Source
+  supplierPartNumber: text("supplier_part_number"), // Supplier Part #
+  costPer: real("cost_per"), // Cost per
+  orderDate: date("order_date"), // Order Date
+  department: text("department"), // Dept.
+  secondarySource: text("secondary_source"), // Secondary Source
+  notes: text("notes"), // Notes
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const enhancedInventoryBalances = pgTable('enhanced_inventory_balances', {
+  id: serial('id').primaryKey(),
+  partId: text('part_id').notNull().references(() => enhancedInventoryItems.agPartNumber),
+  locationId: text('location_id').notNull().default('MAIN'), // MAIN, VENDOR_{vendor_id}, etc.
+  
+  // Quantity tracking
+  onHandQty: real('on_hand_qty').notNull().default(0),
+  committedQty: real('committed_qty').notNull().default(0), // Committed to customer orders
+  allocatedQty: real('allocated_qty').notNull().default(0), // Allocated to production
+  availableQty: real('available_qty').notNull().default(0), // Available = OnHand - Committed - Allocated
+  
+  // Cost tracking
+  unitCost: real('unit_cost').notNull().default(0),
+  totalValue: real('total_value').notNull().default(0),
+  
+  // Safety stock and ordering
+  safetyStock: real('safety_stock').default(0),
+  minOrderQty: real('min_order_qty').default(1),
+  leadTimeDays: integer('lead_time_days').default(14),
+  
+  // Tracking
+  lastTransactionAt: timestamp('last_transaction_at'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+export const enhancedInventoryTransactions = pgTable('enhanced_inventory_transactions', {
+  id: serial('id').primaryKey(),
+  transactionId: text('transaction_id').notNull().unique(), // Auto-generated unique ID
+  
+  // Part and location
+  partId: text('part_id').notNull().references(() => enhancedInventoryItems.agPartNumber),
+  locationId: text('location_id').notNull().default('MAIN'),
+  
+  // Transaction details
+  transactionType: text('transaction_type').notNull(), // 'RECEIPT', 'ISSUE', 'CONSUMPTION', 'ADJUSTMENT', 'SCRAP', etc.
+  quantity: real('quantity').notNull(),
+  unitCost: real('unit_cost').notNull().default(0),
+  totalCost: real('total_cost').notNull().default(0),
+  
+  // Reference information
+  orderId: text('order_id'), // Customer order reference
+  bomId: text('bom_id'), // BOM reference for consumption tracking
+  employeeId: text('employee_id'), // Who performed the transaction
+  
+  // Additional information
+  notes: text('notes'),
+  referenceNumber: text('reference_number'), // PO, RMA, etc.
+  
+  // Tracking
+  transactionDate: timestamp('transaction_date').notNull().defaultNow(),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
 export const inventoryScans = pgTable("inventory_scans", {
   id: serial("id").primaryKey(),
   itemCode: text("item_code").notNull(),

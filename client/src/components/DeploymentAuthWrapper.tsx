@@ -7,6 +7,13 @@ interface DeploymentAuthWrapperProps {
 }
 
 function isDeploymentEnvironment(): boolean {
+  // Force development mode if environment variable is set
+  const forceDevMode = import.meta.env.VITE_FORCE_DEV_MODE === 'true';
+  if (forceDevMode) {
+    console.log('🔧 FORCED DEV MODE: Authentication disabled via VITE_FORCE_DEV_MODE');
+    return false;
+  }
+  
   // Multiple methods to detect deployment environment
   const hostname = window.location.hostname;
   const viteDeployment = import.meta.env.VITE_REPLIT_DEPLOYMENT === '1';

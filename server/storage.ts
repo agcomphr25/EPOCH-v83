@@ -1142,7 +1142,13 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createInventoryItem(data: InsertInventoryItem): Promise<InventoryItem> {
-    const [item] = await db.insert(inventoryItems).values([data]).returning();
+    // Convert Date objects to ISO strings for date fields
+    const insertData: any = { ...data };
+    if (insertData.orderDate instanceof Date) {
+      insertData.orderDate = insertData.orderDate.toISOString();
+    }
+    
+    const [item] = await db.insert(inventoryItems).values([insertData]).returning();
     return item;
   }
 
@@ -1207,7 +1213,16 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createPartsRequest(data: InsertPartsRequest): Promise<PartsRequest> {
-    const [request] = await db.insert(partsRequests).values([data]).returning();
+    // Convert Date objects to ISO strings for date fields
+    const insertData: any = { ...data };
+    if (insertData.expectedDelivery instanceof Date) {
+      insertData.expectedDelivery = insertData.expectedDelivery.toISOString();
+    }
+    if (insertData.actualDelivery instanceof Date) {
+      insertData.actualDelivery = insertData.actualDelivery.toISOString();
+    }
+    
+    const [request] = await db.insert(partsRequests).values([insertData]).returning();
     return request;
   }
 
@@ -1261,7 +1276,13 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createEmployee(data: InsertEmployee): Promise<Employee> {
-    const [employee] = await db.insert(employees).values([data]).returning();
+    // Convert Date objects to ISO strings for date fields
+    const insertData: any = { ...data };
+    if (insertData.hireDate instanceof Date) {
+      insertData.hireDate = insertData.hireDate.toISOString();
+    }
+    
+    const [employee] = await db.insert(employees).values([insertData]).returning();
     return employee;
   }
 
@@ -1485,7 +1506,7 @@ export class DatabaseStorage implements IStorage {
     }
     
     const [evaluation] = await db.update(evaluations)
-      .set({ ...updateData, updatedAt: new Date() })
+      .set({ ...updateData, updatedAt: new Date().toISOString() })
       .where(eq(evaluations.id, id))
       .returning();
     return evaluation;
@@ -1499,8 +1520,8 @@ export class DatabaseStorage implements IStorage {
     const [evaluation] = await db.update(evaluations)
       .set({ 
         status: 'SUBMITTED',
-        submittedAt: new Date(),
-        updatedAt: new Date()
+        submittedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
       })
       .where(eq(evaluations.id, id))
       .returning();
@@ -1512,8 +1533,8 @@ export class DatabaseStorage implements IStorage {
       .set({ 
         ...reviewData,
         status: 'REVIEWED',
-        reviewedAt: new Date(),
-        updatedAt: new Date()
+        reviewedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
       })
       .where(eq(evaluations.id, id))
       .returning();

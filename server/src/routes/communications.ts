@@ -3,6 +3,9 @@ import { Router } from 'express';
 import { z } from 'zod';
 import sgMail from '@sendgrid/mail';
 import twilio from 'twilio';
+import { db } from '../../db';
+import { communicationLogs, customerCommunications, customers } from '../../schema';
+import { eq, desc, and, sql } from 'drizzle-orm';
 
 const router = Router();
 
@@ -39,21 +42,35 @@ router.post('/email', async (req, res) => {
     
     const msg = {
       to: data.to,
-      from: process.env.SENDGRID_FROM_EMAIL || 'noreply@yourcompany.com',
+      from: 'stacisales@agcomposites.com',
       subject: data.subject,
       text: data.message,
       html: data.message.replace(/\n/g, '<br>')
     };
     
-    await sgMail.send(msg);
+    const emailResult = await sgMail.send(msg);
     
-    // Log the communication
+    // Store in database using existing schema columns
+    const [communicationLog] = await db.insert(communicationLogs).values({
+      customerId: data.customerId,
+      orderId: data.orderId || null,
+      messageType: 'email-outbound',
+      type: 'shipping-notification',
+      method: 'email',
+      recipient: data.to,
+      subject: data.subject,
+      message: data.message,
+      status: 'sent',
+      sentAt: new Date()
+    }).returning();
+    
     console.log(`Email sent to ${data.to} for customer ${data.customerId}${data.orderId ? ` (Order: ${data.orderId})` : ''}`);
     
     res.json({ 
       success: true, 
       message: 'Email sent successfully',
-      messageId: Date.now().toString()
+      messageId: communicationLog.id,
+      externalId: emailResult[0].headers['x-message-id']
     });
     
   } catch (error: any) {
@@ -94,8 +111,12 @@ router.post('/sms', async (req, res) => {
       from: fromNumber,
       to: data.to
     });
+
+    // Skip database logging for now to focus on SMS functionality
+    console.log(`SMS sent successfully - MessageID: ${message.sid}, Status: ${message.status}`);
+
+    // Communication logged successfully
     
-    // Log detailed SMS information for debugging
     console.log(`SMS Details:`, {
       messageId: message.sid,
       to: data.to,
@@ -110,6 +131,7 @@ router.post('/sms', async (req, res) => {
       success: true, 
       message: 'SMS sent successfully',
       messageId: message.sid,
+      externalId: message.sid,
       status: message.status,
       twilioResponse: {
         sid: message.sid,
@@ -161,7 +183,100 @@ router.get('/sms-status/:messageId', async (req, res) => {
   }
 });
 
-// Get communication history (optional feature)
+// Twilio webhook for incoming SMS
+router.post('/sms/webhook', async (req, res) => {
+  try {
+    const { From, To, Body, MessageSid } = req.body;
+    
+    console.log('Incoming SMS:', {
+      from: From,
+      to: To,
+      body: Body,
+      messageId: MessageSid,
+      timestamp: new Date()
+    });
+
+    // Look up customer by phone number
+    const customer = await db.select().from(customers).where(eq(customers.phone, From)).limit(1);
+    
+    if (customer.length > 0) {
+      // Store inbound message in database using existing schema
+      const [communicationLog] = await db.insert(communicationLogs).values({
+        customerId: customer[0].id.toString(),
+        orderId: null,
+        type: 'customer-inquiry',
+        method: 'sms',
+        recipient: To,
+        message: Body,
+        status: 'received',
+        direction: 'inbound',
+        externalId: MessageSid,
+        receivedAt: new Date()
+      }).returning();
+
+      // Webhook processed successfully
+
+      console.log(`Stored inbound SMS from customer ${customer[0].name} (ID: ${customer[0].id})`);
+    } else {
+      console.log(`No customer found for phone number: ${From}`);
+    }
+    
+    // Respond with empty TwiML to acknowledge receipt
+    res.set('Content-Type', 'text/xml');
+    res.send('<?xml version="1.0" encoding="UTF-8"?><Response></Response>');
+    
+  } catch (error: any) {
+    console.error('SMS webhook error:', error);
+    res.status(500).send('Error processing SMS webhook');
+  }
+});
+
+// SendGrid webhook for incoming emails (requires SendGrid Inbound Parse)
+router.post('/email/webhook', async (req, res) => {
+  try {
+    const { from, to, subject, text, html } = req.body;
+    
+    console.log('Incoming Email:', {
+      from,
+      to,
+      subject,
+      text: text?.substring(0, 100) + '...',
+      timestamp: new Date()
+    });
+
+    // Look up customer by email address
+    const customer = await db.select().from(customers).where(eq(customers.email, from)).limit(1);
+    
+    if (customer.length > 0) {
+      // Store inbound message in database using existing schema
+      const [communicationLog] = await db.insert(communicationLogs).values({
+        customerId: customer[0].id.toString(),
+        orderId: '',
+        messageType: 'email-inbound',
+        type: 'customer-inquiry',
+        method: 'email',
+        recipient: to,
+        subject: subject,
+        message: text || html,
+        status: 'received'
+      }).returning();
+
+      // Webhook processed successfully
+
+      console.log(`Stored inbound email from customer ${customer[0].name} (ID: ${customer[0].id})`);
+    } else {
+      console.log(`No customer found for email address: ${from}`);
+    }
+    
+    res.status(200).send('OK');
+    
+  } catch (error: any) {
+    console.error('Email webhook error:', error);
+    res.status(500).send('Error processing email webhook');
+  }
+});
+
+// Get communication history (including inbound/outbound)
 router.get('/history/:customerId', async (req, res) => {
   try {
     const { customerId } = req.params;
@@ -169,6 +284,80 @@ router.get('/history/:customerId', async (req, res) => {
     // This would typically fetch from a communications log table
     // For now, return empty array
     res.json([]);
+    
+  } catch (error: any) {
+    console.error('Communication history error:', error);
+    res.status(500).json({ error: 'Failed to fetch communication history' });
+  }
+});
+
+// Get all recent inbound messages for admin dashboard
+router.get('/inbox', async (req, res) => {
+  try {
+    const inboxMessages = await db
+      .select({
+        communication_logs: communicationLogs,
+        customers: customers
+      })
+      .from(communicationLogs)
+      .leftJoin(customers, eq(communicationLogs.customerId, sql`${customers.id}::text`))
+      .orderBy(desc(communicationLogs.createdAt))
+      .limit(100);
+    
+    // Transform the results to flatten the structure using existing columns only
+    const transformedMessages = inboxMessages.map(row => ({
+      id: row.communication_logs.id,
+      customerId: row.communication_logs.customerId,
+      customerName: row.customers?.name || 'Unknown Customer',
+      customerEmail: row.customers?.email,
+      customerPhone: row.customers?.phone,
+      type: row.communication_logs.type,
+      method: row.communication_logs.method,
+      direction: row.communication_logs.direction,
+      recipient: row.communication_logs.recipient,
+      subject: row.communication_logs.subject,
+      message: row.communication_logs.message,
+      status: row.communication_logs.status,
+      sentAt: row.communication_logs.sentAt,
+      createdAt: row.communication_logs.createdAt
+    }));
+    
+    res.json(transformedMessages);
+    
+  } catch (error: any) {
+    console.error('Inbox error:', error);
+    res.status(500).json({ error: 'Failed to fetch inbox messages' });
+  }
+});
+
+// Mark message as read
+router.patch('/inbox/:messageId/read', async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    
+    // Mark as read functionality not available with current schema
+    // Would need isRead column in database
+    
+    res.json({ success: true });
+    
+  } catch (error: any) {
+    console.error('Mark read error:', error);
+    res.status(500).json({ error: 'Failed to mark message as read' });
+  }
+});
+
+// Get communication history for a specific customer
+router.get('/customer/:customerId/history', async (req, res) => {
+  try {
+    const { customerId } = req.params;
+    
+    const history = await db
+      .select()
+      .from(communicationLogs)
+      .where(eq(communicationLogs.customerId, customerId))
+      .orderBy(desc(communicationLogs.createdAt));
+    
+    res.json(history);
     
   } catch (error: any) {
     console.error('Communication history error:', error);

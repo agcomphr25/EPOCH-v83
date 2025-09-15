@@ -21,6 +21,29 @@ interface PurchaseOrderItem {
   updatedAt: string;
 }
 
+interface POProduct {
+  id: number;
+  customerName: string;
+  productName: string;
+  productType: string;
+  material: string;
+  handedness: string;
+  stockModel: string;
+  actionLength: string;
+  actionInlet: string;
+  bottomMetal: string;
+  barrelInlet: string;
+  qds: string;
+  swivelStuds: string;
+  paintOptions: string;
+  texture: string;
+  flatTop: boolean;
+  price: number;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 interface PurchaseOrder {
   id: number;
   poNumber: string;
@@ -34,6 +57,7 @@ interface PurchaseOrder {
 export default function PurchaseOrderItemsQueue() {
   const [items, setItems] = useState<PurchaseOrderItem[]>([]);
   const [purchaseOrders, setPurchaseOrders] = useState<Record<number, PurchaseOrder>>({});
+  const [poProducts, setPOProducts] = useState<POProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -57,6 +81,14 @@ export default function PurchaseOrderItemsQueue() {
       }, {});
       setPurchaseOrders(posMap);
 
+      // Fetch PO Products for product type filtering
+      let products: POProduct[] = [];
+      const poProductsResponse = await fetch('/api/po-products');
+      if (poProductsResponse.ok) {
+        products = await poProductsResponse.json();
+        setPOProducts(products);
+      }
+
       // Fetch all purchase order items
       const allItems: PurchaseOrderItem[] = [];
       for (const po of pos) {
@@ -71,7 +103,21 @@ export default function PurchaseOrderItemsQueue() {
         }
       }
 
-      setItems(allItems);
+      // Filter items to only show stock items in the production queue
+      const stockItems = allItems.filter(item => {
+        // Include stock_model items directly
+        if (item.itemType === 'stock_model') {
+          return true;
+        }
+        // Include custom_model items with stock product type
+        if (item.itemType === 'custom_model') {
+          const poProduct = products.find((product: POProduct) => product.id.toString() === item.itemId);
+          return poProduct?.productType === 'stock';
+        }
+        return false;
+      });
+
+      setItems(stockItems);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch data');
     } finally {
@@ -186,12 +232,12 @@ export default function PurchaseOrderItemsQueue() {
       {/* Items Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Purchase Order Items Queue</CardTitle>
+          <CardTitle>P1 PO Production Queue (Stock Items Only)</CardTitle>
         </CardHeader>
         <CardContent>
           {items.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
-              No purchase order items found in the queue.
+              No stock items found in the production queue.
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -227,8 +273,8 @@ export default function PurchaseOrderItemsQueue() {
                           </div>
                         </TableCell>
                         <TableCell>
-                          <Badge className={getItemTypeColor(item.itemType)}>
-                            {item.itemType.replace('_', ' ').toUpperCase()}
+                          <Badge className="bg-blue-100 text-blue-800">
+                            STOCK
                           </Badge>
                         </TableCell>
                         <TableCell>{item.quantity}</TableCell>

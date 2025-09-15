@@ -45,11 +45,14 @@ router.post('/', async (req: Request, res: Response) => {
 // Update existing mold
 router.put('/:moldId', async (req: Request, res: Response) => {
   try {
-    // Ensure updatedAt is properly set
-    const updateData = {
-      ...req.body,
-      updatedAt: new Date()
-    };
+    // Clean the update data to ensure proper timestamp handling
+    const updateData = { ...req.body };
+    
+    // Remove any timestamp fields that might cause issues
+    delete updateData.createdAt;
+    delete updateData.updatedAt;
+    delete updateData.id; // Remove ID to prevent conflicts
+    
     const mold = await storage.updateMold(req.params.moldId, updateData);
     res.json(mold);
   } catch (error) {
@@ -63,9 +66,51 @@ router.delete('/:moldId', async (req: Request, res: Response) => {
   try {
     await storage.deleteMold(req.params.moldId);
     res.json({ success: true });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Mold deletion error:", error);
-    res.status(500).json({ error: "Failed to delete mold" });
+    
+    // Check if it's a foreign key constraint error
+    if (error.code === '23503' && error.constraint === 'layup_schedule_mold_id_fkey') {
+      res.status(400).json({ 
+        error: "Cannot delete mold - it is currently used in the layup schedule. Please clear the schedule first or disable the mold instead.",
+        constraint: "referenced_in_schedule"
+      });
+    } else {
+      res.status(500).json({ error: "Failed to delete mold" });
+    }
+  }
+});
+
+// Add endpoint to check if mold is referenced in schedule
+router.get('/:moldId/references', async (req: Request, res: Response) => {
+  try {
+    const { storage } = await import('../../storage');
+    const schedule = await storage.getAllLayupSchedule();
+    const references = schedule.filter((entry: any) => entry.moldId === req.params.moldId);
+    
+    res.json({
+      isReferenced: references.length > 0,
+      referenceCount: references.length,
+      references: references.map((ref: any) => ({
+        orderId: ref.orderId,
+        scheduledDate: ref.scheduledDate
+      }))
+    });
+  } catch (error) {
+    console.error("Reference check error:", error);
+    res.status(500).json({ error: "Failed to check references" });
+  }
+});
+
+// Add endpoint to clear schedule references for a mold
+router.delete('/:moldId/schedule-references', async (req: Request, res: Response) => {
+  try {
+    const { storage } = await import('../../storage');
+    await storage.clearMoldFromSchedule(req.params.moldId);
+    res.json({ success: true, message: "Cleared all schedule references for this mold" });
+  } catch (error) {
+    console.error("Clear references error:", error);
+    res.status(500).json({ error: "Failed to clear schedule references" });
   }
 });
 

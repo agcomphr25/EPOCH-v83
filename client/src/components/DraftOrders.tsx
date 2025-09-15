@@ -1,11 +1,13 @@
 // React is automatically imported by Vite JSX transformer
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { FileText, Edit, Trash2, Check, Send } from 'lucide-react';
+import { FileText, Edit, Trash2, Check, Send, Search, X } from 'lucide-react';
 import { Link, useLocation } from 'wouter';
 
 interface OrderDraft {
@@ -15,6 +17,7 @@ interface OrderDraft {
   dueDate: string;
   customerId: string | null;
   customerPO: string | null;
+  fbOrderNumber: string | null;
   modelId: string | null;
   handedness: string | null;
   features: Record<string, any> | null;
@@ -30,6 +33,7 @@ export default function DraftOrders() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
+  const [searchQuery, setSearchQuery] = useState('');
 
   const { data: drafts = [], isLoading, error } = useQuery({
     queryKey: ['/api/orders/drafts', 'excludeFinalized'],
@@ -77,6 +81,24 @@ export default function DraftOrders() {
     ).length;
   };
 
+  // Filter drafts based on search query
+  const filteredDrafts = drafts.filter((draft: OrderDraft) => {
+    if (!searchQuery) return true;
+    
+    const searchTerm = searchQuery.toLowerCase();
+    return (
+      draft.orderId.toLowerCase().includes(searchTerm) ||
+      (draft.customerId && draft.customerId.toLowerCase().includes(searchTerm)) ||
+      (draft.customerPO && draft.customerPO.toLowerCase().includes(searchTerm)) ||
+      (draft.fbOrderNumber && draft.fbOrderNumber.toLowerCase().includes(searchTerm)) ||
+      (draft.modelId && draft.modelId.toLowerCase().includes(searchTerm))
+    );
+  });
+
+  const clearSearch = () => {
+    setSearchQuery('');
+  };
+
   if (isLoading) {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -105,26 +127,74 @@ export default function DraftOrders() {
           Draft Orders
         </h1>
         <p className="text-gray-600 mt-2">Manage saved draft orders</p>
+        
+        {/* Search Box */}
+        <div className="mt-6 max-w-md">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+            <Input
+              type="text"
+              placeholder="Search by Order ID, Customer, PO, FB Number, or Model..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10 pr-10"
+            />
+            {searchQuery && (
+              <button
+                onClick={clearSearch}
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+          {searchQuery && (
+            <p className="text-sm text-gray-500 mt-2">
+              Showing {filteredDrafts.length} of {drafts.length} draft orders
+            </p>
+          )}
+        </div>
       </div>
 
-      {drafts.length === 0 ? (
-        <Card>
-          <CardContent className="py-12">
-            <div className="text-center">
-              <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No draft orders found</h3>
-              <p className="text-gray-500 mb-4">
-                Create a new order and save it as a draft to see it here.
-              </p>
-              <Link href="/order-entry">
-                <Button>Create New Order</Button>
-              </Link>
-            </div>
-          </CardContent>
-        </Card>
+      {filteredDrafts.length === 0 ? (
+        searchQuery ? (
+          <Card>
+            <CardContent className="py-12">
+              <div className="text-center">
+                <Search className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-gray-900 mb-2">No matching draft orders found</h3>
+                <p className="text-gray-500 mb-4">
+                  Try adjusting your search terms or{' '}
+                  <button 
+                    onClick={clearSearch}
+                    className="text-primary hover:underline"
+                  >
+                    clear the search
+                  </button>
+                  {' '}to see all draft orders.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        ) : (
+          <Card>
+            <CardContent className="py-12">
+              <div className="text-center">
+                <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-gray-900 mb-2">No draft orders found</h3>
+                <p className="text-gray-500 mb-4">
+                  Create a new order and save it as a draft to see it here.
+                </p>
+                <Link href="/order-entry">
+                  <Button>Create New Order</Button>
+                </Link>
+              </div>
+            </CardContent>
+          </Card>
+        )
       ) : (
         <div className="grid gap-6">
-          {drafts.map((draft: OrderDraft) => (
+          {filteredDrafts.map((draft: OrderDraft) => (
             <Card key={draft.id} className="hover:shadow-lg transition-shadow">
               <CardHeader>
                 <div className="flex items-center justify-between">

@@ -6,6 +6,7 @@ export interface PurchaseOrder {
   poNumber: string;
   customerId: string;
   customerName: string;
+  itemType: 'single' | 'multiple';
   poDate: string;
   expectedDelivery: string;
   status: 'OPEN' | 'CLOSED' | 'CANCELED';
@@ -35,6 +36,7 @@ export interface CreatePurchaseOrderData {
   poNumber: string;
   customerId: string;
   customerName: string;
+  itemType?: 'single' | 'multiple';
   poDate: string;
   expectedDelivery: string;
   status: 'OPEN' | 'CLOSED' | 'CANCELED';
@@ -94,7 +96,7 @@ export async function createPO(data: CreatePurchaseOrderData): Promise<PurchaseO
   console.log('createPO called with data:', data);
   const response = await apiRequest('/api/pos', {
     method: 'POST',
-    body: data
+    body: JSON.stringify(data)
   });
   return response;
 }
@@ -103,7 +105,7 @@ export async function createPO(data: CreatePurchaseOrderData): Promise<PurchaseO
 export async function updatePO(id: number, data: Partial<CreatePurchaseOrderData>): Promise<PurchaseOrder> {
   const response = await apiRequest(`/api/pos/${id}`, {
     method: 'PUT',
-    body: data
+    body: JSON.stringify(data)
   });
   return response;
 }
@@ -125,7 +127,7 @@ export async function fetchPOItems(poId: number): Promise<PurchaseOrderItem[]> {
 export async function createPOItem(poId: number, data: CreatePurchaseOrderItemData): Promise<PurchaseOrderItem> {
   const response = await apiRequest(`/api/pos/${poId}/items`, {
     method: 'POST',
-    body: data
+    body: JSON.stringify(data)
   });
   return response;
 }
@@ -134,7 +136,7 @@ export async function createPOItem(poId: number, data: CreatePurchaseOrderItemDa
 export async function updatePOItem(poId: number, itemId: number, data: Partial<CreatePurchaseOrderItemData>): Promise<PurchaseOrderItem> {
   const response = await apiRequest(`/api/pos/${poId}/items/${itemId}`, {
     method: 'PUT',
-    body: data
+    body: JSON.stringify(data)
   });
   return response;
 }

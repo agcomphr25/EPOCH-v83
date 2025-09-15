@@ -234,21 +234,15 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
       console.log(`   ${index + 1}. ${date.toDateString()} (${dayName})`);
     });
     const allocations: any[] = [];
-<<<<<<< HEAD
     const dailyAllocationCount = new Map<string, number>();
     
     // CRITICAL FIX: Track which specific molds are used each day (one mold per day max)
     const usedMoldsByDay = new Map<string, Set<string>>();
-=======
-    const dailyMoldUsage = new Map<string, number>();
-    const dailyAllocationCount = new Map<string, number>();
->>>>>>> origin/main
 
     // Initialize daily tracking
     workDates.forEach(date => {
       const dateKey = date.toISOString().split('T')[0];
       dailyAllocationCount.set(dateKey, 0);
-<<<<<<< HEAD
       usedMoldsByDay.set(dateKey, new Set<string>());
     });
 
@@ -256,25 +250,12 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
     console.log('🔍 CHECKING MOLD COMPATIBILITY - Will skip incompatible orders');
     const invalidOrders: any[] = [];
     const validOrders: any[] = [];
-=======
-      
-      activeMolds.forEach((mold: any) => {
-        const moldKey = `${dateKey}-${mold.mold_id}`;
-        dailyMoldUsage.set(moldKey, 0);
-      });
-    });
-
-    // CRITICAL VALIDATION: Verify all orders have compatible molds - NO EXCEPTIONS
-    console.log('🚨 PERFORMING STRICT MOLD VALIDATION - NO EXCEPTIONS ALLOWED');
-    const invalidOrders: any[] = [];
->>>>>>> origin/main
     
     prioritizedOrders.forEach((order: any) => {
       const stockModelId = order.stockModelId || order.modelId || 'unknown';
       const compatibleMolds = findExactMatchingMolds(stockModelId);
       
       if (compatibleMolds.length === 0) {
-<<<<<<< HEAD
         console.warn(`⚠️ SKIPPING: Order ${order.orderId} with stock model "${stockModelId}" has no compatible molds.`);
         invalidOrders.push({ orderId: order.orderId, stockModel: stockModelId });
       } else {
@@ -302,27 +283,6 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
 
     // Process each valid order (now prioritized by score and due date)
     for (const order of validOrders) {
-=======
-        console.error(`🚨 CRITICAL VALIDATION FAILURE: Order ${order.orderId} with stock model "${stockModelId}" has NO compatible molds. SCHEDULING BLOCKED.`);
-        invalidOrders.push({ orderId: order.orderId, stockModel: stockModelId });
-      }
-    });
-    
-    if (invalidOrders.length > 0) {
-      console.error(`🚨 SCHEDULING BLOCKED: ${invalidOrders.length} orders have no compatible molds:`, invalidOrders);
-      return res.status(400).json({
-        success: false,
-        error: 'STRICT VALIDATION FAILED - Orders have no compatible molds',
-        invalidOrders: invalidOrders,
-        message: 'Under no circumstances will a stock model not match the mold. Fix mold configuration before scheduling.'
-      });
-    }
-    
-    console.log('✅ STRICT VALIDATION PASSED: All orders have compatible molds');
-
-    // Process each order (now prioritized by score and due date)
-    for (const order of prioritizedOrders) {
->>>>>>> origin/main
       const stockModelId = order.stockModelId || order.modelId || 'unknown';
       
       // Extract material prefix (CF/FG)
@@ -398,7 +358,6 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
           continue;
         }
 
-<<<<<<< HEAD
         // CRITICAL FIX: Filter compatible molds to exclude already used ones for this day
         const usedMoldsToday = usedMoldsByDay.get(dailyKey) || new Set<string>();
         const availableMolds = compatibleMolds.filter(mold => !usedMoldsToday.has(mold.mold_id));
@@ -456,55 +415,6 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
           console.log(`📊 Daily usage: ${usedMoldsToday.size} molds used on ${dailyKey}`);
           scheduled = true;
           break;
-=======
-        // Try each compatible mold with STRICT capacity limits
-        for (const mold of compatibleMolds) {
-          const moldKey = `${dailyKey}-${mold.mold_id}`;
-          const currentUsage = dailyMoldUsage.get(moldKey) || 0;
-          // LIMIT MOLD MULTIPLIER: Cap at 3 to prevent over-scheduling
-          const moldCapacity = Math.min(mold.multiplier || 1, 3);
-
-          if (currentUsage < moldCapacity) {
-            // FINAL CAPACITY CHECK: Ensure this assignment won't exceed daily limit
-            const finalDailyCheck = (dailyAllocationCount.get(dailyKey) || 0) + 1;
-            if (finalDailyCheck > actualDailyCapacity) {
-              console.log(`🚫 FINAL CAPACITY CHECK FAILED: Would exceed daily limit (${finalDailyCheck} > ${actualDailyCapacity})`);
-              continue;
-            }
-            // CRITICAL VALIDATION: Never allow assignments on non-work days
-            const scheduleDate = new Date(workDate);
-            const scheduleDayOfWeek = scheduleDate.getDay();
-            const scheduleDayName = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][scheduleDayOfWeek];
-            
-            if (!enforcedWorkDays.includes(scheduleDayOfWeek)) {
-              console.error(`❌ CRITICAL: Attempted to schedule ${order.orderId} on ${scheduleDayName} ${scheduleDate.toDateString()}`);
-              console.error(`   Allowed work days: [${enforcedWorkDays.map((d: number) => ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d]).join(', ')}]`);
-              throw new Error(`${scheduleDayName} assignment blocked - not in configured work days`);
-            }
-            
-            // Schedule this order
-            allocations.push({
-              orderId: order.orderId,
-              moldId: mold.mold_id,
-              moldName: mold.model_name,
-              scheduledDate: workDate.toISOString(),
-              stockModelId: stockModelId,
-              materialPrefix: materialPrefix,
-              heavyFill: heavyFill,
-              lopAdjustment: lopAdjustment,
-              customer: order.customerName || 'Unknown',
-              dueDate: order.dueDate || order.orderDate
-            });
-            
-            // Update usage tracking
-            dailyMoldUsage.set(moldKey, currentUsage + 1);
-            dailyAllocationCount.set(dailyKey, currentDailyCount + 1);
-            
-            console.log(`✅ Selected mold ${mold.model_name} for ${order.orderId} (${currentUsage + 1}/${mold.multiplier})`);
-            scheduled = true;
-            break;
-          }
->>>>>>> origin/main
         }
       }
       
@@ -513,7 +423,6 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
       }
     }
 
-<<<<<<< HEAD
     // VALIDATION PASS: Check for any remaining mold conflicts
     console.log(`🔍 VALIDATION PASS: Checking for mold double-booking conflicts...`);
     const moldConflicts: { day: string; moldId: string; orders: string[] }[] = [];
@@ -564,10 +473,6 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
 
     // Calculate success metrics and return results
     const totalProcessed = validOrders.length; // Only count orders that could be scheduled
-=======
-    // Calculate success metrics and return results
-    const totalProcessed = prioritizedOrders.length;
->>>>>>> origin/main
     const totalScheduled = allocations.length;
     const successRate = totalProcessed > 0 ? (totalScheduled / totalProcessed) * 100 : 0;
     
@@ -608,22 +513,14 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
     }
 
     // Analyze failed orders
-<<<<<<< HEAD
     const unscheduledOrders = validOrders.slice(totalScheduled);
-=======
-    const unscheduledOrders = prioritizedOrders.slice(totalScheduled);
->>>>>>> origin/main
     if (unscheduledOrders.length > 0) {
       console.log(`❌ First 10 unscheduled orders:`);
       unscheduledOrders.slice(0, 10).forEach(order => {
         console.log(`   - ${order.orderId}: ${order.stockModelId || order.modelId} (Due: ${new Date(order.dueDate || order.orderDate).toDateString()})`);
       });
       
-<<<<<<< HEAD
       // Analysis by failure reason (should be 0 for no molds since we pre-filtered)
-=======
-      // Analysis by failure reason
->>>>>>> origin/main
       const noMoldsCount = unscheduledOrders.filter(order => {
         const compatibleMolds = findExactMatchingMolds(order.stockModelId || order.modelId || 'unknown');
         return compatibleMolds.length === 0;
@@ -633,14 +530,11 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
       console.log(`   - No compatible molds: ${noMoldsCount}`);
       console.log(`   - Other capacity/timing issues: ${unscheduledOrders.length - noMoldsCount}`);
     }
-<<<<<<< HEAD
     
     // Report skipped orders separately
     if (invalidOrders.length > 0) {
       console.log(`📋 SUMMARY: ${invalidOrders.length} orders were skipped due to invalid stock models:`, invalidOrders.map(o => `${o.orderId}(${o.stockModel})`).join(', '));
     }
-=======
->>>>>>> origin/main
 
     // Save the algorithmic schedule results to the layup_schedule table
     if (allocations.length > 0) {
@@ -675,7 +569,6 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
         console.log(`📅 Saving ${allocations.length} algorithmic schedule entries to layup_schedule table`);
         
         for (const allocation of allocations) {
-<<<<<<< HEAD
           // Extract business day from scheduled date as YYYY-MM-DD string
           const layupDayStr = new Date(allocation.scheduledDate).toISOString().slice(0, 10);
 
@@ -696,21 +589,6 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
             allocation.moldId,
             JSON.stringify(employeeAssignments),
             false // not an override, this is algorithmic
-=======
-          await pool.query(`
-            INSERT INTO layup_schedule (
-              order_id, scheduled_date, mold_id, employee_assignments,
-              is_override, created_at, updated_at
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7)
-          `, [
-            allocation.orderId,
-            allocation.scheduledDate,
-            allocation.moldId,
-            JSON.stringify(employeeAssignments),
-            false, // not an override, this is algorithmic
-            new Date().toISOString(),
-            new Date().toISOString()
->>>>>>> origin/main
           ]);
         }
         
@@ -725,7 +603,6 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
       success: true,
       allocations: allocations,
       scheduledAllocations: allocations, // Add this for compatibility
-<<<<<<< HEAD
       skippedOrders: invalidOrders, // Include orders that were skipped due to no compatible molds
       analytics: {
         totalOrders: prioritizedOrders.length, // Total orders originally considered
@@ -733,12 +610,6 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
         skippedOrders: invalidOrders.length, // Orders skipped due to no compatible molds
         scheduledOrders: totalScheduled,
         unscheduledOrders: totalProcessed - totalScheduled, // Valid orders that couldn't fit in schedule
-=======
-      analytics: {
-        totalOrders: totalProcessed,
-        scheduledOrders: totalScheduled,
-        unscheduledOrders: totalProcessed - totalScheduled,
->>>>>>> origin/main
         efficiency: successRate,
         workDays: scheduleDays,
         dailyCapacity: actualDailyCapacity, // Use actual capacity instead of requested

@@ -39,7 +39,10 @@ export async function fetchProductionOrders(): Promise<ProductionOrder[]> {
 export async function updateProductionOrder(id: number, data: ProductionOrderUpdate): Promise<ProductionOrder> {
   const response = await apiRequest(`/api/production-orders/${id}`, {
     method: 'PUT',
-    body: data
+    body: JSON.stringify(data),
+    headers: {
+      'Content-Type': 'application/json'
+    }
   });
   return response;
 }

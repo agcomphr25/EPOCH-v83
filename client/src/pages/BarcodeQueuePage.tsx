@@ -171,6 +171,14 @@ export default function BarcodeQueuePage() {
 
   // Get orders in barcode department
   const barcodeOrders = useMemo(() => {
+    console.log('🔍 BARCODE ORDERS DEBUG:', {
+      totalOrders: allOrders.length,
+      allDepartments: [...new Set((allOrders as any[]).map(o => o.currentDepartment))],
+      barcodeCount: (allOrders as any[]).filter(o => o.currentDepartment === 'Barcode').length,
+      ei204Found: (allOrders as any[]).find(o => o.orderId === 'EI204'),
+      sampleOrders: (allOrders as any[]).slice(0, 3).map(o => ({ orderId: o.orderId, dept: o.currentDepartment }))
+    });
+    
     return (allOrders as any[]).filter((order: any) => 
       order.currentDepartment === 'Barcode'
     );

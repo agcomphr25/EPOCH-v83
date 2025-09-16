@@ -157,56 +157,6 @@ export const orders = pgTable("orders", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-// Dedicated cancelled orders table - stores archived cancelled orders
-export const cancelledOrders = pgTable("cancelled_orders", {
-  id: serial("id").primaryKey(),
-  orderId: text("order_id").notNull().unique(),
-  orderDate: timestamp("order_date").notNull(),
-  dueDate: timestamp("due_date").notNull(),
-  customerId: text("customer_id"),
-  customerPO: text("customer_po"),
-  fbOrderNumber: text("fb_order_number"),
-  agrOrderDetails: text("agr_order_details"),
-  isFlattop: boolean("is_flattop").default(false),
-  isCustomOrder: text("is_custom_order"), // "yes", "no", or null
-  modelId: text("model_id"),
-  handedness: text("handedness"),
-  shankLength: text("shank_length"),
-  features: jsonb("features"),
-  featureQuantities: jsonb("feature_quantities"),
-  discountCode: text("discount_code"),
-  notes: text("notes"), // Order notes/special instructions
-  customDiscountType: text("custom_discount_type").default("percent"),
-  customDiscountValue: real("custom_discount_value").default(0),
-  showCustomDiscount: boolean("show_custom_discount").default(false),
-  priceOverride: real("price_override"), // Manual price override for stock model
-  shipping: real("shipping").default(0),
-  tikkaOption: text("tikka_option"),
-  status: text("status").default("CANCELLED"),
-  barcode: text("barcode"), // Code 39 barcode for order identification
-  // Department Progression Fields at time of cancellation
-  currentDepartment: text("current_department"),
-  departmentHistory: jsonb("department_history").default('[]'),
-  scrappedQuantity: integer("scrapped_quantity").default(0),
-  totalProduced: integer("total_produced").default(0),
-  // Payment Information at time of cancellation
-  isPaid: boolean("is_paid").default(false),
-  paymentType: text("payment_type"),
-  paymentAmount: real("payment_amount"),
-  paymentDate: timestamp("payment_date"),
-  paymentTimestamp: timestamp("payment_timestamp"),
-  // Cancellation Information
-  cancelledAt: timestamp("cancelled_at").notNull(),
-  cancelReason: text("cancel_reason").notNull(),
-  cancelledBy: text("cancelled_by"), // User who cancelled the order
-  // Original Order Information
-  originalCreatedAt: timestamp("original_created_at"),
-  originalUpdatedAt: timestamp("original_updated_at"),
-  // Archive Information
-  archivedAt: timestamp("archived_at").defaultNow(),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-});
 
 export const csvData = pgTable("csv_data", {
   id: serial("id").primaryKey(),
@@ -829,18 +779,6 @@ export const insertShortTermSaleSchema = z.object({
   isActive: z.number().default(1),
 });
 
-export const insertCancelledOrderSchema = createInsertSchema(cancelledOrders).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-  archivedAt: true,
-}).extend({
-  orderId: z.string().min(1, "Order ID is required"),
-  orderDate: z.coerce.date(),
-  dueDate: z.coerce.date(),
-  cancelledAt: z.coerce.date(),
-  cancelReason: z.string().min(1, "Cancellation reason is required"),
-});
 
 export const insertFeatureCategorySchema = createInsertSchema(featureCategories).omit({
   createdAt: true,
@@ -1326,8 +1264,6 @@ export type InsertOrderDraft = z.infer<typeof insertOrderDraftSchema>;
 export type OrderDraft = typeof orderDrafts.$inferSelect;
 export type InsertAllOrder = z.infer<typeof insertAllOrderSchema>;
 export type AllOrder = typeof allOrders.$inferSelect;
-export type InsertCancelledOrder = z.infer<typeof insertCancelledOrderSchema>;
-export type CancelledOrder = typeof cancelledOrders.$inferSelect;
 export type InsertForm = z.infer<typeof insertFormSchema>;
 export type Form = typeof forms.$inferSelect;
 export type InsertFormSubmission = z.infer<typeof insertFormSubmissionSchema>;

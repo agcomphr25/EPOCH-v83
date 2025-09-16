@@ -1637,7 +1637,7 @@ export class DatabaseStorage implements IStorage {
             const selectedModel = stockModels.find(model => model.id === order.modelId);
             if (selectedModel) {
               const basePrice = Number(order.priceOverride || selectedModel.price || 0);
-              const discountAmount = discount.percent > 0 
+              const discountAmount = (discount.percent && discount.percent > 0) 
                 ? (basePrice * discount.percent / 100)
                 : Number(discount.fixedAmount || 0);
               total -= discountAmount;
@@ -1645,7 +1645,7 @@ export class DatabaseStorage implements IStorage {
           }
         } else if (discount.appliesTo === 'total_order') {
           // Apply discount to entire order total
-          const discountAmount = discount.percent > 0 
+          const discountAmount = (discount.percent && discount.percent > 0) 
             ? (total * discount.percent / 100)
             : Number(discount.fixedAmount || 0);
           total -= discountAmount;
@@ -1786,7 +1786,7 @@ export class DatabaseStorage implements IStorage {
             const selectedModel = stockModels.find(model => model.id === order.modelId);
             if (selectedModel) {
               const basePrice = Number(order.priceOverride || selectedModel.price || 0);
-              const discountAmount = discount.percent > 0 
+              const discountAmount = (discount.percent && discount.percent > 0) 
                 ? (basePrice * discount.percent / 100)
                 : Number(discount.fixedAmount || 0);
               totalPrice -= discountAmount;

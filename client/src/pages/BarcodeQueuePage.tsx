@@ -629,10 +629,10 @@ export default function BarcodeQueuePage() {
                                       actionLength === 'long' ? 'border-blue-500 text-blue-700 bg-blue-50' :
                                       'border-gray-500 text-gray-700 bg-gray-50'
                                     }`}>
-                                      {actionLength === 'short' ? 'Short' : 
-                                       actionLength === 'medium' ? 'Medium' :
-                                       actionLength === 'long' ? 'Long' : 
-                                       actionLength === 'standard' ? 'Standard' : 'Unknown'} Action
+                                      {actionLength === 'short' ? 'Short Action' : 
+                                       actionLength === 'medium' ? 'Medium Action' :
+                                       actionLength === 'long' ? 'Long Action' : 
+                                       actionLength === 'standard' ? 'Tikka Standard' : 'Unknown Action'}
                                     </Badge>
                                   </div>
 
@@ -827,10 +827,10 @@ export default function BarcodeQueuePage() {
                                         actionLength === 'long' ? 'border-blue-500 text-blue-700 bg-blue-50' :
                                         'border-gray-500 text-gray-700 bg-gray-50'
                                       }`}>
-                                        {actionLength === 'short' ? 'Short' : 
-                                         actionLength === 'medium' ? 'Medium' :
-                                         actionLength === 'long' ? 'Long' : 
-                                         actionLength === 'standard' ? 'Standard' : 'Unknown'} Action
+                                        {actionLength === 'short' ? 'Short Action' : 
+                                         actionLength === 'medium' ? 'Medium Action' :
+                                         actionLength === 'long' ? 'Long Action' : 
+                                         actionLength === 'standard' ? 'Tikka Standard' : 'Unknown Action'}
                                       </Badge>
                                       <Link href={`/order-entry?draft=${order.orderId}`}>
                                         <Button variant="outline" size="sm" className="h-6 w-6 p-0" title="View/Edit Order">

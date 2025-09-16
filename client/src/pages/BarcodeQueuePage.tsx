@@ -549,8 +549,7 @@ export default function BarcodeQueuePage() {
                       }
                       
                       // Determine action length with special handling for Tikka models
-                      let actionLength = order.features?.action_length || 
-                                        order.features?.short_action;
+                      let actionLength = (order as any).actionLength;
                       
                       // If no action length and it's a Tikka model, use 'standard'
                       if (!actionLength && order.modelId?.includes('tikka')) {
@@ -760,7 +759,7 @@ export default function BarcodeQueuePage() {
                         {categoryOrders.map((order: any) => {
                           const isOverdue = isAfter(new Date(), new Date(order.dueDate));
                           // Determine action length with special handling for Tikka models
-                          let actionLength = order.features?.action_length;
+                          let actionLength = (order as any).actionLength;
                           
                           // If no action length and it's a Tikka model, use 'standard'
                           if (!actionLength && order.modelId?.includes('tikka')) {

@@ -535,76 +535,22 @@ export default function BarcodeQueuePage() {
                       const isSelected = selectedOrders.has(order.orderId);
                       const isOverdue = isAfter(new Date(), new Date(order.dueDate));
                       
-                      // Helper function to get action length display
-                      const getActionLengthDisplay = (order: any) => {
-                        
-                        if (!order.features) return 'Unknown Action';
-
-                        const modelId = order.stockModelId || order.modelId;
-                        const isAPR = modelId && modelId.toLowerCase().includes('apr');
-
-                        if (isAPR) {
-                          // For APR orders, show both action type AND action length
-                          let actionType = order.features.action_inlet || order.features.action;
-                          let actionLength = order.features.action_length;
-
-                          if (!actionLength || actionLength === 'none') {
-                            if (actionType && actionType.includes('short')) actionLength = 'SA';
-                            else if (actionType && actionType.includes('long')) actionLength = 'LA';
-                            else actionLength = 'SA';
-                          }
-
-                          const lengthMap: {[key: string]: string} = {
-                            'Long': 'LA', 'Medium': 'MA', 'Short': 'SA',
-                            'long': 'LA', 'medium': 'MA', 'short': 'SA',
-                            'LA': 'LA', 'MA': 'MA', 'SA': 'SA'
-                          };
-
-                          const actionLengthAbbr = lengthMap[actionLength] || actionLength;
-
-                          if (!actionType || actionType === 'none') {
-                            return actionLengthAbbr + ' Action';
-                          }
-
-                          const actionMap: {[key: string]: string} = {
-                            'short_action': 'Short Action',
-                            'long_action': 'Long Action',
-                            'medium_action': 'Medium Action',
-                            'short': 'Short Action',
-                            'long': 'Long Action',
-                            'medium': 'Medium Action'
-                          };
-
-                          const actionDisplay = actionMap[actionType] || actionType;
-                          return `${actionLengthAbbr} ${actionDisplay}`;
-                        } else {
-                          // For non-APR orders, show action length
-                          let actionLengthValue = order.features.action_length;
-
-                          if ((!actionLengthValue || actionLengthValue === 'none') && order.features.action_inlet) {
-                            if (order.features.action_inlet.includes('short')) actionLengthValue = 'short';
-                            else if (order.features.action_inlet.includes('long')) actionLengthValue = 'long';
-                            else if (order.features.action_inlet.includes('medium')) actionLengthValue = 'medium';
-                          }
-
-                          if (!actionLengthValue || actionLengthValue === 'none') {
-                            return 'Unknown Action';
-                          }
-
-                          const lengthMap: {[key: string]: string} = {
-                            'Long': 'Long Action',
-                            'Medium': 'Medium Action', 
-                            'Short': 'Short Action',
-                            'long': 'Long Action',
-                            'medium': 'Medium Action',
-                            'short': 'Short Action'
-                          };
-
-                          return lengthMap[actionLengthValue] || `${actionLengthValue} Action`;
-                        }
-                      };
+                      // Debug features object for EI204
+                      if (order.orderId === 'EI204') {
+                        console.log('🔍 EI204 FEATURES DEBUG:', {
+                          orderId: order.orderId,
+                          features: order.features,
+                          featuresType: typeof order.features,
+                          featuresKeys: order.features ? Object.keys(order.features) : 'null',
+                          actionLengthValue: order.features?.action_length,
+                          shortActionValue: order.features?.short_action,
+                          allOrderKeys: Object.keys(order)
+                        });
+                      }
                       
-                      const actionLength = getActionLengthDisplay(order);
+                      const actionLength = order.features?.action_length || 
+                                           order.features?.short_action || 
+                                           'unknown';
                       // Determine material type from stock model ID
                       const materialType = order.modelId?.startsWith('cf_') ? 'Carbon Fiber' : 
                                          order.modelId?.startsWith('fg_') ? 'Fiberglass' : 
@@ -802,86 +748,7 @@ export default function BarcodeQueuePage() {
                       <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
                         {categoryOrders.map((order: any) => {
                           const isOverdue = isAfter(new Date(), new Date(order.dueDate));
-                          
-                          // Helper function to get action length display
-                          const getActionLengthDisplay = (order: any) => {
-                            // Debug logging for first few orders
-                            if (['AI019', 'AO009', 'EI204', 'EI202'].includes(order.orderId)) {
-                              console.log(`🔍 ${order.orderId} DEBUG (Scanning View):`, {
-                                features: order.features,
-                                action_length: order.features?.action_length,
-                                action_inlet: order.features?.action_inlet,
-                                action: order.features?.action
-                              });
-                            }
-                            
-                            if (!order.features) return 'Unknown Action';
-
-                            const modelId = order.stockModelId || order.modelId;
-                            const isAPR = modelId && modelId.toLowerCase().includes('apr');
-
-                            if (isAPR) {
-                              // For APR orders, show both action type AND action length
-                              let actionType = order.features.action_inlet || order.features.action;
-                              let actionLength = order.features.action_length;
-
-                              if (!actionLength || actionLength === 'none') {
-                                if (actionType && actionType.includes('short')) actionLength = 'SA';
-                                else if (actionType && actionType.includes('long')) actionLength = 'LA';
-                                else actionLength = 'SA';
-                              }
-
-                              const lengthMap: {[key: string]: string} = {
-                                'Long': 'LA', 'Medium': 'MA', 'Short': 'SA',
-                                'long': 'LA', 'medium': 'MA', 'short': 'SA',
-                                'LA': 'LA', 'MA': 'MA', 'SA': 'SA'
-                              };
-
-                              const actionLengthAbbr = lengthMap[actionLength] || actionLength;
-
-                              if (!actionType || actionType === 'none') {
-                                return actionLengthAbbr + ' Action';
-                              }
-
-                              const actionMap: {[key: string]: string} = {
-                                'short_action': 'Short Action',
-                                'long_action': 'Long Action',
-                                'medium_action': 'Medium Action',
-                                'short': 'Short Action',
-                                'long': 'Long Action',
-                                'medium': 'Medium Action'
-                              };
-
-                              const actionDisplay = actionMap[actionType] || actionType;
-                              return `${actionLengthAbbr} ${actionDisplay}`;
-                            } else {
-                              // For non-APR orders, show action length
-                              let actionLengthValue = order.features.action_length;
-
-                              if ((!actionLengthValue || actionLengthValue === 'none') && order.features.action_inlet) {
-                                if (order.features.action_inlet.includes('short')) actionLengthValue = 'short';
-                                else if (order.features.action_inlet.includes('long')) actionLengthValue = 'long';
-                                else if (order.features.action_inlet.includes('medium')) actionLengthValue = 'medium';
-                              }
-
-                              if (!actionLengthValue || actionLengthValue === 'none') {
-                                return 'Unknown Action';
-                              }
-
-                              const lengthMap: {[key: string]: string} = {
-                                'Long': 'Long Action',
-                                'Medium': 'Medium Action', 
-                                'Short': 'Short Action',
-                                'long': 'Long Action',
-                                'medium': 'Medium Action',
-                                'short': 'Short Action'
-                              };
-
-                              return lengthMap[actionLengthValue] || `${actionLengthValue} Action`;
-                            }
-                          };
-                          
-                          const actionLength = getActionLengthDisplay(order);
+                          const actionLength = order.features?.action_length || 'unknown';
                           // Determine material type from stock model ID
                           const materialType = order.modelId?.startsWith('cf_') ? 'Carbon Fiber' : 
                                              order.modelId?.startsWith('fg_') ? 'Fiberglass' : 

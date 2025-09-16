@@ -1468,7 +1468,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Helper function to calculate order total from features and pricing
-  private async calculateOrderTotal(order: AllOrder): Promise<number> {
+  public async calculateOrderTotal(order: AllOrder): Promise<number> {
     let total = 0;
 
     // Add base stock model price (use override if set, otherwise use standard price)

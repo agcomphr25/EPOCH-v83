@@ -101,10 +101,10 @@ export default function CNCQueuePage() {
 
   // Enhanced feature aliases mapping
   const FEATURE_ALIASES: { [key: string]: string[] } = {
-    action_length: ['action_length', 'actionLength', 'action', 'action_len', 'length'],
+    action_length: ['action_length', 'actionLength', 'action_len', 'length'],
     barrel_inlet: ['barrel_inlet', 'barrelInlet', 'barrel_channel', 'barrelChannel', 'barrel_profile', 'barrelProfile'],
     handedness: ['handedness', 'hand', 'left_right', 'leftRight'],
-    action_inlet: ['action_inlet', 'actionInlet', 'action_channel', 'actionChannel'],
+    action_inlet: ['action_inlet', 'actionInlet', 'action', 'action_channel', 'actionChannel'],
     bottom_metal: ['bottom_metal', 'bottomMetal', 'bottom', 'metal'],
     custom_bolt_notch: ['custom_bolt_notch', 'customBoltNotch', 'bolt_notch', 'boltNotch']
   };

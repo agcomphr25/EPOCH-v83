@@ -548,9 +548,19 @@ export default function BarcodeQueuePage() {
                         });
                       }
                       
-                      const actionLength = order.features?.action_length || 
-                                           order.features?.short_action || 
-                                           'unknown';
+                      // Determine action length with special handling for Tikka models
+                      let actionLength = order.features?.action_length || 
+                                        order.features?.short_action;
+                      
+                      // If no action length and it's a Tikka model, use 'standard'
+                      if (!actionLength && order.modelId?.includes('tikka')) {
+                        actionLength = 'standard';
+                      }
+                      
+                      // Default to 'unknown' if still not set
+                      if (!actionLength) {
+                        actionLength = 'unknown';
+                      }
                       // Determine material type from stock model ID
                       const materialType = order.modelId?.startsWith('cf_') ? 'Carbon Fiber' : 
                                          order.modelId?.startsWith('fg_') ? 'Fiberglass' : 
@@ -621,7 +631,8 @@ export default function BarcodeQueuePage() {
                                     }`}>
                                       {actionLength === 'short' ? 'Short' : 
                                        actionLength === 'medium' ? 'Medium' :
-                                       actionLength === 'long' ? 'Long' : 'Unknown'} Action
+                                       actionLength === 'long' ? 'Long' : 
+                                       actionLength === 'standard' ? 'Standard' : 'Unknown'} Action
                                     </Badge>
                                   </div>
 
@@ -748,7 +759,18 @@ export default function BarcodeQueuePage() {
                       <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
                         {categoryOrders.map((order: any) => {
                           const isOverdue = isAfter(new Date(), new Date(order.dueDate));
-                          const actionLength = order.features?.action_length || 'unknown';
+                          // Determine action length with special handling for Tikka models
+                          let actionLength = order.features?.action_length;
+                          
+                          // If no action length and it's a Tikka model, use 'standard'
+                          if (!actionLength && order.modelId?.includes('tikka')) {
+                            actionLength = 'standard';
+                          }
+                          
+                          // Default to 'unknown' if still not set
+                          if (!actionLength) {
+                            actionLength = 'unknown';
+                          }
                           // Determine material type from stock model ID
                           const materialType = order.modelId?.startsWith('cf_') ? 'Carbon Fiber' : 
                                              order.modelId?.startsWith('fg_') ? 'Fiberglass' : 
@@ -807,7 +829,8 @@ export default function BarcodeQueuePage() {
                                       }`}>
                                         {actionLength === 'short' ? 'Short' : 
                                          actionLength === 'medium' ? 'Medium' :
-                                         actionLength === 'long' ? 'Long' : 'Unknown'} Action
+                                         actionLength === 'long' ? 'Long' : 
+                                         actionLength === 'standard' ? 'Standard' : 'Unknown'} Action
                                       </Badge>
                                       <Link href={`/order-entry?draft=${order.orderId}`}>
                                         <Button variant="outline" size="sm" className="h-6 w-6 p-0" title="View/Edit Order">

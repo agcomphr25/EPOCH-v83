@@ -149,6 +149,42 @@ export default function CNCQueuePage() {
     return String(value);
   };
 
+  // Derive action length from action inlet when missing
+  const deriveActionLengthFromInlet = (actionInlet: string): string | null => {
+    if (!actionInlet) return null;
+    
+    const inlet = actionInlet.toLowerCase();
+    
+    // Long action patterns
+    if (inlet.includes('remington_700') || 
+        inlet.includes('remington 700') ||
+        inlet.includes('remington_long') ||
+        inlet.includes('remington long') ||
+        inlet.includes('winchester_long') ||
+        inlet.includes('winchester long') ||
+        inlet.includes('savage_long') ||
+        inlet.includes('savage long') ||
+        inlet.includes('long_action') ||
+        inlet.includes('long action')) {
+      return 'long_action';
+    }
+    
+    // Short action patterns  
+    if (inlet.includes('remington_short') ||
+        inlet.includes('remington short') ||
+        inlet.includes('tikka') ||
+        inlet.includes('savage_short') ||
+        inlet.includes('savage short') ||
+        inlet.includes('winchester_short') ||
+        inlet.includes('winchester short') ||
+        inlet.includes('short_action') ||
+        inlet.includes('short action')) {
+      return 'short_action';
+    }
+    
+    return null;
+  };
+
   // Robust feature extraction with alias support and normalization
   const getFeatureValue = (order: any, featureName: string): string | null => {
     // Run diagnostics for problematic orders
@@ -180,6 +216,19 @@ export default function CNCQueuePage() {
               if (normalized) return normalized;
             }
           }
+        }
+      }
+    }
+    
+    // Special handling for action_length - derive from action_inlet if missing
+    if (featureName === 'action_length') {
+      // Check for action_inlet directly to avoid recursion
+      const actionInlet = order.features?.action_inlet || order.action_inlet;
+      if (actionInlet) {
+        const derivedLength = deriveActionLengthFromInlet(actionInlet);
+        if (derivedLength) {
+          console.log(`🔄 DERIVED ACTION LENGTH: ${order.fbOrderNumber || order.orderId} - ${actionInlet} → ${derivedLength}`);
+          return derivedLength;
         }
       }
     }

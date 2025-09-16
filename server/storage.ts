@@ -1962,46 +1962,9 @@ export class DatabaseStorage implements IStorage {
 
   // Get all finalized orders with payment status
   async getAllOrdersWithPaymentStatus(): Promise<(AllOrder & { paymentTotal: number; isFullyPaid: boolean })[]> {
-    // Optimized: Use single query to get orders with customer names and payment totals
-    // Exclude P1 purchase orders from All Orders list
+    // Get all orders with customer names - using simpler approach to avoid TypeScript issues
     const ordersWithCustomers = await db
-      .select({
-        // Order fields
-        id: allOrders.id,
-        orderId: allOrders.orderId,
-        orderDate: allOrders.orderDate,
-        dueDate: allOrders.dueDate,
-        customerId: allOrders.customerId,
-        customerPO: allOrders.customerPO,
-        currentDepartment: allOrders.currentDepartment,
-        status: allOrders.status,
-        modelId: allOrders.modelId,
-        features: allOrders.features,
-        shipping: allOrders.shipping,
-        paymentAmount: allOrders.paymentAmount,
-        isPaid: allOrders.isPaid,
-        isVerified: allOrders.isVerified,
-        fbOrderNumber: allOrders.fbOrderNumber,
-        createdAt: allOrders.createdAt,
-        updatedAt: allOrders.updatedAt,
-        isCancelled: allOrders.isCancelled,
-        cancelledAt: allOrders.cancelledAt,
-        cancelReason: allOrders.cancelReason,
-        // Special shipping fields for highlighting in shipping queue
-        specialShippingInternational: allOrders.specialShippingInternational,
-        specialShippingNextDayAir: allOrders.specialShippingNextDayAir,
-        specialShippingBillToReceiver: allOrders.specialShippingBillToReceiver,
-        // Alt Ship To fields
-        hasAltShipTo: allOrders.hasAltShipTo,
-        altShipToCustomerId: allOrders.altShipToCustomerId,
-        altShipToName: allOrders.altShipToName,
-        altShipToCompany: allOrders.altShipToCompany,
-        altShipToEmail: allOrders.altShipToEmail,
-        altShipToPhone: allOrders.altShipToPhone,
-        altShipToAddress: allOrders.altShipToAddress,
-        // Customer name
-        customerName: customers.name,
-      })
+      .select()
       .from(allOrders)
       .leftJoin(customers, eq(allOrders.customerId, sql`${customers.id}::text`))
       .where(
@@ -2029,7 +1992,10 @@ export class DatabaseStorage implements IStorage {
     const paymentMap = new Map(paymentTotals.map(p => [p.orderId, p.totalPayments]));
 
     // Process orders with payment info (using proper order total calculation)
-    const ordersWithPaymentInfo = await Promise.all(ordersWithCustomers.map(async order => {
+    const ordersWithPaymentInfo = await Promise.all(ordersWithCustomers.map(async row => {
+      const order = row.all_orders; // Extract order from query result
+      const customerName = row.customers?.name || 'Unknown Customer';
+      
       const paymentTotal = paymentMap.get(order.orderId) || 0;
       
       // CRITICAL FIX: Use actual calculated order total, not stale paymentAmount field
@@ -2040,10 +2006,10 @@ export class DatabaseStorage implements IStorage {
 
       return {
         ...order,
-        customer: order.customerName || 'Unknown Customer',
+        customer: customerName,
         paymentTotal,
         isFullyPaid
-      };
+      } as AllOrder & { paymentTotal: number; isFullyPaid: boolean; customer: string };
     }));
 
     return ordersWithPaymentInfo;

@@ -537,15 +537,15 @@ export default function BarcodeQueuePage() {
                       
                       // Helper function to get action length display
                       const getActionLengthDisplay = (order: any) => {
-                        // Debug logging for first few orders
-                        if (['AI019', 'AO009', 'EI204', 'EI202'].includes(order.orderId)) {
-                          console.log(`🔍 ${order.orderId} DEBUG:`, {
-                            features: order.features,
-                            action_length: order.features?.action_length,
-                            action_inlet: order.features?.action_inlet,
-                            action: order.features?.action
-                          });
-                        }
+                        // Debug logging for ALL orders to see what's happening
+                        console.log(`🔍 ${order.orderId} ACTION DEBUG:`, {
+                          features: order.features,
+                          action_length: order.features?.action_length,
+                          action_inlet: order.features?.action_inlet,
+                          action: order.features?.action,
+                          modelId: order.modelId,
+                          hasFeatures: !!order.features
+                        });
                         
                         if (!order.features) return 'Unknown Action';
 

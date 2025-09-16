@@ -1962,9 +1962,91 @@ export class DatabaseStorage implements IStorage {
 
   // Get all finalized orders with payment status
   async getAllOrdersWithPaymentStatus(): Promise<(AllOrder & { paymentTotal: number; isFullyPaid: boolean })[]> {
-    // Get all orders with customer names - using simpler approach to avoid TypeScript issues
+    // Use the same approach as getAllOrders() but include customer names
     const ordersWithCustomers = await db
-      .select()
+      .select({
+        // Order fields - copy from getAllOrders() to avoid TypeScript issues
+        id: allOrders.id,
+        orderId: allOrders.orderId,
+        orderDate: allOrders.orderDate,
+        dueDate: allOrders.dueDate,
+        customerId: allOrders.customerId,
+        customerPO: allOrders.customerPO,
+        fbOrderNumber: allOrders.fbOrderNumber,
+        agrOrderDetails: allOrders.agrOrderDetails,
+        isFlattop: allOrders.isFlattop,
+        isCustomOrder: allOrders.isCustomOrder,
+        modelId: allOrders.modelId,
+        handedness: allOrders.handedness,
+        shankLength: allOrders.shankLength,
+        features: allOrders.features, // CRITICAL: Include features field
+        featureQuantities: allOrders.featureQuantities,
+        discountCode: allOrders.discountCode,
+        notes: allOrders.notes,
+        customDiscountType: allOrders.customDiscountType,
+        customDiscountValue: allOrders.customDiscountValue,
+        showCustomDiscount: allOrders.showCustomDiscount,
+        priceOverride: allOrders.priceOverride,
+        shipping: allOrders.shipping,
+        tikkaOption: allOrders.tikkaOption,
+        status: allOrders.status,
+        barcode: allOrders.barcode,
+        currentDepartment: allOrders.currentDepartment,
+        departmentHistory: allOrders.departmentHistory,
+        scrappedQuantity: allOrders.scrappedQuantity,
+        totalProduced: allOrders.totalProduced,
+        layupCompletedAt: allOrders.layupCompletedAt,
+        pluggingCompletedAt: allOrders.pluggingCompletedAt,
+        cncCompletedAt: allOrders.cncCompletedAt,
+        finishCompletedAt: allOrders.finishCompletedAt,
+        gunsmithCompletedAt: allOrders.gunsmithCompletedAt,
+        paintCompletedAt: allOrders.paintCompletedAt,
+        qcCompletedAt: allOrders.qcCompletedAt,
+        shippingCompletedAt: allOrders.shippingCompletedAt,
+        scrapDate: allOrders.scrapDate,
+        scrapReason: allOrders.scrapReason,
+        scrapDisposition: allOrders.scrapDisposition,
+        scrapAuthorization: allOrders.scrapAuthorization,
+        isReplacement: allOrders.isReplacement,
+        replacedOrderId: allOrders.replacedOrderId,
+        isPaid: allOrders.isPaid,
+        paymentType: allOrders.paymentType,
+        paymentAmount: allOrders.paymentAmount,
+        paymentDate: allOrders.paymentDate,
+        paymentTimestamp: allOrders.paymentTimestamp,
+        trackingNumber: allOrders.trackingNumber,
+        shippingCarrier: allOrders.shippingCarrier,
+        shippingMethod: allOrders.shippingMethod,
+        shippedDate: allOrders.shippedDate,
+        estimatedDelivery: allOrders.estimatedDelivery,
+        shippingLabelGenerated: allOrders.shippingLabelGenerated,
+        customerNotified: allOrders.customerNotified,
+        notificationMethod: allOrders.notificationMethod,
+        notificationSentAt: allOrders.notificationSentAt,
+        deliveryConfirmed: allOrders.deliveryConfirmed,
+        deliveryConfirmedAt: allOrders.deliveryConfirmedAt,
+        isCancelled: allOrders.isCancelled,
+        cancelledAt: allOrders.cancelledAt,
+        cancelReason: allOrders.cancelReason,
+        isVerified: allOrders.isVerified,
+        isManualDueDate: allOrders.isManualDueDate,
+        isManualOrderDate: allOrders.isManualOrderDate,
+        hasAltShipTo: allOrders.hasAltShipTo,
+        altShipToCustomerId: allOrders.altShipToCustomerId,
+        altShipToName: allOrders.altShipToName,
+        altShipToCompany: allOrders.altShipToCompany,
+        altShipToEmail: allOrders.altShipToEmail,
+        altShipToPhone: allOrders.altShipToPhone,
+        altShipToAddress: allOrders.altShipToAddress,
+        specialShippingInternational: allOrders.specialShippingInternational,
+        specialShippingNextDayAir: allOrders.specialShippingNextDayAir,
+        specialShippingBillToReceiver: allOrders.specialShippingBillToReceiver,
+        assignedTechnician: allOrders.assignedTechnician,
+        createdAt: allOrders.createdAt,
+        updatedAt: allOrders.updatedAt,
+        // Customer name
+        customerName: customers.name,
+      })
       .from(allOrders)
       .leftJoin(customers, eq(allOrders.customerId, sql`${customers.id}::text`))
       .where(
@@ -1992,10 +2074,7 @@ export class DatabaseStorage implements IStorage {
     const paymentMap = new Map(paymentTotals.map(p => [p.orderId, p.totalPayments]));
 
     // Process orders with payment info (using proper order total calculation)
-    const ordersWithPaymentInfo = await Promise.all(ordersWithCustomers.map(async row => {
-      const order = row.all_orders; // Extract order from query result
-      const customerName = row.customers?.name || 'Unknown Customer';
-      
+    const ordersWithPaymentInfo = await Promise.all(ordersWithCustomers.map(async order => {
       const paymentTotal = paymentMap.get(order.orderId) || 0;
       
       // CRITICAL FIX: Use actual calculated order total, not stale paymentAmount field
@@ -2006,10 +2085,10 @@ export class DatabaseStorage implements IStorage {
 
       return {
         ...order,
-        customer: customerName,
+        customer: order.customerName || 'Unknown Customer',
         paymentTotal,
         isFullyPaid
-      } as AllOrder & { paymentTotal: number; isFullyPaid: boolean; customer: string };
+      };
     }));
 
     return ordersWithPaymentInfo;

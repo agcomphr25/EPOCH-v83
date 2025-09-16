@@ -74,6 +74,21 @@ export default function CNCQueuePage() {
     return highestPriority;
   };
 
+  // Robust feature extraction - checks both direct columns and features JSONB object
+  const getFeatureValue = (order: any, featureName: string): string | null => {
+    // First check direct column (for older data format)
+    if (order[featureName]) {
+      return order[featureName];
+    }
+    
+    // Then check features JSONB object (for newer data format)
+    if (order.features && order.features[featureName]) {
+      return order.features[featureName];
+    }
+    
+    return null;
+  };
+
   // Create kickback mutation
   const createKickbackMutation = useMutation({
     mutationFn: (kickbackData: any) =>
@@ -710,23 +725,23 @@ export default function CNCQueuePage() {
                                 // For Tikka orders, only show what's available in the requested order
                                 return (
                                   <>
-                                    {order.handedness && (
-                                      <div><span className="font-medium">Handedness:</span> {getFeatureDisplayValue('handedness', order.handedness)}</div>
+                                    {getFeatureValue(order, 'handedness') && (
+                                      <div><span className="font-medium">Handedness:</span> {getFeatureDisplayValue('handedness', getFeatureValue(order, 'handedness')!)}</div>
                                     )}
-                                    {order.features?.barrel_inlet && (
-                                      <div><span className="font-medium">Barrel Inlet:</span> {getFeatureDisplayValue('barrel_inlet', order.features.barrel_inlet)}</div>
+                                    {getFeatureValue(order, 'barrel_inlet') && (
+                                      <div><span className="font-medium">Barrel Inlet:</span> {getFeatureDisplayValue('barrel_inlet', getFeatureValue(order, 'barrel_inlet')!)}</div>
                                     )}
-                                    {order.features?.action_length && (
-                                      <div><span className="font-medium">Action Length:</span> {getFeatureDisplayValue('action_length', order.features.action_length)}</div>
+                                    {getFeatureValue(order, 'action_length') && (
+                                      <div><span className="font-medium">Action Length:</span> {getFeatureDisplayValue('action_length', getFeatureValue(order, 'action_length')!)}</div>
                                     )}
-                                    {order.features?.action_inlet && (
-                                      <div><span className="font-medium">Action Inlet:</span> {getFeatureDisplayValue('action_inlet', order.features.action_inlet)}</div>
+                                    {getFeatureValue(order, 'action_inlet') && (
+                                      <div><span className="font-medium">Action Inlet:</span> {getFeatureDisplayValue('action_inlet', getFeatureValue(order, 'action_inlet')!)}</div>
                                     )}
-                                    {order.features?.bottom_metal && (
-                                      <div><span className="font-medium">Bottom Metal:</span> {getFeatureDisplayValue('bottom_metal', order.features.bottom_metal)}</div>
+                                    {getFeatureValue(order, 'bottom_metal') && (
+                                      <div><span className="font-medium">Bottom Metal:</span> {getFeatureDisplayValue('bottom_metal', getFeatureValue(order, 'bottom_metal')!)}</div>
                                     )}
-                                    {order.features?.custom_bolt_notch && (
-                                      <div><span className="font-medium">Custom Bolt Notch:</span> {getFeatureDisplayValue('custom_bolt_notch', order.features.custom_bolt_notch)}</div>
+                                    {getFeatureValue(order, 'custom_bolt_notch') && (
+                                      <div><span className="font-medium">Custom Bolt Notch:</span> {getFeatureDisplayValue('custom_bolt_notch', getFeatureValue(order, 'custom_bolt_notch')!)}</div>
                                     )}
                                   </>
                                 );
@@ -734,13 +749,13 @@ export default function CNCQueuePage() {
                                 // For all non-Tikka orders, always show all fields in the requested order
                                 return (
                                   <>
-                                    <div><span className="font-medium">Handedness:</span> {order.handedness ? getFeatureDisplayValue('handedness', order.handedness) : 'Not specified'}</div>
-                                    <div><span className="font-medium">Barrel Inlet:</span> {order.features?.barrel_inlet ? getFeatureDisplayValue('barrel_inlet', order.features.barrel_inlet) : 'Not specified'}</div>
-                                    <div><span className="font-medium">Action Length:</span> {order.features?.action_length ? getFeatureDisplayValue('action_length', order.features.action_length) : 'Not specified'}</div>
-                                    <div><span className="font-medium">Action Inlet:</span> {order.features?.action_inlet ? getFeatureDisplayValue('action_inlet', order.features.action_inlet) : 'Not specified'}</div>
-                                    <div><span className="font-medium">Bottom Metal:</span> {order.features?.bottom_metal ? getFeatureDisplayValue('bottom_metal', order.features.bottom_metal) : 'Not specified'}</div>
-                                    {order.features?.custom_bolt_notch && (
-                                      <div><span className="font-medium">Custom Bolt Notch:</span> {getFeatureDisplayValue('custom_bolt_notch', order.features.custom_bolt_notch)}</div>
+                                    <div><span className="font-medium">Handedness:</span> {getFeatureValue(order, 'handedness') ? getFeatureDisplayValue('handedness', getFeatureValue(order, 'handedness')!) : 'Not specified'}</div>
+                                    <div><span className="font-medium">Barrel Inlet:</span> {getFeatureValue(order, 'barrel_inlet') ? getFeatureDisplayValue('barrel_inlet', getFeatureValue(order, 'barrel_inlet')!) : 'Not specified'}</div>
+                                    <div><span className="font-medium">Action Length:</span> {getFeatureValue(order, 'action_length') ? getFeatureDisplayValue('action_length', getFeatureValue(order, 'action_length')!) : 'Not specified'}</div>
+                                    <div><span className="font-medium">Action Inlet:</span> {getFeatureValue(order, 'action_inlet') ? getFeatureDisplayValue('action_inlet', getFeatureValue(order, 'action_inlet')!) : 'Not specified'}</div>
+                                    <div><span className="font-medium">Bottom Metal:</span> {getFeatureValue(order, 'bottom_metal') ? getFeatureDisplayValue('bottom_metal', getFeatureValue(order, 'bottom_metal')!) : 'Not specified'}</div>
+                                    {getFeatureValue(order, 'custom_bolt_notch') && (
+                                      <div><span className="font-medium">Custom Bolt Notch:</span> {getFeatureDisplayValue('custom_bolt_notch', getFeatureValue(order, 'custom_bolt_notch')!)}</div>
                                     )}
                                   </>
                                 );

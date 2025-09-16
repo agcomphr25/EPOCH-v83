@@ -1998,6 +1998,8 @@ export class DatabaseStorage implements IStorage {
         altShipToEmail: allOrders.altShipToEmail,
         altShipToPhone: allOrders.altShipToPhone,
         altShipToAddress: allOrders.altShipToAddress,
+        // Features field (required for action length display)
+        features: allOrders.features,
         // Customer name
         customerName: customers.name,
       })
@@ -2108,6 +2110,8 @@ export class DatabaseStorage implements IStorage {
         altShipToEmail: allOrders.altShipToEmail,
         altShipToPhone: allOrders.altShipToPhone,
         altShipToAddress: allOrders.altShipToAddress,
+        // Features field (required for action length display)
+        features: allOrders.features,
         // Customer name
         customerName: customers.name,
       })

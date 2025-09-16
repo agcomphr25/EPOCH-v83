@@ -74,16 +74,114 @@ export default function CNCQueuePage() {
     return highestPriority;
   };
 
-  // Robust feature extraction - checks both direct columns and features JSONB object
-  const getFeatureValue = (order: any, featureName: string): string | null => {
-    // First check direct column (for older data format)
-    if (order[featureName]) {
-      return order[featureName];
+  // Debug diagnostics for problematic orders
+  const debugOrder = (order: any) => {
+    const problemOrders = ['AK195', 'AN111', 'AK183', 'AN029', 'AL082', 'AM038'];
+    if (problemOrders.includes(order.fbOrderNumber || order.orderId)) {
+      console.log(`🔍 DEBUG ORDER ${order.fbOrderNumber || order.orderId}:`);
+      console.log('  - Order keys:', Object.keys(order));
+      console.log('  - Features object:', order.features);
+      console.log('  - Features type:', typeof order.features);
+      console.log('  - Direct handedness:', order.handedness);
+      console.log('  - Direct action_length:', order.action_length);
+      console.log('  - Direct actionLength:', order.actionLength);
+      console.log('  - Direct barrel_inlet:', order.barrel_inlet);
+      console.log('  - Direct barrelInlet:', order.barrelInlet);
+      if (order.features && typeof order.features === 'object') {
+        console.log('  - Features keys:', Object.keys(order.features));
+        console.log('  - Features.action_length:', order.features.action_length);
+        console.log('  - Features.actionLength:', order.features.actionLength);
+        console.log('  - Features.barrel_inlet:', order.features.barrel_inlet);
+        console.log('  - Features.barrelInlet:', order.features.barrelInlet);
+        console.log('  - Features.barrel_channel:', order.features.barrel_channel);
+        console.log('  - Features.barrel_profile:', order.features.barrel_profile);
+      }
+    }
+  };
+
+  // Enhanced feature aliases mapping
+  const FEATURE_ALIASES: { [key: string]: string[] } = {
+    action_length: ['action_length', 'actionLength', 'action', 'action_len', 'length'],
+    barrel_inlet: ['barrel_inlet', 'barrelInlet', 'barrel_channel', 'barrelChannel', 'barrel_profile', 'barrelProfile'],
+    handedness: ['handedness', 'hand', 'left_right', 'leftRight'],
+    action_inlet: ['action_inlet', 'actionInlet', 'action_channel', 'actionChannel'],
+    bottom_metal: ['bottom_metal', 'bottomMetal', 'bottom', 'metal'],
+    custom_bolt_notch: ['custom_bolt_notch', 'customBoltNotch', 'bolt_notch', 'boltNotch']
+  };
+
+  // Normalize feature value - handles arrays, objects, and various data types
+  const normalizeFeatureValue = (value: any): string | null => {
+    if (!value || value === 'none' || value === 'n/a' || value === 'not_specified' || value === '') {
+      return null;
     }
     
-    // Then check features JSONB object (for newer data format)
-    if (order.features && order.features[featureName]) {
-      return order.features[featureName];
+    // Handle arrays - take first non-empty value
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        if (typeof item === 'object' && item !== null) {
+          const normalized = normalizeFeatureValue(item.value || item.name || item.id);
+          if (normalized) return normalized;
+        } else {
+          const normalized = normalizeFeatureValue(item);
+          if (normalized) return normalized;
+        }
+      }
+      return null;
+    }
+    
+    // Handle objects - extract value, name, or id
+    if (typeof value === 'object' && value !== null) {
+      return normalizeFeatureValue(value.value || value.name || value.id);
+    }
+    
+    // Handle booleans
+    if (typeof value === 'boolean') {
+      return value ? 'yes' : 'no';
+    }
+    
+    // Handle strings
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      return trimmed === '' ? null : trimmed;
+    }
+    
+    // Convert other types to string
+    return String(value);
+  };
+
+  // Robust feature extraction with alias support and normalization
+  const getFeatureValue = (order: any, featureName: string): string | null => {
+    // Run diagnostics for problematic orders
+    debugOrder(order);
+    
+    const aliases = FEATURE_ALIASES[featureName] || [featureName];
+    
+    // Search through all aliases in multiple locations
+    for (const alias of aliases) {
+      // Check direct order properties
+      if (order[alias]) {
+        const normalized = normalizeFeatureValue(order[alias]);
+        if (normalized) return normalized;
+      }
+      
+      // Check features object
+      if (order.features && typeof order.features === 'object') {
+        if (order.features[alias]) {
+          const normalized = normalizeFeatureValue(order.features[alias]);
+          if (normalized) return normalized;
+        }
+        
+        // Check nested feature locations
+        const nestedLocations = ['cnc', 'options', 'details', 'selections'];
+        for (const location of nestedLocations) {
+          if (order.features[location] && typeof order.features[location] === 'object') {
+            if (order.features[location][alias]) {
+              const normalized = normalizeFeatureValue(order.features[location][alias]);
+              if (normalized) return normalized;
+            }
+          }
+        }
+      }
     }
     
     return null;
@@ -187,13 +285,6 @@ export default function CNCQueuePage() {
     'adjustable_stock'   // Adjustable stock models require gunsmith work
   ];
   
-  // Helper function to normalize feature values (handles arrays and strings)
-  const normalizeFeatureValue = (value: any): string => {
-    if (Array.isArray(value)) {
-      return value.length > 0 ? value[0] : '';
-    }
-    return typeof value === 'string' ? value : '';
-  };
 
   // Check if order has features that require gunsmith work
   const requiresGunsmith = (order: any) => {
@@ -246,13 +337,13 @@ export default function CNCQueuePage() {
            featureValue !== 'no' && 
            featureValue !== '' && 
            featureValue !== 'false' &&
-           (featureValue.toLowerCase().includes('yes') ||
-            featureValue.toLowerCase().includes('rail') ||
-            featureValue.toLowerCase().includes('qd') ||
-            featureValue.toLowerCase().includes('tripod') ||
-            featureValue.toLowerCase().includes('bipod') ||
-            featureValue.toLowerCase().includes('spartan') ||
-            featureValue.toLowerCase().includes('adjustable')))
+           (featureValue && featureValue.toLowerCase().includes('yes') ||
+            featureValue && featureValue.toLowerCase().includes('rail') ||
+            featureValue && featureValue.toLowerCase().includes('qd') ||
+            featureValue && featureValue.toLowerCase().includes('tripod') ||
+            featureValue && featureValue.toLowerCase().includes('bipod') ||
+            featureValue && featureValue.toLowerCase().includes('spartan') ||
+            featureValue && featureValue.toLowerCase().includes('adjustable')))
       ) {
         return true;
       }

@@ -1962,75 +1962,35 @@ export class DatabaseStorage implements IStorage {
 
   // Get all finalized orders with payment status
   async getAllOrdersWithPaymentStatus(): Promise<(AllOrder & { paymentTotal: number; isFullyPaid: boolean })[]> {
-    // Use the same approach as getAllOrders() but include customer names
+    // Optimized: Use single query to get orders with customer names and payment totals
+    // Exclude P1 purchase orders from All Orders list
     const ordersWithCustomers = await db
       .select({
-        // Order fields - copy from getAllOrders() to avoid TypeScript issues
+        // Order fields
         id: allOrders.id,
         orderId: allOrders.orderId,
         orderDate: allOrders.orderDate,
         dueDate: allOrders.dueDate,
         customerId: allOrders.customerId,
         customerPO: allOrders.customerPO,
-        fbOrderNumber: allOrders.fbOrderNumber,
-        agrOrderDetails: allOrders.agrOrderDetails,
-        isFlattop: allOrders.isFlattop,
-        isCustomOrder: allOrders.isCustomOrder,
-        modelId: allOrders.modelId,
-        handedness: allOrders.handedness,
-        shankLength: allOrders.shankLength,
-        features: allOrders.features, // CRITICAL: Include features field
-        featureQuantities: allOrders.featureQuantities,
-        discountCode: allOrders.discountCode,
-        notes: allOrders.notes,
-        customDiscountType: allOrders.customDiscountType,
-        customDiscountValue: allOrders.customDiscountValue,
-        showCustomDiscount: allOrders.showCustomDiscount,
-        priceOverride: allOrders.priceOverride,
-        shipping: allOrders.shipping,
-        tikkaOption: allOrders.tikkaOption,
-        status: allOrders.status,
-        barcode: allOrders.barcode,
         currentDepartment: allOrders.currentDepartment,
-        departmentHistory: allOrders.departmentHistory,
-        scrappedQuantity: allOrders.scrappedQuantity,
-        totalProduced: allOrders.totalProduced,
-        layupCompletedAt: allOrders.layupCompletedAt,
-        pluggingCompletedAt: allOrders.pluggingCompletedAt,
-        cncCompletedAt: allOrders.cncCompletedAt,
-        finishCompletedAt: allOrders.finishCompletedAt,
-        gunsmithCompletedAt: allOrders.gunsmithCompletedAt,
-        paintCompletedAt: allOrders.paintCompletedAt,
-        qcCompletedAt: allOrders.qcCompletedAt,
-        shippingCompletedAt: allOrders.shippingCompletedAt,
-        scrapDate: allOrders.scrapDate,
-        scrapReason: allOrders.scrapReason,
-        scrapDisposition: allOrders.scrapDisposition,
-        scrapAuthorization: allOrders.scrapAuthorization,
-        isReplacement: allOrders.isReplacement,
-        replacedOrderId: allOrders.replacedOrderId,
-        isPaid: allOrders.isPaid,
-        paymentType: allOrders.paymentType,
+        status: allOrders.status,
+        modelId: allOrders.modelId,
+        shipping: allOrders.shipping,
         paymentAmount: allOrders.paymentAmount,
-        paymentDate: allOrders.paymentDate,
-        paymentTimestamp: allOrders.paymentTimestamp,
-        trackingNumber: allOrders.trackingNumber,
-        shippingCarrier: allOrders.shippingCarrier,
-        shippingMethod: allOrders.shippingMethod,
-        shippedDate: allOrders.shippedDate,
-        estimatedDelivery: allOrders.estimatedDelivery,
-        shippingLabelGenerated: allOrders.shippingLabelGenerated,
-        customerNotified: allOrders.customerNotified,
-        notificationMethod: allOrders.notificationMethod,
-        notificationSentAt: allOrders.notificationSentAt,
-        deliveryConfirmed: allOrders.deliveryConfirmed,
-        deliveryConfirmedAt: allOrders.deliveryConfirmedAt,
+        isPaid: allOrders.isPaid,
+        isVerified: allOrders.isVerified,
+        fbOrderNumber: allOrders.fbOrderNumber,
+        createdAt: allOrders.createdAt,
+        updatedAt: allOrders.updatedAt,
         isCancelled: allOrders.isCancelled,
         cancelledAt: allOrders.cancelledAt,
         cancelReason: allOrders.cancelReason,
-        isVerified: allOrders.isVerified,
-        isManualDueDate: allOrders.isManualDueDate,
-        isManualOrderDate: allOrders.isManualOrderDate,
+        // Special shipping fields for highlighting in shipping queue
+        specialShippingInternational: allOrders.specialShippingInternational,
+        specialShippingNextDayAir: allOrders.specialShippingNextDayAir,
+        specialShippingBillToReceiver: allOrders.specialShippingBillToReceiver,
+        // Alt Ship To fields
         hasAltShipTo: allOrders.hasAltShipTo,
         altShipToCustomerId: allOrders.altShipToCustomerId,
         altShipToName: allOrders.altShipToName,
@@ -2038,12 +1998,6 @@ export class DatabaseStorage implements IStorage {
         altShipToEmail: allOrders.altShipToEmail,
         altShipToPhone: allOrders.altShipToPhone,
         altShipToAddress: allOrders.altShipToAddress,
-        specialShippingInternational: allOrders.specialShippingInternational,
-        specialShippingNextDayAir: allOrders.specialShippingNextDayAir,
-        specialShippingBillToReceiver: allOrders.specialShippingBillToReceiver,
-        assignedTechnician: allOrders.assignedTechnician,
-        createdAt: allOrders.createdAt,
-        updatedAt: allOrders.updatedAt,
         // Customer name
         customerName: customers.name,
       })
@@ -2073,13 +2027,15 @@ export class DatabaseStorage implements IStorage {
     // Create payment map for fast lookup
     const paymentMap = new Map(paymentTotals.map(p => [p.orderId, p.totalPayments]));
 
-    // Process orders with payment info (simplified to avoid DB connection overflow)
-    const ordersWithPaymentInfo = ordersWithCustomers.map(order => {
+    // Process orders with payment info (using proper order total calculation)
+    const ordersWithPaymentInfo = await Promise.all(ordersWithCustomers.map(async order => {
       const paymentTotal = paymentMap.get(order.orderId) || 0;
       
-      // Use the existing paymentAmount field for now to avoid DB connection issues
-      const orderTotal = order.paymentAmount || 0;
-      const isFullyPaid = paymentTotal >= orderTotal && orderTotal > 0;
+      // CRITICAL FIX: Use actual calculated order total, not stale paymentAmount field
+      const actualOrderTotal = await this.calculateOrderTotal(order);
+
+      // Fixed payment status logic using real current order total
+      const isFullyPaid = paymentTotal >= actualOrderTotal && actualOrderTotal > 0;
 
       return {
         ...order,
@@ -2087,7 +2043,7 @@ export class DatabaseStorage implements IStorage {
         paymentTotal,
         isFullyPaid
       };
-    });
+    }));
 
     return ordersWithPaymentInfo;
   }
@@ -2130,7 +2086,6 @@ export class DatabaseStorage implements IStorage {
         currentDepartment: allOrders.currentDepartment,
         status: allOrders.status,
         modelId: allOrders.modelId,
-        features: allOrders.features,
         shipping: allOrders.shipping,
         paymentAmount: allOrders.paymentAmount,
         isPaid: allOrders.isPaid,

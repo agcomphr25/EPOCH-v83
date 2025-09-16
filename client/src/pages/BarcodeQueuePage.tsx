@@ -537,6 +537,16 @@ export default function BarcodeQueuePage() {
                       
                       // Helper function to get action length display
                       const getActionLengthDisplay = (order: any) => {
+                        // Debug logging for first few orders
+                        if (['AI019', 'AO009', 'EI204', 'EI202'].includes(order.orderId)) {
+                          console.log(`🔍 ${order.orderId} DEBUG:`, {
+                            features: order.features,
+                            action_length: order.features?.action_length,
+                            action_inlet: order.features?.action_inlet,
+                            action: order.features?.action
+                          });
+                        }
+                        
                         if (!order.features) return 'Unknown Action';
 
                         const modelId = order.stockModelId || order.modelId;
@@ -804,6 +814,16 @@ export default function BarcodeQueuePage() {
                           
                           // Helper function to get action length display
                           const getActionLengthDisplay = (order: any) => {
+                            // Debug logging for first few orders
+                            if (['AI019', 'AO009', 'EI204', 'EI202'].includes(order.orderId)) {
+                              console.log(`🔍 ${order.orderId} DEBUG (Scanning View):`, {
+                                features: order.features,
+                                action_length: order.features?.action_length,
+                                action_inlet: order.features?.action_inlet,
+                                action: order.features?.action
+                              });
+                            }
+                            
                             if (!order.features) return 'Unknown Action';
 
                             const modelId = order.stockModelId || order.modelId;

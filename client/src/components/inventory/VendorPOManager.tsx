@@ -204,10 +204,11 @@ function VendorPOForm({ vendorPo, isOpen, onClose, onSubmit }: {
   );
 
   // Fetch vendors for the dropdown
-  const { data: vendors = [] } = useQuery({
+  const { data: vendorsResponse } = useQuery({
     queryKey: ['/api/vendors'],
     queryFn: () => apiRequest('/api/vendors')
   });
+  const vendors = vendorsResponse?.data || [];
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

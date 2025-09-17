@@ -2112,12 +2112,12 @@ export const vendorPurchaseOrderItems = pgTable('vendor_purchase_order_items', {
 // Vendor Purchase Order schemas
 export const insertVendorPurchaseOrderSchema = createInsertSchema(vendorPurchaseOrders).omit({
   id: true,
+  poNumber: true, // Auto-generated
   barcode: true, // Auto-generated
   totalCost: true, // Calculated
   createdAt: true,
   updatedAt: true
 }).extend({
-  poNumber: z.string().min(1, "PO Number is required"),
   vendorId: z.number().min(1, "Vendor is required"),
   vendorName: z.string().min(1, "Vendor name is required"),
   buyerName: z.string().min(1, "Buyer name is required"),

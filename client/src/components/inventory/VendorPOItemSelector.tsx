@@ -89,8 +89,8 @@ function VendorPOItemForm({
 
   // Filter inventory items based on search
   const filteredItems = inventoryItems.filter((invItem) =>
-    invItem.agPartNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    invItem.description.toLowerCase().includes(searchQuery.toLowerCase())
+    (invItem.agPartNumber || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (invItem.description || '').toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const handleInventoryItemSelect = (invItem: InventoryItem) => {

@@ -120,6 +120,25 @@ router.post('/', checkVendorPOPermission, async (req: Request, res: Response) =>
       return res.status(400).json({ error: 'Vendor not found' });
     }
     
+    // Map frontend shipVia to backend enum values
+    const shipViaMapping: { [key: string]: string } = {
+      'Other': 'Delivery',
+      'FedEx Ground': 'Delivery',
+      'FedEx Express': 'Delivery', 
+      'UPS Ground': 'UPS',
+      'UPS Next Day': 'UPS',
+      'USPS': 'Delivery',
+      'Freight': 'Delivery',
+      'Will Call': 'Pickup'
+    };
+
+    // Normalize and map shipVia with debugging
+    const rawShipVia = String(shipVia || '').trim();
+    const mappedShipVia = shipViaMapping[rawShipVia] || rawShipVia || 'Delivery';
+    if (process.env.NODE_ENV === 'development') {
+      console.log('ShipVia mapping:', { raw: rawShipVia, mapped: mappedShipVia });
+    }
+
     // Prepare data for validation with correct field names
     const poData = insertVendorPurchaseOrderSchema.parse({
       vendorId,
@@ -127,7 +146,7 @@ router.post('/', checkVendorPOPermission, async (req: Request, res: Response) =>
       buyerName: (req as any).user?.username || 'System',
       poDate: new Date(),
       expectedDelivery: new Date(expectedDeliveryDate),
-      shipVia: shipVia || 'Delivery',
+      shipVia: mappedShipVia,
       notes,
       status: 'DRAFT'
     });

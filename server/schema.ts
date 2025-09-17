@@ -2184,7 +2184,7 @@ export type P2PurchaseOrderItem = typeof p2PurchaseOrderItems.$inferSelect;
 export type InsertProductionOrder = z.infer<typeof insertProductionOrderSchema>;
 export type ProductionOrder = typeof productionOrders.$inferSelect;
 
-export const orderStatusEnum = pgEnum('order_status', ['DRAFT', 'CONFIRMED', 'FINALIZED', 'CANCELLED', 'RESERVED']);
+// Removed order_status enum to avoid conflicts - using specific enums per module instead
 
 // BOM (Bill of Materials) Management Tables for P2
 export const bomDefinitions = pgTable('bom_definitions', {
@@ -3035,6 +3035,9 @@ export const insertVendorSchema = createInsertSchema(vendors).omit({
 export type Vendor = typeof vendors.$inferSelect;
 export type InsertVendor = z.infer<typeof insertVendorSchema>;
 
+// Vendor Purchase Order Status Enum
+export const vendorPOStatusEnum = pgEnum('vendor_po_status', ['DRAFT', 'SENT', 'PARTIALLY_RECEIVED', 'FULLY_RECEIVED', 'CANCELLED']);
+
 // Vendor Purchase Orders - POs FROM your company TO vendors for procurement
 export const vendorPurchaseOrders = pgTable('vendor_purchase_orders', {
   id: serial('id').primaryKey(),
@@ -3045,7 +3048,7 @@ export const vendorPurchaseOrders = pgTable('vendor_purchase_orders', {
   poDate: date('po_date').notNull(),
   expectedDelivery: date('expected_delivery').notNull(),
   shipVia: text('ship_via').notNull().default('Delivery'), // Delivery, Pickup, UPS, Call to Confirm
-  status: text('status').notNull().default('DRAFT'), // DRAFT, SENT, PARTIALLY_RECEIVED, FULLY_RECEIVED, CANCELLED
+  status: vendorPOStatusEnum('status').notNull().default('DRAFT'),
   notes: text('notes'),
   barcode: text('barcode').unique(), // Auto-generated barcode for receiving
   totalCost: real('total_cost').default(0), // Calculated total of all line items

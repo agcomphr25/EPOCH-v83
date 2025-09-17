@@ -255,7 +255,7 @@ function VendorPOForm({ vendorPo, isOpen, onClose, onSubmit }: {
                 <SelectValue placeholder="Select vendor..." />
               </SelectTrigger>
               <SelectContent>
-                {vendors.map((vendor: any) => (
+                {(vendors || []).map((vendor: any) => (
                   <SelectItem key={vendor.id} value={vendor.id.toString()}>
                     {vendor.name}
                   </SelectItem>

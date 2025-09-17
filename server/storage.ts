@@ -1,5 +1,5 @@
 import {
-  users, csvData, customerTypes, persistentDiscounts, shortTermSales, featureCategories, featureSubCategories, features, stockModels, orders, orderDrafts, payments, forms, formSubmissions, vendors,
+  users, csvData, customerTypes, persistentDiscounts, shortTermSales, featureCategories, featureSubCategories, features, stockModels, orders, orderDrafts, payments, forms, formSubmissions, vendors, vendorPurchaseOrders, vendorPurchaseOrderItems,
   inventoryItems, inventoryScans, partsRequests, employees, qcDefinitions, qcSubmissions, maintenanceSchedules, maintenanceLogs,
   timeClockEntries, checklistItems, onboardingDocs, customers, customerAddresses, communicationLogs, pdfDocuments,
   enhancedFormCategories, enhancedForms, enhancedFormVersions, enhancedFormSubmissions,
@@ -106,6 +106,9 @@ import {
   type RefundRequest, type InsertRefundRequest,
   // Vendor types
   type Vendor, type InsertVendor,
+  // Vendor Purchase Order types
+  type VendorPurchaseOrder, type InsertVendorPurchaseOrder,
+  type VendorPurchaseOrderItem, type InsertVendorPurchaseOrderItem,
   // Robust Parts and BOM types
   type RobustPart, type InsertRobustPart,
   type RobustBomLine, type InsertRobustBomLine,
@@ -666,6 +669,20 @@ export interface IStorage {
   createVendor(data: InsertVendor): Promise<Vendor>;
   updateVendor(id: number, data: Partial<InsertVendor>): Promise<Vendor>;
   deleteVendor(id: number): Promise<void>;
+
+  // Vendor Purchase Order CRUD methods
+  getAllVendorPurchaseOrders(): Promise<VendorPurchaseOrder[]>;
+  getVendorPurchaseOrder(id: number): Promise<VendorPurchaseOrder | undefined>;
+  createVendorPurchaseOrder(data: InsertVendorPurchaseOrder & { poNumber: string; barcode: string; totalCost?: number }): Promise<VendorPurchaseOrder>;
+  updateVendorPurchaseOrder(id: number, data: Partial<InsertVendorPurchaseOrder & { totalCost?: number }>): Promise<VendorPurchaseOrder | undefined>;
+  deleteVendorPurchaseOrder(id: number): Promise<boolean>;
+  
+  // Vendor Purchase Order Items CRUD methods
+  getVendorPurchaseOrderItems(vendorPoId: number): Promise<VendorPurchaseOrderItem[]>;
+  getVendorPurchaseOrderItem(id: number): Promise<VendorPurchaseOrderItem | undefined>;
+  createVendorPurchaseOrderItem(data: InsertVendorPurchaseOrderItem & { totalPrice: number }): Promise<VendorPurchaseOrderItem>;
+  updateVendorPurchaseOrderItem(id: number, data: Partial<InsertVendorPurchaseOrderItem & { totalPrice?: number }>): Promise<VendorPurchaseOrderItem | undefined>;
+  deleteVendorPurchaseOrderItem(id: number): Promise<boolean>;
 
   // ============================================================================
   // INVENTORY MANAGEMENT & MRP METHODS
@@ -6812,6 +6829,82 @@ export class DatabaseStorage implements IStorage {
     // Since there's no isActive column, we'll actually delete the record
     // In the future, you may want to add an isActive column for soft deletes
     await db.delete(vendors).where(eq(vendors.id, id));
+  }
+
+  // Vendor Purchase Order implementations
+  async getAllVendorPurchaseOrders(): Promise<VendorPurchaseOrder[]> {
+    return await db.select().from(vendorPurchaseOrders).orderBy(desc(vendorPurchaseOrders.createdAt));
+  }
+
+  async getVendorPurchaseOrder(id: number): Promise<VendorPurchaseOrder | undefined> {
+    const [vendorPo] = await db.select().from(vendorPurchaseOrders).where(eq(vendorPurchaseOrders.id, id));
+    return vendorPo;
+  }
+
+  async createVendorPurchaseOrder(data: InsertVendorPurchaseOrder & { poNumber: string; barcode: string; totalCost?: number }): Promise<VendorPurchaseOrder> {
+    const [vendorPo] = await db.insert(vendorPurchaseOrders).values({
+      ...data,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    }).returning();
+    return vendorPo;
+  }
+
+  async updateVendorPurchaseOrder(id: number, data: Partial<InsertVendorPurchaseOrder & { totalCost?: number }>): Promise<VendorPurchaseOrder | undefined> {
+    const [vendorPo] = await db.update(vendorPurchaseOrders)
+      .set({
+        ...data,
+        updatedAt: new Date()
+      })
+      .where(eq(vendorPurchaseOrders.id, id))
+      .returning();
+    return vendorPo;
+  }
+
+  async deleteVendorPurchaseOrder(id: number): Promise<boolean> {
+    // First delete all associated items
+    await db.delete(vendorPurchaseOrderItems).where(eq(vendorPurchaseOrderItems.vendorPoId, id));
+    
+    // Then delete the vendor PO
+    const result = await db.delete(vendorPurchaseOrders).where(eq(vendorPurchaseOrders.id, id));
+    return result.rowCount ? result.rowCount > 0 : false;
+  }
+
+  // Vendor Purchase Order Items implementations
+  async getVendorPurchaseOrderItems(vendorPoId: number): Promise<VendorPurchaseOrderItem[]> {
+    return await db.select().from(vendorPurchaseOrderItems)
+      .where(eq(vendorPurchaseOrderItems.vendorPoId, vendorPoId))
+      .orderBy(vendorPurchaseOrderItems.lineNumber);
+  }
+
+  async getVendorPurchaseOrderItem(id: number): Promise<VendorPurchaseOrderItem | undefined> {
+    const [item] = await db.select().from(vendorPurchaseOrderItems).where(eq(vendorPurchaseOrderItems.id, id));
+    return item;
+  }
+
+  async createVendorPurchaseOrderItem(data: InsertVendorPurchaseOrderItem & { totalPrice: number }): Promise<VendorPurchaseOrderItem> {
+    const [item] = await db.insert(vendorPurchaseOrderItems).values({
+      ...data,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    }).returning();
+    return item;
+  }
+
+  async updateVendorPurchaseOrderItem(id: number, data: Partial<InsertVendorPurchaseOrderItem & { totalPrice?: number }>): Promise<VendorPurchaseOrderItem | undefined> {
+    const [item] = await db.update(vendorPurchaseOrderItems)
+      .set({
+        ...data,
+        updatedAt: new Date()
+      })
+      .where(eq(vendorPurchaseOrderItems.id, id))
+      .returning();
+    return item;
+  }
+
+  async deleteVendorPurchaseOrderItem(id: number): Promise<boolean> {
+    const result = await db.delete(vendorPurchaseOrderItems).where(eq(vendorPurchaseOrderItems.id, id));
+    return result.rowCount ? result.rowCount > 0 : false;
   }
 
   // Robust Parts Management Methods

@@ -82,8 +82,8 @@ function VendorPOItemForm({
 
   // Fetch inventory items for AG# search
   const { data: inventoryItems = [] } = useQuery<InventoryItem[]>({
-    queryKey: ['/api/inventory-items'],
-    queryFn: () => apiRequest('/api/inventory-items'),
+    queryKey: ['/api/enhanced/inventory/items'],
+    queryFn: () => apiRequest('/api/enhanced/inventory/items'),
     enabled: searchQuery.length > 0 || searchOpen
   });
 

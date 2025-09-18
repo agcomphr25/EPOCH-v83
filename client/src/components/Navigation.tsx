@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link, useLocation } from 'wouter';
-import { Factory, User, FileText, TrendingDown, Plus, Settings, Package, FilePenLine, ClipboardList, BarChart, ChevronDown, ChevronRight, FormInput, PieChart, Scan, Warehouse, Shield, Wrench, Users, TestTube, DollarSign, Receipt, TrendingUp, List, BookOpen, Calendar, CheckSquare, Truck, Mail, MessageSquare, CreditCard, XCircle, Cog, ArrowRight, LogOut, Scissors, MapPin, Snowflake } from "lucide-react";
+import { Factory, User, FileText, TrendingDown, Plus, Settings, Package, FilePenLine, ClipboardList, BarChart, ChevronDown, ChevronRight, FormInput, PieChart, Scan, Warehouse, Shield, Wrench, Users, TestTube, DollarSign, Receipt, TrendingUp, List, BookOpen, Calendar, CheckSquare, Truck, Mail, MessageSquare, CreditCard, XCircle, Cog, ArrowRight, LogOut, GraduationCap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import InstallPWAButton from "./InstallPWAButton";
@@ -76,8 +76,6 @@ export default function Navigation() {
   const [purchaseOrdersExpanded, setPurchaseOrdersExpanded] = useState(false);
   const [productionSchedulingExpanded, setProductionSchedulingExpanded] = useState(false);
   const [departmentQueueExpanded, setDepartmentQueueExpanded] = useState(false);
-  const [p2DepartmentQueueExpanded, setP2DepartmentQueueExpanded] = useState(false);
-  const [cuttingTableExpanded, setCuttingTableExpanded] = useState(false);
 
   // Helper function to close all dropdowns
   const closeAllDropdowns = useCallback(() => {
@@ -90,8 +88,6 @@ export default function Navigation() {
     setPurchaseOrdersExpanded(false);
     setProductionSchedulingExpanded(false);
     setDepartmentQueueExpanded(false);
-    setP2DepartmentQueueExpanded(false);
-    setCuttingTableExpanded(false);
     setVerifiedModulesExpanded(false);
   }, []);
 
@@ -110,8 +106,6 @@ export default function Navigation() {
       if (dropdownName !== 'purchaseOrders') setPurchaseOrdersExpanded(false);
       if (dropdownName !== 'productionScheduling') setProductionSchedulingExpanded(false);
       if (dropdownName !== 'departmentQueue') setDepartmentQueueExpanded(false);
-      if (dropdownName !== 'p2DepartmentQueue') setP2DepartmentQueueExpanded(false);
-      if (dropdownName !== 'cuttingTable') setCuttingTableExpanded(false);
       if (dropdownName !== 'verifiedModules') setVerifiedModulesExpanded(false);
     }
   }, []);
@@ -273,6 +267,18 @@ export default function Navigation() {
       label: 'Document Management',
       icon: FileText,
       description: 'Unified document repository with advanced tagging and organization'
+    },
+    {
+      path: '/shutdown-training',
+      label: 'Shutdown Training',
+      icon: GraduationCap,
+      description: 'Presentation-style shutdown procedures training with attendance signatures'
+    },
+    {
+      path: '/fire-safety-training',
+      label: 'Fire Safety Training',
+      icon: GraduationCap,
+      description: 'Presentation-style fire safety training with attendance signatures'
     }
   ];
 
@@ -447,10 +453,10 @@ export default function Navigation() {
     },
     {
       path: '/po-products',
-      label: 'P1 PO Products',
+      label: 'PO Products',
       icon: Package,
-      description: 'Product configuration for P1 purchase orders'
-    },
+      description: 'Product configuration for purchase orders'
+    }
   ];
 
   const verifiedModulesItems = [
@@ -518,151 +524,67 @@ export default function Navigation() {
       path: '/department-queue/production-queue',
       label: 'Production Queue',
       icon: List,
-      description: 'Production queue P1 department manager'
-    },
-    {
-      path: '/department-queue/cutting-table',
-      label: 'Cutting Table',
-      icon: Package,
-      description: 'Material cutting and packet preparation P1 department manager'
+      description: 'Production queue department manager'
     },
     {
       path: '/department-queue/layup-plugging',
       label: 'Layup/Plugging',
       icon: Factory,
-      description: 'Layup and plugging P1 department manager'
+      description: 'Layup and plugging department manager'
     },
     {
       path: '/department-queue/barcode',
       label: 'Barcode',
       icon: Scan,
-      description: 'Barcode processing P1 department manager'
+      description: 'Barcode processing department manager'
     },
     {
       path: '/department-queue/cnc',
       label: 'CNC',
       icon: Settings,
-      description: 'CNC machining P1 department manager'
+      description: 'CNC machining department manager'
     },
     {
       path: '/department-queue/gunsmith',
       label: 'Gunsmith',
       icon: Wrench,
-      description: 'Gunsmith P1 department manager'
+      description: 'Gunsmith department manager'
     },
     {
       path: '/department-queue/finish',
       label: 'Finish',
       icon: CheckSquare,
-      description: 'Finish assignment P1 department manager'
+      description: 'Finish assignment department manager'
     },
     {
       path: '/department-queue/finish-qc',
       label: 'Finish QC',
       icon: Shield,
-      description: 'Finish quality control P1 department manager'
+      description: 'Finish quality control department manager'
     },
     {
       path: '/department-queue/paint',
       label: 'Paint',
       icon: Package,
-      description: 'Paint P1 department manager'
+      description: 'Paint department manager'
     },
     {
       path: '/department-queue/qc-shipping',
       label: 'Shipping QC',
       icon: TrendingUp,
-      description: 'Shipping quality control P1 department manager'
+      description: 'Shipping quality control department manager'
     },
     {
       path: '/department-queue/shipping',
       label: 'Shipping',
       icon: Package,
-      description: 'Shipping P1 department manager'
+      description: 'Shipping department manager'
     },
     {
       path: '/shipping-management',
       label: 'Fulfilled Orders',
       icon: Truck,
       description: 'Manage tracking numbers and customer notifications'
-    }
-  ];
-
-  const cuttingTableItems = [
-    {
-      path: '/cutting-table/dashboard',
-      label: 'Cutting Table Dashboard',
-      icon: Scissors,
-      description: 'Overview of all cutting table operations and alerts'
-    },
-    {
-      path: '/cutting-table/p1-packets',
-      label: 'P1 Packet Manager',
-      icon: Package,
-      description: 'Manage CF and FG packet cutting for P1 operations'
-    },
-    {
-      path: '/cutting-table/material-tracker',
-      label: 'Material Tracker',
-      icon: MapPin,
-      description: 'Track inventory and location of CF, FG, and other materials'
-    },
-    {
-      path: '/cutting-table/defrost-schedule',
-      label: 'Defrost Schedule',
-      icon: Snowflake,
-      description: 'Schedule and manage defrost cycles for 20 freezer units'
-    }
-  ];
-
-  const p2DepartmentQueueItems = [
-    {
-      path: '/p2-department-queue/production-queue',
-      label: 'P2 Production Queue',
-      icon: List,
-      description: 'Production queue P2 department manager'
-    },
-    {
-      path: '/p2-department-queue/barcode',
-      label: 'P2 Barcode',
-      icon: Scan,
-      description: 'Barcode processing P2 department manager'
-    },
-    {
-      path: '/p2-department-queue/layup',
-      label: 'P2 Layup',
-      icon: Factory,
-      description: 'Layup P2 department manager'
-    },
-    {
-      path: '/p2-department-queue/assembly-disassembly',
-      label: 'P2 Assembly/Disassembly',
-      icon: Settings,
-      description: 'Assembly/Disassembly P2 department manager'
-    },
-    {
-      path: '/p2-department-queue/finish',
-      label: 'P2 Finish',
-      icon: CheckSquare,
-      description: 'Finish P2 department manager'
-    },
-    {
-      path: '/p2-department-queue/quality-control',
-      label: 'P2 Quality Control',
-      icon: Shield,
-      description: 'Quality Control P2 department manager'
-    },
-    {
-      path: '/p2-department-queue/shipping',
-      label: 'P2 Shipping',
-      icon: Package,
-      description: 'Shipping P2 department manager'
-    },
-    {
-      path: '/p2-department-queue/fulfilled',
-      label: 'P2 Fulfilled',
-      icon: Truck,
-      description: 'Fulfilled P2 orders'
     }
   ];
 
@@ -676,8 +598,6 @@ export default function Navigation() {
   const isPurchaseOrdersActive = purchaseOrdersItems.some(item => location === item.path);
   const isProductionSchedulingActive = productionSchedulingItems.some(item => location === item.path);
   const isDepartmentQueueActive = departmentQueueItems.some(item => location === item.path);
-  const isP2DepartmentQueueActive = p2DepartmentQueueItems.some(item => location === item.path);
-  const isCuttingTableActive = cuttingTableItems.some(item => location === item.path);
 
   // Close all dropdowns when navigating to a new page
   useEffect(() => {
@@ -717,16 +637,10 @@ export default function Navigation() {
       if (isDepartmentQueueActive) {
         setDepartmentQueueExpanded(true);
       }
-      if (isP2DepartmentQueueActive) {
-        setP2DepartmentQueueExpanded(true);
-      }
-      if (isCuttingTableActive) {
-        setCuttingTableExpanded(true);
-      }
     }, 100); // Small delay to prevent conflicts with manual dropdown closing
 
     return () => clearTimeout(timer);
-  }, [isVerifiedModulesActive, isFormsReportsActive, isInventoryActive, isQcMaintenanceActive, isEmployeesActive, isFinanceActive, isUserDashboardsActive, isPurchaseOrdersActive, isProductionSchedulingActive, isDepartmentQueueActive, isP2DepartmentQueueActive, isCuttingTableActive]);
+  }, [isVerifiedModulesActive, isFormsReportsActive, isInventoryActive, isQcMaintenanceActive, isEmployeesActive, isFinanceActive, isUserDashboardsActive, isPurchaseOrdersActive, isProductionSchedulingActive, isDepartmentQueueActive]);
 
   return (
     <header className="bg-white shadow-sm border-b border-gray-200">
@@ -1101,94 +1015,6 @@ export default function Navigation() {
               {departmentQueueExpanded && (
                 <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[250px]">
                   {departmentQueueItems.map((item) => {
-                    const Icon = item.icon;
-                    const isActive = location === item.path;
-
-                    return (
-                      <Link key={item.path} href={item.path}>
-                        <button
-                          className={cn(
-                            "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
-                            isActive && "bg-primary text-white hover:bg-primary"
-                          )}
-                          onClick={closeAllDropdowns}
-                        >
-                          <Icon className="h-4 w-4" />
-                          {item.label}
-                        </button>
-                      </Link>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-            {/* P2 Department Manager Dropdown */}
-            <div className="relative">
-              <Button
-                variant={isP2DepartmentQueueActive ? "default" : "ghost"}
-                className={cn(
-                  "flex items-center gap-2 text-sm",
-                  isP2DepartmentQueueActive && "bg-primary text-white"
-                )}
-                onClick={() => toggleDropdown('p2DepartmentQueue', p2DepartmentQueueExpanded, setP2DepartmentQueueExpanded)}
-              >
-                <Factory className="h-4 w-4" />
-                P2 Department Manager
-                {p2DepartmentQueueExpanded ? (
-                  <ChevronDown className="h-4 w-4" />
-                ) : (
-                  <ChevronRight className="h-4 w-4" />
-                )}
-              </Button>
-
-              {p2DepartmentQueueExpanded && (
-                <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[250px]">
-                  {p2DepartmentQueueItems.map((item) => {
-                    const Icon = item.icon;
-                    const isActive = location === item.path;
-
-                    return (
-                      <Link key={item.path} href={item.path}>
-                        <button
-                          className={cn(
-                            "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
-                            isActive && "bg-primary text-white hover:bg-primary"
-                          )}
-                          onClick={closeAllDropdowns}
-                        >
-                          <Icon className="h-4 w-4" />
-                          {item.label}
-                        </button>
-                      </Link>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-            {/* Cutting Table Dropdown */}
-            <div className="relative">
-              <Button
-                variant={isCuttingTableActive ? "default" : "ghost"}
-                className={cn(
-                  "flex items-center gap-2 text-sm",
-                  isCuttingTableActive && "bg-primary text-white"
-                )}
-                onClick={() => toggleDropdown('cuttingTable', cuttingTableExpanded, setCuttingTableExpanded)}
-              >
-                <Scissors className="h-4 w-4" />
-                Cutting Table
-                {cuttingTableExpanded ? (
-                  <ChevronDown className="h-4 w-4" />
-                ) : (
-                  <ChevronRight className="h-4 w-4" />
-                )}
-              </Button>
-
-              {cuttingTableExpanded && (
-                <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[250px]">
-                  {cuttingTableItems.map((item) => {
                     const Icon = item.icon;
                     const isActive = location === item.path;
 

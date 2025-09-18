@@ -62,41 +62,6 @@ export function generateP1OrderId(date: Date, lastId: string): string {
   return currentPrefix + '001';
 }
 
-// P2 Order ID Generation
-// Format: customer3letters + year + sequential number starting at 0500
-// Example: str250500, str250501, etc. for Strata-G customer in 2025
-export function generateP2OrderId(customerName: string, existingP2OrderIds: string[] = []): string {
-  // Get first 3 letters of customer name in lowercase
-  const customerPrefix = customerName.toLowerCase().substring(0, 3);
-  
-  // Get current year (last 2 digits)
-  const currentYear = new Date().getFullYear();
-  const yearSuffix = currentYear.toString().slice(-2);
-  
-  // Base format: customer3letters + year
-  const basePrefix = customerPrefix + yearSuffix;
-  
-  // Find the highest existing sequence number for this customer and year
-  let maxSequence = 499; // Start at 499 so first ID will be 0500
-  
-  const prefixRegex = new RegExp(`^${basePrefix}(\\d{4})$`);
-  for (const orderId of existingP2OrderIds) {
-    const match = prefixRegex.exec(orderId);
-    if (match) {
-      const sequence = parseInt(match[1], 10);
-      if (sequence > maxSequence) {
-        maxSequence = sequence;
-      }
-    }
-  }
-  
-  // Generate next sequence number
-  const nextSequence = maxSequence + 1;
-  const sequenceStr = nextSequence.toString().padStart(4, '0');
-  
-  return basePrefix + sequenceStr;
-}
-
 // Helper function to get current year-month prefix (e.g., "EH" for August 2025)
 export function getCurrentYearMonthPrefix(date: Date = new Date()): string {
   const year = date.getFullYear();

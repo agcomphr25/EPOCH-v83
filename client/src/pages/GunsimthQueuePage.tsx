@@ -405,7 +405,7 @@ export default function GunsimthQueuePage() {
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex items-center gap-2 mb-6">
         <Target className="h-6 w-6" />
-        <h1 className="text-3xl font-bold">Gunsmith P1 Department Manager</h1>
+        <h1 className="text-3xl font-bold">Gunsmith Department Manager</h1>
       </div>
 
       {/* Barcode Scanner at top */}

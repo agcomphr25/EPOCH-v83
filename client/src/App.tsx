@@ -75,6 +75,8 @@ import WasteManagementForm from '@/pages/WasteManagementForm';
 import TaskTracker from '@/pages/TaskTracker';
 import KickbackTracking from '@/components/KickbackTracking';
 import DocumentManagement from "./pages/DocumentManagement";
+import ShutdownProceduresTraining from "@/pages/ShutdownProceduresTraining";
+import FireSafetyTraining from "@/pages/FireSafetyTraining";
 import PurchaseOrderItemsQueuePage from "./pages/PurchaseOrderItemsQueuePage";
 import LayupPluggingQueuePage from "./pages/LayupPluggingQueuePage";
 import BarcodeQueuePage from "./pages/BarcodeQueuePage";
@@ -88,10 +90,6 @@ import QCShippingQueuePage from "./pages/QCShippingQueuePage";
 import ShippingQueuePage from "./pages/ShippingQueuePage";
 import ShippingLabelPage from "./pages/ShippingLabelPage";
 import ShippingManagement from "./pages/ShippingManagement";
-import CuttingTableQueuePage from "./pages/CuttingTableQueuePage";
-import CuttingTableDashboard from "./pages/CuttingTableDashboard";
-import MaterialTracker from "./pages/MaterialTracker";
-import DefrostSchedule from "./pages/DefrostSchedule";
 import NonconformanceDashboard from "./components/NonconformanceDashboard";
 import NonconformanceReport from "./components/NonconformanceReport";
 import RFQRiskAssessment from "./pages/RFQRiskAssessment";
@@ -105,7 +103,6 @@ import PaymentManagement from "./pages/PaymentManagement";
 import RefundRequest from "./pages/RefundRequest";
 import RefundQueue from "./pages/RefundQueue";
 import ProductionQueuePage from "./pages/ProductionQueuePage";
-import P2ProductionQueuePage from "./pages/P2ProductionQueuePage";
 import SimplifiedLayupScheduler from "./components/SimplifiedLayupScheduler";
 import CustomerSatisfaction from "./pages/CustomerSatisfaction";
 import VendorsPage from "./pages/VendorsPage";
@@ -298,6 +295,8 @@ function App() {
                   <Route path="/task-tracker" component={TaskTracker} />
                   <Route path="/kickback-tracking" component={KickbackTracking} />
                   <Route path="/document-management" component={DocumentManagement} />
+                  <Route path="/shutdown-training" component={ShutdownProceduresTraining} />
+                  <Route path="/fire-safety-training" component={FireSafetyTraining} />
 
                   {/* Queue Management Routes */}
                   <Route path="/purchase-order-items-queue" component={PurchaseOrderItemsQueuePage} />
@@ -317,15 +316,6 @@ function App() {
 
                   {/* Department Queue Management Routes */}
                   <Route path="/department-queue/production-queue" component={ProductionQueuePage} />
-                  
-                  {/* Cutting Table Management Routes */}
-                  <Route path="/cutting-table" component={CuttingTableDashboard} />
-                  <Route path="/cutting-table/dashboard" component={CuttingTableDashboard} />
-                  <Route path="/cutting-table/p1-packets" component={CuttingTableQueuePage} />
-                  <Route path="/department-queue/cutting-table" component={CuttingTableQueuePage} />
-                  <Route path="/cutting-table/material-tracker" component={MaterialTracker} />
-                  <Route path="/cutting-table/defrost-schedule" component={DefrostSchedule} />
-                  
                   <Route path="/department-queue/layup-plugging" component={LayupPluggingQueuePage} />
                   <Route path="/department-queue/barcode" component={BarcodeQueuePage} />
                   <Route path="/department-queue/cnc" component={CNCQueuePage} />
@@ -335,9 +325,6 @@ function App() {
                   <Route path="/department-queue/paint" component={PaintQueuePage} />
                   <Route path="/department-queue/qc-shipping" component={QCShippingQueuePage} />
                   <Route path="/department-queue/shipping" component={ShippingQueuePage} />
-
-                  {/* P2 Department Manager Routes */}
-                  <Route path="/p2-department-queue/production-queue" component={P2ProductionQueuePage} />
                   
                   {/* Shipping Label Route */}
                   <Route path="/shipping/label/:orderId" component={ShippingLabelPage} />

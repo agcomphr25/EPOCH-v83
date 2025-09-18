@@ -123,8 +123,8 @@ router.post('/login', async (req: Request, res: Response) => {
       // Set secure cookie with enhanced security
       res.cookie('sessionToken', result.sessionToken, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production', // Only secure in production
-        sameSite: 'lax', // Changed from 'strict' to 'lax' for better compatibility
+        secure: true, // Always use secure cookies
+        sameSite: 'strict',
         maxAge: 8 * 60 * 60 * 1000, // 8 hours
         path: '/', // Explicit path
       });

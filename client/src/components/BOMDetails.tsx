@@ -292,7 +292,7 @@ export function BOMDetails({ bomId, onBack }: BOMDetailsProps) {
                   Add Item
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
+              <DialogContent className="max-w-2xl">
                 <DialogHeader>
                   <DialogTitle>Add BOM Item</DialogTitle>
                   <DialogDescription>
@@ -464,7 +464,7 @@ export function BOMDetails({ bomId, onBack }: BOMDetailsProps) {
 
       {/* Edit Item Dialog */}
       <Dialog open={!!editingItem} onOpenChange={() => setEditingItem(null)}>
-        <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Edit BOM Item</DialogTitle>
             <DialogDescription>

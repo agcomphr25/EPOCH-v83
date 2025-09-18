@@ -25,9 +25,17 @@ function isDeploymentEnvironment(req: Request): boolean {
   const host = req.get('host') || '';
   
   // Check for production deployment domains
-  return host.includes('.replit.app') || 
-         host.includes('.repl.co') || 
-         process.env.NODE_ENV === 'production';
+  const isProduction = host.includes('.replit.app') || 
+                      host.includes('.repl.co') || 
+                      process.env.NODE_ENV === 'production';
+  
+  if (isProduction) {
+    console.log('🔧 BACKEND PRODUCTION MODE: Authentication enabled for deployed site');
+    return true;
+  } else {
+    console.log('🔧 BACKEND AUTH BYPASS: Local development - authentication disabled');
+    return false;
+  }
 }
 
 /**

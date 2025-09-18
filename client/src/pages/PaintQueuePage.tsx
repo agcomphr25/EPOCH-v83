@@ -14,7 +14,6 @@ import { format } from 'date-fns';
 import { getDisplayOrderId } from '@/lib/orderUtils';
 import { useLocation } from 'wouter';
 import FBNumberSearch from '@/components/FBNumberSearch';
-import { OrderSearchBox } from '@/components/OrderSearchBox';
 import { SalesOrderModal } from '@/components/SalesOrderModal';
 
 export default function PaintQueuePage() {
@@ -336,28 +335,6 @@ export default function PaintQueuePage() {
       {/* FishBowl Number Search */}
       <FBNumberSearch onOrderFound={handleOrderFound} />
 
-      {/* Order Search Box */}
-      <Card>
-        <CardContent className="p-4">
-          <div className="flex items-center gap-4">
-            <OrderSearchBox 
-              orders={paintOrders}
-              placeholder="Search orders by Order ID or FishBowl Number..."
-              onOrderSelect={handleOrderSearchSelect}
-            />
-            {highlightedOrderId && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setHighlightedOrderId(null)}
-                className="text-sm"
-              >
-                Clear highlight
-              </Button>
-            )}
-          </div>
-        </CardContent>
-      </Card>
 
       {/* Department Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">

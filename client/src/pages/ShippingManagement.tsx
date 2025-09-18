@@ -30,6 +30,7 @@ interface OrderWithTracking {
   shippingCost?: number;
   labelGenerated?: boolean;
   labelGeneratedAt?: string;
+  fbOrderNumber?: string;
 }
 
 export default function ShippingManagement() {
@@ -152,7 +153,8 @@ export default function ShippingManagement() {
   const filteredOrders = (orders as OrderWithTracking[] | undefined)?.filter((order: OrderWithTracking) => {
     const matchesSearch = order.orderId.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          order.customer.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         (order.trackingNumber && order.trackingNumber.toLowerCase().includes(searchTerm.toLowerCase()));
+                         (order.trackingNumber && order.trackingNumber.toLowerCase().includes(searchTerm.toLowerCase())) ||
+                         (order.fbOrderNumber && order.fbOrderNumber.toLowerCase().includes(searchTerm.toLowerCase()));
     
     if (filterStatus === 'all') return matchesSearch;
     if (filterStatus === 'shipped') return matchesSearch && order.trackingNumber;
@@ -338,7 +340,7 @@ export default function ShippingManagement() {
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                 <Input
                   id="search"
-                  placeholder="Search by order ID, customer, or tracking number..."
+                  placeholder="Search by order ID, customer, FB order #, or tracking number..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-10"

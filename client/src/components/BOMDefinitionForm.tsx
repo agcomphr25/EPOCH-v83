@@ -65,12 +65,12 @@ export function BOMDefinitionForm({ bom, onSuccess, onCancel }: BOMDefinitionFor
   const mutation = useMutation({
     mutationFn: async (data: BomDefinitionFormData) => {
       if (isEditing) {
-        return apiRequest(`/api/boms/${bom.id}`, {
+        return apiRequest(`/api/p2-boms/${bom.id}`, {
           method: "PUT",
           body: data,
         });
       } else {
-        return apiRequest("/api/boms", {
+        return apiRequest("/api/p2-boms", {
           method: "POST",
           body: data,
         });

@@ -1,7 +1,10 @@
-import { pgTable, text, serial, integer, timestamp, jsonb, boolean, json, real, date, pgEnum, unique } from "drizzle-orm/pg-core";
+
+import { pgTable, text, serial, integer, timestamp, jsonb, boolean, json, real, date, pgEnum, uniqueIndex } from "drizzle-orm/pg-core";
+
+
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
@@ -157,6 +160,7 @@ export const orders = pgTable("orders", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+
 // Dedicated cancelled orders table - stores archived cancelled orders
 // TEMPORARILY COMMENTED OUT TO AVOID INTERACTIVE PROMPT DURING VENDOR TABLE CREATION
 /*
@@ -210,6 +214,7 @@ export const cancelledOrders = pgTable("cancelled_orders", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 */
+
 
 export const csvData = pgTable("csv_data", {
   id: serial("id").primaryKey(),
@@ -413,14 +418,15 @@ export const payments = pgTable("payments", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-// Credit card transactions table for Authorize.Net integration
+// Credit card transactions table for payment gateway integration (Authorize.Net and Accept.blue)
 export const creditCardTransactions = pgTable("credit_card_transactions", {
   id: serial("id").primaryKey(),
   paymentId: integer("payment_id").references(() => payments.id).notNull(),
   orderId: text("order_id").notNull(),
-  transactionId: text("transaction_id").notNull().unique(), // Authorize.Net transaction ID
-  authCode: text("auth_code"), // Authorization code from Authorize.Net
-  responseCode: text("response_code"), // 1 = Approved, 2 = Declined, 3 = Error, 4 = Held for Review (nullable for auth failures)
+  transactionId: text("transaction_id").notNull().unique(), // Gateway transaction ID
+  gateway: text("gateway").notNull().default("authorize_net"), // authorize_net, accept_blue
+  authCode: text("auth_code"), // Authorization code
+  responseCode: text("response_code"), // Gateway response code
   responseReasonCode: text("response_reason_code"), // Detailed reason code
   responseReasonText: text("response_reason_text"), // Human readable response
   avsResult: text("avs_result"), // Address Verification Service result
@@ -439,7 +445,7 @@ export const creditCardTransactions = pgTable("credit_card_transactions", {
   billingZip: text("billing_zip"),
   billingCountry: text("billing_country").default("US"),
   isTest: boolean("is_test").default(false), // Track if this was a test transaction
-  rawResponse: jsonb("raw_response"), // Store full Authorize.Net response for debugging
+  rawResponse: jsonb("raw_response"), // Store full gateway response for debugging
   status: text("status").default("pending"), // pending, completed, failed, refunded, voided
   refundedAmount: real("refunded_amount").default(0),
   voidedAt: timestamp("voided_at"),
@@ -470,8 +476,9 @@ export const refundRequests = pgTable("refund_requests", {
   customerId: text("customer_id"), // Reference to customer (nullable for compatibility)
   refundAmount: real("refund_amount"), // Amount to be refunded
   rejectionReason: text("rejection_reason"), // Reason for rejection if applicable
-  authNetTransactionId: text("auth_net_transaction_id"), // Authorize.Net refund transaction ID
-  authNetRefundId: text("auth_net_refund_id"), // Authorize.Net refund reference
+  gatewayTransactionId: text("gateway_transaction_id"), // Gateway refund transaction ID
+  gatewayRefundId: text("gateway_refund_id"), // Gateway refund reference
+  gateway: text("gateway").default("authorize_net"), // authorize_net, accept_blue
   originalTransactionId: text("original_transaction_id"), // Original transaction being refunded
 });
 
@@ -506,6 +513,81 @@ export const inventoryItems = pgTable("inventory_items", {
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// ENHANCED INVENTORY SYSTEM - Completely Separate Tables
+// =====================================================
+
+export const enhancedInventoryItems = pgTable("enhanced_inventory_items", {
+  id: serial("id").primaryKey(),
+  agPartNumber: text("ag_part_number").notNull().unique(), // AG Part#
+  name: text("name").notNull(), // Name
+  type: text("type").notNull().default("Purchased"), // Type: Purchased or Manufactured
+  source: text("source"), // Source
+  supplierPartNumber: text("supplier_part_number"), // Supplier Part #
+  costPer: real("cost_per"), // Cost per
+  orderDate: date("order_date"), // Order Date
+  department: text("department"), // Dept.
+  secondarySource: text("secondary_source"), // Secondary Source
+  notes: text("notes"), // Notes
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const enhancedInventoryBalances = pgTable('enhanced_inventory_balances', {
+  id: serial('id').primaryKey(),
+  partId: text('part_id').notNull().references(() => enhancedInventoryItems.agPartNumber),
+  locationId: text('location_id').notNull().default('MAIN'), // MAIN, VENDOR_{vendor_id}, etc.
+  
+  // Quantity tracking
+  onHandQty: real('on_hand_qty').notNull().default(0),
+  committedQty: real('committed_qty').notNull().default(0), // Committed to customer orders
+  allocatedQty: real('allocated_qty').notNull().default(0), // Allocated to production
+  availableQty: real('available_qty').notNull().default(0), // Available = OnHand - Committed - Allocated
+  
+  // Cost tracking
+  unitCost: real('unit_cost').notNull().default(0),
+  totalValue: real('total_value').notNull().default(0),
+  
+  // Safety stock and ordering
+  safetyStock: real('safety_stock').default(0),
+  minOrderQty: real('min_order_qty').default(1),
+  leadTimeDays: integer('lead_time_days').default(14),
+  
+  // Tracking
+  lastTransactionAt: timestamp('last_transaction_at'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+export const enhancedInventoryTransactions = pgTable('enhanced_inventory_transactions', {
+  id: serial('id').primaryKey(),
+  transactionId: text('transaction_id').notNull().unique(), // Auto-generated unique ID
+  
+  // Part and location
+  partId: text('part_id').notNull().references(() => enhancedInventoryItems.agPartNumber),
+  locationId: text('location_id').notNull().default('MAIN'),
+  
+  // Transaction details
+  transactionType: text('transaction_type').notNull(), // 'RECEIPT', 'ISSUE', 'CONSUMPTION', 'ADJUSTMENT', 'SCRAP', etc.
+  quantity: real('quantity').notNull(),
+  unitCost: real('unit_cost').notNull().default(0),
+  totalCost: real('total_cost').notNull().default(0),
+  
+  // Reference information
+  orderId: text('order_id'), // Customer order reference
+  bomId: text('bom_id'), // BOM reference for consumption tracking
+  employeeId: text('employee_id'), // Who performed the transaction
+  
+  // Additional information
+  notes: text('notes'),
+  referenceNumber: text('reference_number'), // PO, RMA, etc.
+  
+  // Tracking
+  transactionDate: timestamp('transaction_date').notNull().defaultNow(),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
 });
 
 export const inventoryScans = pgTable("inventory_scans", {
@@ -830,6 +912,7 @@ export const insertShortTermSaleSchema = z.object({
   isActive: z.number().default(1),
 });
 
+
 // TEMPORARILY COMMENTED OUT - RELATED TO CANCELLED ORDERS TABLE
 /*
 export const insertCancelledOrderSchema = createInsertSchema(cancelledOrders).omit({
@@ -845,6 +928,7 @@ export const insertCancelledOrderSchema = createInsertSchema(cancelledOrders).om
   cancelReason: z.string().min(1, "Cancellation reason is required"),
 });
 */
+
 
 export const insertFeatureCategorySchema = createInsertSchema(featureCategories).omit({
   createdAt: true,
@@ -1330,15 +1414,23 @@ export type InsertOrderDraft = z.infer<typeof insertOrderDraftSchema>;
 export type OrderDraft = typeof orderDrafts.$inferSelect;
 export type InsertAllOrder = z.infer<typeof insertAllOrderSchema>;
 export type AllOrder = typeof allOrders.$inferSelect;
+
 // TEMPORARILY COMMENTED OUT - RELATED TO CANCELLED ORDERS TABLE
 // export type InsertCancelledOrder = z.infer<typeof insertCancelledOrderSchema>;
 // export type CancelledOrder = typeof cancelledOrders.$inferSelect;
+
 export type InsertForm = z.infer<typeof insertFormSchema>;
 export type Form = typeof forms.$inferSelect;
 export type InsertFormSubmission = z.infer<typeof insertFormSubmissionSchema>;
 export type FormSubmission = typeof formSubmissions.$inferSelect;
 export type InsertInventoryItem = z.infer<typeof insertInventoryItemSchema>;
 export type InventoryItem = typeof inventoryItems.$inferSelect;
+
+// Enhanced Inventory Types
+export type EnhancedInventoryItem = typeof enhancedInventoryItems.$inferSelect;
+export type InsertEnhancedInventoryItem = z.infer<typeof insertInventoryItemSchema>;
+export type EnhancedInventoryBalance = typeof enhancedInventoryBalances.$inferSelect;
+export type EnhancedInventoryTransaction = typeof enhancedInventoryTransactions.$inferSelect;
 export type InsertInventoryScan = z.infer<typeof insertInventoryScanSchema>;
 export type InventoryScan = typeof inventoryScans.$inferSelect;
 export type InsertEmployee = z.infer<typeof insertEmployeeSchema>;
@@ -1485,6 +1577,7 @@ export const layupSchedule = pgTable("layup_schedule", {
   id: serial("id").primaryKey(),
   orderId: text("order_id").references(() => productionQueue.orderId).notNull(),
   scheduledDate: timestamp("scheduled_date").notNull(),
+  layupDay: date("layup_day").notNull(), // Dedicated DATE column for business day
   moldId: text("mold_id").references(() => molds.moldId).notNull(),
   employeeAssignments: jsonb("employee_assignments").notNull().default('[]'), // Array of {employeeId, workload}
   isOverride: boolean("is_override").default(false), // Manual override flag
@@ -1492,7 +1585,10 @@ export const layupSchedule = pgTable("layup_schedule", {
   overriddenBy: text("overridden_by"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-});
+}, (table) => ({
+  // Unique constraint: exactly one order per mold per day
+  uniqueMoldPerDay: uniqueIndex("ux_layup_mold_day").on(table.layupDay, table.moldId),
+}));
 
 // Insert schemas for Layup Scheduler
 export const insertMoldSchema = createInsertSchema(molds).omit({
@@ -1550,6 +1646,7 @@ export const insertLayupScheduleSchema = createInsertSchema(layupSchedule).omit(
 }).extend({
   orderId: z.string().min(1, "Order ID is required"),
   scheduledDate: z.coerce.date(),
+  layupDay: z.coerce.date(), // Dedicated DATE field for business day constraint
   moldId: z.string().min(1, "Mold ID is required"),
   employeeAssignments: z.array(z.object({
     employeeId: z.string(),
@@ -1806,11 +1903,12 @@ export const enhancedForms = pgTable('enhanced_forms', {
   name: text('name').notNull(),
   description: text('description'),
   categoryId: integer('category_id').references(() => enhancedFormCategories.id),
-  tableName: text('table_name'),
-  layout: jsonb('layout').notNull(),
-  version: integer('version').default(1),
+  schemaConfig: jsonb('schema_config').notNull(),
   createdAt: timestamp('created_at').defaultNow(),
-  updatedAt: timestamp('updated_at').defaultNow()
+  updatedAt: timestamp('updated_at').defaultNow(),
+  tableName: text('table_name'),
+  layout: jsonb('layout'),
+  version: integer('version').default(1)
 });
 
 export const enhancedFormVersions = pgTable('enhanced_form_versions', {
@@ -1949,7 +2047,8 @@ export const insertEnhancedFormSchema = createInsertSchema(enhancedForms).omit({
   description: z.string().optional(),
   categoryId: z.number().optional(),
   tableName: z.string().optional(),
-  layout: z.any(),
+  schemaConfig: z.any().optional(),
+  layout: z.any().optional(),
   version: z.number().default(1),
 });
 
@@ -2625,8 +2724,8 @@ export const insertRefundRequestSchema = createInsertSchema(refundRequests).omit
   approvedAt: true,
   processedAt: true,
   rejectionReason: true,
-  authNetTransactionId: true,
-  authNetRefundId: true,
+  gatewayTransactionId: true,
+  gatewayRefundId: true,
   createdAt: true,
   updatedAt: true,
 }).extend({
@@ -2641,6 +2740,23 @@ export const insertRefundRequestSchema = createInsertSchema(refundRequests).omit
 
 // Types for Refund Requests
 export type InsertRefundRequest = z.infer<typeof insertRefundRequestSchema>;
+
+
+export type RefundRequest = typeof refundRequests.$inferSelect;
+
+// ============================================================================
+// CUTTING TABLE MANAGEMENT SYSTEM
+// ============================================================================
+
+// Cutting Materials - Different materials used for stock production
+export const cuttingMaterials = pgTable("cutting_materials", {
+  id: serial("id").primaryKey(),
+  materialName: text("material_name").notNull().unique(),
+  materialType: text("material_type").notNull(), // Carbon Fiber, Fiberglass, Primtex
+  yieldPerCut: integer("yield_per_cut").notNull(), // How many pieces per cutting operation
+  wasteFactor: real("waste_factor").notNull(), // Decimal waste factor (e.g., 0.12 = 12%)
+  description: text("description"),
+
 export type RefundRequest = typeof refundRequests.$inferSelect;
 
 // ===== VENDOR MANAGEMENT SYSTEM =====
@@ -2676,10 +2792,19 @@ export const vendors = pgTable("vendors", {
   certifications: text("certifications").array(),
   totalScore: real("total_score").default(0),
   lastScoredAt: timestamp("last_scored_at"),
+
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
+
+
+// Product Categories for cutting - Fiberglass Stock Packets, Carbon Stock Packets, etc.
+export const cuttingProductCategories = pgTable("cutting_product_categories", {
+  id: serial("id").primaryKey(),
+  categoryName: text("category_name").notNull().unique(),
+  description: text("description"),
+  isP1: boolean("is_p1").default(true), // P1 (regular) or P2 (OEM/supplier)
 
 // Contact roles enumeration
 export const contactRoleEnum = pgEnum("contact_role", [
@@ -2703,10 +2828,20 @@ export const vendorContacts = pgTable("vendor_contacts", {
   role: text("role"),
   isPrimary: boolean("is_primary").default(false),
   notes: text("notes"),
+
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
+
+
+// Components needed for each product category
+export const cuttingComponents = pgTable("cutting_components", {
+  id: serial("id").primaryKey(),
+  productCategoryId: integer("product_category_id").references(() => cuttingProductCategories.id),
+  materialId: integer("material_id").references(() => cuttingMaterials.id),
+  componentName: text("component_name").notNull(),
+  quantityRequired: integer("quantity_required").notNull(), // Pieces needed per stock packet
 
 // Address types enumeration  
 export const addressTypeEnum = pgEnum("address_type", [
@@ -2730,10 +2865,154 @@ export const vendorAddresses = pgTable("vendor_addresses", {
   zipCode: text("zip_code"),
   country: text("country").default("US"),
   isPrimary: boolean("is_primary").default(false),
+
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
+
+// Cutting requirements for specific orders
+export const cuttingRequirements = pgTable("cutting_requirements", {
+  id: serial("id").primaryKey(),
+  orderId: text("order_id").notNull().references(() => allOrders.orderId),
+  materialId: integer("material_id").references(() => cuttingMaterials.id),
+  componentId: integer("component_id").references(() => cuttingComponents.id),
+  cutsRequired: integer("cuts_required").notNull(),
+  cutsCompleted: integer("cuts_completed").default(0),
+  isCompleted: boolean("is_completed").default(false),
+  assignedTo: text("assigned_to"), // Employee assigned to cutting task
+  startedAt: timestamp("started_at"),
+  completedAt: timestamp("completed_at"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Weekly cutting progress summary
+export const cuttingProgress = pgTable("cutting_progress", {
+  id: serial("id").primaryKey(),
+  materialId: integer("material_id").references(() => cuttingMaterials.id),
+  totalCutsRequired: integer("total_cuts_required").notNull(),
+  totalCutsCompleted: integer("total_cuts_completed").default(0),
+  pendingOrders: integer("pending_orders").default(0), // Number of orders waiting for this material
+  weekDate: date("week_date").notNull(), // Week of production planning
+  lastUpdated: timestamp("last_updated").defaultNow(),
+});
+
+// ============================================================================
+// CUTTING TABLE RELATIONS
+// ============================================================================
+
+export const cuttingMaterialsRelations = relations(cuttingMaterials, ({ many }) => ({
+  components: many(cuttingComponents),
+  requirements: many(cuttingRequirements),
+  progress: many(cuttingProgress),
+}));
+
+export const cuttingProductCategoriesRelations = relations(cuttingProductCategories, ({ many }) => ({
+  components: many(cuttingComponents),
+}));
+
+export const cuttingComponentsRelations = relations(cuttingComponents, ({ one, many }) => ({
+  productCategory: one(cuttingProductCategories, {
+    fields: [cuttingComponents.productCategoryId],
+    references: [cuttingProductCategories.id],
+  }),
+  material: one(cuttingMaterials, {
+    fields: [cuttingComponents.materialId],
+    references: [cuttingMaterials.id],
+  }),
+  requirements: many(cuttingRequirements),
+}));
+
+export const cuttingRequirementsRelations = relations(cuttingRequirements, ({ one }) => ({
+  order: one(allOrders, {
+    fields: [cuttingRequirements.orderId],
+    references: [allOrders.orderId],
+  }),
+  material: one(cuttingMaterials, {
+    fields: [cuttingRequirements.materialId],
+    references: [cuttingMaterials.id],
+  }),
+  component: one(cuttingComponents, {
+    fields: [cuttingRequirements.componentId],
+    references: [cuttingComponents.id],
+  }),
+}));
+
+export const cuttingProgressRelations = relations(cuttingProgress, ({ one }) => ({
+  material: one(cuttingMaterials, {
+    fields: [cuttingProgress.materialId],
+    references: [cuttingMaterials.id],
+  }),
+}));
+
+// ============================================================================
+// CUTTING TABLE INSERT SCHEMAS AND TYPES
+// ============================================================================
+
+export const insertCuttingMaterialSchema = createInsertSchema(cuttingMaterials).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  materialName: z.string().min(1, "Material name is required"),
+  materialType: z.string().min(1, "Material type is required"),
+  yieldPerCut: z.number().min(1, "Yield per cut must be at least 1"),
+  wasteFactor: z.number().min(0).max(1, "Waste factor must be between 0 and 1"),
+});
+
+export const insertCuttingProductCategorySchema = createInsertSchema(cuttingProductCategories).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  categoryName: z.string().min(1, "Category name is required"),
+});
+
+export const insertCuttingComponentSchema = createInsertSchema(cuttingComponents).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  componentName: z.string().min(1, "Component name is required"),
+  quantityRequired: z.number().min(1, "Quantity required must be at least 1"),
+});
+
+export const insertCuttingRequirementSchema = createInsertSchema(cuttingRequirements).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  orderId: z.string().min(1, "Order ID is required"),
+  cutsRequired: z.number().min(1, "Cuts required must be at least 1"),
+});
+
+// Types for cutting tables
+export type InsertCuttingMaterial = z.infer<typeof insertCuttingMaterialSchema>;
+export type CuttingMaterial = typeof cuttingMaterials.$inferSelect;
+
+export type InsertCuttingProductCategory = z.infer<typeof insertCuttingProductCategorySchema>;
+export type CuttingProductCategory = typeof cuttingProductCategories.$inferSelect;
+
+export type InsertCuttingComponent = z.infer<typeof insertCuttingComponentSchema>;
+export type CuttingComponent = typeof cuttingComponents.$inferSelect;
+
+export type InsertCuttingRequirement = z.infer<typeof insertCuttingRequirementSchema>;
+export type CuttingRequirement = typeof cuttingRequirements.$inferSelect;
+
+export type CuttingProgress = typeof cuttingProgress.$inferSelect;
+
+// ============================================================================
+// PACKET-BASED CUTTING TABLES (New Approach)
+// ============================================================================
+
+// Packet Types - CF Stock Packets, FG Stock Packets, etc.
+export const packetTypes = pgTable("packet_types", {
+  id: serial("id").primaryKey(),
+  packetName: text("packet_name").notNull().unique(),
+  materialType: text("material_type").notNull(), // 'Carbon Fiber', 'Fiberglass', 'Primtex'
+  description: text("description"),
 
 // Phone types enumeration
 export const phoneTypeEnum = pgEnum("phone_type", [
@@ -2816,10 +3095,20 @@ export const vendorDocuments = pgTable("vendor_documents", {
   expiryDate: timestamp("expiry_date"),
   uploadedBy: integer("uploaded_by").references(() => users.id),
   isConfidential: boolean("is_confidential").default(false),
+
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
+
+
+// Stock Model to Packet Type Mapping - which stock models need which packets
+export const stockPacketMapping = pgTable("stock_packet_mapping", {
+  id: serial("id").primaryKey(),
+  stockModelPrefix: text("stock_model_prefix").notNull(), // 'cf_', 'fg_', etc.
+  packetTypeId: integer("packet_type_id").references(() => packetTypes.id),
+  packetsPerStock: integer("packets_per_stock").default(1), // Usually 1 packet per stock
+  isActive: boolean("is_active").default(true),
 
 // Scoring criteria - extensible system for vendor evaluation
 export const vendorScoringCriteria = pgTable("vendor_scoring_criteria", {
@@ -2832,9 +3121,26 @@ export const vendorScoringCriteria = pgTable("vendor_scoring_criteria", {
   scoringMethod: text("scoring_method").default("MANUAL"), // MANUAL, AUTO, CALCULATED
   isActive: boolean("is_active").default(true),
   sortOrder: integer("sort_order").default(0),
+
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
+
+
+// Packet Cutting Queue - tracks packet cutting needs
+export const packetCuttingQueue = pgTable("packet_cutting_queue", {
+  id: serial("id").primaryKey(),
+  packetTypeId: integer("packet_type_id").references(() => packetTypes.id),
+  materialId: integer("material_id").references(() => cuttingMaterials.id),
+  packetsNeeded: integer("packets_needed").notNull(),
+  packetsCut: integer("packets_cut").default(0),
+  priorityLevel: integer("priority_level").default(1), // 1-5 priority scale
+  requestedBy: text("requested_by"),
+  assignedTo: text("assigned_to"),
+  startedAt: timestamp("started_at"),
+  completedAt: timestamp("completed_at"),
+  notes: text("notes"),
+  isCompleted: boolean("is_completed").default(false),
 
 // Vendor scores based on criteria
 export const vendorScores = pgTable("vendor_scores", {
@@ -2846,9 +3152,696 @@ export const vendorScores = pgTable("vendor_scores", {
   notes: text("notes"),
   scoredBy: integer("scored_by").references(() => users.id),
   scoredAt: timestamp("scored_at").defaultNow(),
+
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
+
+
+// Relations for packet tables
+export const packetTypesRelations = relations(packetTypes, ({ many }) => ({
+  stockMappings: many(stockPacketMapping),
+  cuttingQueue: many(packetCuttingQueue),
+}));
+
+export const stockPacketMappingRelations = relations(stockPacketMapping, ({ one }) => ({
+  packetType: one(packetTypes, {
+    fields: [stockPacketMapping.packetTypeId],
+    references: [packetTypes.id],
+  }),
+}));
+
+export const packetCuttingQueueRelations = relations(packetCuttingQueue, ({ one }) => ({
+  packetType: one(packetTypes, {
+    fields: [packetCuttingQueue.packetTypeId],
+    references: [packetTypes.id],
+  }),
+  material: one(cuttingMaterials, {
+    fields: [packetCuttingQueue.materialId],
+    references: [cuttingMaterials.id],
+  }),
+}));
+
+// Insert schemas for packet tables
+export const insertPacketTypeSchema = createInsertSchema(packetTypes).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertStockPacketMappingSchema = createInsertSchema(stockPacketMapping).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertPacketCuttingQueueSchema = createInsertSchema(packetCuttingQueue).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+// Types for packet tables
+export type PacketType = typeof packetTypes.$inferSelect;
+export type InsertPacketType = z.infer<typeof insertPacketTypeSchema>;
+
+export type StockPacketMapping = typeof stockPacketMapping.$inferSelect;
+export type InsertStockPacketMapping = z.infer<typeof insertStockPacketMappingSchema>;
+
+export type PacketCuttingQueue = typeof packetCuttingQueue.$inferSelect;
+export type InsertPacketCuttingQueue = z.infer<typeof insertPacketCuttingQueueSchema>;
+
+// ============================================================================
+// VENDOR MANAGEMENT
+// ============================================================================
+
+export const vendors = pgTable("vendors", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  contactPerson: text("contact_person"),
+  email: text("email"),
+  phone: text("phone"),
+  address: text("address"),
+  notes: text("notes"),
+  evaluationNotes: text("evaluation_notes"),
+  approvalNotes: text("approval_notes"),
+  approved: boolean("is_approved"),
+  evaluated: boolean("is_evaluated"),
+  createdAt: timestamp("created_at"),
+  updatedAt: timestamp("updated_at"),
+});
+
+// Vendor contact schema - simplified to match current database structure
+export const vendorContactSchema = z.object({
+  name: z.string().min(1, "Contact name is required"),
+  email: z.string().email("Valid email is required").optional().or(z.literal("")),
+  phone: z.string().optional(),
+  role: z.string().optional(),
+  isPrimary: z.boolean().default(false),
+});
+
+// Vendor insert schema
+export const insertVendorSchema = createInsertSchema(vendors).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  name: z.string().min(1, "Vendor name is required"),
+  email: z.string().email("Valid email is required").optional().or(z.literal("")),
+  contacts: z.array(vendorContactSchema).optional(),
+});
+
+// Vendor types
+export type Vendor = typeof vendors.$inferSelect;
+export type InsertVendor = z.infer<typeof insertVendorSchema>;
+
+// ============================================================================
+// ROBUST BOM MANAGEMENT SYSTEM (P2 Enhanced)
+// ============================================================================
+
+// Lifecycle status enum for parts
+export const partLifecycleStatusEnum = pgEnum('part_lifecycle_status', [
+  'ACTIVE', 
+  'OBSOLETE', 
+  'DISCONTINUED', 
+  'PHASE_OUT'
+]);
+
+// Enhanced Parts Master Table with lifecycle management
+export const robustParts = pgTable('robust_parts', {
+  id: text('id').primaryKey().default(sql`gen_random_uuid()`),
+  sku: text('sku').notNull().unique(),
+  name: text('name').notNull(),
+  type: text('type').notNull(), // PURCHASED, MANUFACTURED, PHANTOM
+  uom: text('uom').notNull().default('ea'), // Unit of measure
+  purchaseUom: text('purchase_uom').notNull().default('ea'), // Purchase UoM (can differ from usage UoM)
+  conversionFactor: real('conversion_factor').notNull().default(1), // Conversion from purchase to usage UoM
+  stdCost: real('std_cost').notNull().default(0),
+  revision: text('revision'),
+  description: text('description'),
+  notes: text('notes'),
+  
+  // Lifecycle Management
+  lifecycleStatus: partLifecycleStatusEnum('lifecycle_status').notNull().default('ACTIVE'),
+  obsoleteDate: timestamp('obsolete_date'),
+  replacementPartId: text('replacement_part_id'),
+  
+  // Validation constraints
+  minQuantity: real('min_quantity').default(0.001),
+  maxQuantity: real('max_quantity').default(999999),
+  decimalPrecision: integer('decimal_precision').default(3),
+  
+  // Status and tracking
+  isActive: boolean('is_active').notNull().default(true),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  createdBy: text('created_by'),
+  updatedBy: text('updated_by'),
+});
+
+// Enhanced BOM Lines Table with hierarchical structure
+export const robustBomLines = pgTable('robust_bom_lines', {
+  id: text('id').primaryKey().default(sql`gen_random_uuid()`),
+  parentPartId: text('parent_part_id').notNull().references(() => robustParts.id, { onDelete: 'cascade' }),
+  childPartId: text('child_part_id').notNull().references(() => robustParts.id, { onDelete: 'restrict' }),
+  qtyPer: real('qty_per').notNull().default(1),
+  uom: text('uom').notNull().default('ea'),
+  scrapPct: real('scrap_pct').notNull().default(0), // Scrap percentage (0-100)
+  notes: text('notes'),
+  
+  // Hierarchical support with depth limit
+  level: integer('level').notNull().default(0), // Tree depth (max 4 levels)
+  sortOrder: integer('sort_order').default(0), // Sort order within parent
+  
+  // Effectivity dating for version control
+  effectiveFrom: timestamp('effective_from'),
+  effectiveTo: timestamp('effective_to'),
+  
+  // Status and tracking
+  isActive: boolean('is_active').notNull().default(true),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  createdBy: text('created_by'),
+  updatedBy: text('updated_by'),
+});
+
+// Cost History Table for audit trail
+export const partCostHistory = pgTable('part_cost_history', {
+  id: text('id').primaryKey().default(sql`gen_random_uuid()`),
+  partId: text('part_id').notNull().references(() => robustParts.id, { onDelete: 'cascade' }),
+  oldCost: real('old_cost'),
+  newCost: real('new_cost').notNull(),
+  changeReason: text('change_reason'), // PURCHASE_ORDER, MANUAL_UPDATE, ROLLUP_CALCULATION
+  sourceReference: text('source_reference'), // PO number, user action, etc.
+  notes: text('notes'),
+  effectiveDate: timestamp('effective_date').notNull().defaultNow(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  createdBy: text('created_by').notNull(),
+});
+
+// Part Change Audit Trail
+export const partAuditLog = pgTable('part_audit_log', {
+  id: text('id').primaryKey().default(sql`gen_random_uuid()`),
+  partId: text('part_id').notNull().references(() => robustParts.id, { onDelete: 'cascade' }),
+  action: text('action').notNull(), // CREATE, UPDATE, DELETE, LIFECYCLE_CHANGE
+  fieldName: text('field_name'), // Which field was changed
+  oldValue: text('old_value'),
+  newValue: text('new_value'),
+  changeReason: text('change_reason'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  createdBy: text('created_by').notNull(),
+});
+
+// BOM Audit Trail
+export const bomAuditLog = pgTable('bom_audit_log', {
+  id: text('id').primaryKey().default(sql`gen_random_uuid()`),
+  bomLineId: text('bom_line_id').references(() => robustBomLines.id, { onDelete: 'cascade' }),
+  parentPartId: text('parent_part_id').notNull().references(() => robustParts.id, { onDelete: 'cascade' }),
+  action: text('action').notNull(), // ADD_LINE, UPDATE_LINE, DELETE_LINE, CLONE_BOM
+  details: jsonb('details'), // Detailed change information
+  changeReason: text('change_reason'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  createdBy: text('created_by').notNull(),
+});
+
+// Robust Parts Relations
+export const robustPartsRelations = relations(robustParts, ({ many, one }) => ({
+  asParentLines: many(robustBomLines, { relationName: 'parentPart' }),
+  asChildLines: many(robustBomLines, { relationName: 'childPart' }),
+  costHistory: many(partCostHistory),
+  auditLog: many(partAuditLog),
+  replacementPart: one(robustParts, { 
+    fields: [robustParts.replacementPartId], 
+    references: [robustParts.id] 
+  }),
+}));
+
+// Robust BOM Lines Relations
+export const robustBomLinesRelations = relations(robustBomLines, ({ one }) => ({
+  parentPart: one(robustParts, { 
+    fields: [robustBomLines.parentPartId], 
+    references: [robustParts.id], 
+    relationName: 'parentPart' 
+  }),
+  childPart: one(robustParts, { 
+    fields: [robustBomLines.childPartId], 
+    references: [robustParts.id], 
+    relationName: 'childPart' 
+  }),
+}));
+
+// Cost History Relations
+export const partCostHistoryRelations = relations(partCostHistory, ({ one }) => ({
+  part: one(robustParts, { 
+    fields: [partCostHistory.partId], 
+    references: [robustParts.id] 
+  }),
+}));
+
+// Audit Log Relations
+export const partAuditLogRelations = relations(partAuditLog, ({ one }) => ({
+  part: one(robustParts, { 
+    fields: [partAuditLog.partId], 
+    references: [robustParts.id] 
+  }),
+}));
+
+export const bomAuditLogRelations = relations(bomAuditLog, ({ one }) => ({
+  bomLine: one(robustBomLines, { 
+    fields: [bomAuditLog.bomLineId], 
+    references: [robustBomLines.id] 
+  }),
+  parentPart: one(robustParts, { 
+    fields: [bomAuditLog.parentPartId], 
+    references: [robustParts.id] 
+  }),
+}));
+
+// Insert Schemas for Robust BOM System
+export const insertRobustPartSchema = createInsertSchema(robustParts).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  sku: z.string().min(1, "SKU is required"),
+  name: z.string().min(1, "Part name is required"),
+  type: z.enum(['PURCHASED', 'MANUFACTURED', 'PHANTOM']),
+  uom: z.string().min(1, "Unit of measure is required"),
+  purchaseUom: z.string().min(1, "Purchase UoM is required"),
+  conversionFactor: z.number().positive("Conversion factor must be positive").default(1),
+  stdCost: z.number().min(0, "Standard cost must be non-negative"),
+  lifecycleStatus: z.enum(['ACTIVE', 'OBSOLETE', 'DISCONTINUED', 'PHASE_OUT']).default('ACTIVE'),
+  minQuantity: z.number().positive("Minimum quantity must be positive").optional(),
+  maxQuantity: z.number().positive("Maximum quantity must be positive").optional(),
+  decimalPrecision: z.number().int().min(0).max(6).default(3),
+});
+
+export const insertRobustBomLineSchema = createInsertSchema(robustBomLines).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  parentPartId: z.string().min(1, "Parent part ID is required"),
+  childPartId: z.string().min(1, "Child part ID is required"),
+  qtyPer: z.number().positive("Quantity per must be positive"),
+  uom: z.string().min(1, "Unit of measure is required"),
+  scrapPct: z.number().min(0).max(100, "Scrap percentage must be between 0 and 100").default(0),
+  level: z.number().int().min(0).max(4, "Maximum BOM depth is 4 levels").default(0),
+});
+
+export const insertPartCostHistorySchema = createInsertSchema(partCostHistory).omit({
+  id: true,
+  createdAt: true,
+}).extend({
+  partId: z.string().min(1, "Part ID is required"),
+  newCost: z.number().min(0, "New cost must be non-negative"),
+  changeReason: z.string().min(1, "Change reason is required"),
+  createdBy: z.string().min(1, "Created by is required"),
+});
+
+export const insertPartAuditLogSchema = createInsertSchema(partAuditLog).omit({
+  id: true,
+  createdAt: true,
+}).extend({
+  partId: z.string().min(1, "Part ID is required"),
+  action: z.string().min(1, "Action is required"),
+  createdBy: z.string().min(1, "Created by is required"),
+});
+
+export const insertBomAuditLogSchema = createInsertSchema(bomAuditLog).omit({
+  id: true,
+  createdAt: true,
+}).extend({
+  parentPartId: z.string().min(1, "Parent part ID is required"),
+  action: z.string().min(1, "Action is required"),
+  createdBy: z.string().min(1, "Created by is required"),
+});
+
+// Types for Robust BOM System
+export type RobustPart = typeof robustParts.$inferSelect;
+export type InsertRobustPart = z.infer<typeof insertRobustPartSchema>;
+
+export type RobustBomLine = typeof robustBomLines.$inferSelect;
+export type InsertRobustBomLine = z.infer<typeof insertRobustBomLineSchema>;
+
+export type PartCostHistory = typeof partCostHistory.$inferSelect;
+export type InsertPartCostHistory = z.infer<typeof insertPartCostHistorySchema>;
+
+export type PartAuditLog = typeof partAuditLog.$inferSelect;
+export type InsertPartAuditLog = z.infer<typeof insertPartAuditLogSchema>;
+
+export type BomAuditLog = typeof bomAuditLog.$inferSelect;
+export type InsertBomAuditLog = z.infer<typeof insertBomAuditLogSchema>;
+
+// ============================================================================
+// INVENTORY MANAGEMENT & MRP SYSTEM
+// ============================================================================
+
+// Inventory transaction types for parts
+export const inventoryTransactionTypeEnum = pgEnum('inventory_transaction_type', [
+  'RECEIPT',           // Parts received from vendor
+  'ISSUE',            // Parts issued to production
+  'CONSUMPTION',      // Parts consumed in production
+  'ADJUSTMENT',       // Inventory adjustments
+  'SCRAP',           // Parts scrapped/wasted
+  'RETURN_TO_VENDOR', // Parts returned to vendor
+  'TRANSFER_OUT',     // Parts sent for outside processing
+  'TRANSFER_IN'       // Parts received back from outside processing
+]);
+
+// Inventory status for progressive allocation
+export const inventoryStatusEnum = pgEnum('inventory_status', [
+  'AVAILABLE',   // Available for allocation
+  'COMMITTED',   // Committed to customer orders
+  'ALLOCATED',   // Allocated to production orders
+  'CONSUMED'     // Consumed in production
+]);
+
+// Inventory Balances - Real-time inventory tracking per part
+export const inventoryBalances = pgTable('inventory_balances', {
+  id: serial('id').primaryKey(),
+  partId: text('part_id').notNull().references(() => robustParts.id),
+  locationId: text('location_id').notNull().default('MAIN'), // MAIN, VENDOR_{vendor_id}, etc.
+  
+  // Quantity tracking
+  onHandQty: real('on_hand_qty').notNull().default(0),
+  committedQty: real('committed_qty').notNull().default(0), // Committed to customer orders
+  allocatedQty: real('allocated_qty').notNull().default(0), // Allocated to production
+  availableQty: real('available_qty').notNull().default(0), // Available = OnHand - Committed - Allocated
+  
+  // Cost tracking
+  unitCost: real('unit_cost').notNull().default(0),
+  totalValue: real('total_value').notNull().default(0),
+  
+  // Safety stock and ordering
+  safetyStock: real('safety_stock').default(0),
+  minOrderQty: real('min_order_qty').default(1),
+  leadTimeDays: integer('lead_time_days').default(7),
+  
+  // Tracking
+  lastTransactionAt: timestamp('last_transaction_at'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Inventory Transactions - All inventory movements
+export const inventoryTransactions = pgTable('inventory_transactions', {
+  id: serial('id').primaryKey(),
+  transactionId: text('transaction_id').notNull().unique(), // Auto-generated unique ID
+  
+  // Part and location
+  partId: text('part_id').notNull().references(() => robustParts.id),
+  locationId: text('location_id').notNull().default('MAIN'),
+  
+  // Transaction details
+  transactionType: inventoryTransactionTypeEnum('transaction_type').notNull(),
+  quantity: real('quantity').notNull(),
+  unitCost: real('unit_cost').notNull().default(0),
+  totalCost: real('total_cost').notNull().default(0),
+  
+  // Reference information
+  orderId: text('order_id'), // Customer order reference
+  poNumber: text('po_number'), // Purchase order reference
+  vendorId: text('vendor_id'), // Vendor reference
+  employeeId: text('employee_id'), // Employee who performed transaction
+  
+  // Progressive allocation tracking
+  allocationStatus: inventoryStatusEnum('allocation_status').default('AVAILABLE'),
+  customerOrderId: text('customer_order_id'), // Specific customer order for allocation
+  productionOrderId: text('production_order_id'), // Production order reference
+  
+  // Outside processing
+  outsideProcessorId: text('outside_processor_id'), // Vendor doing outside processing
+  processingJobId: text('processing_job_id'), // Batch/job number at processor
+  expectedReturnDate: timestamp('expected_return_date'),
+  actualReturnDate: timestamp('actual_return_date'),
+  
+  // Documentation
+  notes: text('notes'),
+  documentUrl: text('document_url'), // Link to supporting documents
+  
+  // Tracking
+  transactionDate: timestamp('transaction_date').notNull().defaultNow(),
+  createdAt: timestamp('created_at').defaultNow(),
+  createdBy: text('created_by').notNull(),
+});
+
+// MRP Material Requirements - Calculated material needs
+export const mrpRequirements = pgTable('mrp_requirements', {
+  id: serial('id').primaryKey(),
+  requirementId: text('requirement_id').notNull().unique(), // Auto-generated unique ID
+  
+  // Part information
+  partId: text('part_id').notNull().references(() => robustParts.id),
+  
+  // Requirement details
+  requiredQty: real('required_qty').notNull(),
+  availableQty: real('available_qty').notNull().default(0),
+  shortageQty: real('shortage_qty').notNull().default(0), // Required - Available
+  
+  // Timing
+  needDate: timestamp('need_date').notNull(),
+  plannedOrderDate: timestamp('planned_order_date'), // When to place order
+  
+  // Source information - what's driving this requirement
+  sourceType: text('source_type').notNull(), // CUSTOMER_ORDER, FORECAST, SAFETY_STOCK
+  sourceOrderId: text('source_order_id'), // Driving customer order
+  sourceCustomerId: text('source_customer_id'), // Customer driving requirement
+  
+  // BOM explosion details
+  bomId: text('bom_id'), // BOM line that created this requirement
+  parentPartId: text('parent_part_id'), // Parent part if from BOM explosion
+  qtyPer: real('qty_per').default(1), // Quantity per parent part
+  
+  // Planning information
+  planningGroup: text('planning_group').default('WEEKLY'), // WEEKLY, MONTHLY
+  priority: integer('priority').default(50), // 1-100, lower = higher priority
+  
+  // Purchase recommendations
+  suggestedPoQty: real('suggested_po_qty').default(0),
+  suggestedVendorId: text('suggested_vendor_id'),
+  estimatedCost: real('estimated_cost').default(0),
+  
+  // Status tracking
+  status: text('status').default('OPEN').notNull(), // OPEN, PO_CREATED, RECEIVED, CLOSED
+  
+  // Tracking
+  calculatedAt: timestamp('calculated_at').notNull().defaultNow(),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Outside Processing Locations - Vendor-specific processing locations
+export const outsideProcessingLocations = pgTable('outside_processing_locations', {
+  id: serial('id').primaryKey(),
+  locationId: text('location_id').notNull().unique(), // VENDOR_{vendor_id}_{location_name}
+  
+  // Vendor information
+  vendorId: text('vendor_id').notNull(), // Reference to vendor
+  vendorName: text('vendor_name').notNull(),
+  locationName: text('location_name').notNull().default('Main'), // Main, Secondary, etc.
+  
+  // Processing capabilities
+  processTypes: text('process_types').array().default([]), // ['ANODIZING', 'PLATING', 'HEAT_TREAT']
+  capacity: text('capacity'), // Description of capacity
+  leadTimeDays: integer('lead_time_days').default(7),
+  
+  // Contact information
+  contactName: text('contact_name'),
+  contactPhone: text('contact_phone'),
+  contactEmail: text('contact_email'),
+  
+  // Address
+  address: text('address'),
+  city: text('city'),
+  state: text('state'),
+  zipCode: text('zip_code'),
+  
+  // Status
+  isActive: boolean('is_active').default(true),
+  notes: text('notes'),
+  
+  // Tracking
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Outside Processing Jobs - Track batches at external processors
+export const outsideProcessingJobs = pgTable('outside_processing_jobs', {
+  id: serial('id').primaryKey(),
+  jobId: text('job_id').notNull().unique(), // Auto-generated job ID
+  
+  // Location and vendor
+  locationId: text('location_id').notNull().references(() => outsideProcessingLocations.locationId),
+  vendorId: text('vendor_id').notNull(),
+  
+  // Job details
+  processType: text('process_type').notNull(), // ANODIZING, PLATING, etc.
+  jobDescription: text('job_description'),
+  
+  // Quantities
+  totalPartsOut: integer('total_parts_out').notNull().default(0), // Parts sent out
+  totalPartsBack: integer('total_parts_back').default(0), // Parts received back
+  scrapQty: integer('scrap_qty').default(0), // Parts scrapped at vendor
+  
+  // Timing
+  dateShipped: timestamp('date_shipped').notNull(),
+  expectedReturn: timestamp('expected_return').notNull(),
+  actualReturn: timestamp('actual_return'),
+  
+  // Cost
+  estimatedCost: real('estimated_cost').default(0),
+  actualCost: real('actual_cost').default(0),
+  
+  // References
+  poNumber: text('po_number'), // PO to vendor for processing
+  packingSlip: text('packing_slip'), // Packing slip reference
+  
+  // Status
+  status: text('status').default('SHIPPED').notNull(), // SHIPPED, IN_PROCESS, COMPLETED, RETURNED
+  
+  // Notes and tracking
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+  createdBy: text('created_by').notNull(),
+});
+
+// MRP Calculations History - Track MRP runs and changes
+export const mrpCalculationHistory = pgTable('mrp_calculation_history', {
+  id: serial('id').primaryKey(),
+  calculationId: text('calculation_id').notNull().unique(),
+  
+  // Calculation details
+  calculationType: text('calculation_type').notNull(), // FULL_RUN, INCREMENTAL, ORDER_CHANGE
+  triggeredBy: text('triggered_by').notNull(), // AUTO, USER, ORDER_CHANGE
+  scope: text('scope').default('ALL'), // ALL, SPECIFIC_PART, SPECIFIC_ORDER
+  
+  // Timing
+  startTime: timestamp('start_time').notNull(),
+  endTime: timestamp('end_time'),
+  duration: integer('duration'), // Duration in seconds
+  
+  // Results
+  partsProcessed: integer('parts_processed').default(0),
+  requirementsGenerated: integer('requirements_generated').default(0),
+  shortagesIdentified: integer('shortages_identified').default(0),
+  poSuggestionsCreated: integer('po_suggestions_created').default(0),
+  
+  // Status
+  status: text('status').default('RUNNING').notNull(), // RUNNING, COMPLETED, FAILED
+  errorMessage: text('error_message'),
+  
+  // Tracking
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// Vendor Part Mapping - Link parts to vendors with pricing
+export const vendorParts = pgTable('vendor_parts', {
+  id: serial('id').primaryKey(),
+  
+  // Part and vendor
+  partId: text('part_id').notNull().references(() => robustParts.id),
+  vendorId: text('vendor_id').notNull(),
+  
+  // Vendor-specific information
+  vendorPartNumber: text('vendor_part_number').notNull(),
+  vendorPartName: text('vendor_part_name'),
+  
+  // Pricing and ordering
+  unitPrice: real('unit_price').notNull().default(0),
+  minOrderQty: real('min_order_qty').default(1),
+  packSize: real('pack_size').default(1), // Vendor's package size
+  leadTimeDays: integer('lead_time_days').default(7),
+  
+  // Vendor metrics
+  isPreferred: boolean('is_preferred').default(false),
+  qualityRating: integer('quality_rating').default(5), // 1-5 scale
+  deliveryRating: integer('delivery_rating').default(5), // 1-5 scale
+  
+  // Price history
+  lastPriceUpdate: timestamp('last_price_update'),
+  priceValidUntil: timestamp('price_valid_until'),
+  
+  // Status
+  isActive: boolean('is_active').default(true),
+  discontinuedDate: timestamp('discontinued_date'),
+  notes: text('notes'),
+  
+  // Tracking
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Insert Schemas for Inventory & MRP
+export const insertInventoryBalanceSchema = createInsertSchema(inventoryBalances).omit({
+  id: true,
+  availableQty: true, // Calculated field
+  totalValue: true, // Calculated field
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  partId: z.string().min(1, "Part ID is required"),
+  locationId: z.string().min(1, "Location ID is required"),
+  onHandQty: z.number().min(0, "On-hand quantity must be non-negative"),
+  committedQty: z.number().min(0, "Committed quantity must be non-negative"),
+  allocatedQty: z.number().min(0, "Allocated quantity must be non-negative"),
+  unitCost: z.number().min(0, "Unit cost must be non-negative"),
+});
+
+export const insertInventoryTransactionSchema = createInsertSchema(inventoryTransactions).omit({
+  id: true,
+  transactionId: true, // Auto-generated
+  createdAt: true,
+}).extend({
+  partId: z.string().min(1, "Part ID is required"),
+  locationId: z.string().min(1, "Location ID is required"),
+  transactionType: z.enum(['RECEIPT', 'ISSUE', 'CONSUMPTION', 'ADJUSTMENT', 'SCRAP', 'RETURN_TO_VENDOR', 'TRANSFER_OUT', 'TRANSFER_IN']),
+  quantity: z.number().refine(val => val !== 0, "Quantity cannot be zero"),
+  unitCost: z.number().min(0, "Unit cost must be non-negative"),
+  createdBy: z.string().min(1, "Created by is required"),
+});
+
+export const insertMrpRequirementSchema = createInsertSchema(mrpRequirements).omit({
+  id: true,
+  requirementId: true, // Auto-generated
+  calculatedAt: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  partId: z.string().min(1, "Part ID is required"),
+  requiredQty: z.number().positive("Required quantity must be positive"),
+  needDate: z.coerce.date(),
+  sourceType: z.enum(['CUSTOMER_ORDER', 'FORECAST', 'SAFETY_STOCK']),
+});
+
+export const insertOutsideProcessingLocationSchema = createInsertSchema(outsideProcessingLocations).omit({
+  id: true,
+  locationId: true, // Auto-generated
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  vendorId: z.string().min(1, "Vendor ID is required"),
+  vendorName: z.string().min(1, "Vendor name is required"),
+  locationName: z.string().min(1, "Location name is required"),
+});
+
+export const insertOutsideProcessingJobSchema = createInsertSchema(outsideProcessingJobs).omit({
+  id: true,
+  jobId: true, // Auto-generated
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  locationId: z.string().min(1, "Location ID is required"),
+  vendorId: z.string().min(1, "Vendor ID is required"),
+  processType: z.string().min(1, "Process type is required"),
+  totalPartsOut: z.number().min(1, "Total parts out must be at least 1"),
+  dateShipped: z.coerce.date(),
+  expectedReturn: z.coerce.date(),
+  createdBy: z.string().min(1, "Created by is required"),
+});
+
+export const insertVendorPartSchema = createInsertSchema(vendorParts).omit({
 
 // ===== VENDOR RELATIONS =====
 
@@ -2990,10 +3983,284 @@ export const insertVendorAddressSchema = createInsertSchema(vendorAddresses).omi
 });
 
 export const insertVendorContactPhoneSchema = createInsertSchema(vendorContactPhones).omit({
+
   id: true,
   createdAt: true,
   updatedAt: true,
 }).extend({
+
+  partId: z.string().min(1, "Part ID is required"),
+  vendorId: z.string().min(1, "Vendor ID is required"),
+  vendorPartNumber: z.string().min(1, "Vendor part number is required"),
+  unitPrice: z.number().min(0, "Unit price must be non-negative"),
+  minOrderQty: z.number().positive("Minimum order quantity must be positive"),
+  leadTimeDays: z.number().min(0, "Lead time must be non-negative"),
+});
+
+// ============================================================================
+// UPDATE SCHEMAS FOR SECURITY VALIDATION
+// ============================================================================
+
+// Update schema for inventory items - allows partial updates while validating types
+export const updateInventoryItemSchema = insertInventoryItemSchema.partial();
+
+// Update schema for inventory balances - partial validation for updateable fields
+export const updateInventoryBalanceSchema = insertInventoryBalanceSchema.partial().omit({
+  partId: true, // Cannot change part ID in updates
+  locationId: true, // Cannot change location ID in updates
+});
+
+// Update schema for inventory transactions - partial validation
+export const updateInventoryTransactionSchema = insertInventoryTransactionSchema.partial().omit({
+  partId: true, // Cannot change part ID in updates
+  transactionType: true, // Cannot change transaction type in updates
+  quantity: true, // Cannot change quantity in updates
+  createdBy: true, // Cannot change creator in updates
+});
+
+// Update schema for parts requests - partial validation for updateable fields
+export const updatePartsRequestSchema = insertPartsRequestSchema.partial();
+
+// Update schema for MRP requirements - partial validation for updateable fields
+export const updateMrpRequirementSchema = insertMrpRequirementSchema.partial().omit({
+  partId: true, // Cannot change part ID in updates
+  requiredQty: true, // Cannot change required quantity in updates
+  sourceType: true, // Cannot change source type in updates
+});
+
+// Update schema for outside processing locations - partial validation
+export const updateOutsideProcessingLocationSchema = insertOutsideProcessingLocationSchema.partial().omit({
+  vendorId: true, // Cannot change vendor ID in updates
+});
+
+// Update schema for outside processing jobs - partial validation for updateable fields
+export const updateOutsideProcessingJobSchema = insertOutsideProcessingJobSchema.partial().omit({
+  locationId: true, // Cannot change location ID in updates
+  vendorId: true, // Cannot change vendor ID in updates
+  createdBy: true, // Cannot change creator in updates
+});
+
+// Update schema for vendor parts - partial validation for updateable fields
+export const updateVendorPartSchema = insertVendorPartSchema.partial().omit({
+  partId: true, // Cannot change part ID in updates
+  vendorId: true, // Cannot change vendor ID in updates
+});
+
+// Types for Inventory & MRP
+export type InventoryBalance = typeof inventoryBalances.$inferSelect;
+export type InsertInventoryBalance = z.infer<typeof insertInventoryBalanceSchema>;
+
+export type InventoryTransaction = typeof inventoryTransactions.$inferSelect;
+export type InsertInventoryTransaction = z.infer<typeof insertInventoryTransactionSchema>;
+
+export type MrpRequirement = typeof mrpRequirements.$inferSelect;
+export type InsertMrpRequirement = z.infer<typeof insertMrpRequirementSchema>;
+
+export type OutsideProcessingLocation = typeof outsideProcessingLocations.$inferSelect;
+export type InsertOutsideProcessingLocation = z.infer<typeof insertOutsideProcessingLocationSchema>;
+
+export type OutsideProcessingJob = typeof outsideProcessingJobs.$inferSelect;
+export type InsertOutsideProcessingJob = z.infer<typeof insertOutsideProcessingJobSchema>;
+
+export type MrpCalculationHistory = typeof mrpCalculationHistory.$inferSelect;
+
+export type VendorPart = typeof vendorParts.$inferSelect;
+export type InsertVendorPart = z.infer<typeof insertVendorPartSchema>;
+
+// Update schema types for security validation
+export type UpdateInventoryItem = z.infer<typeof updateInventoryItemSchema>;
+export type UpdateInventoryBalance = z.infer<typeof updateInventoryBalanceSchema>;
+export type UpdateInventoryTransaction = z.infer<typeof updateInventoryTransactionSchema>;
+export type UpdatePartsRequest = z.infer<typeof updatePartsRequestSchema>;
+export type UpdateMrpRequirement = z.infer<typeof updateMrpRequirementSchema>;
+export type UpdateOutsideProcessingLocation = z.infer<typeof updateOutsideProcessingLocationSchema>;
+export type UpdateOutsideProcessingJob = z.infer<typeof updateOutsideProcessingJobSchema>;
+export type UpdateVendorPart = z.infer<typeof updateVendorPartSchema>;
+
+// ============================================================================
+// ENHANCED INVENTORY MANAGEMENT & MRP SYSTEM EXTENSIONS
+// ============================================================================
+
+// Allocation Details - Track specific demand-to-supply pegging
+export const allocationDetails = pgTable('allocation_details', {
+  id: serial('id').primaryKey(),
+  allocationId: text('allocation_id').notNull().unique(), // Auto-generated unique ID
+  
+  // Part and location
+  partId: text('part_id').notNull().references(() => robustParts.id),
+  locationId: text('location_id').notNull().default('MAIN'),
+  
+  // Allocation details
+  allocatedQty: real('allocated_qty').notNull(),
+  consumedQty: real('consumed_qty').notNull().default(0),
+  remainingQty: real('remaining_qty').notNull(), // Calculated field: allocated - consumed
+  
+  // Demand source (what's requesting this allocation)
+  demandType: text('demand_type').notNull(), // CUSTOMER_ORDER, PRODUCTION_ORDER, FORECAST, SAFETY_STOCK
+  demandOrderId: text('demand_order_id'), // Customer order ID driving this demand
+  demandCustomerId: text('demand_customer_id'), // Customer ID for traceability
+  demandDueDate: timestamp('demand_due_date'), // When this allocation is needed
+  demandPriority: integer('demand_priority').default(50), // 1-100, lower = higher priority
+  
+  // Supply source (what's fulfilling this allocation)
+  supplyType: text('supply_type').notNull(), // ON_HAND, PURCHASE_ORDER, PRODUCTION_ORDER, TRANSFER
+  supplyOrderId: text('supply_order_id'), // PO or production order fulfilling this
+  supplyVendorId: text('supply_vendor_id'), // Vendor if from PO
+  supplyAvailableDate: timestamp('supply_available_date'), // When supply becomes available
+  
+  // Lot/Batch tracking for traceability
+  lotNumber: text('lot_number'), // Lot/batch number for tracking
+  serialNumbers: text('serial_numbers').array(), // Array of serial numbers if applicable
+  expirationDate: timestamp('expiration_date'), // For materials with shelf life
+  
+  // Status and lifecycle
+  allocationStatus: text('allocation_status').default('ALLOCATED').notNull(), // ALLOCATED, RESERVED, CONSUMED, RELEASED
+  reservationDate: timestamp('reservation_date'), // When allocation was first reserved
+  consumptionStartDate: timestamp('consumption_start_date'), // When consumption began
+  fullyConsumedDate: timestamp('fully_consumed_date'), // When allocation was fully consumed
+  
+  // Atomicity protection
+  lockVersion: integer('lock_version').default(0).notNull(), // Optimistic locking
+  isLocked: boolean('is_locked').default(false), // Pessimistic locking for critical operations
+  lockedBy: text('locked_by'), // User/process that locked this allocation
+  lockedAt: timestamp('locked_at'), // When the lock was acquired
+  
+  // Audit and tracking
+  createdBy: text('created_by').notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedBy: text('updated_by'),
+  updatedAt: timestamp('updated_at').defaultNow(),
+  notes: text('notes'),
+});
+
+// Vendor Price Breaks - Volume-based pricing from vendors
+export const vendorPriceBreaks = pgTable('vendor_price_breaks', {
+  id: serial('id').primaryKey(),
+  vendorPartId: integer('vendor_part_id').notNull().references(() => vendorParts.id),
+  
+  // Price break tiers
+  minQty: real('min_qty').notNull(), // Minimum quantity for this price
+  maxQty: real('max_qty'), // Maximum quantity (null = unlimited)
+  unitPrice: real('unit_price').notNull(),
+  
+  // Pricing terms
+  currencyCode: text('currency_code').default('USD').notNull(),
+  paymentTerms: text('payment_terms'), // NET30, 2/10 NET30, etc.
+  validFrom: timestamp('valid_from').notNull(),
+  validUntil: timestamp('valid_until'),
+  
+  // Status
+  isActive: boolean('is_active').default(true),
+  notes: text('notes'),
+  
+  // Tracking
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Outside Processing Batches - Enhanced batch management
+export const outsideProcessingBatches = pgTable('outside_processing_batches', {
+  id: serial('id').primaryKey(),
+  batchId: text('batch_id').notNull().unique(), // Auto-generated batch ID
+  
+  // Batch information
+  jobId: text('job_id').notNull().references(() => outsideProcessingJobs.jobId),
+  batchName: text('batch_name').notNull(),
+  processType: text('process_type').notNull(),
+  
+  // Part tracking
+  partId: text('part_id').notNull().references(() => robustParts.id),
+  lotNumber: text('lot_number'),
+  
+  // Quantities
+  plannedQty: integer('planned_qty').notNull(),
+  shippedQty: integer('shipped_qty').default(0),
+  receivedQty: integer('received_qty').default(0),
+  scrapQty: integer('scrap_qty').default(0),
+  
+  // Timing
+  plannedShipDate: timestamp('planned_ship_date').notNull(),
+  actualShipDate: timestamp('actual_ship_date'),
+  plannedReceiveDate: timestamp('planned_receive_date').notNull(),
+  actualReceiveDate: timestamp('actual_receive_date'),
+  
+  // Cost tracking
+  estimatedCostPerPart: real('estimated_cost_per_part').default(0),
+  actualCostPerPart: real('actual_cost_per_part').default(0),
+  setupCost: real('setup_cost').default(0),
+  
+  // Status and tracking
+  status: text('status').default('PLANNED').notNull(), // PLANNED, SHIPPED, IN_PROCESS, PARTIAL_RECEIPT, COMPLETED
+  packingSlipNumber: text('packing_slip_number'),
+  receivingNotes: text('receiving_notes'),
+  
+  // Integration with production
+  wipLocationId: text('wip_location_id'), // Work-in-process location at vendor
+  returnLocationId: text('return_location_id').default('MAIN'), // Where parts return to
+  
+  // Tracking
+  createdBy: text('created_by').notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// MRP Planning Parameters - Enhanced MRP configuration
+export const mrpPlanningParameters = pgTable('mrp_planning_parameters', {
+  id: serial('id').primaryKey(),
+  parameterId: text('parameter_id').notNull().unique(),
+  
+  // Planning scope
+  partId: text('part_id'), // null = global parameters
+  planningGroup: text('planning_group').default('WEEKLY').notNull(), // DAILY, WEEKLY, MONTHLY
+  
+  // Time fencing
+  demandTimeFenceDays: integer('demand_time_fence_days').default(7), // Frozen demand period
+  planningTimeFenceDays: integer('planning_time_fence_days').default(30), // Planning horizon
+  
+  // Lot sizing
+  lotSizingMethod: text('lot_sizing_method').default('LOT_FOR_LOT').notNull(), // LOT_FOR_LOT, EOQ, FIXED_LOT_SIZE, MIN_MAX
+  fixedLotSize: real('fixed_lot_size'), // For FIXED_LOT_SIZE method
+  lotSizeMultiple: real('lot_size_multiple').default(1), // Round lot sizes to multiples
+  
+  // Safety stock
+  safetyStockMethod: text('safety_stock_method').default('FIXED').notNull(), // FIXED, PERCENTAGE, DYNAMIC
+  safetyStockDays: integer('safety_stock_days').default(0),
+  safetyStockPercent: real('safety_stock_percent').default(0),
+  
+  // Planning frequency
+  planningFrequency: text('planning_frequency').default('WEEKLY').notNull(), // DAILY, WEEKLY, MONTHLY
+  lastPlanningRun: timestamp('last_planning_run'),
+  nextPlanningRun: timestamp('next_planning_run'),
+  
+  // Status
+  isActive: boolean('is_active').default(true),
+  effectiveDate: timestamp('effective_date').notNull().defaultNow(),
+  expirationDate: timestamp('expiration_date'),
+  
+  // Tracking
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Insert Schemas for Enhanced System
+export const insertAllocationDetailSchema = createInsertSchema(allocationDetails).omit({
+  id: true,
+  allocationId: true, // Auto-generated
+  remainingQty: true, // Calculated field
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  partId: z.string().min(1, "Part ID is required"),
+  locationId: z.string().min(1, "Location ID is required"),
+  allocatedQty: z.number().positive("Allocated quantity must be positive"),
+  demandType: z.enum(['CUSTOMER_ORDER', 'PRODUCTION_ORDER', 'FORECAST', 'SAFETY_STOCK']),
+  supplyType: z.enum(['ON_HAND', 'PURCHASE_ORDER', 'PRODUCTION_ORDER', 'TRANSFER']),
+  allocationStatus: z.enum(['ALLOCATED', 'RESERVED', 'CONSUMED', 'RELEASED']).default('ALLOCATED'),
+  createdBy: z.string().min(1, "Created by is required"),
+});
+
+export const insertVendorPriceBreakSchema = createInsertSchema(vendorPriceBreaks).omit({
+
   contactId: z.number().min(1, "Contact ID is required"),
   phoneSlot: z.enum(["1", "2"]),
   type: z.enum(["OFFICE", "MOBILE", "FAX", "TOLL_FREE", "DIRECT", "AFTER_HOURS", "OTHER"]).default("OFFICE"),
@@ -3017,10 +4284,61 @@ export const insertVendorContactEmailSchema = createInsertSchema(vendorContactEm
 });
 
 export const insertVendorDocumentSchema = createInsertSchema(vendorDocuments).omit({
+
   id: true,
   createdAt: true,
   updatedAt: true,
 }).extend({
+
+  vendorPartId: z.number().min(1, "Vendor part ID is required"),
+  minQty: z.number().positive("Minimum quantity must be positive"),
+  unitPrice: z.number().min(0, "Unit price must be non-negative"),
+  validFrom: z.coerce.date(),
+});
+
+export const insertOutsideProcessingBatchSchema = createInsertSchema(outsideProcessingBatches).omit({
+  id: true,
+  batchId: true, // Auto-generated
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  jobId: z.string().min(1, "Job ID is required"),
+  batchName: z.string().min(1, "Batch name is required"),
+  processType: z.string().min(1, "Process type is required"),
+  partId: z.string().min(1, "Part ID is required"),
+  plannedQty: z.number().min(1, "Planned quantity must be at least 1"),
+  plannedShipDate: z.coerce.date(),
+  plannedReceiveDate: z.coerce.date(),
+  createdBy: z.string().min(1, "Created by is required"),
+});
+
+export const insertMrpPlanningParametersSchema = createInsertSchema(mrpPlanningParameters).omit({
+  id: true,
+  parameterId: true, // Auto-generated
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  planningGroup: z.enum(['DAILY', 'WEEKLY', 'MONTHLY']).default('WEEKLY'),
+  lotSizingMethod: z.enum(['LOT_FOR_LOT', 'EOQ', 'FIXED_LOT_SIZE', 'MIN_MAX']).default('LOT_FOR_LOT'),
+  safetyStockMethod: z.enum(['FIXED', 'PERCENTAGE', 'DYNAMIC']).default('FIXED'),
+  planningFrequency: z.enum(['DAILY', 'WEEKLY', 'MONTHLY']).default('WEEKLY'),
+  effectiveDate: z.coerce.date(),
+});
+
+// Enhanced Types
+export type AllocationDetail = typeof allocationDetails.$inferSelect;
+export type InsertAllocationDetail = z.infer<typeof insertAllocationDetailSchema>;
+
+export type VendorPriceBreak = typeof vendorPriceBreaks.$inferSelect;
+export type InsertVendorPriceBreak = z.infer<typeof insertVendorPriceBreakSchema>;
+
+export type OutsideProcessingBatch = typeof outsideProcessingBatches.$inferSelect;
+export type InsertOutsideProcessingBatch = z.infer<typeof insertOutsideProcessingBatchSchema>;
+
+export type MrpPlanningParameters = typeof mrpPlanningParameters.$inferSelect;
+export type InsertMrpPlanningParameters = z.infer<typeof insertMrpPlanningParametersSchema>;
+
+
   vendorId: z.number().min(1, "Vendor ID is required"),
   type: z.enum(["W9", "CONTRACT", "CERTIFICATE", "INSURANCE", "LICENSE", "PROPOSAL", "SPECIFICATION", "QUALITY_CERT", "OTHER"]).default("OTHER"),
   fileName: z.string().min(1, "File name is required"),
@@ -3083,3 +4401,4 @@ export type InsertVendorScoringCriteria = z.infer<typeof insertVendorScoringCrit
 export type VendorScoringCriteria = typeof vendorScoringCriteria.$inferSelect;
 export type InsertVendorScore = z.infer<typeof insertVendorScoreSchema>;
 export type VendorScore = typeof vendorScores.$inferSelect;
+

@@ -4,7 +4,7 @@ hidden = [".config", ".git", "generated-icon.png", "node_modules", "dist"]
 
 [nix]
 channel = "stable-25_05"
-packages = ["jq", "postgresql", "cairo", "pango", "libjpeg", "giflib", "librsvg", "pixman"]
+packages = ["jq", "postgresql", "cairo", "pango", "libjpeg", "giflib", "librsvg", "pixman", "openssh"]
 
 [deployment]
 deploymentTarget = "autoscale"
@@ -49,6 +49,56 @@ localPort = 5000
 externalPort = 80
 
 [[ports]]
+
+
+localPort = 33381
+externalPort = 3003
+
+[[ports]]
+localPort = 35553
+externalPort = 3002
+
+[[ports]]
+localPort = 36365
+externalPort = 3001
+
+[[ports]]
+localPort = 46349
+externalPort = 4200
+
+[[ports]]
+localPort = 46637
+externalPort = 3000
+
+localPort = 34155
+externalPort = 4200
+
+[[ports]]
+localPort = 35047
+externalPort = 3000
+
+[[ports]]
+localPort = 36135
+externalPort = 3003
+
+[[ports]]
+localPort = 39539
+externalPort = 5173
+
+[[ports]]
+localPort = 41367
+externalPort = 5000
+
+[[ports]]
+localPort = 41385
+externalPort = 3001
+
+[[ports]]
+localPort = 43643
+externalPort = 3002
+
+
+
 localPort = 41369
 externalPort = 3000
 

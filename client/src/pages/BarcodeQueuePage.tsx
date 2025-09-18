@@ -61,7 +61,7 @@ export default function BarcodeQueuePage() {
 
   // Get all orders from production pipeline
   const { data: allOrders = [] } = useQuery({
-    queryKey: ['/api/orders/all'],
+    queryKey: ['/api/orders/with-payment-status'],
   });
 
   // Fetch all kickbacks to determine which orders have kickbacks
@@ -132,7 +132,7 @@ export default function BarcodeQueuePage() {
     },
     onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['/api/kickbacks'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
       setKickbackModalOpen(false);
       kickbackForm.reset();
       
@@ -327,7 +327,7 @@ export default function BarcodeQueuePage() {
       setSelectedOrders(new Set());
       setSelectAll(false);
       // Refetch orders to update the display
-      queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
     },
     onError: (error) => {
       toast({
@@ -431,28 +431,6 @@ export default function BarcodeQueuePage() {
               Select All ({selectedOrders.size}/{barcodeOrders.length})
             </label>
           </div>
-
-          {selectedOrders.size > 0 && (
-            <div className="flex items-center gap-2">
-              <Button
-                onClick={handleCreateBarcodes}
-                disabled={createBarcodeLabels.isPending}
-                className="bg-blue-600 hover:bg-blue-700"
-              >
-                <QrCode className="h-4 w-4 mr-2" />
-                Create Avery Labels ({selectedOrders.size})
-              </Button>
-              <Button
-                onClick={handleProgressToCNC}
-                disabled={progressToCNC.isPending}
-                variant="outline"
-                className="border-green-500 text-green-700 hover:bg-green-50"
-              >
-                <ArrowRight className="h-4 w-4 mr-2" />
-                Progress to CNC ({selectedOrders.size})
-              </Button>
-            </div>
-          )}
         </div>
       </div>
 
@@ -556,7 +534,32 @@ export default function BarcodeQueuePage() {
                     {orders.map((order: any) => {
                       const isSelected = selectedOrders.has(order.orderId);
                       const isOverdue = isAfter(new Date(), new Date(order.dueDate));
-                      const actionLength = order.features?.action_length || 'unknown';
+                      
+                      // Debug features object for EI204
+                      if (order.orderId === 'EI204') {
+                        console.log('🔍 EI204 FEATURES DEBUG:', {
+                          orderId: order.orderId,
+                          features: order.features,
+                          featuresType: typeof order.features,
+                          featuresKeys: order.features ? Object.keys(order.features) : 'null',
+                          actionLengthValue: order.features?.action_length,
+                          shortActionValue: order.features?.short_action,
+                          allOrderKeys: Object.keys(order)
+                        });
+                      }
+                      
+                      // Determine action length with special handling for Tikka models
+                      let actionLength = (order as any).actionLength;
+                      
+                      // If no action length and it's a Tikka model, use 'standard'
+                      if (!actionLength && order.modelId?.includes('tikka')) {
+                        actionLength = 'standard';
+                      }
+                      
+                      // Default to 'unknown' if still not set
+                      if (!actionLength) {
+                        actionLength = 'unknown';
+                      }
                       // Determine material type from stock model ID
                       const materialType = order.modelId?.startsWith('cf_') ? 'Carbon Fiber' : 
                                          order.modelId?.startsWith('fg_') ? 'Fiberglass' : 
@@ -625,9 +628,10 @@ export default function BarcodeQueuePage() {
                                       actionLength === 'long' ? 'border-blue-500 text-blue-700 bg-blue-50' :
                                       'border-gray-500 text-gray-700 bg-gray-50'
                                     }`}>
-                                      {actionLength === 'short' ? 'Short' : 
-                                       actionLength === 'medium' ? 'Medium' :
-                                       actionLength === 'long' ? 'Long' : 'Unknown'} Action
+                                      {actionLength === 'short' ? 'Short Action' : 
+                                       actionLength === 'medium' ? 'Medium Action' :
+                                       actionLength === 'long' ? 'Long Action' : 
+                                       actionLength === 'standard' ? 'Tikka Standard' : 'Unknown Action'}
                                     </Badge>
                                   </div>
 
@@ -754,7 +758,18 @@ export default function BarcodeQueuePage() {
                       <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
                         {categoryOrders.map((order: any) => {
                           const isOverdue = isAfter(new Date(), new Date(order.dueDate));
-                          const actionLength = order.features?.action_length || 'unknown';
+                          // Determine action length with special handling for Tikka models
+                          let actionLength = (order as any).actionLength;
+                          
+                          // If no action length and it's a Tikka model, use 'standard'
+                          if (!actionLength && order.modelId?.includes('tikka')) {
+                            actionLength = 'standard';
+                          }
+                          
+                          // Default to 'unknown' if still not set
+                          if (!actionLength) {
+                            actionLength = 'unknown';
+                          }
                           // Determine material type from stock model ID
                           const materialType = order.modelId?.startsWith('cf_') ? 'Carbon Fiber' : 
                                              order.modelId?.startsWith('fg_') ? 'Fiberglass' : 
@@ -811,9 +826,10 @@ export default function BarcodeQueuePage() {
                                         actionLength === 'long' ? 'border-blue-500 text-blue-700 bg-blue-50' :
                                         'border-gray-500 text-gray-700 bg-gray-50'
                                       }`}>
-                                        {actionLength === 'short' ? 'Short' : 
-                                         actionLength === 'medium' ? 'Medium' :
-                                         actionLength === 'long' ? 'Long' : 'Unknown'} Action
+                                        {actionLength === 'short' ? 'Short Action' : 
+                                         actionLength === 'medium' ? 'Medium Action' :
+                                         actionLength === 'long' ? 'Long Action' : 
+                                         actionLength === 'standard' ? 'Tikka Standard' : 'Unknown Action'}
                                       </Badge>
                                       <Link href={`/order-entry?draft=${order.orderId}`}>
                                         <Button variant="outline" size="sm" className="h-6 w-6 p-0" title="View/Edit Order">

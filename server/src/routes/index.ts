@@ -20,10 +20,14 @@ import shippingTestRoutes from './shipping-test';
 import orderAttachmentsRoutes from './orderAttachments';
 import discountsRoutes from './discounts';
 import bomsRoutes from './boms';
+import robustBomRoutes from './robustBom';
+import p2BomsRoutes from './p2boms';
 import communicationsRoutes from './communications';
 import secureVerificationRoutes from './secureVerification';
 import nonconformanceRoutes from '../../routes/nonconformance';
 import paymentsRoutes from './payments';
+import acceptBluePaymentsRoutes from './acceptBluePayments';
+import unifiedPaymentsRoutes from './unifiedPayments';
 import algorithmicSchedulerRoutes from './algorithmicScheduler';
 import productionQueueRoutes from './productionQueue';
 import layupScheduleRoutes from './layupSchedule';
@@ -31,6 +35,14 @@ import layupScheduleRoutes from './layupSchedule';
 import customerSatisfactionRoutes from './customerSatisfaction';
 import poProductsRoutes from './poProducts';
 import refundRoutes from './refunds';
+
+import vendorRoutes from './vendors';
+import cuttingTableRoutes from './cuttingTable';
+import materialInventoryRoutes from './materialInventory';
+import defrostScheduleRoutes from './defrostSchedule';
+import mrpRoutes from './mrp';
+import enhancedRoutes from './enhanced';
+
 import { getAccessToken } from '../utils/upsShipping';
 
 export function registerRoutes(app: Express): Server {
@@ -97,6 +109,12 @@ export function registerRoutes(app: Express): Server {
 
   // BOM management routes
   app.use('/api/boms', bomsRoutes);
+  
+  // Robust BOM management routes (P2 Enhanced)
+  app.use('/api/robust-bom', robustBomRoutes);
+  
+  // P2 BOM management routes (CRUD)
+  app.use('/api/p2-boms', p2BomsRoutes);
 
   // Communications management routes
   app.use('/api/communications', communicationsRoutes);
@@ -106,6 +124,8 @@ export function registerRoutes(app: Express): Server {
 
   // Payment processing routes
   app.use('/api/payments', paymentsRoutes);
+  app.use('/api/accept-blue', acceptBluePaymentsRoutes);
+  app.use('/api/unified-payments', unifiedPaymentsRoutes);
 
   // Algorithmic scheduler routes
   app.use('/api/scheduler', algorithmicSchedulerRoutes);
@@ -127,7 +147,23 @@ export function registerRoutes(app: Express): Server {
 
   // Refund management routes
   app.use('/api/refund-requests', refundRoutes);
+
+  // Vendor management routes
+  app.use('/api/vendors', vendorRoutes);
   
+
+  // Cutting table management routes
+  app.use('/api', cuttingTableRoutes);
+  app.use('/api', materialInventoryRoutes);
+  app.use('/api', defrostScheduleRoutes);
+  
+  // MRP and advanced inventory management routes (legacy)
+  app.use('/api/mrp', mrpRoutes);
+
+  // Enhanced system routes (completely separate from legacy)
+  app.use('/api/enhanced', enhancedRoutes);
+  
+
   // UPS Test endpoint
   app.post('/api/test-ups-auth', async (req, res) => {
     try {
@@ -270,7 +306,7 @@ export function registerRoutes(app: Express): Server {
         SELECT 
           id,
           order_id as "orderId",
-          customer,
+          customer_id as "customer",
           product,
           date,
           due_date as "dueDate",
@@ -597,9 +633,14 @@ export function registerRoutes(app: Express): Server {
       console.log('🔧 LAYUP SCHEDULE GENERATE CALLED');
       const { storage } = await import('../../storage');
       
-      // Get production orders (already sorted by priority)
-      const productionOrders = await storage.getAllProductionOrders();
-      console.log('🔧 Found production orders for scheduling:', productionOrders.length);
+      // Get orders from the same source as the frontend - P1 layup queue
+      console.log('🔧 Fetching orders from P1 layup queue (same as frontend)...');
+      const p1QueueResponse = await fetch('http://localhost:5000/api/p1-layup-queue');
+      if (!p1QueueResponse.ok) {
+        throw new Error(`Failed to fetch P1 layup queue: ${p1QueueResponse.statusText}`);
+      }
+      const p1Orders = await p1QueueResponse.json();
+      console.log('🔧 Found orders from P1 layup queue for scheduling:', p1Orders.length);
       
       // Get mold and employee settings (using same API as LayupScheduler component)
       const molds = await storage.getAllMolds();
@@ -608,29 +649,25 @@ export function registerRoutes(app: Express): Server {
       
       console.log('🔧 Found molds:', molds.length);
       console.log('🔧 Found layup employees:', layupEmployees.length);
-      console.log('🔧 First few production orders:', productionOrders.slice(0, 3).map(o => ({ 
+      console.log('🔧 First few P1 orders from queue:', p1Orders.slice(0, 3).map((o: any) => ({ 
         orderId: o.orderId, 
-        itemName: o.itemName, 
-        itemId: o.itemId 
+        stockModelId: o.stockModelId || o.modelId,
+        source: o.source,
+        currentDepartment: o.currentDepartment
       })));
       
       // Get stock models for proper mapping
       const stockModels = await storage.getAllStockModels();
       
-      // Transform data for scheduler utility
-      const orders = productionOrders.map(order => {
-        // Map item names to stock model IDs using itemId or itemName
-        let stockModelId = (order as any).itemId;
-        if (!stockModelId && (order as any).itemName) {
-          // Try to find matching stock model by name
-          const matchingModel = stockModels.find(model => 
-            model.displayName === (order as any).itemName || 
-            model.name === (order as any).itemName.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '')
-          );
-          if (matchingModel) {
-            stockModelId = matchingModel.id;
-          } else if ((order as any).itemName.includes('Mesa')) {
-            // Default Mesa items to mesa_universal if no exact match
+      // Transform P1 orders for scheduler utility (these already have proper stock model IDs)
+      const orders = p1Orders.map((order: any) => {
+        // P1 orders already have stockModelId or modelId
+        let stockModelId = order.stockModelId || order.modelId;
+        
+        // If still no stock model, try to infer from product name
+        if (!stockModelId || stockModelId === 'unknown') {
+          const productName = order.product || order.modelId || '';
+          if (productName.toLowerCase().includes('mesa')) {
             stockModelId = 'mesa_universal';
           } else {
             stockModelId = 'unknown';
@@ -639,22 +676,23 @@ export function registerRoutes(app: Express): Server {
         
         return {
           orderId: order.orderId,
-          product: (order as any).itemName || 'Unknown Product',
-          customer: (order as any).customerName || 'Unknown Customer',
-          stockModelId: stockModelId || 'unknown',
+          product: order.product || order.modelId || 'Unknown Product',
+          customer: order.customer || 'Unknown Customer',
+          stockModelId: stockModelId,
           dueDate: order.dueDate,
           orderDate: order.orderDate,
-          priorityScore: 50, // Default priority score since productionOrders doesn't have this field
+          priorityScore: order.priorityScore || (order.source === 'p1_purchase_order' ? 20 : 50), // P1 PO orders get higher priority
           quantity: 1,
-          features: (order as any).specifications || {}, // Include specifications as features
-          source: 'production_order' // Add source for identification
+          features: order.features || {},
+          source: order.source || 'main_orders'
         };
       });
       
-      console.log('🔧 Transformed orders with stock models:', orders.slice(0, 3).map(o => ({ 
+      console.log('🔧 Transformed P1 orders with stock models:', orders.slice(0, 3).map(o => ({ 
         orderId: o.orderId, 
         product: o.product, 
-        stockModelId: o.stockModelId 
+        stockModelId: o.stockModelId,
+        source: o.source
       })));
       
       const employeeSettings = layupEmployees.map((emp: any) => ({
@@ -679,7 +717,7 @@ export function registerRoutes(app: Express): Server {
         moldId: mold.moldId,
         modelName: mold.modelName || mold.moldId, // Use moldId as fallback for modelName
         enabled: true,
-        multiplier: 2, // Default capacity multiplier
+        multiplier: 1, // Default capacity multiplier: 1 order per mold per day
         instanceNumber: 1, // Default instance
         stockModels: mold.stockModels || [] // Include stock model compatibility
       }));
@@ -1415,6 +1453,66 @@ export function registerRoutes(app: Express): Server {
       console.error('❌ PRODUCTION FLOW: Push to Layup/Plugging error:', error);
       res.status(500).json({ 
         error: "Failed to push orders to Layup/Plugging department",
+        success: false 
+      });
+    }
+  });
+
+  // Move single order to different department (for layup scheduler action buttons)
+  app.post('/api/move-order-department', async (req, res) => {
+    try {
+      console.log('🏭 SINGLE ORDER MOVE: Move order department API called');
+      const { orderId, department, status } = req.body;
+      
+      if (!orderId || !department || !status) {
+        return res.status(400).json({ 
+          error: "orderId, department, and status are required", 
+          success: false 
+        });
+      }
+
+      console.log(`🏭 SINGLE ORDER MOVE: Moving order ${orderId} to ${department} with status ${status}`);
+      const { storage } = await import('../../storage');
+      
+      // Update order status and department
+      const updateResult = await storage.updateOrderDepartment(orderId, department, status);
+      
+      if (updateResult.success) {
+        console.log(`✅ SINGLE ORDER MOVE: Order ${orderId} moved to ${department} department`);
+        
+        // If moving back to Production Queue, also remove from layup schedule
+        if (department === 'P1 Production Queue') {
+          try {
+            await storage.deleteLayupScheduleByOrder(orderId);
+            console.log(`🗑️ SINGLE ORDER MOVE: Removed ${orderId} from layup schedule`);
+          } catch (scheduleError) {
+            console.warn(`⚠️ SINGLE ORDER MOVE: Could not remove ${orderId} from schedule:`, scheduleError);
+            // Don't fail the whole operation if schedule cleanup fails
+          }
+        }
+        
+        const result = {
+          success: true,
+          message: `Successfully moved order ${orderId} to ${department} department`,
+          orderId,
+          department,
+          status
+        };
+
+        res.json(result);
+      } else {
+        console.warn(`⚠️ SINGLE ORDER MOVE: Failed to update order ${orderId}: ${updateResult.message}`);
+        res.status(400).json({
+          error: updateResult.message,
+          success: false,
+          orderId
+        });
+      }
+      
+    } catch (error) {
+      console.error('❌ SINGLE ORDER MOVE: Move order department error:', error);
+      res.status(500).json({ 
+        error: "Failed to move order to new department",
         success: false 
       });
     }
@@ -2702,8 +2800,10 @@ export function registerRoutes(app: Express): Server {
           const actionLength = (order as any).features?.action_length || 'unknown';
           const modelDisplayName = stockModelMap.get((order as any).modelId) || (order as any).modelId || 'Unknown';
           
-          // Add order information at top
-          page.drawText(`${order.orderId}`, {
+          // Add order information at top - Order ID and Customer Name
+          const customerName = (order as any).customer || '';
+          const orderText = customerName ? `${order.orderId} - ${customerName}` : order.orderId;
+          page.drawText(orderText, {
             x: x + 8,
             y: y + 50,
             size: 11,

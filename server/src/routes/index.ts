@@ -37,6 +37,7 @@ import poProductsRoutes from './poProducts';
 import refundRoutes from './refunds';
 
 import vendorRoutes from './vendors';
+import vendorPORoutes from './vendorPOs';
 import cuttingTableRoutes from './cuttingTable';
 import materialInventoryRoutes from './materialInventory';
 import defrostScheduleRoutes from './defrostSchedule';
@@ -150,6 +151,10 @@ export function registerRoutes(app: Express): Server {
 
   // Vendor management routes
   app.use('/api/vendors', vendorRoutes);
+  
+
+  // Vendor Purchase Order routes
+  app.use('/api/vendor-pos', vendorPORoutes);
   
 
   // Cutting table management routes

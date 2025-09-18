@@ -13,6 +13,7 @@ export const users = pgTable("users", {
   passwordHash: text("password_hash"),
   role: text("role").notNull().default("EMPLOYEE"), // ADMIN, HR, MANAGER, EMPLOYEE
   canOverridePrices: boolean("can_override_prices").default(false),
+  canCreateVendorPOs: boolean("can_create_vendor_pos").default(false),
   employeeId: integer("employee_id").references(() => employees.id),
   isActive: boolean("is_active").default(true),
   lastLoginAt: timestamp("last_login_at"),
@@ -522,10 +523,12 @@ export const enhancedInventoryItems = pgTable("enhanced_inventory_items", {
   id: serial("id").primaryKey(),
   agPartNumber: text("ag_part_number").notNull().unique(), // AG Part#
   name: text("name").notNull(), // Name
+  vendorDescription: text("vendor_description"), // Vendor Description
   type: text("type").notNull().default("Purchased"), // Type: Purchased or Manufactured
   source: text("source"), // Source
   supplierPartNumber: text("supplier_part_number"), // Supplier Part #
   costPer: real("cost_per"), // Cost per
+  uom: text("uom").default("EA"), // Unit of Measure
   orderDate: date("order_date"), // Order Date
   department: text("department"), // Dept.
   secondarySource: text("secondary_source"), // Secondary Source
@@ -1124,6 +1127,27 @@ export const insertInventoryItemSchema = createInsertSchema(inventoryItems).omit
   source: z.string().optional().nullable(),
   supplierPartNumber: z.string().optional().nullable(),
   costPer: z.number().min(0).optional().nullable(),
+  orderDate: z.coerce.date().optional().nullable(),
+  department: z.string().optional().nullable(),
+  secondarySource: z.string().optional().nullable(),
+  notes: z.string().optional().nullable(),
+  isActive: z.boolean().default(true),
+});
+
+// Enhanced inventory item schema
+export const insertEnhancedInventoryItemSchema = createInsertSchema(enhancedInventoryItems).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  agPartNumber: z.string().min(1, "AG Part# is required"),
+  name: z.string().min(1, "Name is required"),
+  vendorDescription: z.string().optional().nullable(),
+  type: z.enum(["Purchased", "Manufactured"]).default("Purchased"),
+  source: z.string().optional().nullable(),
+  supplierPartNumber: z.string().optional().nullable(),
+  costPer: z.number().min(0).optional().nullable(),
+  uom: z.string().default("EA"),
   orderDate: z.coerce.date().optional().nullable(),
   department: z.string().optional().nullable(),
   secondarySource: z.string().optional().nullable(),
@@ -2204,7 +2228,7 @@ export type P2PurchaseOrderItem = typeof p2PurchaseOrderItems.$inferSelect;
 export type InsertProductionOrder = z.infer<typeof insertProductionOrderSchema>;
 export type ProductionOrder = typeof productionOrders.$inferSelect;
 
-export const orderStatusEnum = pgEnum('order_status', ['DRAFT', 'CONFIRMED', 'FINALIZED', 'CANCELLED', 'RESERVED']);
+// Removed order_status enum to avoid conflicts - using specific enums per module instead
 
 // BOM (Bill of Materials) Management Tables for P2
 export const bomDefinitions = pgTable('bom_definitions', {
@@ -3255,6 +3279,86 @@ export const insertVendorSchema = createInsertSchema(vendors).omit({
 export type Vendor = typeof vendors.$inferSelect;
 export type InsertVendor = z.infer<typeof insertVendorSchema>;
 
+// Vendor Purchase Order Status Enum
+export const vendorPOStatusEnum = pgEnum('vendor_po_status', ['DRAFT', 'SENT', 'PARTIALLY_RECEIVED', 'FULLY_RECEIVED', 'CANCELLED']);
+
+// Vendor Purchase Orders - POs FROM your company TO vendors for procurement
+export const vendorPurchaseOrders = pgTable('vendor_purchase_orders', {
+  id: serial('id').primaryKey(),
+  poNumber: text('po_number').notNull().unique(), // VP-YY-### format
+  vendorId: integer('vendor_id').references(() => vendors.id).notNull(),
+  vendorName: text('vendor_name').notNull(), // Denormalized for performance
+  buyerName: text('buyer_name').notNull(), // User who created the PO
+  poDate: date('po_date').notNull(),
+  expectedDelivery: date('expected_delivery').notNull(),
+  shipVia: text('ship_via').notNull().default('Delivery'), // Delivery, Pickup, UPS, Call to Confirm
+  status: vendorPOStatusEnum('status').notNull().default('DRAFT'),
+  notes: text('notes'),
+  barcode: text('barcode').unique(), // Auto-generated barcode for receiving
+  totalCost: real('total_cost').default(0), // Calculated total of all line items
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow()
+});
+
+export const vendorPurchaseOrderItems = pgTable('vendor_purchase_order_items', {
+  id: serial('id').primaryKey(),
+  vendorPoId: integer('vendor_po_id').references(() => vendorPurchaseOrders.id).notNull(),
+  lineNumber: integer('line_number').notNull(), // Sequential line numbers (1, 2, 3...)
+  agPartNumber: text('ag_part_number'), // Your internal AG part number 
+  vendorPartNumber: text('vendor_part_number').notNull(), // Vendor's part number
+  description: text('description').notNull(), // Item description
+  vendorDescription: text('vendor_description'), // Additional description from Enhanced Inventory
+  quantity: real('quantity').notNull(),
+  unitPrice: real('unit_price').default(0), // Price per unit
+  totalPrice: real('total_price').default(0), // quantity * unitPrice
+  uom: text('uom').notNull().default('EA'), // Unit of measure from inventory
+  quantityReceived: real('quantity_received').default(0), // Track received quantities
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow()
+});
+
+// Vendor Purchase Order schemas
+export const insertVendorPurchaseOrderSchema = createInsertSchema(vendorPurchaseOrders).omit({
+  id: true,
+  poNumber: true, // Auto-generated
+  barcode: true, // Auto-generated
+  totalCost: true, // Calculated
+  createdAt: true,
+  updatedAt: true
+}).extend({
+  vendorId: z.number().min(1, "Vendor is required"),
+  vendorName: z.string().min(1, "Vendor name is required"),
+  buyerName: z.string().min(1, "Buyer name is required"),
+  poDate: z.coerce.date(),
+  expectedDelivery: z.coerce.date(),
+  status: z.enum(['DRAFT', 'SENT', 'PARTIALLY_RECEIVED', 'FULLY_RECEIVED', 'CANCELLED']).default('DRAFT'),
+  shipVia: z.enum(['Delivery', 'Pickup', 'UPS', 'Call to Confirm']).default('Delivery')
+});
+
+export const insertVendorPurchaseOrderItemSchema = createInsertSchema(vendorPurchaseOrderItems).omit({
+  id: true,
+  totalPrice: true, // Calculated
+  quantityReceived: true, // Set during receiving
+  createdAt: true,
+  updatedAt: true
+}).extend({
+  vendorPoId: z.number().min(1, "Vendor PO ID is required"),
+  lineNumber: z.number().min(1, "Line number is required"),
+  vendorPartNumber: z.string().min(1, "Vendor part number is required"),
+  description: z.string().min(1, "Description is required"),
+  vendorDescription: z.string().optional(),
+  quantity: z.number().min(1, "Quantity must be at least 1"),
+  unitPrice: z.number().min(0, "Unit price must be non-negative"),
+  uom: z.string().min(1, "Unit of measure is required")
+});
+
+// Vendor Purchase Order types
+export type VendorPurchaseOrder = typeof vendorPurchaseOrders.$inferSelect;
+export type InsertVendorPurchaseOrder = z.infer<typeof insertVendorPurchaseOrderSchema>;
+export type VendorPurchaseOrderItem = typeof vendorPurchaseOrderItems.$inferSelect;
+export type InsertVendorPurchaseOrderItem = z.infer<typeof insertVendorPurchaseOrderItemSchema>;
+
 // ============================================================================
 // ROBUST BOM MANAGEMENT SYSTEM (P2 Enhanced)
 // ============================================================================
@@ -4003,6 +4107,9 @@ export const insertVendorContactPhoneSchema = createInsertSchema(vendorContactPh
 
 // Update schema for inventory items - allows partial updates while validating types
 export const updateInventoryItemSchema = insertInventoryItemSchema.partial();
+
+// Update schema for enhanced inventory items
+export const updateEnhancedInventoryItemSchema = insertEnhancedInventoryItemSchema.partial();
 
 // Update schema for inventory balances - partial validation for updateable fields
 export const updateInventoryBalanceSchema = insertInventoryBalanceSchema.partial().omit({

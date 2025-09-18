@@ -3086,6 +3086,7 @@ export const vendorPurchaseOrderItems = pgTable('vendor_purchase_order_items', {
   agPartNumber: text('ag_part_number'), // Your internal AG part number 
   vendorPartNumber: text('vendor_part_number').notNull(), // Vendor's part number
   description: text('description').notNull(), // Item description
+  vendorDescription: text('vendor_description'), // Additional description from Enhanced Inventory
   quantity: integer('quantity').notNull(),
   unitPrice: real('unit_price').default(0), // Price per unit
   totalPrice: real('total_price').default(0), // quantity * unitPrice
@@ -3125,6 +3126,7 @@ export const insertVendorPurchaseOrderItemSchema = createInsertSchema(vendorPurc
   lineNumber: z.number().min(1, "Line number is required"),
   vendorPartNumber: z.string().min(1, "Vendor part number is required"),
   description: z.string().min(1, "Description is required"),
+  vendorDescription: z.string().optional(),
   quantity: z.number().min(1, "Quantity must be at least 1"),
   unitPrice: z.number().min(0, "Unit price must be non-negative"),
   uom: z.string().min(1, "Unit of measure is required")

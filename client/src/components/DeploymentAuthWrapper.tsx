@@ -10,10 +10,12 @@ function isDeploymentEnvironment(): boolean {
   // Multiple methods to detect deployment environment
   const hostname = window.location.hostname;
   const viteDeployment = import.meta.env.VITE_REPLIT_DEPLOYMENT === '1';
-  const nodeEnv = import.meta.env.VITE_NODE_ENV === 'production';
+  const nodeEnv = import.meta.env.VITE_NODE_ENV;
+  const isDevelopment = import.meta.env.NODE_ENV === 'development' || nodeEnv === 'development';
   
-  // Development overrides - only skip auth for actual development environments
+  // Development overrides - skip auth for development environments
   const isLocalhost = hostname.includes('localhost') || hostname.includes('127.0.0.1');
+
   const isReplitEditor = hostname.includes('replit.dev') && !hostname.includes('.replit.dev');
   const isReplitPreview = hostname.includes('.repl.co'); // Replit preview domains
   
@@ -25,6 +27,7 @@ function isDeploymentEnvironment(): boolean {
   
   // For deployed domains (.repl.co, .replit.app, custom domains), ALWAYS require auth
   console.log('🔧 PRODUCTION MODE: Authentication enabled for deployed site');
+
   return true;
 }
 

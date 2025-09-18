@@ -25,6 +25,7 @@ import InventoryScannerPage from "./pages/InventoryScannerPage";
 import InventoryDashboardPage from "./pages/InventoryDashboardPage";
 import InventoryManagerPage from "./pages/InventoryManagerPage";
 import InventoryReceivingPage from "./pages/InventoryReceivingPage";
+import EnhancedInventoryMRPPage from "./pages/EnhancedInventoryMRPPage";
 import QCPage from "./pages/QCPage";
 import MaintenancePage from "./pages/MaintenancePage";
 import EmployeePortalPage from "./pages/EmployeePortalPage";
@@ -61,6 +62,7 @@ import FALEESHAHTestDashboard from "./pages/FALEESHAHTestDashboard";
 import JOEYBTestDashboard from "./pages/JOEYBTestDashboard";
 import OrderDepartmentTransfer from "./pages/OrderDepartmentTransfer";
 import { BOMAdministration } from "./pages/BOMAdministration";
+import RobustBOMAdministration from "./pages/RobustBOMAdministration";
 import AGBottomMetalReport from "./pages/AGBottomMetalReport";
 import EmployeeDashboard from "./pages/EmployeeDashboard";
 import EmployeeDetail from "./pages/EmployeeDetail";
@@ -103,6 +105,7 @@ import RefundQueue from "./pages/RefundQueue";
 import ProductionQueuePage from "./pages/ProductionQueuePage";
 import SimplifiedLayupScheduler from "./components/SimplifiedLayupScheduler";
 import CustomerSatisfaction from "./pages/CustomerSatisfaction";
+import VendorsPage from "./pages/VendorsPage";
 
 import { Toaster as HotToaster } from 'react-hot-toast';
 import DeploymentAuthWrapper from './components/DeploymentAuthWrapper';
@@ -197,6 +200,9 @@ function App() {
                   <Route path="/customers" component={CustomerManagement} />
                   <Route path="/customer-satisfaction" component={CustomerSatisfaction} />
 
+                  {/* Vendor Management Routes */}
+                  <Route path="/vendors" component={VendorsPage} />
+
                   {/* Purchase Order Routes */}
                   <Route path="/purchase-orders" component={PurchaseOrders} />
                   <Route path="/p1-purchase-orders" component={PurchaseOrders} />
@@ -206,16 +212,21 @@ function App() {
                   {/* Production and BOM Routes */}
                   <Route path="/production-tracking" component={ProductionTracking} />
                   <Route path="/bom-administration" component={BOMAdministration} />
+                  <Route path="/robust-bom-administration" component={RobustBOMAdministration} />
 
                   {/* Barcode and Scanner Routes */}
                   <Route path="/barcode-scanner" component={BarcodeScannerPage} />
 
-                  {/* Inventory Routes */}
+                  {/* Inventory Routes (Legacy) */}
                   <Route path="/inventory" component={InventoryManagerPage} />
                   <Route path="/inventory/scanner" component={InventoryScannerPage} />
                   <Route path="/inventory/dashboard" component={InventoryDashboardPage} />
                   <Route path="/inventory/manager" component={InventoryManagerPage} />
                   <Route path="/inventory/receiving" component={InventoryReceivingPage} />
+                  <Route path="/inventory/enhanced-mrp" component={EnhancedInventoryMRPPage} />
+                  
+                  {/* Enhanced System Routes (Independent) */}
+                  <Route path="/enhanced-inventory" component={EnhancedInventoryMRPPage} />
 
                   {/* QC and Maintenance Routes */}
                   <Route path="/qc" component={QCPage} />

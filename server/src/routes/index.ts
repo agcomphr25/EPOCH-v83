@@ -19,6 +19,8 @@ import shippingTestRoutes from './shipping-test';
 import orderAttachmentsRoutes from './orderAttachments';
 import discountsRoutes from './discounts';
 import bomsRoutes from './boms';
+import robustBomRoutes from './robustBom';
+import p2BomsRoutes from './p2boms';
 import communicationsRoutes from './communications';
 import secureVerificationRoutes from './secureVerification';
 import nonconformanceRoutes from '../../routes/nonconformance';
@@ -32,6 +34,14 @@ import layupScheduleRoutes from './layupSchedule';
 import customerSatisfactionRoutes from './customerSatisfaction';
 import poProductsRoutes from './poProducts';
 import refundRoutes from './refunds';
+
+import vendorRoutes from './vendors';
+import cuttingTableRoutes from './cuttingTable';
+import materialInventoryRoutes from './materialInventory';
+import defrostScheduleRoutes from './defrostSchedule';
+import mrpRoutes from './mrp';
+import enhancedRoutes from './enhanced';
+
 import { getAccessToken } from '../utils/upsShipping';
 
 export function registerRoutes(app: Express): Server {
@@ -89,6 +99,12 @@ export function registerRoutes(app: Express): Server {
 
   // BOM management routes
   app.use('/api/boms', bomsRoutes);
+  
+  // Robust BOM management routes (P2 Enhanced)
+  app.use('/api/robust-bom', robustBomRoutes);
+  
+  // P2 BOM management routes (CRUD)
+  app.use('/api/p2-boms', p2BomsRoutes);
 
   // Communications management routes
   app.use('/api/communications', communicationsRoutes);
@@ -121,7 +137,23 @@ export function registerRoutes(app: Express): Server {
 
   // Refund management routes
   app.use('/api/refund-requests', refundRoutes);
+
+  // Vendor management routes
+  app.use('/api/vendors', vendorRoutes);
   
+
+  // Cutting table management routes
+  app.use('/api', cuttingTableRoutes);
+  app.use('/api', materialInventoryRoutes);
+  app.use('/api', defrostScheduleRoutes);
+  
+  // MRP and advanced inventory management routes (legacy)
+  app.use('/api/mrp', mrpRoutes);
+
+  // Enhanced system routes (completely separate from legacy)
+  app.use('/api/enhanced', enhancedRoutes);
+  
+
   // UPS Test endpoint
   app.post('/api/test-ups-auth', async (req, res) => {
     try {
@@ -264,7 +296,7 @@ export function registerRoutes(app: Express): Server {
         SELECT 
           id,
           order_id as "orderId",
-          customer,
+          customer_id as "customer",
           product,
           date,
           due_date as "dueDate",

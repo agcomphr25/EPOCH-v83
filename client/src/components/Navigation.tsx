@@ -151,6 +151,12 @@ export default function Navigation() {
       description: 'Manage Bill of Materials for P2 operations'
     },
     {
+      path: '/robust-bom-administration',
+      label: 'P2 Robust BOM',
+      icon: Factory,
+      description: 'Advanced BOM management with lifecycle tracking and cost analysis'
+    },
+    {
       path: '/barcode-scanner',
       label: 'Barcde Scanner',
       icon: Scan,
@@ -192,6 +198,18 @@ export default function Navigation() {
       label: 'Receiving',
       icon: Receipt,
       description: 'Receive incoming inventory'
+    },
+    {
+      path: '/inventory/enhanced-mrp',
+      label: 'Enhanced Inventory & MRP',
+      icon: Factory,
+      description: 'Advanced inventory management with material requirements planning'
+    },
+    {
+      path: '/vendors',
+      label: 'Vendor Management',
+      icon: Users,
+      description: 'Manage vendors and suppliers'
     }
   ];
 

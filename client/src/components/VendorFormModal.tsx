@@ -35,44 +35,6 @@ import {
 } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
-// Contact validation schema - simplified to match current database
-const contactSchema = z.object({
-  name: z.string().min(1, "Contact name is required"),
-  email: z.string().email("Valid email is required").optional().or(z.literal("")),
-  phone: z.string().optional(),
-  role: z.string().optional(),
-  isPrimary: z.boolean().default(false),
-});
-
-// Form validation schema
-const vendorFormSchema = z.object({
-  name: z.string().min(1, "Vendor name is required"),
-  email: z.string().email("Valid email is required").optional().or(z.literal("")),
-  phone: z.string().optional(),
-  contactPerson: z.string().optional(),
-  website: z.string().optional(),
-  address: z.object({
-    street: z.string().optional(),
-    city: z.string().optional(),
-    state: z.string().optional(),
-    zip: z.string().optional(),
-    country: z.string().optional(),
-  }).optional(),
-  contacts: z.array(contactSchema).optional(),
-  approved: z.boolean().default(false),
-  evaluated: z.boolean().default(false),
-  evaluationNotes: z.string().optional(),
-  approvalNotes: z.string().optional(),
-
-} from '@/components/ui/tabs';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Checkbox } from '@/components/ui/checkbox';
-import { useToast } from '@/hooks/use-toast';
 import {
   Building2,
   User,
@@ -146,105 +108,6 @@ const vendorFormSchema = z.object({
 type VendorFormData = z.infer<typeof vendorFormSchema>;
 
 
-interface VendorFormModalProps {
-  open: boolean;
-  onClose: () => void;
-  vendorToEdit?: any;
-  onSaved: () => void;
-}
-
-export default function VendorFormModal({ 
-  open, 
-  onClose, 
-  vendorToEdit, 
-  onSaved 
-}: VendorFormModalProps) {
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
-  const isEditing = !!vendorToEdit;
-
-  const form = useForm<VendorFormData>({
-    resolver: zodResolver(vendorFormSchema),
-    defaultValues: {
-      name: "",
-      email: "",
-      phone: "",
-      contactPerson: "",
-      website: "",
-      address: {
-        street: "",
-        city: "",
-        state: "",
-        zip: "",
-        country: "",
-      },
-      contacts: [],
-      approved: false,
-      evaluated: false,
-      evaluationNotes: "",
-      approvalNotes: "",
-    },
-  });
-
-  const { fields: contactFields, append: addContact, remove: removeContact } = useFieldArray({
-    control: form.control,
-    name: "contacts"
-  });
-
-  // Reset form when opening with vendor data or clearing
-  useEffect(() => {
-    if (open) {
-      if (vendorToEdit) {
-        form.reset({
-          name: vendorToEdit.name || "",
-          email: vendorToEdit.email || "",
-          phone: vendorToEdit.phone || "",
-          contactPerson: vendorToEdit.contactPerson || "",
-          website: vendorToEdit.website || "",
-          address: vendorToEdit.address || {
-            street: "",
-            city: "",
-            state: "",
-            zip: "",
-            country: "",
-          },
-          contacts: vendorToEdit.contacts || [],
-          approved: vendorToEdit.approved || false,
-          evaluated: vendorToEdit.evaluated || false,
-          evaluationNotes: vendorToEdit.evaluationNotes || "",
-          approvalNotes: vendorToEdit.approvalNotes || "",
-        });
-      } else {
-        form.reset({
-          name: "",
-          email: "",
-          phone: "",
-          contactPerson: "",
-          website: "",
-          address: {
-            street: "",
-            city: "",
-            state: "",
-            zip: "",
-            country: "",
-          },
-          contacts: [],
-          approved: false,
-          evaluated: false,
-          evaluationNotes: "",
-          approvalNotes: "",
-        });
-      }
-    }
-  }, [open, vendorToEdit, form]);
-
-  const createVendorMutation = useMutation({
-    mutationFn: (data: VendorFormData) => apiRequest("/api/vendors", {
-      method: "POST",
-      body: data,
-    }),
-    onSuccess: () => {
-
 // Component props
 interface VendorFormModalProps {
   isOpen: boolean;
@@ -313,6 +176,171 @@ export default function VendorFormModal({
       setDocuments([]);
     }
   }, [vendorDocuments]);
+
+  const onSubmit = async (data: VendorFormData) => {
+    if (mode === 'create') {
+      createVendorMutation.mutate(data);
+    } else {
+      updateVendorMutation.mutate(data);
+    }
+  };
+
+  const addContact = () => {
+    if (contactFields.length < 3) {
+      appendContact({
+        contactSlot: contactFields.length + 1,
+        firstName: '',
+        lastName: '',
+        role: '',
+        isPrimary: contactFields.length === 0, // First contact is primary by default
+        notes: '',
+        phones: [],
+        emails: [],
+      });
+    }
+  };
+
+  const removeContactAndReindex = (contactIndex: number) => {
+    removeContact(contactIndex);
+    
+    // Reindex remaining contacts to maintain contiguous slots
+    setTimeout(() => {
+      const updatedContacts = form.getValues('contacts');
+      updatedContacts.forEach((contact, index) => {
+        form.setValue(`contacts.${index}.contactSlot`, index + 1);
+      });
+    }, 0);
+  };
+
+  const addPhone = (contactIndex: number) => {
+    const currentContact = contactFields[contactIndex];
+    if (currentContact.phones.length < 2) {
+      const updatedContact = {
+        ...currentContact,
+        phones: [...currentContact.phones, {
+          phoneSlot: currentContact.phones.length + 1,
+          type: 'work' as const,
+          phoneNumber: '',
+          isPrimary: currentContact.phones.length === 0,
+        }]
+      };
+      form.setValue(`contacts.${contactIndex}`, updatedContact);
+    }
+  };
+
+  const addEmail = (contactIndex: number) => {
+    const currentContact = contactFields[contactIndex];
+    if (currentContact.emails.length < 2) {
+      const updatedContact = {
+        ...currentContact,
+        emails: [...currentContact.emails, {
+          emailSlot: currentContact.emails.length + 1,
+          type: 'work' as const,
+          emailAddress: '',
+          isPrimary: currentContact.emails.length === 0,
+        }]
+      };
+      form.setValue(`contacts.${contactIndex}`, updatedContact);
+    }
+  };
+
+  const removePhone = (contactIndex: number, phoneIndex: number) => {
+    const currentContact = contactFields[contactIndex];
+    const updatedPhones = currentContact.phones.filter((_, index) => index !== phoneIndex);
+    
+    // Reindex remaining phones
+    updatedPhones.forEach((phone, index) => {
+      phone.phoneSlot = index + 1;
+      if (index === 0) phone.isPrimary = true;
+    });
+
+    const updatedContact = {
+      ...currentContact,
+      phones: updatedPhones
+    };
+    form.setValue(`contacts.${contactIndex}`, updatedContact);
+  };
+
+  const removeEmail = (contactIndex: number, emailIndex: number) => {
+    const currentContact = contactFields[contactIndex];
+    const updatedEmails = currentContact.emails.filter((_, index) => index !== emailIndex);
+    
+    // Reindex remaining emails
+    updatedEmails.forEach((email, index) => {
+      email.emailSlot = index + 1;
+      if (index === 0) email.isPrimary = true;
+    });
+
+    const updatedContact = {
+      ...currentContact,
+      emails: updatedEmails
+    };
+    form.setValue(`contacts.${contactIndex}`, updatedContact);
+  };
+
+  const addAddress = () => {
+    if (addressFields.length < 2) {
+      appendAddress({
+        addressSlot: addressFields.length + 1,
+        type: addressFields.length === 0 ? 'business' : 'billing',
+        street1: '',
+        street2: '',
+        city: '',
+        state: '',
+        zipCode: '',
+        country: 'USA',
+        isPrimary: addressFields.length === 0,
+      });
+    }
+  };
+
+  const removeAddressAndReindex = (addressIndex: number) => {
+    removeAddress(addressIndex);
+    
+    // Reindex remaining addresses to maintain contiguous slots
+    setTimeout(() => {
+      const updatedAddresses = form.getValues('addresses');
+      updatedAddresses.forEach((address, index) => {
+        form.setValue(`addresses.${index}.addressSlot`, index + 1);
+        form.setValue(`addresses.${index}.isPrimary`, index === 0);
+      });
+    }, 0);
+  };
+
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file && vendor?.id) {
+      handleDocumentUpload();
+    }
+  };
+
+  const handleDocumentUpload = async () => {
+    setIsUploadingDocument(true);
+    // Document upload logic would go here
+    setIsUploadingDocument(false);
+    setShowDocumentForm(false);
+  };
+
+  const handleDeleteDocument = (documentId: number) => {
+    // Delete document logic
+  };
+
+  const handlePreviewDocument = (document: VendorDocument) => {
+    window.open(`/api/documents/${document.filePath}`, '_blank');
+  };
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  const getDocumentTypeLabel = (type: string) => {
+    const docType = DOCUMENT_TYPES.find(t => t.value === type);
+    return docType ? docType.label : type;
+  };
 
   // Initialize form with default values
   const defaultValues: VendorFormData = {
@@ -498,7 +526,6 @@ export default function VendorFormModal({
     },
   });
 
-<
   // Update vendor mutation (complete implementation)
   const updateVendorMutation = useMutation({
     mutationFn: async (data: VendorFormData) => {
@@ -716,59 +743,6 @@ export default function VendorFormModal({
   });
 
 
-  const onSubmit = (data: VendorFormData) => {
-    // Clean up empty email to avoid validation issues
-    if (data.email === "") {
-      delete data.email;
-    }
-
-    // Convert address object to string for database compatibility
-    let addressString = "";
-    if (data.address && typeof data.address === "object") {
-      const addr = data.address;
-      const parts = [
-        addr.street,
-        addr.city,
-        addr.state,
-        addr.zip,
-        addr.country
-      ].filter(part => part && part.trim());
-      addressString = parts.join(", ");
-    } else if (typeof data.address === "string") {
-      addressString = data.address;
-    }
-
-    // Clean up contact emails
-    if (data.contacts) {
-      data.contacts = data.contacts.map(contact => ({
-        ...contact,
-        email: contact.email === "" ? undefined : contact.email
-      }));
-    }
-
-    // Prepare final data with address as string
-    const submitData = {
-      ...data,
-      address: addressString || undefined
-    };
-
-    if (isEditing) {
-      updateVendorMutation.mutate(submitData);
-    } else {
-      createVendorMutation.mutate(submitData);
-    }
-  };
-
-  const handleAddContact = () => {
-    addContact({
-      name: "",
-      email: "",
-      phone: "",
-      role: "",
-      isPrimary: false,
-    });
-  };
-
   const isPending = createVendorMutation.isPending || updateVendorMutation.isPending;
 
   return (
@@ -797,155 +771,37 @@ export default function VendorFormModal({
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
-                    name="name"
+                    name="basic.name"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Vendor Name *</FormLabel>
+                        <FormControl>
+                          <Input {...field} data-testid="input-vendor-name" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
 
-  const onSubmit = async (data: VendorFormData) => {
-    if (mode === 'create') {
-      createVendorMutation.mutate(data);
-    } else {
-      updateVendorMutation.mutate(data);
-    }
-  };
+                  <FormField
+                    control={form.control}
+                    name="basic.website"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Website</FormLabel>
+                        <FormControl>
+                          <Input {...field} data-testid="input-vendor-website" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
 
-  const addContact = () => {
-    if (contactFields.length < 3) {
-      appendContact({
-        contactSlot: contactFields.length + 1,
-        firstName: '',
-        lastName: '',
-        role: '',
-        isPrimary: contactFields.length === 0, // First contact is primary by default
-        notes: '',
-        phones: [],
-        emails: [],
-      });
-    }
-  };
+                </div>
+              </TabsContent>
 
-  const removeContactAndReindex = (contactIndex: number) => {
-    removeContact(contactIndex);
-    
-    // Reindex remaining contacts to maintain contiguous slots
-    setTimeout(() => {
-      const updatedContacts = form.getValues('contacts');
-      updatedContacts.forEach((contact, index) => {
-        form.setValue(`contacts.${index}.contactSlot`, index + 1);
-      });
-    }, 0);
-  };
-
-  const addPhone = (contactIndex: number) => {
-    const currentContact = contactFields[contactIndex];
-    if (currentContact.phones.length < 2) {
-      const updatedContact = {
-        ...currentContact,
-        phones: [
-          ...currentContact.phones,
-          {
-            phoneSlot: currentContact.phones.length + 1,
-            type: 'work' as const,
-            phoneNumber: '',
-            isPrimary: currentContact.phones.length === 0,
-          },
-        ],
-      };
-      updateContact(contactIndex, updatedContact);
-    }
-  };
-
-  const addEmail = (contactIndex: number) => {
-    const currentContact = contactFields[contactIndex];
-    if (currentContact.emails.length < 2) {
-      const updatedContact = {
-        ...currentContact,
-        emails: [
-          ...currentContact.emails,
-          {
-            emailSlot: currentContact.emails.length + 1,
-            type: 'work' as const,
-            emailAddress: '',
-            isPrimary: currentContact.emails.length === 0,
-          },
-        ],
-      };
-      updateContact(contactIndex, updatedContact);
-    }
-  };
-
-  const removePhone = (contactIndex: number, phoneIndex: number) => {
-    const currentContact = contactFields[contactIndex];
-    const updatedPhones = currentContact.phones.filter((_, i) => i !== phoneIndex);
-    
-    // Reindex remaining phones to maintain contiguous slots
-    const reindexedPhones = updatedPhones.map((phone, index) => ({
-      ...phone,
-      phoneSlot: index + 1,
-    }));
-    
-    const updatedContact = {
-      ...currentContact,
-      phones: reindexedPhones,
-    };
-    updateContact(contactIndex, updatedContact);
-  };
-
-  const removeEmail = (contactIndex: number, emailIndex: number) => {
-    const currentContact = contactFields[contactIndex];
-    const updatedEmails = currentContact.emails.filter((_, i) => i !== emailIndex);
-    
-    // Reindex remaining emails to maintain contiguous slots
-    const reindexedEmails = updatedEmails.map((email, index) => ({
-      ...email,
-      emailSlot: index + 1,
-    }));
-    
-    const updatedContact = {
-      ...currentContact,
-      emails: reindexedEmails,
-    };
-    updateContact(contactIndex, updatedContact);
-  };
-
-  const addAddress = () => {
-    if (addressFields.length < 2) {
-      appendAddress({
-        addressSlot: addressFields.length + 1,
-        type: 'business',
-        street1: '',
-        street2: '',
-        city: '',
-        state: '',
-        zipCode: '',
-        country: 'USA',
-        isPrimary: addressFields.length === 0, // First address is primary by default
-      });
-    }
-  };
-
-  const removeAddressAndReindex = (addressIndex: number) => {
-    removeAddress(addressIndex);
-    
-    // Reindex remaining addresses to maintain contiguous slots
-    setTimeout(() => {
-      const updatedAddresses = form.getValues('addresses');
-      updatedAddresses.forEach((address, index) => {
-        form.setValue(`addresses.${index}.addressSlot`, index + 1);
-      });
-    }, 0);
-  };
-
-  // Document upload mutation
-  const uploadDocumentMutation = useMutation({
-    mutationFn: async ({ file, type, notes }: { file: File; type: string; notes: string }) => {
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('vendorId', vendor.id.toString());
-      formData.append('type', type);
-      formData.append('notes', notes);
-
-      const response = await fetch('/api/vendor-documents', {
-        method: 'POST',
-        body: formData,
+              {/* Contacts Tab */}
+              <TabsContent value="contacts" className="space-y-4 mt-4">
       });
 
       if (!response.ok) throw new Error('Upload failed');

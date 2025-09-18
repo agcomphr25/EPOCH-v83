@@ -14,10 +14,12 @@ import type { EnhancedInventoryItem } from '@shared/schema';
 interface InventoryFormData {
   agPartNumber: string;
   name: string;
+  vendorDescription: string;
   type: string;
   source: string;
   supplierPartNumber: string;
   costPer: string;
+  uom: string;
   orderDate: string;
   department: string;
   secondarySource: string;
@@ -68,6 +70,19 @@ const InventoryForm = ({
           required
         />
       </div>
+    </div>
+
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div>
+        <Label htmlFor="vendorDescription">Vendor Description</Label>
+        <Input
+          id="vendorDescription"
+          name="vendorDescription"
+          value={formData.vendorDescription}
+          onChange={onChange}
+          placeholder="Enter vendor description"
+        />
+      </div>
       <div>
         <Label htmlFor="type">Type *</Label>
         <Select value={formData.type} onValueChange={(value) => onSelectChange('type', value)}>
@@ -105,7 +120,7 @@ const InventoryForm = ({
       </div>
     </div>
 
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
       <div>
         <Label htmlFor="costPer">Cost per</Label>
         <Input
@@ -117,6 +132,27 @@ const InventoryForm = ({
           onChange={onChange}
           placeholder="0.00"
         />
+      </div>
+      <div>
+        <Label htmlFor="uom">UOM</Label>
+        <Select value={formData.uom} onValueChange={(value) => onSelectChange('uom', value)}>
+          <SelectTrigger data-testid="select-uom">
+            <SelectValue placeholder="Select UOM" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="EA">EA</SelectItem>
+            <SelectItem value="LB">LB</SelectItem>
+            <SelectItem value="FT">FT</SelectItem>
+            <SelectItem value="SQ FT">SQ FT</SelectItem>
+            <SelectItem value="SQM">SQM</SelectItem>
+            <SelectItem value="GAL">GAL</SelectItem>
+            <SelectItem value="OZ">OZ</SelectItem>
+            <SelectItem value="PACK">PACK</SelectItem>
+            <SelectItem value="SET">SET</SelectItem>
+            <SelectItem value="ROLL">ROLL</SelectItem>
+            <SelectItem value="SHEET">SHEET</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
       <div>
         <Label htmlFor="orderDate">Order Date</Label>
@@ -195,10 +231,12 @@ export default function InventoryItemsCard() {
   const [formData, setFormData] = useState<InventoryFormData>({
     agPartNumber: '',
     name: '',
+    vendorDescription: '',
     type: 'Purchased',
     source: '',
     supplierPartNumber: '',
     costPer: '',
+    uom: 'EA',
     orderDate: '',
     department: '',
     secondarySource: '',
@@ -219,6 +257,7 @@ export default function InventoryItemsCard() {
     return (
       item.agPartNumber.toLowerCase().includes(searchLower) ||
       item.name.toLowerCase().includes(searchLower) ||
+      (item.vendorDescription && item.vendorDescription.toLowerCase().includes(searchLower)) ||
       (item.source && item.source.toLowerCase().includes(searchLower)) ||
       (item.supplierPartNumber && item.supplierPartNumber.toLowerCase().includes(searchLower)) ||
       (item.department && item.department.toLowerCase().includes(searchLower)) ||
@@ -347,10 +386,12 @@ export default function InventoryItemsCard() {
     setFormData({
       agPartNumber: '',
       name: '',
+      vendorDescription: '',
       type: 'Purchased',
       source: '',
       supplierPartNumber: '',
       costPer: '',
+      uom: 'EA',
       orderDate: '',
       department: '',
       secondarySource: '',
@@ -378,10 +419,12 @@ export default function InventoryItemsCard() {
     const submitData = {
       agPartNumber: formData.agPartNumber,
       name: formData.name,
+      vendorDescription: formData.vendorDescription || null,
       type: formData.type || 'Purchased',
       source: formData.source || null,
       supplierPartNumber: formData.supplierPartNumber || null,
       costPer: formData.costPer ? parseFloat(formData.costPer) : null,
+      uom: formData.uom || 'EA',
       orderDate: formData.orderDate || null,
       department: formData.department || null,
       secondarySource: formData.secondarySource || null,
@@ -400,10 +443,12 @@ export default function InventoryItemsCard() {
     setFormData({
       agPartNumber: item.agPartNumber,
       name: item.name,
+      vendorDescription: item.vendorDescription || '',
       type: item.type || 'Purchased',
       source: item.source || '',
       supplierPartNumber: item.supplierPartNumber || '',
       costPer: item.costPer ? item.costPer.toString() : '',
+      uom: item.uom || 'EA',
       orderDate: item.orderDate ? new Date(item.orderDate).toISOString().split('T')[0] : '',
       department: item.department || '',
       secondarySource: item.secondarySource || '',
@@ -535,9 +580,11 @@ export default function InventoryItemsCard() {
               <tr className="bg-gray-50 dark:bg-gray-800">
                 <th className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-left">AG Part#</th>
                 <th className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-left">Name</th>
+                <th className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-left">Vendor Description</th>
                 <th className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-left">Source</th>
                 <th className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-left">Supplier Part #</th>
                 <th className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-left">Cost per</th>
+                <th className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-left">UOM</th>
                 <th className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-left">Notes</th>
                 <th className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-left">Actions</th>
               </tr>
@@ -547,9 +594,11 @@ export default function InventoryItemsCard() {
                 <tr key={item.id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
                   <td className="border border-gray-200 dark:border-gray-700 px-4 py-2 font-medium">{item.agPartNumber}</td>
                   <td className="border border-gray-200 dark:border-gray-700 px-4 py-2">{item.name}</td>
+                  <td className="border border-gray-200 dark:border-gray-700 px-4 py-2">{item.vendorDescription || '-'}</td>
                   <td className="border border-gray-200 dark:border-gray-700 px-4 py-2">{item.source || '-'}</td>
                   <td className="border border-gray-200 dark:border-gray-700 px-4 py-2">{item.supplierPartNumber || '-'}</td>
                   <td className="border border-gray-200 dark:border-gray-700 px-4 py-2">{item.costPer ? `$${item.costPer.toFixed(2)}` : '-'}</td>
+                  <td className="border border-gray-200 dark:border-gray-700 px-4 py-2">{item.uom || 'EA'}</td>
                   <td className="border border-gray-200 dark:border-gray-700 px-4 py-2">
                     <div className="max-w-xs truncate" title={item.notes || 'No notes'}>
                       {item.notes || '-'}

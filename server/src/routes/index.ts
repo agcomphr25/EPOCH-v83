@@ -25,20 +25,23 @@ import communicationsRoutes from './communications';
 import secureVerificationRoutes from './secureVerification';
 import nonconformanceRoutes from '../../routes/nonconformance';
 import paymentsRoutes from './payments';
+import acceptBluePaymentsRoutes from './acceptBluePayments';
+import unifiedPaymentsRoutes from './unifiedPayments';
 import algorithmicSchedulerRoutes from './algorithmicScheduler';
 import productionQueueRoutes from './productionQueue';
 import layupScheduleRoutes from './layupSchedule';
 // import gatewayReportsRoutes from './gatewayReports'; // Temporarily removed
 import customerSatisfactionRoutes from './customerSatisfaction';
 import poProductsRoutes from './poProducts';
-import p2POProductsRoutes from './p2POProducts';
 import refundRoutes from './refunds';
+
 import vendorRoutes from './vendors';
 import cuttingTableRoutes from './cuttingTable';
 import materialInventoryRoutes from './materialInventory';
 import defrostScheduleRoutes from './defrostSchedule';
 import mrpRoutes from './mrp';
 import enhancedRoutes from './enhanced';
+
 import { getAccessToken } from '../utils/upsShipping';
 
 export function registerRoutes(app: Express): Server {
@@ -111,6 +114,8 @@ export function registerRoutes(app: Express): Server {
 
   // Payment processing routes
   app.use('/api/payments', paymentsRoutes);
+  app.use('/api/accept-blue', acceptBluePaymentsRoutes);
+  app.use('/api/unified-payments', unifiedPaymentsRoutes);
 
   // Algorithmic scheduler routes
   app.use('/api/scheduler', algorithmicSchedulerRoutes);
@@ -129,7 +134,6 @@ export function registerRoutes(app: Express): Server {
 
   // PO Products routes
   app.use('/api/po-products', poProductsRoutes);
-  app.use('/api/p2-po-products', p2POProductsRoutes);
 
   // Refund management routes
   app.use('/api/refund-requests', refundRoutes);
@@ -137,6 +141,7 @@ export function registerRoutes(app: Express): Server {
   // Vendor management routes
   app.use('/api/vendors', vendorRoutes);
   
+
   // Cutting table management routes
   app.use('/api', cuttingTableRoutes);
   app.use('/api', materialInventoryRoutes);
@@ -148,6 +153,7 @@ export function registerRoutes(app: Express): Server {
   // Enhanced system routes (completely separate from legacy)
   app.use('/api/enhanced', enhancedRoutes);
   
+
   // UPS Test endpoint
   app.post('/api/test-ups-auth', async (req, res) => {
     try {
@@ -617,9 +623,14 @@ export function registerRoutes(app: Express): Server {
       console.log('🔧 LAYUP SCHEDULE GENERATE CALLED');
       const { storage } = await import('../../storage');
       
-      // Get production orders (already sorted by priority)
-      const productionOrders = await storage.getAllProductionOrders();
-      console.log('🔧 Found production orders for scheduling:', productionOrders.length);
+      // Get orders from the same source as the frontend - P1 layup queue
+      console.log('🔧 Fetching orders from P1 layup queue (same as frontend)...');
+      const p1QueueResponse = await fetch('http://localhost:5000/api/p1-layup-queue');
+      if (!p1QueueResponse.ok) {
+        throw new Error(`Failed to fetch P1 layup queue: ${p1QueueResponse.statusText}`);
+      }
+      const p1Orders = await p1QueueResponse.json();
+      console.log('🔧 Found orders from P1 layup queue for scheduling:', p1Orders.length);
       
       // Get mold and employee settings (using same API as LayupScheduler component)
       const molds = await storage.getAllMolds();
@@ -628,29 +639,25 @@ export function registerRoutes(app: Express): Server {
       
       console.log('🔧 Found molds:', molds.length);
       console.log('🔧 Found layup employees:', layupEmployees.length);
-      console.log('🔧 First few production orders:', productionOrders.slice(0, 3).map(o => ({ 
+      console.log('🔧 First few P1 orders from queue:', p1Orders.slice(0, 3).map((o: any) => ({ 
         orderId: o.orderId, 
-        itemName: o.itemName, 
-        itemId: o.itemId 
+        stockModelId: o.stockModelId || o.modelId,
+        source: o.source,
+        currentDepartment: o.currentDepartment
       })));
       
       // Get stock models for proper mapping
       const stockModels = await storage.getAllStockModels();
       
-      // Transform data for scheduler utility
-      const orders = productionOrders.map(order => {
-        // Map item names to stock model IDs using itemId or itemName
-        let stockModelId = (order as any).itemId;
-        if (!stockModelId && (order as any).itemName) {
-          // Try to find matching stock model by name
-          const matchingModel = stockModels.find(model => 
-            model.displayName === (order as any).itemName || 
-            model.name === (order as any).itemName.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '')
-          );
-          if (matchingModel) {
-            stockModelId = matchingModel.id;
-          } else if ((order as any).itemName.includes('Mesa')) {
-            // Default Mesa items to mesa_universal if no exact match
+      // Transform P1 orders for scheduler utility (these already have proper stock model IDs)
+      const orders = p1Orders.map((order: any) => {
+        // P1 orders already have stockModelId or modelId
+        let stockModelId = order.stockModelId || order.modelId;
+        
+        // If still no stock model, try to infer from product name
+        if (!stockModelId || stockModelId === 'unknown') {
+          const productName = order.product || order.modelId || '';
+          if (productName.toLowerCase().includes('mesa')) {
             stockModelId = 'mesa_universal';
           } else {
             stockModelId = 'unknown';
@@ -659,22 +666,23 @@ export function registerRoutes(app: Express): Server {
         
         return {
           orderId: order.orderId,
-          product: (order as any).itemName || 'Unknown Product',
-          customer: (order as any).customerName || 'Unknown Customer',
-          stockModelId: stockModelId || 'unknown',
+          product: order.product || order.modelId || 'Unknown Product',
+          customer: order.customer || 'Unknown Customer',
+          stockModelId: stockModelId,
           dueDate: order.dueDate,
           orderDate: order.orderDate,
-          priorityScore: 50, // Default priority score since productionOrders doesn't have this field
+          priorityScore: order.priorityScore || (order.source === 'p1_purchase_order' ? 20 : 50), // P1 PO orders get higher priority
           quantity: 1,
-          features: (order as any).specifications || {}, // Include specifications as features
-          source: 'production_order' // Add source for identification
+          features: order.features || {},
+          source: order.source || 'main_orders'
         };
       });
       
-      console.log('🔧 Transformed orders with stock models:', orders.slice(0, 3).map(o => ({ 
+      console.log('🔧 Transformed P1 orders with stock models:', orders.slice(0, 3).map(o => ({ 
         orderId: o.orderId, 
         product: o.product, 
-        stockModelId: o.stockModelId 
+        stockModelId: o.stockModelId,
+        source: o.source
       })));
       
       const employeeSettings = layupEmployees.map((emp: any) => ({
@@ -699,7 +707,7 @@ export function registerRoutes(app: Express): Server {
         moldId: mold.moldId,
         modelName: mold.modelName || mold.moldId, // Use moldId as fallback for modelName
         enabled: true,
-        multiplier: 2, // Default capacity multiplier
+        multiplier: 1, // Default capacity multiplier: 1 order per mold per day
         instanceNumber: 1, // Default instance
         stockModels: mold.stockModels || [] // Include stock model compatibility
       }));
@@ -1323,172 +1331,51 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  // P2 Production Queue endpoint - handles individual P2 production orders with serial numbers
+  // P2 Production Queue endpoint - handles P2 production orders only
   app.get('/api/p2-production-queue', async (req, res) => {
     try {
       console.log('🏭 Starting P2 production queue processing...');
       const { storage } = await import('../../storage');
 
-      // Get P2 production orders with purchase order details
-      const productionOrdersWithPO = await storage.getP2ProductionOrdersWithPurchaseOrderDetails();
-      
-      // Map individual production orders with their serial numbers
-      const individualOrders = productionOrdersWithPO
-        .filter(po => po.status === 'PENDING')
-        .map(po => {
-          // Calculate priority score
-          const dueDate = new Date(po.poItemDueDate || po.createdAt || new Date());
-          const today = new Date();
-          const daysUntilDue = Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-          const priorityScore = Math.max(20, Math.min(35, 20 + Math.floor(daysUntilDue / 2)));
+      // Get production orders from P2 system
+      const productionOrders = await storage.getAllP2ProductionOrders();
+      const pendingProductionOrders = productionOrders.filter(po => po.status === 'PENDING');
 
-          return {
-            id: `prod-${po.id}`,
-            orderId: po.orderId, // Individual order ID like P2-P2-PO123-1-003-013
-            serialNumber: po.sku, // The designated serial number (SKU)
-            orderDate: po.poDate || new Date().toISOString(),
-            customerName: po.customerName,
-            stockModel: po.partName, // Individual part name
-            product: `${po.poItemPartName} (${po.poItemPartNumber})`, // Original product from PO
-            dueDate: po.poItemDueDate,
-            status: po.status,
-            department: po.department || 'Production Queue',
-            currentDepartment: po.department || 'Production Queue',
-            priorityScore: priorityScore,
-            source: 'p2_production_order' as const,
-            p2PoId: po.p2PoId,
-            p2PoItemId: po.p2PoItemId,
-            productionOrderId: po.id,
-            specifications: { 
-              partName: po.partName,
-              sku: po.sku,
-              quantity: po.quantity,
-              originalProduct: po.poItemPartName,
-              originalPartNumber: po.poItemPartNumber
-            },
-            createdAt: po.createdAt || new Date().toISOString(),
-            updatedAt: po.updatedAt || po.createdAt || new Date().toISOString()
-          };
-        })
-        .sort((a, b) => a.priorityScore - b.priorityScore);
+      const p2LayupOrders = pendingProductionOrders.map(po => {
+        // Calculate priority score for production orders (higher priority)
+        const dueDate = new Date(po.dueDate || po.createdAt || new Date());
+        const today = new Date();
+        const daysUntilDue = Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+        const priorityScore = Math.max(20, Math.min(35, 20 + Math.floor(daysUntilDue / 2))); // 20-35 range, higher priority
 
-      console.log(`🏭 P2 production queue orders count: ${individualOrders.length}`);
-      console.log(`🏭 Individual production orders with serial numbers: ${individualOrders.length}`);
+        return {
+          id: `prod-${po.id}`,
+          orderId: po.orderId,
+          orderDate: po.createdAt || new Date().toISOString(),
+          customer: 'Production Order',
+          product: po.partName || po.orderId,
+          quantity: po.quantity,
+          status: po.status,
+          department: po.department,
+          currentDepartment: po.department,
+          priorityScore: priorityScore,
+          dueDate: po.dueDate,
+          source: 'production_order' as const,
+          productionOrderId: po.id,
+          stockModelId: po.orderId, // Use order ID as stock model for mold matching
+          specifications: { department: po.department },
+          createdAt: po.createdAt || new Date().toISOString(),
+          updatedAt: po.updatedAt || po.createdAt || new Date().toISOString()
+        };
+      });
 
-      res.json(individualOrders);
+      console.log(`🏭 P2 production queue orders count: ${p2LayupOrders.length}`);
+      console.log(`🏭 Production orders in P2 result: ${p2LayupOrders.length}`);
+
+      res.json(p2LayupOrders);
     } catch (error) {
       console.error("P2 production queue error:", error);
       res.status(500).json({ error: "Failed to fetch P2 production queue" });
-    }
-  });
-
-  // P2 Department progression endpoint - move P2 orders to Layup/Plugging
-  app.post('/api/p2-department/progress-to-layup', async (req, res) => {
-    try {
-      console.log('🏭 P2 DEPARTMENT: Progress to Layup API called');
-      const { orderIds } = req.body;
-      
-      if (!orderIds || !Array.isArray(orderIds) || orderIds.length === 0) {
-        return res.status(400).json({ 
-          error: "orderIds array is required", 
-          success: false 
-        });
-      }
-
-      console.log(`🏭 P2 DEPARTMENT: Processing ${orderIds.length} P2 orders for Layup progression`);
-      const { storage } = await import('../../storage');
-      
-      // Update P2 orders to move them to Layup department
-      const updatedOrders = [];
-      
-      for (const orderId of orderIds) {
-        try {
-          // For P2 orders, we need to handle both production orders and regular orders
-          const updateResult = await storage.updateOrderDepartment(orderId, 'Layup', 'IN_PROGRESS');
-          
-          if (updateResult.success) {
-            updatedOrders.push(orderId);
-            console.log(`✅ P2 DEPARTMENT: P2 Order ${orderId} moved to Layup department`);
-          } else {
-            console.warn(`⚠️ P2 DEPARTMENT: Failed to update P2 order ${orderId}: ${updateResult.message}`);
-          }
-        } catch (orderError) {
-          console.error(`❌ P2 DEPARTMENT: Error updating P2 order ${orderId}:`, orderError);
-        }
-      }
-
-      const result = {
-        success: true,
-        message: `Successfully moved ${updatedOrders.length} of ${orderIds.length} P2 orders to Layup/Plugging department`,
-        updatedOrders,
-        totalRequested: orderIds.length,
-        totalUpdated: updatedOrders.length
-      };
-
-      console.log('🏭 P2 DEPARTMENT: Progression result:', result);
-      res.json(result);
-      
-    } catch (error) {
-      console.error('❌ P2 DEPARTMENT: Progress to Layup error:', error);
-      res.status(500).json({ 
-        error: "Failed to progress P2 orders to Layup/Plugging department",
-        success: false 
-      });
-    }
-  });
-
-  // P2 Department progression endpoint - move P2 orders to Barcode
-  app.post('/api/p2-department/progress-to-barcode', async (req, res) => {
-    try {
-      console.log('🏭 P2 DEPARTMENT: Progress to Barcode API called');
-      const { orderIds } = req.body;
-      
-      if (!orderIds || !Array.isArray(orderIds) || orderIds.length === 0) {
-        return res.status(400).json({ 
-          error: "orderIds array is required", 
-          success: false 
-        });
-      }
-
-      console.log(`🏭 P2 DEPARTMENT: Processing ${orderIds.length} P2 orders for Barcode progression`);
-      const { storage } = await import('../../storage');
-      
-      // Update P2 orders to move them to Barcode department
-      const updatedOrders = [];
-      
-      for (const orderId of orderIds) {
-        try {
-          // For P2 orders, move from Production Queue to Barcode department
-          const updateResult = await storage.updateOrderDepartment(orderId, 'Barcode', 'IN_PROGRESS');
-          
-          if (updateResult.success) {
-            updatedOrders.push(orderId);
-            console.log(`✅ P2 DEPARTMENT: P2 Order ${orderId} moved to Barcode department`);
-          } else {
-            console.warn(`⚠️ P2 DEPARTMENT: Failed to update P2 order ${orderId}: ${updateResult.message}`);
-          }
-        } catch (orderError) {
-          console.error(`❌ P2 DEPARTMENT: Error updating P2 order ${orderId}:`, orderError);
-        }
-      }
-
-      const result = {
-        success: true,
-        message: `Successfully moved ${updatedOrders.length} of ${orderIds.length} P2 orders to Barcode department`,
-        updatedOrders,
-        totalRequested: orderIds.length,
-        totalUpdated: updatedOrders.length
-      };
-
-      console.log('🏭 P2 DEPARTMENT: Barcode progression result:', result);
-      res.json(result);
-      
-    } catch (error) {
-      console.error('❌ P2 DEPARTMENT: Progress to Barcode error:', error);
-      res.status(500).json({ 
-        error: "Failed to progress P2 orders to Barcode department",
-        success: false 
-      });
     }
   });
 
@@ -1506,7 +1393,7 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  // Push orders to Layup/Plugging P1 Department Manager workflow
+  // Push orders to Layup/Plugging Department Manager workflow
   app.post('/api/push-to-layup-plugging', async (req, res) => {
     try {
       console.log('🏭 PRODUCTION FLOW: Push to Layup/Plugging API called');
@@ -1556,6 +1443,66 @@ export function registerRoutes(app: Express): Server {
       console.error('❌ PRODUCTION FLOW: Push to Layup/Plugging error:', error);
       res.status(500).json({ 
         error: "Failed to push orders to Layup/Plugging department",
+        success: false 
+      });
+    }
+  });
+
+  // Move single order to different department (for layup scheduler action buttons)
+  app.post('/api/move-order-department', async (req, res) => {
+    try {
+      console.log('🏭 SINGLE ORDER MOVE: Move order department API called');
+      const { orderId, department, status } = req.body;
+      
+      if (!orderId || !department || !status) {
+        return res.status(400).json({ 
+          error: "orderId, department, and status are required", 
+          success: false 
+        });
+      }
+
+      console.log(`🏭 SINGLE ORDER MOVE: Moving order ${orderId} to ${department} with status ${status}`);
+      const { storage } = await import('../../storage');
+      
+      // Update order status and department
+      const updateResult = await storage.updateOrderDepartment(orderId, department, status);
+      
+      if (updateResult.success) {
+        console.log(`✅ SINGLE ORDER MOVE: Order ${orderId} moved to ${department} department`);
+        
+        // If moving back to Production Queue, also remove from layup schedule
+        if (department === 'P1 Production Queue') {
+          try {
+            await storage.deleteLayupScheduleByOrder(orderId);
+            console.log(`🗑️ SINGLE ORDER MOVE: Removed ${orderId} from layup schedule`);
+          } catch (scheduleError) {
+            console.warn(`⚠️ SINGLE ORDER MOVE: Could not remove ${orderId} from schedule:`, scheduleError);
+            // Don't fail the whole operation if schedule cleanup fails
+          }
+        }
+        
+        const result = {
+          success: true,
+          message: `Successfully moved order ${orderId} to ${department} department`,
+          orderId,
+          department,
+          status
+        };
+
+        res.json(result);
+      } else {
+        console.warn(`⚠️ SINGLE ORDER MOVE: Failed to update order ${orderId}: ${updateResult.message}`);
+        res.status(400).json({
+          error: updateResult.message,
+          success: false,
+          orderId
+        });
+      }
+      
+    } catch (error) {
+      console.error('❌ SINGLE ORDER MOVE: Move order department error:', error);
+      res.status(500).json({ 
+        error: "Failed to move order to new department",
         success: false 
       });
     }
@@ -2843,8 +2790,10 @@ export function registerRoutes(app: Express): Server {
           const actionLength = (order as any).features?.action_length || 'unknown';
           const modelDisplayName = stockModelMap.get((order as any).modelId) || (order as any).modelId || 'Unknown';
           
-          // Add order information at top
-          page.drawText(`${order.orderId}`, {
+          // Add order information at top - Order ID and Customer Name
+          const customerName = (order as any).customer || '';
+          const orderText = customerName ? `${order.orderId} - ${customerName}` : order.orderId;
+          page.drawText(orderText, {
             x: x + 8,
             y: y + 50,
             size: 11,
@@ -3095,122 +3044,6 @@ export function registerRoutes(app: Express): Server {
     } catch (error) {
       console.error('🔄 Progress orders error:', error);
       res.status(500).json({ error: 'Failed to progress orders' });
-    }
-  });
-
-  // P2 Purchase Order Items endpoints
-  app.get('/api/p2/purchase-orders/:poId/items', async (req, res) => {
-    try {
-      const { poId } = req.params;
-      const { storage } = await import('../../storage');
-      const items = await storage.getP2PurchaseOrderItems(parseInt(poId));
-      res.json(items);
-    } catch (error) {
-      console.error('Get P2 purchase order items error:', error);
-      res.status(500).json({ error: 'Failed to get P2 purchase order items' });
-    }
-  });
-
-  app.post('/api/p2/purchase-orders/:poId/items', async (req, res) => {
-    try {
-      const { poId } = req.params;
-      const { storage } = await import('../../storage');
-      const { insertP2PurchaseOrderItemSchema } = await import('@shared/schema');
-      
-      const itemData = insertP2PurchaseOrderItemSchema.omit({ poId: true }).parse(req.body);
-      const item = await storage.createP2PurchaseOrderItem({ 
-        ...itemData, 
-        poId: parseInt(poId),
-        totalPrice: itemData.quantity * (itemData.unitPrice || 0)
-      });
-      
-      console.log('✅ Created P2 purchase order item:', item.id);
-      res.status(201).json(item);
-    } catch (error) {
-      console.error('Create P2 purchase order item error:', error);
-      res.status(500).json({ error: 'Failed to create P2 purchase order item' });
-    }
-  });
-
-  app.put('/api/p2/purchase-orders/:poId/items/:itemId', async (req, res) => {
-    try {
-      const { itemId } = req.params;
-      const { storage } = await import('../../storage');
-      const { insertP2PurchaseOrderItemSchema } = await import('@shared/schema');
-      
-      const itemData = insertP2PurchaseOrderItemSchema.partial().omit({ poId: true }).parse(req.body);
-      const item = await storage.updateP2PurchaseOrderItem(parseInt(itemId), itemData);
-      
-      console.log('✅ Updated P2 purchase order item:', item.id);
-      res.json(item);
-    } catch (error) {
-      console.error('Update P2 purchase order item error:', error);
-      res.status(500).json({ error: 'Failed to update P2 purchase order item' });
-    }
-  });
-
-  app.delete('/api/p2/purchase-orders/:poId/items/:itemId', async (req, res) => {
-    try {
-      const { itemId } = req.params;
-      const { storage } = await import('../../storage');
-      
-      await storage.deleteP2PurchaseOrderItem(parseInt(itemId));
-      
-      console.log('✅ Deleted P2 purchase order item:', itemId);
-      res.json({ success: true });
-    } catch (error) {
-      console.error('Delete P2 purchase order item error:', error);
-      res.status(500).json({ error: 'Failed to delete P2 purchase order item' });
-    }
-  });
-
-  // Get all P2 purchase order items (for quantity calculations)
-  app.get('/api/p2-purchase-order-items-all', async (req, res) => {
-    try {
-      const { storage } = await import('../../storage');
-      
-      console.log('📋 Get all P2 purchase order items endpoint called');
-      
-      // Get all P2 purchase order items across all purchase orders
-      const allItems = await storage.getAllP2PurchaseOrderItems();
-      
-      console.log(`✅ Retrieved ${allItems.length} P2 purchase order items`);
-      res.json(allItems);
-    } catch (error) {
-      console.error('Get all P2 purchase order items error:', error);
-      res.status(500).json({ error: 'Failed to get P2 purchase order items' });
-    }
-  });
-
-  // P2 Production Orders generation endpoint
-  app.post('/api/p2/purchase-orders/:poId/generate-production-orders', async (req, res) => {
-    try {
-      const { poId } = req.params;
-      const { storage } = await import('../../storage');
-      
-      console.log('🏭 Generate P2 Production Orders endpoint called for PO:', poId);
-      
-      // Check if production orders already exist for this P2 PO
-      const existingOrders = await storage.getP2ProductionOrdersByPoId(parseInt(poId));
-      if (existingOrders.length > 0) {
-        return res.status(409).json({ 
-          error: `P2 production orders already exist for this PO (${existingOrders.length} orders found). Cannot generate duplicates.`,
-          existingCount: existingOrders.length
-        });
-      }
-      
-      const productionOrders = await storage.generateP2ProductionOrders(parseInt(poId));
-      
-      console.log(`✅ Generated ${productionOrders.length} P2 production orders for PO ${poId}`);
-      res.status(201).json({ 
-        success: true,
-        message: `Generated ${productionOrders.length} P2 production orders`,
-        productionOrders: productionOrders.length,
-        orders: productionOrders
-      });
-    } catch (error) {
-      console.error('Generate P2 production orders error:', error);
-      res.status(500).json({ error: 'Failed to generate P2 production orders' });
     }
   });
 

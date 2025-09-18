@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, timestamp, jsonb, boolean, json, real, date, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, timestamp, jsonb, boolean, json, real, date, pgEnum, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { relations, sql } from "drizzle-orm";
@@ -157,56 +157,6 @@ export const orders = pgTable("orders", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-// Dedicated cancelled orders table - stores archived cancelled orders
-export const cancelledOrders = pgTable("cancelled_orders", {
-  id: serial("id").primaryKey(),
-  orderId: text("order_id").notNull().unique(),
-  orderDate: timestamp("order_date").notNull(),
-  dueDate: timestamp("due_date").notNull(),
-  customerId: text("customer_id"),
-  customerPO: text("customer_po"),
-  fbOrderNumber: text("fb_order_number"),
-  agrOrderDetails: text("agr_order_details"),
-  isFlattop: boolean("is_flattop").default(false),
-  isCustomOrder: text("is_custom_order"), // "yes", "no", or null
-  modelId: text("model_id"),
-  handedness: text("handedness"),
-  shankLength: text("shank_length"),
-  features: jsonb("features"),
-  featureQuantities: jsonb("feature_quantities"),
-  discountCode: text("discount_code"),
-  notes: text("notes"), // Order notes/special instructions
-  customDiscountType: text("custom_discount_type").default("percent"),
-  customDiscountValue: real("custom_discount_value").default(0),
-  showCustomDiscount: boolean("show_custom_discount").default(false),
-  priceOverride: real("price_override"), // Manual price override for stock model
-  shipping: real("shipping").default(0),
-  tikkaOption: text("tikka_option"),
-  status: text("status").default("CANCELLED"),
-  barcode: text("barcode"), // Code 39 barcode for order identification
-  // Department Progression Fields at time of cancellation
-  currentDepartment: text("current_department"),
-  departmentHistory: jsonb("department_history").default('[]'),
-  scrappedQuantity: integer("scrapped_quantity").default(0),
-  totalProduced: integer("total_produced").default(0),
-  // Payment Information at time of cancellation
-  isPaid: boolean("is_paid").default(false),
-  paymentType: text("payment_type"),
-  paymentAmount: real("payment_amount"),
-  paymentDate: timestamp("payment_date"),
-  paymentTimestamp: timestamp("payment_timestamp"),
-  // Cancellation Information
-  cancelledAt: timestamp("cancelled_at").notNull(),
-  cancelReason: text("cancel_reason").notNull(),
-  cancelledBy: text("cancelled_by"), // User who cancelled the order
-  // Original Order Information
-  originalCreatedAt: timestamp("original_created_at"),
-  originalUpdatedAt: timestamp("original_updated_at"),
-  // Archive Information
-  archivedAt: timestamp("archived_at").defaultNow(),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-});
 
 export const csvData = pgTable("csv_data", {
   id: serial("id").primaryKey(),
@@ -410,14 +360,15 @@ export const payments = pgTable("payments", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-// Credit card transactions table for Authorize.Net integration
+// Credit card transactions table for payment gateway integration (Authorize.Net and Accept.blue)
 export const creditCardTransactions = pgTable("credit_card_transactions", {
   id: serial("id").primaryKey(),
   paymentId: integer("payment_id").references(() => payments.id).notNull(),
   orderId: text("order_id").notNull(),
-  transactionId: text("transaction_id").notNull().unique(), // Authorize.Net transaction ID
-  authCode: text("auth_code"), // Authorization code from Authorize.Net
-  responseCode: text("response_code"), // 1 = Approved, 2 = Declined, 3 = Error, 4 = Held for Review (nullable for auth failures)
+  transactionId: text("transaction_id").notNull().unique(), // Gateway transaction ID
+  gateway: text("gateway").notNull().default("authorize_net"), // authorize_net, accept_blue
+  authCode: text("auth_code"), // Authorization code
+  responseCode: text("response_code"), // Gateway response code
   responseReasonCode: text("response_reason_code"), // Detailed reason code
   responseReasonText: text("response_reason_text"), // Human readable response
   avsResult: text("avs_result"), // Address Verification Service result
@@ -436,7 +387,7 @@ export const creditCardTransactions = pgTable("credit_card_transactions", {
   billingZip: text("billing_zip"),
   billingCountry: text("billing_country").default("US"),
   isTest: boolean("is_test").default(false), // Track if this was a test transaction
-  rawResponse: jsonb("raw_response"), // Store full Authorize.Net response for debugging
+  rawResponse: jsonb("raw_response"), // Store full gateway response for debugging
   status: text("status").default("pending"), // pending, completed, failed, refunded, voided
   refundedAmount: real("refunded_amount").default(0),
   voidedAt: timestamp("voided_at"),
@@ -467,8 +418,9 @@ export const refundRequests = pgTable("refund_requests", {
   customerId: text("customer_id"), // Reference to customer (nullable for compatibility)
   refundAmount: real("refund_amount"), // Amount to be refunded
   rejectionReason: text("rejection_reason"), // Reason for rejection if applicable
-  authNetTransactionId: text("auth_net_transaction_id"), // Authorize.Net refund transaction ID
-  authNetRefundId: text("auth_net_refund_id"), // Authorize.Net refund reference
+  gatewayTransactionId: text("gateway_transaction_id"), // Gateway refund transaction ID
+  gatewayRefundId: text("gateway_refund_id"), // Gateway refund reference
+  gateway: text("gateway").default("authorize_net"), // authorize_net, accept_blue
   originalTransactionId: text("original_transaction_id"), // Original transaction being refunded
 });
 
@@ -902,18 +854,6 @@ export const insertShortTermSaleSchema = z.object({
   isActive: z.number().default(1),
 });
 
-export const insertCancelledOrderSchema = createInsertSchema(cancelledOrders).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-  archivedAt: true,
-}).extend({
-  orderId: z.string().min(1, "Order ID is required"),
-  orderDate: z.coerce.date(),
-  dueDate: z.coerce.date(),
-  cancelledAt: z.coerce.date(),
-  cancelReason: z.string().min(1, "Cancellation reason is required"),
-});
 
 export const insertFeatureCategorySchema = createInsertSchema(featureCategories).omit({
   createdAt: true,
@@ -1399,8 +1339,6 @@ export type InsertOrderDraft = z.infer<typeof insertOrderDraftSchema>;
 export type OrderDraft = typeof orderDrafts.$inferSelect;
 export type InsertAllOrder = z.infer<typeof insertAllOrderSchema>;
 export type AllOrder = typeof allOrders.$inferSelect;
-export type InsertCancelledOrder = z.infer<typeof insertCancelledOrderSchema>;
-export type CancelledOrder = typeof cancelledOrders.$inferSelect;
 export type InsertForm = z.infer<typeof insertFormSchema>;
 export type Form = typeof forms.$inferSelect;
 export type InsertFormSubmission = z.infer<typeof insertFormSubmissionSchema>;
@@ -1559,6 +1497,7 @@ export const layupSchedule = pgTable("layup_schedule", {
   id: serial("id").primaryKey(),
   orderId: text("order_id").references(() => productionQueue.orderId).notNull(),
   scheduledDate: timestamp("scheduled_date").notNull(),
+  layupDay: date("layup_day").notNull(), // Dedicated DATE column for business day
   moldId: text("mold_id").references(() => molds.moldId).notNull(),
   employeeAssignments: jsonb("employee_assignments").notNull().default('[]'), // Array of {employeeId, workload}
   isOverride: boolean("is_override").default(false), // Manual override flag
@@ -1566,7 +1505,10 @@ export const layupSchedule = pgTable("layup_schedule", {
   overriddenBy: text("overridden_by"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-});
+}, (table) => ({
+  // Unique constraint: exactly one order per mold per day
+  uniqueMoldPerDay: uniqueIndex("ux_layup_mold_day").on(table.layupDay, table.moldId),
+}));
 
 // Insert schemas for Layup Scheduler
 export const insertMoldSchema = createInsertSchema(molds).omit({
@@ -1624,6 +1566,7 @@ export const insertLayupScheduleSchema = createInsertSchema(layupSchedule).omit(
 }).extend({
   orderId: z.string().min(1, "Order ID is required"),
   scheduledDate: z.coerce.date(),
+  layupDay: z.coerce.date(), // Dedicated DATE field for business day constraint
   moldId: z.string().min(1, "Mold ID is required"),
   employeeAssignments: z.array(z.object({
     employeeId: z.string(),
@@ -1880,11 +1823,12 @@ export const enhancedForms = pgTable('enhanced_forms', {
   name: text('name').notNull(),
   description: text('description'),
   categoryId: integer('category_id').references(() => enhancedFormCategories.id),
-  tableName: text('table_name'),
-  layout: jsonb('layout').notNull(),
-  version: integer('version').default(1),
+  schemaConfig: jsonb('schema_config').notNull(),
   createdAt: timestamp('created_at').defaultNow(),
-  updatedAt: timestamp('updated_at').defaultNow()
+  updatedAt: timestamp('updated_at').defaultNow(),
+  tableName: text('table_name'),
+  layout: jsonb('layout'),
+  version: integer('version').default(1)
 });
 
 export const enhancedFormVersions = pgTable('enhanced_form_versions', {
@@ -1974,8 +1918,6 @@ export const p2PurchaseOrderItems = pgTable('p2_purchase_order_items', {
   quantity: integer('quantity').notNull(),
   unitPrice: real('unit_price').default(0), // Price per unit
   totalPrice: real('total_price').default(0), // quantity * unitPrice
-  dueDate: date('due_date'), // Due date for this item
-  p2ProductId: integer('p2_product_id').references(() => poProducts.id), // Optional P2 product reference
   specifications: text('specifications'), // Part specifications
   notes: text('notes'),
   createdAt: timestamp('created_at').defaultNow(),
@@ -2025,7 +1967,8 @@ export const insertEnhancedFormSchema = createInsertSchema(enhancedForms).omit({
   description: z.string().optional(),
   categoryId: z.number().optional(),
   tableName: z.string().optional(),
-  layout: z.any(),
+  schemaConfig: z.any().optional(),
+  layout: z.any().optional(),
   version: z.number().default(1),
 });
 
@@ -2125,8 +2068,6 @@ export const insertP2PurchaseOrderItemSchema = createInsertSchema(p2PurchaseOrde
   quantity: z.number().min(1, "Quantity must be at least 1"),
   unitPrice: z.number().min(0).default(0),
   totalPrice: z.number().min(0).default(0),
-  dueDate: z.string().optional().nullable(),
-  p2ProductId: z.number().optional().nullable(),
   specifications: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
 });
@@ -2208,7 +2149,7 @@ export const bomItems = pgTable('bom_items', {
   referenceBomId: integer('reference_bom_id').references(() => bomDefinitions.id), // Points to another BOM if this item is a sub-assembly
   assemblyLevel: integer('assembly_level').default(0), // 0=top level, 1=sub-assembly, 2=component, etc.
   // Component Library Support
-  quantityMultiplier: real('quantity_multiplier').default(1), // Multiplies quantities when used as sub-assembly
+  quantityMultiplier: integer('quantity_multiplier').default(1), // Multiplies quantities when used as sub-assembly
   notes: text('notes'), // Manufacturing notes or special instructions
   isActive: boolean('is_active').default(true),
   createdAt: timestamp('created_at').defaultNow(),
@@ -2240,7 +2181,7 @@ export const insertBomItemSchema = createInsertSchema(bomItems).omit({
   itemType: z.enum(['manufactured', 'material', 'sub_assembly']).default('manufactured'),
   referenceBomId: z.number().optional(), // Optional reference to another BOM
   assemblyLevel: z.number().default(0),
-  quantityMultiplier: z.number().min(0.001, "Quantity multiplier must be greater than 0").default(1),
+  quantityMultiplier: z.number().min(1).default(1),
   notes: z.string().optional(),
   isActive: z.boolean().default(true),
 });
@@ -2703,8 +2644,8 @@ export const insertRefundRequestSchema = createInsertSchema(refundRequests).omit
   approvedAt: true,
   processedAt: true,
   rejectionReason: true,
-  authNetTransactionId: true,
-  authNetRefundId: true,
+  gatewayTransactionId: true,
+  gatewayRefundId: true,
   createdAt: true,
   updatedAt: true,
 }).extend({
@@ -2719,6 +2660,7 @@ export const insertRefundRequestSchema = createInsertSchema(refundRequests).omit
 
 // Types for Refund Requests
 export type InsertRefundRequest = z.infer<typeof insertRefundRequestSchema>;
+
 export type RefundRequest = typeof refundRequests.$inferSelect;
 
 // ============================================================================
@@ -3947,3 +3889,4 @@ export type InsertOutsideProcessingBatch = z.infer<typeof insertOutsideProcessin
 
 export type MrpPlanningParameters = typeof mrpPlanningParameters.$inferSelect;
 export type InsertMrpPlanningParameters = z.infer<typeof insertMrpPlanningParametersSchema>;
+

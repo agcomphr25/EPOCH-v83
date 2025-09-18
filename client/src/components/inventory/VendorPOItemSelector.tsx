@@ -255,15 +255,6 @@ function VendorPOItemForm({
                 placeholder="Vendor's part number..."
                 data-testid="input-vendor-part-number"
               />
-              {formData.agPartNumber && (
-                <div className="mt-2 p-2 bg-blue-50 rounded-md">
-                  <div className="text-xs text-blue-600 font-medium">Selected Inventory Item:</div>
-                  <div className="text-sm text-blue-800">{formData.agPartNumber}</div>
-                  {formData.unitPrice > 0 && (
-                    <div className="text-xs text-blue-600">Cost: ${formData.unitPrice.toFixed(2)}</div>
-                  )}
-                </div>
-              )}
             </div>
           </div>
 

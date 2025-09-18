@@ -87,10 +87,16 @@ export class EnhancedStorage {
   }
 
   async updateInventoryItem(id: number, data: Partial<InsertEnhancedInventoryItem>): Promise<InventoryItem> {
+    // Handle date conversion for orderDate field
+    const cleanData = { ...data };
+    if (cleanData.orderDate && cleanData.orderDate instanceof Date) {
+      cleanData.orderDate = cleanData.orderDate.toISOString().split('T')[0] as any;
+    }
+    
     const [item] = await db
       .update(enhancedInventoryItems)
       .set({
-        ...data,
+        ...cleanData,
         updatedAt: new Date()
       })
       .where(eq(enhancedInventoryItems.id, id))

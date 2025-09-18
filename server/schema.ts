@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 import { pgTable, text, serial, integer, timestamp, jsonb, boolean, json, real, date, pgEnum, uniqueIndex } from "drizzle-orm/pg-core";
-=======
-import { pgTable, text, serial, integer, timestamp, jsonb, boolean, json, real, date, pgEnum } from "drizzle-orm/pg-core";
->>>>>>> origin/main
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { relations } from "drizzle-orm";
@@ -161,56 +157,6 @@ export const orders = pgTable("orders", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-// Dedicated cancelled orders table - stores archived cancelled orders
-export const cancelledOrders = pgTable("cancelled_orders", {
-  id: serial("id").primaryKey(),
-  orderId: text("order_id").notNull().unique(),
-  orderDate: timestamp("order_date").notNull(),
-  dueDate: timestamp("due_date").notNull(),
-  customerId: text("customer_id"),
-  customerPO: text("customer_po"),
-  fbOrderNumber: text("fb_order_number"),
-  agrOrderDetails: text("agr_order_details"),
-  isFlattop: boolean("is_flattop").default(false),
-  isCustomOrder: text("is_custom_order"), // "yes", "no", or null
-  modelId: text("model_id"),
-  handedness: text("handedness"),
-  shankLength: text("shank_length"),
-  features: jsonb("features"),
-  featureQuantities: jsonb("feature_quantities"),
-  discountCode: text("discount_code"),
-  notes: text("notes"), // Order notes/special instructions
-  customDiscountType: text("custom_discount_type").default("percent"),
-  customDiscountValue: real("custom_discount_value").default(0),
-  showCustomDiscount: boolean("show_custom_discount").default(false),
-  priceOverride: real("price_override"), // Manual price override for stock model
-  shipping: real("shipping").default(0),
-  tikkaOption: text("tikka_option"),
-  status: text("status").default("CANCELLED"),
-  barcode: text("barcode"), // Code 39 barcode for order identification
-  // Department Progression Fields at time of cancellation
-  currentDepartment: text("current_department"),
-  departmentHistory: jsonb("department_history").default('[]'),
-  scrappedQuantity: integer("scrapped_quantity").default(0),
-  totalProduced: integer("total_produced").default(0),
-  // Payment Information at time of cancellation
-  isPaid: boolean("is_paid").default(false),
-  paymentType: text("payment_type"),
-  paymentAmount: real("payment_amount"),
-  paymentDate: timestamp("payment_date"),
-  paymentTimestamp: timestamp("payment_timestamp"),
-  // Cancellation Information
-  cancelledAt: timestamp("cancelled_at").notNull(),
-  cancelReason: text("cancel_reason").notNull(),
-  cancelledBy: text("cancelled_by"), // User who cancelled the order
-  // Original Order Information
-  originalCreatedAt: timestamp("original_created_at"),
-  originalUpdatedAt: timestamp("original_updated_at"),
-  // Archive Information
-  archivedAt: timestamp("archived_at").defaultNow(),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-});
 
 export const csvData = pgTable("csv_data", {
   id: serial("id").primaryKey(),
@@ -414,25 +360,15 @@ export const payments = pgTable("payments", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-<<<<<<< HEAD
 // Credit card transactions table for payment gateway integration (Authorize.Net and Accept.blue)
-=======
-// Credit card transactions table for Authorize.Net integration
->>>>>>> origin/main
 export const creditCardTransactions = pgTable("credit_card_transactions", {
   id: serial("id").primaryKey(),
   paymentId: integer("payment_id").references(() => payments.id).notNull(),
   orderId: text("order_id").notNull(),
-<<<<<<< HEAD
   transactionId: text("transaction_id").notNull().unique(), // Gateway transaction ID
   gateway: text("gateway").notNull().default("authorize_net"), // authorize_net, accept_blue
   authCode: text("auth_code"), // Authorization code
   responseCode: text("response_code"), // Gateway response code
-=======
-  transactionId: text("transaction_id").notNull().unique(), // Authorize.Net transaction ID
-  authCode: text("auth_code"), // Authorization code from Authorize.Net
-  responseCode: text("response_code"), // 1 = Approved, 2 = Declined, 3 = Error, 4 = Held for Review (nullable for auth failures)
->>>>>>> origin/main
   responseReasonCode: text("response_reason_code"), // Detailed reason code
   responseReasonText: text("response_reason_text"), // Human readable response
   avsResult: text("avs_result"), // Address Verification Service result
@@ -451,11 +387,7 @@ export const creditCardTransactions = pgTable("credit_card_transactions", {
   billingZip: text("billing_zip"),
   billingCountry: text("billing_country").default("US"),
   isTest: boolean("is_test").default(false), // Track if this was a test transaction
-<<<<<<< HEAD
   rawResponse: jsonb("raw_response"), // Store full gateway response for debugging
-=======
-  rawResponse: jsonb("raw_response"), // Store full Authorize.Net response for debugging
->>>>>>> origin/main
   status: text("status").default("pending"), // pending, completed, failed, refunded, voided
   refundedAmount: real("refunded_amount").default(0),
   voidedAt: timestamp("voided_at"),
@@ -486,14 +418,9 @@ export const refundRequests = pgTable("refund_requests", {
   customerId: text("customer_id"), // Reference to customer (nullable for compatibility)
   refundAmount: real("refund_amount"), // Amount to be refunded
   rejectionReason: text("rejection_reason"), // Reason for rejection if applicable
-<<<<<<< HEAD
   gatewayTransactionId: text("gateway_transaction_id"), // Gateway refund transaction ID
   gatewayRefundId: text("gateway_refund_id"), // Gateway refund reference
   gateway: text("gateway").default("authorize_net"), // authorize_net, accept_blue
-=======
-  authNetTransactionId: text("auth_net_transaction_id"), // Authorize.Net refund transaction ID
-  authNetRefundId: text("auth_net_refund_id"), // Authorize.Net refund reference
->>>>>>> origin/main
   originalTransactionId: text("original_transaction_id"), // Original transaction being refunded
 });
 
@@ -852,18 +779,6 @@ export const insertShortTermSaleSchema = z.object({
   isActive: z.number().default(1),
 });
 
-export const insertCancelledOrderSchema = createInsertSchema(cancelledOrders).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-  archivedAt: true,
-}).extend({
-  orderId: z.string().min(1, "Order ID is required"),
-  orderDate: z.coerce.date(),
-  dueDate: z.coerce.date(),
-  cancelledAt: z.coerce.date(),
-  cancelReason: z.string().min(1, "Cancellation reason is required"),
-});
 
 export const insertFeatureCategorySchema = createInsertSchema(featureCategories).omit({
   createdAt: true,
@@ -1349,8 +1264,6 @@ export type InsertOrderDraft = z.infer<typeof insertOrderDraftSchema>;
 export type OrderDraft = typeof orderDrafts.$inferSelect;
 export type InsertAllOrder = z.infer<typeof insertAllOrderSchema>;
 export type AllOrder = typeof allOrders.$inferSelect;
-export type InsertCancelledOrder = z.infer<typeof insertCancelledOrderSchema>;
-export type CancelledOrder = typeof cancelledOrders.$inferSelect;
 export type InsertForm = z.infer<typeof insertFormSchema>;
 export type Form = typeof forms.$inferSelect;
 export type InsertFormSubmission = z.infer<typeof insertFormSubmissionSchema>;
@@ -1503,10 +1416,7 @@ export const layupSchedule = pgTable("layup_schedule", {
   id: serial("id").primaryKey(),
   orderId: text("order_id").references(() => productionQueue.orderId).notNull(),
   scheduledDate: timestamp("scheduled_date").notNull(),
-<<<<<<< HEAD
   layupDay: date("layup_day").notNull(), // Dedicated DATE column for business day
-=======
->>>>>>> origin/main
   moldId: text("mold_id").references(() => molds.moldId).notNull(),
   employeeAssignments: jsonb("employee_assignments").notNull().default('[]'), // Array of {employeeId, workload}
   isOverride: boolean("is_override").default(false), // Manual override flag
@@ -1514,14 +1424,10 @@ export const layupSchedule = pgTable("layup_schedule", {
   overriddenBy: text("overridden_by"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-<<<<<<< HEAD
 }, (table) => ({
   // Unique constraint: exactly one order per mold per day
   uniqueMoldPerDay: uniqueIndex("ux_layup_mold_day").on(table.layupDay, table.moldId),
 }));
-=======
-});
->>>>>>> origin/main
 
 // Insert schemas for Layup Scheduler
 export const insertMoldSchema = createInsertSchema(molds).omit({
@@ -1579,10 +1485,7 @@ export const insertLayupScheduleSchema = createInsertSchema(layupSchedule).omit(
 }).extend({
   orderId: z.string().min(1, "Order ID is required"),
   scheduledDate: z.coerce.date(),
-<<<<<<< HEAD
   layupDay: z.coerce.date(), // Dedicated DATE field for business day constraint
-=======
->>>>>>> origin/main
   moldId: z.string().min(1, "Mold ID is required"),
   employeeAssignments: z.array(z.object({
     employeeId: z.string(),
@@ -1839,20 +1742,12 @@ export const enhancedForms = pgTable('enhanced_forms', {
   name: text('name').notNull(),
   description: text('description'),
   categoryId: integer('category_id').references(() => enhancedFormCategories.id),
-<<<<<<< HEAD
   schemaConfig: jsonb('schema_config').notNull(),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
   tableName: text('table_name'),
   layout: jsonb('layout'),
   version: integer('version').default(1)
-=======
-  tableName: text('table_name'),
-  layout: jsonb('layout').notNull(),
-  version: integer('version').default(1),
-  createdAt: timestamp('created_at').defaultNow(),
-  updatedAt: timestamp('updated_at').defaultNow()
->>>>>>> origin/main
 });
 
 export const enhancedFormVersions = pgTable('enhanced_form_versions', {
@@ -1942,11 +1837,6 @@ export const p2PurchaseOrderItems = pgTable('p2_purchase_order_items', {
   quantity: integer('quantity').notNull(),
   unitPrice: real('unit_price').default(0), // Price per unit
   totalPrice: real('total_price').default(0), // quantity * unitPrice
-<<<<<<< HEAD
-=======
-  dueDate: date('due_date'), // Due date for this item
-  p2ProductId: integer('p2_product_id').references(() => poProducts.id), // Optional P2 product reference
->>>>>>> origin/main
   specifications: text('specifications'), // Part specifications
   notes: text('notes'),
   createdAt: timestamp('created_at').defaultNow(),
@@ -1996,12 +1886,8 @@ export const insertEnhancedFormSchema = createInsertSchema(enhancedForms).omit({
   description: z.string().optional(),
   categoryId: z.number().optional(),
   tableName: z.string().optional(),
-<<<<<<< HEAD
   schemaConfig: z.any().optional(),
   layout: z.any().optional(),
-=======
-  layout: z.any(),
->>>>>>> origin/main
   version: z.number().default(1),
 });
 
@@ -2101,11 +1987,6 @@ export const insertP2PurchaseOrderItemSchema = createInsertSchema(p2PurchaseOrde
   quantity: z.number().min(1, "Quantity must be at least 1"),
   unitPrice: z.number().min(0).default(0),
   totalPrice: z.number().min(0).default(0),
-<<<<<<< HEAD
-=======
-  dueDate: z.string().optional().nullable(),
-  p2ProductId: z.number().optional().nullable(),
->>>>>>> origin/main
   specifications: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
 });
@@ -2187,11 +2068,7 @@ export const bomItems = pgTable('bom_items', {
   referenceBomId: integer('reference_bom_id').references(() => bomDefinitions.id), // Points to another BOM if this item is a sub-assembly
   assemblyLevel: integer('assembly_level').default(0), // 0=top level, 1=sub-assembly, 2=component, etc.
   // Component Library Support
-<<<<<<< HEAD
   quantityMultiplier: integer('quantity_multiplier').default(1), // Multiplies quantities when used as sub-assembly
-=======
-  quantityMultiplier: real('quantity_multiplier').default(1), // Multiplies quantities when used as sub-assembly
->>>>>>> origin/main
   notes: text('notes'), // Manufacturing notes or special instructions
   isActive: boolean('is_active').default(true),
   createdAt: timestamp('created_at').defaultNow(),
@@ -2223,11 +2100,7 @@ export const insertBomItemSchema = createInsertSchema(bomItems).omit({
   itemType: z.enum(['manufactured', 'material', 'sub_assembly']).default('manufactured'),
   referenceBomId: z.number().optional(), // Optional reference to another BOM
   assemblyLevel: z.number().default(0),
-<<<<<<< HEAD
   quantityMultiplier: z.number().min(1).default(1),
-=======
-  quantityMultiplier: z.number().min(0.001, "Quantity multiplier must be greater than 0").default(1),
->>>>>>> origin/main
   notes: z.string().optional(),
   isActive: z.boolean().default(true),
 });
@@ -2690,13 +2563,8 @@ export const insertRefundRequestSchema = createInsertSchema(refundRequests).omit
   approvedAt: true,
   processedAt: true,
   rejectionReason: true,
-<<<<<<< HEAD
   gatewayTransactionId: true,
   gatewayRefundId: true,
-=======
-  authNetTransactionId: true,
-  authNetRefundId: true,
->>>>>>> origin/main
   createdAt: true,
   updatedAt: true,
 }).extend({
@@ -2711,277 +2579,4 @@ export const insertRefundRequestSchema = createInsertSchema(refundRequests).omit
 
 // Types for Refund Requests
 export type InsertRefundRequest = z.infer<typeof insertRefundRequestSchema>;
-<<<<<<< HEAD
 export type RefundRequest = typeof refundRequests.$inferSelect;
-=======
-export type RefundRequest = typeof refundRequests.$inferSelect;
-
-// ============================================================================
-// CUTTING TABLE MANAGEMENT SYSTEM
-// ============================================================================
-
-// Cutting Materials - Different materials used for stock production
-export const cuttingMaterials = pgTable("cutting_materials", {
-  id: serial("id").primaryKey(),
-  materialName: text("material_name").notNull().unique(),
-  materialType: text("material_type").notNull(), // Carbon Fiber, Fiberglass, Primtex
-  yieldPerCut: integer("yield_per_cut").notNull(), // How many pieces per cutting operation
-  wasteFactor: real("waste_factor").notNull(), // Decimal waste factor (e.g., 0.12 = 12%)
-  description: text("description"),
-  isActive: boolean("is_active").default(true),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-});
-
-// Product Categories for cutting - Fiberglass Stock Packets, Carbon Stock Packets, etc.
-export const cuttingProductCategories = pgTable("cutting_product_categories", {
-  id: serial("id").primaryKey(),
-  categoryName: text("category_name").notNull().unique(),
-  description: text("description"),
-  isP1: boolean("is_p1").default(true), // P1 (regular) or P2 (OEM/supplier)
-  isActive: boolean("is_active").default(true),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-});
-
-// Components needed for each product category
-export const cuttingComponents = pgTable("cutting_components", {
-  id: serial("id").primaryKey(),
-  productCategoryId: integer("product_category_id").references(() => cuttingProductCategories.id),
-  materialId: integer("material_id").references(() => cuttingMaterials.id),
-  componentName: text("component_name").notNull(),
-  quantityRequired: integer("quantity_required").notNull(), // Pieces needed per stock packet
-  isActive: boolean("is_active").default(true),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-});
-
-// Cutting requirements for specific orders
-export const cuttingRequirements = pgTable("cutting_requirements", {
-  id: serial("id").primaryKey(),
-  orderId: text("order_id").notNull().references(() => allOrders.orderId),
-  materialId: integer("material_id").references(() => cuttingMaterials.id),
-  componentId: integer("component_id").references(() => cuttingComponents.id),
-  cutsRequired: integer("cuts_required").notNull(),
-  cutsCompleted: integer("cuts_completed").default(0),
-  isCompleted: boolean("is_completed").default(false),
-  assignedTo: text("assigned_to"), // Employee assigned to cutting task
-  startedAt: timestamp("started_at"),
-  completedAt: timestamp("completed_at"),
-  notes: text("notes"),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-});
-
-// Weekly cutting progress summary
-export const cuttingProgress = pgTable("cutting_progress", {
-  id: serial("id").primaryKey(),
-  materialId: integer("material_id").references(() => cuttingMaterials.id),
-  totalCutsRequired: integer("total_cuts_required").notNull(),
-  totalCutsCompleted: integer("total_cuts_completed").default(0),
-  pendingOrders: integer("pending_orders").default(0), // Number of orders waiting for this material
-  weekDate: date("week_date").notNull(), // Week of production planning
-  lastUpdated: timestamp("last_updated").defaultNow(),
-});
-
-// ============================================================================
-// CUTTING TABLE RELATIONS
-// ============================================================================
-
-export const cuttingMaterialsRelations = relations(cuttingMaterials, ({ many }) => ({
-  components: many(cuttingComponents),
-  requirements: many(cuttingRequirements),
-  progress: many(cuttingProgress),
-}));
-
-export const cuttingProductCategoriesRelations = relations(cuttingProductCategories, ({ many }) => ({
-  components: many(cuttingComponents),
-}));
-
-export const cuttingComponentsRelations = relations(cuttingComponents, ({ one, many }) => ({
-  productCategory: one(cuttingProductCategories, {
-    fields: [cuttingComponents.productCategoryId],
-    references: [cuttingProductCategories.id],
-  }),
-  material: one(cuttingMaterials, {
-    fields: [cuttingComponents.materialId],
-    references: [cuttingMaterials.id],
-  }),
-  requirements: many(cuttingRequirements),
-}));
-
-export const cuttingRequirementsRelations = relations(cuttingRequirements, ({ one }) => ({
-  order: one(allOrders, {
-    fields: [cuttingRequirements.orderId],
-    references: [allOrders.orderId],
-  }),
-  material: one(cuttingMaterials, {
-    fields: [cuttingRequirements.materialId],
-    references: [cuttingMaterials.id],
-  }),
-  component: one(cuttingComponents, {
-    fields: [cuttingRequirements.componentId],
-    references: [cuttingComponents.id],
-  }),
-}));
-
-export const cuttingProgressRelations = relations(cuttingProgress, ({ one }) => ({
-  material: one(cuttingMaterials, {
-    fields: [cuttingProgress.materialId],
-    references: [cuttingMaterials.id],
-  }),
-}));
-
-// ============================================================================
-// CUTTING TABLE INSERT SCHEMAS AND TYPES
-// ============================================================================
-
-export const insertCuttingMaterialSchema = createInsertSchema(cuttingMaterials).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-}).extend({
-  materialName: z.string().min(1, "Material name is required"),
-  materialType: z.string().min(1, "Material type is required"),
-  yieldPerCut: z.number().min(1, "Yield per cut must be at least 1"),
-  wasteFactor: z.number().min(0).max(1, "Waste factor must be between 0 and 1"),
-});
-
-export const insertCuttingProductCategorySchema = createInsertSchema(cuttingProductCategories).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-}).extend({
-  categoryName: z.string().min(1, "Category name is required"),
-});
-
-export const insertCuttingComponentSchema = createInsertSchema(cuttingComponents).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-}).extend({
-  componentName: z.string().min(1, "Component name is required"),
-  quantityRequired: z.number().min(1, "Quantity required must be at least 1"),
-});
-
-export const insertCuttingRequirementSchema = createInsertSchema(cuttingRequirements).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-}).extend({
-  orderId: z.string().min(1, "Order ID is required"),
-  cutsRequired: z.number().min(1, "Cuts required must be at least 1"),
-});
-
-// Types for cutting tables
-export type InsertCuttingMaterial = z.infer<typeof insertCuttingMaterialSchema>;
-export type CuttingMaterial = typeof cuttingMaterials.$inferSelect;
-
-export type InsertCuttingProductCategory = z.infer<typeof insertCuttingProductCategorySchema>;
-export type CuttingProductCategory = typeof cuttingProductCategories.$inferSelect;
-
-export type InsertCuttingComponent = z.infer<typeof insertCuttingComponentSchema>;
-export type CuttingComponent = typeof cuttingComponents.$inferSelect;
-
-export type InsertCuttingRequirement = z.infer<typeof insertCuttingRequirementSchema>;
-export type CuttingRequirement = typeof cuttingRequirements.$inferSelect;
-
-export type CuttingProgress = typeof cuttingProgress.$inferSelect;
-
-// ============================================================================
-// PACKET-BASED CUTTING TABLES (New Approach)
-// ============================================================================
-
-// Packet Types - CF Stock Packets, FG Stock Packets, etc.
-export const packetTypes = pgTable("packet_types", {
-  id: serial("id").primaryKey(),
-  packetName: text("packet_name").notNull().unique(),
-  materialType: text("material_type").notNull(), // 'Carbon Fiber', 'Fiberglass', 'Primtex'
-  description: text("description"),
-  isActive: boolean("is_active").default(true),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-});
-
-// Stock Model to Packet Type Mapping - which stock models need which packets
-export const stockPacketMapping = pgTable("stock_packet_mapping", {
-  id: serial("id").primaryKey(),
-  stockModelPrefix: text("stock_model_prefix").notNull(), // 'cf_', 'fg_', etc.
-  packetTypeId: integer("packet_type_id").references(() => packetTypes.id),
-  packetsPerStock: integer("packets_per_stock").default(1), // Usually 1 packet per stock
-  isActive: boolean("is_active").default(true),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-});
-
-// Packet Cutting Queue - tracks packet cutting needs
-export const packetCuttingQueue = pgTable("packet_cutting_queue", {
-  id: serial("id").primaryKey(),
-  packetTypeId: integer("packet_type_id").references(() => packetTypes.id),
-  materialId: integer("material_id").references(() => cuttingMaterials.id),
-  packetsNeeded: integer("packets_needed").notNull(),
-  packetsCut: integer("packets_cut").default(0),
-  priorityLevel: integer("priority_level").default(1), // 1-5 priority scale
-  requestedBy: text("requested_by"),
-  assignedTo: text("assigned_to"),
-  startedAt: timestamp("started_at"),
-  completedAt: timestamp("completed_at"),
-  notes: text("notes"),
-  isCompleted: boolean("is_completed").default(false),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-});
-
-// Relations for packet tables
-export const packetTypesRelations = relations(packetTypes, ({ many }) => ({
-  stockMappings: many(stockPacketMapping),
-  cuttingQueue: many(packetCuttingQueue),
-}));
-
-export const stockPacketMappingRelations = relations(stockPacketMapping, ({ one }) => ({
-  packetType: one(packetTypes, {
-    fields: [stockPacketMapping.packetTypeId],
-    references: [packetTypes.id],
-  }),
-}));
-
-export const packetCuttingQueueRelations = relations(packetCuttingQueue, ({ one }) => ({
-  packetType: one(packetTypes, {
-    fields: [packetCuttingQueue.packetTypeId],
-    references: [packetTypes.id],
-  }),
-  material: one(cuttingMaterials, {
-    fields: [packetCuttingQueue.materialId],
-    references: [cuttingMaterials.id],
-  }),
-}));
-
-// Insert schemas for packet tables
-export const insertPacketTypeSchema = createInsertSchema(packetTypes).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-});
-
-export const insertStockPacketMappingSchema = createInsertSchema(stockPacketMapping).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-});
-
-export const insertPacketCuttingQueueSchema = createInsertSchema(packetCuttingQueue).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-});
-
-// Types for packet tables
-export type PacketType = typeof packetTypes.$inferSelect;
-export type InsertPacketType = z.infer<typeof insertPacketTypeSchema>;
-
-export type StockPacketMapping = typeof stockPacketMapping.$inferSelect;
-export type InsertStockPacketMapping = z.infer<typeof insertStockPacketMappingSchema>;
-
-export type PacketCuttingQueue = typeof packetCuttingQueue.$inferSelect;
-export type InsertPacketCuttingQueue = z.infer<typeof insertPacketCuttingQueueSchema>;
->>>>>>> origin/main

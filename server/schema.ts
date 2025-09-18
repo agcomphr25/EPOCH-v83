@@ -2756,8 +2756,9 @@ export const cuttingMaterials = pgTable("cutting_materials", {
   yieldPerCut: integer("yield_per_cut").notNull(), // How many pieces per cutting operation
   wasteFactor: real("waste_factor").notNull(), // Decimal waste factor (e.g., 0.12 = 12%)
   description: text("description"),
-
-export type RefundRequest = typeof refundRequests.$inferSelect;
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
 
 // ===== VENDOR MANAGEMENT SYSTEM =====
 
@@ -2805,6 +2806,9 @@ export const cuttingProductCategories = pgTable("cutting_product_categories", {
   categoryName: text("category_name").notNull().unique(),
   description: text("description"),
   isP1: boolean("is_p1").default(true), // P1 (regular) or P2 (OEM/supplier)
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
 
 // Contact roles enumeration
 export const contactRoleEnum = pgEnum("contact_role", [
@@ -2842,6 +2846,9 @@ export const cuttingComponents = pgTable("cutting_components", {
   materialId: integer("material_id").references(() => cuttingMaterials.id),
   componentName: text("component_name").notNull(),
   quantityRequired: integer("quantity_required").notNull(), // Pieces needed per stock packet
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
 
 // Address types enumeration  
 export const addressTypeEnum = pgEnum("address_type", [
@@ -3013,6 +3020,9 @@ export const packetTypes = pgTable("packet_types", {
   packetName: text("packet_name").notNull().unique(),
   materialType: text("material_type").notNull(), // 'Carbon Fiber', 'Fiberglass', 'Primtex'
   description: text("description"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
 
 // Phone types enumeration
 export const phoneTypeEnum = pgEnum("phone_type", [

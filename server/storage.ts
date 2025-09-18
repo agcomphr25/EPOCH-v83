@@ -7062,6 +7062,8 @@ AG Composites Team`;
 
   async createVendor(data: InsertVendor): Promise<Vendor> {
     const [vendor] = await db.insert(vendors).values(data).returning();
+    return vendor;
+  }
 
   // ===== VENDOR MANAGEMENT IMPLEMENTATION =====
 
@@ -7125,10 +7127,6 @@ AG Composites Team`;
   }
 
   async updateVendor(id: number, data: Partial<InsertVendor>): Promise<Vendor> {
-
-    }
-    
-
     const [vendor] = await db
       .update(vendors)
       .set({
@@ -7472,8 +7470,13 @@ AG Composites Team`;
       .values({
         partId,
         locationId,
+        ...data,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .returning();
 
-      .where(eq(vendorAddresses.id, id));
+    return newBalance;
   }
 
   // Vendor Contact Phones CRUD
@@ -7879,8 +7882,12 @@ AG Composites Team`;
       .values({
         ...data,
         locationId,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .returning();
 
-    return phone;
+    return location;
   }
 
   async updateContactPhone(id: number, data: Partial<InsertVendorContactPhone>): Promise<VendorContactPhone> {
@@ -7996,14 +8003,12 @@ AG Composites Team`;
       .values({
         ...data,
         jobId,
-
-      .where(eq(vendorContactEmails.id, id))
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
       .returning();
 
-    if (!email) {
-      throw new Error(`Contact email with ID ${id} not found`);
-    }
-    return email;
+    return job;
   }
 
   async deleteContactEmail(id: number): Promise<void> {

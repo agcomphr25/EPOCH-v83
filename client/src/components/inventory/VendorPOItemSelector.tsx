@@ -24,6 +24,7 @@ type VendorPOItem = {
   agPartNumber?: string;
   vendorPartNumber?: string;
   description?: string;
+  vendorDescription?: string;
   quantity: number;
   unitPrice: number;
   totalPrice: number;
@@ -37,6 +38,7 @@ type CreateVendorPOItemData = {
   agPartNumber?: string;
   vendorPartNumber?: string;
   description?: string;
+  vendorDescription?: string;
   quantity: number;
   unitPrice: number;
   uom?: string;
@@ -79,6 +81,7 @@ function VendorPOItemForm({
     agPartNumber: item?.agPartNumber || '',
     vendorPartNumber: item?.vendorPartNumber || '',
     description: item?.description || '',
+    vendorDescription: item?.vendorDescription || '',
     quantity: item?.quantity || 1,
     unitPrice: item?.unitPrice || 0,
     uom: item?.uom || 'EA',
@@ -110,6 +113,7 @@ function VendorPOItemForm({
       agPartNumber: invItem.agPartNumber,
       vendorPartNumber: invItem.supplierPartNumber || '',
       description: invItem.name,
+      vendorDescription: invItem.vendorDescription || '',
       unitPrice: invItem.costPer || 0,
       uom: invItem.uom || 'EA',
       notes: invItem.notes || '',
@@ -155,7 +159,7 @@ function VendorPOItemForm({
 
   const totalPrice = calculateTotalPrice(formData.quantity, formData.unitPrice);
 
-  const uomOptions = ['EA', 'LB', 'FT', 'SQ FT', 'GAL', 'OZ', 'PACK', 'SET', 'ROLL', 'SHEET'];
+  const uomOptions = ['EA', 'LB', 'FT', 'SQ FT', 'SQM', 'GAL', 'OZ', 'PACK', 'SET', 'ROLL', 'SHEET'];
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -272,6 +276,18 @@ function VendorPOItemForm({
               rows={2}
               required
               data-testid="input-description"
+            />
+          </div>
+
+          <div>
+            <Label htmlFor="vendorDescription">Description</Label>
+            <Textarea
+              id="vendorDescription"
+              value={formData.vendorDescription}
+              onChange={(e) => setFormData({ ...formData, vendorDescription: e.target.value })}
+              placeholder="Additional description..."
+              rows={2}
+              data-testid="input-vendor-description"
             />
           </div>
 

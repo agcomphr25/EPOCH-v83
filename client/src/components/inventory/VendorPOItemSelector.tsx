@@ -582,7 +582,7 @@ export default function VendorPOItemSelector({
                       </div>
                     </TableCell>
                     <TableCell className="text-right" data-testid={`text-quantity-${item.id}`}>
-                      {item.quantity.toLocaleString()}
+                      {item.quantity.toFixed(2)}
                     </TableCell>
                     <TableCell data-testid={`text-uom-${item.id}`}>
                       {item.uom}

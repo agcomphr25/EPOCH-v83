@@ -57,8 +57,8 @@ type CreateVendorPOData = {
   notes?: string;
 };
 
-// Vendor PO quantity display component
-function VendorPOQuantityDisplay({ vendorPoId }: { vendorPoId: number }) {
+// Vendor PO line items display component
+function VendorPOItemsDisplay({ vendorPoId }: { vendorPoId: number }) {
   const { data: items = [], isLoading } = useQuery<VendorPOItem[]>({
     queryKey: ['/api/vendor-pos', vendorPoId, 'items'],
     queryFn: () => apiRequest(`/api/vendor-pos/${vendorPoId}/items`)
@@ -70,10 +70,53 @@ function VendorPOQuantityDisplay({ vendorPoId }: { vendorPoId: number }) {
     return <span className="text-gray-500">Loading...</span>;
   }
 
+  if (items.length === 0) {
+    return (
+      <div className="text-gray-500 text-sm italic">
+        No items added yet
+      </div>
+    );
+  }
+
   return (
-    <div className="flex items-center gap-1">
-      <Package className="w-4 h-4 text-blue-600" />
-      <span className="font-medium text-blue-600">{totalQuantity} items</span>
+    <div className="space-y-2">
+      <div className="flex items-center gap-1 mb-2">
+        <Package className="w-4 h-4 text-blue-600" />
+        <span className="font-medium text-blue-600">{totalQuantity.toFixed(2)} total qty</span>
+      </div>
+      <div className="space-y-1">
+        {items.slice(0, 3).map((item) => (
+          <div key={item.id} className="text-xs bg-gray-50 dark:bg-gray-800 rounded p-2">
+            <div className="flex justify-between items-start">
+              <div className="flex-1 min-w-0">
+                <div className="font-medium text-gray-900 dark:text-gray-100 truncate">
+                  {item.agPartNumber && (
+                    <span className="text-blue-600">#{item.agPartNumber}</span>
+                  )} {item.description}
+                </div>
+                {item.vendorPartNumber && (
+                  <div className="text-gray-500 text-xs truncate">
+                    Vendor: {item.vendorPartNumber}
+                  </div>
+                )}
+              </div>
+              <div className="text-right ml-2 flex-shrink-0">
+                <div className="font-medium text-gray-900 dark:text-gray-100">
+                  {item.quantity.toFixed(2)} {item.uom}
+                </div>
+                <div className="text-gray-500 text-xs">
+                  ${item.unitPrice.toFixed(2)} ea
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
+        {items.length > 3 && (
+          <div className="text-xs text-gray-500 italic">
+            ...and {items.length - 3} more items
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -111,8 +154,8 @@ function VendorPOCard({ vendorPo, onEdit, onDelete, onViewItems }: {
                 {vendorPo.vendorName || `Vendor ID: ${vendorPo.vendorId}`}
               </div>
             </CardDescription>
-            <div className="mt-2">
-              <VendorPOQuantityDisplay vendorPoId={vendorPo.id} />
+            <div className="mt-3">
+              <VendorPOItemsDisplay vendorPoId={vendorPo.id} />
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -621,7 +664,7 @@ export default function VendorPOManager() {
           )}
         </div>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
           {filteredVendorPOs.map((vendorPo) => (
             <VendorPOCard
               key={vendorPo.id}

@@ -127,7 +127,7 @@ function VendorPOItemForm({
   };
 
   const handleQuantityChange = (value: string) => {
-    const quantity = parseInt(value) || 1;
+    const quantity = parseFloat(value) || 0;
     setFormData({ ...formData, quantity });
   };
 
@@ -297,8 +297,8 @@ function VendorPOItemForm({
               <Input
                 id="quantity"
                 type="number"
-                step="1"
-                min="1"
+                step="0.01"
+                min="0.01"
                 value={formData.quantity}
                 onChange={(e) => handleQuantityChange(e.target.value)}
                 required

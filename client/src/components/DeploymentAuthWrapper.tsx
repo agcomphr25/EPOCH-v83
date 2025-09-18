@@ -15,35 +15,17 @@ function isDeploymentEnvironment(): boolean {
   // Development overrides - only skip auth for actual development environments
   const isLocalhost = hostname.includes('localhost') || hostname.includes('127.0.0.1');
   const isReplitEditor = hostname.includes('replit.dev') && !hostname.includes('.replit.dev');
-<<<<<<< HEAD
   const isReplitPreview = hostname.includes('.repl.co'); // Replit preview domains
   
-  // FORCE DEVELOPMENT MODE: Always bypass authentication in development
-  // This ensures authentication is never required in the Replit development environment
-  console.log('🔧 AUTH BYPASS: Development mode forced - authentication disabled');
-  return false;
-  
-  // Original logic commented out - can be restored later if needed
-  // Skip auth ONLY for localhost, Replit editor, and Replit preview (not deployed)
-<<<<<<< HEAD
-  if (isLocalhost || isReplitEditor || isReplitPreview) {
-=======
-  
-  // Debug logs removed - authentication working correctly
-  
-  // Skip auth ONLY for localhost and Replit editor (not deployed)
+  // Skip auth ONLY for localhost and Replit editor (not deployed .repl.co domains)
   if (isLocalhost || isReplitEditor) {
->>>>>>> origin/main
-      return false;
+    console.log('🔧 AUTH BYPASS: Local development - authentication disabled');
+    return false;
   }
-=======
-  // if (isLocalhost || isReplitEditor || isReplitPreview) {
-  //     return false;
-  // }
->>>>>>> 3a33976bb477bd1c9dd3b577e7f867547491edf5
   
-  // For custom domains like agcompepoch.xyz, ALWAYS require auth
-  // return true;
+  // For deployed domains (.repl.co, .replit.app, custom domains), ALWAYS require auth
+  console.log('🔧 PRODUCTION MODE: Authentication enabled for deployed site');
+  return true;
 }
 
 export default function DeploymentAuthWrapper({ children }: DeploymentAuthWrapperProps) {

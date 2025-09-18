@@ -129,11 +129,7 @@ export default function POProductsPage() {
       queryClient.invalidateQueries({ queryKey: ['/api/po-products'] });
       toast({
         title: "Success",
-<<<<<<< HEAD
         description: "PO Product created successfully",
-=======
-        description: "P1 PO Product created successfully",
->>>>>>> origin/main
       });
       handleReset();
       setShowCreateForm(false);
@@ -141,11 +137,7 @@ export default function POProductsPage() {
     onError: (error: any) => {
       toast({
         title: "Error",
-<<<<<<< HEAD
         description: error.message || "Failed to create PO Product",
-=======
-        description: error.message || "Failed to create P1 PO Product",
->>>>>>> origin/main
         variant: "destructive",
       });
     },
@@ -162,11 +154,7 @@ export default function POProductsPage() {
       queryClient.invalidateQueries({ queryKey: ['/api/po-products'] });
       toast({
         title: "Success",
-<<<<<<< HEAD
         description: "PO Product updated successfully",
-=======
-        description: "P1 PO Product updated successfully",
->>>>>>> origin/main
       });
       setEditingProduct(null);
       handleReset();
@@ -174,11 +162,7 @@ export default function POProductsPage() {
     onError: (error: any) => {
       toast({
         title: "Error",
-<<<<<<< HEAD
         description: error.message || "Failed to update PO Product",
-=======
-        description: error.message || "Failed to update P1 PO Product",
->>>>>>> origin/main
         variant: "destructive",
       });
     },
@@ -194,21 +178,13 @@ export default function POProductsPage() {
       queryClient.invalidateQueries({ queryKey: ['/api/po-products'] });
       toast({
         title: "Success",
-<<<<<<< HEAD
         description: "PO Product deleted successfully",
-=======
-        description: "P1 PO Product deleted successfully",
->>>>>>> origin/main
       });
     },
     onError: (error: any) => {
       toast({
         title: "Error",
-<<<<<<< HEAD
         description: error.message || "Failed to delete PO Product",
-=======
-        description: error.message || "Failed to delete P1 PO Product",
->>>>>>> origin/main
         variant: "destructive",
       });
     },
@@ -292,11 +268,7 @@ export default function POProductsPage() {
   };
 
   const handleDelete = (id: number) => {
-<<<<<<< HEAD
     if (window.confirm('Are you sure you want to delete this PO Product?')) {
-=======
-    if (window.confirm('Are you sure you want to delete this P1 PO Product?')) {
->>>>>>> origin/main
       deleteMutation.mutate(id);
     }
   };
@@ -306,11 +278,7 @@ export default function POProductsPage() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Package className="h-6 w-6 text-primary" />
-<<<<<<< HEAD
           <h1 className="text-3xl font-bold text-gray-900">PO Products</h1>
-=======
-          <h1 className="text-3xl font-bold text-gray-900">P1 PO Products</h1>
->>>>>>> origin/main
         </div>
         <Button 
           onClick={() => {
@@ -327,11 +295,7 @@ export default function POProductsPage() {
       {/* Products Table */}
       <Card>
         <CardHeader>
-<<<<<<< HEAD
           <CardTitle>All PO Products</CardTitle>
-=======
-          <CardTitle>All P1 PO Products</CardTitle>
->>>>>>> origin/main
         </CardHeader>
         <CardContent>
           {productsLoading ? (
@@ -339,11 +303,7 @@ export default function POProductsPage() {
           ) : poProducts.length === 0 ? (
             <div className="text-center py-8">
               <Package className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-<<<<<<< HEAD
               <p className="text-gray-500">No PO Products found</p>
-=======
-              <p className="text-gray-500">No P1 PO Products found</p>
->>>>>>> origin/main
               <Button 
                 className="mt-4" 
                 onClick={() => setShowCreateForm(true)}
@@ -424,17 +384,10 @@ export default function POProductsPage() {
         <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
-<<<<<<< HEAD
               {editingProduct ? 'Edit PO Product' : 'Create New PO Product'}
             </DialogTitle>
             <DialogDescription>
               {editingProduct ? 'Update the product details below.' : 'Fill in the product details below to create a new PO Product.'}
-=======
-              {editingProduct ? 'Edit P1 PO Product' : 'Create New P1 PO Product'}
-            </DialogTitle>
-            <DialogDescription>
-              {editingProduct ? 'Update the product details below.' : 'Fill in the product details below to create a new P1 PO Product.'}
->>>>>>> origin/main
             </DialogDescription>
           </DialogHeader>
 
@@ -483,10 +436,6 @@ export default function POProductsPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="stock">Stock</SelectItem>
-<<<<<<< HEAD
-=======
-                  <SelectItem value="P2-Item">P2 Item</SelectItem>
->>>>>>> origin/main
                   <SelectItem value="AG-M5-SA">AG-M5-SA</SelectItem>
                   <SelectItem value="AG-M5-LA">AG-M5-LA</SelectItem>
                   <SelectItem value="AG-M5-LA-CIP">AG-M5-LA-CIP</SelectItem>

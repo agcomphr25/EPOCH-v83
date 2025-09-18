@@ -3,11 +3,4 @@ dist
 .DS_Store
 server/public
 vite.config.ts.*
-<<<<<<< HEAD
 *.tar.gz
-=======
-*.tar.gz
-# ignore DB dumps & backups
-*.sql
-backups/
->>>>>>> origin/main

@@ -176,9 +176,35 @@ router.post('/', checkVendorPOPermission, async (req: Request, res: Response) =>
 router.put('/:id', checkVendorPOPermission, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const updateData = insertVendorPurchaseOrderSchema.partial().parse(req.body);
+    const { expectedDeliveryDate, shipVia, notes, vendorId } = req.body;
     
-    const updatedPO = await storage.updateVendorPurchaseOrder(parseInt(id), updateData);
+    // Map frontend field names to backend schema field names
+    const updateData: any = {};
+    
+    if (vendorId !== undefined) updateData.vendorId = vendorId;
+    if (expectedDeliveryDate !== undefined) {
+      updateData.expectedDelivery = new Date(expectedDeliveryDate);
+    }
+    if (shipVia !== undefined) {
+      // Map frontend shipVia to backend enum values
+      const shipViaMapping: { [key: string]: string } = {
+        'Other': 'Delivery',
+        'FedEx Ground': 'Delivery',
+        'FedEx Express': 'Delivery', 
+        'UPS Ground': 'UPS',
+        'UPS Next Day': 'UPS',
+        'USPS': 'Delivery',
+        'Freight': 'Delivery',
+        'Will Call': 'Pickup'
+      };
+      updateData.shipVia = shipViaMapping[shipVia] || shipVia || 'Delivery';
+    }
+    if (notes !== undefined) updateData.notes = notes;
+    
+    // Validate only the fields that are being updated
+    const validatedData = insertVendorPurchaseOrderSchema.partial().parse(updateData);
+    
+    const updatedPO = await storage.updateVendorPurchaseOrder(parseInt(id), validatedData);
     
     if (!updatedPO) {
       return res.status(404).json({ error: "Vendor purchase order not found" });

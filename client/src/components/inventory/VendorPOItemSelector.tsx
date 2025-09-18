@@ -47,9 +47,11 @@ type InventoryItem = {
   id: number;
   agPartNumber: string;
   name: string; // This is 'description' from Enhanced Inventory
+  vendorDescription?: string;
   source?: string;
   supplierPartNumber?: string;
   costPer?: number;
+  uom?: string;
   orderDate?: string;
   department?: string;
   secondarySource?: string;
@@ -97,6 +99,7 @@ function VendorPOItemForm({
   const filteredItems = inventoryItems.filter((invItem) =>
     (invItem.agPartNumber || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
     (invItem.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (invItem.vendorDescription || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
     (invItem.source || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
     (invItem.supplierPartNumber || '').toLowerCase().includes(searchQuery.toLowerCase())
   );
@@ -108,6 +111,7 @@ function VendorPOItemForm({
       vendorPartNumber: invItem.supplierPartNumber || '',
       description: invItem.name,
       unitPrice: invItem.costPer || 0,
+      uom: invItem.uom || 'EA',
       notes: invItem.notes || '',
     });
     setSearchQuery(invItem.agPartNumber);

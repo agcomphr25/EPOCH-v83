@@ -2,13 +2,13 @@ import { Router, Request, Response } from 'express';
 import { enhancedStorage } from '../storage/enhanced-storage';
 import { authenticateToken } from '../../middleware/auth';
 import {
-  insertInventoryItemSchema,
+  insertEnhancedInventoryItemSchema,
+  updateEnhancedInventoryItemSchema,
   insertInventoryBalanceSchema,
   insertInventoryTransactionSchema,
   insertOutsideProcessingLocationSchema,
   insertOutsideProcessingJobSchema,
   insertVendorPartSchema,
-  updateInventoryItemSchema,
   updateInventoryBalanceSchema,
   updateOutsideProcessingLocationSchema,
   updateOutsideProcessingJobSchema,
@@ -34,7 +34,7 @@ router.get('/inventory/items', async (req: Request, res: Response) => {
 // POST /api/enhanced/inventory/items - Create inventory item
 router.post('/inventory/items', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const itemData = insertInventoryItemSchema.parse(req.body);
+    const itemData = insertEnhancedInventoryItemSchema.parse(req.body);
     const newItem = await enhancedStorage.createInventoryItem(itemData);
     res.status(201).json(newItem);
   } catch (error) {
@@ -50,7 +50,7 @@ router.post('/inventory/items', authenticateToken, async (req: Request, res: Res
 router.put('/inventory/items/:id', authenticateToken, async (req: Request, res: Response) => {
   try {
     const itemId = parseInt(req.params.id);
-    const updates = updateInventoryItemSchema.parse(req.body);
+    const updates = updateEnhancedInventoryItemSchema.parse(req.body);
     const updatedItem = await enhancedStorage.updateInventoryItem(itemId, updates);
     res.json(updatedItem);
   } catch (error) {
@@ -86,10 +86,12 @@ router.get('/inventory/export/csv', async (req: Request, res: Response) => {
     // Create CSV headers
     const headers = [
       'AG Part#',
-      'Name', 
+      'Name',
+      'Vendor Description',
       'Source',
       'Supplier Part #',
       'Cost per',
+      'UOM',
       'Order Date',
       'Dept.',
       'Secondary Source',
@@ -102,9 +104,11 @@ router.get('/inventory/export/csv', async (req: Request, res: Response) => {
       ...items.map(item => [
         `"${item.agPartNumber || ''}"`,
         `"${item.name || ''}"`,
+        `"${item.vendorDescription || ''}"`,
         `"${item.source || ''}"`,
         `"${item.supplierPartNumber || ''}"`,
         item.costPer ? item.costPer.toString() : '',
+        `"${item.uom || 'EA'}"`,
         item.orderDate ? new Date(item.orderDate).toISOString().split('T')[0] : '',
         `"${item.department || ''}"`,
         `"${item.secondarySource || ''}"`,
@@ -167,6 +171,10 @@ router.post('/inventory/import/csv', authenticateToken, async (req: Request, res
             case 'name':
               itemData.name = value;
               break;
+            case 'vendor description':
+            case 'vendordescription':
+              itemData.vendorDescription = value || null;
+              break;
             case 'source':
               itemData.source = value || null;
               break;
@@ -177,6 +185,9 @@ router.post('/inventory/import/csv', authenticateToken, async (req: Request, res
             case 'cost per':
             case 'costper':
               itemData.costPer = value && !isNaN(parseFloat(value)) ? parseFloat(value) : null;
+              break;
+            case 'uom':
+              itemData.uom = value || 'EA';
               break;
             case 'order date':
             case 'orderdate':
@@ -203,7 +214,7 @@ router.post('/inventory/import/csv', authenticateToken, async (req: Request, res
         }
 
         // Use enhanced storage for import
-        const validatedData = insertInventoryItemSchema.parse(itemData);
+        const validatedData = insertEnhancedInventoryItemSchema.parse(itemData);
         await enhancedStorage.createInventoryItem(validatedData);
         importedCount++;
       } catch (error) {

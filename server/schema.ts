@@ -1119,6 +1119,27 @@ export const insertInventoryItemSchema = createInsertSchema(inventoryItems).omit
   isActive: z.boolean().default(true),
 });
 
+// Enhanced inventory item schema
+export const insertEnhancedInventoryItemSchema = createInsertSchema(enhancedInventoryItems).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  agPartNumber: z.string().min(1, "AG Part# is required"),
+  name: z.string().min(1, "Name is required"),
+  vendorDescription: z.string().optional().nullable(),
+  type: z.enum(["Purchased", "Manufactured"]).default("Purchased"),
+  source: z.string().optional().nullable(),
+  supplierPartNumber: z.string().optional().nullable(),
+  costPer: z.number().min(0).optional().nullable(),
+  uom: z.string().default("EA"),
+  orderDate: z.coerce.date().optional().nullable(),
+  department: z.string().optional().nullable(),
+  secondarySource: z.string().optional().nullable(),
+  notes: z.string().optional().nullable(),
+  isActive: z.boolean().default(true),
+});
+
 export const insertInventoryScanSchema = createInsertSchema(inventoryScans).omit({
   id: true,
   scannedAt: true,
@@ -3720,6 +3741,9 @@ export const insertVendorPartSchema = createInsertSchema(vendorParts).omit({
 
 // Update schema for inventory items - allows partial updates while validating types
 export const updateInventoryItemSchema = insertInventoryItemSchema.partial();
+
+// Update schema for enhanced inventory items
+export const updateEnhancedInventoryItemSchema = insertEnhancedInventoryItemSchema.partial();
 
 // Update schema for inventory balances - partial validation for updateable fields
 export const updateInventoryBalanceSchema = insertInventoryBalanceSchema.partial().omit({

@@ -20,7 +20,8 @@ import {
   Calendar,
   User,
   Package,
-  ArrowRight
+  ArrowRight,
+  Scan
 } from 'lucide-react';
 
 interface ProductionQueueOrder {
@@ -310,6 +311,10 @@ export default function ProductionQueueManager() {
   const [productionSchedule, setProductionSchedule] = useState<ProductionSchedule | null>(null);
   const [selectedWeeks, setSelectedWeeks] = useState<number[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  
+  // State for order selection in regular production queue
+  const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
+  const [selectAll, setSelectAll] = useState(false);
 
   // Fetch prioritized production queue
   const { data: productionQueue = [], isLoading, refetch } = useQuery<ProductionQueueOrder[]>({
@@ -441,12 +446,172 @@ export default function ProductionQueueManager() {
     }
   });
 
+  // Move selected orders to barcode department mutation
+  const moveToBarcodeDepMutation = useMutation({
+    mutationFn: (orderIds: string[]) => 
+      apiRequest('/api/orders/progress-department', {
+        method: 'POST',
+        body: JSON.stringify({ 
+          orderIds, 
+          targetDepartment: 'Barcode',
+          currentDepartment: 'Production Queue' 
+        })
+      }),
+    onSuccess: (result: any, orderIds: string[]) => {
+      setSelectedOrders(new Set());
+      setSelectAll(false);
+      toast({
+        title: "Success",
+        description: `${orderIds.length} order(s) moved to Barcode department`,
+      });
+      // Invalidate multiple query keys as orders may affect different lists
+      queryClient.invalidateQueries({ queryKey: ['/api/production-queue/prioritized'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/production-queue/attention'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/production-queue/po-items'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
+    },
+    onError: (error: any) => {
+      console.error('Error progressing orders:', error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to progress orders to Barcode department",
+        variant: "destructive"
+      });
+    }
+  });
+
   const getUrgencyBadgeColor = (urgencyLevel: string) => {
     switch (urgencyLevel) {
       case 'critical': return 'bg-red-500 hover:bg-red-600 text-white';
       case 'high': return 'bg-orange-500 hover:bg-orange-600 text-white';
       case 'medium': return 'bg-yellow-500 hover:bg-yellow-600 text-white';
       default: return 'bg-green-500 hover:bg-green-600 text-white';
+    }
+  };
+
+  // Helper function to extract action length from order features
+  // Based on LayupScheduler.tsx logic to ensure consistency
+  const getActionLength = (order: ProductionQueueOrder) => {
+    const orderFeatures = (order as any).features;
+    if (!orderFeatures) return 'N/A';
+
+    const modelId = order.stockModelId || order.modelId;
+    const isAPR = modelId && modelId.toLowerCase().includes('apr');
+
+    // For APR orders, show combined action length and action type (matching LayupScheduler)
+    if (isAPR) {
+      // Check for action_inlet field first (more specific)
+      let actionType = orderFeatures.action_inlet;
+      if (!actionType) {
+        // Fallback to action field
+        actionType = orderFeatures.action;
+      }
+
+      // Get action length for APR orders
+      let actionLength = orderFeatures.action_length;
+      if (!actionLength || actionLength === 'none') {
+        // Try to derive from action_inlet
+        if (actionType && actionType.includes('short')) actionLength = 'SA';
+        else if (actionType && actionType.includes('long')) actionLength = 'LA';
+        else actionLength = 'SA'; // Default for APR
+      }
+
+      // Convert action length to abbreviation
+      const lengthMap: {[key: string]: string} = {
+        'Long': 'LA', 'Medium': 'MA', 'Short': 'SA',
+        'long': 'LA', 'medium': 'MA', 'short': 'SA',
+        'LA': 'LA', 'MA': 'MA', 'SA': 'SA'
+      };
+
+      const actionLengthAbbr = lengthMap[actionLength] || actionLength;
+
+      if (!actionType || actionType === 'none') {
+        // Show just action length if no action type
+        return actionLengthAbbr;
+      }
+
+      // Convert common action types to readable format
+      const actionMap: {[key: string]: string} = {
+        'anti_ten_hunter_def': 'Anti-X Hunter',
+        'apr': 'APR',
+        'rem_700': 'Rem 700',
+        'tikka': 'Tikka',
+        'savage': 'Savage'
+      };
+
+      const actionDisplay = actionMap[actionType] || actionType.replace(/_/g, ' ').toUpperCase();
+
+      // Combine action length and action type for APR orders
+      return `${actionLengthAbbr} ${actionDisplay}`;
+    }
+
+    // For non-APR orders, show action length
+    // Look for action_length field first
+    let actionLengthValue = orderFeatures.action_length;
+
+    // If action_length is empty or 'none', try to derive from action_inlet
+    if ((!actionLengthValue || actionLengthValue === 'none') && orderFeatures.action_inlet) {
+      const actionInlet = orderFeatures.action_inlet;
+      
+      // Map common action inlets to action lengths based on actual data patterns
+      const inletToLengthMap: {[key: string]: string} = {
+        'anti_ten_hunter_def': 'SA',
+        'remington_700': 'SA',
+        'remington_700_long': 'LA',
+        'rem_700': 'SA',
+        'rem_700_short': 'SA',
+        'rem_700_long': 'LA',
+        'tikka_t3': 'SA',
+        'tikka_short': 'SA',
+        'tikka_long': 'LA',
+        'savage_short': 'SA',
+        'savage_long': 'LA',
+        'savage_110': 'LA',
+        'winchester_70': 'LA',
+        'howa_1500': 'SA',
+        'bergara_b14': 'SA',
+        'carbon_six_medium': 'MA'
+      };
+
+      actionLengthValue = inletToLengthMap[actionInlet] || 'SA';
+    }
+
+    if (!actionLengthValue || actionLengthValue === 'none') return 'N/A';
+
+    // Simple abbreviation mapping
+    const displayMap: {[key: string]: string} = {
+      'Long': 'LA', 'Medium': 'MA', 'Short': 'SA',
+      'long': 'LA', 'medium': 'MA', 'short': 'SA',
+      'LA': 'LA', 'MA': 'MA', 'SA': 'SA'
+    };
+
+    return displayMap[actionLengthValue] || actionLengthValue;
+  };
+
+  // Helper functions for order selection
+  const handleOrderSelection = (orderId: string, isSelected: boolean) => {
+    const newSelectedOrders = new Set(selectedOrders);
+    if (isSelected) {
+      newSelectedOrders.add(orderId);
+    } else {
+      newSelectedOrders.delete(orderId);
+    }
+    setSelectedOrders(newSelectedOrders);
+    setSelectAll(newSelectedOrders.size === productionQueue.length);
+  };
+
+  const handleSelectAll = (isSelectAll: boolean) => {
+    if (isSelectAll) {
+      setSelectedOrders(new Set(productionQueue.map(order => order.orderId)));
+    } else {
+      setSelectedOrders(new Set());
+    }
+    setSelectAll(isSelectAll);
+  };
+
+  const handleMoveToBarcodeDepartment = () => {
+    if (selectedOrders.size > 0) {
+      moveToBarcodeDepMutation.mutate(Array.from(selectedOrders));
     }
   };
 
@@ -743,86 +908,148 @@ export default function ProductionQueueManager() {
               <p className="text-sm">Use Auto-Populate to add eligible orders</p>
             </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-20">Priority</TableHead>
-                  <TableHead>Order ID</TableHead>
-                  <TableHead>Customer</TableHead>
-                  <TableHead>Model</TableHead>
-                  <TableHead>Stock Model</TableHead>
-                  <TableHead>Due Date</TableHead>
-                  <TableHead>Days to Due</TableHead>
-                  <TableHead>Urgency</TableHead>
-                  <TableHead>Score</TableHead>
-                  <TableHead className="w-32">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {productionQueue.map((order, index) => (
-                  <TableRow key={order.orderId} className={order.isOverdue ? 'bg-red-50' : ''}>
-                    <TableCell className="font-bold text-center">
-                      #{order.queuePosition}
-                    </TableCell>
-                    <TableCell className="font-medium">
-                      <div>
-                        {order.fbOrderNumber || order.orderId}
-                        {order.fbOrderNumber && (
-                          <div className="text-xs text-gray-500">{order.orderId}</div>
-                        )}
+            <div className="space-y-4">
+              {/* Multi-select Actions */}
+              {selectedOrders.size > 0 && (
+                <Card className="bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800">
+                  <CardContent className="py-4">
+                    <div className="flex items-center justify-between flex-wrap gap-4">
+                      <div className="flex items-center gap-2">
+                        <CheckCircle className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                        <span className="font-medium text-blue-800 dark:text-blue-200">
+                          {selectedOrders.size} order{selectedOrders.size > 1 ? 's' : ''} selected for progression
+                        </span>
                       </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1">
-                        <User className="w-3 h-3 text-gray-400" />
-                        {order.customerName || order.customerId}
-                      </div>
-                    </TableCell>
-                    <TableCell>{order.modelId}</TableCell>
-                    <TableCell>
-                      <Badge variant="outline">{order.stockModelId}</Badge>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1">
-                        <Calendar className="w-3 h-3 text-gray-400" />
-                        {new Date(order.dueDate).toLocaleDateString()}
-                      </div>
-                    </TableCell>
-                    <TableCell className={order.isOverdue ? 'text-red-600 font-semibold' : ''}>
-                      {order.daysToDue} days
-                    </TableCell>
-                    <TableCell>
-                      <Badge className={getUrgencyBadgeColor(order.urgencyLevel)}>
-                        {order.urgencyLevel.toUpperCase()}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="font-mono text-sm">
-                      {order.priorityScore}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-2">
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => movePriority(index, 'up')}
-                          disabled={index === 0 || updatePrioritiesMutation.isPending}
+                          onClick={() => setSelectedOrders(new Set())}
+                          disabled={moveToBarcodeDepMutation.isPending}
+                          data-testid="button-clear-selection"
                         >
-                          <ArrowUp className="w-3 h-3" />
+                          Clear Selection
                         </Button>
                         <Button
-                          variant="outline"
                           size="sm"
-                          onClick={() => movePriority(index, 'down')}
-                          disabled={index === productionQueue.length - 1 || updatePrioritiesMutation.isPending}
+                          onClick={handleMoveToBarcodeDepartment}
+                          disabled={moveToBarcodeDepMutation.isPending}
+                          className="bg-green-600 hover:bg-green-700 dark:bg-green-700 dark:hover:bg-green-600"
+                          data-testid="button-progress-barcode"
                         >
-                          <ArrowDown className="w-3 h-3" />
+                          <Scan className="w-4 h-4 mr-2" />
+                          {moveToBarcodeDepMutation.isPending ? 'Moving...' : 'Progress to Barcode Department →'}
                         </Button>
                       </div>
-                    </TableCell>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-12">
+                      <Checkbox
+                        checked={selectAll}
+                        onCheckedChange={handleSelectAll}
+                        data-testid="checkbox-select-all"
+                      />
+                    </TableHead>
+                    <TableHead className="w-20">Priority</TableHead>
+                    <TableHead>Order ID</TableHead>
+                    <TableHead>Customer</TableHead>
+                    <TableHead>Model</TableHead>
+                    <TableHead>Stock Model</TableHead>
+                    <TableHead>Action Length</TableHead>
+                    <TableHead>Due Date</TableHead>
+                    <TableHead>Days to Due</TableHead>
+                    <TableHead>Urgency</TableHead>
+                    <TableHead>Score</TableHead>
+                    <TableHead className="w-32">Actions</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {productionQueue.map((order, index) => (
+                    <TableRow 
+                      key={order.orderId} 
+                      className={`${order.isOverdue ? 'bg-red-50' : ''} ${selectedOrders.has(order.orderId) ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}
+                    >
+                      <TableCell>
+                        <Checkbox
+                          checked={selectedOrders.has(order.orderId)}
+                          onCheckedChange={(checked) => handleOrderSelection(order.orderId, checked as boolean)}
+                          data-testid={`checkbox-order-${order.orderId}`}
+                        />
+                      </TableCell>
+                      <TableCell className="font-bold text-center">
+                        #{order.queuePosition}
+                      </TableCell>
+                      <TableCell className="font-medium">
+                        <div>
+                          {order.fbOrderNumber || order.orderId}
+                          {order.fbOrderNumber && (
+                            <div className="text-xs text-gray-500">{order.orderId}</div>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1">
+                          <User className="w-3 h-3 text-gray-400" />
+                          {order.customerName || order.customerId}
+                        </div>
+                      </TableCell>
+                      <TableCell>{order.modelId}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline">{order.stockModelId}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="secondary" data-testid={`text-action-length-${order.orderId}`}>
+                          {getActionLength(order)}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1">
+                          <Calendar className="w-3 h-3 text-gray-400" />
+                          {new Date(order.dueDate).toLocaleDateString()}
+                        </div>
+                      </TableCell>
+                      <TableCell className={order.isOverdue ? 'text-red-600 font-semibold' : ''}>
+                        {order.daysToDue} days
+                      </TableCell>
+                      <TableCell>
+                        <Badge className={getUrgencyBadgeColor(order.urgencyLevel)}>
+                          {order.urgencyLevel.toUpperCase()}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="font-mono text-sm">
+                        {order.priorityScore}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => movePriority(index, 'up')}
+                            disabled={index === 0 || updatePrioritiesMutation.isPending}
+                          >
+                            <ArrowUp className="w-3 h-3" />
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => movePriority(index, 'down')}
+                            disabled={index === productionQueue.length - 1 || updatePrioritiesMutation.isPending}
+                          >
+                            <ArrowDown className="w-3 h-3" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           )}
               </CardContent>
             </AccordionContent>

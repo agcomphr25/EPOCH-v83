@@ -1,7 +1,6 @@
 import React from 'react';
 
 export default function OrdersListSimple() {
-  console.log('OrdersListSimple component rendering');
   
   return (
     <div className="min-h-screen p-8">

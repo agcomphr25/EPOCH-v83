@@ -10,11 +10,14 @@ function isDeploymentEnvironment(): boolean {
   // Multiple methods to detect deployment environment
   const hostname = window.location.hostname;
   const viteDeployment = import.meta.env.VITE_REPLIT_DEPLOYMENT === '1';
-  const nodeEnv = import.meta.env.VITE_NODE_ENV === 'production';
+  const nodeEnv = import.meta.env.VITE_NODE_ENV;
+  const isDevelopment = import.meta.env.NODE_ENV === 'development' || nodeEnv === 'development';
   
   // Development overrides - skip auth for development environments
   const isLocalhost = hostname.includes('localhost') || hostname.includes('127.0.0.1');
+
   const isReplitEditor = hostname.includes('replit.dev') && !hostname.includes('.replit.dev');
+
   const isReplitDev = hostname.includes('replit.dev'); // All replit.dev domains (including workspaces)
   const isDevelopment = import.meta.env.MODE === 'development' || import.meta.env.VITE_NODE_ENV === 'development';
   
@@ -24,6 +27,7 @@ function isDeploymentEnvironment(): boolean {
   }
   
   // Only require auth for explicitly deployed production environments
+
   return true;
 }
 

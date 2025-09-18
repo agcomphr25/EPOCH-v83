@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link, useLocation } from 'wouter';
-import { Factory, User, FileText, TrendingDown, Plus, Settings, Package, FilePenLine, ClipboardList, BarChart, ChevronDown, ChevronRight, FormInput, PieChart, Scan, Warehouse, Shield, Wrench, Users, TestTube, DollarSign, Receipt, TrendingUp, List, BookOpen, Calendar, CheckSquare, Truck, Mail, MessageSquare, CreditCard, XCircle, Cog, ArrowRight, LogOut } from "lucide-react";
+import { Factory, User, FileText, TrendingDown, Plus, Settings, Package, FilePenLine, ClipboardList, BarChart, ChevronDown, ChevronRight, FormInput, PieChart, Scan, Warehouse, Shield, Wrench, Users, TestTube, DollarSign, Receipt, TrendingUp, List, BookOpen, Calendar, CheckSquare, Truck, Mail, MessageSquare, CreditCard, XCircle, Cog, ArrowRight, LogOut, GraduationCap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import InstallPWAButton from "./InstallPWAButton";
@@ -151,6 +151,12 @@ export default function Navigation() {
       description: 'Manage Bill of Materials for P2 operations'
     },
     {
+      path: '/robust-bom-administration',
+      label: 'P2 Robust BOM',
+      icon: Factory,
+      description: 'Advanced BOM management with lifecycle tracking and cost analysis'
+    },
+    {
       path: '/barcode-scanner',
       label: 'Barcde Scanner',
       icon: Scan,
@@ -194,10 +200,18 @@ export default function Navigation() {
       description: 'Receive incoming inventory'
     },
     {
-      path: '/vendor-management',
+
+      path: '/inventory/enhanced-mrp',
+      label: 'Enhanced Inventory & MRP',
+      icon: Factory,
+      description: 'Advanced inventory management with material requirements planning'
+    },
+    {
+      path: '/vendors',
       label: 'Vendor Management',
       icon: Users,
-      description: 'Manage vendors with contacts, addresses, and documents'
+      description: 'Manage vendors and suppliers'
+
     }
   ];
 
@@ -255,6 +269,18 @@ export default function Navigation() {
       label: 'Document Management',
       icon: FileText,
       description: 'Unified document repository with advanced tagging and organization'
+    },
+    {
+      path: '/shutdown-training',
+      label: 'Shutdown Training',
+      icon: GraduationCap,
+      description: 'Presentation-style shutdown procedures training with attendance signatures'
+    },
+    {
+      path: '/fire-safety-training',
+      label: 'Fire Safety Training',
+      icon: GraduationCap,
+      description: 'Presentation-style fire safety training with attendance signatures'
     }
   ];
 
@@ -980,7 +1006,7 @@ export default function Navigation() {
                 onClick={() => toggleDropdown('departmentQueue', departmentQueueExpanded, setDepartmentQueueExpanded)}
               >
                 <Factory className="h-4 w-4" />
-                Department Manager
+                P1 Department Manager
                 {departmentQueueExpanded ? (
                   <ChevronDown className="h-4 w-4" />
                 ) : (

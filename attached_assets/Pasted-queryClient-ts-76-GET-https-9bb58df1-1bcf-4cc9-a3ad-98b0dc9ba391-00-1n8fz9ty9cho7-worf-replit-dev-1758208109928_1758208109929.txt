@@ -1,0 +1,201 @@
+queryClient.ts:76  GET https://9bb58df1-1bcf-4cc9-a3ad-98b0dc9ba391-00-1n8fz9ty9cho7.worf.replit.dev/api/production-queue/po-items 500 (Internal Server Error)
+apiRequest @ queryClient.ts:76
+queryFn @ ProductionQueueManager.tsx:328
+fetchFn @ chunk-65LAIXSP.js?v=a2532008:879
+run @ chunk-65LAIXSP.js?v=a2532008:507
+start @ chunk-65LAIXSP.js?v=a2532008:550
+fetch @ chunk-65LAIXSP.js?v=a2532008:918
+executeFetch_fn @ chunk-65LAIXSP.js?v=a2532008:2280
+onSubscribe @ chunk-65LAIXSP.js?v=a2532008:1976
+subscribe @ chunk-65LAIXSP.js?v=a2532008:24
+(anonymous) @ chunk-65LAIXSP.js?v=a2532008:3147
+subscribeToStore @ chunk-276SZO74.js?v=a2532008:11984
+commitHookEffectListMount @ chunk-276SZO74.js?v=a2532008:16915
+commitPassiveMountOnFiber @ chunk-276SZO74.js?v=a2532008:18156
+commitPassiveMountEffects_complete @ chunk-276SZO74.js?v=a2532008:18129
+commitPassiveMountEffects_begin @ chunk-276SZO74.js?v=a2532008:18119
+commitPassiveMountEffects @ chunk-276SZO74.js?v=a2532008:18109
+flushPassiveEffectsImpl @ chunk-276SZO74.js?v=a2532008:19490
+flushPassiveEffects @ chunk-276SZO74.js?v=a2532008:19447
+commitRootImpl @ chunk-276SZO74.js?v=a2532008:19416
+commitRoot @ chunk-276SZO74.js?v=a2532008:19277
+performSyncWorkOnRoot @ chunk-276SZO74.js?v=a2532008:18895
+flushSyncCallbacks @ chunk-276SZO74.js?v=a2532008:9119
+(anonymous) @ chunk-276SZO74.js?v=a2532008:18627Understand this error
+queryClient.ts:78 ✅ API Response from /api/production-queue/po-items: 500
+main.tsx:33 💥 API Request failed for /api/production-queue/po-items: Error: Failed to fetch PO items
+    at apiRequest (queryClient.ts:100:13)
+console.error @ main.tsx:33
+apiRequest @ queryClient.ts:117
+await in apiRequest
+queryFn @ ProductionQueueManager.tsx:328
+fetchFn @ chunk-65LAIXSP.js?v=a2532008:879
+run @ chunk-65LAIXSP.js?v=a2532008:507
+start @ chunk-65LAIXSP.js?v=a2532008:550
+fetch @ chunk-65LAIXSP.js?v=a2532008:918
+executeFetch_fn @ chunk-65LAIXSP.js?v=a2532008:2280
+onSubscribe @ chunk-65LAIXSP.js?v=a2532008:1976
+subscribe @ chunk-65LAIXSP.js?v=a2532008:24
+(anonymous) @ chunk-65LAIXSP.js?v=a2532008:3147
+subscribeToStore @ chunk-276SZO74.js?v=a2532008:11984
+commitHookEffectListMount @ chunk-276SZO74.js?v=a2532008:16915
+commitPassiveMountOnFiber @ chunk-276SZO74.js?v=a2532008:18156
+commitPassiveMountEffects_complete @ chunk-276SZO74.js?v=a2532008:18129
+commitPassiveMountEffects_begin @ chunk-276SZO74.js?v=a2532008:18119
+commitPassiveMountEffects @ chunk-276SZO74.js?v=a2532008:18109
+flushPassiveEffectsImpl @ chunk-276SZO74.js?v=a2532008:19490
+flushPassiveEffects @ chunk-276SZO74.js?v=a2532008:19447
+commitRootImpl @ chunk-276SZO74.js?v=a2532008:19416
+commitRoot @ chunk-276SZO74.js?v=a2532008:19277
+performSyncWorkOnRoot @ chunk-276SZO74.js?v=a2532008:18895
+flushSyncCallbacks @ chunk-276SZO74.js?v=a2532008:9119
+(anonymous) @ chunk-276SZO74.js?v=a2532008:18627Understand this error
+queryClient.ts:78 ✅ API Response from /api/production-queue/prioritized: 200
+queryClient.ts:42 🌐 API Request to /api/production-queue/po-items (timeout: 30000ms, deployment: false)
+queryClient.ts:76  GET https://9bb58df1-1bcf-4cc9-a3ad-98b0dc9ba391-00-1n8fz9ty9cho7.worf.replit.dev/api/production-queue/po-items 500 (Internal Server Error)
+apiRequest @ queryClient.ts:76
+queryFn @ ProductionQueueManager.tsx:328
+fetchFn @ chunk-65LAIXSP.js?v=a2532008:879
+run @ chunk-65LAIXSP.js?v=a2532008:507
+(anonymous) @ chunk-65LAIXSP.js?v=a2532008:532
+Promise.then
+(anonymous) @ chunk-65LAIXSP.js?v=a2532008:528
+Promise.catch
+run @ chunk-65LAIXSP.js?v=a2532008:511
+start @ chunk-65LAIXSP.js?v=a2532008:550
+fetch @ chunk-65LAIXSP.js?v=a2532008:918
+executeFetch_fn @ chunk-65LAIXSP.js?v=a2532008:2280
+onSubscribe @ chunk-65LAIXSP.js?v=a2532008:1976
+subscribe @ chunk-65LAIXSP.js?v=a2532008:24
+(anonymous) @ chunk-65LAIXSP.js?v=a2532008:3147
+subscribeToStore @ chunk-276SZO74.js?v=a2532008:11984
+commitHookEffectListMount @ chunk-276SZO74.js?v=a2532008:16915
+commitPassiveMountOnFiber @ chunk-276SZO74.js?v=a2532008:18156
+commitPassiveMountEffects_complete @ chunk-276SZO74.js?v=a2532008:18129
+commitPassiveMountEffects_begin @ chunk-276SZO74.js?v=a2532008:18119
+commitPassiveMountEffects @ chunk-276SZO74.js?v=a2532008:18109
+flushPassiveEffectsImpl @ chunk-276SZO74.js?v=a2532008:19490
+flushPassiveEffects @ chunk-276SZO74.js?v=a2532008:19447
+commitRootImpl @ chunk-276SZO74.js?v=a2532008:19416
+commitRoot @ chunk-276SZO74.js?v=a2532008:19277
+performSyncWorkOnRoot @ chunk-276SZO74.js?v=a2532008:18895
+flushSyncCallbacks @ chunk-276SZO74.js?v=a2532008:9119
+(anonymous) @ chunk-276SZO74.js?v=a2532008:18627Understand this error
+queryClient.ts:78 ✅ API Response from /api/production-queue/po-items: 500
+main.tsx:33 💥 API Request failed for /api/production-queue/po-items: Error: Failed to fetch PO items
+    at apiRequest (queryClient.ts:100:13)
+console.error @ main.tsx:33
+apiRequest @ queryClient.ts:117
+await in apiRequest
+queryFn @ ProductionQueueManager.tsx:328
+fetchFn @ chunk-65LAIXSP.js?v=a2532008:879
+run @ chunk-65LAIXSP.js?v=a2532008:507
+(anonymous) @ chunk-65LAIXSP.js?v=a2532008:532
+Promise.then
+(anonymous) @ chunk-65LAIXSP.js?v=a2532008:528
+Promise.catch
+run @ chunk-65LAIXSP.js?v=a2532008:511
+start @ chunk-65LAIXSP.js?v=a2532008:550
+fetch @ chunk-65LAIXSP.js?v=a2532008:918
+executeFetch_fn @ chunk-65LAIXSP.js?v=a2532008:2280
+onSubscribe @ chunk-65LAIXSP.js?v=a2532008:1976
+subscribe @ chunk-65LAIXSP.js?v=a2532008:24
+(anonymous) @ chunk-65LAIXSP.js?v=a2532008:3147
+subscribeToStore @ chunk-276SZO74.js?v=a2532008:11984
+commitHookEffectListMount @ chunk-276SZO74.js?v=a2532008:16915
+commitPassiveMountOnFiber @ chunk-276SZO74.js?v=a2532008:18156
+commitPassiveMountEffects_complete @ chunk-276SZO74.js?v=a2532008:18129
+commitPassiveMountEffects_begin @ chunk-276SZO74.js?v=a2532008:18119
+commitPassiveMountEffects @ chunk-276SZO74.js?v=a2532008:18109
+flushPassiveEffectsImpl @ chunk-276SZO74.js?v=a2532008:19490
+flushPassiveEffects @ chunk-276SZO74.js?v=a2532008:19447
+commitRootImpl @ chunk-276SZO74.js?v=a2532008:19416
+commitRoot @ chunk-276SZO74.js?v=a2532008:19277
+performSyncWorkOnRoot @ chunk-276SZO74.js?v=a2532008:18895
+flushSyncCallbacks @ chunk-276SZO74.js?v=a2532008:9119
+(anonymous) @ chunk-276SZO74.js?v=a2532008:18627Understand this error
+queryClient.ts:76  GET https://9bb58df1-1bcf-4cc9-a3ad-98b0dc9ba391-00-1n8fz9ty9cho7.worf.replit.dev/api/production-queue/attention 500 (Internal Server Error)
+apiRequest @ queryClient.ts:76
+queryFn @ ProductionQueueManager.tsx:334
+fetchFn @ chunk-65LAIXSP.js?v=a2532008:879
+run @ chunk-65LAIXSP.js?v=a2532008:507
+start @ chunk-65LAIXSP.js?v=a2532008:550
+fetch @ chunk-65LAIXSP.js?v=a2532008:918
+executeFetch_fn @ chunk-65LAIXSP.js?v=a2532008:2280
+onSubscribe @ chunk-65LAIXSP.js?v=a2532008:1976
+subscribe @ chunk-65LAIXSP.js?v=a2532008:24
+(anonymous) @ chunk-65LAIXSP.js?v=a2532008:3147
+subscribeToStore @ chunk-276SZO74.js?v=a2532008:11984
+commitHookEffectListMount @ chunk-276SZO74.js?v=a2532008:16915
+commitPassiveMountOnFiber @ chunk-276SZO74.js?v=a2532008:18156
+commitPassiveMountEffects_complete @ chunk-276SZO74.js?v=a2532008:18129
+commitPassiveMountEffects_begin @ chunk-276SZO74.js?v=a2532008:18119
+commitPassiveMountEffects @ chunk-276SZO74.js?v=a2532008:18109
+flushPassiveEffectsImpl @ chunk-276SZO74.js?v=a2532008:19490
+flushPassiveEffects @ chunk-276SZO74.js?v=a2532008:19447
+commitRootImpl @ chunk-276SZO74.js?v=a2532008:19416
+commitRoot @ chunk-276SZO74.js?v=a2532008:19277
+performSyncWorkOnRoot @ chunk-276SZO74.js?v=a2532008:18895
+flushSyncCallbacks @ chunk-276SZO74.js?v=a2532008:9119
+(anonymous) @ chunk-276SZO74.js?v=a2532008:18627Understand this error
+queryClient.ts:78 ✅ API Response from /api/production-queue/attention: 500
+main.tsx:33 💥 API Request failed for /api/production-queue/attention: Error: Failed to fetch orders needing attention
+    at apiRequest (queryClient.ts:100:13)
+console.error @ main.tsx:33
+apiRequest @ queryClient.ts:117
+await in apiRequest
+queryFn @ ProductionQueueManager.tsx:334
+fetchFn @ chunk-65LAIXSP.js?v=a2532008:879
+run @ chunk-65LAIXSP.js?v=a2532008:507
+start @ chunk-65LAIXSP.js?v=a2532008:550
+fetch @ chunk-65LAIXSP.js?v=a2532008:918
+executeFetch_fn @ chunk-65LAIXSP.js?v=a2532008:2280
+onSubscribe @ chunk-65LAIXSP.js?v=a2532008:1976
+subscribe @ chunk-65LAIXSP.js?v=a2532008:24
+(anonymous) @ chunk-65LAIXSP.js?v=a2532008:3147
+subscribeToStore @ chunk-276SZO74.js?v=a2532008:11984
+commitHookEffectListMount @ chunk-276SZO74.js?v=a2532008:16915
+commitPassiveMountOnFiber @ chunk-276SZO74.js?v=a2532008:18156
+commitPassiveMountEffects_complete @ chunk-276SZO74.js?v=a2532008:18129
+commitPassiveMountEffects_begin @ chunk-276SZO74.js?v=a2532008:18119
+commitPassiveMountEffects @ chunk-276SZO74.js?v=a2532008:18109
+flushPassiveEffectsImpl @ chunk-276SZO74.js?v=a2532008:19490
+flushPassiveEffects @ chunk-276SZO74.js?v=a2532008:19447
+commitRootImpl @ chunk-276SZO74.js?v=a2532008:19416
+commitRoot @ chunk-276SZO74.js?v=a2532008:19277
+performSyncWorkOnRoot @ chunk-276SZO74.js?v=a2532008:18895
+flushSyncCallbacks @ chunk-276SZO74.js?v=a2532008:9119
+(anonymous) @ chunk-276SZO74.js?v=a2532008:18627Understand this error
+queryClient.ts:42 🌐 API Request to /api/production-queue/attention (timeout: 30000ms, deployment: false)
+queryClient.ts:76  GET https://9bb58df1-1bcf-4cc9-a3ad-98b0dc9ba391-00-1n8fz9ty9cho7.worf.replit.dev/api/production-queue/attention 500 (Internal Server Error)
+apiRequest @ queryClient.ts:76
+queryFn @ ProductionQueueManager.tsx:334
+fetchFn @ chunk-65LAIXSP.js?v=a2532008:879
+run @ chunk-65LAIXSP.js?v=a2532008:507
+(anonymous) @ chunk-65LAIXSP.js?v=a2532008:532
+Promise.then
+(anonymous) @ chunk-65LAIXSP.js?v=a2532008:528
+Promise.catch
+run @ chunk-65LAIXSP.js?v=a2532008:511
+start @ chunk-65LAIXSP.js?v=a2532008:550
+fetch @ chunk-65LAIXSP.js?v=a2532008:918
+executeFetch_fn @ chunk-65LAIXSP.js?v=a2532008:2280
+onSubscribe @ chunk-65LAIXSP.js?v=a2532008:1976
+subscribe @ chunk-65LAIXSP.js?v=a2532008:24
+(anonymous) @ chunk-65LAIXSP.js?v=a2532008:3147
+subscribeToStore @ chunk-276SZO74.js?v=a2532008:11984
+commitHookEffectListMount @ chunk-276SZO74.js?v=a2532008:16915
+commitPassiveMountOnFiber @ chunk-276SZO74.js?v=a2532008:18156
+commitPassiveMountEffects_complete @ chunk-276SZO74.js?v=a2532008:18129
+commitPassiveMountEffects_begin @ chunk-276SZO74.js?v=a2532008:18119
+commitPassiveMountEffects @ chunk-276SZO74.js?v=a2532008:18109
+flushPassiveEffectsImpl @ chunk-276SZO74.js?v=a2532008:19490
+flushPassiveEffects @ chunk-276SZO74.js?v=a2532008:19447
+commitRootImpl @ chunk-276SZO74.js?v=a2532008:19416
+commitRoot @ chunk-276SZO74.js?v=a2532008:19277
+performSyncWorkOnRoot @ chunk-276SZO74.js?v=a2532008:18895
+flushSyncCallbacks @ chunk-276SZO74.js?v=a2532008:9119
+(anonymous) @ chunk-276SZO74.js?v=a2532008:18627Understand this error
+queryClient.ts:78 ✅ API Response from /api/production-queue/attention: 500
+main.tsx:33 💥 API Request failed for /api/production-queue/attention: Error: Failed to fetch orders needing attention
+    at apiRequest (queryClient.ts:100:13)

@@ -453,8 +453,7 @@ export default function ProductionQueueManager() {
         method: 'POST',
         body: JSON.stringify({ 
           orderIds, 
-          targetDepartment: 'Barcode',
-          currentDepartment: 'Production Queue' 
+          toDepartment: 'Barcode'
         })
       }),
     onSuccess: (result: any, orderIds: string[]) => {

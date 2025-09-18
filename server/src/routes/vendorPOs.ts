@@ -229,9 +229,14 @@ router.post('/:id/items', checkVendorPOPermission, async (req: Request, res: Res
     const { id } = req.params;
     const vendorPoId = parseInt(id);
     
+    // Auto-generate line number based on existing items
+    const existingItems = await storage.getVendorPurchaseOrderItems(vendorPoId);
+    const nextLineNumber = existingItems.length + 1;
+    
     const itemData = insertVendorPurchaseOrderItemSchema.parse({
       ...req.body,
-      vendorPoId
+      vendorPoId,
+      lineNumber: nextLineNumber
     });
     
     // Calculate total price

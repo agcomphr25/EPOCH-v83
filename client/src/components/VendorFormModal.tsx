@@ -802,41 +802,38 @@ export default function VendorFormModal({
 
               {/* Contacts Tab */}
               <TabsContent value="contacts" className="space-y-4 mt-4">
-      });
+                {/* Contact management UI would go here */}
+              </TabsContent>
 
-      if (!response.ok) throw new Error('Upload failed');
-      return response.json();
-    },
-    onSuccess: (newDocument) => {
-      setDocuments(prev => [...prev, newDocument]);
-      queryClient.invalidateQueries({ queryKey: ['/api/vendors'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/vendors', vendor.id, 'details'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/vendor-documents/vendor', vendor.id] });
-      toast({
-        title: "Success",
-        description: "Document uploaded successfully",
-      });
-      setShowDocumentForm(false);
-      setSelectedDocumentType('OTHER');
-      setDocumentNotes('');
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to upload document",
-        variant: "destructive",
-      });
-    },
-  });
+              {/* Notes Tab */}
+              <TabsContent value="notes" className="space-y-4 mt-4">
+                {/* Notes UI would go here */}
+              </TabsContent>
+            </Tabs>
 
-  const deleteDocumentMutation = useMutation({
-    mutationFn: async (documentId: number) => {
-      const response = await fetch(`/api/vendor-documents/${documentId}`, {
-        method: 'DELETE',
-      });
+            <div className="flex justify-end space-x-2 pt-4">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={onClose}
+                data-testid="button-cancel-vendor-form"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={isPending}
+                data-testid="button-submit-vendor-form"
+              >
+                {isPending ? "Saving..." : mode === 'create' ? "Create Vendor" : "Update Vendor"}
+              </Button>
+            </div>
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
+  );
+}
       if (!response.ok) throw new Error('Delete failed');
       return documentId;
     },

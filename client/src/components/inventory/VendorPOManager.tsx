@@ -105,7 +105,7 @@ function VendorPOItemsDisplay({ vendorPoId }: { vendorPoId: number }) {
                   {item.quantity.toFixed(2)} {item.uom}
                 </div>
                 <div className="text-gray-500 text-xs">
-                  ${item.unitPrice.toFixed(2)} ea
+                  ${item.unitPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ea
                 </div>
               </div>
             </div>
@@ -171,7 +171,7 @@ function VendorPOCard({ vendorPo, onEdit, onDelete, onViewItems }: {
           <div>
             <span className="text-gray-500">Total Cost:</span>
             <p className="font-medium" data-testid={`text-total-cost-${vendorPo.id}`}>
-              ${vendorPo.totalCost.toFixed(2)}
+              ${vendorPo.totalCost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </p>
           </div>
           {vendorPo.expectedDeliveryDate && (

@@ -46,11 +46,17 @@ type CreateVendorPOItemData = {
 type InventoryItem = {
   id: number;
   agPartNumber: string;
-  description: string;
-  uom?: string;
-  category?: string;
-  location?: string;
-  quantityOnHand: number;
+  name: string; // This is 'description' from Enhanced Inventory
+  source?: string;
+  supplierPartNumber?: string;
+  costPer?: number;
+  orderDate?: string;
+  department?: string;
+  secondarySource?: string;
+  notes?: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
 };
 
 // Item form component
@@ -90,15 +96,18 @@ function VendorPOItemForm({
   // Filter inventory items based on search
   const filteredItems = inventoryItems.filter((invItem) =>
     (invItem.agPartNumber || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (invItem.description || '').toLowerCase().includes(searchQuery.toLowerCase())
+    (invItem.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (invItem.source || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (invItem.supplierPartNumber || '').toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const handleInventoryItemSelect = (invItem: InventoryItem) => {
     setFormData({
       ...formData,
       agPartNumber: invItem.agPartNumber,
-      description: invItem.description,
-      uom: invItem.uom || 'EA',
+      description: invItem.name,
+      unitPrice: invItem.costPer || 0,
+      notes: invItem.notes || '',
     });
     setSearchQuery(invItem.agPartNumber);
     setSearchOpen(false);
@@ -170,7 +179,7 @@ function VendorPOItemForm({
                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-[400px] p-0">
+                <PopoverContent className="w-[500px] p-0">
                   <Command>
                     <CommandInput
                       placeholder="Search AG parts..."
@@ -193,11 +202,26 @@ function VendorPOItemForm({
                                 formData.agPartNumber === invItem.agPartNumber ? "opacity-100" : "opacity-0"
                               )}
                             />
-                            <div className="flex flex-col">
-                              <span className="font-medium">{invItem.agPartNumber}</span>
-                              <span className="text-sm text-gray-500 truncate">
-                                {invItem.description}
+                            <div className="flex flex-col w-full">
+                              <div className="flex justify-between items-center">
+                                <span className="font-medium">{invItem.agPartNumber}</span>
+                                {invItem.costPer && (
+                                  <span className="text-sm text-green-600 font-medium">
+                                    ${invItem.costPer.toFixed(2)}
+                                  </span>
+                                )}
+                              </div>
+                              <span className="text-sm text-gray-700 truncate">
+                                {invItem.name}
                               </span>
+                              {invItem.source && (
+                                <div className="flex items-center gap-2 text-xs text-gray-500">
+                                  <span>Source: {invItem.source}</span>
+                                  {invItem.supplierPartNumber && (
+                                    <span>• Part: {invItem.supplierPartNumber}</span>
+                                  )}
+                                </div>
+                              )}
                             </div>
                           </CommandItem>
                         ))}
@@ -217,6 +241,15 @@ function VendorPOItemForm({
                 placeholder="Vendor's part number..."
                 data-testid="input-vendor-part-number"
               />
+              {formData.agPartNumber && (
+                <div className="mt-2 p-2 bg-blue-50 rounded-md">
+                  <div className="text-xs text-blue-600 font-medium">Selected Inventory Item:</div>
+                  <div className="text-sm text-blue-800">{formData.agPartNumber}</div>
+                  {formData.unitPrice > 0 && (
+                    <div className="text-xs text-blue-600">Cost: ${formData.unitPrice.toFixed(2)}</div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 

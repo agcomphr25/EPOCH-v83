@@ -1,5 +1,5 @@
 
-import { pgTable, text, serial, integer, timestamp, jsonb, boolean, json, real, date, pgEnum, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, timestamp, jsonb, boolean, json, real, date, pgEnum, uniqueIndex, unique } from "drizzle-orm/pg-core";
 
 
 import { createInsertSchema } from "drizzle-zod";
@@ -3119,6 +3119,9 @@ export const stockPacketMapping = pgTable("stock_packet_mapping", {
   packetTypeId: integer("packet_type_id").references(() => packetTypes.id),
   packetsPerStock: integer("packets_per_stock").default(1), // Usually 1 packet per stock
   isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
 
 // Scoring criteria - extensible system for vendor evaluation
 export const vendorScoringCriteria = pgTable("vendor_scoring_criteria", {
@@ -3151,6 +3154,9 @@ export const packetCuttingQueue = pgTable("packet_cutting_queue", {
   completedAt: timestamp("completed_at"),
   notes: text("notes"),
   isCompleted: boolean("is_completed").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
 
 // Vendor scores based on criteria
 export const vendorScores = pgTable("vendor_scores", {
@@ -3222,24 +3228,8 @@ export type PacketCuttingQueue = typeof packetCuttingQueue.$inferSelect;
 export type InsertPacketCuttingQueue = z.infer<typeof insertPacketCuttingQueueSchema>;
 
 // ============================================================================
-// VENDOR MANAGEMENT
+// VENDOR MANAGEMENT (using existing vendors table from line 2772)
 // ============================================================================
-
-export const vendors = pgTable("vendors", {
-  id: serial("id").primaryKey(),
-  name: text("name").notNull(),
-  contactPerson: text("contact_person"),
-  email: text("email"),
-  phone: text("phone"),
-  address: text("address"),
-  notes: text("notes"),
-  evaluationNotes: text("evaluation_notes"),
-  approvalNotes: text("approval_notes"),
-  approved: boolean("is_approved"),
-  evaluated: boolean("is_evaluated"),
-  createdAt: timestamp("created_at"),
-  updatedAt: timestamp("updated_at"),
-});
 
 // Vendor contact schema - simplified to match current database structure
 export const vendorContactSchema = z.object({
@@ -3250,20 +3240,8 @@ export const vendorContactSchema = z.object({
   isPrimary: z.boolean().default(false),
 });
 
-// Vendor insert schema
-export const insertVendorSchema = createInsertSchema(vendors).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-}).extend({
-  name: z.string().min(1, "Vendor name is required"),
-  email: z.string().email("Valid email is required").optional().or(z.literal("")),
-  contacts: z.array(vendorContactSchema).optional(),
-});
-
-// Vendor types
+// Vendor types (using comprehensive schema defined later)
 export type Vendor = typeof vendors.$inferSelect;
-export type InsertVendor = z.infer<typeof insertVendorSchema>;
 
 // ============================================================================
 // ROBUST BOM MANAGEMENT SYSTEM (P2 Enhanced)
@@ -3852,6 +3830,10 @@ export const insertOutsideProcessingJobSchema = createInsertSchema(outsideProces
 });
 
 export const insertVendorPartSchema = createInsertSchema(vendorParts).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
 
 // ===== VENDOR RELATIONS =====
 
@@ -4348,21 +4330,6 @@ export type InsertOutsideProcessingBatch = z.infer<typeof insertOutsideProcessin
 export type MrpPlanningParameters = typeof mrpPlanningParameters.$inferSelect;
 export type InsertMrpPlanningParameters = z.infer<typeof insertMrpPlanningParametersSchema>;
 
-
-  vendorId: z.number().min(1, "Vendor ID is required"),
-  type: z.enum(["W9", "CONTRACT", "CERTIFICATE", "INSURANCE", "LICENSE", "PROPOSAL", "SPECIFICATION", "QUALITY_CERT", "OTHER"]).default("OTHER"),
-  fileName: z.string().min(1, "File name is required"),
-  originalFileName: z.string().min(1, "Original file name is required"),
-  filePath: z.string().min(1, "File path is required"),
-  fileSize: z.number().min(0, "File size must be positive"),
-  mimeType: z.string().min(1, "MIME type is required"),
-  description: z.string().optional().nullable(),
-  tags: z.array(z.string()).default([]),
-  expiryDate: z.coerce.date().optional().nullable(),
-  uploadedBy: z.number().optional().nullable(),
-  isConfidential: z.boolean().default(false),
-  isActive: z.boolean().default(true),
-});
 
 export const insertVendorScoringCriteriaSchema = createInsertSchema(vendorScoringCriteria).omit({
   id: true,

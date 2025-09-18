@@ -16,13 +16,13 @@ import {
   type MrpRequirement
 } from '@shared/schema';
 import { 
-  insertInventoryItemSchema,
+  insertEnhancedInventoryItemSchema,
   insertInventoryBalanceSchema,
   insertInventoryTransactionSchema,
   insertOutsideProcessingLocationSchema,
   insertOutsideProcessingJobSchema,
   insertVendorPartSchema,
-  type InsertInventoryItem,
+  type InsertEnhancedInventoryItem,
   type InsertInventoryBalance,
   type InsertInventoryTransaction,
   type InsertOutsideProcessingLocation,
@@ -72,7 +72,7 @@ export class EnhancedStorage {
     return item;
   }
 
-  async createInventoryItem(data: InsertInventoryItem): Promise<InventoryItem> {
+  async createInventoryItem(data: InsertEnhancedInventoryItem): Promise<InventoryItem> {
     const { id, createdAt, updatedAt, ...cleanData } = data as any;
     
     const [item] = await db
@@ -86,7 +86,7 @@ export class EnhancedStorage {
     return item;
   }
 
-  async updateInventoryItem(id: number, data: Partial<InsertInventoryItem>): Promise<InventoryItem> {
+  async updateInventoryItem(id: number, data: Partial<InsertEnhancedInventoryItem>): Promise<InventoryItem> {
     const [item] = await db
       .update(enhancedInventoryItems)
       .set({

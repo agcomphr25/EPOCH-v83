@@ -13,7 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from "@/lib/utils";
-import { Pencil, Trash2, Plus, Search, Package, ChevronsUpDown, Check, Hash } from 'lucide-react';
+import { Pencil, Trash2, Plus, Search, Package, ChevronsUpDown, Check, Hash, Building2, DollarSign } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
 // Types
@@ -214,14 +214,27 @@ function VendorPOItemForm({
                               <span className="text-sm text-gray-700 truncate">
                                 {invItem.name}
                               </span>
-                              {invItem.source && (
-                                <div className="flex items-center gap-2 text-xs text-gray-500">
-                                  <span>Source: {invItem.source}</span>
-                                  {invItem.supplierPartNumber && (
-                                    <span>• Part: {invItem.supplierPartNumber}</span>
-                                  )}
-                                </div>
-                              )}
+                              <div className="flex items-center gap-3 text-xs text-gray-500 mt-1">
+                                {invItem.source && (
+                                  <div className="flex items-center gap-1">
+                                    <Building2 className="w-3 h-3" />
+                                    <span>{invItem.source}</span>
+                                  </div>
+                                )}
+                                {invItem.supplierPartNumber && (
+                                  <div className="flex items-center gap-1">
+                                    <Package className="w-3 h-3" />
+                                    <span>{invItem.supplierPartNumber}</span>
+                                  </div>
+                                )}
+                                {invItem.department && (
+                                  <div className="flex items-center gap-1">
+                                    <span className="px-1.5 py-0.5 bg-gray-100 rounded text-xs">
+                                      {invItem.department}
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
                             </div>
                           </CommandItem>
                         ))}

@@ -3087,11 +3087,11 @@ export const vendorPurchaseOrderItems = pgTable('vendor_purchase_order_items', {
   vendorPartNumber: text('vendor_part_number').notNull(), // Vendor's part number
   description: text('description').notNull(), // Item description
   vendorDescription: text('vendor_description'), // Additional description from Enhanced Inventory
-  quantity: integer('quantity').notNull(),
+  quantity: real('quantity').notNull(),
   unitPrice: real('unit_price').default(0), // Price per unit
   totalPrice: real('total_price').default(0), // quantity * unitPrice
   uom: text('uom').notNull().default('EA'), // Unit of measure from inventory
-  quantityReceived: integer('quantity_received').default(0), // Track received quantities
+  quantityReceived: real('quantity_received').default(0), // Track received quantities
   notes: text('notes'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow()

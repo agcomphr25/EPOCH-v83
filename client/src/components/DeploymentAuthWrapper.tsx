@@ -17,16 +17,16 @@ function isDeploymentEnvironment(): boolean {
   const isLocalhost = hostname.includes('localhost') || hostname.includes('127.0.0.1');
 
   const isReplitEditor = hostname.includes('replit.dev') && !hostname.includes('.replit.dev');
-  const isReplitPreview = hostname.includes('.repl.co'); // Replit preview domains
+
+  const isReplitDev = hostname.includes('replit.dev'); // All replit.dev domains (including workspaces)
+  const isDevelopment = import.meta.env.MODE === 'development' || import.meta.env.VITE_NODE_ENV === 'development';
   
-  // Skip auth ONLY for localhost and Replit editor (not deployed .repl.co domains)
-  if (isLocalhost || isReplitEditor) {
-    console.log('🔧 AUTH BYPASS: Local development - authentication disabled');
-    return false;
+  // Skip auth for ANY development environment
+  if (isLocalhost || isReplitEditor || isReplitDev || isDevelopment || !viteDeployment) {
+      return false;
   }
   
-  // For deployed domains (.repl.co, .replit.app, custom domains), ALWAYS require auth
-  console.log('🔧 PRODUCTION MODE: Authentication enabled for deployed site');
+  // Only require auth for explicitly deployed production environments
 
   return true;
 }

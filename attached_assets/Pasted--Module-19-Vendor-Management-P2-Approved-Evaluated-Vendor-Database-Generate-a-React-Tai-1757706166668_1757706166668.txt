@@ -1,0 +1,191 @@
+**Module 19: Vendor Management (P2 – Approved/Evaluated Vendor Database)**
+
+Generate a React + Tailwind + plain-JS solution that provides:
+- A vendor list with search & filters
+- Create/Edit vendor modal with validation
+- Radio fields for **Approved** and **Evaluated**, with an **Evaluation Date** picker
+- Basic REST utils/hooks and expected backend endpoints
+
+---
+
+## 1) Utilities: `src/utils/vendorUtils.js`
+Use `axios` and export:
+```js
+import axios from 'axios';
+
+export function fetchVendors(filters = {}) {
+  const params = new URLSearchParams(filters).toString();
+  return axios.get(`/api/vendors?${params}`);
+}
+export function fetchVendor(id) {
+  return axios.get(`/api/vendors/${id}`);
+}
+export function createVendor(payload) {
+  // payload: { name, contactPerson, email, phone, address, additionalEmail, approved, evaluated, evaluationDate }
+  return axios.post('/api/vendors', payload);
+}
+export function updateVendor(id, payload) {
+  return axios.put(`/api/vendors/${id}`, payload);
+}
+export function deleteVendor(id) {
+  return axios.delete(`/api/vendors/${id}`);
+}
+2) Hook: src/hooks/useVendors.js
+js
+Copy code
+import { useState, useEffect } from 'react';
+import { fetchVendors } from '../utils/vendorUtils';
+
+export default function useVendors(filters) {
+  const [vendors, setVendors] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    fetchVendors(filters)
+      .then(res => setVendors(res.data))
+      .finally(() => setLoading(false));
+  }, [JSON.stringify(filters)]);
+
+  return { vendors, loading, refresh: () => fetchVendors(filters).then(res => setVendors(res.data)) };
+}
+3) Component: src/components/VendorFormModal.jsx
+Props: { open, onClose, onSaved, vendorToEdit }
+
+Fields (all with labels & Tailwind styling):
+
+Vendor Name (required, text)
+
+Contact Person (text)
+
+Email (required, email)
+
+Additional Email (email, optional)
+
+Phone # (text; simple E.164/US pattern hint)
+
+Address (textarea)
+
+Approved (radio: Yes/No → boolean approved)
+
+Evaluated (radio: Yes/No → boolean evaluated)
+
+Evaluation Date (date input; enabled & required only if Evaluated = Yes)
+
+Buttons: Cancel, Save
+
+Validation:
+
+name and email required
+
+If evaluated === true, evaluationDate required and must be a valid date
+
+Basic email format checks for email and additionalEmail (if provided)
+
+Behavior:
+
+On Save: call createVendor or updateVendor, toast success, onSaved(), then onClose()
+
+4) Component: src/components/VendorAdmin.jsx
+Top Bar:
+
+Search input (filters by name/contact/email)
+
+Filters: Approved (All/Yes/No), Evaluated (All/Yes/No)
+
+“New Vendor” button → opens VendorFormModal
+
+Table (sortable by Name, Approved, Evaluated, Evaluation Date):
+
+Columns: Name, Contact, Email, Additional Email, Phone, Address, Approved Badge (Yes/No), Evaluated Badge (Yes/No), Evaluation Date (if any), Actions
+
+Badges: Green for Yes, Gray for No
+
+Actions: Edit (opens modal prefilled), Delete (confirm dialog)
+
+State: uses useVendors({ q, approved, evaluated })
+
+Empty State: “No vendors found. Try clearing filters.”
+
+Optional: Pagination controls (client-side simple or stub)
+
+5) Pages / Routing
+Route /vendors → renders <VendorAdmin />
+
+6) Dependencies
+sql
+Copy code
+npm install axios react-hot-toast @headlessui/react date-fns
+(Use react-hot-toast for success/error messages; Headless UI optional for modal—otherwise a simple custom modal is fine.)
+
+7) Backend Contracts (document in comments)
+Implement REST endpoints (JSON):
+
+GET /api/vendors?q=&approved=&evaluated=
+
+q matches name/contact/email (case-insensitive, partial)
+
+approved ∈ { 'yes','no' } (optional)
+
+evaluated ∈ { 'yes','no' } (optional)
+
+Returns array of:
+
+json
+Copy code
+{
+  "id": 123,
+  "name": "ACME Composites",
+  "contactPerson": "Dana Smith",
+  "email": "qa@acme.com",
+  "additionalEmail": "ap@acme.com",
+  "phone": "+1-555-0100",
+  "address": "123 Industrial Way, City, ST 00000",
+  "approved": true,
+  "evaluated": true,
+  "evaluationDate": "2025-08-04T00:00:00.000Z",
+  "createdAt": "...", "updatedAt": "..."
+}
+GET /api/vendors/:id → single vendor
+
+POST /api/vendors → validate required fields; set createdAt
+
+PUT /api/vendors/:id → update fields; set updatedAt
+
+DELETE /api/vendors/:id → soft delete or hard delete (document which)
+
+DB table suggested master_vendor_list (or vendors):
+
+pgsql
+Copy code
+id SERIAL PK,
+name TEXT NOT NULL,
+contact_person TEXT,
+email TEXT NOT NULL,
+additional_email TEXT,
+phone TEXT,
+address TEXT,
+approved BOOLEAN DEFAULT false,
+evaluated BOOLEAN DEFAULT false,
+evaluation_date TIMESTAMP NULL,
+created_at TIMESTAMP DEFAULT now(),
+updated_at TIMESTAMP DEFAULT now()
+Add indexes on (LOWER(name)), (approved), (evaluated).
+
+8) UI/UX Notes
+Disable Evaluation Date unless Evaluated = Yes. When toggled from Yes→No, clear the date.
+
+Prettify phone display but store raw value.
+
+Later you can plug in address validation (SmartyStreets) and vendor document uploads (e.g., W-9, certificates).
+
+9) QA Checklist (inline comments)
+Required fields enforced (name, email).
+
+Evaluated logic enforces date.
+
+Search and filters combine (q + approved + evaluated).
+
+Edit preserves existing values.
+
+Deleting removes row and refreshes list.

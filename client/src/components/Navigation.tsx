@@ -200,6 +200,7 @@ export default function Navigation() {
       description: 'Receive incoming inventory'
     },
     {
+
       path: '/inventory/enhanced-mrp',
       label: 'Enhanced Inventory & MRP',
       icon: Factory,
@@ -210,6 +211,7 @@ export default function Navigation() {
       label: 'Vendor Management',
       icon: Users,
       description: 'Manage vendors and suppliers'
+
     }
   ];
 

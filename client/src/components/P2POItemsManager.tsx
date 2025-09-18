@@ -21,8 +21,6 @@ const p2PurchaseOrderItemSchema = z.object({
   partName: z.string().min(1, "Part Name is required"),
   quantity: z.number().min(1, "Quantity must be at least 1"),
   unitPrice: z.number().min(0, "Unit price must be non-negative").default(0),
-  dueDate: z.string().min(1, "Due date is required"),
-  p2ProductId: z.string().optional(),
   specifications: z.string().optional(),
   notes: z.string().optional(),
 });
@@ -33,8 +31,6 @@ interface P2PurchaseOrderItem extends P2PurchaseOrderItemForm {
   id: number;
   poId: number;
   totalPrice: number;
-  dueDate: string;
-  p2ProductId?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -46,19 +42,6 @@ interface BOMDefinition {
   revision: string;
   description?: string;
   isActive: boolean;
-}
-
-interface P2POProduct {
-  id: number;
-  customerName: string;
-  productName: string;
-  productType: string;
-  partNumber: string;
-  specifications: string;
-  price: number;
-  isActive: boolean;
-  createdAt: string;
-  updatedAt: string;
 }
 
 interface P2POItemsManagerProps {
@@ -80,11 +63,6 @@ export function P2POItemsManager({ poId, poNumber, onBack }: P2POItemsManagerPro
 
   const { data: boms = [] } = useQuery<BOMDefinition[]>({
     queryKey: ["/api/boms"],
-  });
-
-  const { data: p2Products = [] } = useQuery<P2POProduct[]>({
-    queryKey: ["/api/p2-po-products"],
-    queryFn: () => apiRequest("/api/p2-po-products"),
   });
 
   const { data: productionOrders = [] } = useQuery({
@@ -120,25 +98,16 @@ export function P2POItemsManager({ poId, poNumber, onBack }: P2POItemsManagerPro
       partName: "",
       quantity: 1,
       unitPrice: 0,
-      dueDate: new Date().toISOString().split('T')[0], // Default to today's date
-      p2ProductId: "none",
       specifications: "",
       notes: "",
     },
   });
 
   const createMutation = useMutation({
-    mutationFn: (data: P2PurchaseOrderItemForm) => {
-      // Convert "none" to null for p2ProductId before sending to API
-      const apiData = {
-        ...data,
-        p2ProductId: data.p2ProductId === "none" ? null : (data.p2ProductId ? parseInt(data.p2ProductId) : null)
-      };
-      return apiRequest(`/api/p2/purchase-orders/${poId}/items`, {
-        method: "POST",
-        body: apiData,
-      });
-    },
+    mutationFn: (data: P2PurchaseOrderItemForm) => apiRequest(`/api/p2/purchase-orders/${poId}/items`, {
+      method: "POST",
+      body: data,
+    }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/p2/purchase-orders", poId, "items"] });
       toast({ title: "Success", description: "P2 Purchase Order item added successfully" });
@@ -151,17 +120,11 @@ export function P2POItemsManager({ poId, poNumber, onBack }: P2POItemsManagerPro
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ itemId, data }: { itemId: number; data: Partial<P2PurchaseOrderItemForm> }) => {
-      // Convert "none" to null for p2ProductId before sending to API
-      const apiData = {
-        ...data,
-        p2ProductId: data.p2ProductId === "none" ? null : (data.p2ProductId ? parseInt(data.p2ProductId) : undefined)
-      };
-      return apiRequest(`/api/p2/purchase-orders/${poId}/items/${itemId}`, {
+    mutationFn: ({ itemId, data }: { itemId: number; data: Partial<P2PurchaseOrderItemForm> }) =>
+      apiRequest(`/api/p2/purchase-orders/${poId}/items/${itemId}`, {
         method: "PUT",
-        body: apiData,
-      });
-    },
+        body: data,
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/p2/purchase-orders", poId, "items"] });
       toast({ title: "Success", description: "P2 Purchase Order item updated successfully" });
@@ -200,8 +163,6 @@ export function P2POItemsManager({ poId, poNumber, onBack }: P2POItemsManagerPro
       partName: item.partName,
       quantity: item.quantity,
       unitPrice: item.unitPrice,
-      dueDate: item.dueDate || new Date().toISOString().split('T')[0],
-      p2ProductId: item.p2ProductId || "none",
       specifications: item.specifications || "",
       notes: item.notes || "",
     });
@@ -215,8 +176,6 @@ export function P2POItemsManager({ poId, poNumber, onBack }: P2POItemsManagerPro
       partName: "",
       quantity: 1,
       unitPrice: 0,
-      dueDate: new Date().toISOString().split('T')[0],
-      p2ProductId: "none",
       specifications: "",
       notes: "",
     });
@@ -230,7 +189,7 @@ export function P2POItemsManager({ poId, poNumber, onBack }: P2POItemsManagerPro
     }).format(amount);
   };
 
-  const totalValue = Array.isArray(items) ? items.reduce((sum, item) => sum + item.totalPrice, 0) : 0;
+  const totalValue = items.reduce((sum, item) => sum + item.totalPrice, 0);
 
   if (isLoading) {
     return <div className="p-6">Loading P2 purchase order items...</div>;
@@ -253,7 +212,7 @@ export function P2POItemsManager({ poId, poNumber, onBack }: P2POItemsManagerPro
           <Button 
             variant="outline" 
             onClick={() => generateProductionOrdersMutation.mutate()}
-            disabled={generateProductionOrdersMutation.isPending || !Array.isArray(items) || items.length === 0}
+            disabled={generateProductionOrdersMutation.isPending || items.length === 0}
           >
             {generateProductionOrdersMutation.isPending ? "Generating..." : "Generate Production Orders"}
           </Button>
@@ -355,51 +314,6 @@ export function P2POItemsManager({ poId, poNumber, onBack }: P2POItemsManagerPro
                     )}
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="dueDate"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Due Date</FormLabel>
-                        <FormControl>
-                          <Input 
-                            type="date" 
-                            {...field}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="p2ProductId"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>P2 Product (Optional)</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select P2 Product" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="none">None</SelectItem>
-                            {Array.isArray(p2Products) && p2Products
-                              .filter(product => product.isActive)
-                              .map((product) => (
-                                <SelectItem key={product.id} value={product.id.toString()}>
-                                  {product.productName} - {product.partNumber}
-                                </SelectItem>
-                              ))}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
                 <FormField
                   control={form.control}
                   name="specifications"
@@ -466,7 +380,7 @@ export function P2POItemsManager({ poId, poNumber, onBack }: P2POItemsManagerPro
                 </Badge>
               </CardTitle>
               <CardDescription>
-                {Array.isArray(items) ? items.length : 0} item{(Array.isArray(items) ? items.length : 0) !== 1 ? 's' : ''} in this P2 purchase order
+                {items.length} item{items.length !== 1 ? 's' : ''} in this P2 purchase order
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -482,7 +396,7 @@ export function P2POItemsManager({ poId, poNumber, onBack }: P2POItemsManagerPro
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {Array.isArray(items) && items.map((item) => (
+                  {items.map((item) => (
                     <TableRow key={item.id}>
                       <TableCell className="font-medium">{item.partNumber}</TableCell>
                       <TableCell>
@@ -523,12 +437,12 @@ export function P2POItemsManager({ poId, poNumber, onBack }: P2POItemsManagerPro
       )}
 
       {/* Production Orders Section */}
-      {Array.isArray(productionOrders) && productionOrders.length > 0 && (
+      {productionOrders.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle>Generated Production Orders</CardTitle>
             <CardDescription>
-              {Array.isArray(productionOrders) ? productionOrders.length : 0} production order{(Array.isArray(productionOrders) ? productionOrders.length : 0) !== 1 ? 's' : ''} generated from this P2 purchase order
+              {productionOrders.length} production order{productionOrders.length !== 1 ? 's' : ''} generated from this P2 purchase order
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -545,7 +459,7 @@ export function P2POItemsManager({ poId, poNumber, onBack }: P2POItemsManagerPro
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {Array.isArray(productionOrders) && productionOrders.map((order: any) => (
+                {productionOrders.map((order: any) => (
                   <TableRow key={order.id}>
                     <TableCell className="font-mono text-sm">{order.orderId}</TableCell>
                     <TableCell className="font-medium">{order.sku}</TableCell>
@@ -557,7 +471,7 @@ export function P2POItemsManager({ poId, poNumber, onBack }: P2POItemsManagerPro
                     <TableCell>
                       <Badge variant={order.status === 'PENDING' ? 'secondary' : 
                                     order.status === 'IN_PROGRESS' ? 'default' : 
-                                    order.status === 'COMPLETED' ? 'secondary' : 'destructive'}>
+                                    order.status === 'COMPLETED' ? 'success' : 'destructive'}>
                         {order.status}
                       </Badge>
                     </TableCell>
@@ -573,7 +487,7 @@ export function P2POItemsManager({ poId, poNumber, onBack }: P2POItemsManagerPro
       )}
 
       {/* Material Requirements Section */}
-      {Array.isArray(materialRequirements) && materialRequirements.length > 0 && (
+      {materialRequirements.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle>Material Requirements</CardTitle>
@@ -592,7 +506,7 @@ export function P2POItemsManager({ poId, poNumber, onBack }: P2POItemsManagerPro
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {Array.isArray(materialRequirements) && materialRequirements.map((material: any, index: number) => (
+                {materialRequirements.map((material: any, index: number) => (
                   <TableRow key={index}>
                     <TableCell className="font-medium">{material.partName}</TableCell>
                     <TableCell>

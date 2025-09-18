@@ -144,6 +144,7 @@ const InventoryForm = ({
             <SelectItem value="LB">LB</SelectItem>
             <SelectItem value="FT">FT</SelectItem>
             <SelectItem value="SQ FT">SQ FT</SelectItem>
+            <SelectItem value="SQM">SQM</SelectItem>
             <SelectItem value="GAL">GAL</SelectItem>
             <SelectItem value="OZ">OZ</SelectItem>
             <SelectItem value="PACK">PACK</SelectItem>

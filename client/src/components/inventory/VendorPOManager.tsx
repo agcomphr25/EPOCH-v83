@@ -342,7 +342,8 @@ function VendorPOForm({ vendorPo, isOpen, onClose, onSubmit }: {
 export default function VendorPOManager() {
   const [selectedVendorPO, setSelectedVendorPO] = useState<VendorPO | null>(null);
   const [showForm, setShowForm] = useState(false);
-  const [showItems, setShowItems] = useState(false);
+  const [showDetailView, setShowDetailView] = useState(false);
+  const [activeTab, setActiveTab] = useState('details');
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
 
@@ -419,7 +420,14 @@ export default function VendorPOManager() {
 
   const handleEdit = (vendorPo: VendorPO) => {
     setSelectedVendorPO(vendorPo);
-    setShowForm(true);
+    setShowDetailView(true);
+    setActiveTab('details');
+  };
+
+  const handleBackToList = () => {
+    setShowDetailView(false);
+    setSelectedVendorPO(null);
+    setActiveTab('details');
   };
 
   const handleDelete = (id: number) => {
@@ -430,7 +438,8 @@ export default function VendorPOManager() {
 
   const handleViewItems = (vendorPo: VendorPO) => {
     setSelectedVendorPO(vendorPo);
-    setShowItems(true);
+    setShowDetailView(true);
+    setActiveTab('items');
   };
 
   const handleFormSubmit = (data: CreateVendorPOData) => {
@@ -465,6 +474,74 @@ export default function VendorPOManager() {
   }
 
   const statusOptions = ['all', 'Draft', 'Sent', 'Partially Received', 'Fully Received', 'Cancelled'];
+
+  // Show detail view if a PO is selected
+  if (showDetailView && selectedVendorPO) {
+    return (
+      <div className="space-y-6">
+        {/* Detail Header */}
+        <div className="flex justify-between items-center">
+          <div>
+            <div className="flex items-center gap-4">
+              <Button
+                variant="outline"
+                onClick={handleBackToList}
+                data-testid="button-back-to-list"
+              >
+                ← Back to List
+              </Button>
+              <div>
+                <h2 className="text-2xl font-bold tracking-tight" data-testid="detail-po-number">
+                  {selectedVendorPO.poNumber}
+                </h2>
+                <p className="text-muted-foreground">
+                  {selectedVendorPO.vendorName || `Vendor ID: ${selectedVendorPO.vendorId}`}
+                </p>
+              </div>
+            </div>
+          </div>
+          <Badge className={getStatusColor(selectedVendorPO.status)} data-testid="detail-status">
+            {selectedVendorPO.status}
+          </Badge>
+        </div>
+
+        {/* Tabbed Interface */}
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+          <TabsList>
+            <TabsTrigger value="details" data-testid="tab-details">PO Details</TabsTrigger>
+            <TabsTrigger value="items" data-testid="tab-items">Line Items</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="details" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Purchase Order Details</CardTitle>
+                <CardDescription>Edit the details for this purchase order</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <VendorPOForm
+                  vendorPo={selectedVendorPO}
+                  isOpen={true}
+                  onClose={() => {}}
+                  onSubmit={handleFormSubmit}
+                />
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="items" className="space-y-4">
+            <VendorPOItemSelector 
+              vendorPoId={selectedVendorPO.id}
+              poNumber={selectedVendorPO.poNumber}
+              onTotalChange={(total) => {
+                queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos'] });
+              }}
+            />
+          </TabsContent>
+        </Tabs>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -557,37 +634,6 @@ export default function VendorPOManager() {
         onSubmit={handleFormSubmit}
       />
 
-      {/* Items Modal */}
-      <Dialog open={showItems} onOpenChange={setShowItems}>
-        <DialogContent className="max-w-7xl max-h-[80vh]">
-          <DialogHeader>
-            <DialogTitle data-testid="items-dialog-title">
-              Items for {selectedVendorPO?.poNumber}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="overflow-y-auto">
-            {selectedVendorPO && (
-              <VendorPOItemSelector 
-                vendorPoId={selectedVendorPO.id}
-                poNumber={selectedVendorPO.poNumber}
-                onTotalChange={(total) => {
-                  // Optionally refresh the PO data to update total costs
-                  queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos'] });
-                }}
-              />
-            )}
-          </div>
-          <div className="border-t pt-4 mt-4">
-            <Button 
-              variant="outline" 
-              onClick={() => setShowItems(false)}
-              data-testid="button-close-items"
-            >
-              Close
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

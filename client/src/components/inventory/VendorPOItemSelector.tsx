@@ -259,12 +259,12 @@ function VendorPOItemForm({
           </div>
 
           <div>
-            <Label htmlFor="description">Description *</Label>
+            <Label htmlFor="description">Part Name *</Label>
             <Textarea
               id="description"
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              placeholder="Item description..."
+              placeholder="Part name..."
               rows={2}
               required
               data-testid="input-description"

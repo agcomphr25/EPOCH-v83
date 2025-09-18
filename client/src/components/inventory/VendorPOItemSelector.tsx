@@ -216,7 +216,7 @@ function VendorPOItemForm({
                                 <span className="font-medium">{invItem.agPartNumber}</span>
                                 {invItem.costPer && (
                                   <span className="text-sm text-green-600 font-medium">
-                                    ${invItem.costPer.toFixed(2)}
+                                    ${invItem.costPer.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                   </span>
                                 )}
                               </div>
@@ -345,7 +345,7 @@ function VendorPOItemForm({
             <div className="flex justify-between items-center">
               <span className="text-sm text-gray-600">Total Price:</span>
               <span className="text-lg font-bold" data-testid="text-total-price">
-                ${totalPrice.toFixed(2)}
+                ${totalPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </span>
             </div>
           </div>
@@ -521,7 +521,7 @@ export default function VendorPOItemSelector({
             Items for {poNumber}
           </h3>
           <p className="text-sm text-muted-foreground">
-            {items.length} item{items.length !== 1 ? 's' : ''} • Total: ${total.toFixed(2)}
+            {items.length} item{items.length !== 1 ? 's' : ''} • Total: ${total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </p>
         </div>
         <Button onClick={handleAdd} data-testid="button-add-item">
@@ -588,10 +588,10 @@ export default function VendorPOItemSelector({
                       {item.uom}
                     </TableCell>
                     <TableCell className="text-right" data-testid={`text-unit-price-${item.id}`}>
-                      ${item.unitPrice.toFixed(2)}
+                      ${item.unitPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </TableCell>
                     <TableCell className="text-right font-medium" data-testid={`text-total-price-${item.id}`}>
-                      ${item.totalPrice.toFixed(2)}
+                      ${item.totalPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </TableCell>
                     <TableCell>
                       <div className="flex gap-1">
@@ -623,7 +623,7 @@ export default function VendorPOItemSelector({
             <div className="border-t p-4 bg-gray-50">
               <div className="flex justify-between items-center text-lg font-semibold">
                 <span>Total:</span>
-                <span data-testid="text-grand-total">${total.toFixed(2)}</span>
+                <span data-testid="text-grand-total">${total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
               </div>
             </div>
           </CardContent>

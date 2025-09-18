@@ -513,10 +513,12 @@ export const enhancedInventoryItems = pgTable("enhanced_inventory_items", {
   id: serial("id").primaryKey(),
   agPartNumber: text("ag_part_number").notNull().unique(), // AG Part#
   name: text("name").notNull(), // Name
+  vendorDescription: text("vendor_description"), // Vendor Description
   type: text("type").notNull().default("Purchased"), // Type: Purchased or Manufactured
   source: text("source"), // Source
   supplierPartNumber: text("supplier_part_number"), // Supplier Part #
   costPer: real("cost_per"), // Cost per
+  uom: text("uom").default("EA"), // Unit of Measure
   orderDate: date("order_date"), // Order Date
   department: text("department"), // Dept.
   secondarySource: text("secondary_source"), // Secondary Source

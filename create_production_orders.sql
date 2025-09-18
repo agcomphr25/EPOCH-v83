@@ -1,0 +1,23 @@
+CREATE TABLE production_orders (
+  id SERIAL PRIMARY KEY,
+  order_id VARCHAR(255) NOT NULL,
+  po_id INTEGER NOT NULL,
+  po_item_id INTEGER NOT NULL,
+  customer_id VARCHAR(255) NOT NULL,
+  customer_name VARCHAR(255) NOT NULL,
+  po_number VARCHAR(255) NOT NULL,
+  item_type VARCHAR(50) NOT NULL,
+  item_id VARCHAR(255) NOT NULL,
+  item_name VARCHAR(255) NOT NULL,
+  specifications JSONB,
+  order_date TIMESTAMP NOT NULL,
+  due_date TIMESTAMP NOT NULL,
+  production_status VARCHAR(50) NOT NULL DEFAULT 'PENDING',
+  laid_up_at TIMESTAMP,
+  shipped_at TIMESTAMP,
+  notes TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (po_id) REFERENCES purchase_orders(id),
+  FOREIGN KEY (po_item_id) REFERENCES purchase_order_items(id)
+);

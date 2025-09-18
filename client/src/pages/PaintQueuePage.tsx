@@ -14,7 +14,6 @@ import { format } from 'date-fns';
 import { getDisplayOrderId } from '@/lib/orderUtils';
 import { useLocation } from 'wouter';
 import FBNumberSearch from '@/components/FBNumberSearch';
-import { OrderSearchBox } from '@/components/OrderSearchBox';
 import { SalesOrderModal } from '@/components/SalesOrderModal';
 
 export default function PaintQueuePage() {
@@ -327,7 +326,7 @@ export default function PaintQueuePage() {
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex items-center gap-2 mb-6">
         <Package className="h-6 w-6" />
-        <h1 className="text-3xl font-bold">Paint P1 Department Manager</h1>
+        <h1 className="text-3xl font-bold">Paint Department Manager</h1>
       </div>
 
       {/* Barcode Scanner at top */}
@@ -336,28 +335,6 @@ export default function PaintQueuePage() {
       {/* FishBowl Number Search */}
       <FBNumberSearch onOrderFound={handleOrderFound} />
 
-      {/* Order Search Box */}
-      <Card>
-        <CardContent className="p-4">
-          <div className="flex items-center gap-4">
-            <OrderSearchBox 
-              orders={paintOrders}
-              placeholder="Search orders by Order ID or FishBowl Number..."
-              onOrderSelect={handleOrderSearchSelect}
-            />
-            {highlightedOrderId && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setHighlightedOrderId(null)}
-                className="text-sm"
-              >
-                Clear highlight
-              </Button>
-            )}
-          </div>
-        </CardContent>
-      </Card>
 
       {/* Department Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">

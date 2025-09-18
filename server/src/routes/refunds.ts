@@ -102,8 +102,34 @@ router.get('/', async (req: Request, res: Response) => {
   try {
     console.log('🔍 Getting all refund requests');
     
+    // Select only the columns that exist in the current database schema
     const requests = await db
-      .select()
+      .select({
+        id: refundRequests.id,
+        orderId: refundRequests.orderId,
+        refundType: refundRequests.refundType,
+        amount: refundRequests.amount,
+        reason: refundRequests.reason,
+        notes: refundRequests.notes,
+        status: refundRequests.status,
+        requestedBy: refundRequests.requestedBy,
+        requestedAt: refundRequests.requestedAt,
+        approvedBy: refundRequests.approvedBy,
+        approvedAt: refundRequests.approvedAt,
+        processedBy: refundRequests.processedBy,
+        processedAt: refundRequests.processedAt,
+        transactionId: refundRequests.transactionId,
+        createdAt: refundRequests.createdAt,
+        updatedAt: refundRequests.updatedAt,
+        customerId: refundRequests.customerId,
+        refundAmount: refundRequests.refundAmount,
+        rejectionReason: refundRequests.rejectionReason,
+        originalTransactionId: refundRequests.originalTransactionId,
+        // Temporarily exclude new columns that don't exist in database yet:
+        // gatewayTransactionId: refundRequests.gatewayTransactionId,
+        // gatewayRefundId: refundRequests.gatewayRefundId,
+        // gateway: refundRequests.gateway,
+      })
       .from(refundRequests)
       .orderBy(desc(refundRequests.createdAt));
 

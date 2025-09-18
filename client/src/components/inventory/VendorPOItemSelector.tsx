@@ -105,6 +105,7 @@ function VendorPOItemForm({
     setFormData({
       ...formData,
       agPartNumber: invItem.agPartNumber,
+      vendorPartNumber: invItem.supplierPartNumber || '',
       description: invItem.name,
       unitPrice: invItem.costPer || 0,
       notes: invItem.notes || '',

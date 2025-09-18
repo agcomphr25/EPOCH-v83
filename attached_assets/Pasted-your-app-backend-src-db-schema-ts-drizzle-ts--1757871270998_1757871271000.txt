@@ -1,0 +1,608 @@
+your-app/
+├─ backend/
+│  ├─ src/
+│  │  ├─ db/
+│  │  │  ├─ schema.ts
+│  │  │  ├─ drizzle.ts
+│  │  │  └─ seed.ts
+│  │  ├─ services/
+│  │  │  └─ rollupService.ts
+│  │  ├─ routes/
+│  │  │  ├─ parts.ts
+│  │  │  └─ bom.ts
+│  │  └─ server.ts
+│  ├─ drizzle.config.ts
+│  ├─ tsconfig.json
+│  └─ package.json
+└─ frontend/
+   ├─ src/
+   │  ├─ utils/bomUtils.js
+   │  └─ components/bom/{BOMManager.jsx, BOMTree.jsx, PartFormModal.jsx}
+   ├─ package.json
+   └─ tailwind.config.js
+1) Backend
+1.1 backend/package.json
+json
+Copy code
+// P2 BOM Management version
+{
+  "name": "bom-backend-p2",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "node --env-file=.env dist/server.js",
+    "build": "tsup src/server.ts --format esm --clean --dts false --out-dir dist",
+    "drizzle:generate": "drizzle-kit generate",
+    "drizzle:migrate": "drizzle-kit migrate",
+    "seed": "tsx src/db/seed.ts"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dayjs": "^1.11.11",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "pg": "^8.11.5",
+    "zod": "^3.23.8",
+    "drizzle-orm": "^0.31.2"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.12.12",
+    "drizzle-kit": "^0.27.0",
+    "tsx": "^4.7.1",
+    "tsup": "^8.0.2",
+    "typescript": "^5.4.5"
+  }
+}
+Important: Your previous BOM system’s backend/package.json should be kept (perhaps under bom-backend-old/), or simply commented out. For example:
+
+jsonc
+Copy code
+// {
+//   "name": "bom-backend",
+//   …
+// }
+// Now replaced by "bom-backend-p2" for clarity.
+1.2 .env (in backend/)
+env
+Copy code
+DATABASE_URL=postgres://USER:PASSWORD@HOST:PORT/DBNAME
+PORT=5051
+CORS_ORIGIN=http://localhost:5173
+1.3 backend/drizzle.config.ts
+ts
+Copy code
+import 'dotenv/config';
+
+export default {
+  schema: "./src/db/schema.ts",
+  out: "./drizzle",
+  driver: "pg",
+  dbCredentials: {
+    connectionString: process.env.DATABASE_URL!
+  }
+};
+1.4 backend/src/db/drizzle.ts
+ts
+Copy code
+import 'dotenv/config';
+import { drizzle } from 'drizzle-orm/node-postgres';
+import pkg from 'pg';
+const { Pool } = pkg;
+
+export const pool = new Pool({
+  connectionString: process.env.DATABASE_URL
+});
+
+export const db = drizzle(pool);
+1.5 backend/src/db/schema.ts
+ts
+Copy code
+import { pgTable, varchar, numeric, boolean, timestamp, uuid, real } from 'drizzle-orm/pg-core';
+import { relations } from 'drizzle-orm';
+
+export const parts = pgTable('parts', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  sku: varchar('sku', { length: 64 }).notNull().unique(),
+  name: varchar('name', { length: 256 }).notNull(),
+  type: varchar('type', { length: 16 }).notNull(),
+  uom: varchar('uom', { length: 16 }).notNull().default('ea'),
+  stdCost: numeric('std_cost', { precision: 12, scale: 4 }).notNull().default('0'),
+  revision: varchar('revision', { length: 32 }),
+  isActive: boolean('is_active').notNull().default(true),
+  createdAt: timestamp('created_at', { withTimezone: false }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow()
+});
+
+export const bomLines = pgTable('bom_lines', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  parentId: uuid('parent_id').notNull().references(() => parts.id, { onDelete: 'cascade' }),
+  childId: uuid('child_id').notNull().references(() => parts.id, { onDelete: 'restrict' }),
+  qtyPer: real('qty_per').notNull().default(1),
+  uom: varchar('uom', { length: 16 }).notNull().default('ea'),
+  scrapPct: real('scrap_pct').notNull().default(0),
+  notes: varchar('notes', { length: 512 }),
+  effectiveFrom: timestamp('effective_from'),
+  effectiveTo: timestamp('effective_to'),
+  createdAt: timestamp('created_at', { withTimezone: false }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow()
+});
+
+export const partsRelations = relations(parts, ({ many }) => ({
+  asParentLines: many(bomLines, { relationName: 'parent' }),
+  asChildLines: many(bomLines, { relationName: 'child' })
+}));
+
+export const bomRelations = relations(bomLines, ({ one }) => ({
+  parent: one(parts, { fields: [bomLines.parentId], references: [parts.id], relationName: 'parent' }),
+  child:  one(parts, { fields: [bomLines.childId], references: [parts.id], relationName: 'child' })
+}));
+1.6 backend/src/services/rollupService.ts
+ts
+Copy code
+import { db } from '../db/drizzle';
+import { bomLines, parts } from '../db/schema';
+import { eq } from 'drizzle-orm';
+
+export async function computeRolledCost(rootPartId: string): Promise<number> {
+  const costCache = new Map<string, number>();
+
+  async function costOf(partId: string): Promise<number> {
+    if (costCache.has(partId)) return costCache.get(partId)!;
+
+    const [p] = await db.select().from(parts).where(eq(parts.id, partId)).limit(1);
+    if (!p) throw new Error('Part not found: ' + partId);
+
+    const children = await db.select().from(bomLines).where(eq(bomLines.parentId, partId));
+    if (children.length === 0) {
+      const base = Number(p.stdCost || 0);
+      costCache.set(partId, base);
+      return base;
+    }
+
+    let sum = 0;
+    for (const line of children) {
+      const childCost = await costOf(line.childId);
+      const qty = Number(line.qtyPer || 1);
+      const scrap = Number(line.scrapPct || 0) / 100;
+      sum += childCost * qty * (1 + scrap);
+    }
+
+    sum += Number(p.stdCost || 0);
+    costCache.set(partId, sum);
+    return sum;
+  }
+
+  return await costOf(rootPartId);
+}
+
+export async function fetchBomTree(rootPartId: string) {
+  const [root] = await db.select().from(parts).where(eq(parts.id, rootPartId)).limit(1);
+  if (!root) throw new Error('Root part not found');
+
+  async function linesOf(parentId: string) {
+    const lines = await db.select().from(bomLines).where(eq(bomLines.parentId, parentId));
+    const withChildren = [];
+
+    for (const l of lines) {
+      const [child] = await db.select().from(parts).where(eq(parts.id, l.childId)).limit(1);
+      const grandchildren = await linesOf(l.childId);
+      withChildren.push({
+        ...l,
+        child,
+        children: grandchildren
+      });
+    }
+    return withChildren;
+  }
+
+  const lines = await linesOf(root.id);
+  return { root, lines };
+}
+1.7 backend/src/routes/parts.ts
+ts
+Copy code
+import { Router } from 'express';
+import { db } from '../db/drizzle';
+import { parts } from '../db/schema';
+import { and, eq, ilike, sql } from 'drizzle-orm';
+import { z } from 'zod';
+
+const router = Router();
+
+const partSchema = z.object({
+  sku: z.string().min(1),
+  name: z.string().min(1),
+  type: z.enum(['PURCHASED', 'MANUFACTURED', 'PHANTOM']),
+  uom: z.string().min(1),
+  stdCost: z.coerce.number().min(0),
+  revision: z.string().optional().nullable(),
+  isActive: z.coerce.boolean()
+});
+
+router.get('/search', async (req, res) => {
+  const q = String(req.query.q || '').trim();
+  const type = String(req.query.type || 'ALL');
+  const page = Number(req.query.page || 1);
+  const pageSize = Number(req.query.pageSize || 10);
+  const offset = (page - 1) * pageSize;
+
+  const whereClauses = [];
+  if (q) whereClauses.push(ilike(parts.name, `%${q}%`).or(ilike(parts.sku, `%${q}%`)));
+  if (type !== 'ALL') whereClauses.push(eq(parts.type, type as any));
+
+  const whereExpr = whereClauses.length ? and(...whereClauses) : undefined;
+
+  const items = await db.select().from(parts)
+    .where(whereExpr as any)
+    .orderBy(parts.sku)
+    .limit(pageSize)
+    .offset(offset);
+
+  const [{ count }] = await db.execute<{ count: string }>(sql`
+    SELECT COUNT(*)::int FROM parts
+    ${whereExpr ? sql`WHERE ${whereExpr}` : sql``}
+  `) as any;
+
+  res.json({ items, total: Number(count), page, pageSize });
+});
+
+router.get('/:id', async (req, res) => {
+  const id = String(req.params.id);
+  const rows = await db.select().from(parts).where(eq(parts.id, id)).limit(1);
+  if (!rows[0]) return res.status(404).json({ message: 'Not found' });
+  res.json(rows[0]);
+});
+
+router.post('/', async (req, res) => {
+  const parsed = partSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
+  const [row] = await db.insert(parts).values(parsed.data).returning();
+  res.json(row);
+});
+
+router.put('/:id', async (req, res) => {
+  const id = String(req.params.id);
+  const parsed = partSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
+  const [row] = await db.update(parts).set(parsed.data).where(eq(parts.id, id)).returning();
+  if (!row) return res.status(404).json({ message: 'Not found' });
+  res.json(row);
+});
+
+export default router;
+1.8 backend/src/routes/bom.ts
+ts
+Copy code
+import { Router } from 'express';
+import { z } from 'zod';
+import { db } from '../db/drizzle';
+import { bomLines } from '../db/schema';
+import { eq } from 'drizzle-orm';
+import { computeRolledCost, fetchBomTree } from '../services/rollupService';
+
+const router = Router();
+
+router.get('/:rootId/tree', async (req, res) => {
+  try {
+    const data = await fetchBomTree(String(req.params.rootId));
+    res.json(data);
+  } catch (e: any) {
+    res.status(400).json({ message: e.message });
+  }
+});
+
+const addChildSchema = z.object({
+  childId: z.string().uuid(),
+  qtyPer: z.coerce.number().positive(),
+  uom: z.string().min(1),
+  scrapPct: z.coerce.number().min(0).max(100).optional().default(0),
+  notes: z.string().optional().default('')
+});
+
+router.post('/:parentId/children', async (req, res) => {
+  try {
+    const parentId = String(req.params.parentId);
+    const parsed = addChildSchema.parse(req.body);
+    const [row] = await db.insert(bomLines).values({
+      parentId,
+      childId: parsed.childId,
+      qtyPer: parsed.qtyPer,
+      uom: parsed.uom,
+      scrapPct: parsed.scrapPct ?? 0,
+      notes: parsed.notes || ''
+    }).returning();
+    res.json(row);
+  } catch (e: any) {
+    res.status(400).json({ message: e.message });
+  }
+});
+
+const lineUpdateSchema = z.object({
+  qtyPer: z.coerce.number().positive().optional(),
+  uom: z.string().min(1).optional(),
+  scrapPct: z.coerce.number().min(0).max(100).optional(),
+  notes: z.string().optional()
+});
+
+router.put('/line/:lineId', async (req, res) => {
+  try {
+    const lineId = String(req.params.lineId);
+    const parsed = lineUpdateSchema.parse(req.body);
+    const [row] = await db.update(bomLines).set(parsed).where(eq(bomLines.id, lineId)).returning();
+    if (!row) return res.status(404).json({ message: 'Not found' });
+    res.json(row);
+  } catch (e: any) {
+    res.status(400).json({ message: e.message });
+  }
+});
+
+router.delete('/line/:lineId', async (req, res) => {
+  try {
+    const lineId = String(req.params.lineId);
+    const [row] = await db.delete(bomLines).where(eq(bomLines.id, lineId)).returning();
+    if (!row) return res.status(404).json({ message: 'Not found' });
+    res.json({ ok: true });
+  } catch (e: any) {
+    res.status(400).json({ message: e.message });
+  }
+});
+
+router.get('/:rootId/rollup', async (req, res) => {
+  try {
+    const rolledCost = await computeRolledCost(String(req.params.rootId));
+    res.json({ rolledCost, currency: 'USD', timestamp: new Date().toISOString() });
+  } catch (e: any) {
+    res.status(400).json({ message: e.message });
+  }
+});
+
+export default router;
+1.9 backend/src/server.ts
+ts
+Copy code
+import 'dotenv/config';
+import express from 'express';
+import cors from 'cors';
+import partsRoutes from './routes/parts';
+import bomRoutes from './routes/bom';
+
+const app = express();
+app.use(express.json());
+app.use(cors({
+  origin: process.env.CORS_ORIGIN?.split(',') || '*'
+}));
+
+app.get('/api/health', (_, res) => res.json({ ok: true, at: new Date().toISOString() }));
+
+// P2 BOM Management
+app.use('/api/parts', partsRoutes);
+app.use('/api/bom', bomRoutes);
+
+// Your OLD BOM system (commented out for reference):
+/*
+import oldBomRoutes from './routes/oldBom';
+app.use('/api/old-bom', oldBomRoutes);
+*/
+
+const port = Number(process.env.PORT || 5051);
+app.listen(port, () => {
+  console.log(`P2 BOM API listening on :${port}`);
+});
+1.10 Optional: backend/src/db/seed.ts
+ts
+Copy code
+import { db } from './drizzle';
+import { parts, bomLines } from './schema';
+
+async function main() {
+  const [cfRoll] = await db.insert(parts).values({
+    sku: 'MAT-CF-ROLL', name: 'Carbon Fiber Fabric Roll',
+    type: 'PURCHASED', uom: 'yd', stdCost: '30.00', isActive: true
+  }).returning();
+
+  const [foam] = await db.insert(parts).values({
+    sku: 'MAT-FOAM-BLK', name: 'Foam Block',
+    type: 'PURCHASED', uom: 'ea', stdCost: '10.00', isActive: true
+  }).returning();
+
+  const [shell] = await db.insert(parts).values({
+    sku: 'CMP-SHELL', name: 'Carbon Fiber Shell',
+    type: 'MANUFACTURED', uom: 'ea', stdCost: '2.50', isActive: true
+  }).returning();
+
+  await db.insert(bomLines).values([
+    { parentId: shell.id, childId: cfRoll.id, qtyPer: 3, uom: 'yd', scrapPct: 5 },
+    { parentId: shell.id, childId: foam.id, qtyPer: 0.2, uom: 'ea', scrapPct: 0 }
+  ]);
+
+  const [finished] = await db.insert(parts).values({
+    sku: 'STK-AJ283', name: 'Custom Rifle Stock AJ283',
+    type: 'MANUFACTURED', uom: 'ea', stdCost: '5.00', isActive: true
+  }).returning();
+
+  await db.insert(bomLines).values([
+    { parentId: finished.id, childId: shell.id, qtyPer: 1, uom: 'ea', scrapPct: 2 }
+  ]);
+
+  console.log('Seeded example data.');
+}
+
+main().then(() => process.exit(0)).catch((e) => {
+  console.error(e);
+  process.exit(1);
+});
+2) Frontend (React + Tailwind)
+2.1 frontend/src/utils/bomUtils.js
+js
+Copy code
+import axios from 'axios';
+
+const api = axios.create({
+  baseURL: import.meta.env.VITE_API_BASE || 'http://localhost:5051/api'
+});
+
+// Parts
+export async function searchParts({ q = '', type = 'ALL', page = 1, pageSize = 10 } = {}) {
+  const params = new URLSearchParams({ q, type, page, pageSize }).toString();
+  const { data } = await api.get(`/parts/search?${params}`);
+  return data;
+}
+export async function fetchPart(id) {
+  const { data } = await api.get(`/parts/${id}`);
+  return data;
+}
+export async function createPart(payload) {
+  const { data } = await api.post(`/parts`, payload);
+  return data;
+}
+export async function updatePart(id, payload) {
+  const { data } = await api.put(`/parts/${id}`, payload);
+  return data;
+}
+
+// BOM tree and rollup
+export async function fetchBomTree(rootPartId) {
+  const { data } = await api.get(`/bom/${rootPartId}/tree`);
+  return data;
+}
+export async function addBomChild(parentId, payload) {
+  const { data } = await api.post(`/bom/${parentId}/children`, payload);
+  return data;
+}
+export async function updateBomLine(lineId, payload) {
+  const { data } = await api.put(`/bom/line/${lineId}`, payload);
+  return data;
+}
+export async function deleteBomLine(lineId) {
+  const { data } = await api.delete(`/bom/line/${lineId}`);
+  return data;
+}
+export async function rollupCost(rootPartId) {
+  const { data } = await api.get(`/bom/${rootPartId}/rollup`);
+  return data;
+}
+2.2 frontend/src/components/bom/PartFormModal.jsx
+jsx
+Copy code
+import { useEffect, useState } from 'react';
+import { createPart, updatePart } from '../../utils/bomUtils';
+
+const TYPE_OPTIONS = ['PURCHASED', 'MANUFACTURED', 'PHANTOM'];
+
+export default function PartFormModal({ open, onClose, initial, onSaved }) {
+  const [form, setForm] = useState({
+    sku: '', name: '', type: 'PURCHASED', uom: 'ea', stdCost: 0, revision: '', isActive: true
+  });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (initial) {
+      setForm({
+        sku: initial.sku || '',
+        name: initial.name || '',
+        type: initial.type || 'PURCHASED',
+        uom: initial.uom || 'ea',
+        stdCost: Number(initial.stdCost || 0),
+        revision: initial.revision || '',
+        isActive: !!initial.isActive
+      });
+    } else {
+      setForm({ sku: '', name: '', type: 'PURCHASED', uom: 'ea', stdCost: 0, revision: '', isActive: true });
+    }
+    setError('');
+  }, [initial, open]);
+
+  if (!open) return null;
+  const onChange = (k, v) => setForm(s => ({ ...s, [k]: v }));
+
+  const validate = () => {
+    if (!form.sku.trim()) return 'SKU is required.';
+    if (!form.name.trim()) return 'Name is required.';
+    if (!TYPE_OPTIONS.includes(form.type)) return 'Invalid type.';
+    if (!form.uom.trim()) return 'UoM is required.';
+    if (Number.isNaN(Number(form.stdCost)) || Number(form.stdCost) < 0) return 'Cost must be ≥ 0.';
+    return '';
+  };
+
+  const onSubmit = async (e) => {
+    e.preventDefault();
+    const v = validate();
+    if (v) return setError(v);
+    try {
+      setSaving(true);
+      const payload = {
+        sku: form.sku.trim(),
+        name: form.name.trim(),
+        type: form.type,
+        uom: form.uom.trim(),
+        stdCost: Number(form.stdCost),
+        revision: form.revision?.trim() || '',
+        isActive: !!form.isActive
+      };
+      const saved = initial?.id ? await updatePart(initial.id, payload) : await createPart(payload);
+      onSaved?.(saved);
+      onClose?.();
+    } catch (err) {
+      setError(err?.response?.data?.message || err.message || 'Failed to save.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+      <div className="bg-white w-full max-w-xl rounded-2xl shadow-xl p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-semibold">{initial?.id ? 'Edit Part' : 'Create Part'}</h2>
+          <button className="text-gray-500 hover:text-gray-700" onClick={onClose}>✕</button>
+        </div>
+        <form onSubmit={onSubmit} className="space-y-4">
+          {error && <div className="text-red-600 text-sm">{error}</div>}
+          <div className="grid grid-cols-2 gap-4">
+            {/* SKU, Name, Type, UoM, Std Cost, Revision, Active Checkbox */}
+            {/* All fields same as your snippet */}
+          </div>
+          <div className="flex justify-end gap-3 pt-2">
+            <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl border">Cancel</button>
+            <button type="submit" disabled={saving} className="px-4 py-2 rounded-xl bg-blue-600 text-white">
+              {saving ? 'Saving…' : 'Save'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+2.3 frontend/src/components/bom/BOMTree.jsx
+(Use your provided code verbatim—it’s clean and well‑structured)
+
+2.4 frontend/src/components/bom/BOMManager.jsx
+(Use your provided code, with the part‑search pane, BOM tree pane, roll‑up panel, pagination, debounced search, etc.)
+
+3) How to Run
+Backend
+bash
+Copy code
+cd backend
+# Use your package manager (npm / pnpm / yarn)
+pnpm install
+pnpm drizzle:generate
+pnpm drizzle:migrate
+pnpm seed    # optional
+pnpm dev     # runs at :5051
+Frontend
+Ensure Tailwind is properly set up.
+
+Set environment variable (e.g., in .env):
+
+env
+Copy code
+VITE_API_BASE=http://localhost:5051/api
+Run your frontend dev server (pnpm dev or npm run dev).
+
+Summary & Next Steps
+Your current BOM system remains untouched and comment‑ed out in backend/src/server.ts, while all new "P2 BOM Management" files are organized cleanly under the same structure—but versioned/renamed so there's no confusion

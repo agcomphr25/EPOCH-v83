@@ -8556,8 +8556,12 @@ AG Composites Team`;
       .values({
         ...data,
         parameterId,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .returning();
 
-      .where(eq(vendorScoringCriteria.id, id));
+    return parameters;
   }
 
   async getVendorScores(vendorId: number): Promise<VendorScore[]> {
@@ -8807,83 +8811,8 @@ export interface AllocationDiscrepancy {
   actualValue: number;
   difference: number;
   description: string;
-
-      .where(eq(vendorScores.id, id))
-      .returning();
-
-    if (!score) {
-      throw new Error(`Vendor score with ID ${id} not found`);
-    }
-
-    // Update vendor total score after updating
-    await this.calculateVendorTotalScore(score.vendorId);
-    
-    return score;
-  }
-
-  async deleteVendorScore(id: number): Promise<void> {
-    const score = await this.getVendorScore(id);
-    if (score) {
-      await db.delete(vendorScores).where(eq(vendorScores.id, id));
-      // Update vendor total score after deletion
-      await this.calculateVendorTotalScore(score.vendorId);
-    }
-  }
-
-  async calculateVendorTotalScore(vendorId: number): Promise<number> {
-    // Get all active scoring criteria with their weights
-    const criteria = await db
-      .select()
-      .from(vendorScoringCriteria)
-      .where(eq(vendorScoringCriteria.isActive, true));
-
-    if (criteria.length === 0) {
-      return 0;
-    }
-
-    // Get the vendor's latest scores for each criteria
-    const scores = await db
-      .select()
-      .from(vendorScores)
-      .where(eq(vendorScores.vendorId, vendorId))
-      .orderBy(desc(vendorScores.scoredAt));
-
-    // Calculate weighted average score
-    let totalWeightedScore = 0;
-    let totalWeight = 0;
-    const scoredCriteria = new Set<number>();
-
-    for (const score of scores) {
-      // Only use the most recent score per criteria
-      if (scoredCriteria.has(score.criteriaId)) {
-        continue;
-      }
-      
-      const criterion = criteria.find(c => c.id === score.criteriaId);
-      if (criterion) {
-        const normalizedScore = (score.score / score.maxScore) * 100;
-        totalWeightedScore += normalizedScore * criterion.weight;
-        totalWeight += criterion.weight;
-        scoredCriteria.add(score.criteriaId);
-      }
-    }
-
-    const finalScore = totalWeight > 0 ? totalWeightedScore / totalWeight : 0;
-
-    // Update vendor's total score
-    await db
-      .update(vendors)
-      .set({
-        totalScore: finalScore,
-        lastScoredAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .where(eq(vendors.id, vendorId));
-
-    return finalScore;
-  }
-
-
 }
+
+// End of interfaces and types
 
 export const storage = new DatabaseStorage();

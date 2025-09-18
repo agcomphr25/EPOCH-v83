@@ -186,11 +186,12 @@ function VendorPOCard({ vendorPo, onEdit, onDelete, onViewItems }: {
 }
 
 // Create/Edit form component
-function VendorPOForm({ vendorPo, isOpen, onClose, onSubmit }: {
+function VendorPOForm({ vendorPo, isOpen, onClose, onSubmit, inline = false }: {
   vendorPo?: VendorPO;
   isOpen: boolean;
   onClose: () => void;
   onSubmit: (data: CreateVendorPOData) => void;
+  inline?: boolean;
 }) {
   const [formData, setFormData] = useState<CreateVendorPOData>({
     vendorId: vendorPo?.vendorId || 0,
@@ -235,6 +236,104 @@ function VendorPOForm({ vendorPo, isOpen, onClose, onSubmit }: {
     'Other'
   ];
 
+  const formContent = (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div>
+        <Label htmlFor="vendorId">Vendor *</Label>
+        <Select
+          value={formData.vendorId.toString()}
+          onValueChange={(value) => setFormData({ ...formData, vendorId: parseInt(value) })}
+          data-testid="select-vendor"
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Select vendor..." />
+          </SelectTrigger>
+          <SelectContent>
+            {(vendors || []).map((vendor: any) => (
+              <SelectItem key={vendor.id} value={vendor.id.toString()}>
+                {vendor.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div>
+        <Label htmlFor="expectedDeliveryDate">Expected Delivery Date</Label>
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              className={cn(
+                "w-full justify-start text-left font-normal",
+                !deliveryDate && "text-muted-foreground"
+              )}
+              data-testid="button-delivery-date"
+            >
+              <CalendarIcon className="mr-2 h-4 w-4" />
+              {deliveryDate ? format(deliveryDate, "PPP") : "Select date"}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="start">
+            <Calendar
+              mode="single"
+              selected={deliveryDate}
+              onSelect={setDeliveryDate}
+              initialFocus
+            />
+          </PopoverContent>
+        </Popover>
+      </div>
+
+      <div>
+        <Label htmlFor="shipVia">Ship Via</Label>
+        <Select
+          value={formData.shipVia}
+          onValueChange={(value) => setFormData({ ...formData, shipVia: value })}
+          data-testid="select-ship-via"
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Select shipping method..." />
+          </SelectTrigger>
+          <SelectContent>
+            {shipViaOptions.map((option) => (
+              <SelectItem key={option} value={option}>
+                {option}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div>
+        <Label htmlFor="notes">Notes</Label>
+        <Textarea
+          id="notes"
+          value={formData.notes}
+          onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+          placeholder="Additional notes..."
+          rows={3}
+          data-testid="input-notes"
+        />
+      </div>
+
+      <div className="flex gap-2 pt-4">
+        <Button type="submit" className="flex-1" data-testid="button-submit">
+          {vendorPo ? 'Update' : 'Create'} Purchase Order
+        </Button>
+        {!inline && (
+          <Button type="button" variant="outline" onClick={onClose} data-testid="button-cancel">
+            Cancel
+          </Button>
+        )}
+      </div>
+    </form>
+  );
+
+  if (inline) {
+    return formContent;
+  }
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-md">
@@ -243,96 +342,7 @@ function VendorPOForm({ vendorPo, isOpen, onClose, onSubmit }: {
             {vendorPo ? 'Edit Vendor Purchase Order' : 'Create New Vendor Purchase Order'}
           </DialogTitle>
         </DialogHeader>
-        
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <Label htmlFor="vendorId">Vendor *</Label>
-            <Select
-              value={formData.vendorId.toString()}
-              onValueChange={(value) => setFormData({ ...formData, vendorId: parseInt(value) })}
-              data-testid="select-vendor"
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select vendor..." />
-              </SelectTrigger>
-              <SelectContent>
-                {(vendors || []).map((vendor: any) => (
-                  <SelectItem key={vendor.id} value={vendor.id.toString()}>
-                    {vendor.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div>
-            <Label htmlFor="expectedDeliveryDate">Expected Delivery Date</Label>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  className={cn(
-                    "w-full justify-start text-left font-normal",
-                    !deliveryDate && "text-muted-foreground"
-                  )}
-                  data-testid="button-delivery-date"
-                >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {deliveryDate ? format(deliveryDate, "PPP") : "Select date"}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <Calendar
-                  mode="single"
-                  selected={deliveryDate}
-                  onSelect={setDeliveryDate}
-                  initialFocus
-                />
-              </PopoverContent>
-            </Popover>
-          </div>
-
-          <div>
-            <Label htmlFor="shipVia">Ship Via</Label>
-            <Select
-              value={formData.shipVia}
-              onValueChange={(value) => setFormData({ ...formData, shipVia: value })}
-              data-testid="select-ship-via"
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select shipping method..." />
-              </SelectTrigger>
-              <SelectContent>
-                {shipViaOptions.map((option) => (
-                  <SelectItem key={option} value={option}>
-                    {option}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div>
-            <Label htmlFor="notes">Notes</Label>
-            <Textarea
-              id="notes"
-              value={formData.notes}
-              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-              placeholder="Additional notes..."
-              rows={3}
-              data-testid="input-notes"
-            />
-          </div>
-
-          <div className="flex gap-2 pt-4">
-            <Button type="submit" className="flex-1" data-testid="button-submit">
-              {vendorPo ? 'Update' : 'Create'} Purchase Order
-            </Button>
-            <Button type="button" variant="outline" onClick={onClose} data-testid="button-cancel">
-              Cancel
-            </Button>
-          </div>
-        </form>
+        {formContent}
       </DialogContent>
     </Dialog>
   );
@@ -524,6 +534,7 @@ export default function VendorPOManager() {
                   isOpen={true}
                   onClose={() => {}}
                   onSubmit={handleFormSubmit}
+                  inline={true}
                 />
               </CardContent>
             </Card>

@@ -1,5 +1,8 @@
 
 import { Router, Request, Response } from 'express';
+import fs from 'fs';
+import path from 'path';
+import { z } from 'zod';
 import { storage } from '../../storage';
 import { insertVendorSchema } from '@shared/schema';
 
@@ -97,20 +100,6 @@ router.delete('/:id', async (req: Request, res: Response) => {
   }
 });
 
-export default router;
-
-import { Router } from 'express';
-import type { Request, Response } from 'express';
-import fs from 'fs';
-import path from 'path';
-
-import { db } from '../../db';
-import { sql } from 'drizzle-orm';
-import { storage } from '../../storage';
-import { insertVendorSchema, insertVendorContactSchema, insertVendorAddressSchema } from '../../schema';
-import { z } from 'zod';
-
-const router = Router();
 
 // Vendor Management Routes
 

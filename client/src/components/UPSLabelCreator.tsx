@@ -514,16 +514,17 @@ export default function UPSLabelCreator({ orderId, isOpen, onClose, onSuccess }:
           </CardContent>
         </Card>
 
-        {/* Shipping Rates */}
-        <div className="flex gap-4">
+        {/* Shipping Rates - DEBUG VERSION */}
+        <div className="flex gap-4 p-4 bg-blue-50 border-2 border-blue-300 rounded-lg">
           <Button
             onClick={handleGetRates}
             disabled={getRatesMutation.isPending}
             variant="outline"
-            className="flex items-center gap-2"
+            className="flex items-center gap-2 bg-blue-500 text-white hover:bg-blue-600 border-blue-500 px-6 py-3 text-lg font-bold"
+            style={{ backgroundColor: '#3B82F6', color: 'white', minWidth: '200px' }}
           >
-            <DollarSign className="w-4 h-4" />
-            {getRatesMutation.isPending ? 'Getting Rates...' : 'Get Shipping Rates'}
+            <DollarSign className="w-5 h-5" />
+            {getRatesMutation.isPending ? 'Getting Rates...' : '💰 GET SHIPPING RATES'}
           </Button>
 
           {showRates && rates.length > 0 && (

@@ -30,17 +30,12 @@ router.get('/', async (req: Request, res: Response) => {
   }
 });
 
-// Get all orders with payment status for All Orders List with payment column
+// Get all orders with payment status for All Orders List with payment column (TEMP DISABLED)
 router.get('/with-payment-status', async (req: Request, res: Response) => {
   try {
-    // Add basic caching headers to reduce server load
-    res.set({
-      'Cache-Control': 'public, max-age=30, stale-while-revalidate=60',
-      'ETag': `"orders-${Date.now()}"`
-    });
-    
-    const orders = await storage.getAllOrdersWithPaymentStatus();
-    res.json(orders);
+    // TEMPORARY FIX: Return empty array to prevent DB connection overload
+    console.log('⚠️  TEMPORARY: /with-payment-status disabled to prevent DB overload');
+    res.json([]);
   } catch (error) {
     console.error('Error retrieving orders with payment status:', error);
     res.status(500).json({ error: "Failed to fetch orders with payment status", details: (error as any).message });

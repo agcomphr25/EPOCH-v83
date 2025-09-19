@@ -1208,6 +1208,23 @@ export default function ShippingQueuePage() {
                   
                   {/* Shipping Actions for Selected Order */}
                   <ShippingActions orderId={selectedCard || ''} orderData={getSelectedOrder()} />
+                  
+                  {/* NEW: Advanced UPS Label Creator with Rate Shopping */}
+                  <div className="mt-4 p-4 border-2 border-blue-300 bg-blue-50 rounded-lg">
+                    <div className="flex items-center justify-between mb-2">
+                      <h3 className="text-lg font-semibold text-blue-800">🚚 Advanced Shipping with Rate Shopping</h3>
+                    </div>
+                    <p className="text-sm text-blue-600 mb-3">Get rates from multiple shipping services and create labels with the best price!</p>
+                    <Button
+                      onClick={() => {
+                        setSelectedOrderId(selectedCard);
+                        setShowLabelCreator(true);
+                      }}
+                      className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 text-lg"
+                    >
+                      💰 CREATE LABEL WITH RATE SHOPPING
+                    </Button>
+                  </div>
                 </div>
               ) : (
                 <div className="text-center py-8 text-gray-500">

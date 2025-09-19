@@ -51,6 +51,7 @@ interface ShippingRate {
 }
 
 export default function UPSLabelCreator({ orderId, isOpen, onClose, onSuccess }: UPSLabelCreatorProps) {
+  console.log('🚚 UPSLabelCreator Modal:', { orderId, isOpen });
   const { toast } = useToast();
   
   // Form state

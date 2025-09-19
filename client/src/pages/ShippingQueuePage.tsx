@@ -1237,18 +1237,16 @@ export default function ShippingQueuePage() {
         </div>
       </div>
 
-      {/* UPS Label Creator Dialog */}
-      {showLabelCreator && selectedOrderId && (
-        <UPSLabelCreator
-          orderId={selectedOrderId || ''}
-          isOpen={showLabelCreator}
-          onClose={() => {
-            setShowLabelCreator(false);
-            setSelectedOrderId(null);
-          }}
-          onSuccess={handleLabelSuccess}
-        />
-      )}
+      {/* UPS Label Creator Dialog - Always rendered */}
+      <UPSLabelCreator
+        orderId={getSelectedOrder()?.orderId || selectedCard || ''}
+        isOpen={showLabelCreator}
+        onClose={() => {
+          setShowLabelCreator(false);
+          setSelectedOrderId(null);
+        }}
+        onSuccess={handleLabelSuccess}
+      />
 
       {/* Working Shipping Details Modal - DEBUG VERSION */}
       {showShippingDialog && (

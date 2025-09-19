@@ -233,15 +233,10 @@ export default function ShippingQueuePage() {
 
   // Get unique customer IDs from shipping orders for address lookup (including alt ship-to customers)
   const uniqueCustomerIds = useMemo(() => {
-    const orders = allOrders as any[];
-    const shippingOrdersList = orders.filter((order: any) => 
-      order.currentDepartment === 'Shipping' || 
-      (order.department === 'Shipping' && order.status === 'IN_PROGRESS')
-    );
-    
+    const orders = shippingReadyOrders as any[];
     const customerIds = new Set<string>();
     
-    shippingOrdersList.forEach(order => {
+    orders.forEach(order => {
       // Add main customer ID
       if (order.customerId) {
         customerIds.add(order.customerId);
@@ -253,7 +248,7 @@ export default function ShippingQueuePage() {
     });
     
     return Array.from(customerIds);
-  }, [allOrders]);
+  }, [shippingReadyOrders]);
 
   // Fetch customer addresses for all shipping orders at once
   const { data: customerAddressesMap = {} } = useQuery({

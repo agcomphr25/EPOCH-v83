@@ -37,6 +37,7 @@ import poProductsRoutes from './poProducts';
 import refundRoutes from './refunds';
 
 import vendorRoutes from './vendors';
+
 // import cuttingTableRoutes from './cuttingTable';
 // import materialInventoryRoutes from './materialInventory';
 // import defrostScheduleRoutes from './defrostSchedule';
@@ -152,7 +153,7 @@ export function registerRoutes(app: Express): Server {
   app.use('/api/vendors', vendorRoutes);
   
 
-  // Cutting table management routes (commented out - files don't exist)
+
   // app.use('/api', cuttingTableRoutes);
   // app.use('/api', materialInventoryRoutes);
   // app.use('/api', defrostScheduleRoutes);

@@ -55,7 +55,12 @@ export default function ShippingQueuePage() {
   
   // Get all orders from production pipeline with payment status
   const { data: allOrders = [] } = useQuery({
-    queryKey: ['/api/orders/with-payment-status'],
+    queryKey: ['/api/orders/all'],
+  });
+
+  // Get shipping-ready orders directly
+  const { data: shippingReadyOrders = [] } = useQuery({
+    queryKey: ['/api/shipping/ready-for-shipping'],
   });
 
   // Fetch all kickbacks to determine which orders have kickbacks
@@ -149,19 +154,15 @@ export default function ShippingQueuePage() {
 
   // Get orders in Shipping department, categorized by due date
   const shippingOrders = useMemo(() => {
-    const orders = allOrders as any[];
-    const filteredOrders = orders.filter((order: any) => 
-      order.currentDepartment === 'Shipping' || 
-      (order.department === 'Shipping' && order.status === 'IN_PROGRESS')
-    );
+    const orders = shippingReadyOrders as any[];
     
     // Sort by due date - most urgent first
-    return filteredOrders.sort((a: any, b: any) => {
+    return orders.sort((a: any, b: any) => {
       const dateA = a.dueDate ? new Date(a.dueDate).getTime() : 0;
       const dateB = b.dueDate ? new Date(b.dueDate).getTime() : 0;
       return dateA - dateB; // Earliest due date first (most urgent)
     });
-  }, [allOrders]);
+  }, [shippingReadyOrders]);
 
   // Categorize orders by due date
   const categorizedOrders = useMemo(() => {
@@ -288,6 +289,7 @@ export default function ShippingQueuePage() {
   };
 
   const getCustomerInfo = (customerId: string) => {
+    if (!customerId) return null;
     const customerList = customers as any[];
     return customerList.find((c: any) => c.id.toString() === customerId.toString());
   };

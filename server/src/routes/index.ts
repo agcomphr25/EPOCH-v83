@@ -37,9 +37,10 @@ import poProductsRoutes from './poProducts';
 import refundRoutes from './refunds';
 
 import vendorRoutes from './vendors';
-import cuttingTableRoutes from './cuttingTable';
-import materialInventoryRoutes from './materialInventory';
-import defrostScheduleRoutes from './defrostSchedule';
+// Commented out missing routes
+// import cuttingTableRoutes from './cuttingTable';
+// import materialInventoryRoutes from './materialInventory';
+// import defrostScheduleRoutes from './defrostSchedule';
 import mrpRoutes from './mrp';
 import enhancedRoutes from './enhanced';
 
@@ -152,10 +153,10 @@ export function registerRoutes(app: Express): Server {
   app.use('/api/vendors', vendorRoutes);
   
 
-  // Cutting table management routes
-  app.use('/api', cuttingTableRoutes);
-  app.use('/api', materialInventoryRoutes);
-  app.use('/api', defrostScheduleRoutes);
+  // Commented out missing routes
+  // app.use('/api', cuttingTableRoutes);
+  // app.use('/api', materialInventoryRoutes);
+  // app.use('/api', defrostScheduleRoutes);
   
   // MRP and advanced inventory management routes (legacy)
   app.use('/api/mrp', mrpRoutes);

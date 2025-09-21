@@ -650,6 +650,11 @@ export default function LayupScheduler() {
   // Track order assignments (orderId -> { moldId, date })
   const [orderAssignments, setOrderAssignments] = useState<{[orderId: string]: { moldId: string, date: string }}>({});
 
+  // Extract P1 purchase orders from the unified orders data
+  const p1PurchaseOrders = useMemo(() => {
+    return orders.filter(order => order.source === 'p1_purchase_order');
+  }, [orders]);
+
   // Clear schedule function for testing
   const clearSchedule = useCallback(async () => {
     console.log('🧹 CLEARING ALL SCHEDULE ASSIGNMENTS AND DATABASE');
@@ -4098,10 +4103,55 @@ export default function LayupScheduler() {
                             Select P1 Purchase Orders for Priority
                           </label>
                           <div className="max-h-48 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded-lg p-3">
-                            <p className="text-xs text-gray-500 text-center py-4" data-testid="text-oem-po-placeholder">
-                              P1 purchase order selection will be implemented in the next step.
-                              This will show available P1 purchase orders for selection.
-                            </p>
+                            {p1PurchaseOrders.length > 0 ? (
+                              <div className="space-y-2">
+                                {p1PurchaseOrders.map((order) => (
+                                  <div key={order.orderId} className="flex items-center space-x-3 p-2 border border-gray-100 dark:border-gray-700 rounded">
+                                    <Checkbox
+                                      id={`po-${order.orderId}`}
+                                      data-testid={`input-po-${order.orderId}`}
+                                      checked={pendingOemChanges.orders.includes(order.orderId)}
+                                      onCheckedChange={(checked) => {
+                                        setPendingOemChanges(prev => ({
+                                          ...prev,
+                                          orders: checked 
+                                            ? [...prev.orders.filter(id => id !== order.orderId), order.orderId] // Prevent duplicates
+                                            : prev.orders.filter(id => id !== order.orderId)
+                                        }));
+                                      }}
+                                    />
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex items-center justify-between">
+                                        <label
+                                          htmlFor={`po-${order.orderId}`}
+                                          className="text-sm font-medium cursor-pointer truncate"
+                                          data-testid={`text-po-${order.orderId}`}
+                                        >
+                                          {order.orderId}
+                                        </label>
+                                        <div className="text-xs text-gray-500 ml-2">
+                                          {order.product || order.stockModelId}
+                                        </div>
+                                      </div>
+                                      {order.dueDate && (
+                                        <div className="text-xs text-gray-500 mt-1">
+                                          Due: {format(new Date(order.dueDate), 'MM/dd/yyyy')}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="text-center py-6" data-testid="text-oem-po-empty">
+                                <p className="text-xs text-gray-500 mb-2" data-testid="text-no-po-orders">
+                                  No P1 purchase orders available for prioritization.
+                                </p>
+                                <p className="text-xs text-gray-400">
+                                  P1 purchase orders will appear here when they are created from the P1 Purchase Order system.
+                                </p>
+                              </div>
+                            )}
                           </div>
                         </div>
                       )}

@@ -1622,7 +1622,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAllOrders(): Promise<AllOrder[]> {
-    // Select only the columns that actually exist in the all_orders table
+    // Select ALL columns from the all_orders table and order by ID to get consistent results
     const orders = await db.select({
       id: allOrders.id,
       orderId: allOrders.orderId,
@@ -1698,7 +1698,7 @@ export class DatabaseStorage implements IStorage {
         sql`${allOrders.orderId} NOT LIKE 'PO%'`
       )
     )
-    .orderBy(desc(allOrders.updatedAt));
+    .orderBy(desc(allOrders.id));
 
     // Get all customers to create a lookup map
     const allCustomers = await db.select({

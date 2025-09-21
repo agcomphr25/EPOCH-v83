@@ -103,10 +103,19 @@ export default function ShippingLabelPage() {
     onSuccess: (data) => {
       setRates(data.rates || []);
       setShowRates(true);
-      toast({
-        title: 'Rates Retrieved',
-        description: `Found ${data.rates?.length || 0} shipping options`,
-      });
+      
+      if (data.isEstimate) {
+        toast({
+          title: 'Estimated Rates',
+          description: data.message || 'Rate estimates provided. Enable UPS Rating API for live rates.',
+          variant: 'default',
+        });
+      } else {
+        toast({
+          title: 'Rates Retrieved',
+          description: `Found ${data.rates?.length || 0} shipping options`,
+        });
+      }
     },
     onError: (error: any) => {
       toast({
@@ -690,7 +699,10 @@ export default function ShippingLabelPage() {
                         <SelectItem key={rate.serviceCode} value={rate.serviceCode}>
                           <div className="flex justify-between w-full items-center">
                             <span className="font-medium">{rate.serviceName}</span>
-                            <span className="ml-4 font-bold text-green-600">${rate.totalCharges.toFixed(2)}</span>
+                            <span className={`ml-4 font-bold ${(rate as any).isEstimate ? 'text-orange-600' : 'text-green-600'}`}>
+                              ${rate.totalCharges.toFixed(2)}
+                              {(rate as any).isEstimate && <span className="text-xs ml-1 text-orange-500">*est</span>}
+                            </span>
                             {rate.guaranteedDaysToDelivery && (
                               <span className="ml-2 text-xs text-gray-500">({rate.guaranteedDaysToDelivery} days)</span>
                             )}
@@ -710,9 +722,13 @@ export default function ShippingLabelPage() {
             </div>
 
             {showRates && rates.length > 0 && (
-              <div className="mt-4 p-4 bg-green-50 rounded-lg">
-                <p className="text-sm text-green-800">
-                  ✅ <strong>{rates.length}</strong> shipping options found! Select a service above, then generate your label.
+              <div className={`mt-4 p-4 rounded-lg ${rates.some((r: any) => r.isEstimate) ? 'bg-orange-50' : 'bg-green-50'}`}>
+                <p className={`text-sm ${rates.some((r: any) => r.isEstimate) ? 'text-orange-800' : 'text-green-800'}`}>
+                  {rates.some((r: any) => r.isEstimate) ? (
+                    <>⚠️ <strong>{rates.length}</strong> estimated rates shown. Enable UPS Rating API in your developer account for live rates.</>
+                  ) : (
+                    <>✅ <strong>{rates.length}</strong> shipping options found! Select a service above, then generate your label.</>
+                  )}
                 </p>
               </div>
             )}

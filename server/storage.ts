@@ -1693,7 +1693,9 @@ export class DatabaseStorage implements IStorage {
       and(
         ne(allOrders.status, 'CANCELLED'),
         or(isNull(allOrders.isCancelled), eq(allOrders.isCancelled, false)),
-        sql`${allOrders.orderId} NOT LIKE 'P1-%'`
+        sql`${allOrders.orderId} NOT LIKE 'P1-%'`,
+        sql`${allOrders.orderId} NOT LIKE 'PO-%'`,
+        sql`${allOrders.orderId} NOT LIKE 'PO%'`
       )
     )
     .orderBy(desc(allOrders.updatedAt));

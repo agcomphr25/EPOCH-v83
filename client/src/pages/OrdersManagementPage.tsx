@@ -66,8 +66,8 @@ export default function OrdersManagementPage() {
 
   // Fetch orders data
   const { data: orders = [], isLoading, error, refetch } = useQuery<Order[]>({
-    queryKey: ['/api/orders/with-payment-status'],
-    queryFn: () => apiRequest('/api/orders/with-payment-status'),
+    queryKey: ['/api/orders/all'],
+    queryFn: () => apiRequest('/api/orders/all'),
     refetchOnWindowFocus: false,
   });
 
@@ -253,7 +253,7 @@ export default function OrdersManagementPage() {
 
   // Handle refresh
   const handleRefresh = () => {
-    queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
     refetch();
     toast({
       title: "Data Refreshed",

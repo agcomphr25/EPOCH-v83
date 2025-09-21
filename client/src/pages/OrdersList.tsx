@@ -413,7 +413,11 @@ export default function OrdersList() {
   try {
     const { data: orders, isLoading, error } = useQuery<Order[]>({
       queryKey: ['/api/orders'],
-      queryFn: () => apiRequest('/api/orders'),
+      queryFn: async () => {
+        const result = await apiRequest('/api/orders');
+        console.log('🔍 Frontend received orders:', result?.slice(0, 10)?.map(o => ({id: o.id, orderId: o.orderId})));
+        return result;
+      },
       staleTime: 0, // Always fetch fresh data
       gcTime: 60 * 1000, // 1 minute
       refetchOnWindowFocus: true,
@@ -906,8 +910,8 @@ export default function OrdersList() {
                     <TableCell className="font-medium" title={order.fbOrderNumber ? `FB Order: ${order.fbOrderNumber} (Order ID: ${order.orderId})` : `Order ID: ${order.orderId}`}>
                       <div className="flex items-center gap-2">
                         <OrderSummaryTooltip orderId={order.orderId}>
-                          <span className="text-blue-600 hover:text-blue-800 cursor-pointer">
-                            {getDisplayOrderId(order)}
+                          <span className="text-blue-600 hover:text-blue-800 cursor-pointer" title={`Raw orderId: ${order.orderId}, Display: ${getDisplayOrderId(order)}`}>
+                            {order.orderId}
                           </span>
                         </OrderSummaryTooltip>
                         {hasUnresolvedKickback(order.orderId) && (

@@ -412,8 +412,8 @@ export default function OrdersList() {
 
   try {
     const { data: orders, isLoading, error } = useQuery<Order[]>({
-      queryKey: ['/api/orders/with-payment-status', 'v2'],
-      queryFn: () => apiRequest('/api/orders/with-payment-status'),
+      queryKey: ['/api/orders/all', 'v2'],
+      queryFn: () => apiRequest('/api/orders/all'),
       refetchInterval: false, // Completely disable automatic refetching
       refetchOnWindowFocus: false, // Disable refetch on window focus
       refetchOnReconnect: false, // Disable refetch on network reconnect

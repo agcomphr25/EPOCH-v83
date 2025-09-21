@@ -865,6 +865,32 @@ export default function LayupScheduler() {
     }
   };
 
+  const applyOemChanges = () => {
+    setIsApplyingChanges(true);
+    
+    try {
+      // Apply pending changes to main state
+      setOemMode(pendingOemChanges.mode);
+      setSelectedPOOrders(pendingOemChanges.orders);
+      
+      // Set pending changes to reflect the applied state (not defaults)
+      setPendingOemChanges({ mode: pendingOemChanges.mode, orders: pendingOemChanges.orders });
+      
+      toast({
+        title: "OEM Settings Updated",
+        description: `OEM mode ${pendingOemChanges.mode ? 'enabled' : 'disabled'}. ${pendingOemChanges.orders.length} purchase orders selected for priority.`,
+      });
+    } catch (error) {
+      toast({
+        title: "Update Failed",
+        description: "Failed to update OEM settings",
+        variant: "destructive"
+      });
+    } finally {
+      setIsApplyingChanges(false);
+    }
+  };
+
   // Drag and drop sensors
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -4008,6 +4034,100 @@ export default function LayupScheduler() {
                           <Button
                             size="sm"
                             onClick={applyEmployeeChanges}
+                            disabled={isApplyingChanges}
+                          >
+                            {isApplyingChanges ? 'Applying...' : 'Apply Changes'}
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  </DialogContent>
+                </Dialog>
+
+                <Dialog onOpenChange={(open) => {
+                  if (open) {
+                    // Sync pending state from current state when dialog opens
+                    setPendingOemChanges({ mode: oemMode, orders: selectedPOOrders });
+                  }
+                }}>
+                  <DialogTrigger asChild>
+                    <DropdownMenuItem onSelect={(e) => e.preventDefault()} data-testid="link-oem-settings">
+                      <Settings className="w-4 h-4 mr-2" />
+                      OEM Settings
+                    </DropdownMenuItem>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-md">
+                    <DialogHeader>
+                      <DialogTitle>OEM Settings</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                        Configure OEM priority mode for purchase order scheduling. When enabled, selected P1 purchase orders will be prioritized in the production schedule.
+                      </p>
+                      
+                      {/* OEM Mode Toggle */}
+                      <div className="flex items-center space-x-3 p-3 border border-gray-200 dark:border-gray-700 rounded-lg">
+                        <Checkbox
+                          id="oem-mode"
+                          data-testid="input-oem-mode"
+                          checked={pendingOemChanges.mode}
+                          onCheckedChange={(checked) => {
+                            setPendingOemChanges(prev => ({
+                              ...prev,
+                              mode: !!checked
+                            }));
+                          }}
+                        />
+                        <div className="flex-1">
+                          <label
+                            htmlFor="oem-mode"
+                            className="text-sm font-medium cursor-pointer"
+                          >
+                            Enable OEM Priority Mode
+                          </label>
+                          <p className="text-xs text-gray-500 mt-1">
+                            Prioritize selected P1 purchase orders in the production schedule
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* P1 Purchase Orders Selection */}
+                      {pendingOemChanges.mode && (
+                        <div className="space-y-3">
+                          <label className="text-sm font-medium">
+                            Select P1 Purchase Orders for Priority
+                          </label>
+                          <div className="max-h-48 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded-lg p-3">
+                            <p className="text-xs text-gray-500 text-center py-4" data-testid="text-oem-po-placeholder">
+                              P1 purchase order selection will be implemented in the next step.
+                              This will show available P1 purchase orders for selection.
+                            </p>
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                        <p className="text-xs text-blue-700 dark:text-blue-300">
+                          <strong>How OEM Mode Works:</strong> When enabled, selected P1 purchase orders receive highest priority in the production schedule. Regular customer orders will fill remaining capacity after priority orders are scheduled.
+                        </p>
+                      </div>
+                      
+                      {/* Apply button */}
+                      {(pendingOemChanges.mode !== oemMode || JSON.stringify(pendingOemChanges.orders) !== JSON.stringify(selectedPOOrders)) && (
+                        <div className="flex justify-end space-x-2 pt-4 border-t border-gray-200 dark:border-gray-700">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            data-testid="button-cancel-oem-settings"
+                            onClick={() => setPendingOemChanges({ mode: oemMode, orders: selectedPOOrders })}
+                            disabled={isApplyingChanges}
+                          >
+                            Cancel
+                          </Button>
+                          <Button
+                            size="sm"
+                            data-testid="button-apply-oem-settings"
+                            onClick={applyOemChanges}
                             disabled={isApplyingChanges}
                           >
                             {isApplyingChanges ? 'Applying...' : 'Apply Changes'}

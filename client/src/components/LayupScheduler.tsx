@@ -1402,7 +1402,41 @@ export default function LayupScheduler() {
     enabled: true,
   }) as { data: any[]; isLoading: boolean };
 
-  const { orders: allOrders, reloadOrders, loading: ordersLoading } = useUnifiedLayupOrders();
+  // Use custom query with OEM settings instead of the default useUnifiedLayupOrders hook
+  const { data: allOrders = [], isLoading: ordersLoading, refetch: reloadOrders } = useQuery({
+    queryKey: ['/api/p1-layup-queue', oemMode, selectedPOOrders.join(',')],
+    queryFn: async () => {
+      console.log('🚀 Making API call to /api/p1-layup-queue with OEM settings:', { oemMode, selectedPOOrders });
+      const url = new URL('/api/p1-layup-queue', window.location.origin);
+      
+      // Add OEM settings as query parameters
+      if (oemMode) {
+        url.searchParams.set('oemMode', 'true');
+        if (selectedPOOrders.length > 0) {
+          url.searchParams.set('selectedPOOrders', selectedPOOrders.join(','));
+        }
+      }
+      
+      const response = await fetch(url.toString());
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      const data = await response.json();
+      console.log('🎯 API response with OEM settings:', {
+        status: response.status,
+        length: data?.length,
+        oemMode,
+        selectedPOCount: selectedPOOrders.length
+      });
+      return data;
+    },
+    retry: 3,
+    staleTime: 5000,
+    cacheTime: 60000,
+    refetchOnWindowFocus: false,
+    refetchOnMount: true,
+    refetchInterval: false
+  });
 
   // Include all orders from the production queue (regular orders, Mesa production orders, P1 purchase orders)
   const orders = useMemo(() => {

@@ -23,6 +23,9 @@ const router = Router();
 router.get('/', async (req: Request, res: Response) => {
   try {
     const orders = await storage.getAllOrders();
+    const poCount = orders.filter(o => o.orderId.startsWith('PO')).length;
+    const agCount = orders.filter(o => o.orderId.startsWith('AG')).length;
+    console.log(`📊 ALL ORDERS API: Total=${orders.length}, AG orders=${agCount}, PO orders=${poCount}`);
     res.json(orders);
   } catch (error) {
     console.error('Error retrieving orders:', error);

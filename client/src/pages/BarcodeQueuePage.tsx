@@ -61,7 +61,7 @@ export default function BarcodeQueuePage() {
 
   // Get all orders from production pipeline
   const { data: allOrders = [] } = useQuery({
-    queryKey: ['/api/orders/with-payment-status'],
+    queryKey: ['/api/orders/all'],
   });
 
   // Fetch all kickbacks to determine which orders have kickbacks

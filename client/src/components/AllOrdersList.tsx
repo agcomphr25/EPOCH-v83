@@ -174,7 +174,7 @@ export default function AllOrdersList() {
         newSet.delete(variables.orderId);
         return newSet;
       });
-      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
       toast.error('Failed to update department');
     }
   });
@@ -188,7 +188,7 @@ export default function AllOrdersList() {
     },
     onSuccess: () => {
       toast.success('Order scrapped successfully');
-      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
       queryClient.invalidateQueries({ queryKey: ['/api/orders/pipeline-counts'] });
       setScrapModalOrder(null);
     },
@@ -205,7 +205,7 @@ export default function AllOrdersList() {
     },
     onSuccess: () => {
       toast.success('Replacement order created successfully');
-      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
     },
     onError: (error) => {
       toast.error(`Failed to create replacement: ${error.message}`);
@@ -221,7 +221,7 @@ export default function AllOrdersList() {
     },
     onSuccess: () => {
       toast.success('Order cancelled successfully');
-      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
       queryClient.invalidateQueries({ queryKey: ['/api/orders/pipeline-counts'] });
       queryClient.invalidateQueries({ queryKey: ['/api/production-queue/prioritized'] });
       queryClient.invalidateQueries({ queryKey: ['/api/p1-layup-queue'] });

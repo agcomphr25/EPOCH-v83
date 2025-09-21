@@ -724,10 +724,11 @@ router.post('/get-rates', async (req: Request, res: Response) => {
       });
     }
 
-    // Build rate payload for OAuth 2.0 API (updated format)
+    // Build rate payload for OAuth 2.0 API (requesting shop rates for all services)
     const ratePayload = {
       RateRequest: {
         Request: {
+          RequestOption: 'Shop', // This gets rates for all available services
           TransactionReference: {
             CustomerContext: 'Rate Shopping Request'
           }

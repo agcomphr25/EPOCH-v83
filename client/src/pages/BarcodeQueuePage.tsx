@@ -132,7 +132,7 @@ export default function BarcodeQueuePage() {
     },
     onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['/api/kickbacks'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
       setKickbackModalOpen(false);
       kickbackForm.reset();
       
@@ -327,7 +327,7 @@ export default function BarcodeQueuePage() {
       setSelectedOrders(new Set());
       setSelectAll(false);
       // Refetch orders to update the display
-      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
     },
     onError: (error) => {
       toast({

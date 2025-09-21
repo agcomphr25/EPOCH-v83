@@ -165,7 +165,7 @@ export default function OrdersList() {
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
       showToast({
         title: "Order Cancelled",
         description: "The order has been cancelled successfully.",
@@ -289,7 +289,7 @@ export default function OrdersList() {
         newSet.delete(variables.orderId);
         return newSet;
       });
-      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
       toast.error('Failed to update department');
     }
   });
@@ -304,7 +304,7 @@ export default function OrdersList() {
     console.log(`🔄 Progressing order ${orderId} from ${currentDepartment} to ${nextDepartment}`);
 
     // IMMEDIATELY update React Query cache - this prevents any reversion
-    queryClient.setQueryData(['/api/orders/with-payment-status', 'v2'], (old: any[]) => {
+    queryClient.setQueryData(['/api/orders', 'v2'], (old: any[]) => {
       if (!old) return old;
       const updated = old.map((order: any) => {
         if (order.orderId === orderId) {

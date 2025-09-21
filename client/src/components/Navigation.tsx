@@ -1,10 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link, useLocation } from 'wouter';
-import { Factory, User, FileText, TrendingDown, Plus, Settings, Package, FilePenLine, ClipboardList, BarChart, ChevronDown, ChevronRight, FormInput, PieChart, Scan, Warehouse, Shield, Wrench, Users, TestTube, DollarSign, Receipt, TrendingUp, List, BookOpen, Calendar, CheckSquare, Truck, Mail, MessageSquare, CreditCard, XCircle, Cog, ArrowRight, LogOut } from "lucide-react";
+import { Factory, User, FileText, TrendingDown, Plus, Settings, Package, FilePenLine, ClipboardList, BarChart, ChevronDown, ChevronRight, FormInput, PieChart, Scan, Warehouse, Shield, Wrench, Users, TestTube, DollarSign, Receipt, TrendingUp, List, BookOpen, Calendar, CheckSquare, Truck, Mail, MessageSquare, CreditCard, XCircle, Cog, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import InstallPWAButton from "./InstallPWAButton";
-import { useQuery } from '@tanstack/react-query';
 import {
   NavigationMenu,
   NavigationMenuItem,
@@ -19,52 +18,8 @@ import {
 export default function Navigation() {
   const [location] = useLocation();
   
-  // Check if we're in deployment environment to show logout button
-  const isDeploymentEnvironment = () => {
-    const hostname = window.location.hostname;
-    const isLocalhost = hostname.includes('localhost') || hostname.includes('127.0.0.1');
-    const isReplitEditor = hostname.includes('replit.dev') && !hostname.includes('.replit.dev');
-    return !isLocalhost && !isReplitEditor;
-  };
   
-  // Fetch current user data
-  const { data: currentUser } = useQuery({
-    queryKey: ['currentUser'],
-    queryFn: async () => {
-      const token = localStorage.getItem('sessionToken') || localStorage.getItem('jwtToken');
-      if (!token || !isDeploymentEnvironment()) {
-        return null;
-      }
-      
-      try {
-        const response = await fetch('/api/auth/session', {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
-        
-        if (response.ok) {
-          const userData = await response.json();
-          return userData;
-        }
-        return null;
-      } catch (error) {
-        console.error('Failed to fetch user data:', error);
-        return null;
-      }
-    },
-    enabled: isDeploymentEnvironment(),
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    retry: false
-  });
   
-  // Logout function
-  const handleLogout = () => {
-    localStorage.removeItem('sessionToken');
-    localStorage.removeItem('jwtToken');
-    // Force a complete page reload to trigger authentication check
-    window.location.reload();
-  };
 
   const [verifiedModulesExpanded, setVerifiedModulesExpanded] = useState(false);
   const [formsReportsExpanded, setFormsReportsExpanded] = useState(false);
@@ -1057,23 +1012,6 @@ export default function Navigation() {
           <div className="flex flex-wrap items-center gap-2 lg:gap-4">
             <InstallPWAButton />
             <span className="text-sm text-gray-600">Manufacturing ERP System</span>
-            {isDeploymentEnvironment() && currentUser?.username && (
-              <span className="text-sm font-medium text-gray-700" data-testid="text-username">
-                {currentUser.username}
-              </span>
-            )}
-            {isDeploymentEnvironment() && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleLogout}
-                className="gap-2"
-                data-testid="button-logout"
-              >
-                <LogOut className="h-4 w-4" />
-                Logout
-              </Button>
-            )}
             <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center">
               <User className="h-4 w-4 text-white" />
             </div>

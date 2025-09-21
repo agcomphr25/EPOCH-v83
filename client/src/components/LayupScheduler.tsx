@@ -650,11 +650,6 @@ export default function LayupScheduler() {
   // Track order assignments (orderId -> { moldId, date })
   const [orderAssignments, setOrderAssignments] = useState<{[orderId: string]: { moldId: string, date: string }}>({});
 
-  // Extract P1 purchase orders from the unified orders data
-  const p1PurchaseOrders = useMemo(() => {
-    return orders.filter(order => order.source === 'p1_purchase_order');
-  }, [orders]);
-
   // Clear schedule function for testing
   const clearSchedule = useCallback(async () => {
     console.log('🧹 CLEARING ALL SCHEDULE ASSIGNMENTS AND DATABASE');
@@ -1474,6 +1469,11 @@ export default function LayupScheduler() {
     // Return ALL orders from the production queue - no filtering by source
     return allOrders || [];
   }, [allOrders, ordersLoading]);
+
+  // Extract P1 purchase orders from the unified orders data
+  const p1PurchaseOrders = useMemo(() => {
+    return orders.filter(order => order.source === 'p1_purchase_order');
+  }, [orders]);
 
   // Auto-run LOP scheduler when orders are loaded to ensure proper scheduling
   const processedOrders = useMemo(() => {
@@ -4711,9 +4711,9 @@ export default function LayupScheduler() {
                                 // First try to find in processedOrders
                                 let order = processedOrders.find(o => o.orderId === orderId);
                                 
-                                // If not found, try in original orders array
+                                // If not found, try in original allOrders array
                                 if (!order) {
-                                  order = orders.find(o => o.orderId === orderId);
+                                  order = allOrders.find(o => o.orderId === orderId);
                                 }
                                 
                                 if (!order) {

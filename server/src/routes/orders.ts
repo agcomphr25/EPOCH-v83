@@ -25,7 +25,16 @@ router.get('/', async (req: Request, res: Response) => {
     const orders = await storage.getAllOrders();
     const poCount = orders.filter(o => o.orderId.startsWith('PO')).length;
     const agCount = orders.filter(o => o.orderId.startsWith('AG')).length;
+    const sampleOrderIds = orders.slice(0, 10).map(o => o.orderId);
     console.log(`📊 ALL ORDERS API: Total=${orders.length}, AG orders=${agCount}, PO orders=${poCount}`);
+    console.log(`📊 Sample Order IDs: ${sampleOrderIds.join(', ')}`);
+    console.log(`📊 ACTUAL RESPONSE BEING SENT TO FRONTEND: ${JSON.stringify(orders.slice(0, 3).map(o => ({id: o.id, orderId: o.orderId})))}`);
+    
+    // Log any orders that might look like PO orders
+    const suspiciousOrders = orders.filter(o => o.orderId.includes('PO'));
+    if (suspiciousOrders.length > 0) {
+      console.log(`⚠️  SUSPICIOUS: Found ${suspiciousOrders.length} orders with 'PO' in orderId:`, suspiciousOrders.map(o => o.orderId));
+    }
     res.json(orders);
   } catch (error) {
     console.error('Error retrieving orders:', error);

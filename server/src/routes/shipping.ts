@@ -704,7 +704,7 @@ router.post('/get-rates', async (req: Request, res: Response) => {
     console.log('🏠 Ship FROM address:', JSON.stringify(shipFromAddress, null, 2));
     console.log('🏠 Ship TO address:', JSON.stringify(shipToAddress, null, 2));
 
-    // Use OAuth 2.0 credentials (updated API)
+    // Use OAuth 2.0 credentials (same as working label creation)
     const upsClientId = process.env.UPS_CLIENT_ID?.trim();
     const upsClientSecret = process.env.UPS_CLIENT_SECRET?.trim();
     const upsShipperNumber = process.env.UPS_SHIPPER_NUMBER?.trim();
@@ -715,11 +715,11 @@ router.post('/get-rates', async (req: Request, res: Response) => {
       });
     }
 
-    // Get OAuth token
+    // Get OAuth token (same as label creation)
     let accessToken;
     try {
       accessToken = await getUPSOAuthToken(upsClientId, upsClientSecret);
-      console.log('⚡ UPS OAuth token ready for rate shopping');
+      console.log('⚡ UPS OAuth token ready for rate shopping (same flow as labels)');
     } catch (tokenError: any) {
       console.error('Failed to get UPS OAuth token for rates:', tokenError.message);
       return res.status(500).json({ 
@@ -728,7 +728,7 @@ router.post('/get-rates', async (req: Request, res: Response) => {
       });
     }
 
-    // Build rate payload for OAuth 2.0 API (requesting shop rates for all services)
+    // Build rate payload for OAuth 2.0 API (corrected format)
     const ratePayload = {
       RateRequest: {
         Request: {
@@ -737,12 +737,20 @@ router.post('/get-rates', async (req: Request, res: Response) => {
             CustomerContext: 'Rate Shopping Request'
           }
         },
+        PickupType: {
+          Code: '01', // Daily Pickup
+          Description: 'Daily Pickup'
+        },
+        CustomerClassification: {
+          Code: '01', // Wholesale
+          Description: 'Wholesale'
+        },
         Shipment: {
           Shipper: {
             Name: 'AG Composites',
             ShipperNumber: upsShipperNumber,
             Address: {
-              AddressLine: [shipFromAddress.street],
+              AddressLine: shipFromAddress.street,
               City: shipFromAddress.city,
               StateProvinceCode: shipFromAddress.state,
               PostalCode: shipFromAddress.zipCode,
@@ -752,17 +760,18 @@ router.post('/get-rates', async (req: Request, res: Response) => {
           ShipTo: {
             Name: shipToAddress.name || 'Customer',
             Address: {
-              AddressLine: [shipToAddress.street],
+              AddressLine: shipToAddress.street,
               City: shipToAddress.city,
               StateProvinceCode: shipToAddress.state,
               PostalCode: shipToAddress.zipCode,
               CountryCode: shipToAddress.country || 'US',
+              ResidentialAddressIndicator: '1'
             },
           },
           ShipFrom: {
             Name: 'AG Composites',
             Address: {
-              AddressLine: [shipFromAddress.street],
+              AddressLine: shipFromAddress.street,
               City: shipFromAddress.city,
               StateProvinceCode: shipFromAddress.state,
               PostalCode: shipFromAddress.zipCode,
@@ -795,7 +804,7 @@ router.post('/get-rates', async (req: Request, res: Response) => {
       },
     };
 
-    // Use OAuth 2.0 API endpoint - Test environment for development
+    // Use OAuth 2.0 API endpoint - same environment as working labels
     const isProduction = process.env.NODE_ENV === 'production' || process.env.REPLIT_DEPLOYMENT === '1';
     const upsEndpoint = isProduction
       ? 'https://onlinetools.ups.com/api/rating/v1/Rate'  // Production
@@ -808,7 +817,7 @@ router.post('/get-rates', async (req: Request, res: Response) => {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
         'transId': 'rating-' + Date.now(),
-        'transactionSrc': 'testing'
+        'transactionSrc': 'epoch'
       },
       timeout: 30000,
     });

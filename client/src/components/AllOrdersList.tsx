@@ -63,7 +63,7 @@ export default function AllOrdersList() {
   }, []);
 
   const { data: orders, isLoading, refetch } = useQuery<Order[]>({
-    queryKey: ['/api/orders/with-payment-status'],
+    queryKey: ['/api/orders/all'],
     refetchInterval: false, // Completely disable automatic refetching
     refetchOnWindowFocus: false, // Disable refetch on window focus
     refetchOnReconnect: false, // Disable refetch on network reconnect
@@ -71,7 +71,7 @@ export default function AllOrdersList() {
   
   // Add a manual refresh button for debugging
   const handleRefresh = () => {
-    queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
     refetch();
   };
 

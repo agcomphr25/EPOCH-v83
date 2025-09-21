@@ -701,22 +701,32 @@ router.post('/get-rates', async (req: Request, res: Response) => {
   try {
     const { shipToAddress, shipFromAddress, packageWeight, packageDimensions } = req.body;
 
-    if (!process.env.UPS_USERNAME || !process.env.UPS_PASSWORD || !process.env.UPS_ACCESS_KEY) {
+    // Use OAuth 2.0 credentials (updated API)
+    const upsClientId = process.env.UPS_CLIENT_ID?.trim();
+    const upsClientSecret = process.env.UPS_CLIENT_SECRET?.trim();
+    const upsShipperNumber = process.env.UPS_SHIPPER_NUMBER?.trim();
+
+    if (!upsClientId || !upsClientSecret || !upsShipperNumber) {
       return res.status(500).json({ 
-        error: 'UPS API credentials not configured.' 
+        error: 'UPS API credentials not configured. Please set UPS_CLIENT_ID, UPS_CLIENT_SECRET, and UPS_SHIPPER_NUMBER environment variables.' 
       });
     }
 
+    // Get OAuth token
+    let accessToken;
+    try {
+      accessToken = await getUPSOAuthToken(upsClientId, upsClientSecret);
+      console.log('⚡ UPS OAuth token ready for rate shopping');
+    } catch (tokenError: any) {
+      console.error('Failed to get UPS OAuth token for rates:', tokenError.message);
+      return res.status(500).json({ 
+        error: 'Failed to authenticate with UPS OAuth API for rate shopping',
+        details: tokenError.message
+      });
+    }
+
+    // Build rate payload for OAuth 2.0 API
     const ratePayload = {
-      UPSSecurity: {
-        UsernameToken: {
-          Username: process.env.UPS_USERNAME,
-          Password: process.env.UPS_PASSWORD,
-        },
-        ServiceAccessToken: {
-          AccessLicenseNumber: process.env.UPS_ACCESS_KEY,
-        },
-      },
       RateRequest: {
         Request: {
           RequestOption: 'Rate',
@@ -763,13 +773,13 @@ router.post('/get-rates', async (req: Request, res: Response) => {
       },
     };
 
-    const isProduction = process.env.NODE_ENV === 'production';
-    const upsEndpoint = isProduction 
-      ? 'https://onlinetools.ups.com/rest/Rate'
-      : 'https://wwwcie.ups.com/rest/Rate';
+    // Use OAuth 2.0 API endpoint (updated 2024+ API)
+    const upsEndpoint = 'https://onlinetools.ups.com/api/rating/v1/Rate';
+    console.log('Using UPS OAuth 2.0 Rate API endpoint:', upsEndpoint);
 
     const response = await axios.post(upsEndpoint, ratePayload, {
       headers: { 
+        'Authorization': `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
         'Accept': 'application/json'
       },

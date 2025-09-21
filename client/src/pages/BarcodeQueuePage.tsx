@@ -1076,7 +1076,7 @@ export default function BarcodeQueuePage() {
                   <FormItem>
                     <FormLabel>Reported By *</FormLabel>
                     <FormControl>
-                      <Input placeholder="Your name" {...field} />
+                      <Input id="reportedBy" placeholder="Your name" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

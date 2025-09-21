@@ -638,6 +638,15 @@ export default function LayupScheduler() {
   const [pendingMoldChanges, setPendingMoldChanges] = useState<{[key: string]: {enabled: boolean, multiplier: number}}>({});
   const [isApplyingChanges, setIsApplyingChanges] = useState(false);
 
+  // OEM Settings state management
+  interface PendingOemChanges {
+    mode: boolean;
+    orders: string[];
+  }
+  const [oemMode, setOemMode] = useState(false);
+  const [selectedPOOrders, setSelectedPOOrders] = useState<string[]>([]);
+  const [pendingOemChanges, setPendingOemChanges] = useState<PendingOemChanges>({ mode: false, orders: [] });
+
   // Track order assignments (orderId -> { moldId, date })
   const [orderAssignments, setOrderAssignments] = useState<{[orderId: string]: { moldId: string, date: string }}>({});
 

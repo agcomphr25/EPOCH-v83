@@ -32,8 +32,8 @@ router.get('/order/:orderId', async (req: Request, res: Response) => {
     
     if (order.customerId) {
       try {
-        customer = await storage.getCustomer(parseInt(order.customerId));
-        addresses = await storage.getCustomerAddresses(parseInt(order.customerId));
+        customer = await storage.getCustomer(order.customerId);
+        addresses = await storage.getCustomerAddresses(order.customerId);
       } catch (customerError) {
         console.warn('Could not fetch customer data:', customerError);
       }
@@ -58,9 +58,8 @@ router.get('/order/:orderId', async (req: Request, res: Response) => {
     // Priority 2: Check if using existing customer as alternate shipping
     else if (order.hasAltShipTo && order.altShipToCustomerId && addresses.length > 0) {
       try {
-        const altCustomerId = parseInt(order.altShipToCustomerId);
-        const altCustomer = await storage.getCustomer(altCustomerId);
-        const altAddresses = await storage.getCustomerAddresses(altCustomerId);
+        const altCustomer = await storage.getCustomer(order.altShipToCustomerId);
+        const altAddresses = await storage.getCustomerAddresses(order.altShipToCustomerId);
         if (altCustomer && altAddresses.length > 0) {
           shippingAddress = {
             source: 'alternate_customer',
@@ -725,14 +724,18 @@ router.post('/get-rates', async (req: Request, res: Response) => {
       });
     }
 
-    // Build rate payload for OAuth 2.0 API
+    // Build rate payload for OAuth 2.0 API (updated format)
     const ratePayload = {
       RateRequest: {
         Request: {
-          RequestOption: 'Rate',
+          TransactionReference: {
+            CustomerContext: 'Rate Shopping Request'
+          }
         },
         Shipment: {
           Shipper: {
+            Name: 'AG Composites',
+            ShipperNumber: upsShipperNumber,
             Address: {
               AddressLine: [shipFromAddress.street],
               City: shipFromAddress.city,
@@ -742,6 +745,7 @@ router.post('/get-rates', async (req: Request, res: Response) => {
             },
           },
           ShipTo: {
+            Name: shipToAddress.name || 'Customer',
             Address: {
               AddressLine: [shipToAddress.street],
               City: shipToAddress.city,
@@ -750,13 +754,25 @@ router.post('/get-rates', async (req: Request, res: Response) => {
               CountryCode: shipToAddress.country || 'US',
             },
           },
+          ShipFrom: {
+            Name: 'AG Composites',
+            Address: {
+              AddressLine: [shipFromAddress.street],
+              City: shipFromAddress.city,
+              StateProvinceCode: shipFromAddress.state,
+              PostalCode: shipFromAddress.zipCode,
+              CountryCode: shipFromAddress.country || 'US',
+            },
+          },
           Package: {
             PackagingType: {
               Code: '02', // Customer Package
+              Description: 'Package'
             },
             Dimensions: packageDimensions ? {
               UnitOfMeasurement: {
                 Code: 'IN',
+                Description: 'Inches'
               },
               Length: packageDimensions.length.toString(),
               Width: packageDimensions.width.toString(),
@@ -765,6 +781,7 @@ router.post('/get-rates', async (req: Request, res: Response) => {
             PackageWeight: {
               UnitOfMeasurement: {
                 Code: 'LBS',
+                Description: 'Pounds'
               },
               Weight: packageWeight?.toString() || '1',
             },
@@ -781,10 +798,14 @@ router.post('/get-rates', async (req: Request, res: Response) => {
       headers: { 
         'Authorization': `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
-        'Accept': 'application/json'
+        'Accept': 'application/json',
+        'transId': 'rating-' + Date.now(),
+        'transactionSrc': 'testing'
       },
       timeout: 30000,
     });
+
+    console.log('Rate API payload:', JSON.stringify(ratePayload, null, 2));
 
     const ratedShipments = response.data?.RateResponse?.RatedShipment;
     if (ratedShipments) {
@@ -809,7 +830,8 @@ router.post('/get-rates', async (req: Request, res: Response) => {
       });
     }
   } catch (error: any) {
-    console.error('UPS Rate API error:', error.response?.data || error.message);
+    console.error('UPS Rate API error details:', JSON.stringify(error.response?.data, null, 2));
+    console.error('UPS Rate API error message:', error.message);
     res.status(500).json({ 
       error: 'Failed to get shipping rates',
       details: error.response?.data || error.message

@@ -18,7 +18,6 @@ import orderAttachmentsRoutes from './orderAttachments';
 import discountsRoutes from './discounts';
 import bomsRoutes from './boms';
 import communicationsRoutes from './communications';
-import secureVerificationRoutes from './secureVerification';
 import nonconformanceRoutes from '../../routes/nonconformance';
 import paymentsRoutes from './payments';
 import algorithmicSchedulerRoutes from './algorithmicScheduler';
@@ -2958,5 +2957,4 @@ export {
   orderAttachmentsRoutes as orderAttachmentsRouter,
   tasksRoutes as tasksRouter,
   communicationsRoutes as communicationsRouter,
-  secureVerificationRoutes as secureVerificationRouter
 };

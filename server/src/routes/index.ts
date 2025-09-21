@@ -243,46 +243,16 @@ export function registerRoutes(app: Express): Server {
         return true;
       });
       
-      // Also get active orders from the orders table (for P1 PO production orders)
-      const { pool } = await import('../../db');
-      
-      // Use direct SQL query to avoid schema conflicts
-      const activeOrdersResult = await pool.query(`
-        SELECT 
-          id,
-          order_id as "orderId",
-          customer,
-          product,
-          date,
-          due_date as "dueDate",
-          current_department as "currentDepartment",
-          status
-        FROM orders 
-        WHERE current_department = 'P1 Production Queue'
-      `);
-      
-      const activeOrders = activeOrdersResult || [];
-      
-      // Convert active orders to the expected format and combine
-      const formattedActiveOrders = activeOrders.map((order: any) => ({
-        id: order.id,
-        orderId: order.orderId,
-        orderDate: order.date, // Use date field directly
-        dueDate: order.dueDate,
-        currentDepartment: (order as any).currentDepartment,
-        customerId: order.customer,
-        features: {},
-        modelId: order.product,
-        status: (order as any).status,
-        poId: null,
-        productionOrderId: null
-      }));
+      // Skip the orders table query since it doesn't have the expected columns
+      // and appears to be empty anyway. Focus on all_orders table which has the data.
+      const formattedActiveOrders: any[] = [];
       
       // Combine both sources  
       const combinedUnscheduledOrders = [...unscheduledOrders, ...formattedActiveOrders];
       
       // Fetch P1 PO orders from all_orders table (orders created from P1 PO week selection)
       console.log('🔍 Fetching P1 PO orders from all_orders table...');
+      const { pool } = await import('../../db');
       const p1POOrdersResult = await pool.query(`
         SELECT 
           order_id as "orderId",

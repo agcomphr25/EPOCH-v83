@@ -3507,7 +3507,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createCustomer(data: InsertCustomer): Promise<Customer> {
-    const [customer] = await db.insert(customers).values(data).returning();
+    // Explicitly omit id field to prevent null value insertion
+    const { id, ...cleanData } = data as any;
+    const [customer] = await db.insert(customers).values(cleanData).returning();
     return customer;
   }
 

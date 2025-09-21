@@ -1280,7 +1280,7 @@ export default function OrdersList() {
                     <FormItem>
                       <FormLabel>Reported By</FormLabel>
                       <FormControl>
-                        <Input placeholder="Employee name" {...field} />
+                        <Input id="kickback-reportedBy" placeholder="Employee name" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>

@@ -728,82 +728,6 @@ router.post('/get-rates', async (req: Request, res: Response) => {
       });
     }
 
-    // Build rate payload for OAuth 2.0 API (corrected format)
-    const ratePayload = {
-      RateRequest: {
-        Request: {
-          RequestOption: 'Shop', // This gets rates for all available services
-          TransactionReference: {
-            CustomerContext: 'Rate Shopping Request'
-          }
-        },
-        PickupType: {
-          Code: '01', // Daily Pickup
-          Description: 'Daily Pickup'
-        },
-        CustomerClassification: {
-          Code: '01', // Wholesale
-          Description: 'Wholesale'
-        },
-        Shipment: {
-          Shipper: {
-            Name: 'AG Composites',
-            ShipperNumber: upsShipperNumber,
-            Address: {
-              AddressLine: shipFromAddress.street,
-              City: shipFromAddress.city,
-              StateProvinceCode: shipFromAddress.state,
-              PostalCode: shipFromAddress.zipCode,
-              CountryCode: shipFromAddress.country || 'US',
-            },
-          },
-          ShipTo: {
-            Name: shipToAddress.name || 'Customer',
-            Address: {
-              AddressLine: shipToAddress.street,
-              City: shipToAddress.city,
-              StateProvinceCode: shipToAddress.state,
-              PostalCode: shipToAddress.zipCode,
-              CountryCode: shipToAddress.country || 'US',
-              ResidentialAddressIndicator: '1'
-            },
-          },
-          ShipFrom: {
-            Name: 'AG Composites',
-            Address: {
-              AddressLine: shipFromAddress.street,
-              City: shipFromAddress.city,
-              StateProvinceCode: shipFromAddress.state,
-              PostalCode: shipFromAddress.zipCode,
-              CountryCode: shipFromAddress.country || 'US',
-            },
-          },
-          Package: {
-            PackagingType: {
-              Code: '02', // Customer Package
-              Description: 'Package'
-            },
-            Dimensions: packageDimensions ? {
-              UnitOfMeasurement: {
-                Code: 'IN',
-                Description: 'Inches'
-              },
-              Length: packageDimensions.length.toString(),
-              Width: packageDimensions.width.toString(),
-              Height: packageDimensions.height.toString(),
-            } : undefined,
-            PackageWeight: {
-              UnitOfMeasurement: {
-                Code: 'LBS',
-                Description: 'Pounds'
-              },
-              Weight: packageWeight?.toString() || '1',
-            },
-          },
-        },
-      },
-    };
-
     // Use OAuth 2.0 API endpoint - same environment as working labels
     const isProduction = process.env.NODE_ENV === 'production' || process.env.REPLIT_DEPLOYMENT === '1';
     const upsEndpoint = isProduction
@@ -811,39 +735,97 @@ router.post('/get-rates', async (req: Request, res: Response) => {
       : 'https://wwwcie.ups.com/api/rating/v1/Rate';      // Test/Sandbox
     console.log(`Using UPS ${isProduction ? 'PRODUCTION' : 'TEST'} OAuth 2.0 Rate API endpoint:`, upsEndpoint);
 
-    const response = await axios.post(upsEndpoint, ratePayload, {
-      headers: { 
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-        'transId': 'rating-' + Date.now(),
-        'transactionSrc': 'epoch'
-      },
-      timeout: 30000,
-    });
+    // Try multiple service codes one by one to find what works from Alabama
+    const servicesToTry = [
+      { code: '03', name: 'UPS Ground' },
+      { code: '02', name: 'UPS 2nd Day Air' },
+      { code: '01', name: 'UPS Next Day Air' },
+      { code: '12', name: 'UPS 3 Day Select' }
+    ];
 
-    console.log('Rate API payload:', JSON.stringify(ratePayload, null, 2));
+    const successfulRates = [];
+    
+    for (const service of servicesToTry) {
+      try {
+        const ratePayload = {
+          RateRequest: {
+            Request: {
+              RequestOption: 'Rate'
+            },
+            Shipment: {
+              Shipper: {
+                Name: 'AG Composites',
+                ShipperNumber: upsShipperNumber,
+                Address: {
+                  AddressLine: [shipFromAddress.street],
+                  City: shipFromAddress.city,
+                  StateProvinceCode: shipFromAddress.state,
+                  PostalCode: shipFromAddress.zipCode,
+                  CountryCode: 'US'
+                }
+              },
+              ShipTo: {
+                Name: shipToAddress.name || 'Customer',
+                Address: {
+                  AddressLine: [shipToAddress.street],
+                  City: shipToAddress.city,
+                  StateProvinceCode: shipToAddress.state,
+                  PostalCode: shipToAddress.zipCode,
+                  CountryCode: 'US'
+                }
+              },
+              Service: {
+                Code: service.code
+              },
+              Package: {
+                PackagingType: {
+                  Code: '02'
+                },
+                PackageWeight: {
+                  UnitOfMeasurement: {
+                    Code: 'LBS'
+                  },
+                  Weight: (packageWeight || 5).toString()
+                }
+              }
+            }
+          }
+        };
 
-    const ratedShipments = response.data?.RateResponse?.RatedShipment;
-    if (ratedShipments) {
-      const rates = Array.isArray(ratedShipments) ? ratedShipments : [ratedShipments];
-      const formattedRates = rates.map((rate: any) => ({
-        serviceCode: rate.Service?.Code,
-        serviceName: getServiceName(rate.Service?.Code),
-        totalCharges: parseFloat(rate.TotalCharges?.MonetaryValue || '0'),
-        currency: rate.TotalCharges?.CurrencyCode || 'USD',
-        guaranteedDaysToDelivery: rate.GuaranteedDaysToDelivery,
-        scheduleDeliveryDate: rate.ScheduledDeliveryDate,
-      }));
+        console.log(`🚚 Trying UPS service ${service.code} (${service.name})`);
+        
+        const serviceResponse = await axios.post(upsEndpoint, ratePayload, {
+          headers: { 
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          timeout: 15000,
+        });
 
-      res.json({
+        const ratedShipment = serviceResponse.data?.RateResponse?.RatedShipment;
+        if (ratedShipment) {
+          successfulRates.push({
+            serviceCode: service.code,
+            serviceName: service.name,
+            totalCharges: parseFloat(ratedShipment.TotalCharges?.MonetaryValue || '0'),
+            currency: ratedShipment.TotalCharges?.CurrencyCode || 'USD',
+            guaranteedDaysToDelivery: ratedShipment.GuaranteedDaysToDelivery,
+            scheduleDeliveryDate: ratedShipment.ScheduledDeliveryDate,
+          });
+          console.log(`✅ ${service.name}: $${ratedShipment.TotalCharges?.MonetaryValue}`);
+        }
+      } catch (serviceError: any) {
+        console.log(`❌ ${service.name} (${service.code}): ${serviceError.response?.data?.response?.errors?.[0]?.message || 'Failed'}`);
+        // Continue to next service
+      }
+    }
+
+    if (successfulRates.length > 0) {
+      console.log(`🎉 Successfully got ${successfulRates.length} real UPS rates!`);
+      return res.json({
         success: true,
-        rates: formattedRates
-      });
-    } else {
-      res.status(500).json({ 
-        error: 'No rates returned from UPS',
-        details: response.data 
+        rates: successfulRates
       });
     }
   } catch (error: any) {

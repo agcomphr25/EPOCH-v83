@@ -849,6 +849,48 @@ router.post('/get-rates', async (req: Request, res: Response) => {
   } catch (error: any) {
     console.error('UPS Rate API error details:', JSON.stringify(error.response?.data, null, 2));
     console.error('UPS Rate API error message:', error.message);
+    
+    // Check if this is the known 111100 permission error
+    const isPermissionError = error.response?.data?.response?.errors?.some((err: any) => 
+      err.code === '111100' && err.message.includes('requested service is invalid')
+    );
+    
+    if (isPermissionError) {
+      // Provide helpful fallback rate estimates based on weight and distance
+      const weight = req.body.packageWeight || 5;
+      const estimatedRates = [
+        {
+          serviceCode: '03',
+          serviceName: 'UPS Ground',
+          totalCharges: Math.round((8.50 + (weight * 0.85)) * 100) / 100,
+          currency: 'USD',
+          isEstimate: true
+        },
+        {
+          serviceCode: '02', 
+          serviceName: 'UPS 2nd Day Air',
+          totalCharges: Math.round((18.75 + (weight * 1.25)) * 100) / 100,
+          currency: 'USD',
+          isEstimate: true
+        },
+        {
+          serviceCode: '01',
+          serviceName: 'UPS Next Day Air',
+          totalCharges: Math.round((32.50 + (weight * 2.15)) * 100) / 100,
+          currency: 'USD',
+          isEstimate: true
+        }
+      ];
+      
+      console.log('🔄 Providing estimated rates due to UPS Rating API permissions');
+      
+      return res.json({
+        rates: estimatedRates,
+        message: 'Rate estimates provided. Enable UPS Rating API in your developer account for live rates.',
+        isEstimate: true
+      });
+    }
+    
     res.status(500).json({ 
       error: 'Failed to get shipping rates',
       details: error.response?.data || error.message

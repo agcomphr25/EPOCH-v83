@@ -332,7 +332,7 @@ export default function KickbackTracking() {
                         <FormItem>
                           <FormLabel>Reported By</FormLabel>
                           <FormControl>
-                            <Input placeholder="Your name" {...field} />
+                            <Input id="kickback-reportedBy-tracking" placeholder="Your name" {...field} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>

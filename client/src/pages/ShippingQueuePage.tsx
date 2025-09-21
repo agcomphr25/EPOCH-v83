@@ -138,7 +138,7 @@ export default function ShippingQueuePage() {
         description: `Order ${orderId} has been marked as fulfilled and moved to shipping management`,
       });
       // Invalidate and refetch orders to update the UI
-      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
       queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
       setSelectedCard(null);
       setSelectedOrders([]);

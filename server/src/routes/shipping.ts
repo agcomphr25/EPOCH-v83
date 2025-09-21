@@ -700,6 +700,10 @@ router.post('/get-rates', async (req: Request, res: Response) => {
   try {
     const { shipToAddress, shipFromAddress, packageWeight, packageDimensions } = req.body;
 
+    // Log the addresses for debugging
+    console.log('🏠 Ship FROM address:', JSON.stringify(shipFromAddress, null, 2));
+    console.log('🏠 Ship TO address:', JSON.stringify(shipToAddress, null, 2));
+
     // Use OAuth 2.0 credentials (updated API)
     const upsClientId = process.env.UPS_CLIENT_ID?.trim();
     const upsClientSecret = process.env.UPS_CLIENT_SECRET?.trim();
@@ -791,9 +795,12 @@ router.post('/get-rates', async (req: Request, res: Response) => {
       },
     };
 
-    // Use OAuth 2.0 API endpoint (updated 2024+ API)
-    const upsEndpoint = 'https://onlinetools.ups.com/api/rating/v1/Rate';
-    console.log('Using UPS OAuth 2.0 Rate API endpoint:', upsEndpoint);
+    // Use OAuth 2.0 API endpoint - Test environment for development
+    const isProduction = process.env.NODE_ENV === 'production' || process.env.REPLIT_DEPLOYMENT === '1';
+    const upsEndpoint = isProduction
+      ? 'https://onlinetools.ups.com/api/rating/v1/Rate'  // Production
+      : 'https://wwwcie.ups.com/api/rating/v1/Rate';      // Test/Sandbox
+    console.log(`Using UPS ${isProduction ? 'PRODUCTION' : 'TEST'} OAuth 2.0 Rate API endpoint:`, upsEndpoint);
 
     const response = await axios.post(upsEndpoint, ratePayload, {
       headers: { 
@@ -880,10 +887,13 @@ router.post('/test-ups-shipment', async (req: Request, res: Response) => {
 
 // UPS OAuth 2.0 Authentication (2024+ API)
 async function getUPSOAuthToken(clientId: string, clientSecret: string): Promise<string> {
-  // Use production OAuth endpoint for real tracking numbers
-  const tokenEndpoint = 'https://onlinetools.ups.com/security/v1/oauth/token';
+  // Use appropriate environment endpoint
+  const isProduction = process.env.NODE_ENV === 'production' || process.env.REPLIT_DEPLOYMENT === '1';
+  const tokenEndpoint = isProduction
+    ? 'https://onlinetools.ups.com/security/v1/oauth/token'  // Production
+    : 'https://wwwcie.ups.com/security/v1/oauth/token';      // Test/Sandbox
     
-  console.log('UPS OAuth Token Endpoint:', tokenEndpoint);
+  console.log(`UPS ${isProduction ? 'PRODUCTION' : 'TEST'} OAuth Token Endpoint:`, tokenEndpoint);
   
   const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
   

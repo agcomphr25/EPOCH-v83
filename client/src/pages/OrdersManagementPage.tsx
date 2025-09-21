@@ -66,8 +66,8 @@ export default function OrdersManagementPage() {
 
   // Fetch orders data
   const { data: orders = [], isLoading, error, refetch } = useQuery<Order[]>({
-    queryKey: ['/api/orders/all'],
-    queryFn: () => apiRequest('/api/orders/all'),
+    queryKey: ['/api/orders'],
+    queryFn: () => apiRequest('/api/orders'),
     refetchOnWindowFocus: false,
   });
 

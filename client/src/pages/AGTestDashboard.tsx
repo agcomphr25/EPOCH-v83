@@ -30,9 +30,9 @@ export default function AGTestDashboard() {
     window.location.href = '/login';
   };
 
-  // Get all orders
+  // Get all customer orders (excluding purchase orders)
   const { data: allOrders = [] } = useQuery({
-    queryKey: ['/api/orders/all'],
+    queryKey: ['/api/orders'],
   });
 
   // Get stock models for display names

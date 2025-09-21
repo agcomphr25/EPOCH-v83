@@ -111,7 +111,7 @@ export default function AllOrdersPage() {
       
       // Clear all caches and force immediate refetch
       queryClient.clear();
-      await queryClient.refetchQueries({ queryKey: ['/api/orders/all'] });
+      await queryClient.refetchQueries({ queryKey: ['/api/orders'] });
     },
     onError: (error: any, variables) => {
       console.error(`❌ Failed to progress order ${variables.orderId}:`, error);
@@ -124,7 +124,7 @@ export default function AllOrdersPage() {
   });
 
   const { data: allOrders, isLoading } = useQuery<Order[]>({
-    queryKey: ['/api/orders/all'],
+    queryKey: ['/api/orders'],
     staleTime: 30000, // Cache for 30 seconds to improve performance  
     gcTime: 60000 // Keep in cache for 1 minute
   });
@@ -153,7 +153,7 @@ export default function AllOrdersPage() {
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
       queryClient.invalidateQueries({ queryKey: ['/api/orders/pipeline-counts'] });
       queryClient.invalidateQueries({ queryKey: ['/api/production-queue/prioritized'] });
       queryClient.invalidateQueries({ queryKey: ['/api/layup-schedule'] });

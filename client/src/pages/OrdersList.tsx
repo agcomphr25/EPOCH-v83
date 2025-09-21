@@ -304,7 +304,7 @@ export default function OrdersList() {
     console.log(`🔄 Progressing order ${orderId} from ${currentDepartment} to ${nextDepartment}`);
 
     // IMMEDIATELY update React Query cache - this prevents any reversion
-    queryClient.setQueryData(['/api/orders', 'v2'], (old: any[]) => {
+    queryClient.setQueryData(['/api/orders'], (old: any[]) => {
       if (!old) return old;
       const updated = old.map((order: any) => {
         if (order.orderId === orderId) {
@@ -412,11 +412,13 @@ export default function OrdersList() {
 
   try {
     const { data: orders, isLoading, error } = useQuery<Order[]>({
-      queryKey: ['/api/orders', 'v2'],
+      queryKey: ['/api/orders'],
       queryFn: () => apiRequest('/api/orders'),
-      refetchInterval: false, // Completely disable automatic refetching
-      refetchOnWindowFocus: false, // Disable refetch on window focus
-      refetchOnReconnect: false, // Disable refetch on network reconnect
+      staleTime: 0, // Always fetch fresh data
+      gcTime: 60 * 1000, // 1 minute
+      refetchOnWindowFocus: true,
+      refetchOnMount: true,
+      refetchOnReconnect: true,
     });
 
 

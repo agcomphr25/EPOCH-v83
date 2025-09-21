@@ -1,8 +1,6 @@
 import { Express } from 'express';
 import { createServer, type Server } from "http";
-import authRoutes from './auth';
 import employeesRoutes from './employees';
-import usersRoutes from './users';
 import ordersRoutes from './orders';
 import formsRoutes from './forms';
 import tasksRoutes from './tasks';
@@ -33,14 +31,8 @@ import refundRoutes from './refunds';
 import { getAccessToken } from '../utils/upsShipping';
 
 export function registerRoutes(app: Express): Server {
-  // Authentication routes
-  app.use('/api/auth', authRoutes);
-
   // Employee management routes
   app.use('/api/employees', employeesRoutes);
-
-  // User management routes
-  app.use('/api/users', usersRoutes);
 
   // Order management routes  
   app.use('/api/orders', ordersRoutes);

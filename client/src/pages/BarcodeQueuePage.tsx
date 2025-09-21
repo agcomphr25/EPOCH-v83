@@ -1076,7 +1076,7 @@ export default function BarcodeQueuePage() {
                   <FormItem>
                     <FormLabel>Reported By *</FormLabel>
                     <FormControl>
-                      <Input id="reportedBy" autocomplete="name" placeholder="Your name" {...field} />
+                      <Input id="reportedBy" autoComplete="name" placeholder="Your name" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

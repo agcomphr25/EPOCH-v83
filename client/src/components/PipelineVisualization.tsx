@@ -14,6 +14,7 @@ const departments = [
   { name: 'Finish', color: 'bg-[#7BAFD4]' },
   { name: 'Finish QC', color: 'bg-[#7BAFD4]' },
   { name: 'Paint', color: 'bg-[#7BAFD4]' },
+  { name: 'Shipping QC', color: 'bg-[#7BAFD4]' },
   { name: 'Shipping', color: 'bg-[#7BAFD4]' }
 ];
 

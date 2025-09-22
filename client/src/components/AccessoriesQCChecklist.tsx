@@ -71,9 +71,19 @@ export default function AccessoriesQCChecklist({ orderId, onSubmit }: Accessorie
     }
   });
 
+  // Fetch feature definitions to get bottom metal and other option pricing
+  const { data: featureDefinitions = [], isLoading: featureDefsLoading } = useQuery({
+    queryKey: ['/api/features'],
+    queryFn: async () => {
+      const response = await fetch('/api/features');
+      if (!response.ok) throw new Error('Failed to fetch feature definitions');
+      return response.json();
+    }
+  });
+
   // Process order features to identify actual extra charge accessories
   useEffect(() => {
-    if (!orderData?.features || !featureSubCategories.length) return;
+    if (!orderData?.features || !featureSubCategories.length || !featureDefinitions.length) return;
 
     const items: ExtraChargeItem[] = [];
     const features = orderData.features;
@@ -114,46 +124,57 @@ export default function AccessoriesQCChecklist({ orderId, onSubmit }: Accessorie
 
     // Check bottom metal - ONLY include if it has confirmed extra charges (accessories)
     if (features.bottom_metal) {
-      let pricingInfo = pricingByCode.get(features.bottom_metal);
-      
-      // Try variations if direct match fails
-      if (!pricingInfo) {
-        const normalized = features.bottom_metal.replace(/_/g, '-').toLowerCase();
-        pricingInfo = pricingByCode.get(normalized);
-      }
+      // Find bottom metal pricing from feature definitions
+      const bottomMetalFeature = featureDefinitions.find((f: any) => f.id === 'bottom_metal' || f.name === 'bottom_metal');
+      const bottomMetalOption = bottomMetalFeature?.options?.find((opt: any) => opt.value === features.bottom_metal);
       
       // Only add if we have confirmed pricing > 0
-      if (pricingInfo && pricingInfo.price > 0) {
+      if (bottomMetalOption && bottomMetalOption.price > 0) {
         items.push({
           key: `bottom_metal_${features.bottom_metal}`,
           label: features.bottom_metal,
-          displayName: `Bottom Metal: ${pricingInfo.displayName}`,
-          price: pricingInfo.price,
+          displayName: `Bottom Metal: ${bottomMetalOption.label}`,
+          price: bottomMetalOption.price,
           checked: false,
           category: 'accessory'
         });
       }
-      // If no pricing found, do NOT include the item - requirement is only extra charges
+      // If no pricing found or price is 0, do NOT include the item - requirement is only extra charges
     }
 
     // Check other options - ONLY include those with confirmed extra charges
     if (features.other_options && Array.isArray(features.other_options)) {
       features.other_options.forEach((option: string) => {
-        let pricingInfo = pricingByCode.get(option);
+        // First try to find pricing in feature definitions
+        let optionPrice = 0;
+        let optionLabel = option;
         
-        // Try variations if direct match fails
-        if (!pricingInfo) {
-          const normalized = option.replace(/_/g, '-').toLowerCase();
-          pricingInfo = pricingByCode.get(normalized);
+        // Look through all feature definitions for this option
+        for (const featureDef of featureDefinitions) {
+          const foundOption = featureDef.options?.find((opt: any) => opt.value === option);
+          if (foundOption && foundOption.price > 0) {
+            optionPrice = foundOption.price;
+            optionLabel = foundOption.label;
+            break;
+          }
+        }
+        
+        // Fallback to feature sub-categories if not found in feature definitions
+        if (optionPrice === 0) {
+          const pricingInfo = pricingByCode.get(option);
+          if (pricingInfo && pricingInfo.price > 0) {
+            optionPrice = pricingInfo.price;
+            optionLabel = pricingInfo.displayName;
+          }
         }
         
         // Only add if we have confirmed pricing > 0
-        if (pricingInfo && pricingInfo.price > 0) {
+        if (optionPrice > 0) {
           items.push({
             key: `other_option_${option}`,
             label: option,
-            displayName: `${pricingInfo.displayName}`,
-            price: pricingInfo.price,
+            displayName: optionLabel,
+            price: optionPrice,
             checked: false,
             category: 'accessory'
           });
@@ -212,21 +233,17 @@ export default function AccessoriesQCChecklist({ orderId, onSubmit }: Accessorie
 
     // Check action inlet - categorize under inlet
     if (features.action_inlet) {
-      let pricingInfo = pricingByCode.get(features.action_inlet);
-      
-      // Try variations if direct match fails
-      if (!pricingInfo) {
-        const normalized = features.action_inlet.replace(/_/g, '-').toLowerCase();
-        pricingInfo = pricingByCode.get(normalized);
-      }
+      // Find action inlet pricing from feature definitions
+      const actionInletFeature = featureDefinitions.find((f: any) => f.id === 'action_inlet' || f.name === 'action_inlet');
+      const actionInletOption = actionInletFeature?.options?.find((opt: any) => opt.value === features.action_inlet);
       
       // Only add if we have confirmed pricing > 0
-      if (pricingInfo && pricingInfo.price > 0) {
+      if (actionInletOption && actionInletOption.price > 0) {
         items.push({
           key: `action_inlet_${features.action_inlet}`,
           label: features.action_inlet,
-          displayName: `Action Inlet: ${pricingInfo.displayName}`,
-          price: pricingInfo.price,
+          displayName: `Action Inlet: ${actionInletOption.label}`,
+          price: actionInletOption.price,
           checked: false,
           category: 'inlet'
         });
@@ -235,21 +252,17 @@ export default function AccessoriesQCChecklist({ orderId, onSubmit }: Accessorie
 
     // Check barrel inlet - categorize under inlet
     if (features.barrel_inlet) {
-      let pricingInfo = pricingByCode.get(features.barrel_inlet);
-      
-      // Try variations if direct match fails
-      if (!pricingInfo) {
-        const normalized = features.barrel_inlet.replace(/_/g, '-').toLowerCase();
-        pricingInfo = pricingByCode.get(normalized);
-      }
+      // Find barrel inlet pricing from feature definitions
+      const barrelInletFeature = featureDefinitions.find((f: any) => f.id === 'barrel_inlet' || f.name === 'barrel_inlet');
+      const barrelInletOption = barrelInletFeature?.options?.find((opt: any) => opt.value === features.barrel_inlet);
       
       // Only add if we have confirmed pricing > 0
-      if (pricingInfo && pricingInfo.price > 0) {
+      if (barrelInletOption && barrelInletOption.price > 0) {
         items.push({
           key: `barrel_inlet_${features.barrel_inlet}`,
           label: features.barrel_inlet,
-          displayName: `Barrel Inlet: ${pricingInfo.displayName}`,
-          price: pricingInfo.price,
+          displayName: `Barrel Inlet: ${barrelInletOption.label}`,
+          price: barrelInletOption.price,
           checked: false,
           category: 'inlet'
         });
@@ -327,7 +340,7 @@ export default function AccessoriesQCChecklist({ orderId, onSubmit }: Accessorie
   const allItemsChecked = extraChargeItems.length > 0 && 
     extraChargeItems.every(item => checkedItems[item.key] === true);
 
-  if (orderLoading || subCategoriesLoading) {
+  if (orderLoading || subCategoriesLoading || featureDefsLoading) {
     return (
       <Card>
         <CardContent className="flex justify-center py-8">

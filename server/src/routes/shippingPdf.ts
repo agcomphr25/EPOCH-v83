@@ -616,6 +616,36 @@ router.get('/qc-checklist/:orderId', async (req: Request, res: Response) => {
       color: rgb(0, 0, 0),
     });
 
+    // Order Notes/Special Instructions for QC
+    if (order.notes) {
+      currentY -= 40;
+      page.drawText('SPECIAL INSTRUCTIONS / NOTES:', {
+        x: margin,
+        y: currentY,
+        size: 11,
+        font: boldFont,
+        color: rgb(0, 0, 0),
+      });
+
+      currentY -= 20;
+      // Word wrap the notes using the existing helper function
+      const noteLines = wrapText(order.notes, printableWidth - 10, 10, font);
+      
+      for (const line of noteLines) {
+        page.drawText(line, {
+          x: margin + 5,
+          y: currentY,
+          size: 10,
+          font: font,
+          color: rgb(0, 0, 0),
+        });
+        currentY -= 15;
+      }
+
+      // Add some spacing after notes
+      currentY -= 20;
+    }
+
     // Digital signature section - print optimized
     currentY -= 60;
     page.drawText('DIGITAL CERTIFICATION', {

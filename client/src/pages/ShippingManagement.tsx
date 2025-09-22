@@ -13,10 +13,12 @@ import { Truck, Package, Search, Filter, Send, CheckCircle, Clock, Download, Fil
 // Removed UPSLabelCreator import since we're now using Track Order instead of Create Label
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
+import CustomerDetailsTooltip from '@/components/CustomerDetailsTooltip';
 
 interface OrderWithTracking {
   orderId: string;
   customer: string;
+  customerId?: string;
   product: string;
   currentDepartment: string;
   status: string;
@@ -408,7 +410,20 @@ export default function ShippingManagement() {
                       </div>
                     </TableCell>
                     <TableCell className="font-mono">{order.orderId}</TableCell>
-                    <TableCell>{order.customer}</TableCell>
+                    <TableCell>
+                      {order.customerId ? (
+                        <CustomerDetailsTooltip 
+                          customerId={order.customerId} 
+                          customerName={order.customer}
+                        >
+                          <span className="cursor-pointer hover:text-blue-600 transition-colors">
+                            {order.customer}
+                          </span>
+                        </CustomerDetailsTooltip>
+                      ) : (
+                        order.customer
+                      )}
+                    </TableCell>
                     <TableCell>{order.product}</TableCell>
                     <TableCell>
                       {order.trackingNumber ? (

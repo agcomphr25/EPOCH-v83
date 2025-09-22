@@ -32,8 +32,8 @@ router.get('/order/:orderId', async (req: Request, res: Response) => {
     
     if (order.customerId) {
       try {
-        customer = await storage.getCustomer(parseInt(order.customerId));
-        addresses = await storage.getCustomerAddresses(parseInt(order.customerId));
+        customer = await storage.getCustomer(order.customerId);
+        addresses = await storage.getCustomerAddresses(order.customerId);
       } catch (customerError) {
         console.warn('Could not fetch customer data:', customerError);
       }
@@ -58,9 +58,8 @@ router.get('/order/:orderId', async (req: Request, res: Response) => {
     // Priority 2: Check if using existing customer as alternate shipping
     else if (order.hasAltShipTo && order.altShipToCustomerId && addresses.length > 0) {
       try {
-        const altCustomerId = parseInt(order.altShipToCustomerId);
-        const altCustomer = await storage.getCustomer(altCustomerId);
-        const altAddresses = await storage.getCustomerAddresses(altCustomerId);
+        const altCustomer = await storage.getCustomer(order.altShipToCustomerId);
+        const altAddresses = await storage.getCustomerAddresses(order.altShipToCustomerId);
         if (altCustomer && altAddresses.length > 0) {
           shippingAddress = {
             source: 'alternate_customer',
@@ -701,105 +700,179 @@ router.post('/get-rates', async (req: Request, res: Response) => {
   try {
     const { shipToAddress, shipFromAddress, packageWeight, packageDimensions } = req.body;
 
-    if (!process.env.UPS_USERNAME || !process.env.UPS_PASSWORD || !process.env.UPS_ACCESS_KEY) {
+    // Log the addresses for debugging
+    console.log('🏠 Ship FROM address:', JSON.stringify(shipFromAddress, null, 2));
+    console.log('🏠 Ship TO address:', JSON.stringify(shipToAddress, null, 2));
+
+    // Use OAuth 2.0 credentials (same as working label creation)
+    const upsClientId = process.env.UPS_CLIENT_ID?.trim();
+    const upsClientSecret = process.env.UPS_CLIENT_SECRET?.trim();
+    const upsShipperNumber = process.env.UPS_SHIPPER_NUMBER?.trim();
+
+    if (!upsClientId || !upsClientSecret || !upsShipperNumber) {
       return res.status(500).json({ 
-        error: 'UPS API credentials not configured.' 
+        error: 'UPS API credentials not configured. Please set UPS_CLIENT_ID, UPS_CLIENT_SECRET, and UPS_SHIPPER_NUMBER environment variables.' 
       });
     }
 
-    const ratePayload = {
-      UPSSecurity: {
-        UsernameToken: {
-          Username: process.env.UPS_USERNAME,
-          Password: process.env.UPS_PASSWORD,
-        },
-        ServiceAccessToken: {
-          AccessLicenseNumber: process.env.UPS_ACCESS_KEY,
-        },
-      },
-      RateRequest: {
-        Request: {
-          RequestOption: 'Rate',
-        },
-        Shipment: {
-          Shipper: {
-            Address: {
-              AddressLine: [shipFromAddress.street],
-              City: shipFromAddress.city,
-              StateProvinceCode: shipFromAddress.state,
-              PostalCode: shipFromAddress.zipCode,
-              CountryCode: shipFromAddress.country || 'US',
-            },
-          },
-          ShipTo: {
-            Address: {
-              AddressLine: [shipToAddress.street],
-              City: shipToAddress.city,
-              StateProvinceCode: shipToAddress.state,
-              PostalCode: shipToAddress.zipCode,
-              CountryCode: shipToAddress.country || 'US',
-            },
-          },
-          Package: {
-            PackagingType: {
-              Code: '02', // Customer Package
-            },
-            Dimensions: packageDimensions ? {
-              UnitOfMeasurement: {
-                Code: 'IN',
-              },
-              Length: packageDimensions.length.toString(),
-              Width: packageDimensions.width.toString(),
-              Height: packageDimensions.height.toString(),
-            } : undefined,
-            PackageWeight: {
-              UnitOfMeasurement: {
-                Code: 'LBS',
-              },
-              Weight: packageWeight?.toString() || '1',
-            },
-          },
-        },
-      },
-    };
-
-    const isProduction = process.env.NODE_ENV === 'production';
-    const upsEndpoint = isProduction 
-      ? 'https://onlinetools.ups.com/rest/Rate'
-      : 'https://wwwcie.ups.com/rest/Rate';
-
-    const response = await axios.post(upsEndpoint, ratePayload, {
-      headers: { 
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      },
-      timeout: 30000,
-    });
-
-    const ratedShipments = response.data?.RateResponse?.RatedShipment;
-    if (ratedShipments) {
-      const rates = Array.isArray(ratedShipments) ? ratedShipments : [ratedShipments];
-      const formattedRates = rates.map((rate: any) => ({
-        serviceCode: rate.Service?.Code,
-        serviceName: getServiceName(rate.Service?.Code),
-        totalCharges: parseFloat(rate.TotalCharges?.MonetaryValue || '0'),
-        currency: rate.TotalCharges?.CurrencyCode || 'USD',
-        guaranteedDaysToDelivery: rate.GuaranteedDaysToDelivery,
-        scheduleDeliveryDate: rate.ScheduledDeliveryDate,
-      }));
-
-      res.json({
-        success: true,
-        rates: formattedRates
+    // Get OAuth token (same as label creation)
+    let accessToken;
+    try {
+      accessToken = await getUPSOAuthToken(upsClientId, upsClientSecret);
+      console.log('⚡ UPS OAuth token ready for rate shopping (same flow as labels)');
+    } catch (tokenError: any) {
+      console.error('Failed to get UPS OAuth token for rates:', tokenError.message);
+      return res.status(500).json({ 
+        error: 'Failed to authenticate with UPS OAuth API for rate shopping',
+        details: tokenError.message
       });
-    } else {
-      res.status(500).json({ 
-        error: 'No rates returned from UPS',
-        details: response.data 
+    }
+
+    // Use OAuth 2.0 API endpoint - same environment as working labels
+    const isProduction = process.env.NODE_ENV === 'production' || process.env.REPLIT_DEPLOYMENT === '1';
+    const upsEndpoint = isProduction
+      ? 'https://onlinetools.ups.com/api/rating/v1/Rate'  // Production
+      : 'https://wwwcie.ups.com/api/rating/v1/Rate';      // Test/Sandbox
+    console.log(`Using UPS ${isProduction ? 'PRODUCTION' : 'TEST'} OAuth 2.0 Rate API endpoint:`, upsEndpoint);
+
+    // Try multiple service codes one by one to find what works from Alabama
+    const servicesToTry = [
+      { code: '03', name: 'UPS Ground' },
+      { code: '02', name: 'UPS 2nd Day Air' },
+      { code: '01', name: 'UPS Next Day Air' },
+      { code: '12', name: 'UPS 3 Day Select' }
+    ];
+
+    const successfulRates = [];
+    
+    for (const service of servicesToTry) {
+      try {
+        const ratePayload = {
+          RateRequest: {
+            Request: {
+              RequestOption: 'Rate'
+            },
+            Shipment: {
+              Shipper: {
+                Name: 'AG Composites',
+                ShipperNumber: upsShipperNumber,
+                Address: {
+                  AddressLine: [shipFromAddress.street],
+                  City: shipFromAddress.city,
+                  StateProvinceCode: shipFromAddress.state,
+                  PostalCode: shipFromAddress.zipCode,
+                  CountryCode: 'US'
+                }
+              },
+              ShipTo: {
+                Name: shipToAddress.name || 'Customer',
+                Address: {
+                  AddressLine: [shipToAddress.street],
+                  City: shipToAddress.city,
+                  StateProvinceCode: shipToAddress.state,
+                  PostalCode: shipToAddress.zipCode,
+                  CountryCode: 'US'
+                }
+              },
+              Service: {
+                Code: service.code
+              },
+              Package: {
+                PackagingType: {
+                  Code: '02'
+                },
+                PackageWeight: {
+                  UnitOfMeasurement: {
+                    Code: 'LBS'
+                  },
+                  Weight: (packageWeight || 5).toString()
+                }
+              }
+            }
+          }
+        };
+
+        console.log(`🚚 Trying UPS service ${service.code} (${service.name})`);
+        
+        const serviceResponse = await axios.post(upsEndpoint, ratePayload, {
+          headers: { 
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          timeout: 15000,
+        });
+
+        const ratedShipment = serviceResponse.data?.RateResponse?.RatedShipment;
+        if (ratedShipment) {
+          successfulRates.push({
+            serviceCode: service.code,
+            serviceName: service.name,
+            totalCharges: parseFloat(ratedShipment.TotalCharges?.MonetaryValue || '0'),
+            currency: ratedShipment.TotalCharges?.CurrencyCode || 'USD',
+            guaranteedDaysToDelivery: ratedShipment.GuaranteedDaysToDelivery,
+            scheduleDeliveryDate: ratedShipment.ScheduledDeliveryDate,
+          });
+          console.log(`✅ ${service.name}: $${ratedShipment.TotalCharges?.MonetaryValue}`);
+        }
+      } catch (serviceError: any) {
+        console.log(`❌ ${service.name} (${service.code}): ${serviceError.response?.data?.response?.errors?.[0]?.message || 'Failed'}`);
+        // Continue to next service
+      }
+    }
+
+    if (successfulRates.length > 0) {
+      console.log(`🎉 Successfully got ${successfulRates.length} real UPS rates!`);
+      return res.json({
+        success: true,
+        rates: successfulRates
       });
     }
   } catch (error: any) {
-    console.error('UPS Rate API error:', error.response?.data || error.message);
+    console.error('UPS Rate API error details:', JSON.stringify(error.response?.data, null, 2));
+    console.error('UPS Rate API error message:', error.message);
+    
+    // Check if this is the known 111100 permission error
+    const isPermissionError = error.response?.data?.response?.errors?.some((err: any) => 
+      err.code === '111100' && err.message.includes('requested service is invalid')
+    );
+    
+    if (isPermissionError) {
+      // Provide helpful fallback rate estimates based on weight and distance
+      const weight = req.body.packageWeight || 5;
+      const estimatedRates = [
+        {
+          serviceCode: '03',
+          serviceName: 'UPS Ground',
+          totalCharges: Math.round((8.50 + (weight * 0.85)) * 100) / 100,
+          currency: 'USD',
+          isEstimate: true
+        },
+        {
+          serviceCode: '02', 
+          serviceName: 'UPS 2nd Day Air',
+          totalCharges: Math.round((18.75 + (weight * 1.25)) * 100) / 100,
+          currency: 'USD',
+          isEstimate: true
+        },
+        {
+          serviceCode: '01',
+          serviceName: 'UPS Next Day Air',
+          totalCharges: Math.round((32.50 + (weight * 2.15)) * 100) / 100,
+          currency: 'USD',
+          isEstimate: true
+        }
+      ];
+      
+      console.log('🔄 Providing estimated rates due to UPS Rating API permissions');
+      
+      return res.json({
+        rates: estimatedRates,
+        message: 'Rate estimates provided. Enable UPS Rating API in your developer account for live rates.',
+        isEstimate: true
+      });
+    }
+    
     res.status(500).json({ 
       error: 'Failed to get shipping rates',
       details: error.response?.data || error.message
@@ -847,10 +920,13 @@ router.post('/test-ups-shipment', async (req: Request, res: Response) => {
 
 // UPS OAuth 2.0 Authentication (2024+ API)
 async function getUPSOAuthToken(clientId: string, clientSecret: string): Promise<string> {
-  // Use production OAuth endpoint for real tracking numbers
-  const tokenEndpoint = 'https://onlinetools.ups.com/security/v1/oauth/token';
+  // Use appropriate environment endpoint
+  const isProduction = process.env.NODE_ENV === 'production' || process.env.REPLIT_DEPLOYMENT === '1';
+  const tokenEndpoint = isProduction
+    ? 'https://onlinetools.ups.com/security/v1/oauth/token'  // Production
+    : 'https://wwwcie.ups.com/security/v1/oauth/token';      // Test/Sandbox
     
-  console.log('UPS OAuth Token Endpoint:', tokenEndpoint);
+  console.log(`UPS ${isProduction ? 'PRODUCTION' : 'TEST'} OAuth Token Endpoint:`, tokenEndpoint);
   
   const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
   

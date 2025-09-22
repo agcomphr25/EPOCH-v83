@@ -197,7 +197,7 @@ export default function PaintQueuePage() {
         method: 'POST',
         body: JSON.stringify({
           orderIds: orderIds,
-          department: 'Shipping',
+          department: 'Shipping QC',
           status: 'IN_PROGRESS'
         }),
         headers: { 'Content-Type': 'application/json' }
@@ -207,12 +207,12 @@ export default function PaintQueuePage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
       queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
-      toast.success(`${selectedOrders.size} orders moved to Shipping department`);
+      toast.success(`${selectedOrders.size} orders moved to Shipping QC department`);
       setSelectedOrders(new Set());
       setSelectAll(false);
     },
     onError: () => {
-      toast.error("Failed to move orders to Shipping");
+      toast.error("Failed to move orders to Shipping QC");
     }
   });
 

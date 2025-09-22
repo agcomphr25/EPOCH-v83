@@ -277,7 +277,7 @@ export default function AccessoriesQCChecklist({ orderId, onSubmit }: Accessorie
       initialCheckedItems[item.key] = false;
     });
     form.setValue('checkedItems', initialCheckedItems);
-  }, [orderData, featureSubCategories, form]);
+  }, [orderData, featureSubCategories, featureDefinitions, form]);
 
   // Submit QC checklist using proper schema and apiRequest
   const submitMutation = useMutation({

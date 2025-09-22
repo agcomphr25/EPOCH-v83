@@ -58,7 +58,7 @@ export default function ShippingQueuePage() {
     queryKey: ['/api/orders/all'],
   });
 
-  // Get shipping-ready orders directly
+  // Get shipping-ready orders directly (this returns all shipping-related orders - 298 total)
   const { data: shippingReadyOrders = [] } = useQuery({
     queryKey: ['/api/shipping/ready-for-shipping'],
   });
@@ -152,17 +152,22 @@ export default function ShippingQueuePage() {
     }
   });
 
-  // Get orders in Shipping department, categorized by due date
+  // Get orders in Shipping department only (not all shipping-related orders)
   const shippingOrders = useMemo(() => {
-    const orders = shippingReadyOrders as any[];
+    const orders = allOrders as any[];
+    
+    // Filter to only orders specifically in "Shipping" department
+    const shippingDeptOrders = orders.filter((order: any) => 
+      order.currentDepartment === 'Shipping'
+    );
     
     // Sort by due date - most urgent first
-    return orders.sort((a: any, b: any) => {
+    return shippingDeptOrders.sort((a: any, b: any) => {
       const dateA = a.dueDate ? new Date(a.dueDate).getTime() : 0;
       const dateB = b.dueDate ? new Date(b.dueDate).getTime() : 0;
       return dateA - dateB; // Earliest due date first (most urgent)
     });
-  }, [shippingReadyOrders]);
+  }, [allOrders]);
 
   // Categorize orders by due date
   const categorizedOrders = useMemo(() => {
@@ -216,8 +221,8 @@ export default function ShippingQueuePage() {
   const shippingQCCount = useMemo(() => {
     const orders = allOrders as any[];
     return orders.filter((order: any) => 
-      order.currentDepartment === 'QC' || 
-      (order.department === 'QC' && order.status === 'IN_PROGRESS')
+      order.currentDepartment === 'Shipping QC' || 
+      (order.department === 'Shipping QC' && order.status === 'IN_PROGRESS')
     ).length;
   }, [allOrders]);
 

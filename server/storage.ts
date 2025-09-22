@@ -146,7 +146,7 @@ import {
 
 } from "./schema";
 import { db } from "./db";
-import { eq, desc, asc, and, or, ilike, isNull, sql, ne, like, lt, gt, gte, lte, inArray, getTableColumns, count, sum, max, notInArray } from "drizzle-orm";
+import { eq, desc, asc, and, or, ilike, isNull, sql, ne, like, lt, gt, gte, lte, inArray, getTableColumns, count, sum, max, notInArray, not } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import bcrypt from 'bcrypt';
 import axios from 'axios';

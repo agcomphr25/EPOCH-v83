@@ -411,20 +411,11 @@ export default function OrdersList() {
   };
 
   try {
-    const { data: orders, isLoading, error } = useQuery<Order[]>({
-      queryKey: ['/api/orders'],
-      queryFn: async () => {
-        const result = await apiRequest('/api/orders');
-        console.log('🔍 Frontend received orders:', result?.slice(0, 10)?.map(o => ({id: o.id, orderId: o.orderId})));
-        console.log('🔍 PO orders in frontend:', result?.filter(o => o.orderId?.includes('PO') || o.orderId?.startsWith('P1-') || o.orderId?.startsWith('P2-'))?.length || 0);
-        return result;
-      },
-      staleTime: 0, // Always fetch fresh data
-      gcTime: 0, // No cache
-      refetchOnWindowFocus: true,
-      refetchOnMount: true,
-      refetchOnReconnect: true,
-    });
+  const { data: orders, isLoading, error } = useQuery<Order[]>({
+    queryKey: ['/api/orders'],
+    staleTime: 30000, // 30 seconds
+    gcTime: 60000, // 1 minute
+  });
 
 
     const { data: customers } = useQuery<Customer[]>({

@@ -1273,8 +1273,7 @@ export type InsertEmployeeCertification = z.infer<typeof insertEmployeeCertifica
 export type EmployeeCertification = typeof employeeCertifications.$inferSelect;
 export type InsertEvaluation = z.infer<typeof insertEvaluationSchema>;
 export type Evaluation = typeof evaluations.$inferSelect;
-export type InsertUserSession = z.infer<typeof insertUserSessionSchema>;
-export type UserSession = typeof userSessions.$inferSelect;
+// User session types removed with authentication system
 export type InsertEmployeeDocument = z.infer<typeof insertEmployeeDocumentSchema>;
 export type EmployeeDocument = typeof employeeDocuments.$inferSelect;
 export type InsertEmployeeAuditLog = z.infer<typeof insertEmployeeAuditLogSchema>;
@@ -2485,32 +2484,32 @@ export type CustomerSatisfactionSurvey = typeof customerSatisfactionSurveys.$inf
 export type InsertCustomerSatisfactionResponse = z.infer<typeof insertCustomerSatisfactionResponseSchema>;
 export type CustomerSatisfactionResponse = typeof customerSatisfactionResponses.$inferSelect;
 
-// PO Products table for Purchase Order product configurations
+// PO Products table for Purchase Order product configurations - Updated from EPOCH v8.3
 export const poProducts = pgTable("po_products", {
   id: serial("id").primaryKey(),
   customerName: text("customer_name").notNull(),
   productName: text("product_name").notNull(),
-  productType: text("product_type"), // stock, AG-M5-SA, AG-M5-LA, etc.
-  material: text("material"), // carbon_fiber, fiberglass
-  handedness: text("handedness"), // right, left
+  material: text("material"),
+  handedness: text("handedness"),
   stockModel: text("stock_model"),
   actionLength: text("action_length"),
   actionInlet: text("action_inlet"),
   bottomMetal: text("bottom_metal"),
   barrelInlet: text("barrel_inlet"),
-  qds: text("qds"), // none, 2_on_left, 2_on_right
-  swivelStuds: text("swivel_studs"), // none, 3_ah, 2_privateer
+  qds: text("qds"),
+  swivelStuds: text("swivel_studs"),
   paintOptions: text("paint_options"),
-  texture: text("texture"), // none, grip_forend
-  flatTop: boolean("flat_top").default(false),
-  price: real("price"),
-  notes: text("notes"), // Optional notes field
+  texture: text("texture"),
+  price: real("price").default(0),
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
+  flatTop: boolean("flat_top").default(false),
+  notes: text("notes"),
+  productType: text("product_type"),
 });
 
-// Insert schema for PO Products
+// Insert schema for PO Products - Updated from EPOCH v8.3
 export const insertPOProductSchema = createInsertSchema(poProducts).omit({
   id: true,
   createdAt: true,
@@ -2529,10 +2528,11 @@ export const insertPOProductSchema = createInsertSchema(poProducts).omit({
   swivelStuds: z.string().optional().nullable(),
   paintOptions: z.string().optional().nullable(),
   texture: z.string().optional().nullable(),
-  flatTop: z.boolean().default(false),
-  price: z.number().min(0, "Price must be positive").optional().nullable(),
-  notes: z.string().optional().nullable(),
+  price: z.number().min(0, "Price must be positive").default(0),
   isActive: z.boolean().default(true),
+  flatTop: z.boolean().default(false),
+  notes: z.string().optional().nullable(),
+  productType: z.string().optional().nullable(),
 });
 
 // Types for PO Products

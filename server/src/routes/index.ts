@@ -2821,6 +2821,18 @@ export function registerRoutes(app: Express): Server {
           
           // Check for special features to add to label
           const features = (order as any).features || {};
+          
+          // Add paint color if specified
+          const paintOption = features.paint_options || '';
+          if (paintOption && paintOption !== 'none' && paintOption !== 'no_paint') {
+            const paintDisplayText = paintOption.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase());
+            page.drawText(`Paint: ${paintDisplayText}`, {
+              x: x + 8,
+              y: y + 14,
+              size: 6,
+              color: rgb(0, 0.4, 0.8), // Blue color to indicate paint option
+            });
+          }
           const specialLabels = [];
           
           // Extract swivel studs and texture options for color-coded display
@@ -2862,7 +2874,6 @@ export function registerRoutes(app: Express): Server {
           
           
           // Determine barcode color based on specifications
-          const paintOption = features.paint_options || '';
           const modelId = (order as any).modelId || '';
           
           // Check if this order is high priority or late (you can add this logic later)

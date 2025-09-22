@@ -17,6 +17,7 @@ const DEPARTMENTS = [
   'Finish',
   'Finish QC',
   'Paint',
+  'Shipping QC',
   'Shipping',
   'Fulfilled'
 ];

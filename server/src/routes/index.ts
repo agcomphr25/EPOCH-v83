@@ -2801,76 +2801,88 @@ export function registerRoutes(app: Express): Server {
           const actionLength = (order as any).features?.action_length || 'unknown';
           const modelDisplayName = stockModelMap.get((order as any).modelId) || (order as any).modelId || 'Unknown';
           
-          // Add order information at top - Order ID and Customer Name
-          const customerName = (order as any).customer || '';
-          const orderText = customerName ? `${order.orderId} - ${customerName}` : order.orderId;
-          page.drawText(orderText, {
-            x: x + 8,
-            y: y + 50,
-            size: 11,
-            color: rgb(0, 0, 0),
-          });
-          
-          // Add stock model and action length on same line below barcode
-          page.drawText(`${modelDisplayName} - ${actionLength.toUpperCase()}`, {
-            x: x + 8,
-            y: y + 22,
-            size: 7,
-            color: rgb(0, 0, 0),
-          });
-          
           // Check for special features to add to label
           const features = (order as any).features || {};
           
-          // Add paint color if specified
+          // 1. Order ID / Stock Type / Action Length (top line)
+          const orderStockAction = `${order.orderId}/ ${modelDisplayName}/ ${actionLength.toUpperCase()}`;
+          page.drawText(orderStockAction, {
+            x: x + 8,
+            y: y + 50,
+            size: 9,
+            color: rgb(0, 0, 0),
+          });
+          
+          // 3. Paint color (below barcode)
           const paintOption = features.paint_options || '';
           if (paintOption && paintOption !== 'none' && paintOption !== 'no_paint') {
             const paintDisplayText = paintOption.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase());
             page.drawText(`Paint: ${paintDisplayText}`, {
               x: x + 8,
-              y: y + 14,
-              size: 6,
-              color: rgb(0, 0.4, 0.8), // Blue color to indicate paint option
+              y: y + 22,
+              size: 7,
+              color: rgb(0, 0.4, 0.8),
             });
           }
-          const specialLabels = [];
           
-          // Extract swivel studs and texture options for color-coded display
-          const swivelStudsText = features.swivel_studs && 
-                                 features.swivel_studs !== 'standard_swivel_studs' && 
-                                 features.swivel_studs !== 'standard' 
-                                 ? features.swivel_studs.replace(/_/g, ' ') : null;
+          // 4. Due Date
+          const dueDate = (order as any).dueDate;
+          if (dueDate) {
+            const dueDateFormatted = new Date(dueDate).toLocaleDateString('en-US', {
+              month: 'short',
+              day: 'numeric',
+              year: 'numeric'
+            });
+            page.drawText(`Due: ${dueDateFormatted}`, {
+              x: x + 8,
+              y: y + 14,
+              size: 7,
+              color: rgb(0, 0, 0),
+            });
+          }
           
-          const textureText = features.texture_options && 
-                             features.texture_options !== 'no_texture' && 
-                             features.texture_options !== 'none'
-                             ? features.texture_options.replace(/_/g, ' ') : null;
+          // 5. Texture/Swivel Studs different than standard (NSNH)
+          let specialFeaturesText = '';
           
-          // Check for NSNH (No Swivel Studs No Holes) - this should show as "NSNH"
+          // Check for NSNH (No Swivel Studs No Holes)
           const hasNSNH = features.swivel_studs === 'no_swivel_studs' || 
                          features.swivel_studs === 'no_swivel_no_holes' ||
                          (features.swivel_studs && features.swivel_studs.includes('no_swivel')) ||
                          (features.swivel_studs && features.swivel_studs.includes('no_holes'));
           
           if (hasNSNH) {
-            specialLabels.push('NSNH');
+            specialFeaturesText = 'NSNH';
+          } else {
+            // Check for non-standard swivel studs
+            const swivelStudsText = features.swivel_studs && 
+                                   features.swivel_studs !== 'standard_swivel_studs' && 
+                                   features.swivel_studs !== 'standard' 
+                                   ? features.swivel_studs.replace(/_/g, ' ').toUpperCase() : null;
+            
+            // Check for texture options
+            const textureText = features.texture_options && 
+                               features.texture_options !== 'no_texture' && 
+                               features.texture_options !== 'none'
+                               ? features.texture_options.replace(/_/g, ' ').toUpperCase() : null;
+            
+            const specialParts = [];
+            if (textureText) specialParts.push(textureText);
+            if (swivelStudsText) specialParts.push(swivelStudsText);
+            
+            if (specialParts.length > 0) {
+              specialFeaturesText = specialParts.join(' / ');
+            }
           }
           
-          // Add non-standard swivel studs (only if it's not a "no swivel" case)
-          if (swivelStudsText && !hasNSNH) {
-            specialLabels.push(`SWIVEL: ${swivelStudsText.toUpperCase()}`);
+          if (specialFeaturesText) {
+            page.drawText(specialFeaturesText, {
+              x: x + 8,
+              y: y + 6,
+              size: 6,
+              color: rgb(0.6, 0, 0.8), // Purple color for special features
+            });
           }
-          
-          // Add texture options in purple (simulated with different style in PDF)
-          if (textureText) {
-            specialLabels.push(`TEXTURE: ${textureText.toUpperCase()}`);
-          }
-          
-          // Carbon Camo Ready
-          if (features.paint_options === 'carbon_camo_ready' ||
-              (features.paint_options && features.paint_options.includes('carbon_camo'))) {
-            specialLabels.push('CARBON CAMO READY');
-          }
+          // (Removed old special labels logic - now handled above in structured format)
           
           
           // Determine barcode color based on specifications
@@ -2944,50 +2956,8 @@ export function registerRoutes(app: Express): Server {
             }
           };
           
-          // Draw the barcode with appropriate color (blue for terrain/premium/standard paint, black otherwise)
+          // 2. Draw the barcode in the middle (between top info and paint color)
           redrawCode39Barcode(barcodeText, x + 8, y + 32, barcodeColor);
-          
-          
-          // Draw special labels with appropriate colors on separate line below stock model
-          if (specialLabels.length > 0) {
-            let xOffset = x + 8;
-            
-            for (let i = 0; i < specialLabels.length; i++) {
-              const label = specialLabels[i];
-              let textColor = rgb(0, 0, 0); // Default black
-              
-              // Orange for swivel studs
-              if (label.includes('SWIVEL') || label === 'NSNH') {
-                textColor = rgb(1, 0.5, 0); // Orange
-              }
-              // Purple for texture
-              else if (label.includes('TEXTURE')) {
-                textColor = rgb(0.5, 0, 0.8); // Purple
-              }
-              
-              const separator = i > 0 ? ' - ' : '';
-              page.drawText(`${separator}${label}`, {
-                x: xOffset,
-                y: y + 16, // Move special labels higher
-                size: 5,
-                color: textColor,
-              });
-              
-              xOffset += (separator.length + label.length) * 3; // Approximate text width
-            }
-          }
-          
-          // Add due date
-          const dueDate = new Date(order.dueDate).toLocaleDateString('en-US', { 
-            month: 'short', 
-            day: 'numeric' 
-          });
-          page.drawText(`Due: ${dueDate}`, {
-            x: x + 8,
-            y: y + 10,
-            size: 6,
-            color: rgb(0, 0, 0),
-          });
         }
       }
       

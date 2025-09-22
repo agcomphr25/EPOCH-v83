@@ -1967,7 +1967,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       font: boldFont,
     });
 
-    summaryLineY -= 25;
+    summaryLineY -= 18; // Reduced from 25 to 18
 
     // Shipping
     if (order.shipping && order.shipping > 0) {
@@ -1985,7 +1985,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
         font: boldFont,
       });
 
-      summaryLineY -= 25;
+      summaryLineY -= 18; // Reduced from 25 to 18
     }
 
     // Final separator line
@@ -1996,7 +1996,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       color: rgb(0, 0, 0),
     });
 
-    summaryLineY -= 25;
+    summaryLineY -= 18; // Reduced from 25 to 18
 
     // Total
     const finalTotal = calculatedSubtotal + (order.shipping || 0);
@@ -2015,7 +2015,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       color: rgb(0, 0.6, 0),
     });
 
-    summaryLineY -= 15;
+    summaryLineY -= 10; // Reduced from 15 to 10
 
     // Calculate dynamic box height and draw the box
     const actualBoxHeight = boxStartY - summaryLineY + 10;
@@ -2028,8 +2028,8 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       borderWidth: 1,
     });
 
-    // Reset current Y for next section
-    currentY = summaryLineY - 20;
+    // Reset current Y for next section - moved notes closer to totals
+    currentY = summaryLineY - 10; // Reduced from 20 to 10
 
     // Order Notes/Special Instructions
     if (order.notes) {

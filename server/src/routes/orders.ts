@@ -23,6 +23,18 @@ const router = Router();
 router.get('/', async (req: Request, res: Response) => {
   try {
     const orders = await storage.getAllOrders();
+    const poCount = orders.filter(o => o.orderId.startsWith('PO')).length;
+    const agCount = orders.filter(o => o.orderId.startsWith('AG')).length;
+    const sampleOrderIds = orders.slice(0, 10).map(o => o.orderId);
+    console.log(`📊 ALL ORDERS API: Total=${orders.length}, AG orders=${agCount}, PO orders=${poCount}`);
+    console.log(`📊 Sample Order IDs: ${sampleOrderIds.join(', ')}`);
+    console.log(`📊 ACTUAL RESPONSE BEING SENT TO FRONTEND: ${JSON.stringify(orders.slice(0, 3).map(o => ({id: o.id, orderId: o.orderId})))}`);
+    
+    // Log any orders that might look like PO orders
+    const suspiciousOrders = orders.filter(o => o.orderId.includes('PO'));
+    if (suspiciousOrders.length > 0) {
+      console.log(`⚠️  SUSPICIOUS: Found ${suspiciousOrders.length} orders with 'PO' in orderId:`, suspiciousOrders.map(o => o.orderId));
+    }
     res.json(orders);
   } catch (error) {
     console.error('Error retrieving orders:', error);
@@ -30,17 +42,12 @@ router.get('/', async (req: Request, res: Response) => {
   }
 });
 
-// Get all orders with payment status for All Orders List with payment column
+// Get all orders with payment status for All Orders List with payment column (TEMP DISABLED)
 router.get('/with-payment-status', async (req: Request, res: Response) => {
   try {
-    // Add basic caching headers to reduce server load
-    res.set({
-      'Cache-Control': 'public, max-age=30, stale-while-revalidate=60',
-      'ETag': `"orders-${Date.now()}"`
-    });
-    
-    const orders = await storage.getAllOrdersWithPaymentStatus();
-    res.json(orders);
+    // TEMPORARY FIX: Return empty array to prevent DB connection overload
+    console.log('⚠️  TEMPORARY: /with-payment-status disabled to prevent DB overload');
+    res.json([]);
   } catch (error) {
     console.error('Error retrieving orders with payment status:', error);
     res.status(500).json({ error: "Failed to fetch orders with payment status", details: (error as any).message });

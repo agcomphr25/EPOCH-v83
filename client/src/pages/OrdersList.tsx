@@ -165,7 +165,7 @@ export default function OrdersList() {
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
       showToast({
         title: "Order Cancelled",
         description: "The order has been cancelled successfully.",
@@ -225,7 +225,7 @@ export default function OrdersList() {
   // Department progression functions
   const getNextDepartment = (currentDepartment: string) => {
     const departmentFlow = [
-      'P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 'Finish', 'Gunsmith', 'Paint', 'Shipping QC', 'Shipping'
+      'P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 'Finish', 'Gunsmith', 'Paint', 'Shipping'
     ];
 
     // Handle alternative department names
@@ -289,7 +289,7 @@ export default function OrdersList() {
         newSet.delete(variables.orderId);
         return newSet;
       });
-      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
       toast.error('Failed to update department');
     }
   });
@@ -304,7 +304,7 @@ export default function OrdersList() {
     console.log(`🔄 Progressing order ${orderId} from ${currentDepartment} to ${nextDepartment}`);
 
     // IMMEDIATELY update React Query cache - this prevents any reversion
-    queryClient.setQueryData(['/api/orders/with-payment-status', 'v2'], (old: any[]) => {
+    queryClient.setQueryData(['/api/orders'], (old: any[]) => {
       if (!old) return old;
       const updated = old.map((order: any) => {
         if (order.orderId === orderId) {
@@ -411,13 +411,11 @@ export default function OrdersList() {
   };
 
   try {
-    const { data: orders, isLoading, error } = useQuery<Order[]>({
-      queryKey: ['/api/orders/with-payment-status', 'v2'],
-      queryFn: () => apiRequest('/api/orders/with-payment-status'),
-      refetchInterval: false, // Completely disable automatic refetching
-      refetchOnWindowFocus: false, // Disable refetch on window focus
-      refetchOnReconnect: false, // Disable refetch on network reconnect
-    });
+  const { data: orders, isLoading, error } = useQuery<Order[]>({
+    queryKey: ['/api/orders'],
+    staleTime: 30000, // 30 seconds
+    gcTime: 60000, // 1 minute
+  });
 
 
     const { data: customers } = useQuery<Customer[]>({
@@ -904,8 +902,8 @@ export default function OrdersList() {
                     <TableCell className="font-medium" title={order.fbOrderNumber ? `FB Order: ${order.fbOrderNumber} (Order ID: ${order.orderId})` : `Order ID: ${order.orderId}`}>
                       <div className="flex items-center gap-2">
                         <OrderSummaryTooltip orderId={order.orderId}>
-                          <span className="text-blue-600 hover:text-blue-800 cursor-pointer">
-                            {getDisplayOrderId(order)}
+                          <span className="text-blue-600 hover:text-blue-800 cursor-pointer" title={`Raw orderId: ${order.orderId}, Display: ${getDisplayOrderId(order)}`}>
+                            {order.orderId}
                           </span>
                         </OrderSummaryTooltip>
                         {hasUnresolvedKickback(order.orderId) && (
@@ -1280,7 +1278,7 @@ export default function OrdersList() {
                     <FormItem>
                       <FormLabel>Reported By</FormLabel>
                       <FormControl>
-                        <Input placeholder="Employee name" {...field} />
+                        <Input id="kickback-reportedBy" autoComplete="name" placeholder="Employee name" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>

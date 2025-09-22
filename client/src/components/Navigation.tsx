@@ -572,7 +572,7 @@ export default function Navigation() {
     },
     {
       path: '/department-queue/qc-shipping',
-      label: 'Shipping QC',
+      label: 'Shipping',
       icon: TrendingUp,
       description: 'Shipping quality control department manager'
     },

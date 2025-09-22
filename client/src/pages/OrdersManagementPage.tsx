@@ -50,7 +50,6 @@ const DEPARTMENTS = [
   'Gunsmith',
   'Finish QC',
   'Paint',
-  'Shipping QC',
   'Shipping'
 ];
 
@@ -114,8 +113,7 @@ export default function OrdersManagementPage() {
       'Gunsmith': 'bg-purple-500',
       'Finish QC': 'bg-yellow-600',
       'Paint': 'bg-pink-500',
-      'Shipping QC': 'bg-indigo-500',
-      'Shipping': 'bg-gray-500'
+      'Shipping': 'bg-indigo-500'
     };
     return colors[department] || 'bg-gray-400';
   };

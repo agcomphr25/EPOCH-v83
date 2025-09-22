@@ -86,7 +86,6 @@ export default function AllOrdersPage() {
     'Gunsmith',
     'Finish QC',
     'Paint',
-    'Shipping QC',
     'Shipping'
   ];
   

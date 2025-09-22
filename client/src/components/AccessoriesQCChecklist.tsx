@@ -26,6 +26,7 @@ interface ExtraChargeItem {
   displayName: string;
   price: number;
   checked: boolean;
+  category: 'accessory' | 'inlet' | 'miscellaneous';
 }
 
 // Form schema that includes all the checklist items plus notes
@@ -111,7 +112,7 @@ export default function AccessoriesQCChecklist({ orderId, onSubmit }: Accessorie
       }
     });
 
-    // Check bottom metal - ONLY include if it has confirmed extra charges
+    // Check bottom metal - ONLY include if it has confirmed extra charges (accessories)
     if (features.bottom_metal) {
       let pricingInfo = pricingByCode.get(features.bottom_metal);
       
@@ -128,7 +129,8 @@ export default function AccessoriesQCChecklist({ orderId, onSubmit }: Accessorie
           label: features.bottom_metal,
           displayName: `Bottom Metal: ${pricingInfo.displayName}`,
           price: pricingInfo.price,
-          checked: false
+          checked: false,
+          category: 'accessory'
         });
       }
       // If no pricing found, do NOT include the item - requirement is only extra charges
@@ -152,7 +154,8 @@ export default function AccessoriesQCChecklist({ orderId, onSubmit }: Accessorie
             label: option,
             displayName: `${pricingInfo.displayName}`,
             price: pricingInfo.price,
-            checked: false
+            checked: false,
+            category: 'accessory'
           });
         }
         // If no pricing found, do NOT include the item - requirement is only extra charges
@@ -184,10 +187,73 @@ export default function AccessoriesQCChecklist({ orderId, onSubmit }: Accessorie
           label: features.paint_options,
           displayName: `Paint: ${paintInfo.displayName || features.paint_options.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}`,
           price: paintInfo.price,
-          checked: false
+          checked: false,
+          category: 'accessory'
         });
       }
       // If no exact pricing found, do NOT include the item - requirement is only extra charges
+    }
+
+    // Check miscellaneous items - these are always charged items
+    if (features.miscItems && Array.isArray(features.miscItems)) {
+      features.miscItems.forEach((miscItem: any, index: number) => {
+        if (miscItem.unitPrice && miscItem.unitPrice > 0) {
+          items.push({
+            key: `misc_item_${miscItem.id || index}`,
+            label: miscItem.description || `Misc Item ${index + 1}`,
+            displayName: `${miscItem.description || `Misc Item ${index + 1}`} (Qty: ${miscItem.quantity})`,
+            price: miscItem.total || (miscItem.quantity * miscItem.unitPrice),
+            checked: false,
+            category: 'miscellaneous'
+          });
+        }
+      });
+    }
+
+    // Check action inlet - categorize under inlet
+    if (features.action_inlet) {
+      let pricingInfo = pricingByCode.get(features.action_inlet);
+      
+      // Try variations if direct match fails
+      if (!pricingInfo) {
+        const normalized = features.action_inlet.replace(/_/g, '-').toLowerCase();
+        pricingInfo = pricingByCode.get(normalized);
+      }
+      
+      // Only add if we have confirmed pricing > 0
+      if (pricingInfo && pricingInfo.price > 0) {
+        items.push({
+          key: `action_inlet_${features.action_inlet}`,
+          label: features.action_inlet,
+          displayName: `Action Inlet: ${pricingInfo.displayName}`,
+          price: pricingInfo.price,
+          checked: false,
+          category: 'inlet'
+        });
+      }
+    }
+
+    // Check barrel inlet - categorize under inlet
+    if (features.barrel_inlet) {
+      let pricingInfo = pricingByCode.get(features.barrel_inlet);
+      
+      // Try variations if direct match fails
+      if (!pricingInfo) {
+        const normalized = features.barrel_inlet.replace(/_/g, '-').toLowerCase();
+        pricingInfo = pricingByCode.get(normalized);
+      }
+      
+      // Only add if we have confirmed pricing > 0
+      if (pricingInfo && pricingInfo.price > 0) {
+        items.push({
+          key: `barrel_inlet_${features.barrel_inlet}`,
+          label: features.barrel_inlet,
+          displayName: `Barrel Inlet: ${pricingInfo.displayName}`,
+          price: pricingInfo.price,
+          checked: false,
+          category: 'inlet'
+        });
+      }
     }
 
     setExtraChargeItems(items);
@@ -293,47 +359,62 @@ export default function AccessoriesQCChecklist({ orderId, onSubmit }: Accessorie
         ) : (
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onFormSubmit)} className="space-y-6">
-              <div className="space-y-4">
-                <h3 className="font-semibold text-lg">Extra Charge Accessories to Verify:</h3>
-                
-                {extraChargeItems.map((item) => (
-                  <div key={item.key} className="flex items-start space-x-3 p-3 border rounded-lg">
-                    <FormField
-                      control={form.control}
-                      name={`checkedItems.${item.key}`}
-                      render={({ field }) => (
-                        <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                          <FormControl>
-                            <Checkbox
-                              data-testid={`checkbox-${item.key}`}
-                              checked={field.value}
-                              onCheckedChange={field.onChange}
-                              className="mt-1"
-                            />
-                          </FormControl>
-                          <div className="space-y-1 leading-none">
-                            <FormLabel 
-                              className="text-sm font-medium cursor-pointer"
-                              data-testid={`label-${item.key}`}
-                            >
-                              {item.displayName}
-                            </FormLabel>
-                            <Badge variant="outline" className="ml-2" data-testid={`badge-price-${item.key}`}>
-                              ${item.price}
-                            </Badge>
-                          </div>
-                          <div className="ml-auto">
-                            {field.value ? (
-                              <CheckCircle className="h-5 w-5 text-green-500" data-testid={`icon-pass-${item.key}`} />
-                            ) : (
-                              <XCircle className="h-5 w-5 text-red-500" data-testid={`icon-fail-${item.key}`} />
+              <div className="space-y-6">
+                {/* Group items by category */}
+                {['accessory', 'inlet', 'miscellaneous'].map(category => {
+                  const categoryItems = extraChargeItems.filter(item => item.category === category);
+                  if (categoryItems.length === 0) return null;
+                  
+                  const categoryTitle = {
+                    accessory: 'Accessories (Extra Charge)',
+                    inlet: 'Inlet (Extra Charge)', 
+                    miscellaneous: 'Miscellaneous Items'
+                  }[category];
+                  
+                  return (
+                    <div key={category} className="space-y-3">
+                      <h3 className="font-semibold text-lg border-b pb-2">{categoryTitle}:</h3>
+                      {categoryItems.map((item) => (
+                        <div key={item.key} className="flex items-start space-x-3 p-3 border rounded-lg">
+                          <FormField
+                            control={form.control}
+                            name={`checkedItems.${item.key}`}
+                            render={({ field }) => (
+                              <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                                <FormControl>
+                                  <Checkbox
+                                    data-testid={`checkbox-${item.key}`}
+                                    checked={field.value}
+                                    onCheckedChange={field.onChange}
+                                    className="mt-1"
+                                  />
+                                </FormControl>
+                                <div className="space-y-1 leading-none">
+                                  <FormLabel 
+                                    className="text-sm font-medium cursor-pointer"
+                                    data-testid={`label-${item.key}`}
+                                  >
+                                    {item.displayName}
+                                  </FormLabel>
+                                  <Badge variant="outline" className="ml-2" data-testid={`badge-price-${item.key}`}>
+                                    ${item.price}
+                                  </Badge>
+                                </div>
+                                <div className="ml-auto">
+                                  {field.value ? (
+                                    <CheckCircle className="h-5 w-5 text-green-500" data-testid={`icon-pass-${item.key}`} />
+                                  ) : (
+                                    <XCircle className="h-5 w-5 text-red-500" data-testid={`icon-fail-${item.key}`} />
+                                  )}
+                                </div>
+                              </FormItem>
                             )}
-                          </div>
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                ))}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })}
               </div>
 
               <FormField

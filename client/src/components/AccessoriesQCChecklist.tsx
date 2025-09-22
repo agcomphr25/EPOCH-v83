@@ -231,43 +231,8 @@ export default function AccessoriesQCChecklist({ orderId, onSubmit }: Accessorie
       });
     }
 
-    // Check action inlet - categorize under inlet
-    if (features.action_inlet) {
-      // Find action inlet pricing from feature definitions
-      const actionInletFeature = featureDefinitions.find((f: any) => f.id === 'action_inlet' || f.name === 'action_inlet');
-      const actionInletOption = actionInletFeature?.options?.find((opt: any) => opt.value === features.action_inlet);
-      
-      // Only add if we have confirmed pricing > 0
-      if (actionInletOption && actionInletOption.price > 0) {
-        items.push({
-          key: `action_inlet_${features.action_inlet}`,
-          label: features.action_inlet,
-          displayName: `Action Inlet: ${actionInletOption.label}`,
-          price: actionInletOption.price,
-          checked: false,
-          category: 'inlet'
-        });
-      }
-    }
-
-    // Check barrel inlet - categorize under inlet
-    if (features.barrel_inlet) {
-      // Find barrel inlet pricing from feature definitions
-      const barrelInletFeature = featureDefinitions.find((f: any) => f.id === 'barrel_inlet' || f.name === 'barrel_inlet');
-      const barrelInletOption = barrelInletFeature?.options?.find((opt: any) => opt.value === features.barrel_inlet);
-      
-      // Only add if we have confirmed pricing > 0
-      if (barrelInletOption && barrelInletOption.price > 0) {
-        items.push({
-          key: `barrel_inlet_${features.barrel_inlet}`,
-          label: features.barrel_inlet,
-          displayName: `Barrel Inlet: ${barrelInletOption.label}`,
-          price: barrelInletOption.price,
-          checked: false,
-          category: 'inlet'
-        });
-      }
-    }
+    // REMOVED INLET SECTIONS: action_inlet and barrel_inlet are no longer included in QC checklist
+    // Per user requirement: QC checklist should show bottom metals, hats, shirts, touchup paint, hoodies, beanies (not inlets)
 
     setExtraChargeItems(items);
 
@@ -373,14 +338,13 @@ export default function AccessoriesQCChecklist({ orderId, onSubmit }: Accessorie
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onFormSubmit)} className="space-y-6">
               <div className="space-y-6">
-                {/* Group items by category */}
-                {['accessory', 'inlet', 'miscellaneous'].map(category => {
+                {/* Group items by category - REMOVED 'inlet' category per user requirement */}
+                {['accessory', 'miscellaneous'].map(category => {
                   const categoryItems = extraChargeItems.filter(item => item.category === category);
                   if (categoryItems.length === 0) return null;
                   
                   const categoryTitle = {
                     accessory: 'Accessories (Extra Charge)',
-                    inlet: 'Inlet (Extra Charge)', 
                     miscellaneous: 'Miscellaneous Items'
                   }[category];
                   

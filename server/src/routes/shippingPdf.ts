@@ -956,16 +956,8 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       font: boldFont,
     });
 
-    // Bill to section - positioned INSIDE the box
+    // Customer details section - positioned INSIDE the box
     let customerTextY = customerBoxY + customerBoxHeight - 45; // Start text properly inside box
-    page.drawText('BILL TO:', {
-      x: margin + 8,
-      y: customerTextY,
-      size: 10,
-      font: boldFont,
-    });
-
-    customerTextY -= 15;
     if (customer) {
       // Customer name and company - positioned INSIDE the box
       const customerLine = customer.company ? 
@@ -1409,6 +1401,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     let swivelPrice = 0;
     let otherOptionsPrice = 0;
     let paintPrice = 0;
+    let miscPrice = 0;
 
     // Stock Model - Base Price
     page.drawText('Stock Model:', {
@@ -1870,6 +1863,52 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
 
     summaryLineY -= 12;
 
+    // Miscellaneous Items
+    miscPrice = 0;
+    let miscDisplay = 'None';
+    
+    if ((order as any).features?.miscItems && Array.isArray((order as any).features?.miscItems) && (order as any).features?.miscItems.length > 0) {
+      const miscItems = (order as any).features?.miscItems;
+      miscPrice = miscItems.reduce((sum: number, item: any) => sum + (item.total || 0), 0);
+      miscDisplay = miscItems.map((item: any) => 
+        `${item.description || 'Misc Item'} (Qty: ${item.quantity}) - $${(item.total || 0).toFixed(2)}`
+      ).join(', ');
+    }
+
+    page.drawText('Miscellaneous Items:', {
+      x: margin + 10,
+      y: summaryLineY,
+      size: 9,
+      font: font,
+    });
+
+    // Word wrap miscellaneous items text
+    const wrappedMiscItems = wrapText(miscDisplay, printableWidth - 120, 9, font);
+    wrappedMiscItems.forEach((line, index) => {
+      page.drawText(line, {
+        x: margin + 120,
+        y: summaryLineY - (index * 12),
+        size: 9,
+        font: font,
+        color: rgb(0.2, 0.2, 0.2),
+      });
+    });
+
+    // Adjust Y position for multiple lines
+    if (wrappedMiscItems.length > 1) {
+      summaryLineY -= (wrappedMiscItems.length - 1) * 12;
+    }
+
+    page.drawText(`$${miscPrice.toFixed(2)}`, {
+      x: margin + printableWidth - 80,
+      y: summaryLineY,
+      size: 9,
+      font: boldFont,
+      color: rgb(0, 0.4, 0.8),
+    });
+
+    summaryLineY -= 12;
+
     // Paint Options
     paintPrice = 0;
     let paintDisplay = 'Not selected';
@@ -1952,7 +1991,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     summaryLineY -= 25;
 
     // Subtotal
-    const calculatedSubtotal = basePrice + actionLengthPrice + actionInletPrice + bottomMetalPrice + barrelInletPrice + qdPrice + lopPrice + railsPrice + texturePrice + swivelPrice + otherOptionsPrice + paintPrice;
+    const calculatedSubtotal = basePrice + actionLengthPrice + actionInletPrice + bottomMetalPrice + barrelInletPrice + qdPrice + lopPrice + railsPrice + texturePrice + swivelPrice + otherOptionsPrice + paintPrice + miscPrice;
     page.drawText('Subtotal:', {
       x: margin + 10,
       y: summaryLineY,

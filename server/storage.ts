@@ -1697,7 +1697,10 @@ export class DatabaseStorage implements IStorage {
         sql`${allOrders.orderId} NOT LIKE 'PO-%'`,
         sql`${allOrders.orderId} NOT LIKE 'PO%'`,
         // Exclude orders created from purchase orders (source starts with PO_)
-        not(like(allOrders.source, 'PO_%'))
+        or(
+          isNull(allOrders.source),
+          not(like(allOrders.source, 'PO_%'))
+        )
       )
     )
     .orderBy(desc(allOrders.id));

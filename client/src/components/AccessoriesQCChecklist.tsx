@@ -142,44 +142,36 @@ export default function AccessoriesQCChecklist({ orderId, onSubmit }: Accessorie
       // If no pricing found or price is 0, do NOT include the item - requirement is only extra charges
     }
 
-    // Check other options - ONLY include those with confirmed extra charges
-    if (features.other_options && Array.isArray(features.other_options)) {
-      features.other_options.forEach((option: string) => {
-        // First try to find pricing in feature definitions
-        let optionPrice = 0;
-        let optionLabel = option;
-        
-        // Look through all feature definitions for this option
-        for (const featureDef of featureDefinitions) {
-          const foundOption = featureDef.options?.find((opt: any) => opt.value === option);
-          if (foundOption && foundOption.price > 0) {
-            optionPrice = foundOption.price;
-            optionLabel = foundOption.label;
-            break;
+    // Show ALL chargeable accessories from other_options feature definition (not just selected ones)
+    // This allows QC to verify presence of hats, shirts, touchup paint, hoodies, beanies, etc.
+    const otherOptionsFeature = featureDefinitions.find((f: any) => f.id === 'other_options');
+    if (otherOptionsFeature?.options) {
+      otherOptionsFeature.options.forEach((option: any) => {
+        // Only include accessories that have pricing and are relevant for QC
+        if (option.price > 0) {
+          // Filter to specific accessories we want in QC checklist
+          const accessoryKeywords = ['hat', 'shirt', 'sweatshirt', 'beanie', 'hoodie', 'touch_up_paint', 'touchup_paint'];
+          const isRelevantAccessory = accessoryKeywords.some(keyword => 
+            option.value.toLowerCase().includes(keyword) || 
+            option.label.toLowerCase().includes(keyword)
+          );
+          
+          if (isRelevantAccessory) {
+            // Check if this accessory is actually selected on the order
+            const isSelected = features.other_options && Array.isArray(features.other_options) 
+              ? features.other_options.includes(option.value)
+              : false;
+              
+            items.push({
+              key: `other_option_${option.value}`,
+              label: option.value,
+              displayName: `${option.label}${isSelected ? ' (Selected)' : ' (Not Selected)'}`,
+              price: option.price,
+              checked: false,
+              category: 'accessory'
+            });
           }
         }
-        
-        // Fallback to feature sub-categories if not found in feature definitions
-        if (optionPrice === 0) {
-          const pricingInfo = pricingByCode.get(option);
-          if (pricingInfo && pricingInfo.price > 0) {
-            optionPrice = pricingInfo.price;
-            optionLabel = pricingInfo.displayName;
-          }
-        }
-        
-        // Only add if we have confirmed pricing > 0
-        if (optionPrice > 0) {
-          items.push({
-            key: `other_option_${option}`,
-            label: option,
-            displayName: optionLabel,
-            price: optionPrice,
-            checked: false,
-            category: 'accessory'
-          });
-        }
-        // If no pricing found, do NOT include the item - requirement is only extra charges
       });
     }
 

@@ -1509,7 +1509,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
 
     // Action Inlet
     if (summaryLineY > currentY - featuresTableHeight + 15) {
-      const actionInletFeature = features.find(f => f.id === 'action');
+      const actionInletFeature = features.find(f => f.id === 'action_inlet');
       const actionInletOption = actionInletFeature?.options?.find(opt => opt.value === (order as any).features?.action_inlet);
       actionInletPrice = actionInletOption?.price || 0;
 

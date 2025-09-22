@@ -2813,10 +2813,20 @@ export function registerRoutes(app: Express): Server {
             color: rgb(0, 0, 0),
           });
           
-          // 3. Paint color (below barcode)
-          const paintOption = features.paint_options || '';
-          if (paintOption && paintOption !== 'none' && paintOption !== 'no_paint') {
-            const paintDisplayText = paintOption.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase());
+          // 3. Paint color (below barcode) - check all possible paint fields
+          const paintOption = features.metallic_finishes || features.paint_options || features.paint_options_combined || '';
+          if (paintOption && paintOption !== 'none' && paintOption !== 'no_paint' && paintOption !== 'no_finish') {
+            let paintDisplayText = paintOption;
+            
+            // Handle paint_options_combined format (e.g., "special_effects:carbon_black_tan_camo")
+            if (paintOption.includes(':')) {
+              const parts = paintOption.split(':');
+              paintDisplayText = parts.length > 1 ? parts[1] : parts[0];
+            }
+            
+            // Clean up display text
+            paintDisplayText = paintDisplayText.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase());
+            
             page.drawText(`Paint: ${paintDisplayText}`, {
               x: x + 8,
               y: y + 22,

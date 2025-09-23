@@ -264,6 +264,66 @@ router.post('/:id/reject', async (req: Request, res: Response) => {
   }
 });
 
+// POST /api/refund-requests/:id/process - Mark a refund request as processed
+router.post('/:id/process', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    console.log(`🔄 Processing refund request ${id}`);
+    
+    // Get the refund request details first
+    const [existingRequest] = await db
+      .select()
+      .from(refundRequests)
+      .where(eq(refundRequests.id, parseInt(id)));
+
+    if (!existingRequest) {
+      return res.status(404).json({ error: 'Refund request not found' });
+    }
+
+    if (existingRequest.status !== 'APPROVED') {
+      return res.status(400).json({ error: 'Only approved refund requests can be processed' });
+    }
+    
+    // For now, we'll use a hardcoded processor. In production, this would come from auth
+    const processedBy = 'MANAGER'; // TODO: Get from authentication context
+    
+    const [updatedRequest] = await db
+      .update(refundRequests)
+      .set({
+        status: 'PROCESSED',
+        processedBy,
+        processedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(refundRequests.id, parseInt(id)))
+      .returning();
+
+    console.log('✅ Processed refund request:', updatedRequest.id);
+
+    // CSR Notification Logic
+    // TODO: In a real system, this would send an email/notification to the requestedBy user
+    console.log(`📧 CSR Notification: Notifying ${existingRequest.requestedBy} that refund request ${existingRequest.orderId} has been processed`);
+    
+    // For now, we'll just log the notification. In production, this would:
+    // 1. Send an email to the CSR
+    // 2. Create an in-app notification
+    // 3. Update a notification queue/system
+    console.log(`📧 Notification Details:
+      - To: ${existingRequest.requestedBy}
+      - Subject: Refund Request Processed - Order ${existingRequest.orderId}
+      - Message: Your refund request for $${existingRequest.refundAmount} on order ${existingRequest.orderId} has been processed.`);
+    
+    res.json({
+      ...updatedRequest,
+      message: `Refund processed successfully. CSR ${existingRequest.requestedBy} has been notified.`
+    });
+    
+  } catch (error) {
+    console.error('❌ Error processing refund request:', error);
+    res.status(500).json({ error: 'Failed to process refund request' });
+  }
+});
+
 // GET /api/refund-requests/customer/:customerId - Get refund requests for a specific customer
 router.get('/customer/:customerId', async (req: Request, res: Response) => {
   try {

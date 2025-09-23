@@ -1614,6 +1614,20 @@ export const layupSchedule = pgTable("layup_schedule", {
   uniqueMoldPerDay: uniqueIndex("ux_layup_mold_day").on(table.layupDay, table.moldId),
 }));
 
+export const oemLayupSettings = pgTable("oem_layup_settings", {
+  id: serial("id").primaryKey(),
+  purchaseOrderId: text("purchase_order_id").notNull(),
+  weekStart: timestamp("week_start").notNull(),
+  weekEnd: timestamp("week_end"),
+  priorityLevel: integer("priority_level").default(2000),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  // Unique constraint: one priority setting per PO per week
+  uniquePOPerWeek: uniqueIndex("ux_oem_po_week").on(table.purchaseOrderId, table.weekStart),
+}));
+
 // Insert schemas for Layup Scheduler
 export const insertMoldSchema = createInsertSchema(molds).omit({
   id: true,

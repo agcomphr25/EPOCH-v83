@@ -63,8 +63,11 @@ export default function AllOrdersList() {
   }, []);
 
   const { data: ordersResponse, isLoading, refetch } = useQuery({
-    queryKey: ['/api/orders/with-payment-status/paginated'],
-    queryFn: () => apiRequest('/api/orders/with-payment-status/paginated?page=1&limit=1000'),
+    queryKey: ['/api/orders/with-payment-status/paginated', 'v2'], // Force cache refresh
+    queryFn: () => {
+      console.log('🔥 DEBUG: Making API call to payment status endpoint');
+      return apiRequest('/api/orders/with-payment-status/paginated?page=1&limit=1000');
+    },
     refetchInterval: false, // Completely disable automatic refetching
     refetchOnWindowFocus: false, // Disable refetch on window focus
     refetchOnReconnect: false, // Disable refetch on network reconnect

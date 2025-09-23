@@ -2507,6 +2507,7 @@ export class DatabaseStorage implements IStorage {
     limit: number, 
     totalPages: number 
   }> {
+    console.log(`🔍 PAGINATED: Requested page=${page}, limit=${limit}`);
     // First, get the total count for pagination (no filters, match original /api/orders behavior)
     const totalCountResult = await db
       .select({ count: sql<number>`COUNT(*)` })
@@ -2515,6 +2516,7 @@ export class DatabaseStorage implements IStorage {
     const total = totalCountResult[0]?.count || 0;
     const totalPages = Math.ceil(total / limit);
     const offset = (page - 1) * limit;
+    console.log(`🔍 PAGINATED: Database count=${total}, totalPages=${totalPages}, offset=${offset}`);
 
     // Use the same field selection as the original method but with pagination
     const ordersWithCustomers = await db
@@ -2561,6 +2563,8 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(allOrders.updatedAt))
       .limit(limit)
       .offset(offset);
+    
+    console.log(`🔍 PAGINATED: Query returned ${ordersWithCustomers.length} orders`);
 
     // Get all payments aggregated by order ID in parallel
     const paymentTotals = await db

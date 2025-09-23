@@ -456,8 +456,8 @@ export default function VendorPOManager() {
     }
   });
 
-  // Filter vendor POs
-  const filteredVendorPOs = vendorPOs.filter(vendorPo => {
+  // Filter vendor POs with safety check
+  const filteredVendorPOs = (Array.isArray(vendorPOs) ? vendorPOs : []).filter(vendorPo => {
     const matchesSearch = vendorPo.poNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
       vendorPo.vendorName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       false;
@@ -648,15 +648,15 @@ export default function VendorPOManager() {
         <div className="text-center py-8" data-testid="empty-state">
           <ShoppingCart className="w-12 h-12 text-gray-400 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">
-            {vendorPOs.length === 0 ? 'No vendor purchase orders' : 'No matching purchase orders'}
+            {(Array.isArray(vendorPOs) ? vendorPOs.length : 0) === 0 ? 'No vendor purchase orders' : 'No matching purchase orders'}
           </h3>
           <p className="text-gray-500">
-            {vendorPOs.length === 0 
+            {(Array.isArray(vendorPOs) ? vendorPOs.length : 0) === 0 
               ? 'Create your first vendor purchase order to get started.'
               : 'Try adjusting your search or filters.'
             }
           </p>
-          {vendorPOs.length === 0 && (
+          {(Array.isArray(vendorPOs) ? vendorPOs.length : 0) === 0 && (
             <Button onClick={handleCreate} className="mt-4" data-testid="button-create-first-vendor-po">
               <Plus className="w-4 h-4 mr-2" />
               Create First Vendor PO

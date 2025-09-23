@@ -41,6 +41,7 @@ import { ChevronLeft, ChevronRight, Calendar, Grid3X3, Calendar1, Settings, User
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Separator } from "@/components/ui/separator";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getDisplayOrderId, validateNoFridayAssignments } from '@/lib/orderUtils';
 import { useToast } from '@/hooks/use-toast';
 
@@ -724,6 +725,7 @@ function DroppableCell({
 }
 
 export default function LayupScheduler() {
+  const [activeTab, setActiveTab] = useState('schedule');
   const [viewType, setViewType] = useState<'day' | 'week' | 'month'>('week');
   const [currentDate, setCurrentDate] = useState(() => {
     // FORCE CURRENT WEEK: Initialize to start of current week to fix auto-advance issue
@@ -3824,7 +3826,6 @@ export default function LayupScheduler() {
             <div>
               <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Layup Scheduler</h1>
               <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">P1 Order Production Scheduling</p>
-
             </div>
 
 
@@ -4606,8 +4607,18 @@ export default function LayupScheduler() {
         )}
       </div>
 
-      {/* Scrollable Content Area */}
-      <div className="flex-1 overflow-auto">
+      {/* Tabs Interface */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
+        <div className="px-6 pt-4">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="schedule" data-testid="tab-schedule">Schedule</TabsTrigger>
+            <TabsTrigger value="settings" data-testid="tab-settings">Settings</TabsTrigger>
+          </TabsList>
+        </div>
+
+        <TabsContent value="schedule" className="flex-1 overflow-auto mt-0">
+          {/* Scrollable Content Area */}
+          <div className="flex-1 overflow-auto">
         <DndContext
           sensors={sensors}
           onDragStart={handleDragStart}
@@ -4617,101 +4628,6 @@ export default function LayupScheduler() {
           <div className="px-6 pb-6">
             {viewType === 'week' || viewType === 'day' ? (
               <div className="space-y-6">
-                {/* OEM Purchase Order Priority Settings */}
-                <div className="bg-purple-50 dark:bg-purple-900/20 rounded-lg p-4 mb-4">
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                        OEM Priority Settings
-                      </h3>
-                      <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                        Select P1 purchase orders to prioritize in scheduling
-                      </p>
-                    </div>
-                    <Button
-                      onClick={() => setShowOEMSettings(!showOEMSettings)}
-                      variant="outline"
-                      size="sm"
-                    >
-                      {showOEMSettings ? 'Hide' : 'Configure'} OEM Priority
-                    </Button>
-                  </div>
-                  
-                  {showOEMSettings && (
-                    <div className="mt-4 space-y-4">
-                      <div className="border-t pt-4">
-                        <h4 className="font-medium text-gray-900 dark:text-white mb-3">
-                          Select P1 Purchase Orders for Priority Scheduling:
-                        </h4>
-                        {p1PurchaseOrders.length === 0 ? (
-                          <p className="text-sm text-gray-500 italic">No P1 purchase orders available</p>
-                        ) : (
-                          <div className="max-h-60 overflow-y-auto space-y-2">
-                            {p1PurchaseOrders.map((po: any) => (
-                              <div key={po.id} className="flex items-center space-x-3 p-2 bg-white dark:bg-gray-800 rounded border">
-                                <input
-                                  type="checkbox"
-                                  id={`po-${po.id}`}
-                                  checked={selectedOEMPurchaseOrders.includes(po.id)}
-                                  onChange={(e) => {
-                                    if (e.target.checked) {
-                                      setSelectedOEMPurchaseOrders([...selectedOEMPurchaseOrders, po.id]);
-                                    } else {
-                                      setSelectedOEMPurchaseOrders(selectedOEMPurchaseOrders.filter(id => id !== po.id));
-                                    }
-                                  }}
-                                  className="rounded border-gray-300"
-                                  data-testid={`checkbox-po-${po.id}`}
-                                />
-                                <label htmlFor={`po-${po.id}`} className="flex-1 text-sm">
-                                  <div className="font-medium text-gray-900 dark:text-white">
-                                    PO #{po.poNumber || po.id}
-                                  </div>
-                                  <div className="text-gray-500">
-                                    Vendor: {po.vendorName || 'Unknown'} • Status: {po.status || 'Active'} • Due: {po.dueDate ? new Date(po.dueDate).toLocaleDateString() : 'Not set'}
-                                  </div>
-                                </label>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                      
-                      <div className="flex justify-between items-center pt-3 border-t">
-                        <div className="text-sm text-gray-600 dark:text-gray-400">
-                          {selectedOEMPurchaseOrders.length} purchase order(s) selected for priority
-                        </div>
-                        <div className="space-x-2">
-                          <Button
-                            onClick={() => setSelectedOEMPurchaseOrders([])}
-                            variant="outline"
-                            size="sm"
-                            disabled={selectedOEMPurchaseOrders.length === 0}
-                            data-testid="button-clear-oem-selections"
-                          >
-                            Clear Selections
-                          </Button>
-                          <SaveOEMSettingsButton 
-                            selectedOEMPurchaseOrders={selectedOEMPurchaseOrders}
-                            weekStart={weekStart}
-                            onSaveSuccess={() => setOemSettingsSaved(true)}
-                          />
-                        </div>
-                      </div>
-                      {oemSettingsSaved && selectedOEMPurchaseOrders.length > 0 && (
-                        <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded p-3">
-                          <div className="flex items-center space-x-2">
-                            <CheckCircle className="w-4 h-4 text-green-600" />
-                            <span className="text-sm text-green-700 dark:text-green-300">
-                              OEM priority settings saved. Selected purchase orders will be prioritized during scheduling.
-                            </span>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-
                 {/* Auto-Schedule Controls */}
                 <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
                   <div className="flex justify-between items-center">
@@ -5088,7 +5004,99 @@ export default function LayupScheduler() {
             ) : null}
           </DragOverlay>
         </DndContext>
-      </div>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="settings" className="flex-1 overflow-auto mt-0">
+          <div className="px-6 py-6 space-y-6">
+            {/* OEM Purchase Order Priority Settings */}
+            <div className="bg-purple-50 dark:bg-purple-900/20 rounded-lg p-6">
+              <div className="flex justify-between items-center">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                    OEM Priority Settings
+                  </h3>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                    Select P1 purchase orders to prioritize in scheduling for the week of {format(startOfWeek(currentDate, { weekStartsOn: 1 }), 'M/d')} - {format(addDays(startOfWeek(currentDate, { weekStartsOn: 1 }), 4), 'M/d')}
+                  </p>
+                </div>
+              </div>
+              
+              <div className="mt-4 space-y-4">
+                <div className="border-t pt-4">
+                  <h4 className="font-medium text-gray-900 dark:text-white mb-3">
+                    Select P1 Purchase Orders for Priority Scheduling:
+                  </h4>
+                  {p1PurchaseOrders.length === 0 ? (
+                    <p className="text-sm text-gray-500 italic">No P1 purchase orders available</p>
+                  ) : (
+                    <div className="max-h-60 overflow-y-auto space-y-2">
+                      {p1PurchaseOrders.map((po: any) => (
+                        <div key={po.id} className="flex items-center space-x-3 p-2 bg-white dark:bg-gray-800 rounded border">
+                          <input
+                            type="checkbox"
+                            id={`po-${po.id}`}
+                            checked={selectedOEMPurchaseOrders.includes(po.id)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedOEMPurchaseOrders([...selectedOEMPurchaseOrders, po.id]);
+                              } else {
+                                setSelectedOEMPurchaseOrders(selectedOEMPurchaseOrders.filter(id => id !== po.id));
+                              }
+                            }}
+                            className="rounded border-gray-300"
+                            data-testid={`checkbox-po-${po.id}`}
+                          />
+                          <label htmlFor={`po-${po.id}`} className="flex-1 text-sm">
+                            <div className="font-medium text-gray-900 dark:text-white">
+                              PO #{po.poNumber || po.id}
+                            </div>
+                            <div className="text-gray-500">
+                              Vendor: {po.vendorName || 'Unknown'} • Status: {po.status || 'Active'} • Due: {po.dueDate ? new Date(po.dueDate).toLocaleDateString() : 'Not set'}
+                            </div>
+                          </label>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                
+                <div className="flex justify-between items-center pt-3 border-t">
+                  <div className="text-sm text-gray-600 dark:text-gray-400">
+                    {selectedOEMPurchaseOrders.length} purchase order(s) selected for priority
+                  </div>
+                  <div className="space-x-2">
+                    <Button
+                      onClick={() => setSelectedOEMPurchaseOrders([])}
+                      variant="outline"
+                      size="sm"
+                      disabled={selectedOEMPurchaseOrders.length === 0}
+                      data-testid="button-clear-oem-selections"
+                    >
+                      Clear Selections
+                    </Button>
+                    <SaveOEMSettingsButton 
+                      selectedOEMPurchaseOrders={selectedOEMPurchaseOrders}
+                      weekStart={weekStart}
+                      onSaveSuccess={() => setOemSettingsSaved(true)}
+                    />
+                  </div>
+                </div>
+                {oemSettingsSaved && selectedOEMPurchaseOrders.length > 0 && (
+                  <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded p-3">
+                    <div className="flex items-center space-x-2">
+                      <CheckCircle className="w-4 h-4 text-green-600" />
+                      <span className="text-sm text-green-700 dark:text-green-300">
+                        OEM priority settings saved. Selected purchase orders will be prioritized during scheduling.
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

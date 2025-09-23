@@ -169,7 +169,7 @@ router.post('/', async (req: Request, res: Response) => {
 });
 
 // POST /api/refund-requests/:id/approve - Approve a refund request
-router.post('/:id/approve', async (req: Request, res: Response) => {
+router.post('/:id/approve', authenticateToken, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     console.log(`✅ Approving refund request ${id}`);
@@ -226,7 +226,7 @@ router.post('/:id/approve', async (req: Request, res: Response) => {
 });
 
 // POST /api/refund-requests/:id/reject - Reject a refund request
-router.post('/:id/reject', async (req: Request, res: Response) => {
+router.post('/:id/reject', authenticateToken, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { rejectionReason } = req.body;
@@ -265,7 +265,7 @@ router.post('/:id/reject', async (req: Request, res: Response) => {
 });
 
 // POST /api/refund-requests/:id/process - Mark a refund request as processed
-router.post('/:id/process', async (req: Request, res: Response) => {
+router.post('/:id/process', authenticateToken, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     console.log(`🔄 Processing refund request ${id}`);

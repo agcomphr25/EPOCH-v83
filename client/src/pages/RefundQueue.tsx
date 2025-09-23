@@ -59,6 +59,32 @@ export default function RefundQueue() {
     },
   });
 
+  // Fetch current user to check admin permissions
+  const { data: currentUser } = useQuery({
+    queryKey: ['currentUser'],
+    queryFn: async () => {
+      try {
+        const response = await fetch('/api/auth/session', {
+          credentials: 'include' // Include cookies for session-based auth
+        });
+        
+        if (response.ok) {
+          const userData = await response.json();
+          return userData;
+        }
+        return null;
+      } catch (error) {
+        console.error('Failed to fetch user data:', error);
+        return null;
+      }
+    },
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    retry: false
+  });
+
+  // Check if user is admin (using exact role strings from backend)
+  const isAdmin = currentUser?.role === 'ADMIN' || currentUser?.role === 'HR';
+
   // Update refund request status mutation
   const updateRefundRequestMutation = useMutation({
     mutationFn: async ({ id, action, rejectionReason }: { id: number; action: ActionType; rejectionReason?: string }) => {
@@ -283,26 +309,28 @@ export default function RefundQueue() {
                       <div className="text-2xl font-bold text-green-600 mb-2" data-testid={`request-amount-${request.id}`}>
                         {formatCurrency(request.refundAmount)}
                       </div>
-                      <div className="flex gap-2">
-                        <Button
-                          size="sm"
-                          onClick={() => handleAction(request, 'approve')}
-                          className="bg-green-600 hover:bg-green-700"
-                          data-testid={`approve-button-${request.id}`}
-                        >
-                          <CheckCircle className="h-4 w-4 mr-1" />
-                          Approve
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          onClick={() => handleAction(request, 'reject')}
-                          data-testid={`reject-button-${request.id}`}
-                        >
-                          <XCircle className="h-4 w-4 mr-1" />
-                          Reject
-                        </Button>
-                      </div>
+                      {isAdmin && (
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            onClick={() => handleAction(request, 'approve')}
+                            className="bg-green-600 hover:bg-green-700"
+                            data-testid={`approve-button-${request.id}`}
+                          >
+                            <CheckCircle className="h-4 w-4 mr-1" />
+                            Approve
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => handleAction(request, 'reject')}
+                            data-testid={`reject-button-${request.id}`}
+                          >
+                            <XCircle className="h-4 w-4 mr-1" />
+                            Reject
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   </div>
                   <div className="border-t pt-3 space-y-2">
@@ -379,15 +407,17 @@ export default function RefundQueue() {
                       <div className="text-2xl font-bold text-green-600 mb-2" data-testid={`approved-amount-${request.id}`}>
                         {formatCurrency(request.refundAmount)}
                       </div>
-                      <Button
-                        size="sm"
-                        onClick={() => handleAction(request, 'process')}
-                        className="bg-blue-600 hover:bg-blue-700"
-                        data-testid={`process-button-${request.id}`}
-                      >
-                        <CheckCircle className="h-4 w-4 mr-1" />
-                        Mark as Processed
-                      </Button>
+                      {isAdmin && (
+                        <Button
+                          size="sm"
+                          onClick={() => handleAction(request, 'process')}
+                          className="bg-blue-600 hover:bg-blue-700"
+                          data-testid={`process-button-${request.id}`}
+                        >
+                          <CheckCircle className="h-4 w-4 mr-1" />
+                          Mark as Processed
+                        </Button>
+                      )}
                     </div>
                   </div>
                   <div className="border-t pt-3 space-y-2">

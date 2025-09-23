@@ -430,39 +430,35 @@ router.post('/address-autocomplete-bypass', async (req: Request, res: Response) 
       }
     }
     
-    // Use UPS Address Autocomplete for partial searches
-    console.log('🔧 Making UPS Address Autocomplete API call');
+    // Use Geoapify Address Autocomplete for partial searches
+    console.log('🔧 Making Geoapify Address Autocomplete API call for:', search);
     
     try {
-      const suggestions = await getUPSAddressAutocomplete(search);
-      console.log('🔧 UPS Autocomplete suggestions:', suggestions);
+      // Using Geoapify Geocoding API for autocomplete
+      const geoapifyApiKey = process.env.GEOAPIFY_API_KEY || 'demo'; // Use demo for testing
+      const geoapifyUrl = `https://api.geoapify.com/v1/geocode/autocomplete?text=${encodeURIComponent(search)}&limit=5&type=address&format=json&apiKey=${geoapifyApiKey}`;
       
-      // Transform UPS suggestions to match expected format
-      const transformedSuggestions = suggestions.map((suggestion: string) => {
-        // Try to parse the suggestion to extract components
-        const parts = suggestion.split(', ');
-        const text = suggestion;
-        let streetLine = '', city = '', state = '', zipCode = '';
-        
-        if (parts.length >= 1) {
-          streetLine = parts[0];
-        }
-        if (parts.length >= 2) {
-          // Parse "City State ZIP" format
-          const cityStateZip = parts[1];
-          const match = cityStateZip.match(/^(.+?)\s+([A-Z]{2})(?:\s+(\d{5}(?:-\d{4})?))?$/);
-          if (match) {
-            city = match[1];
-            state = match[2];
-            zipCode = match[3] || '';
-          } else {
-            city = cityStateZip;
-          }
-        }
+      const response = await fetch(geoapifyUrl);
+      console.log('🔧 Geoapify response status:', response.status);
+      
+      if (!response.ok) {
+        throw new Error(`Geoapify API error: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      console.log('🔧 Geoapify raw response:', JSON.stringify(data, null, 2));
+      
+      // Transform Geoapify response to match expected format
+      const transformedSuggestions = (data.results || []).map((result: any) => {
+        const formatted = result.formatted || '';
+        const addressLine1 = result.address_line1 || result.housenumber + ' ' + result.street || '';
+        const city = result.city || '';
+        const state = result.state_code || result.state || '';
+        const zipCode = result.postcode || '';
         
         return {
-          text: text,
-          streetLine: streetLine,
+          text: formatted,
+          streetLine: addressLine1.trim(),
           city: city,
           state: state,
           zipCode: zipCode,
@@ -470,26 +466,53 @@ router.post('/address-autocomplete-bypass', async (req: Request, res: Response) 
         };
       });
       
-      console.log('🔧 Transformed UPS suggestions:', transformedSuggestions);
+      console.log('🔧 Transformed Geoapify suggestions:', transformedSuggestions);
       console.log('🔧 Sending response with suggestions count:', transformedSuggestions.length);
       
       res.json({
         suggestions: transformedSuggestions
       });
       
-    } catch (upsError) {
-      console.error('🔧 UPS Autocomplete error:', upsError);
+    } catch (geoapifyError) {
+      console.error('🔧 Geoapify Autocomplete error:', geoapifyError);
       
-      // Fallback: return the original search as a suggestion
-      res.json({
-        suggestions: [{
-          text: search,
-          streetLine: search,
+      // Fallback: try a simple address parsing approach
+      const fallbackSuggestions = [{
+        text: search,
+        streetLine: search,
+        city: '',
+        state: '',
+        zipCode: '',
+        entries: 1
+      }];
+      
+      // If search looks like a street number + name, provide some basic suggestions
+      if (/^\d+\s+\w+/.test(search)) {
+        const parts = search.split(' ');
+        const streetNum = parts[0];
+        const streetName = parts.slice(1).join(' ');
+        
+        fallbackSuggestions.push({
+          text: `${streetNum} ${streetName} St`,
+          streetLine: `${streetNum} ${streetName} St`,
           city: '',
           state: '',
           zipCode: '',
           entries: 1
-        }]
+        });
+        
+        fallbackSuggestions.push({
+          text: `${streetNum} ${streetName} Ave`,
+          streetLine: `${streetNum} ${streetName} Ave`,
+          city: '',
+          state: '',
+          zipCode: '',
+          entries: 1
+        });
+      }
+      
+      res.json({
+        suggestions: fallbackSuggestions
       });
     }
     

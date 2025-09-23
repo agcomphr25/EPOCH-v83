@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { Button } from "@/components/ui/button";
@@ -14,7 +14,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
-import { Pencil, Trash2, Plus, Eye, Package, Search, TrendingUp, ShoppingCart, Calendar as CalendarIcon, Building2 } from 'lucide-react';
+import { Pencil, Trash2, Plus, Eye, Package, Search, TrendingUp, ShoppingCart, Calendar as CalendarIcon, Building2, ChevronDown, ChevronRight, Grid, List } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import VendorPOItemSelector from './VendorPOItemSelector';
 
@@ -399,6 +399,9 @@ export default function VendorPOManager() {
   const [activeTab, setActiveTab] = useState('details');
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [viewMode, setViewMode] = useState<'list' | 'grouped'>('grouped'); // Default to grouped view
+  const [expandedVendors, setExpandedVendors] = useState<Set<string>>(new Set());
+  const hasInitialized = useRef(false);
 
   const queryClient = useQueryClient();
 
@@ -464,6 +467,43 @@ export default function VendorPOManager() {
     const matchesStatus = statusFilter === 'all' || vendorPo.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
+
+  // Group POs by vendor for categorized view
+  const groupedVendorPOs = React.useMemo(() => {
+    const groups = filteredVendorPOs.reduce((acc, po) => {
+      const vendorKey = `${po.vendorName || 'Unknown Vendor'} (${po.vendorId})`;
+      if (!acc[vendorKey]) {
+        acc[vendorKey] = {
+          vendorName: po.vendorName || 'Unknown Vendor',
+          vendorId: po.vendorId,
+          pos: []
+        };
+      }
+      acc[vendorKey].pos.push(po);
+      return acc;
+    }, {} as Record<string, { vendorName: string; vendorId: number; pos: VendorPO[] }>);
+    
+    return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b));
+  }, [filteredVendorPOs]);
+
+  const toggleVendorExpansion = (vendorKey: string) => {
+    const newExpanded = new Set(expandedVendors);
+    if (newExpanded.has(vendorKey)) {
+      newExpanded.delete(vendorKey);
+    } else {
+      newExpanded.add(vendorKey);
+    }
+    setExpandedVendors(newExpanded);
+  };
+
+  // Expand all vendors by default on initial load only
+  React.useEffect(() => {
+    if (groupedVendorPOs.length > 0 && !hasInitialized.current) {
+      const allVendorKeys = groupedVendorPOs.map(([key]) => key);
+      setExpandedVendors(new Set(allVendorKeys));
+      hasInitialized.current = true;
+    }
+  }, [groupedVendorPOs]);
 
   // Event handlers
   const handleCreate = () => {
@@ -601,13 +641,35 @@ export default function VendorPOManager() {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex justify-between items-center">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight" data-testid="page-title">
-            Vendor Purchase Orders
-          </h2>
-          <p className="text-muted-foreground">
-            Manage purchase orders to vendors for procurement
-          </p>
+        <div className="flex items-center gap-4">
+          <div>
+            <h2 className="text-2xl font-bold tracking-tight" data-testid="page-title">
+              Vendor Purchase Orders
+            </h2>
+            <p className="text-muted-foreground">
+              Manage purchase orders to vendors for procurement
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant={viewMode === 'list' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setViewMode('list')}
+              data-testid="button-list-view"
+            >
+              <List className="w-4 h-4 mr-1" />
+              List
+            </Button>
+            <Button
+              variant={viewMode === 'grouped' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setViewMode('grouped')}
+              data-testid="button-grouped-view"
+            >
+              <Grid className="w-4 h-4 mr-1" />
+              By Vendor
+            </Button>
+          </div>
         </div>
         <Button onClick={handleCreate} data-testid="button-create-vendor-po">
           <Plus className="w-4 h-4 mr-2" />
@@ -643,7 +705,7 @@ export default function VendorPOManager() {
         </Select>
       </div>
 
-      {/* Vendor PO List */}
+      {/* Vendor PO Display */}
       {filteredVendorPOs.length === 0 ? (
         <div className="text-center py-8" data-testid="empty-state">
           <ShoppingCart className="w-12 h-12 text-gray-400 mx-auto mb-4" />
@@ -663,8 +725,8 @@ export default function VendorPOManager() {
             </Button>
           )}
         </div>
-      ) : (
-        <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+      ) : viewMode === 'list' ? (
+        <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3" data-testid="list-view">
           {filteredVendorPOs.map((vendorPo) => (
             <VendorPOCard
               key={vendorPo.id}
@@ -674,6 +736,79 @@ export default function VendorPOManager() {
               onViewItems={handleViewItems}
             />
           ))}
+        </div>
+      ) : (
+        <div className="space-y-6" data-testid="grouped-view">
+          {groupedVendorPOs.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              No vendor purchase orders found for grouping.
+            </div>
+          ) : (
+            groupedVendorPOs.map(([vendorKey, vendorData]) => {
+              const isExpanded = expandedVendors.has(vendorKey);
+              const poCount = vendorData.pos.length;
+              
+              return (
+                <Card key={vendorKey} className="overflow-hidden" data-testid={`vendor-group-${vendorData.vendorId}`}>
+                  <CardHeader 
+                    className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                    onClick={() => toggleVendorExpansion(vendorKey)}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        {isExpanded ? (
+                          <ChevronDown className="w-5 h-5 text-gray-500" />
+                        ) : (
+                          <ChevronRight className="w-5 h-5 text-gray-500" />
+                        )}
+                        <div>
+                          <CardTitle className="text-lg">
+                            {vendorData.vendorName}
+                          </CardTitle>
+                          <CardDescription>
+                            ID: {vendorData.vendorId}
+                          </CardDescription>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <Badge variant="secondary" data-testid={`vendor-po-count-${vendorData.vendorId}`}>
+                          {poCount} PO{poCount !== 1 ? 's' : ''}
+                        </Badge>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            // Show/hide all POs for this vendor
+                            toggleVendorExpansion(vendorKey);
+                          }}
+                          data-testid={`toggle-vendor-${vendorData.vendorId}`}
+                        >
+                          {isExpanded ? 'Collapse' : 'Expand'}
+                        </Button>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  
+                  {isExpanded && (
+                    <CardContent className="pt-0">
+                      <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3" data-testid={`vendor-pos-${vendorData.vendorId}`}>
+                        {vendorData.pos.map((vendorPo) => (
+                          <VendorPOCard
+                            key={vendorPo.id}
+                            vendorPo={vendorPo}
+                            onEdit={handleEdit}
+                            onDelete={handleDelete}
+                            onViewItems={handleViewItems}
+                          />
+                        ))}
+                      </div>
+                    </CardContent>
+                  )}
+                </Card>
+              );
+            })
+          )}
         </div>
       )}
 

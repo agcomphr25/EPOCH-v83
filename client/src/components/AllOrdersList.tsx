@@ -62,16 +62,19 @@ export default function AllOrdersList() {
     };
   }, []);
 
-  const { data: orders, isLoading, refetch } = useQuery<Order[]>({
-    queryKey: ['/api/orders'],
+  const { data: ordersResponse, isLoading, refetch } = useQuery({
+    queryKey: ['/api/orders/with-payment-status/paginated'],
+    queryFn: () => apiRequest('/api/orders/with-payment-status/paginated?page=1&limit=1000'),
     refetchInterval: false, // Completely disable automatic refetching
     refetchOnWindowFocus: false, // Disable refetch on window focus
     refetchOnReconnect: false, // Disable refetch on network reconnect
   });
+
+  const orders: Order[] = ordersResponse?.orders || [];
   
   // Add a manual refresh button for debugging
   const handleRefresh = () => {
-    queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status/paginated'] });
     refetch();
   };
 
@@ -174,7 +177,7 @@ export default function AllOrdersList() {
         newSet.delete(variables.orderId);
         return newSet;
       });
-      queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status/paginated'] });
       toast.error('Failed to update department');
     }
   });
@@ -188,7 +191,7 @@ export default function AllOrdersList() {
     },
     onSuccess: () => {
       toast.success('Order scrapped successfully');
-      queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status/paginated'] });
       queryClient.invalidateQueries({ queryKey: ['/api/orders/pipeline-counts'] });
       setScrapModalOrder(null);
     },
@@ -205,7 +208,7 @@ export default function AllOrdersList() {
     },
     onSuccess: () => {
       toast.success('Replacement order created successfully');
-      queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status/paginated'] });
     },
     onError: (error) => {
       toast.error(`Failed to create replacement: ${error.message}`);
@@ -221,7 +224,7 @@ export default function AllOrdersList() {
     },
     onSuccess: () => {
       toast.success('Order cancelled successfully');
-      queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status/paginated'] });
       queryClient.invalidateQueries({ queryKey: ['/api/orders/pipeline-counts'] });
       queryClient.invalidateQueries({ queryKey: ['/api/production-queue/prioritized'] });
       queryClient.invalidateQueries({ queryKey: ['/api/p1-layup-queue'] });
@@ -318,15 +321,18 @@ export default function AllOrdersList() {
     console.log(`🔄 Progressing order ${orderId} from ${currentDepartment} to ${nextDepartment}`);
     
     // IMMEDIATELY update React Query cache - this prevents any reversion
-    queryClient.setQueryData(['/api/orders/with-payment-status'], (old: any[]) => {
-      if (!old) return old;
-      const updated = old.map((order: any) => {
-        if (order.orderId === orderId) {
-          console.log(`✅ Cache updated: ${orderId} -> ${nextDepartment}`);
-          return { ...order, currentDepartment: nextDepartment };
-        }
-        return order;
-      });
+    queryClient.setQueryData(['/api/orders/with-payment-status/paginated'], (old: any) => {
+      if (!old?.orders) return old;
+      const updated = {
+        ...old,
+        orders: old.orders.map((order: any) => {
+          if (order.orderId === orderId) {
+            console.log(`✅ Cache updated: ${orderId} -> ${nextDepartment}`);
+            return { ...order, currentDepartment: nextDepartment };
+          }
+          return order;
+        })
+      };
       return updated;
     });
     
@@ -343,15 +349,18 @@ export default function AllOrdersList() {
     console.log(`🔄 Pushing order ${orderId} to ${nextDepartment}`);
     
     // IMMEDIATELY update React Query cache - this prevents any reversion
-    queryClient.setQueryData(['/api/orders/with-payment-status'], (old: any[]) => {
-      if (!old) return old;
-      const updated = old.map((order: any) => {
-        if (order.orderId === orderId) {
-          console.log(`✅ Cache updated: ${orderId} -> ${nextDepartment}`);
-          return { ...order, currentDepartment: nextDepartment };
-        }
-        return order;
-      });
+    queryClient.setQueryData(['/api/orders/with-payment-status/paginated'], (old: any) => {
+      if (!old?.orders) return old;
+      const updated = {
+        ...old,
+        orders: old.orders.map((order: any) => {
+          if (order.orderId === orderId) {
+            console.log(`✅ Cache updated: ${orderId} -> ${nextDepartment}`);
+            return { ...order, currentDepartment: nextDepartment };
+          }
+          return order;
+        })
+      };
       return updated;
     });
     

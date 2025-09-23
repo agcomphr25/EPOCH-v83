@@ -430,51 +430,54 @@ router.post('/address-autocomplete-bypass', async (req: Request, res: Response) 
       }
     }
     
-    // Use Geoapify Address Autocomplete for partial searches
-    console.log('🔧 Making Geoapify Address Autocomplete API call for:', search);
+    // Use Nominatim (OpenStreetMap) for free address autocomplete
+    console.log('🔧 Making Nominatim Address Autocomplete API call for:', search);
     
     try {
-      // Using Geoapify Geocoding API for autocomplete
-      const geoapifyApiKey = process.env.GEOAPIFY_API_KEY || 'demo'; // Use demo for testing
-      const geoapifyUrl = `https://api.geoapify.com/v1/geocode/autocomplete?text=${encodeURIComponent(search)}&limit=5&type=address&format=json&apiKey=${geoapifyApiKey}`;
+      // Using Nominatim API (free, no API key required)
+      const nominatimUrl = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(search)}&format=json&addressdetails=1&limit=5&countrycodes=us`;
       
-      const response = await fetch(geoapifyUrl);
-      console.log('🔧 Geoapify response status:', response.status);
+      const response = await fetch(nominatimUrl, {
+        headers: {
+          'User-Agent': 'EPOCH-ERP-System/1.0 (your-email@example.com)' // Required by Nominatim
+        }
+      });
+      
+      console.log('🔧 Nominatim response status:', response.status);
       
       if (!response.ok) {
-        throw new Error(`Geoapify API error: ${response.status}`);
+        throw new Error(`Nominatim API error: ${response.status}`);
       }
       
       const data = await response.json();
-      console.log('🔧 Geoapify raw response:', JSON.stringify(data, null, 2));
+      console.log('🔧 Nominatim raw response:', JSON.stringify(data, null, 2));
       
-      // Transform Geoapify response to match expected format
-      const transformedSuggestions = (data.results || []).map((result: any) => {
-        const formatted = result.formatted || '';
-        const addressLine1 = result.address_line1 || result.housenumber + ' ' + result.street || '';
-        const city = result.city || '';
-        const state = result.state_code || result.state || '';
-        const zipCode = result.postcode || '';
+      // Transform Nominatim response to match expected format
+      const transformedSuggestions = data.map((result: any) => {
+        const address = result.address || {};
+        const houseNumber = address.house_number || '';
+        const street = address.road || '';
+        const streetLine = houseNumber && street ? `${houseNumber} ${street}` : (street || result.display_name.split(',')[0]);
         
         return {
-          text: formatted,
-          streetLine: addressLine1.trim(),
-          city: city,
-          state: state,
-          zipCode: zipCode,
+          text: result.display_name,
+          streetLine: streetLine,
+          city: address.city || address.town || address.village || '',
+          state: address.state || '',
+          zipCode: address.postcode || '',
           entries: 1
         };
       });
       
-      console.log('🔧 Transformed Geoapify suggestions:', transformedSuggestions);
+      console.log('🔧 Transformed Nominatim suggestions:', transformedSuggestions);
       console.log('🔧 Sending response with suggestions count:', transformedSuggestions.length);
       
       res.json({
         suggestions: transformedSuggestions
       });
       
-    } catch (geoapifyError) {
-      console.error('🔧 Geoapify Autocomplete error:', geoapifyError);
+    } catch (nominatimError) {
+      console.error('🔧 Nominatim Autocomplete error:', nominatimError);
       
       // Fallback: try a simple address parsing approach
       const fallbackSuggestions = [{

@@ -67,6 +67,15 @@ export default function CounterfeitPreventionTraining() {
     endTime: ''
   });
 
+  const [quizAnswers, setQuizAnswers] = useState({
+    question1: '',
+    question2: '',
+    question3: '',
+    question4: '',
+    question5: '',
+    question6: ''
+  });
+
   const addParticipant = () => {
     setParticipants([...participants, {name: '', signature: '', date: '', department: ''}]);
   };
@@ -313,40 +322,315 @@ export default function CounterfeitPreventionTraining() {
           {/* Quiz Section */}
           <Card className="print:shadow-none print:border print:border-gray-400 break-inside-avoid print:mb-4">
             <CardHeader className="bg-slate-50 print:bg-white print:border-b print:border-gray-400 print:p-3">
-              <CardTitle className="text-xl text-slate-800 print:text-lg print:text-black print:font-bold">Quiz</CardTitle>
+              <CardTitle className="text-xl text-slate-800 print:text-lg print:text-black print:font-bold">Multiple Choice Quiz</CardTitle>
             </CardHeader>
             <CardContent className="pt-4 print:p-3 print:pt-2">
               <div className="space-y-6 text-sm print:text-sm print:text-black">
+                
+                {/* Question 1 */}
                 <div>
-                  <p className="font-semibold mb-2">1. Name two negative impacts of counterfeit parts.</p>
-                  <div className="border-b border-gray-400 h-6 mb-2"></div>
-                  <div className="border-b border-gray-400 h-6"></div>
+                  <p className="font-semibold mb-3">1. Which TWO are negative impacts of counterfeit parts?</p>
+                  <div className="space-y-2 ml-4">
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input 
+                        type="radio" 
+                        name="question1" 
+                        value="a" 
+                        checked={quizAnswers.question1 === 'a'}
+                        onChange={(e) => setQuizAnswers({...quizAnswers, question1: e.target.value})}
+                        data-testid="quiz-q1-option-a"
+                      />
+                      <span>A) Personal injury and mission failure</span>
+                    </label>
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input 
+                        type="radio" 
+                        name="question1" 
+                        value="b" 
+                        checked={quizAnswers.question1 === 'b'}
+                        onChange={(e) => setQuizAnswers({...quizAnswers, question1: e.target.value})}
+                        data-testid="quiz-q1-option-b"
+                      />
+                      <span>B) Lower costs and faster delivery</span>
+                    </label>
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input 
+                        type="radio" 
+                        name="question1" 
+                        value="c" 
+                        checked={quizAnswers.question1 === 'c'}
+                        onChange={(e) => setQuizAnswers({...quizAnswers, question1: e.target.value})}
+                        data-testid="quiz-q1-option-c"
+                      />
+                      <span>C) Better product quality and reliability</span>
+                    </label>
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input 
+                        type="radio" 
+                        name="question1" 
+                        value="d" 
+                        checked={quizAnswers.question1 === 'd'}
+                        onChange={(e) => setQuizAnswers({...quizAnswers, question1: e.target.value})}
+                        data-testid="quiz-q1-option-d"
+                      />
+                      <span>D) Increased customer satisfaction</span>
+                    </label>
+                  </div>
                 </div>
                 
+                {/* Question 2 */}
                 <div>
-                  <p className="font-semibold mb-2">2. What is the best way to avoid receiving counterfeit parts?</p>
-                  <div className="border-b border-gray-400 h-6"></div>
+                  <p className="font-semibold mb-3">2. What is the best way to avoid receiving counterfeit parts?</p>
+                  <div className="space-y-2 ml-4">
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input 
+                        type="radio" 
+                        name="question2" 
+                        value="a" 
+                        checked={quizAnswers.question2 === 'a'}
+                        onChange={(e) => setQuizAnswers({...quizAnswers, question2: e.target.value})}
+                        data-testid="quiz-q2-option-a"
+                      />
+                      <span>A) Buy from the cheapest supplier available</span>
+                    </label>
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input 
+                        type="radio" 
+                        name="question2" 
+                        value="b" 
+                        checked={quizAnswers.question2 === 'b'}
+                        onChange={(e) => setQuizAnswers({...quizAnswers, question2: e.target.value})}
+                        data-testid="quiz-q2-option-b"
+                      />
+                      <span>B) Procure directly from Original Component/Equipment Manufacturers (OCM/OEM)</span>
+                    </label>
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input 
+                        type="radio" 
+                        name="question2" 
+                        value="c" 
+                        checked={quizAnswers.question2 === 'c'}
+                        onChange={(e) => setQuizAnswers({...quizAnswers, question2: e.target.value})}
+                        data-testid="quiz-q2-option-c"
+                      />
+                      <span>C) Purchase from online auction sites</span>
+                    </label>
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input 
+                        type="radio" 
+                        name="question2" 
+                        value="d" 
+                        checked={quizAnswers.question2 === 'd'}
+                        onChange={(e) => setQuizAnswers({...quizAnswers, question2: e.target.value})}
+                        data-testid="quiz-q2-option-d"
+                      />
+                      <span>D) Always buy used parts to save money</span>
+                    </label>
+                  </div>
                 </div>
                 
+                {/* Question 3 */}
                 <div>
-                  <p className="font-semibold mb-2">3. Does AG require their suppliers to have a counterfeit avoidance program?</p>
-                  <div className="border-b border-gray-400 h-6"></div>
+                  <p className="font-semibold mb-3">3. Does AG require their suppliers to have a counterfeit prevention program?</p>
+                  <div className="space-y-2 ml-4">
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input 
+                        type="radio" 
+                        name="question3" 
+                        value="a" 
+                        checked={quizAnswers.question3 === 'a'}
+                        onChange={(e) => setQuizAnswers({...quizAnswers, question3: e.target.value})}
+                        data-testid="quiz-q3-option-a"
+                      />
+                      <span>A) Yes, suppliers must ensure through processes and/or formal programs against counterfeit materials</span>
+                    </label>
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input 
+                        type="radio" 
+                        name="question3" 
+                        value="b" 
+                        checked={quizAnswers.question3 === 'b'}
+                        onChange={(e) => setQuizAnswers({...quizAnswers, question3: e.target.value})}
+                        data-testid="quiz-q3-option-b"
+                      />
+                      <span>B) No, it's optional for suppliers</span>
+                    </label>
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input 
+                        type="radio" 
+                        name="question3" 
+                        value="c" 
+                        checked={quizAnswers.question3 === 'c'}
+                        onChange={(e) => setQuizAnswers({...quizAnswers, question3: e.target.value})}
+                        data-testid="quiz-q3-option-c"
+                      />
+                      <span>C) Only large suppliers need counterfeit prevention programs</span>
+                    </label>
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input 
+                        type="radio" 
+                        name="question3" 
+                        value="d" 
+                        checked={quizAnswers.question3 === 'd'}
+                        onChange={(e) => setQuizAnswers({...quizAnswers, question3: e.target.value})}
+                        data-testid="quiz-q3-option-d"
+                      />
+                      <span>D) AG handles all counterfeit prevention internally</span>
+                    </label>
+                  </div>
                 </div>
                 
+                {/* Question 4 */}
                 <div>
-                  <p className="font-semibold mb-2">4. What are two red flags to easily detect potential counterfeit parts?</p>
-                  <div className="border-b border-gray-400 h-6 mb-2"></div>
-                  <div className="border-b border-gray-400 h-6"></div>
+                  <p className="font-semibold mb-3">4. Which are red flags that could indicate counterfeit parts?</p>
+                  <div className="space-y-2 ml-4">
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input 
+                        type="radio" 
+                        name="question4" 
+                        value="a" 
+                        checked={quizAnswers.question4 === 'a'}
+                        onChange={(e) => setQuizAnswers({...quizAnswers, question4: e.target.value})}
+                        data-testid="quiz-q4-option-a"
+                      />
+                      <span>A) No certificate of conformance and unknown supplier</span>
+                    </label>
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input 
+                        type="radio" 
+                        name="question4" 
+                        value="b" 
+                        checked={quizAnswers.question4 === 'b'}
+                        onChange={(e) => setQuizAnswers({...quizAnswers, question4: e.target.value})}
+                        data-testid="quiz-q4-option-b"
+                      />
+                      <span>B) Parts arrive quickly and cost less than expected</span>
+                    </label>
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input 
+                        type="radio" 
+                        name="question4" 
+                        value="c" 
+                        checked={quizAnswers.question4 === 'c'}
+                        onChange={(e) => setQuizAnswers({...quizAnswers, question4: e.target.value})}
+                        data-testid="quiz-q4-option-c"
+                      />
+                      <span>C) Perfect packaging and documentation</span>
+                    </label>
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input 
+                        type="radio" 
+                        name="question4" 
+                        value="d" 
+                        checked={quizAnswers.question4 === 'd'}
+                        onChange={(e) => setQuizAnswers({...quizAnswers, question4: e.target.value})}
+                        data-testid="quiz-q4-option-d"
+                      />
+                      <span>D) Parts from authorized distributors</span>
+                    </label>
+                  </div>
                 </div>
                 
+                {/* Question 5 */}
                 <div>
-                  <p className="font-semibold mb-2">5. What is the first thing you do if you suspect a part is a fake or counterfeit?</p>
-                  <div className="border-b border-gray-400 h-6"></div>
+                  <p className="font-semibold mb-3">5. What is the first thing you do if you suspect a part is counterfeit?</p>
+                  <div className="space-y-2 ml-4">
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input 
+                        type="radio" 
+                        name="question5" 
+                        value="a" 
+                        checked={quizAnswers.question5 === 'a'}
+                        onChange={(e) => setQuizAnswers({...quizAnswers, question5: e.target.value})}
+                        data-testid="quiz-q5-option-a"
+                      />
+                      <span>A) Use the part anyway since it might be fine</span>
+                    </label>
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input 
+                        type="radio" 
+                        name="question5" 
+                        value="b" 
+                        checked={quizAnswers.question5 === 'b'}
+                        onChange={(e) => setQuizAnswers({...quizAnswers, question5: e.target.value})}
+                        data-testid="quiz-q5-option-b"
+                      />
+                      <span>B) Isolate and quarantine the parts to prevent them from entering production</span>
+                    </label>
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input 
+                        type="radio" 
+                        name="question5" 
+                        value="c" 
+                        checked={quizAnswers.question5 === 'c'}
+                        onChange={(e) => setQuizAnswers({...quizAnswers, question5: e.target.value})}
+                        data-testid="quiz-q5-option-c"
+                      />
+                      <span>C) Return the parts to the supplier immediately</span>
+                    </label>
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input 
+                        type="radio" 
+                        name="question5" 
+                        value="d" 
+                        checked={quizAnswers.question5 === 'd'}
+                        onChange={(e) => setQuizAnswers({...quizAnswers, question5: e.target.value})}
+                        data-testid="quiz-q5-option-d"
+                      />
+                      <span>D) Throw the parts in the regular trash</span>
+                    </label>
+                  </div>
                 </div>
                 
+                {/* Question 6 */}
                 <div>
-                  <p className="font-semibold mb-2">6. Should you throw away or return the items you suspect as counterfeit?</p>
-                  <div className="border-b border-gray-400 h-6"></div>
+                  <p className="font-semibold mb-3">6. What should you do with items you suspect are counterfeit?</p>
+                  <div className="space-y-2 ml-4">
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input 
+                        type="radio" 
+                        name="question6" 
+                        value="a" 
+                        checked={quizAnswers.question6 === 'a'}
+                        onChange={(e) => setQuizAnswers({...quizAnswers, question6: e.target.value})}
+                        data-testid="quiz-q6-option-a"
+                      />
+                      <span>A) Throw them away immediately</span>
+                    </label>
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input 
+                        type="radio" 
+                        name="question6" 
+                        value="b" 
+                        checked={quizAnswers.question6 === 'b'}
+                        onChange={(e) => setQuizAnswers({...quizAnswers, question6: e.target.value})}
+                        data-testid="quiz-q6-option-b"
+                      />
+                      <span>B) Return them to the supplier so they can investigate</span>
+                    </label>
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input 
+                        type="radio" 
+                        name="question6" 
+                        value="c" 
+                        checked={quizAnswers.question6 === 'c'}
+                        onChange={(e) => setQuizAnswers({...quizAnswers, question6: e.target.value})}
+                        data-testid="quiz-q6-option-c"
+                      />
+                      <span>C) Store in quarantine as nonconforming/counterfeit product pending management review</span>
+                    </label>
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input 
+                        type="radio" 
+                        name="question6" 
+                        value="d" 
+                        checked={quizAnswers.question6 === 'd'}
+                        onChange={(e) => setQuizAnswers({...quizAnswers, question6: e.target.value})}
+                        data-testid="quiz-q6-option-d"
+                      />
+                      <span>D) Sell them to another company</span>
+                    </label>
+                  </div>
                 </div>
               </div>
             </CardContent>

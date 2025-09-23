@@ -8,6 +8,7 @@ import { z } from 'zod';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
@@ -152,6 +153,7 @@ export default function VendorFormModal({
   vendor,
   mode = 'create'
 }: VendorFormModalProps) {
+  const isEditing = mode === 'edit';
   const [activeTab, setActiveTab] = useState('basic');
   const [documents, setDocuments] = useState<VendorDocument[]>([]);
   const [isUploadingDocument, setIsUploadingDocument] = useState(false);

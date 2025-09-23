@@ -4776,9 +4776,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { view, includeDept, includeScheduleFlag } = req.query;
       
+      // Force no caching for debugging
+      res.set({
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+      });
+      
       // Use the payment-aware method instead of basic getAllOrders
+      console.log('🔍 Executing getAllOrdersWithPaymentStatusPaginated for All Orders page...');
       const result = await storage.getAllOrdersWithPaymentStatusPaginated(1, 1000); // Get first 1000 orders
       const orders = result.orders;
+      console.log(`✅ Processed ${orders.length} orders with payment info`);
       
       res.json(orders);
     } catch (error) {

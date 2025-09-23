@@ -2600,6 +2600,7 @@ export class DatabaseStorage implements IStorage {
       try {
         // Calculate real-time order total using the existing method
         actualOrderTotal = await this.calculateOrderTotal(order);
+        console.log(`💰 Payment calc for ${order.orderId}: paymentTotal=${paymentTotal}, orderTotal=${actualOrderTotal}`);
       } catch (error) {
         // Fallback to stored paymentAmount if calculation fails
         console.warn(`Failed to calculate order total for ${order.orderId}, using stored amount:`, error);

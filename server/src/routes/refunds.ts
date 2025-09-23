@@ -324,6 +324,46 @@ router.post('/:id/process', authenticateToken, async (req: Request, res: Respons
   }
 });
 
+// GET /api/refund-requests/order/:orderId - Get refund requests for a specific order
+router.get('/order/:orderId', async (req: Request, res: Response) => {
+  try {
+    const { orderId } = req.params;
+    console.log(`🔍 Getting refund requests for order ${orderId}`);
+    
+    // Select only the columns that exist in the current database schema
+    const requests = await db
+      .select({
+        id: refundRequests.id,
+        orderId: refundRequests.orderId,
+        refundType: refundRequests.refundType,
+        amount: refundRequests.amount,
+        reason: refundRequests.reason,
+        notes: refundRequests.notes,
+        status: refundRequests.status,
+        requestedBy: refundRequests.requestedBy,
+        requestedAt: refundRequests.requestedAt,
+        approvedBy: refundRequests.approvedBy,
+        approvedAt: refundRequests.approvedAt,
+        processedBy: refundRequests.processedBy,
+        processedAt: refundRequests.processedAt,
+        transactionId: refundRequests.transactionId,
+        createdAt: refundRequests.createdAt,
+        updatedAt: refundRequests.updatedAt,
+        customerId: refundRequests.customerId,
+        refundAmount: refundRequests.refundAmount,
+      })
+      .from(refundRequests)
+      .where(eq(refundRequests.orderId, orderId))
+      .orderBy(desc(refundRequests.createdAt));
+
+    console.log(`✅ Found ${requests.length} refund requests for order ${orderId}`);
+    res.json(requests);
+  } catch (error) {
+    console.error('❌ Error fetching order refund requests:', error);
+    res.status(500).json({ error: 'Failed to fetch order refund requests' });
+  }
+});
+
 // GET /api/refund-requests/customer/:customerId - Get refund requests for a specific customer
 router.get('/customer/:customerId', async (req: Request, res: Response) => {
   try {

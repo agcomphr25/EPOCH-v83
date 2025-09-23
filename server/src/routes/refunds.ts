@@ -3,7 +3,7 @@ import { db } from '../../db';
 import { refundRequests, allOrders, customers, payments, creditCardTransactions } from '../../schema';
 import { insertRefundRequestSchema } from '../../schema';
 import { eq, desc, and, sql } from 'drizzle-orm';
-import { authenticateToken } from '../../middleware/auth';
+import { authenticateToken, requireRole } from '../../middleware/auth';
 // @ts-ignore - AuthorizeNet doesn't have proper TypeScript definitions
 import AuthorizeNet from 'authorizenet';
 
@@ -98,7 +98,7 @@ async function processAuthorizeNetRefund(transactionId: string, refundAmount: nu
 }
 
 // GET /api/refund-requests - Get all refund requests
-router.get('/', async (req: Request, res: Response) => {
+router.get('/', authenticateToken, requireRole('ADMIN', 'HR'), async (req: Request, res: Response) => {
   try {
     console.log('🔍 Getting all refund requests');
     
@@ -142,15 +142,15 @@ router.get('/', async (req: Request, res: Response) => {
 });
 
 // POST /api/refund-requests - Create a new refund request
-router.post('/', async (req: Request, res: Response) => {
+router.post('/', authenticateToken, async (req: Request, res: Response) => {
   try {
     console.log('📝 Creating new refund request:', req.body);
     
     // Validate request data
     const validatedData = insertRefundRequestSchema.parse(req.body);
     
-    // For now, we'll use a hardcoded user. In production, this would come from auth
-    const requestedBy = 'CSR'; // TODO: Get from authentication context
+    // Get the authenticated user
+    const requestedBy = (req as any).user?.username || 'Unknown';
     
     const [newRequest] = await db
       .insert(refundRequests)
@@ -169,7 +169,7 @@ router.post('/', async (req: Request, res: Response) => {
 });
 
 // POST /api/refund-requests/:id/approve - Approve a refund request
-router.post('/:id/approve', authenticateToken, async (req: Request, res: Response) => {
+router.post('/:id/approve', authenticateToken, requireRole('ADMIN', 'HR'), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     console.log(`✅ Approving refund request ${id}`);
@@ -226,7 +226,7 @@ router.post('/:id/approve', authenticateToken, async (req: Request, res: Respons
 });
 
 // POST /api/refund-requests/:id/reject - Reject a refund request
-router.post('/:id/reject', authenticateToken, async (req: Request, res: Response) => {
+router.post('/:id/reject', authenticateToken, requireRole('ADMIN', 'HR'), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { rejectionReason } = req.body;
@@ -265,7 +265,7 @@ router.post('/:id/reject', authenticateToken, async (req: Request, res: Response
 });
 
 // POST /api/refund-requests/:id/process - Mark a refund request as processed
-router.post('/:id/process', authenticateToken, async (req: Request, res: Response) => {
+router.post('/:id/process', authenticateToken, requireRole('ADMIN', 'HR'), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     console.log(`🔄 Processing refund request ${id}`);

@@ -690,6 +690,11 @@ export default function LayupScheduler() {
   const [orderAssignments, setOrderAssignments] = useState<{[orderId: string]: { moldId: string, date: string }}>({});
   const [recentlyRemovedOrders, setRecentlyRemovedOrders] = useState<Set<string>>(new Set());
 
+  // OEM Settings state management
+  const [showOEMSettings, setShowOEMSettings] = useState(false);
+  const [selectedOEMPurchaseOrders, setSelectedOEMPurchaseOrders] = useState<string[]>([]);
+  const [oemSettingsSaved, setOemSettingsSaved] = useState(false);
+
 
   // Clear schedule function for testing
   const clearSchedule = useCallback(async () => {
@@ -2377,6 +2382,17 @@ export default function LayupScheduler() {
 
   const { data: features = [] } = useQuery({
     queryKey: ['/api/features'],
+  }) as { data: any[] };
+
+  // Fetch P1 purchase orders for OEM settings
+  const { data: p1PurchaseOrders = [] } = useQuery({
+    queryKey: ['/api/pos'],
+    queryFn: async () => {
+      const response = await fetch('/api/pos');
+      if (!response.ok) throw new Error('Failed to fetch purchase orders');
+      const data = await response.json();
+      return data || [];
+    },
   }) as { data: any[] };
 
   // Print functionality

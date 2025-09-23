@@ -446,7 +446,11 @@ export default function RefundQueue() {
                       </span>
                     </div>
                     <div className="text-sm text-gray-500" data-testid={`processed-date-${request.id}`}>
-                      {request.approvedAt ? formatDate(request.approvedAt) : formatDate(request.updatedAt)}
+                      {request.status === 'PROCESSED' && request.processedAt 
+                        ? formatDate(request.processedAt)
+                        : request.approvedAt 
+                        ? formatDate(request.approvedAt) 
+                        : formatDate(request.updatedAt)}
                     </div>
                   </div>
                   {request.rejectionReason && (
@@ -477,14 +481,16 @@ export default function RefundQueue() {
         <DialogContent data-testid="action-dialog">
           <DialogHeader>
             <DialogTitle data-testid="dialog-title">
-              {actionType === 'approve' ? 'Approve' : 'Reject'} Refund Request
+              {actionType === 'approve' ? 'Approve' : actionType === 'reject' ? 'Reject' : 'Mark as Processed'} Refund Request
             </DialogTitle>
             <DialogDescription data-testid="dialog-description">
               {selectedRequest && (
                 <>
                   {actionType === 'approve' 
                     ? `Approve a ${formatCurrency(selectedRequest.refundAmount)} refund for order ${selectedRequest.orderId}?`
-                    : `Reject the refund request for order ${selectedRequest.orderId}?`
+                    : actionType === 'reject'
+                    ? `Reject the refund request for order ${selectedRequest.orderId}?`
+                    : `Mark the ${formatCurrency(selectedRequest.refundAmount)} refund for order ${selectedRequest.orderId} as processed and notify the CSR?`
                   }
                 </>
               )}
@@ -522,7 +528,7 @@ export default function RefundQueue() {
               data-testid="confirm-action-button"
             >
               {updateRefundRequestMutation.isPending ? 'Processing...' : 
-                actionType === 'approve' ? 'Approve Refund' : 'Reject Request'
+                actionType === 'approve' ? 'Approve Refund' : actionType === 'reject' ? 'Reject Request' : 'Mark as Processed'
               }
             </Button>
           </div>

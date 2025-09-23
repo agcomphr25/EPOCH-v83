@@ -457,7 +457,7 @@ export default function VendorPOManager() {
   });
 
   // Filter vendor POs
-  const filteredVendorPOs = vendorPOs.filter(vendorPo => {
+  const filteredVendorPOs = (vendorPOs || []).filter(vendorPo => {
     const matchesSearch = vendorPo.poNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
       vendorPo.vendorName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       false;

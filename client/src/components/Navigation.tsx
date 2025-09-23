@@ -290,6 +290,12 @@ export default function Navigation() {
       label: 'Fire Safety Training',
       icon: GraduationCap,
       description: 'Presentation-style fire safety training with attendance signatures'
+    },
+    {
+      path: '/counterfeit-prevention-training',
+      label: 'Counterfeit Prevention Training',
+      icon: Shield,
+      description: 'Presentation-style counterfeit materials prevention training with attendance signatures'
     }
   ];
 

@@ -3,7 +3,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
-import { Shield, Users, Calendar, Clock, Printer, AlertTriangle, Eye, Zap, CheckCircle } from "lucide-react";
+import { Shield, Users, Calendar, Clock, Printer, AlertTriangle, Eye, Zap, CheckCircle, FileText } from "lucide-react";
+// @ts-ignore - html2pdf.js doesn't have type definitions
+import html2pdf from 'html2pdf.js';
 
 // Print-specific styles
 const printStyles = `
@@ -88,6 +90,48 @@ export default function CounterfeitPreventionTraining() {
 
   const handlePrint = () => {
     window.print();
+  };
+
+  const generatePDF = () => {
+    const element = document.querySelector('.print-content') as HTMLElement;
+    if (!element) return;
+
+    const opt = {
+      margin: [0.5, 0.5, 0.5, 0.5],
+      filename: `Counterfeit_Prevention_Training_${new Date().toISOString().split('T')[0]}.pdf`,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { 
+        scale: 2,
+        useCORS: true,
+        letterRendering: true,
+        logging: false,
+        height: element.scrollHeight,
+        width: element.scrollWidth
+      },
+      jsPDF: { 
+        unit: 'in', 
+        format: 'letter', 
+        orientation: 'portrait' 
+      },
+      pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+    };
+
+    // Temporarily hide interactive elements for cleaner PDF
+    const interactiveElements = document.querySelectorAll('.print\\:hidden, input[type="radio"]:not(:checked)');
+    const originalDisplay: string[] = [];
+    
+    interactiveElements.forEach((el, index) => {
+      originalDisplay[index] = (el as HTMLElement).style.display;
+      (el as HTMLElement).style.display = 'none';
+    });
+
+    // Generate PDF
+    html2pdf().set(opt).from(element).save().then(() => {
+      // Restore original display
+      interactiveElements.forEach((el, index) => {
+        (el as HTMLElement).style.display = originalDisplay[index] || '';
+      });
+    });
   };
 
   return (
@@ -807,7 +851,7 @@ export default function CounterfeitPreventionTraining() {
         </div>
 
         {/* Action Buttons */}
-        <div className="mt-6 text-center print:hidden">
+        <div className="mt-6 text-center print:hidden space-x-4">
           <Button 
             onClick={handlePrint} 
             className="bg-red-600 hover:bg-red-700"
@@ -815,6 +859,14 @@ export default function CounterfeitPreventionTraining() {
           >
             <Printer className="h-4 w-4 mr-2" />
             Print Training Sheet
+          </Button>
+          <Button 
+            onClick={generatePDF} 
+            className="bg-blue-600 hover:bg-blue-700"
+            data-testid="button-pdf-counterfeit-training"
+          >
+            <FileText className="h-4 w-4 mr-2" />
+            Generate PDF
           </Button>
         </div>
         </div>

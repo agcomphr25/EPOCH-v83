@@ -315,7 +315,7 @@ export function registerRoutes(app: Express): Server {
           id,
           order_id as "orderId",
           customer_id as "customer",
-          product,
+          model_id as "modelId",
           date,
           due_date as "dueDate",
           current_department as "currentDepartment",
@@ -335,7 +335,7 @@ export function registerRoutes(app: Express): Server {
         currentDepartment: (order as any).currentDepartment,
         customerId: order.customer,
         features: {},
-        modelId: order.product,
+        modelId: order.modelId,
         status: (order as any).status,
         poId: null,
         productionOrderId: null

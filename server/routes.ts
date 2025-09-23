@@ -4771,11 +4771,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Department Progression API Routes
   
-  // Get all orders with department information
+  // Get all orders with department information and payment status
   app.get("/api/orders", async (req, res) => {
     try {
       const { view, includeDept, includeScheduleFlag } = req.query;
-      const orders = await storage.getAllOrders();
+      
+      // Use the payment-aware method instead of basic getAllOrders
+      const result = await storage.getAllOrdersWithPaymentStatusPaginated(1, 1000); // Get first 1000 orders
+      const orders = result.orders;
+      
       res.json(orders);
     } catch (error) {
       console.error("Orders fetch error:", error);

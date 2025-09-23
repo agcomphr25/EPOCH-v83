@@ -677,6 +677,22 @@ export default function CounterfeitPreventionTraining() {
                   </div>
                 </div>
               </div>
+              
+              {/* Signature Section */}
+              <div className="mt-8 pt-6 border-t border-gray-400">
+                <div className="grid grid-cols-2 gap-8 print:gap-4">
+                  <div className="space-y-2">
+                    <label className="font-semibold text-sm print:text-sm print:text-black">Employee Signature:</label>
+                    <div className="border-b-2 border-gray-400 h-12 print:h-8"></div>
+                    <div className="text-xs text-gray-600 print:text-xs print:text-black">Date: ________________</div>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="font-semibold text-sm print:text-sm print:text-black">Training Instructor:</label>
+                    <div className="border-b-2 border-gray-400 h-12 print:h-8"></div>
+                    <div className="text-xs text-gray-600 print:text-xs print:text-black">Date: ________________</div>
+                  </div>
+                </div>
+              </div>
             </CardContent>
           </Card>
 
@@ -809,41 +825,6 @@ export default function CounterfeitPreventionTraining() {
           </CardContent>
         </Card>
 
-        {/* Attendance Section */}
-        <Card className="print:shadow-none print:border print:border-gray-400 break-inside-avoid print:mt-6 print:page-break-before">
-          <CardHeader className="pb-4 print:border-b print:border-gray-400 print:p-3">
-            <CardTitle className="flex items-center gap-2 print:text-lg print:font-bold">
-              <Users className="h-5 w-5 print:hidden" />
-              Training Attendance
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="print:p-3">
-            <div className="space-y-6 print:space-y-4">
-              {/* Participant Signature Lines */}
-              <div className="space-y-4 print:space-y-3">
-                {[...Array(15)].map((_, index) => (
-                  <div key={index} className="border-b border-gray-400 h-8 print:h-6"></div>
-                ))}
-              </div>
-            </div>
-
-            <Separator className="my-6 print:my-4 print:border-gray-400" />
-            
-            {/* Instructor Signature */}
-            <div className="grid grid-cols-2 gap-8 print:gap-4">
-              <div className="space-y-2">
-                <label className="font-semibold text-sm print:text-sm print:text-black">Instructor Signature:</label>
-                <div className="border-b-2 border-gray-400 h-12 print:h-8"></div>
-                <div className="text-xs text-gray-600 print:text-xs print:text-black">Date: ________________</div>
-              </div>
-              <div className="space-y-2">
-                <label className="font-semibold text-sm print:text-sm print:text-black">Training Coordinator:</label>
-                <div className="border-b-2 border-gray-400 h-12 print:h-8"></div>
-                <div className="text-xs text-gray-600 print:text-xs print:text-black">Date: ________________</div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
 
         {/* Footer with Date */}
         <div className="mt-8 text-center border-t border-gray-400 pt-4 print:mt-6 print:pt-3">

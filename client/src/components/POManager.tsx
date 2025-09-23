@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { fetchPOs, createPO, updatePO, deletePO, fetchPOItems, type PurchaseOrder, type CreatePurchaseOrderData, type PurchaseOrderItem } from '@/lib/poUtils';
 import { generateProductionOrdersFromPO } from '@/lib/productionUtils';
@@ -231,6 +231,7 @@ export default function POManager() {
   const [showCreateCustomer, setShowCreateCustomer] = useState(false);
   const [viewMode, setViewMode] = useState<'list' | 'grouped'>('grouped'); // Default to grouped view
   const [expandedCustomers, setExpandedCustomers] = useState<Set<string>>(new Set());
+  const hasInitialized = useRef(false);
   const [newCustomerData, setNewCustomerData] = useState({
     name: '',
     email: '',
@@ -540,13 +541,14 @@ export default function POManager() {
     setExpandedCustomers(newExpanded);
   };
 
-  // Expand all customers by default on initial load
+  // Expand all customers by default on initial load only
   React.useEffect(() => {
-    if (groupedPOs.length > 0 && expandedCustomers.size === 0) {
+    if (groupedPOs.length > 0 && !hasInitialized.current) {
       const allCustomerKeys = groupedPOs.map(([key]) => key);
       setExpandedCustomers(new Set(allCustomerKeys));
+      hasInitialized.current = true;
     }
-  }, [groupedPOs, expandedCustomers.size]);
+  }, [groupedPOs]);
 
   const getStatusColor = (status: string) => {
     switch (status) {

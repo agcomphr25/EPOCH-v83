@@ -1520,7 +1520,8 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
         font: font,
       });
 
-      const actionInletDisplay = actionInletOption?.label || 'Not selected';
+      const actionInletDisplay = actionInletOption?.label || 
+        (order.features?.action_inlet ? (order.features as any)?.action_inlet.charAt(0).toUpperCase() + (order.features as any)?.action_inlet.slice(1) : 'Not selected');
       const wrappedActionInlet = wrapText(actionInletDisplay, 300, 9, font);
       wrappedActionInlet.forEach((line, index) => {
         if (summaryLineY - (index * 12) > currentY - featuresTableHeight + 8) {

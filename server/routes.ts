@@ -72,7 +72,16 @@ import {
   // Purchase Review Checklist schema
   insertPurchaseReviewChecklistSchema,
   // Task Tracker schema
-  insertTaskItemSchema
+  insertTaskItemSchema,
+  // Vendor management schemas
+  insertVendorSchema,
+  insertVendorContactSchema,
+  insertVendorAddressSchema,
+  insertVendorContactPhoneSchema,
+  insertVendorContactEmailSchema,
+  insertVendorDocumentSchema,
+  insertVendorScoringCriteriaSchema,
+  insertVendorScoreSchema
 } from "@shared/schema";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -5355,6 +5364,532 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Delete task item error:", error);
       res.status(500).json({ error: "Failed to delete task item" });
+    }
+  });
+
+  // ===== VENDOR MANAGEMENT API ROUTES =====
+
+  // Vendors CRUD Routes
+  app.get("/api/vendors", async (req, res) => {
+    try {
+      const vendors = await storage.getAllVendors();
+      res.json(vendors);
+    } catch (error) {
+      console.error("Get vendors error:", error);
+      res.status(500).json({ error: "Failed to retrieve vendors" });
+    }
+  });
+
+  app.get("/api/vendors/search", async (req, res) => {
+    try {
+      const query = req.query.q as string;
+      if (!query) {
+        return res.status(400).json({ error: "Search query is required" });
+      }
+      const vendors = await storage.searchVendors(query);
+      res.json(vendors);
+    } catch (error) {
+      console.error("Search vendors error:", error);
+      res.status(500).json({ error: "Failed to search vendors" });
+    }
+  });
+
+  app.get("/api/vendors/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const vendor = await storage.getVendor(id);
+      if (!vendor) {
+        return res.status(404).json({ error: "Vendor not found" });
+      }
+      res.json(vendor);
+    } catch (error) {
+      console.error("Get vendor error:", error);
+      res.status(500).json({ error: "Failed to retrieve vendor" });
+    }
+  });
+
+  app.get("/api/vendors/:id/details", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const vendor = await storage.getVendorWithDetails(id);
+      if (!vendor) {
+        return res.status(404).json({ error: "Vendor not found" });
+      }
+      res.json(vendor);
+    } catch (error) {
+      console.error("Get vendor details error:", error);
+      res.status(500).json({ error: "Failed to retrieve vendor details" });
+    }
+  });
+
+  app.post("/api/vendors", async (req, res) => {
+    try {
+      const data = insertVendorSchema.parse(req.body);
+      const vendor = await storage.createVendor(data);
+      res.status(201).json(vendor);
+    } catch (error) {
+      console.error("Create vendor error:", error);
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: "Invalid vendor data", details: error.errors });
+      } else {
+        res.status(500).json({ error: "Failed to create vendor" });
+      }
+    }
+  });
+
+  app.put("/api/vendors/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const data = insertVendorSchema.partial().parse(req.body);
+      const vendor = await storage.updateVendor(id, data);
+      res.json(vendor);
+    } catch (error) {
+      console.error("Update vendor error:", error);
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: "Invalid vendor data", details: error.errors });
+      } else {
+        res.status(500).json({ error: "Failed to update vendor" });
+      }
+    }
+  });
+
+  app.delete("/api/vendors/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      await storage.deleteVendor(id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Delete vendor error:", error);
+      res.status(500).json({ error: "Failed to delete vendor" });
+    }
+  });
+
+  // Vendor Contacts Routes
+  app.get("/api/vendors/:vendorId/contacts", async (req, res) => {
+    try {
+      const vendorId = parseInt(req.params.vendorId);
+      const contacts = await storage.getVendorContacts(vendorId);
+      res.json(contacts);
+    } catch (error) {
+      console.error("Get vendor contacts error:", error);
+      res.status(500).json({ error: "Failed to retrieve vendor contacts" });
+    }
+  });
+
+  app.get("/api/vendor-contacts/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const contact = await storage.getVendorContact(id);
+      if (!contact) {
+        return res.status(404).json({ error: "Contact not found" });
+      }
+      res.json(contact);
+    } catch (error) {
+      console.error("Get vendor contact error:", error);
+      res.status(500).json({ error: "Failed to retrieve vendor contact" });
+    }
+  });
+
+  app.post("/api/vendor-contacts", async (req, res) => {
+    try {
+      const data = insertVendorContactSchema.parse(req.body);
+      const contact = await storage.createVendorContact(data);
+      res.status(201).json(contact);
+    } catch (error) {
+      console.error("Create vendor contact error:", error);
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: "Invalid contact data", details: error.errors });
+      } else {
+        res.status(500).json({ error: "Failed to create vendor contact" });
+      }
+    }
+  });
+
+  app.put("/api/vendor-contacts/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const data = insertVendorContactSchema.partial().parse(req.body);
+      const contact = await storage.updateVendorContact(id, data);
+      res.json(contact);
+    } catch (error) {
+      console.error("Update vendor contact error:", error);
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: "Invalid contact data", details: error.errors });
+      } else {
+        res.status(500).json({ error: "Failed to update vendor contact" });
+      }
+    }
+  });
+
+  app.delete("/api/vendor-contacts/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      await storage.deleteVendorContact(id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Delete vendor contact error:", error);
+      res.status(500).json({ error: "Failed to delete vendor contact" });
+    }
+  });
+
+  // Vendor Addresses Routes
+  app.get("/api/vendors/:vendorId/addresses", async (req, res) => {
+    try {
+      const vendorId = parseInt(req.params.vendorId);
+      const addresses = await storage.getVendorAddresses(vendorId);
+      res.json(addresses);
+    } catch (error) {
+      console.error("Get vendor addresses error:", error);
+      res.status(500).json({ error: "Failed to retrieve vendor addresses" });
+    }
+  });
+
+  app.get("/api/vendor-addresses/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const address = await storage.getVendorAddress(id);
+      if (!address) {
+        return res.status(404).json({ error: "Address not found" });
+      }
+      res.json(address);
+    } catch (error) {
+      console.error("Get vendor address error:", error);
+      res.status(500).json({ error: "Failed to retrieve vendor address" });
+    }
+  });
+
+  app.post("/api/vendor-addresses", async (req, res) => {
+    try {
+      const data = insertVendorAddressSchema.parse(req.body);
+      const address = await storage.createVendorAddress(data);
+      res.status(201).json(address);
+    } catch (error) {
+      console.error("Create vendor address error:", error);
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: "Invalid address data", details: error.errors });
+      } else {
+        res.status(500).json({ error: "Failed to create vendor address" });
+      }
+    }
+  });
+
+  app.put("/api/vendor-addresses/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const data = insertVendorAddressSchema.partial().parse(req.body);
+      const address = await storage.updateVendorAddress(id, data);
+      res.json(address);
+    } catch (error) {
+      console.error("Update vendor address error:", error);
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: "Invalid address data", details: error.errors });
+      } else {
+        res.status(500).json({ error: "Failed to update vendor address" });
+      }
+    }
+  });
+
+  app.delete("/api/vendor-addresses/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      await storage.deleteVendorAddress(id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Delete vendor address error:", error);
+      res.status(500).json({ error: "Failed to delete vendor address" });
+    }
+  });
+
+  // Vendor Contact Phones Routes
+  app.get("/api/vendor-contacts/:contactId/phones", async (req, res) => {
+    try {
+      const contactId = parseInt(req.params.contactId);
+      const phones = await storage.getContactPhones(contactId);
+      res.json(phones);
+    } catch (error) {
+      console.error("Get contact phones error:", error);
+      res.status(500).json({ error: "Failed to retrieve contact phones" });
+    }
+  });
+
+  app.post("/api/vendor-contact-phones", async (req, res) => {
+    try {
+      const data = insertVendorContactPhoneSchema.parse(req.body);
+      const phone = await storage.createContactPhone(data);
+      res.status(201).json(phone);
+    } catch (error) {
+      console.error("Create contact phone error:", error);
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: "Invalid phone data", details: error.errors });
+      } else {
+        res.status(500).json({ error: "Failed to create contact phone" });
+      }
+    }
+  });
+
+  app.put("/api/vendor-contact-phones/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const data = insertVendorContactPhoneSchema.partial().parse(req.body);
+      const phone = await storage.updateContactPhone(id, data);
+      res.json(phone);
+    } catch (error) {
+      console.error("Update contact phone error:", error);
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: "Invalid phone data", details: error.errors });
+      } else {
+        res.status(500).json({ error: "Failed to update contact phone" });
+      }
+    }
+  });
+
+  app.delete("/api/vendor-contact-phones/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      await storage.deleteContactPhone(id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Delete contact phone error:", error);
+      res.status(500).json({ error: "Failed to delete contact phone" });
+    }
+  });
+
+  // Vendor Contact Emails Routes
+  app.get("/api/vendor-contacts/:contactId/emails", async (req, res) => {
+    try {
+      const contactId = parseInt(req.params.contactId);
+      const emails = await storage.getContactEmails(contactId);
+      res.json(emails);
+    } catch (error) {
+      console.error("Get contact emails error:", error);
+      res.status(500).json({ error: "Failed to retrieve contact emails" });
+    }
+  });
+
+  app.post("/api/vendor-contact-emails", async (req, res) => {
+    try {
+      const data = insertVendorContactEmailSchema.parse(req.body);
+      const email = await storage.createContactEmail(data);
+      res.status(201).json(email);
+    } catch (error) {
+      console.error("Create contact email error:", error);
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: "Invalid email data", details: error.errors });
+      } else {
+        res.status(500).json({ error: "Failed to create contact email" });
+      }
+    }
+  });
+
+  app.put("/api/vendor-contact-emails/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const data = insertVendorContactEmailSchema.partial().parse(req.body);
+      const email = await storage.updateContactEmail(id, data);
+      res.json(email);
+    } catch (error) {
+      console.error("Update contact email error:", error);
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: "Invalid email data", details: error.errors });
+      } else {
+        res.status(500).json({ error: "Failed to update contact email" });
+      }
+    }
+  });
+
+  app.delete("/api/vendor-contact-emails/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      await storage.deleteContactEmail(id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Delete contact email error:", error);
+      res.status(500).json({ error: "Failed to delete contact email" });
+    }
+  });
+
+  // Vendor Documents Routes
+  app.get("/api/vendors/:vendorId/documents", async (req, res) => {
+    try {
+      const vendorId = parseInt(req.params.vendorId);
+      const documents = await storage.getVendorDocuments(vendorId);
+      res.json(documents);
+    } catch (error) {
+      console.error("Get vendor documents error:", error);
+      res.status(500).json({ error: "Failed to retrieve vendor documents" });
+    }
+  });
+
+  app.get("/api/vendor-documents/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const document = await storage.getVendorDocument(id);
+      if (!document) {
+        return res.status(404).json({ error: "Document not found" });
+      }
+      res.json(document);
+    } catch (error) {
+      console.error("Get vendor document error:", error);
+      res.status(500).json({ error: "Failed to retrieve vendor document" });
+    }
+  });
+
+  app.post("/api/vendor-documents", async (req, res) => {
+    try {
+      const data = insertVendorDocumentSchema.parse(req.body);
+      const document = await storage.createVendorDocument(data);
+      res.status(201).json(document);
+    } catch (error) {
+      console.error("Create vendor document error:", error);
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: "Invalid document data", details: error.errors });
+      } else {
+        res.status(500).json({ error: "Failed to create vendor document" });
+      }
+    }
+  });
+
+  app.put("/api/vendor-documents/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const data = insertVendorDocumentSchema.partial().parse(req.body);
+      const document = await storage.updateVendorDocument(id, data);
+      res.json(document);
+    } catch (error) {
+      console.error("Update vendor document error:", error);
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: "Invalid document data", details: error.errors });
+      } else {
+        res.status(500).json({ error: "Failed to update vendor document" });
+      }
+    }
+  });
+
+  app.delete("/api/vendor-documents/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      await storage.deleteVendorDocument(id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Delete vendor document error:", error);
+      res.status(500).json({ error: "Failed to delete vendor document" });
+    }
+  });
+
+  // Vendor Scoring Routes
+  app.get("/api/vendor-scoring-criteria", async (req, res) => {
+    try {
+      const criteria = await storage.getAllScoringCriteria();
+      res.json(criteria);
+    } catch (error) {
+      console.error("Get scoring criteria error:", error);
+      res.status(500).json({ error: "Failed to retrieve scoring criteria" });
+    }
+  });
+
+  app.post("/api/vendor-scoring-criteria", async (req, res) => {
+    try {
+      const data = insertVendorScoringCriteriaSchema.parse(req.body);
+      const criteria = await storage.createScoringCriteria(data);
+      res.status(201).json(criteria);
+    } catch (error) {
+      console.error("Create scoring criteria error:", error);
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: "Invalid criteria data", details: error.errors });
+      } else {
+        res.status(500).json({ error: "Failed to create scoring criteria" });
+      }
+    }
+  });
+
+  app.put("/api/vendor-scoring-criteria/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const data = insertVendorScoringCriteriaSchema.partial().parse(req.body);
+      const criteria = await storage.updateScoringCriteria(id, data);
+      res.json(criteria);
+    } catch (error) {
+      console.error("Update scoring criteria error:", error);
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: "Invalid criteria data", details: error.errors });
+      } else {
+        res.status(500).json({ error: "Failed to update scoring criteria" });
+      }
+    }
+  });
+
+  app.delete("/api/vendor-scoring-criteria/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      await storage.deleteScoringCriteria(id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Delete scoring criteria error:", error);
+      res.status(500).json({ error: "Failed to delete scoring criteria" });
+    }
+  });
+
+  app.get("/api/vendors/:vendorId/scores", async (req, res) => {
+    try {
+      const vendorId = parseInt(req.params.vendorId);
+      const scores = await storage.getVendorScores(vendorId);
+      res.json(scores);
+    } catch (error) {
+      console.error("Get vendor scores error:", error);
+      res.status(500).json({ error: "Failed to retrieve vendor scores" });
+    }
+  });
+
+  app.post("/api/vendor-scores", async (req, res) => {
+    try {
+      const data = insertVendorScoreSchema.parse(req.body);
+      const score = await storage.createVendorScore(data);
+      res.status(201).json(score);
+    } catch (error) {
+      console.error("Create vendor score error:", error);
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: "Invalid score data", details: error.errors });
+      } else {
+        res.status(500).json({ error: "Failed to create vendor score" });
+      }
+    }
+  });
+
+  app.put("/api/vendor-scores/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const data = insertVendorScoreSchema.partial().parse(req.body);
+      const score = await storage.updateVendorScore(id, data);
+      res.json(score);
+    } catch (error) {
+      console.error("Update vendor score error:", error);
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: "Invalid score data", details: error.errors });
+      } else {
+        res.status(500).json({ error: "Failed to update vendor score" });
+      }
+    }
+  });
+
+  app.delete("/api/vendor-scores/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      await storage.deleteVendorScore(id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Delete vendor score error:", error);
+      res.status(500).json({ error: "Failed to delete vendor score" });
+    }
+  });
+
+  app.get("/api/vendors/:vendorId/total-score", async (req, res) => {
+    try {
+      const vendorId = parseInt(req.params.vendorId);
+      const totalScore = await storage.calculateVendorTotalScore(vendorId);
+      res.json({ vendorId, totalScore });
+    } catch (error) {
+      console.error("Calculate vendor total score error:", error);
+      res.status(500).json({ error: "Failed to calculate vendor total score" });
     }
   });
 

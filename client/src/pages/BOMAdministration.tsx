@@ -197,7 +197,7 @@ export function BOMAdministration() {
                           </Badge>
                         </TableCell>
                         <TableCell>
-                          {new Date(bom.updatedAt).toLocaleDateString()}
+                          {bom.updatedAt ? new Date(bom.updatedAt).toLocaleDateString() : "—"}
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end space-x-2">
@@ -246,7 +246,7 @@ export function BOMAdministration() {
           </DialogHeader>
           {editingBOM && (
             <BOMDefinitionForm 
-              bom={editingBOM}
+              bom={editingBOM as any}
               onSuccess={handleBOMUpdated}
               onCancel={() => setEditingBOM(null)}
             />

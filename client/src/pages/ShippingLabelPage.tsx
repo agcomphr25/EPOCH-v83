@@ -2,10 +2,20 @@ import React, { useState, useEffect } from 'react';
 import { useLocation, useRoute } from 'wouter';
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Package, Truck } from 'lucide-react';
-import { useQuery } from '@tanstack/react-query';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ArrowLeft, Package, Truck, DollarSign } from 'lucide-react';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
+import { apiRequest } from '@/lib/queryClient';
+
+interface ShippingRate {
+  serviceCode: string;
+  serviceName: string;
+  totalCharges: number;
+  currency: string;
+  guaranteedDaysToDelivery?: string;
+}
 
 export default function ShippingLabelPage() {
   const [location, setLocation] = useLocation();
@@ -35,6 +45,11 @@ export default function ShippingLabelPage() {
       country: 'US'
     }
   });
+
+  // Rate shopping state
+  const [showRates, setShowRates] = useState(false);
+  const [rates, setRates] = useState<ShippingRate[]>([]);
+  const [selectedService, setSelectedService] = useState('03'); // UPS Ground default
 
   // Get order details with customer data in single request for better performance
   const { data: orderDetails, isLoading: orderLoading } = useQuery({
@@ -79,6 +94,84 @@ export default function ShippingLabelPage() {
     }
   }, [shippingAddress, customerAddress, customerInfo]);
 
+  // Get shipping rates mutation
+  const getRatesMutation = useMutation({
+    mutationFn: (data: any) => apiRequest('/api/shipping/get-rates', {
+      method: 'POST',
+      body: data,
+    }),
+    onSuccess: (data) => {
+      setRates(data.rates || []);
+      setShowRates(true);
+      
+      if (data.isEstimate) {
+        toast({
+          title: 'Estimated Rates',
+          description: data.message || 'Rate estimates provided. Enable UPS Rating API for live rates.',
+          variant: 'default',
+        });
+      } else {
+        toast({
+          title: 'Rates Retrieved',
+          description: `Found ${data.rates?.length || 0} shipping options`,
+        });
+      }
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Rate Error',
+        description: error.message || 'Failed to get shipping rates',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const handleGetRates = () => {
+    // Validate required fields
+    if (!shippingDetails.address.street || !shippingDetails.address.city || !shippingDetails.address.state || !shippingDetails.address.zip) {
+      toast({
+        title: 'Address Required',
+        description: 'Please complete the shipping address before getting rates',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (!shippingDetails.weight || parseFloat(shippingDetails.weight) <= 0) {
+      toast({
+        title: 'Package Weight Required',
+        description: 'Please enter a valid package weight',
+        variant: 'destructive',
+      });
+      return;
+    }
+    
+    getRatesMutation.mutate({
+      shipToAddress: {
+        name: shippingDetails.address.name,
+        street: shippingDetails.address.street,
+        city: shippingDetails.address.city,
+        state: shippingDetails.address.state,
+        zipCode: shippingDetails.address.zip,
+        country: shippingDetails.address.country
+      },
+      shipFromAddress: {
+        name: 'AG Composites',
+        street: '230 Hamer Road',
+        city: 'OWENS CROSS ROADS',
+        state: 'AL',
+        zipCode: '35763',
+        country: 'US'
+      },
+      packageWeight: parseFloat(shippingDetails.weight),
+      packageDimensions: shippingDetails.length ? {
+        length: parseFloat(shippingDetails.length),
+        width: parseFloat(shippingDetails.width),
+        height: parseFloat(shippingDetails.height)
+      } : undefined
+    });
+  };
+
   const generateShippingLabel = async () => {
     if (!orderId) return;
     
@@ -109,7 +202,8 @@ export default function ShippingLabelPage() {
           },
           declaredValue: parseFloat(shippingDetails.value),
           billingOption: shippingDetails.billingOption,
-          receiverAccount: shippingDetails.billingOption === 'receiver' ? shippingDetails.receiverAccount : undefined
+          receiverAccount: shippingDetails.billingOption === 'receiver' ? shippingDetails.receiverAccount : undefined,
+          serviceCode: selectedService // Use the selected shipping service
         }),
         signal: controller.signal
       });
@@ -575,6 +669,71 @@ export default function ShippingLabelPage() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Rate Shopping Section */}
+        <Card className="mt-6">
+          <CardContent className="p-6">
+            <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+              <DollarSign className="h-5 w-5" />
+              Shipping Rate Shopping
+            </h3>
+            <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+              <Button
+                onClick={handleGetRates}
+                disabled={getRatesMutation.isPending}
+                className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 text-lg font-bold min-w-[220px]"
+              >
+                <DollarSign className="w-5 h-5" />
+                {getRatesMutation.isPending ? 'Getting Rates...' : '💰 GET SHIPPING RATES'}
+              </Button>
+
+              {showRates && rates.length > 0 && (
+                <div className="flex items-center gap-3">
+                  <span className="text-sm font-medium text-gray-700">Service:</span>
+                  <Select value={selectedService} onValueChange={setSelectedService}>
+                    <SelectTrigger className="w-72">
+                      <SelectValue placeholder="Select shipping service" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {rates.map((rate) => (
+                        <SelectItem key={rate.serviceCode} value={rate.serviceCode}>
+                          <div className="flex justify-between w-full items-center">
+                            <span className="font-medium">{rate.serviceName}</span>
+                            <span className={`ml-4 font-bold ${(rate as any).isEstimate ? 'text-orange-600' : 'text-green-600'}`}>
+                              ${rate.totalCharges.toFixed(2)}
+                              {(rate as any).isEstimate && <span className="text-xs ml-1 text-orange-500">*est</span>}
+                            </span>
+                            {rate.guaranteedDaysToDelivery && (
+                              <span className="ml-2 text-xs text-gray-500">({rate.guaranteedDaysToDelivery} days)</span>
+                            )}
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {showRates && rates.length === 0 && (
+                <div className="text-sm text-gray-600 bg-yellow-50 p-3 rounded-md">
+                  No shipping rates available. Please check your address and package details.
+                </div>
+              )}
+            </div>
+
+            {showRates && rates.length > 0 && (
+              <div className={`mt-4 p-4 rounded-lg ${rates.some((r: any) => r.isEstimate) ? 'bg-orange-50' : 'bg-green-50'}`}>
+                <p className={`text-sm ${rates.some((r: any) => r.isEstimate) ? 'text-orange-800' : 'text-green-800'}`}>
+                  {rates.some((r: any) => r.isEstimate) ? (
+                    <>⚠️ <strong>{rates.length}</strong> estimated rates shown. Enable UPS Rating API in your developer account for live rates.</>
+                  ) : (
+                    <>✅ <strong>{rates.length}</strong> shipping options found! Select a service above, then generate your label.</>
+                  )}
+                </p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         {/* Action Buttons */}
         <div className="mt-6 flex gap-4 justify-end">

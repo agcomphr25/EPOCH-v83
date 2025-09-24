@@ -11,7 +11,8 @@ const styles = StyleSheet.create({
   header: {
     marginBottom: 20,
     textAlign: 'center',
-    borderBottom: 1,
+    borderBottomWidth: 1,
+    borderBottomStyle: 'solid',
     borderBottomColor: '#E5E7EB',
     paddingBottom: 10,
   },
@@ -58,7 +59,8 @@ const styles = StyleSheet.create({
   answerKey: {
     marginTop: 30,
     paddingTop: 15,
-    borderTop: 1,
+    borderTopWidth: 1,
+    borderTopStyle: 'solid',
     borderTopColor: '#9CA3AF',
   },
   answerKeyTitle: {
@@ -89,14 +91,16 @@ const styles = StyleSheet.create({
     color: '#374151',
   },
   signatureTable: {
-    border: 1,
+    borderWidth: 1,
+    borderStyle: 'solid',
     borderColor: '#D1D5DB',
   },
   tableHeader: {
     flexDirection: 'row',
     backgroundColor: '#F3F4F6',
     padding: 8,
-    borderBottom: 1,
+    borderBottomWidth: 1,
+    borderBottomStyle: 'solid',
     borderBottomColor: '#D1D5DB',
   },
   tableHeaderCell: {
@@ -109,7 +113,8 @@ const styles = StyleSheet.create({
   tableRow: {
     flexDirection: 'row',
     padding: 8,
-    borderBottom: 1,
+    borderBottomWidth: 1,
+    borderBottomStyle: 'solid',
     borderBottomColor: '#E5E7EB',
     minHeight: 30,
   },

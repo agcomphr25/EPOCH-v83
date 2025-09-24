@@ -695,6 +695,24 @@ function getServiceName(serviceCode: string): string {
   return serviceMap[serviceCode] || 'UPS Ground';
 }
 
+function getEstimatedDeliveryDays(serviceCode: string): string {
+  const deliveryMap: { [key: string]: string } = {
+    '01': '1 business day',
+    '02': '2 business days',
+    '03': '3-5 business days',
+    '07': '1-3 business days',
+    '08': '3-5 business days',
+    '11': '6-10 business days',
+    '12': '3 business days',
+    '13': '1 business day',
+    '14': '1 business day (early AM)',
+    '54': '1-3 business days',
+    '59': '2 business days (AM)',
+    '65': '6-10 business days',
+  };
+  return deliveryMap[serviceCode] || '3-5 business days';
+}
+
 // Get UPS service rates for an address
 router.post('/get-rates', async (req: Request, res: Response) => {
   try {
@@ -1109,6 +1127,143 @@ router.post('/add-tracking/:orderId', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error adding tracking number:', error);
     res.status(500).json({ error: 'Failed to add tracking number' });
+  }
+});
+
+// Calculate UPS shipping rates (rate shopping)
+router.post('/calculate-rates', async (req: Request, res: Response) => {
+  try {
+    const { destination, packageDetails } = req.body;
+    
+    if (!destination?.zipCode || !packageDetails?.weight) {
+      return res.status(400).json({ 
+        error: 'Destination ZIP code and package weight are required' 
+      });
+    }
+
+    console.log('⚡ Calculating UPS rates for:', { destination, packageDetails });
+
+    // Validate UPS credentials
+    const upsClientId = process.env.UPS_CLIENT_ID?.trim();
+    const upsClientSecret = process.env.UPS_CLIENT_SECRET?.trim();
+    const upsShipperNumber = process.env.UPS_SHIPPER_NUMBER?.trim();
+    
+    if (!upsClientId || !upsClientSecret || !upsShipperNumber) {
+      return res.status(500).json({ 
+        error: 'UPS credentials not configured' 
+      });
+    }
+
+    // Get OAuth token
+    const accessToken = await getUPSOAuthToken(upsClientId, upsClientSecret);
+
+    // Build rate request for multiple services
+    const rateRequest = {
+      RateRequest: {
+        Request: {
+          RequestOption: 'Shop',
+          TransactionReference: {
+            CustomerContext: 'Rate Shopping Request',
+          },
+        },
+        Shipment: {
+          Shipper: {
+            Name: process.env.SHIP_FROM_NAME || 'AG Composites',
+            ShipperNumber: upsShipperNumber,
+            Address: {
+              AddressLine: [process.env.SHIP_FROM_ADDRESS1 || '230 Hamer Rd.'],
+              City: process.env.SHIP_FROM_CITY || 'Owens Crossroads',
+              StateProvinceCode: process.env.SHIP_FROM_STATE || 'AL',
+              PostalCode: process.env.SHIP_FROM_POSTAL || '35763',
+              CountryCode: 'US',
+            },
+          },
+          ShipTo: {
+            Name: 'Customer',
+            Address: {
+              PostalCode: destination.zipCode,
+              CountryCode: destination.country || 'US',
+            },
+          },
+          ShipFrom: {
+            Name: process.env.SHIP_FROM_NAME || 'AG Composites',
+            Address: {
+              AddressLine: [process.env.SHIP_FROM_ADDRESS1 || '230 Hamer Rd.'],
+              City: process.env.SHIP_FROM_CITY || 'Owens Crossroads',
+              StateProvinceCode: process.env.SHIP_FROM_STATE || 'AL',
+              PostalCode: process.env.SHIP_FROM_POSTAL || '35763',
+              CountryCode: 'US',
+            },
+          },
+          Package: {
+            PackagingType: {
+              Code: '02', // Customer Packaging
+            },
+            Dimensions: packageDetails.dimensions ? {
+              UnitOfMeasurement: {
+                Code: 'IN',
+              },
+              Length: packageDetails.dimensions.length.toString(),
+              Width: packageDetails.dimensions.width.toString(),
+              Height: packageDetails.dimensions.height.toString(),
+            } : undefined,
+            PackageWeight: {
+              UnitOfMeasurement: {
+                Code: 'LBS',
+              },
+              Weight: packageDetails.weight.toString(),
+            },
+          },
+        },
+      },
+    };
+
+    // Call UPS Rate API
+    const response = await axios.post(
+      'https://onlinetools.ups.com/api/rating/v1/Shop',
+      rateRequest,
+      {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        timeout: 30000,
+      }
+    );
+
+    // Parse response and format rates
+    const rateResponse = response.data?.RateResponse;
+    const shipments = rateResponse?.RatedShipment;
+    
+    if (!shipments || shipments.length === 0) {
+      return res.json({ rates: [] });
+    }
+
+    // Format rates for frontend
+    const rates = shipments.map((shipment: any) => {
+      const service = shipment.Service;
+      const charges = shipment.TotalCharges || shipment.TransportationCharges;
+      
+      return {
+        serviceCode: service.Code,
+        serviceName: getServiceName(service.Code),
+        totalCharges: charges.MonetaryValue,
+        currency: charges.CurrencyCode,
+        estimatedDelivery: getEstimatedDeliveryDays(service.Code),
+        transitTime: shipment.GuaranteedDelivery?.BusinessDaysInTransit || 'N/A'
+      };
+    });
+
+    console.log(`✅ Found ${rates.length} UPS rates`);
+    res.json({ rates });
+
+  } catch (error: any) {
+    console.error('Error calculating UPS rates:', error.response?.data || error.message);
+    res.status(500).json({ 
+      error: 'Failed to calculate shipping rates',
+      details: error.message 
+    });
   }
 });
 

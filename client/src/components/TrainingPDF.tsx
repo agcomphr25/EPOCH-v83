@@ -340,18 +340,36 @@ export const generateContentPDF = async (props: TrainingPDFProps) => {
   saveAs(blob, filename);
 };
 
-// Combined PDF Document Component (Quiz/Content + Attendance)
+// Combined PDF Document Component (Content + Quiz + Attendance)
 const CombinedPDFDocument = ({ title, companyName, questions = [], content = [], includeAnswerKey = true, attendeeCount = 15 }: TrainingPDFProps) => (
   <Document>
-    {/* First Page - Quiz/Content */}
-    <Page size="A4" style={styles.page}>
-      <View style={styles.header}>
-        <Image style={styles.logo} src={logoImage} />
-        <Text style={styles.title}>{title}</Text>
-      </View>
+    {/* First Pages - Training Content */}
+    {content.length > 0 && (
+      <Page size="A4" style={styles.page}>
+        <View style={styles.header}>
+          <Image style={styles.logo} src={logoImage} />
+          <Text style={styles.title}>{title}</Text>
+        </View>
 
-      {questions.length > 0 ? (
-        /* Quiz Content */
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Training Content</Text>
+          {content.map((paragraph, index) => (
+            <Text key={index} style={{ fontSize: 10, marginBottom: 8, color: '#374151' }}>
+              {paragraph}
+            </Text>
+          ))}
+        </View>
+      </Page>
+    )}
+
+    {/* Quiz Page */}
+    {questions.length > 0 && (
+      <Page size="A4" style={styles.page}>
+        <View style={styles.header}>
+          <Image style={styles.logo} src={logoImage} />
+          <Text style={styles.title}>{title.replace(' - Complete', ' - Assessment')}</Text>
+        </View>
+
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Training Assessment</Text>
           <Text style={{ fontSize: 10, marginBottom: 15, color: '#6B7280' }}>
@@ -370,32 +388,43 @@ const CombinedPDFDocument = ({ title, companyName, questions = [], content = [],
               ))}
             </View>
           ))}
+        </View>
 
-          {includeAnswerKey && (
-            <View style={styles.answerKey}>
-              <Text style={styles.answerKeyTitle}>Answer Key (For Instructor Use Only)</Text>
-              <View style={styles.answerGrid}>
-                {questions.map((question, index) => (
-                  <Text key={question.id} style={styles.answerItem}>
-                    {index + 1}. {question.correctAnswer}) {question.options.find(opt => opt.charAt(0) === question.correctAnswer)?.substring(3)}
-                  </Text>
-                ))}
-              </View>
+        {/* Signature Section */}
+        <View style={{ marginTop: 30, paddingTop: 15, borderTopWidth: 1, borderTopStyle: 'solid', borderTopColor: '#9CA3AF' }}>
+          <Text style={{ fontSize: 12, fontWeight: 'bold', marginBottom: 15, color: '#1F2937' }}>
+            Training Completion Certification
+          </Text>
+          
+          <View style={{ flexDirection: 'row', marginBottom: 15 }}>
+            <View style={{ flex: 1, marginRight: 20 }}>
+              <Text style={{ fontSize: 10, marginBottom: 20, color: '#374151' }}>Employee Name (Print):</Text>
+              <View style={{ borderBottomWidth: 1, borderBottomStyle: 'solid', borderBottomColor: '#000', minHeight: 15, marginBottom: 5 }}></View>
             </View>
-          )}
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 10, marginBottom: 20, color: '#374151' }}>Date:</Text>
+              <View style={{ borderBottomWidth: 1, borderBottomStyle: 'solid', borderBottomColor: '#000', minHeight: 15, marginBottom: 5 }}></View>
+            </View>
+          </View>
+
+          <View style={{ flexDirection: 'row', marginBottom: 15 }}>
+            <View style={{ flex: 1, marginRight: 20 }}>
+              <Text style={{ fontSize: 10, marginBottom: 20, color: '#374151' }}>Employee Signature:</Text>
+              <View style={{ borderBottomWidth: 1, borderBottomStyle: 'solid', borderBottomColor: '#000', minHeight: 15, marginBottom: 5 }}></View>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 10, marginBottom: 20, color: '#374151' }}>Score: _____ / {questions.length}</Text>
+              <View style={{ borderBottomWidth: 1, borderBottomStyle: 'solid', borderBottomColor: '#000', minHeight: 15, marginBottom: 5 }}></View>
+            </View>
+          </View>
+
+          <View style={{ marginTop: 15 }}>
+            <Text style={{ fontSize: 10, marginBottom: 20, color: '#374151' }}>Instructor Signature:</Text>
+            <View style={{ borderBottomWidth: 1, borderBottomStyle: 'solid', borderBottomColor: '#000', minHeight: 15, marginBottom: 5 }}></View>
+          </View>
         </View>
-      ) : (
-        /* Content Only */
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Training Content</Text>
-          {content.map((paragraph, index) => (
-            <Text key={index} style={{ fontSize: 10, marginBottom: 8, color: '#374151' }}>
-              {paragraph}
-            </Text>
-          ))}
-        </View>
-      )}
-    </Page>
+      </Page>
+    )}
 
     {/* Second Page - Attendance */}
     <Page size="A4" style={styles.page}>

@@ -16,6 +16,7 @@ interface Order {
   paymentTotal?: number;
   isFullyPaid?: boolean;
   isVerified?: boolean;
+  features?: any; // Add features field for CNC branching logic
 }
 
 interface Kickback {
@@ -41,7 +42,7 @@ import { getDisplayOrderId } from '@/lib/orderUtils';
 import CustomerDetailsTooltip from './CustomerDetailsTooltip';
 import CommunicationCompose from './CommunicationCompose';
 
-const departments = ['P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 'Finish', 'Gunsmith', 'Finish QC', 'Paint', 'Shipping'];
+const departments = ['P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 'Gunsmith', 'Finish', 'Finish QC', 'Paint', 'Shipping'];
 
 export default function AllOrdersList() {
   const [selectedDepartment, setSelectedDepartment] = useState('all');
@@ -301,16 +302,21 @@ export default function AllOrdersList() {
   });
 
   const departments = [
-    'P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 'Finish', 'Gunsmith', 'Finish QC', 'Paint', 'Shipping'
+    'P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 'Gunsmith', 'Finish', 'Finish QC', 'Paint', 'Shipping'
   ];
 
-  const getNextDepartment = (currentDepartment: string) => {
+  const getNextDepartment = (currentDepartment: string, orderFeatures?: any) => {
     // Handle alternative department names
     const normalizedDepartment = currentDepartment === 'Layup' ? 'Layup/Plugging' : currentDepartment;
     
-    // Special case: Gunsmith should progress to Finish (bypassing normal array order)
-    if (normalizedDepartment === 'Gunsmith') {
-      return 'Finish';
+    // Special case: CNC splits to Gunsmith or Finish based on features
+    if (normalizedDepartment === 'CNC') {
+      // Orders with "no_rail" bypass gunsmith work entirely and go directly to Finish
+      if (orderFeatures && orderFeatures.rail_type === 'no_rail') {
+        return 'Finish';
+      }
+      // All other CNC orders go to Gunsmith
+      return 'Gunsmith';
     }
     
     const currentIndex = departments.indexOf(normalizedDepartment);
@@ -320,8 +326,8 @@ export default function AllOrdersList() {
     return null;
   };
 
-  const handleProgressOrder = React.useCallback((orderId: string, currentDepartment: string) => {
-    const nextDepartment = getNextDepartment(currentDepartment);
+  const handleProgressOrder = React.useCallback((orderId: string, currentDepartment: string, orderFeatures?: any) => {
+    const nextDepartment = getNextDepartment(currentDepartment, orderFeatures);
     if (!nextDepartment) {
       toast.error('No next department available');
       return;
@@ -538,7 +544,7 @@ export default function AllOrdersList() {
               {sortedOrders.map(order => {
                 // Use local update if available, otherwise server data
                 const displayDepartment = localOrderUpdates[order.orderId] || order.currentDepartment;
-                const nextDept = getNextDepartment(displayDepartment);
+                const nextDept = getNextDepartment(displayDepartment, order.features);
                 const isComplete = displayDepartment === 'Shipping';
                 const isScrapped = order.status === 'SCRAPPED';
                 const isFulfilled = order.status === 'FULFILLED'; // Only exclude FULFILLED, not FINALIZED
@@ -689,7 +695,7 @@ export default function AllOrdersList() {
                         {!isScrapped && !isComplete && !isFulfilled && nextDept && order.currentDepartment !== 'P1 Production Queue' && (
                           <Button
                             size="sm"
-                            onClick={() => handleProgressOrder(order.orderId, displayDepartment)}
+                            onClick={() => handleProgressOrder(order.orderId, displayDepartment, order.features)}
                             className="bg-blue-600 hover:bg-blue-700 text-white"
                           >
                             <ArrowRight className="w-4 h-4 mr-1" />

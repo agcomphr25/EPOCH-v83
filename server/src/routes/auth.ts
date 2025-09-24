@@ -190,6 +190,25 @@ router.post('/logout', authenticateToken, async (req: Request, res: Response) =>
 
 // GET /api/auth/session - Check current session (enhanced timeout handling)
 router.get('/session', async (req: Request, res: Response) => {
+  // Check if we're in development environment first
+  const host = req.get('host') || '';
+  const isLocalhost = host.includes('localhost') || host.includes('127.0.0.1');
+  const isReplitDev = host.includes('replit.dev');
+  const isDevelopment = process.env.NODE_ENV === 'development';
+  
+  // Skip authentication in development environment
+  if (isLocalhost || isReplitDev || isDevelopment) {
+    console.log('🔧 BACKEND AUTH BYPASS: Development environment - session check skipped');
+    return res.json({
+      id: 999,
+      username: 'dev-user',
+      role: 'ADMIN',
+      employeeId: null,
+      isActive: true,
+      canOverridePrices: true
+    });
+  }
+
   // Timeout adjusted for deployment environments
   const isDeployment = req.get('host')?.includes('.replit.app') || 
                       req.get('host')?.includes('.repl.co') ||

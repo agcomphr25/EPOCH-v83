@@ -2507,11 +2507,14 @@ export class DatabaseStorage implements IStorage {
     limit: number, 
     totalPages: number 
   }> {
-    // First, get the total count for pagination (exclude purchase orders and purchase order customers)
+    // First, get the total count for pagination (exclude purchase orders and purchase order customers by ID and name)
     const totalCountResult = await db
       .select({ count: sql<number>`COUNT(*)` })
       .from(allOrders)
-      .where(sql`${allOrders.orderId} NOT LIKE 'PO%' AND ${allOrders.customerId} NOT IN (SELECT DISTINCT customer_id FROM purchase_orders WHERE customer_id IS NOT NULL)`);
+      .leftJoin(customers, eq(allOrders.customerId, sql`${customers.id}::text`))
+      .where(sql`${allOrders.orderId} NOT LIKE 'PO%' 
+        AND ${allOrders.customerId} NOT IN (SELECT DISTINCT customer_id FROM purchase_orders WHERE customer_id IS NOT NULL)
+        AND ${customers.name} NOT IN (SELECT DISTINCT customer_name FROM purchase_orders WHERE customer_name IS NOT NULL)`);
     
     const total = totalCountResult[0]?.count || 0;
     const totalPages = Math.ceil(total / limit);
@@ -2559,7 +2562,9 @@ export class DatabaseStorage implements IStorage {
       })
       .from(allOrders)
       .leftJoin(customers, eq(allOrders.customerId, sql`${customers.id}::text`))
-      .where(sql`${allOrders.orderId} NOT LIKE 'PO%' AND ${allOrders.customerId} NOT IN (SELECT DISTINCT customer_id FROM purchase_orders WHERE customer_id IS NOT NULL)`)
+      .where(sql`${allOrders.orderId} NOT LIKE 'PO%' 
+        AND ${allOrders.customerId} NOT IN (SELECT DISTINCT customer_id FROM purchase_orders WHERE customer_id IS NOT NULL)
+        AND ${customers.name} NOT IN (SELECT DISTINCT customer_name FROM purchase_orders WHERE customer_name IS NOT NULL)`)
       .orderBy(desc(allOrders.updatedAt))
       .limit(limit)
       .offset(offset);

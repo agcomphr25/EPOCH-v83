@@ -41,7 +41,7 @@ import { getDisplayOrderId } from '@/lib/orderUtils';
 import CustomerDetailsTooltip from './CustomerDetailsTooltip';
 import CommunicationCompose from './CommunicationCompose';
 
-const departments = ['P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 'Gunsmith', 'Finish', 'Finish QC', 'Paint', 'Shipping'];
+const departments = ['P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 'Finish', 'Gunsmith', 'Finish QC', 'Paint', 'Shipping'];
 
 export default function AllOrdersList() {
   const [selectedDepartment, setSelectedDepartment] = useState('all');
@@ -301,12 +301,17 @@ export default function AllOrdersList() {
   });
 
   const departments = [
-    'P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 'Gunsmith', 'Finish', 'Finish QC', 'Paint', 'Shipping'
+    'P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 'Finish', 'Gunsmith', 'Finish QC', 'Paint', 'Shipping'
   ];
 
   const getNextDepartment = (currentDepartment: string) => {
     // Handle alternative department names
     const normalizedDepartment = currentDepartment === 'Layup' ? 'Layup/Plugging' : currentDepartment;
+    
+    // Special case: Gunsmith should progress to Finish (bypassing normal array order)
+    if (normalizedDepartment === 'Gunsmith') {
+      return 'Finish';
+    }
     
     const currentIndex = departments.indexOf(normalizedDepartment);
     if (currentIndex >= 0 && currentIndex < departments.length - 1) {

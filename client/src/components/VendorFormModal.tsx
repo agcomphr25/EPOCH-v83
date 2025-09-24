@@ -37,7 +37,6 @@ import {
 } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
-import { useToast } from '@/hooks/use-toast';
 import {
   Building2,
   User,
@@ -517,7 +516,6 @@ export default function VendorFormModal({
       });
 
       queryClient.invalidateQueries({ queryKey: ["/api/vendors"] });
-      onSaved();
       onClose();
 
     },
@@ -734,7 +732,7 @@ export default function VendorFormModal({
       });
 
       queryClient.invalidateQueries({ queryKey: ["/api/vendors"] });
-      onSaved();
+      onClose();
 
     },
     onError: (error: any) => {
@@ -750,7 +748,7 @@ export default function VendorFormModal({
   const isPending = createVendorMutation.isPending || updateVendorMutation.isPending;
 
   return (
-    <Dialog open={open} onOpenChange={onClose}>
+    <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto" data-testid="dialog-vendor-form">
         <DialogHeader>
           <DialogTitle data-testid="text-vendor-form-title">

@@ -5,7 +5,7 @@ import { MapPin, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import debounce from 'lodash.debounce';
-import { autocompleteAddress, validateAddress, type AddressData } from '@/utils/addressUtils';
+import { type AddressData } from '@/utils/addressUtils';
 
 interface SimpleAddressInputProps {
   label: string;
@@ -14,9 +14,18 @@ interface SimpleAddressInputProps {
   required?: boolean;
 }
 
+interface SuggestionData {
+  text: string;
+  streetLine: string;
+  city: string;
+  state: string;
+  zipCode: string;
+  entries: number;
+}
+
 export default function SimpleAddressInput({ label, value, onChange, required = false }: SimpleAddressInputProps) {
   const [query, setQuery] = useState(value.street || '');
-  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [suggestions, setSuggestions] = useState<SuggestionData[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(-1);
@@ -24,7 +33,7 @@ export default function SimpleAddressInput({ label, value, onChange, required = 
   const suggestionsRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
-  // Debounced fetch function using SmartyStreets API
+  // Debounced fetch function using Nominatim API
   const fetchSuggestions = debounce(async (q: string) => {
     if (!q.trim()) {
       setSuggestions([]);
@@ -34,12 +43,18 @@ export default function SimpleAddressInput({ label, value, onChange, required = 
     
     setIsLoading(true);
     try {
-      console.log('Fetching SmartyStreets suggestions for:', q);
-      const results = await autocompleteAddress(q);
-      console.log('SmartyStreets suggestions received:', results);
+      console.log('Fetching address suggestions for:', q);
+      const response = await fetch('/api/customers/address-autocomplete-bypass', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ search: q })
+      });
       
-      setSuggestions(results);
-      setShowSuggestions(results.length > 0);
+      const data = await response.json();
+      console.log('Address suggestions received:', data);
+      
+      setSuggestions(data.suggestions || []);
+      setShowSuggestions((data.suggestions || []).length > 0);
       setSelectedIndex(-1);
     } catch (error) {
       console.error('Address autocomplete error:', error);
@@ -63,83 +78,28 @@ export default function SimpleAddressInput({ label, value, onChange, required = 
     setQuery(value.street || '');
   }, [value.street]);
 
-  const parseAddressFromSuggestion = (suggestion: string): AddressData => {
-    const parts = suggestion.split(', ');
+  const handleSelect = (suggestion: SuggestionData) => {
+    console.log('🔧 SimpleAddressInput handleSelect called with:', suggestion);
     
-    if (parts.length >= 2) {
-      const street = parts[0];
-      const cityStateZip = parts[1];
-      
-      // Parse "City ST" or "City ST 12345" format
-      const match = cityStateZip.match(/^(.+?)\s+([A-Z]{2})(?:\s+(\d{5}(?:-\d{4})?))?$/);
-      
-      if (match) {
-        return {
-          street,
-          city: match[1],
-          state: match[2],
-          zipCode: match[3] || '',
-          country: 'United States'
-        };
-      }
-    }
-    
-    // Fallback - return the suggestion as street address
-    return {
-      street: suggestion,
-      city: '',
-      state: '',
-      zipCode: '',
+    // Use the structured data directly from the suggestion
+    const addressData: AddressData = {
+      street: suggestion.streetLine,
+      city: suggestion.city,
+      state: suggestion.state,
+      zipCode: suggestion.zipCode,
       country: 'United States'
     };
-  };
-
-  const handleSelect = async (suggestion: string) => {
-    console.log('🔧 SimpleAddressInput handleSelect called with:', suggestion);
-    const parsedAddress = parseAddressFromSuggestion(suggestion);
-    console.log('🔧 Parsed address components:', parsedAddress);
     
-    setQuery(parsedAddress.street);
+    console.log('🔧 Using structured address data:', addressData);
+    
+    setQuery(addressData.street);
     setShowSuggestions(false);
     setSelectedIndex(-1);
     
-    // Try to get ZIP code by calling SmartyStreets Street API directly
-    try {
-      const response = await fetch('/api/customers/address-autocomplete-bypass', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          search: `${parsedAddress.street}, ${parsedAddress.city}, ${parsedAddress.state}`,
-          getZipCode: true 
-        })
-      });
-      
-      const data = await response.json();
-      console.log('🔧 ZIP code lookup response:', data);
-      
-      // Check if we got ZIP code information from either fullAddress response or suggestions
-      if (data.fullAddress && data.fullAddress.components && data.fullAddress.components.zipcode) {
-        parsedAddress.zipCode = data.fullAddress.components.zipcode;
-        console.log('🔧 ZIP code from fullAddress response:', parsedAddress.zipCode);
-      } else if (data.suggestions && data.suggestions.length > 0 && data.suggestions[0].zipCode) {
-        parsedAddress.zipCode = data.suggestions[0].zipCode;
-        console.log('🔧 ZIP code from suggestions response:', parsedAddress.zipCode);
-      } else {
-        // Try to extract ZIP code from the suggestion text itself
-        const zipMatch = suggestion.match(/\b(\d{5}(?:-\d{4})?)\b/);
-        if (zipMatch) {
-          parsedAddress.zipCode = zipMatch[1];
-          console.log('🔧 ZIP code extracted from suggestion text:', parsedAddress.zipCode);
-        }
-      }
-    } catch (error) {
-      console.log('🔧 ZIP code lookup failed, using address without ZIP:', error);
-    }
-    
-    onChange(parsedAddress);
+    onChange(addressData);
     toast({
       title: 'Address selected',
-      description: `${parsedAddress.street}, ${parsedAddress.city}, ${parsedAddress.state}${parsedAddress.zipCode ? ' ' + parsedAddress.zipCode : ''}`,
+      description: `${addressData.street}, ${addressData.city}, ${addressData.state}${addressData.zipCode ? ' ' + addressData.zipCode : ''}`,
     });
   };
 
@@ -231,7 +191,7 @@ export default function SimpleAddressInput({ label, value, onChange, required = 
                   selectedIndex === index && "bg-blue-50 text-blue-600"
                 )}
               >
-                {suggestion}
+                {suggestion.text}
               </div>
             ))}
           </div>

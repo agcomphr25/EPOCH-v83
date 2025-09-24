@@ -946,7 +946,7 @@ router.post('/:orderId/progress', async (req: Request, res: Response) => {
     // Define the departments sequence for automatic progression
     const departments = [
       'P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 
-      'Finish', 'Gunsmith', 'Paint', 'Shipping QC', 'Shipping'
+      'Gunsmith', 'Finish', 'Finish QC', 'Paint', 'Shipping QC', 'Shipping'
     ];
 
     // CRITICAL SAFEGUARD: Prevent backwards department progression

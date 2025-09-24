@@ -76,6 +76,7 @@ export default function CounterfeitPreventionTraining() {
     endTime: ''
   });
 
+
   const [quizAnswers, setQuizAnswers] = useState<QuizAnswer[]>([]);
   const [employeeSignature, setEmployeeSignature] = useState('');
   const [employeeDate, setEmployeeDate] = useState('');
@@ -188,6 +189,7 @@ export default function CounterfeitPreventionTraining() {
     const opt = {
       margin: [0.75, 0.75, 0.75, 0.75],
       filename: `counterfeit-prevention-training-${trainingInfo.date}.pdf`,
+
       image: { type: 'jpeg', quality: 0.98 },
       html2canvas: { 
         scale: 2,
@@ -226,6 +228,7 @@ export default function CounterfeitPreventionTraining() {
   return (
     <>
       <style>{printStyles}</style>
+
       <div className="min-h-screen bg-gray-50 p-4">
         {/* Control Panel */}
         <div className="max-w-4xl mx-auto mb-6 print:hidden">
@@ -242,10 +245,12 @@ export default function CounterfeitPreventionTraining() {
                   <Download className="w-4 h-4" />
                   Download PDF
                 </Button>
+
               </div>
             </CardContent>
           </Card>
         </div>
+
 
         {/* Training Content */}
         <div id="training-content" className="print-content">
@@ -698,8 +703,8 @@ export default function CounterfeitPreventionTraining() {
               <p>Questions or concerns should be directed to the Quality Assurance Department.</p>
             </div>
           </div>
+
         </div>
       </div>
     </>
   );
-}

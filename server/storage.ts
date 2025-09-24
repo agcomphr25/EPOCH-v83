@@ -2507,17 +2507,17 @@ export class DatabaseStorage implements IStorage {
     limit: number, 
     totalPages: number 
   }> {
-    // First, get the total count for pagination (exclude purchase orders)
+    // First, get the total count for pagination (exclude purchase orders and purchase order customers)
     const totalCountResult = await db
       .select({ count: sql<number>`COUNT(*)` })
       .from(allOrders)
-      .where(sql`${allOrders.orderId} NOT LIKE 'PO%'`);
+      .where(sql`${allOrders.orderId} NOT LIKE 'PO%' AND ${allOrders.customerId} NOT IN (SELECT DISTINCT customer_id FROM purchase_orders WHERE customer_id IS NOT NULL)`);
     
     const total = totalCountResult[0]?.count || 0;
     const totalPages = Math.ceil(total / limit);
     const offset = (page - 1) * limit;
 
-    // Use the same field selection as the original method but with pagination (exclude purchase orders)
+    // Use the same field selection as the original method but with pagination (exclude purchase orders and purchase order customers)
     const ordersWithCustomers = await db
       .select({
         // Order fields - using the same selection as original method
@@ -2559,7 +2559,7 @@ export class DatabaseStorage implements IStorage {
       })
       .from(allOrders)
       .leftJoin(customers, eq(allOrders.customerId, sql`${customers.id}::text`))
-      .where(sql`${allOrders.orderId} NOT LIKE 'PO%'`)
+      .where(sql`${allOrders.orderId} NOT LIKE 'PO%' AND ${allOrders.customerId} NOT IN (SELECT DISTINCT customer_id FROM purchase_orders WHERE customer_id IS NOT NULL)`)
       .orderBy(desc(allOrders.updatedAt))
       .limit(limit)
       .offset(offset);

@@ -89,7 +89,8 @@ export default function AllOrdersList() {
   // Fetch all kickbacks to determine which orders have kickbacks
   const { data: allKickbacks = [] } = useQuery<Kickback[]>({
     queryKey: ['/api/kickbacks'],
-    refetchInterval: 30000 // Refresh every 30 seconds
+    refetchInterval: false, // Disable auto-refresh to prevent cache conflicts, but keep manual refresh options
+    // Keep default behavior for refetchOnWindowFocus and refetchOnReconnect
   });
 
   // Helper function to get model display name
@@ -150,6 +151,9 @@ export default function AllOrdersList() {
     onSuccess: (data, variables) => {
       console.log(`✅ API Success: ${variables.orderId} -> ${variables.nextDepartment}`);
       toast.success('Department updated');
+      
+      // Invalidate kickbacks cache to ensure fresh data
+      queryClient.invalidateQueries({ queryKey: ['/api/kickbacks'] });
       
       // Cache is already updated from button click - just clean up local state
       setTimeout(() => {

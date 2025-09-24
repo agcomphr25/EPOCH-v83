@@ -134,51 +134,147 @@ const CounterfeitPreventionTraining: React.FC = () => {
           {/* Training Content */}
           <Card className="mb-8">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <FileText className="h-5 w-5" />
-                Training Overview
+              <CardTitle className="flex items-center gap-2 text-center w-full">
+                <div className="w-full">
+                  <div className="text-sm text-gray-600 mb-2">AG Advanced Technologies LLC</div>
+                  <div className="text-lg font-bold text-blue-600 mb-1">Counterfeit Materials Prevention</div>
+                  <div className="text-sm italic">Responsive • Reliable • Supportive</div>
+                </div>
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-6">
+            <CardContent className="space-y-8">
+              
+              {/* Introduction */}
               <div>
-                <h3 className="text-lg font-semibold mb-3">Learning Objectives</h3>
-                <ul className="space-y-2 list-disc pl-6">
-                  <li>Understand the risks associated with counterfeit materials in manufacturing</li>
-                  <li>Learn to identify potential indicators of counterfeit parts and components</li>
-                  <li>Know proper procedures for reporting and handling suspected counterfeit materials</li>
-                  <li>Understand verification processes for supplier authenticity</li>
-                  <li>Learn quality control measures to prevent counterfeit materials from entering production</li>
+                <h3 className="text-lg font-semibold mb-3 text-blue-600">Introduction</h3>
+                <p className="mb-3">Counterfeiting is growing in exponential proportions with respect to the types of:</p>
+                <ol className="list-decimal pl-6 space-y-1">
+                  <li>Products being counterfeited</li>
+                  <li>Industries affected</li>
+                  <li>Potential consequences caused by counterfeits</li>
+                </ol>
+                <p className="mt-3 text-sm text-gray-700">
+                  If this threat is not adequately addressed, counterfeit items have the potential to seriously compromise the safety and operational effectiveness of our products.
+                </p>
+              </div>
+
+              {/* Reference */}
+              <div>
+                <h3 className="text-lg font-semibold mb-3 text-blue-600">Reference</h3>
+                <ul className="space-y-1 list-disc pl-6">
+                  <li>AS9100(D) Section 8.1.4</li>
+                  <li>Quality Manual Section 8.1.4</li>
+                  <li>Process Manual Section 3.13</li>
                 </ul>
               </div>
 
+              {/* Purpose */}
               <div>
-                <h3 className="text-lg font-semibold mb-3">Key Points</h3>
-                <div className="space-y-4">
-                  <div>
-                    <h4 className="font-medium">Risk Awareness</h4>
-                    <p className="text-sm text-gray-600">
-                      Counterfeit materials pose serious safety, quality, and legal risks. They can lead to product failures, safety incidents, and regulatory violations.
-                    </p>
+                <h3 className="text-lg font-semibold mb-3 text-blue-600">Purpose</h3>
+                <p className="mb-3">The objective of this training is to raise awareness of:</p>
+                <ol className="list-decimal pl-6 space-y-1">
+                  <li>The risks and impacts of counterfeit parts infiltrating the supply chain</li>
+                  <li>Best practices to eliminate or mitigate those risks</li>
+                  <li>The AG Composites counterfeit prevention requirements for suppliers</li>
+                </ol>
+              </div>
+
+              {/* Impact of Counterfeit Parts */}
+              <div>
+                <h3 className="text-lg font-semibold mb-3 text-blue-600">Impact of Counterfeit Parts</h3>
+                <p className="mb-3">Counterfeit parts can cause:</p>
+                <ol className="list-decimal pl-6 space-y-1">
+                  <li>Personal injury</li>
+                  <li>Mission failure</li>
+                  <li>Reduced reliability and product recall</li>
+                  <li>Potential loss of contracts</li>
+                  <li>Shutdown of manufacturing lines</li>
+                  <li>Negative cost and schedule impacts</li>
+                  <li>Penalties for companies and individuals</li>
+                  <li>Damage to our image</li>
+                </ol>
+              </div>
+
+              {/* Procedure - Avoidance */}
+              <div>
+                <h3 className="text-lg font-semibold mb-3 text-blue-600">Procedure - Avoidance</h3>
+                <ol className="list-decimal pl-6 space-y-2">
+                  <li>Procuring directly from the Original Component or Equipment manufacturer (OCM/OEM) is the lowest risk.</li>
+                  <li>OCM Authorized Distributors are the next lowest risk.
+                    <ol className="list-[lower-alpha] pl-6 mt-1 space-y-1">
+                      <li>OCM Authorized distributors have documented sales agreements with manufacturers.</li>
+                      <li>Inventory manager should verify authorized distributor status with the manufacturer.</li>
+                    </ol>
+                  </li>
+                  <li>AG POs require suppliers to use OCMs or their authorized sources for products that will be delivered to Lockheed Martin.</li>
+                </ol>
+              </div>
+
+              {/* AG Supplier Requirements */}
+              <div className="bg-blue-50 p-4 rounded-lg border-l-4 border-blue-500">
+                <h3 className="text-lg font-semibold mb-3 text-blue-600">AG Supplier Requirements</h3>
+                <div className="text-sm">
+                  <strong>PREVENTION OF COUNTERFEIT PARTS:</strong> Suppliers shall ensure through their processes and/or a formal program against the receipt of counterfeit materials into their inventory, against their use in manufacturing, and against their being sold to other suppliers. Supplier shall not deliver counterfeit work or suspect counterfeit work to AG Advanced Technologies. All parts and materials shall be procured only through Original Equipment Manufacturers (OEMs)/Original Component Manufacturers (OCMs) or their franchised dealer or distributors unless pre-approval has been granted by AG Advanced Technologies. Knowingly supplying material deemed or suspected as counterfeit will be considered unethical business practice and would result in a supplier investigation, reporting and possible removal from AG Advanced Technologies Approved Supplier list.
+                </div>
+              </div>
+
+              {/* Procedure - Detection */}
+              <div>
+                <h3 className="text-lg font-semibold mb-3 text-blue-600">Procedure - Detection</h3>
+                <p className="mb-3">Identify the issue: Carefully inspect the items and identify any visual discrepancies or inconsistencies that suggest they may be counterfeit.</p>
+                
+                <h4 className="font-semibold mb-3 text-red-600">Red Flags:</h4>
+                <div className="grid md:grid-cols-2 gap-2 text-sm">
+                  <div className="space-y-1">
+                    <div>🚩 No certificate of conformance</div>
+                    <div>🚩 Item marking issues</div>
+                    <div>🚩 Package issues</div>
+                    <div>🚩 Obsolete item</div>
+                    <div>🚩 Unknown supplier</div>
                   </div>
-                  <div>
-                    <h4 className="font-medium">Detection Methods</h4>
-                    <p className="text-sm text-gray-600">
-                      Watch for unusual pricing, questionable documentation, unfamiliar suppliers, and parts that don't match specifications or quality standards.
-                    </p>
-                  </div>
-                  <div>
-                    <h4 className="font-medium">Supplier Verification</h4>
-                    <p className="text-sm text-gray-600">
-                      Always verify suppliers through authorized distributor networks, check certifications, and maintain detailed documentation of the supply chain.
-                    </p>
-                  </div>
-                  <div>
-                    <h4 className="font-medium">Reporting Procedures</h4>
-                    <p className="text-sm text-gray-600">
-                      Immediately report any suspected counterfeit materials to quality control and management. Do not use questionable parts in production.
-                    </p>
+                  <div className="space-y-1">
+                    <div>❌ Batch/lot # issues</div>
+                    <div>❌ Spelling/return address unknown</div>
+                    <div>❌ Doesn't match previous items</div>
+                    <div>❌ Poor quality or materials</div>
                   </div>
                 </div>
+              </div>
+
+              {/* Procedure - Mitigation */}
+              <div>
+                <h3 className="text-lg font-semibold mb-3 text-blue-600">Procedure - Mitigation</h3>
+                <ol className="list-decimal pl-6 space-y-2 text-sm">
+                  <li><strong>Isolate the parts:</strong> Quarantine the suspect counterfeit parts to prevent them from entering the production line or being used in any product.</li>
+                  <li><strong>Document thoroughly:</strong> Create detailed documentation including photos, part numbers, lot numbers, supplier information, and any evidence of the suspected counterfeiting.</li>
+                  <li><strong>Inform your supplier:</strong> Provide evidence and request an explanation. If necessary, require corrective action from the supplier.</li>
+                  <li><strong>Conduct an internal investigation:</strong> Determine the extent of the problem and potential risks within the supply chain.</li>
+                  <li><strong>Communicate with the customer:</strong> Rework, replace, or repair any fielded product in conjunction with customer input.</li>
+                  <li><strong>Determine if the authorities should be notified</strong> and which authorities. (FAA, local police, FBI, etc.)</li>
+                </ol>
+              </div>
+
+              {/* Procedure - Disposition */}
+              <div>
+                <h3 className="text-lg font-semibold mb-3 text-blue-600">Procedure - Disposition</h3>
+                <ol className="list-decimal pl-6 space-y-2 text-sm">
+                  <li>Store counterfeit parts or materials in quarantine, clearly identified as nonconforming/counterfeit product pending a review by your organization's management and legal representation.</li>
+                  <li>Do not return Counterfeit to the supplier in such a way that they could be reintroduced into the supply chain to be sold again to another victim.</li>
+                  <li>Legal authorities may be contacted to initiate an investigation into the counterfeiting activity. Parts may be required as evidence.</li>
+                  <li>Upon conclusion of any investigation, upper management will authorize the disposition and method for disposing of any suspect/counterfeit items.</li>
+                </ol>
+              </div>
+
+              {/* Conclusion */}
+              <div className="bg-green-50 p-4 rounded-lg border-l-4 border-green-500">
+                <h3 className="text-lg font-semibold mb-3 text-green-600">Conclusion</h3>
+                <ul className="space-y-2 text-sm">
+                  <li>➔ Counterfeit materials are a serious threat and can compromise the integrity of the important products we provide.</li>
+                  <li>➔ The use of Original Component or Equipment manufacturers and their authorized sources results in the least risk for counterfeit items infiltrating our products.</li>
+                  <li>➔ If you suspect counterfeit items may have been supplied to AG, you must notify the quality manager immediately.</li>
+                  <li>➔ Counterfeit risk must be controlled throughout the entire supply chain.</li>
+                  <li>➔ Thank you for your continued efforts to ensure counterfeit components do not infiltrate our supply chains.</li>
+                </ul>
               </div>
             </CardContent>
           </Card>

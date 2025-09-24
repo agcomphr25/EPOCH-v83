@@ -58,7 +58,7 @@ router.get('/with-payment-status', async (req: Request, res: Response) => {
 router.get('/with-payment-status/paginated', async (req: Request, res: Response) => {
   try {
     const page = parseInt(req.query.page as string) || 1;
-    const limit = Math.min(parseInt(req.query.limit as string) || 50, 100); // Max 100 per page
+    const limit = Math.min(parseInt(req.query.limit as string) || 50, 1000); // Max 1000 per page
     
     // Add basic caching headers
     res.set({

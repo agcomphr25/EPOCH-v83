@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -387,6 +387,9 @@ export function BulkShippingActions({ selectedOrders, onClearSelection, shipping
               <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>Bulk Shipping for {selectedOrders.length} Orders</DialogTitle>
+                  <DialogDescription>
+                    Create shipping labels and track packages for multiple orders at once. Fill in the shipping address, package details, and billing options below.
+                  </DialogDescription>
                 </DialogHeader>
                 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 py-4">

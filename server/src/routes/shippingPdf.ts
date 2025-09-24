@@ -1,8 +1,22 @@
 import { Router, Request, Response } from 'express';
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 import fetch from 'node-fetch';
+import * as fs from 'fs';
+import * as path from 'path';
 
 const router = Router();
+
+// Helper function to load and embed company logo
+async function embedCompanyLogo(pdfDoc: PDFDocument) {
+  try {
+    const logoPath = path.join(__dirname, '../assets/logo_1758737066805.png');
+    const logoImageBytes = fs.readFileSync(logoPath);
+    return await pdfDoc.embedPng(logoImageBytes);
+  } catch (error) {
+    console.warn('Could not load company logo:', error);
+    return null;
+  }
+}
 
 // UPS API Configuration - Use environment variable or default to test  
 const UPS_ENV = process.env.UPS_ENV || 'test';
@@ -299,17 +313,36 @@ router.get('/qc-checklist/:orderId', async (req: Request, res: Response) => {
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
     const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
-    // Header with company branding - optimized for printing
+    // Header with company logo - optimized for printing
     let currentY = height - margin;
-    page.drawText('AG COMPOSITES', {
-      x: margin,
-      y: currentY,
-      size: 18,
-      font: boldFont,
-      color: rgb(0, 0, 0),
-    });
+    
+    // Load and embed company logo
+    const logo = await embedCompanyLogo(pdfDoc);
+    if (logo) {
+      // Scale logo to fit nicely in header
+      const logoWidth = 150;
+      const logoHeight = logoWidth * (logo.height / logo.width);
+      
+      page.drawImage(logo, {
+        x: margin,
+        y: currentY - logoHeight,
+        width: logoWidth,
+        height: logoHeight,
+      });
+      
+      currentY -= logoHeight + 10;
+    } else {
+      // Fallback to text if logo fails to load
+      page.drawText('AG COMPOSITES', {
+        x: margin,
+        y: currentY,
+        size: 18,
+        font: boldFont,
+        color: rgb(0, 0, 0),
+      });
+      currentY -= 25;
+    }
 
-    currentY -= 25;
     page.drawText('Quality Control Inspection Report', {
       x: margin,
       y: currentY,
@@ -790,18 +823,37 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
     const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
-    // Header section with company branding - Fixed positioning
+    // Header section with company logo - Fixed positioning
     let currentY = height - margin - 20; // Move header down from very top edge
-    page.drawText('AG COMPOSITES', {
-      x: margin,
-      y: currentY,
-      size: 20,
-      font: boldFont,
-      color: rgb(0, 0, 0),
-    });
+    
+    // Load and embed company logo
+    const logo = await embedCompanyLogo(pdfDoc);
+    if (logo) {
+      // Scale logo to fit nicely in header
+      const logoWidth = 150;
+      const logoHeight = logoWidth * (logo.height / logo.width);
+      
+      page.drawImage(logo, {
+        x: margin,
+        y: currentY - logoHeight,
+        width: logoWidth,
+        height: logoHeight,
+      });
+      
+      currentY -= logoHeight + 15;
+    } else {
+      // Fallback to text if logo fails to load
+      page.drawText('AG COMPOSITES', {
+        x: margin,
+        y: currentY,
+        size: 20,
+        font: boldFont,
+        color: rgb(0, 0, 0),
+      });
+      currentY -= 35;
+    }
 
     // Sales Order title
-    currentY -= 35; // Increase spacing for better layout
     page.drawText('SALES ORDER', {
       x: margin,
       y: currentY,

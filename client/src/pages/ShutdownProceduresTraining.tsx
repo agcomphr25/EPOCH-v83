@@ -75,8 +75,8 @@ export default function ShutdownProceduresTraining() {
     setParticipants(updated);
   };
 
-  const generatePrintablePDF = () => {
-    const element = document.getElementById('printable-shutdown-content');
+  const generateContentPDF = () => {
+    const element = document.getElementById('printable-content-content');
     if (!element) return;
 
     // Temporarily make the element visible for PDF generation
@@ -85,7 +85,29 @@ export default function ShutdownProceduresTraining() {
     
     const opt = {
       margin: 0.5,
-      filename: `Shutdown_Procedures_Training_Printable_${new Date().toISOString().split('T')[0]}.pdf`,
+      filename: `Shutdown_Procedures_Content_${new Date().toISOString().split('T')[0]}.pdf`,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { scale: 2 },
+      jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
+    };
+
+    html2pdf().set(opt).from(element).save().then(() => {
+      // Restore original classes after PDF generation
+      element.className = originalClasses;
+    });
+  };
+
+  const generateAttendancePDF = () => {
+    const element = document.getElementById('printable-shutdown-attendance');
+    if (!element) return;
+
+    // Temporarily make the element visible for PDF generation
+    const originalClasses = element.className;
+    element.className = element.className.replace('hidden', '').replace('print:block', 'block');
+    
+    const opt = {
+      margin: 0.5,
+      filename: `Shutdown_Procedures_Attendance_${new Date().toISOString().split('T')[0]}.pdf`,
       image: { type: 'jpeg', quality: 0.98 },
       html2canvas: { scale: 2 },
       jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
@@ -317,13 +339,22 @@ export default function ShutdownProceduresTraining() {
         {/* Action Buttons */}
         <div className="mt-6 flex justify-center gap-2 print:hidden">
           <Button 
-            onClick={generatePrintablePDF}
+            onClick={generateContentPDF}
             variant="outline"
             className="flex items-center gap-2"
-            data-testid="button-download-pdf"
+            data-testid="button-download-content-pdf"
           >
             <Download className="h-4 w-4" />
-            Download Printable PDF
+            Content PDF
+          </Button>
+          <Button 
+            onClick={generateAttendancePDF}
+            variant="outline"
+            className="flex items-center gap-2"
+            data-testid="button-download-attendance-pdf"
+          >
+            <Download className="h-4 w-4" />
+            Attendance PDF
           </Button>
           <Button 
             onClick={handlePrint} 
@@ -331,17 +362,17 @@ export default function ShutdownProceduresTraining() {
             data-testid="button-print-training-sheet"
           >
             <Printer className="h-4 w-4 mr-2" />
-            Print Training Sheet
+            Print All
           </Button>
         </div>
 
-        {/* Printable Content - Hidden on screen, visible in print */}
-        <div id="printable-shutdown-content" className="hidden print:block">
+        {/* Content Printable - Hidden on screen, visible in print */}
+        <div id="printable-content-content" className="hidden print:block">
           <PrintLayout
-            title="Shutdown Procedures Training"
+            title="Shutdown Procedures Training - Reference Guide"
             companyName="AG Advanced Technologies LLC"
-            includeSignatures={true}
-            attendeeCount={15}
+            includeSignatures={false}
+            attendeeCount={0}
           >
             {/* CNC Department */}
             <div className="mb-6">
@@ -458,6 +489,30 @@ export default function ShutdownProceduresTraining() {
                 <li>• Any issues or concerns should be reported to management immediately</li>
                 <li>• These procedures must be followed for the safety and security of all personnel</li>
               </ul>
+            </div>
+          </PrintLayout>
+        </div>
+
+        {/* Attendance Printable - Hidden on screen, visible in print */}
+        <div id="printable-shutdown-attendance" className="hidden print:block">
+          <PrintLayout
+            title="Shutdown Procedures Training - Attendance"
+            companyName="AG Advanced Technologies LLC"
+            includeSignatures={true}
+            attendeeCount={15}
+          >
+            <div className="mb-6">
+              <h2 className="text-lg font-semibold mb-4">Training Attendance Record</h2>
+              <p className="mb-4 text-sm">
+                All attendees must sign below to confirm participation in the Shutdown Procedures Training session.
+              </p>
+              <div className="mb-4 text-sm">
+                <p><strong>Training Topic:</strong> End-of-Day Shutdown Procedures</p>
+                <p><strong>Training Date:</strong> ___________________</p>
+                <p><strong>Training Duration:</strong> ___________________</p>
+                <p><strong>Training Location:</strong> ___________________</p>
+                <p><strong>Instructor:</strong> ___________________</p>
+              </div>
             </div>
           </PrintLayout>
         </div>

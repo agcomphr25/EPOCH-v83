@@ -313,12 +313,6 @@ export default function Navigation() {
       description: 'Presentation-style shutdown procedures training with attendance signatures'
     },
     {
-      path: '/fire-safety-training',
-      label: 'Fire Safety Training',
-      icon: GraduationCap,
-      description: 'Presentation-style fire safety training with attendance signatures'
-    },
-    {
       path: '/counterfeit-prevention-training',
       label: 'Counterfeit Prevention Training',
       icon: Shield,

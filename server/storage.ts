@@ -2507,18 +2507,10 @@ export class DatabaseStorage implements IStorage {
     limit: number, 
     totalPages: number 
   }> {
-    // First, get the total count for pagination
+    // First, get the total count for pagination (no filters, match original /api/orders behavior)
     const totalCountResult = await db
       .select({ count: sql<number>`COUNT(*)` })
-      .from(allOrders)
-      .where(
-        and(
-          sql`${allOrders.orderId} NOT LIKE 'P1-%'`,
-          sql`${allOrders.orderId} NOT LIKE 'PO%'`,
-          sql`${allOrders.orderId} != 'AG1'`,
-          sql`${allOrders.orderId} NOT LIKE '%PO%'`
-        )
-      );
+      .from(allOrders);
     
     const total = totalCountResult[0]?.count || 0;
     const totalPages = Math.ceil(total / limit);
@@ -2566,17 +2558,10 @@ export class DatabaseStorage implements IStorage {
       })
       .from(allOrders)
       .leftJoin(customers, eq(allOrders.customerId, sql`${customers.id}::text`))
-      .where(
-        and(
-          sql`${allOrders.orderId} NOT LIKE 'P1-%'`,
-          sql`${allOrders.orderId} NOT LIKE 'PO%'`,
-          sql`${allOrders.orderId} != 'AG1'`,
-          sql`${allOrders.orderId} NOT LIKE '%PO%'`
-        )
-      )
       .orderBy(desc(allOrders.updatedAt))
       .limit(limit)
       .offset(offset);
+    
 
     // Get all payments aggregated by order ID in parallel
     const paymentTotals = await db

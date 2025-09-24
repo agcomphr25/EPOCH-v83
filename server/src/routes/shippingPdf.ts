@@ -9,7 +9,7 @@ const router = Router();
 // Helper function to load and embed company logo
 async function embedCompanyLogo(pdfDoc: PDFDocument) {
   try {
-    const logoPath = path.join(__dirname, '../assets/logo_1758737066805.png');
+    const logoPath = path.join(__dirname, '../assets/logo_updated.png');
     const logoImageBytes = fs.readFileSync(logoPath);
     return await pdfDoc.embedPng(logoImageBytes);
   } catch (error) {

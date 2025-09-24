@@ -1,5 +1,6 @@
-import { Document, Page, Text, View, StyleSheet, pdf } from '@react-pdf/renderer';
+import { Document, Page, Text, View, StyleSheet, pdf, Image } from '@react-pdf/renderer';
 import { saveAs } from 'file-saver';
+import logoImage from '@assets/logo_1758737066805.png';
 
 // Create styles
 const styles = StyleSheet.create({
@@ -31,6 +32,12 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: '#6B7280',
     fontStyle: 'italic',
+  },
+  logo: {
+    width: 200,
+    height: 'auto',
+    marginBottom: 10,
+    alignSelf: 'center',
   },
   section: {
     marginBottom: 20,
@@ -147,9 +154,8 @@ const QuizPDFDocument = ({ title, companyName, questions = [] }: TrainingPDFProp
   <Document>
     <Page size="A4" style={styles.page}>
       <View style={styles.header}>
-        <Text style={styles.companyName}>{companyName}</Text>
+        <Image style={styles.logo} src={logoImage} />
         <Text style={styles.title}>{title}</Text>
-        <Text style={styles.subtitle}>Responsive • Reliable • Supportive</Text>
       </View>
 
       <View style={styles.section}>
@@ -214,9 +220,8 @@ const AnswerKeyPDFDocument = ({ title, companyName, questions = [] }: TrainingPD
   <Document>
     <Page size="A4" style={styles.page}>
       <View style={styles.header}>
-        <Text style={styles.companyName}>{companyName}</Text>
+        <Image style={styles.logo} src={logoImage} />
         <Text style={styles.title}>{title.replace(' - Assessment', ' - Answer Key')}</Text>
-        <Text style={styles.subtitle}>Responsive • Reliable • Supportive</Text>
       </View>
 
       <View style={styles.section}>
@@ -247,9 +252,8 @@ const ContentPDFDocument = ({ title, companyName, content = [] }: TrainingPDFPro
   <Document>
     <Page size="A4" style={styles.page}>
       <View style={styles.header}>
-        <Text style={styles.companyName}>{companyName}</Text>
+        <Image style={styles.logo} src={logoImage} />
         <Text style={styles.title}>{title}</Text>
-        <Text style={styles.subtitle}>Responsive • Reliable • Supportive</Text>
       </View>
 
       <View style={styles.section}>
@@ -269,9 +273,8 @@ const AttendancePDFDocument = ({ title, companyName, attendeeCount = 15 }: Train
   <Document>
     <Page size="A4" style={styles.page}>
       <View style={styles.header}>
-        <Text style={styles.companyName}>{companyName}</Text>
+        <Image style={styles.logo} src={logoImage} />
         <Text style={styles.title}>{title}</Text>
-        <Text style={styles.subtitle}>Responsive • Reliable • Supportive</Text>
       </View>
 
       <View style={styles.section}>
@@ -343,9 +346,8 @@ const CombinedPDFDocument = ({ title, companyName, questions = [], content = [],
     {/* First Page - Quiz/Content */}
     <Page size="A4" style={styles.page}>
       <View style={styles.header}>
-        <Text style={styles.companyName}>{companyName}</Text>
+        <Image style={styles.logo} src={logoImage} />
         <Text style={styles.title}>{title}</Text>
-        <Text style={styles.subtitle}>Responsive • Reliable • Supportive</Text>
       </View>
 
       {questions.length > 0 ? (
@@ -398,9 +400,8 @@ const CombinedPDFDocument = ({ title, companyName, questions = [], content = [],
     {/* Second Page - Attendance */}
     <Page size="A4" style={styles.page}>
       <View style={styles.header}>
-        <Text style={styles.companyName}>{companyName}</Text>
+        <Image style={styles.logo} src={logoImage} />
         <Text style={styles.title}>{title.replace(' - Assessment', ' - Attendance').replace(' - Content', ' - Attendance')}</Text>
-        <Text style={styles.subtitle}>Responsive • Reliable • Supportive</Text>
       </View>
 
       <View style={styles.section}>

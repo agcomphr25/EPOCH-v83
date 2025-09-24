@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { GraduationCap, Users, Calendar, Clock, Printer, Download } from "lucide-react";
 import { PrintLayout } from '@/components/PrintLayout';
-import { generateContentPDF, generateAttendancePDF } from '@/components/TrainingPDF';
+import { generateContentPDF, generateAttendancePDF, generateCombinedPDF } from '@/components/TrainingPDF';
 
 // Print-specific styles
 const printStyles = `
@@ -163,8 +163,85 @@ export default function ShutdownProceduresTraining() {
     });
   };
 
-  const handlePrint = () => {
-    window.print();
+  const handlePrint = async () => {
+    const shutdownContent = [
+      "AG Advanced Technologies LLC - Shutdown Procedures Training",
+      "",
+      "PURPOSE",
+      "This training provides standardized procedures for safely shutting down all departments within AG Advanced Technologies facility. These procedures ensure the safety and security of personnel, equipment, and facilities at the end of each work day or in emergency situations.",
+      "",
+      "GENERAL SHUTDOWN SEQUENCE",
+      "1. Complete all active production operations safely",
+      "2. Secure all materials and work-in-progress items", 
+      "3. Turn off all machinery and equipment",
+      "4. Clean and organize work areas",
+      "5. Turn off air compressors and utilities",
+      "6. Close and lock all doors and container access",
+      "7. Turn off all lighting",
+      "8. Conduct final safety walkthrough",
+      "",
+      "DEPARTMENT-SPECIFIC PROCEDURES",
+      "",
+      "CNC DEPARTMENT",
+      "• Turn machines OFF",
+      "• Turn air compressor OFF", 
+      "• Organize the department area",
+      "• Close and lock container doors",
+      "• Close and lock all doors: 2 pedestrian exit doors, Roll down door",
+      "• Turn lights OFF",
+      "",
+      "GUNSMITH DEPARTMENT",
+      "• Turn machines OFF",
+      "• Turn air compressor OFF",
+      "• Organize the department area", 
+      "• Close and lock container doors",
+      "• Close and lock all doors: 1 pedestrian exit door, Roll down door",
+      "• Turn lights OFF",
+      "",
+      "FINISH DEPARTMENT", 
+      "• Clean and organize department area",
+      "• Turn the air compressor OFF",
+      "• Ensure there are no overflowing trash cans",
+      "• Close and lock container doors",
+      "• Close and lock all doors: 3 pedestrian exit doors, Roll down door",
+      "• Turn lights OFF",
+      "",
+      "PAINT DEPARTMENT",
+      "• Clean all paint guns",
+      "• Turn the air compressor OFF", 
+      "• Clean and organize department area",
+      "• Ensure there are no overflowing trash cans",
+      "• Close and lock container doors",
+      "• Close and lock all doors: 1 pedestrian exit door, Roll down door", 
+      "• Turn lights OFF",
+      "",
+      "LAYUP DEPARTMENT",
+      "• Place all fiberglass materials back in storage",
+      "• Clean and organize department area",
+      "• Ensure there are no overflowing trash cans",
+      "• Close and lock container doors",
+      "• Close and lock all doors: 2 pedestrian exit doors, Roll down door",
+      "• Turn lights OFF",
+      "",
+      "EMERGENCY PROCEDURES",
+      "• In case of emergency, follow posted evacuation procedures",
+      "• Ensure all personnel have safely exited the building",
+      "• Contact emergency services if required", 
+      "• Do not re-enter building until authorized by management",
+      "",
+      "IMPORTANT NOTES",
+      "• All employees must be properly trained on shutdown procedures",
+      "• Department supervisors are responsible for ensuring compliance",
+      "• Any issues or concerns should be reported to management immediately",
+      "• These procedures must be followed for the safety and security of all personnel"
+    ];
+
+    await generateCombinedPDF({
+      title: 'Shutdown Procedures Training - Complete',
+      companyName: 'AG Advanced Technologies LLC',
+      content: shutdownContent,
+      attendeeCount: 15
+    });
   };
 
   return (

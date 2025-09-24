@@ -4,8 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { GraduationCap, Users, Calendar, Clock, Printer, Download } from "lucide-react";
-import html2pdf from 'html2pdf.js';
 import { PrintLayout } from '@/components/PrintLayout';
+import { generateContentPDF, generateAttendancePDF } from '@/components/TrainingPDF';
 
 // Print-specific styles
 const printStyles = `
@@ -75,47 +75,91 @@ export default function ShutdownProceduresTraining() {
     setParticipants(updated);
   };
 
-  const generateContentPDF = () => {
-    const element = document.getElementById('printable-content-content');
-    if (!element) return;
+  const handleGenerateContentPDF = async () => {
+    const shutdownContent = [
+      "AG Advanced Technologies LLC - Shutdown Procedures Training",
+      "",
+      "PURPOSE",
+      "This training provides standardized procedures for safely shutting down all departments within AG Advanced Technologies facility. These procedures ensure the safety and security of personnel, equipment, and facilities at the end of each work day or in emergency situations.",
+      "",
+      "GENERAL SHUTDOWN SEQUENCE",
+      "1. Complete all active production operations safely",
+      "2. Secure all materials and work-in-progress items", 
+      "3. Turn off all machinery and equipment",
+      "4. Clean and organize work areas",
+      "5. Turn off air compressors and utilities",
+      "6. Close and lock all doors and container access",
+      "7. Turn off all lighting",
+      "8. Conduct final safety walkthrough",
+      "",
+      "DEPARTMENT-SPECIFIC PROCEDURES",
+      "",
+      "CNC DEPARTMENT",
+      "• Turn machines OFF",
+      "• Turn air compressor OFF", 
+      "• Organize the department area",
+      "• Close and lock container doors",
+      "• Close and lock all doors: 2 pedestrian exit doors, Roll down door",
+      "• Turn lights OFF",
+      "",
+      "GUNSMITH DEPARTMENT",
+      "• Turn machines OFF",
+      "• Turn air compressor OFF",
+      "• Organize the department area", 
+      "• Close and lock container doors",
+      "• Close and lock all doors: 1 pedestrian exit door, Roll down door",
+      "• Turn lights OFF",
+      "",
+      "FINISH DEPARTMENT", 
+      "• Clean and organize department area",
+      "• Turn the air compressor OFF",
+      "• Ensure there are no overflowing trash cans",
+      "• Close and lock container doors",
+      "• Close and lock all doors: 3 pedestrian exit doors, Roll down door",
+      "• Turn lights OFF",
+      "",
+      "PAINT DEPARTMENT",
+      "• Clean all paint guns",
+      "• Turn the air compressor OFF", 
+      "• Clean and organize department area",
+      "• Ensure there are no overflowing trash cans",
+      "• Close and lock container doors",
+      "• Close and lock all doors: 1 pedestrian exit door, Roll down door", 
+      "• Turn lights OFF",
+      "",
+      "LAYUP DEPARTMENT",
+      "• Place all fiberglass materials back in storage",
+      "• Clean and organize department area",
+      "• Ensure there are no overflowing trash cans",
+      "• Close and lock container doors",
+      "• Close and lock all doors: 2 pedestrian exit doors, Roll down door",
+      "• Turn lights OFF",
+      "",
+      "EMERGENCY PROCEDURES",
+      "• In case of emergency, follow posted evacuation procedures",
+      "• Ensure all personnel have safely exited the building",
+      "• Contact emergency services if required", 
+      "• Do not re-enter building until authorized by management",
+      "",
+      "IMPORTANT NOTES",
+      "• All employees must be properly trained on shutdown procedures",
+      "• Department supervisors are responsible for ensuring compliance",
+      "• Any issues or concerns should be reported to management immediately",
+      "• These procedures must be followed for the safety and security of all personnel"
+    ];
 
-    // Temporarily make the element visible for PDF generation
-    const originalClasses = element.className;
-    element.className = element.className.replace('hidden', '').replace('print:block', 'block');
-    
-    const opt = {
-      margin: 0.5,
-      filename: `Shutdown_Procedures_Content_${new Date().toISOString().split('T')[0]}.pdf`,
-      image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: { scale: 2 },
-      jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
-    };
-
-    html2pdf().set(opt).from(element).save().then(() => {
-      // Restore original classes after PDF generation
-      element.className = originalClasses;
+    await generateContentPDF({
+      title: 'Shutdown Procedures Training - Content',
+      companyName: 'AG Advanced Technologies LLC',
+      content: shutdownContent
     });
   };
 
-  const generateAttendancePDF = () => {
-    const element = document.getElementById('printable-shutdown-attendance');
-    if (!element) return;
-
-    // Temporarily make the element visible for PDF generation
-    const originalClasses = element.className;
-    element.className = element.className.replace('hidden', '').replace('print:block', 'block');
-    
-    const opt = {
-      margin: 0.5,
-      filename: `Shutdown_Procedures_Attendance_${new Date().toISOString().split('T')[0]}.pdf`,
-      image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: { scale: 2 },
-      jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
-    };
-
-    html2pdf().set(opt).from(element).save().then(() => {
-      // Restore original classes after PDF generation
-      element.className = originalClasses;
+  const handleGenerateAttendancePDF = async () => {
+    await generateAttendancePDF({
+      title: 'Shutdown Procedures Training - Attendance',
+      companyName: 'AG Advanced Technologies LLC',
+      attendeeCount: 15
     });
   };
 
@@ -339,7 +383,7 @@ export default function ShutdownProceduresTraining() {
         {/* Action Buttons */}
         <div className="mt-6 flex justify-center gap-2 print:hidden">
           <Button 
-            onClick={generateContentPDF}
+            onClick={handleGenerateContentPDF}
             variant="outline"
             className="flex items-center gap-2"
             data-testid="button-download-content-pdf"
@@ -348,7 +392,7 @@ export default function ShutdownProceduresTraining() {
             Content PDF
           </Button>
           <Button 
-            onClick={generateAttendancePDF}
+            onClick={handleGenerateAttendancePDF}
             variant="outline"
             className="flex items-center gap-2"
             data-testid="button-download-attendance-pdf"

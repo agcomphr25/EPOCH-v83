@@ -6,8 +6,8 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import { Download, FileText, Shield, Printer } from 'lucide-react';
-import html2pdf from 'html2pdf.js';
 import { PrintLayout } from '@/components/PrintLayout';
+import { generateQuizPDF, generateAttendancePDF } from '@/components/TrainingPDF';
 
 interface QuizAnswer {
   questionId: string;
@@ -102,47 +102,20 @@ const CounterfeitPreventionTraining: React.FC = () => {
     });
   };
 
-  const generateQuizPDF = () => {
-    const element = document.getElementById('printable-quiz-content');
-    if (!element) return;
-
-    // Temporarily make the element visible for PDF generation
-    const originalClasses = element.className;
-    element.className = element.className.replace('hidden', '').replace('print:block', 'block');
-    
-    const opt = {
-      margin: 0.5,
-      filename: `Counterfeit_Prevention_Quiz_${new Date().toISOString().split('T')[0]}.pdf`,
-      image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: { scale: 2 },
-      jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
-    };
-
-    html2pdf().set(opt).from(element).save().then(() => {
-      // Restore original classes after PDF generation
-      element.className = originalClasses;
+  const handleGenerateQuizPDF = async () => {
+    await generateQuizPDF({
+      title: 'Counterfeit Prevention Training - Assessment',
+      companyName: 'AG Advanced Technologies LLC',
+      questions: questions,
+      includeAnswerKey: true
     });
   };
 
-  const generateAttendancePDF = () => {
-    const element = document.getElementById('printable-attendance-content');
-    if (!element) return;
-
-    // Temporarily make the element visible for PDF generation
-    const originalClasses = element.className;
-    element.className = element.className.replace('hidden', '').replace('print:block', 'block');
-    
-    const opt = {
-      margin: 0.5,
-      filename: `Counterfeit_Prevention_Attendance_${new Date().toISOString().split('T')[0]}.pdf`,
-      image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: { scale: 2 },
-      jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
-    };
-
-    html2pdf().set(opt).from(element).save().then(() => {
-      // Restore original classes after PDF generation
-      element.className = originalClasses;
+  const handleGenerateAttendancePDF = async () => {
+    await generateAttendancePDF({
+      title: 'Counterfeit Prevention Training - Attendance',
+      companyName: 'AG Advanced Technologies LLC',
+      attendeeCount: 15
     });
   };
 
@@ -159,11 +132,11 @@ const CounterfeitPreventionTraining: React.FC = () => {
             <h1 className="text-3xl font-bold text-gray-900">Counterfeit Prevention Training</h1>
           </div>
           <div className="flex items-center gap-2">
-            <Button onClick={generateQuizPDF} variant="outline" className="flex items-center gap-2">
+            <Button onClick={handleGenerateQuizPDF} variant="outline" className="flex items-center gap-2">
               <Download className="h-4 w-4" />
               Quiz PDF
             </Button>
-            <Button onClick={generateAttendancePDF} variant="outline" className="flex items-center gap-2">
+            <Button onClick={handleGenerateAttendancePDF} variant="outline" className="flex items-center gap-2">
               <Download className="h-4 w-4" />
               Attendance PDF
             </Button>
@@ -493,12 +466,11 @@ const CounterfeitPreventionTraining: React.FC = () => {
               <div className="mt-12 pt-8 border-t-2 border-gray-400">
                 <h3 className="text-md font-semibold mb-4">Answer Key (For Instructor Use Only)</h3>
                 <div className="grid grid-cols-3 gap-4 text-sm">
-                  <div>1. B) Safety hazards and quality control failures</div>
-                  <div>2. B) Pricing significantly below market value</div>
-                  <div>3. C) Immediately upon discovery</div>
-                  <div>4. C) Original Component or Equipment manufacturers (OCM/OEM)</div>
-                  <div>5. B) Quarantine the part and document thoroughly</div>
-                  <div>6. C) Investigation and possible removal from approved supplier list</div>
+                  {questions.map((question, index) => (
+                    <div key={question.id}>
+                      {index + 1}. {question.correctAnswer}) {question.options.find(opt => opt.charAt(0) === question.correctAnswer)?.substring(3)}
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>

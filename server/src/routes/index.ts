@@ -10,6 +10,7 @@ import kickbackRoutes from './kickbacks';
 import inventoryRoutes from './inventory';
 import customersRoutes from './customers';
 import vendorsRoutes, { contactRouter, vendorDocumentRouter } from './vendors';
+import vendorPOsRoutes from './vendorPOs';
 import qualityRoutes from './quality';
 import documentsRoutes from './documents';
 import moldsRoutes from './molds';
@@ -78,6 +79,9 @@ export function registerRoutes(app: Express): Server {
 
   // Vendor management routes
   app.use('/api/vendors', vendorsRoutes);
+  
+  // Vendor purchase orders routes
+  app.use('/api/vendor-pos', vendorPOsRoutes);
   
   // Vendor contacts routes (generic)
   app.use('/api/vendor-contacts', contactRouter);

@@ -9,6 +9,7 @@ import tasksRoutes from './tasks';
 import kickbackRoutes from './kickbacks';
 import inventoryRoutes from './inventory';
 import customersRoutes from './customers';
+import vendorsRoutes, { contactRouter, vendorDocumentRouter } from './vendors';
 import qualityRoutes from './quality';
 import documentsRoutes from './documents';
 import moldsRoutes from './molds';
@@ -19,6 +20,8 @@ import shippingTestRoutes from './shipping-test';
 import orderAttachmentsRoutes from './orderAttachments';
 import discountsRoutes from './discounts';
 import bomsRoutes from './boms';
+import robustBomRoutes from './robustBom';
+import p2BomsRoutes from './p2boms';
 import communicationsRoutes from './communications';
 import secureVerificationRoutes from './secureVerification';
 import nonconformanceRoutes from '../../routes/nonconformance';
@@ -32,6 +35,17 @@ import layupScheduleRoutes from './layupSchedule';
 import customerSatisfactionRoutes from './customerSatisfaction';
 import poProductsRoutes from './poProducts';
 import refundRoutes from './refunds';
+
+import vendorRoutes from './vendors';
+
+
+// import cuttingTableRoutes from './cuttingTable';
+// import materialInventoryRoutes from './materialInventory';
+// import defrostScheduleRoutes from './defrostSchedule';
+
+import mrpRoutes from './mrp';
+import enhancedRoutes from './enhanced';
+
 import { getAccessToken } from '../utils/upsShipping';
 
 export function registerRoutes(app: Express): Server {
@@ -62,6 +76,15 @@ export function registerRoutes(app: Express): Server {
   // Customer management routes
   app.use('/api/customers', customersRoutes);
 
+  // Vendor management routes
+  app.use('/api/vendors', vendorsRoutes);
+  
+  // Vendor contacts routes (generic)
+  app.use('/api/vendor-contacts', contactRouter);
+  
+  // Vendor documents routes  
+  app.use('/api/vendor-documents', vendorDocumentRouter);
+
   // Quality control and maintenance routes
   app.use('/api/quality', qualityRoutes);
 
@@ -89,6 +112,12 @@ export function registerRoutes(app: Express): Server {
 
   // BOM management routes
   app.use('/api/boms', bomsRoutes);
+  
+  // Robust BOM management routes (P2 Enhanced)
+  app.use('/api/robust-bom', robustBomRoutes);
+  
+  // P2 BOM management routes (CRUD)
+  app.use('/api/p2-boms', p2BomsRoutes);
 
   // Communications management routes
   app.use('/api/communications', communicationsRoutes);
@@ -121,7 +150,25 @@ export function registerRoutes(app: Express): Server {
 
   // Refund management routes
   app.use('/api/refund-requests', refundRoutes);
+
+  // Vendor management routes
+  app.use('/api/vendors', vendorRoutes);
   
+
+
+
+  // app.use('/api', cuttingTableRoutes);
+  // app.use('/api', materialInventoryRoutes);
+  // app.use('/api', defrostScheduleRoutes);
+
+  
+  // MRP and advanced inventory management routes (legacy)
+  app.use('/api/mrp', mrpRoutes);
+
+  // Enhanced system routes (completely separate from legacy)
+  app.use('/api/enhanced', enhancedRoutes);
+  
+
   // UPS Test endpoint
   app.post('/api/test-ups-auth', async (req, res) => {
     try {
@@ -264,7 +311,7 @@ export function registerRoutes(app: Express): Server {
         SELECT 
           id,
           order_id as "orderId",
-          customer,
+          customer_id as "customer",
           product,
           date,
           due_date as "dueDate",
@@ -2669,7 +2716,7 @@ export function registerRoutes(app: Express): Server {
           const labelHeight = 72; // 1" * 72 points/inch
           const columnGap = 9; // 0.125" * 72 points/inch (reduced gap between columns)
           const x = leftMargin + (col * (labelWidth + columnGap));
-          const y = 792 - labelHeight - (row * labelHeight); // Position labels properly from top
+          const y = 792 - labelHeight - (row * labelHeight) - 36; // Position labels properly from top, shifted down 0.5 inches
           
           // Draw label border with clear separation  
           page.drawRectangle({
@@ -2758,68 +2805,101 @@ export function registerRoutes(app: Express): Server {
           const actionLength = (order as any).features?.action_length || 'unknown';
           const modelDisplayName = stockModelMap.get((order as any).modelId) || (order as any).modelId || 'Unknown';
           
-          // Add order information at top - Order ID and Customer Name
-          const customerName = (order as any).customer || '';
-          const orderText = customerName ? `${order.orderId} - ${customerName}` : order.orderId;
-          page.drawText(orderText, {
-            x: x + 8,
-            y: y + 50,
-            size: 11,
-            color: rgb(0, 0, 0),
-          });
-          
-          // Add stock model and action length on same line below barcode
-          page.drawText(`${modelDisplayName} - ${actionLength.toUpperCase()}`, {
-            x: x + 8,
-            y: y + 22,
-            size: 7,
-            color: rgb(0, 0, 0),
-          });
-          
           // Check for special features to add to label
           const features = (order as any).features || {};
-          const specialLabels = [];
           
-          // Extract swivel studs and texture options for color-coded display
-          const swivelStudsText = features.swivel_studs && 
-                                 features.swivel_studs !== 'standard_swivel_studs' && 
-                                 features.swivel_studs !== 'standard' 
-                                 ? features.swivel_studs.replace(/_/g, ' ') : null;
+          // 1. Order ID / Stock Type / Action Length (top line)
+          const orderStockAction = `${order.orderId}/ ${modelDisplayName}/ ${actionLength.toUpperCase()}`;
+          page.drawText(orderStockAction, {
+            x: x + 8,
+            y: y + 50,
+            size: 9,
+            color: rgb(0, 0, 0),
+          });
           
-          const textureText = features.texture_options && 
-                             features.texture_options !== 'no_texture' && 
-                             features.texture_options !== 'none'
-                             ? features.texture_options.replace(/_/g, ' ') : null;
+          // 3. Paint color (below barcode) - check all possible paint fields
+          const paintOption = features.metallic_finishes || features.paint_options || features.paint_options_combined || '';
+          if (paintOption && paintOption !== 'none' && paintOption !== 'no_paint' && paintOption !== 'no_finish') {
+            let paintDisplayText = paintOption;
+            
+            // Handle paint_options_combined format (e.g., "special_effects:carbon_black_tan_camo")
+            if (paintOption.includes(':')) {
+              const parts = paintOption.split(':');
+              paintDisplayText = parts.length > 1 ? parts[1] : parts[0];
+            }
+            
+            // Clean up display text
+            paintDisplayText = paintDisplayText.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase());
+            
+            page.drawText(`Paint: ${paintDisplayText}`, {
+              x: x + 8,
+              y: y + 22,
+              size: 7,
+              color: rgb(0, 0.4, 0.8),
+            });
+          }
           
-          // Check for NSNH (No Swivel Studs No Holes) - this should show as "NSNH"
+          // 4. Due Date
+          const dueDate = (order as any).dueDate;
+          if (dueDate) {
+            const dueDateFormatted = new Date(dueDate).toLocaleDateString('en-US', {
+              month: 'short',
+              day: 'numeric',
+              year: 'numeric'
+            });
+            page.drawText(`Due: ${dueDateFormatted}`, {
+              x: x + 8,
+              y: y + 14,
+              size: 7,
+              color: rgb(0, 0, 0),
+            });
+          }
+          
+          // 5. Texture/Swivel Studs different than standard (NSNH)
+          let specialFeaturesText = '';
+          
+          // Check for NSNH (No Swivel Studs No Holes)
           const hasNSNH = features.swivel_studs === 'no_swivel_studs' || 
                          features.swivel_studs === 'no_swivel_no_holes' ||
                          (features.swivel_studs && features.swivel_studs.includes('no_swivel')) ||
                          (features.swivel_studs && features.swivel_studs.includes('no_holes'));
           
           if (hasNSNH) {
-            specialLabels.push('NSNH');
+            specialFeaturesText = 'NSNH';
+          } else {
+            // Check for non-standard swivel studs
+            const swivelStudsText = features.swivel_studs && 
+                                   features.swivel_studs !== 'standard_swivel_studs' && 
+                                   features.swivel_studs !== 'standard' 
+                                   ? features.swivel_studs.replace(/_/g, ' ').toUpperCase() : null;
+            
+            // Check for texture options
+            const textureText = features.texture_options && 
+                               features.texture_options !== 'no_texture' && 
+                               features.texture_options !== 'none'
+                               ? features.texture_options.replace(/_/g, ' ').toUpperCase() : null;
+            
+            const specialParts = [];
+            if (textureText) specialParts.push(textureText);
+            if (swivelStudsText) specialParts.push(swivelStudsText);
+            
+            if (specialParts.length > 0) {
+              specialFeaturesText = specialParts.join(' / ');
+            }
           }
           
-          // Add non-standard swivel studs (only if it's not a "no swivel" case)
-          if (swivelStudsText && !hasNSNH) {
-            specialLabels.push(`SWIVEL: ${swivelStudsText.toUpperCase()}`);
+          if (specialFeaturesText) {
+            page.drawText(specialFeaturesText, {
+              x: x + 8,
+              y: y + 6,
+              size: 6,
+              color: rgb(0.6, 0, 0.8), // Purple color for special features
+            });
           }
-          
-          // Add texture options in purple (simulated with different style in PDF)
-          if (textureText) {
-            specialLabels.push(`TEXTURE: ${textureText.toUpperCase()}`);
-          }
-          
-          // Carbon Camo Ready
-          if (features.paint_options === 'carbon_camo_ready' ||
-              (features.paint_options && features.paint_options.includes('carbon_camo'))) {
-            specialLabels.push('CARBON CAMO READY');
-          }
+          // (Removed old special labels logic - now handled above in structured format)
           
           
           // Determine barcode color based on specifications
-          const paintOption = features.paint_options || '';
           const modelId = (order as any).modelId || '';
           
           // Check if this order is high priority or late (you can add this logic later)
@@ -2890,50 +2970,8 @@ export function registerRoutes(app: Express): Server {
             }
           };
           
-          // Draw the barcode with appropriate color (blue for terrain/premium/standard paint, black otherwise)
+          // 2. Draw the barcode in the middle (between top info and paint color)
           redrawCode39Barcode(barcodeText, x + 8, y + 32, barcodeColor);
-          
-          
-          // Draw special labels with appropriate colors on separate line below stock model
-          if (specialLabels.length > 0) {
-            let xOffset = x + 8;
-            
-            for (let i = 0; i < specialLabels.length; i++) {
-              const label = specialLabels[i];
-              let textColor = rgb(0, 0, 0); // Default black
-              
-              // Orange for swivel studs
-              if (label.includes('SWIVEL') || label === 'NSNH') {
-                textColor = rgb(1, 0.5, 0); // Orange
-              }
-              // Purple for texture
-              else if (label.includes('TEXTURE')) {
-                textColor = rgb(0.5, 0, 0.8); // Purple
-              }
-              
-              const separator = i > 0 ? ' - ' : '';
-              page.drawText(`${separator}${label}`, {
-                x: xOffset,
-                y: y + 16, // Move special labels higher
-                size: 5,
-                color: textColor,
-              });
-              
-              xOffset += (separator.length + label.length) * 3; // Approximate text width
-            }
-          }
-          
-          // Add due date
-          const dueDate = new Date(order.dueDate).toLocaleDateString('en-US', { 
-            month: 'short', 
-            day: 'numeric' 
-          });
-          page.drawText(`Due: ${dueDate}`, {
-            x: x + 8,
-            y: y + 10,
-            size: 6,
-            color: rgb(0, 0, 0),
-          });
         }
       }
       

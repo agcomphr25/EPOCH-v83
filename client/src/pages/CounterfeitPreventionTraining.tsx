@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import { Download, FileText, Shield, Printer } from 'lucide-react';
-import { generateQuizPDF, generateAttendancePDF, generateCombinedPDF } from '@/components/TrainingPDF';
+import { generateQuizPDF, generateAnswerKeyPDF, generateAttendancePDF, generateCombinedPDF } from '@/components/TrainingPDF';
 
 interface QuizAnswer {
   questionId: string;
@@ -105,8 +105,15 @@ const CounterfeitPreventionTraining: React.FC = () => {
     await generateQuizPDF({
       title: 'Counterfeit Prevention Training - Assessment',
       companyName: 'AG Advanced Technologies LLC',
-      questions: questions,
-      includeAnswerKey: true
+      questions: questions
+    });
+  };
+
+  const handleGenerateAnswerKeyPDF = async () => {
+    await generateAnswerKeyPDF({
+      title: 'Counterfeit Prevention Training - Assessment',
+      companyName: 'AG Advanced Technologies LLC',
+      questions: questions
     });
   };
 
@@ -123,7 +130,7 @@ const CounterfeitPreventionTraining: React.FC = () => {
       title: 'Counterfeit Prevention Training - Complete',
       companyName: 'AG Advanced Technologies LLC',
       questions: questions,
-      includeAnswerKey: true,
+      includeAnswerKey: false,
       attendeeCount: 15
     });
   };
@@ -140,6 +147,10 @@ const CounterfeitPreventionTraining: React.FC = () => {
             <Button onClick={handleGenerateQuizPDF} variant="outline" className="flex items-center gap-2">
               <Download className="h-4 w-4" />
               Quiz PDF
+            </Button>
+            <Button onClick={handleGenerateAnswerKeyPDF} variant="outline" className="flex items-center gap-2">
+              <FileText className="h-4 w-4" />
+              Answer Key
             </Button>
             <Button onClick={handleGenerateAttendancePDF} variant="outline" className="flex items-center gap-2">
               <Download className="h-4 w-4" />

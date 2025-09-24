@@ -456,8 +456,10 @@ export default function VendorPOManager() {
     }
   });
 
+
   // Filter vendor POs (add safety check to ensure vendorPOs is an array)
   const filteredVendorPOs = Array.isArray(vendorPOs) ? vendorPOs.filter(vendorPo => {
+
     const matchesSearch = vendorPo.poNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
       vendorPo.vendorName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       false;

@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import { Download, FileText, Shield, Printer } from 'lucide-react';
 import { PrintLayout } from '@/components/PrintLayout';
-import { generateQuizPDF, generateAttendancePDF } from '@/components/TrainingPDF';
+import { generateQuizPDF, generateAttendancePDF, generateCombinedPDF } from '@/components/TrainingPDF';
 
 interface QuizAnswer {
   questionId: string;
@@ -119,8 +119,14 @@ const CounterfeitPreventionTraining: React.FC = () => {
     });
   };
 
-  const handlePrint = () => {
-    window.print();
+  const handlePrint = async () => {
+    await generateCombinedPDF({
+      title: 'Counterfeit Prevention Training - Complete',
+      companyName: 'AG Advanced Technologies LLC',
+      questions: questions,
+      includeAnswerKey: true,
+      attendeeCount: 15
+    });
   };
 
   return (

@@ -132,15 +132,8 @@ export default function CounterfeitPreventionTraining() {
       interactiveElements.forEach((el, index) => {
         (el as HTMLElement).style.display = originalDisplay[index] || '';
       });
-=======
-import React, { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Label } from '@/components/ui/label';
-import { Input } from '@/components/ui/input';
-import { Separator } from '@/components/ui/separator';
-import { Download, FileText, Shield, Printer } from 'lucide-react';
+    });
+  };
 import { generateQuizPDF, generateAnswerKeyPDF, generateAttendancePDF, generateCombinedPDF } from '@/components/TrainingPDF';
 
 interface QuizAnswer {

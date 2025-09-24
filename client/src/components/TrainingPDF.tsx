@@ -1,6 +1,6 @@
 import { Document, Page, Text, View, StyleSheet, pdf, Image } from '@react-pdf/renderer';
 import { saveAs } from 'file-saver';
-import logoImage from '@assets/logo_1758737066805.png';
+import logoImage from '@assets/logo_updated.png';
 
 // Create styles
 const styles = StyleSheet.create({

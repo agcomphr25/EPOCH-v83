@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link, useLocation } from 'wouter';
-import { Factory, User, FileText, TrendingDown, Plus, Settings, Package, FilePenLine, ClipboardList, BarChart, ChevronDown, ChevronRight, FormInput, PieChart, Scan, Warehouse, Shield, Wrench, Users, TestTube, DollarSign, Receipt, TrendingUp, List, BookOpen, Calendar, CheckSquare, Truck, Mail, MessageSquare, CreditCard, XCircle, Cog, ArrowRight, LogOut, GraduationCap } from "lucide-react";
+
+import { Factory, User, FileText, TrendingDown, Plus, Settings, Package, FilePenLine, ClipboardList, BarChart, ChevronDown, ChevronRight, FormInput, PieChart, Scan, Warehouse, Shield, Wrench, Users, TestTube, DollarSign, Receipt, TrendingUp, List, BookOpen, Calendar, CheckSquare, Truck, Mail, MessageSquare, CreditCard, XCircle, Cog, ArrowRight, LogOut, Scissors, MapPin, Snowflake, ShoppingCart } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import InstallPWAButton from "./InstallPWAButton";
@@ -151,6 +153,12 @@ export default function Navigation() {
       description: 'Manage Bill of Materials for P2 operations'
     },
     {
+      path: '/robust-bom-administration',
+      label: 'P2 Robust BOM',
+      icon: Factory,
+      description: 'Advanced BOM management with lifecycle tracking and cost analysis'
+    },
+    {
       path: '/barcode-scanner',
       label: 'Barcde Scanner',
       icon: Scan,
@@ -192,6 +200,27 @@ export default function Navigation() {
       label: 'Receiving',
       icon: Receipt,
       description: 'Receive incoming inventory'
+    },
+    {
+
+      path: '/inventory/enhanced-mrp',
+      label: 'Enhanced Inventory & MRP',
+      icon: Factory,
+      description: 'Advanced inventory management with material requirements planning'
+    },
+    {
+      path: '/vendors',
+      label: 'Vendor Management',
+      icon: Users,
+      description: 'Manage vendors and suppliers'
+
+    },
+    {
+      path: '/vendor-pos',
+      label: 'Vendor Purchase Orders',
+      icon: ShoppingCart,
+      description: 'Create and manage purchase orders to vendors'
+
     }
   ];
 

@@ -59,9 +59,9 @@ export default function BarcodeQueuePage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
 
-  // Get all orders from production pipeline
+  // Get all customer orders from production pipeline
   const { data: allOrders = [] } = useQuery({
-    queryKey: ['/api/orders/with-payment-status'],
+    queryKey: ['/api/orders'],
   });
 
   // Fetch all kickbacks to determine which orders have kickbacks
@@ -132,7 +132,7 @@ export default function BarcodeQueuePage() {
     },
     onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['/api/kickbacks'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
       setKickbackModalOpen(false);
       kickbackForm.reset();
       
@@ -327,7 +327,7 @@ export default function BarcodeQueuePage() {
       setSelectedOrders(new Set());
       setSelectAll(false);
       // Refetch orders to update the display
-      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
     },
     onError: (error) => {
       toast({
@@ -1076,7 +1076,7 @@ export default function BarcodeQueuePage() {
                   <FormItem>
                     <FormLabel>Reported By *</FormLabel>
                     <FormControl>
-                      <Input placeholder="Your name" {...field} />
+                      <Input id="reportedBy" autoComplete="name" placeholder="Your name" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

@@ -301,10 +301,6 @@ export default function AllOrdersList() {
     }
   });
 
-  const departments = [
-    'P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 'Gunsmith', 'Finish', 'Finish QC', 'Paint', 'Shipping'
-  ];
-
   const getNextDepartment = (currentDepartment: string, orderFeatures?: any) => {
     // Handle alternative department names
     const normalizedDepartment = currentDepartment === 'Layup' ? 'Layup/Plugging' : currentDepartment;

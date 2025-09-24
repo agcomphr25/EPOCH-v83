@@ -281,6 +281,29 @@ export default function Navigation() {
       label: 'Document Management',
       icon: FileText,
       description: 'Unified document repository with advanced tagging and organization'
+
+    },
+  ];
+
+  const trainingItems = [
+    {
+      path: '/shutdown-training',
+      label: 'Shutdown Training',
+      icon: GraduationCap,
+      description: 'Presentation-style shutdown procedures training with attendance signatures'
+    },
+    {
+      path: '/fire-safety-training',
+      label: 'Fire Safety Training',
+      icon: GraduationCap,
+      description: 'Presentation-style fire safety training with attendance signatures'
+    },
+    {
+      path: '/counterfeit-prevention-training',
+      label: 'Counterfeit Prevention Training',
+      icon: Shield,
+      description: 'Comprehensive counterfeit materials prevention training with multiple choice quiz'
+
     }
   ];
 

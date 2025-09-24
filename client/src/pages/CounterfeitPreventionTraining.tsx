@@ -102,8 +102,8 @@ const CounterfeitPreventionTraining: React.FC = () => {
     });
   };
 
-  const generatePrintablePDF = () => {
-    const element = document.getElementById('printable-training-content');
+  const generateQuizPDF = () => {
+    const element = document.getElementById('printable-quiz-content');
     if (!element) return;
 
     // Temporarily make the element visible for PDF generation
@@ -112,7 +112,29 @@ const CounterfeitPreventionTraining: React.FC = () => {
     
     const opt = {
       margin: 0.5,
-      filename: `Counterfeit_Prevention_Training_Printable_${new Date().toISOString().split('T')[0]}.pdf`,
+      filename: `Counterfeit_Prevention_Quiz_${new Date().toISOString().split('T')[0]}.pdf`,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { scale: 2 },
+      jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
+    };
+
+    html2pdf().set(opt).from(element).save().then(() => {
+      // Restore original classes after PDF generation
+      element.className = originalClasses;
+    });
+  };
+
+  const generateAttendancePDF = () => {
+    const element = document.getElementById('printable-attendance-content');
+    if (!element) return;
+
+    // Temporarily make the element visible for PDF generation
+    const originalClasses = element.className;
+    element.className = element.className.replace('hidden', '').replace('print:block', 'block');
+    
+    const opt = {
+      margin: 0.5,
+      filename: `Counterfeit_Prevention_Attendance_${new Date().toISOString().split('T')[0]}.pdf`,
       image: { type: 'jpeg', quality: 0.98 },
       html2canvas: { scale: 2 },
       jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
@@ -137,13 +159,17 @@ const CounterfeitPreventionTraining: React.FC = () => {
             <h1 className="text-3xl font-bold text-gray-900">Counterfeit Prevention Training</h1>
           </div>
           <div className="flex items-center gap-2">
-            <Button onClick={generatePrintablePDF} variant="outline" className="flex items-center gap-2">
+            <Button onClick={generateQuizPDF} variant="outline" className="flex items-center gap-2">
               <Download className="h-4 w-4" />
-              Download Printable PDF
+              Quiz PDF
+            </Button>
+            <Button onClick={generateAttendancePDF} variant="outline" className="flex items-center gap-2">
+              <Download className="h-4 w-4" />
+              Attendance PDF
             </Button>
             <Button onClick={handlePrint} className="flex items-center gap-2">
               <Printer className="h-4 w-4" />
-              Print
+              Print All
             </Button>
           </div>
         </div>
@@ -389,149 +415,15 @@ const CounterfeitPreventionTraining: React.FC = () => {
           </Card>
         </div>
 
-        {/* Printable Content - Hidden on screen, visible in print */}
-        <div id="printable-training-content" className="hidden print:block">
+        {/* Quiz Printable Content - Hidden on screen, visible in print */}
+        <div id="printable-quiz-content" className="hidden print:block">
           <PrintLayout
-            title="Counterfeit Materials Prevention Training"
+            title="Counterfeit Prevention Training - Assessment"
             companyName="AG Advanced Technologies LLC"
-            includeSignatures={true}
-            attendeeCount={15}
+            includeSignatures={false}
+            attendeeCount={0}
           >
-            {/* Introduction */}
             <div className="mb-6">
-              <h2 className="text-lg font-semibold mb-3">Introduction</h2>
-              <p className="mb-3">Counterfeiting is growing in exponential proportions with respect to the types of:</p>
-              <ol className="list-decimal pl-6 space-y-1">
-                <li>Products being counterfeited</li>
-                <li>Industries affected</li>
-                <li>Potential consequences caused by counterfeits</li>
-              </ol>
-              <p className="mt-3">
-                If this threat is not adequately addressed, counterfeit items have the potential to seriously compromise the safety and operational effectiveness of our products.
-              </p>
-            </div>
-
-            {/* Reference */}
-            <div className="mb-6">
-              <h2 className="text-lg font-semibold mb-3">Reference</h2>
-              <ul className="space-y-1 list-disc pl-6">
-                <li>AS9100(D) Section 8.1.4</li>
-                <li>Quality Manual Section 8.1.4</li>
-                <li>Process Manual Section 3.13</li>
-              </ul>
-            </div>
-
-            {/* Purpose */}
-            <div className="mb-6">
-              <h2 className="text-lg font-semibold mb-3">Purpose</h2>
-              <p className="mb-3">The objective of this training is to raise awareness of:</p>
-              <ol className="list-decimal pl-6 space-y-1">
-                <li>The risks and impacts of counterfeit parts infiltrating the supply chain</li>
-                <li>Best practices to eliminate or mitigate those risks</li>
-                <li>The AG Composites counterfeit prevention requirements for suppliers</li>
-              </ol>
-            </div>
-
-            {/* Impact of Counterfeit Parts */}
-            <div className="mb-6">
-              <h2 className="text-lg font-semibold mb-3">Impact of Counterfeit Parts</h2>
-              <p className="mb-3">Counterfeit parts can cause:</p>
-              <ol className="list-decimal pl-6 space-y-1">
-                <li>Personal injury</li>
-                <li>Mission failure</li>
-                <li>Reduced reliability and product recall</li>
-                <li>Potential loss of contracts</li>
-                <li>Shutdown of manufacturing lines</li>
-                <li>Negative cost and schedule impacts</li>
-                <li>Penalties for companies and individuals</li>
-                <li>Damage to our image</li>
-              </ol>
-            </div>
-
-            {/* Procedure - Avoidance */}
-            <div className="mb-6">
-              <h2 className="text-lg font-semibold mb-3">Procedure - Avoidance</h2>
-              <ol className="list-decimal pl-6 space-y-2">
-                <li>Procuring directly from the Original Component or Equipment manufacturer (OCM/OEM) is the lowest risk.</li>
-                <li>OCM Authorized Distributors are the next lowest risk.
-                  <ol className="list-[lower-alpha] pl-6 mt-1 space-y-1">
-                    <li>OCM Authorized distributors have documented sales agreements with manufacturers.</li>
-                    <li>Inventory manager should verify authorized distributor status with the manufacturer.</li>
-                  </ol>
-                </li>
-                <li>AG POs require suppliers to use OCMs or their authorized sources for products that will be delivered to Lockheed Martin.</li>
-              </ol>
-            </div>
-
-            {/* AG Supplier Requirements */}
-            <div className="mb-6 p-4 border border-gray-800 rounded">
-              <h2 className="text-lg font-semibold mb-3">AG Supplier Requirements</h2>
-              <p className="text-sm">
-                <strong>PREVENTION OF COUNTERFEIT PARTS:</strong> Suppliers shall ensure through their processes and/or a formal program against the receipt of counterfeit materials into their inventory, against their use in manufacturing, and against their being sold to other suppliers. Supplier shall not deliver counterfeit work or suspect counterfeit work to AG Advanced Technologies. All parts and materials shall be procured only through Original Equipment Manufacturers (OEMs)/Original Component Manufacturers (OCMs) or their franchised dealer or distributors unless pre-approval has been granted by AG Advanced Technologies. Knowingly supplying material deemed or suspected as counterfeit will be considered unethical business practice and would result in a supplier investigation, reporting and possible removal from AG Advanced Technologies Approved Supplier list.
-              </p>
-            </div>
-
-            {/* Procedure - Detection */}
-            <div className="mb-6">
-              <h2 className="text-lg font-semibold mb-3">Procedure - Detection</h2>
-              <p className="mb-3">Identify the issue: Carefully inspect the items and identify any visual discrepancies or inconsistencies that suggest they may be counterfeit.</p>
-              
-              <h3 className="font-semibold mb-3">Red Flags:</h3>
-              <div className="grid grid-cols-2 gap-2 text-sm">
-                <div className="space-y-1">
-                  <div>🚩 No certificate of conformance</div>
-                  <div>🚩 Item marking issues</div>
-                  <div>🚩 Package issues</div>
-                  <div>🚩 Obsolete item</div>
-                  <div>🚩 Unknown supplier</div>
-                </div>
-                <div className="space-y-1">
-                  <div>❌ Batch/lot # issues</div>
-                  <div>❌ Spelling/return address unknown</div>
-                  <div>❌ Doesn't match previous items</div>
-                  <div>❌ Poor quality or materials</div>
-                </div>
-              </div>
-            </div>
-
-            {/* Procedure - Mitigation */}
-            <div className="mb-6">
-              <h2 className="text-lg font-semibold mb-3">Procedure - Mitigation</h2>
-              <ol className="list-decimal pl-6 space-y-2 text-sm">
-                <li><strong>Isolate the parts:</strong> Quarantine the suspect counterfeit parts to prevent them from entering the production line or being used in any product.</li>
-                <li><strong>Document thoroughly:</strong> Create detailed documentation including photos, part numbers, lot numbers, supplier information, and any evidence of the suspected counterfeiting.</li>
-                <li><strong>Inform your supplier:</strong> Provide evidence and request an explanation. If necessary, require corrective action from the supplier.</li>
-                <li><strong>Conduct an internal investigation:</strong> Determine the extent of the problem and potential risks within the supply chain.</li>
-                <li><strong>Communicate with the customer:</strong> Rework, replace, or repair any fielded product in conjunction with customer input.</li>
-                <li><strong>Determine if the authorities should be notified</strong> and which authorities. (FAA, local police, FBI, etc.)</li>
-              </ol>
-            </div>
-
-            {/* Procedure - Disposition */}
-            <div className="mb-6">
-              <h2 className="text-lg font-semibold mb-3">Procedure - Disposition</h2>
-              <ol className="list-decimal pl-6 space-y-2 text-sm">
-                <li>Store counterfeit parts or materials in quarantine, clearly identified as nonconforming/counterfeit product pending a review by your organization's management and legal representation.</li>
-                <li>Do not return Counterfeit to the supplier in such a way that they could be reintroduced into the supply chain to be sold again to another victim.</li>
-                <li>Legal authorities may be contacted to initiate an investigation into the counterfeiting activity. Parts may be required as evidence.</li>
-                <li>Upon conclusion of any investigation, upper management will authorize the disposition and method for disposing of any suspect/counterfeit items.</li>
-              </ol>
-            </div>
-
-            {/* Conclusion */}
-            <div className="mb-8 p-4 border border-gray-800 rounded">
-              <h2 className="text-lg font-semibold mb-3">Conclusion</h2>
-              <ul className="space-y-2 text-sm">
-                <li>➔ Counterfeit materials are a serious threat and can compromise the integrity of the important products we provide.</li>
-                <li>➔ The use of Original Component or Equipment manufacturers and their authorized sources results in the least risk for counterfeit items infiltrating our products.</li>
-                <li>➔ If you suspect counterfeit items may have been supplied to AG, you must notify the quality manager immediately.</li>
-                <li>➔ Counterfeit risk must be controlled throughout the entire supply chain.</li>
-                <li>➔ Thank you for your continued efforts to ensure counterfeit components do not infiltrate our supply chains.</li>
-              </ul>
-            </div>
-
-            {/* Training Assessment Section */}
-            <div className="page-break">
               <h2 className="text-lg font-semibold mb-4">Training Assessment</h2>
               <p className="mb-6 text-sm">Please complete this assessment to demonstrate understanding of counterfeit prevention procedures. Circle the correct answer for each question.</p>
               
@@ -595,6 +487,43 @@ const CounterfeitPreventionTraining: React.FC = () => {
                     <div>D) Nothing, as long as they provide a refund</div>
                   </div>
                 </div>
+              </div>
+
+              {/* Answer key section for instructor */}
+              <div className="mt-12 pt-8 border-t-2 border-gray-400">
+                <h3 className="text-md font-semibold mb-4">Answer Key (For Instructor Use Only)</h3>
+                <div className="grid grid-cols-3 gap-4 text-sm">
+                  <div>1. B) Safety hazards and quality control failures</div>
+                  <div>2. B) Pricing significantly below market value</div>
+                  <div>3. C) Immediately upon discovery</div>
+                  <div>4. C) Original Component or Equipment manufacturers (OCM/OEM)</div>
+                  <div>5. B) Quarantine the part and document thoroughly</div>
+                  <div>6. C) Investigation and possible removal from approved supplier list</div>
+                </div>
+              </div>
+            </div>
+          </PrintLayout>
+        </div>
+
+        {/* Attendance Printable Content - Hidden on screen, visible in print */}
+        <div id="printable-attendance-content" className="hidden print:block">
+          <PrintLayout
+            title="Counterfeit Prevention Training - Attendance"
+            companyName="AG Advanced Technologies LLC"
+            includeSignatures={true}
+            attendeeCount={15}
+          >
+            <div className="mb-6">
+              <h2 className="text-lg font-semibold mb-4">Training Attendance Record</h2>
+              <p className="mb-4 text-sm">
+                All attendees must sign below to confirm participation in the Counterfeit Prevention Training session.
+              </p>
+              <div className="mb-4 text-sm">
+                <p><strong>Training Topic:</strong> Counterfeit Materials Prevention</p>
+                <p><strong>Training Date:</strong> ___________________</p>
+                <p><strong>Training Duration:</strong> ___________________</p>
+                <p><strong>Training Location:</strong> ___________________</p>
+                <p><strong>Instructor:</strong> ___________________</p>
               </div>
             </div>
           </PrintLayout>

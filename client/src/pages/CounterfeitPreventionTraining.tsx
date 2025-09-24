@@ -6,7 +6,6 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import { Download, FileText, Shield, Printer } from 'lucide-react';
-import { PrintLayout } from '@/components/PrintLayout';
 import { generateQuizPDF, generateAttendancePDF, generateCombinedPDF } from '@/components/TrainingPDF';
 
 interface QuizAnswer {
@@ -394,118 +393,6 @@ const CounterfeitPreventionTraining: React.FC = () => {
           </Card>
         </div>
 
-        {/* Quiz Printable Content - Hidden on screen, visible in print */}
-        <div id="printable-quiz-content" className="hidden print:block">
-          <PrintLayout
-            title="Counterfeit Prevention Training - Assessment"
-            companyName="AG Advanced Technologies LLC"
-            includeSignatures={false}
-            attendeeCount={0}
-          >
-            <div className="mb-6">
-              <h2 className="text-lg font-semibold mb-4">Training Assessment</h2>
-              <p className="mb-6 text-sm">Please complete this assessment to demonstrate understanding of counterfeit prevention procedures. Circle the correct answer for each question.</p>
-              
-              <div className="space-y-6">
-                <div>
-                  <p className="font-medium mb-2">1. What is the primary concern when dealing with counterfeit materials in manufacturing?</p>
-                  <div className="pl-4 space-y-1 text-sm">
-                    <div>A) Cost savings from cheaper materials</div>
-                    <div>B) Safety hazards and quality control failures</div>
-                    <div>C) Improved production efficiency</div>
-                    <div>D) Better supplier relationships</div>
-                  </div>
-                </div>
-
-                <div>
-                  <p className="font-medium mb-2">2. Which of the following is a key indicator of potentially counterfeit parts?</p>
-                  <div className="pl-4 space-y-1 text-sm">
-                    <div>A) Parts arrive ahead of schedule</div>
-                    <div>B) Pricing significantly below market value</div>
-                    <div>C) Parts have extra documentation</div>
-                    <div>D) Supplier offers extended warranty</div>
-                  </div>
-                </div>
-
-                <div>
-                  <p className="font-medium mb-2">3. When should you report suspected counterfeit materials?</p>
-                  <div className="pl-4 space-y-1 text-sm">
-                    <div>A) Only after completing production</div>
-                    <div>B) At the end of the work week</div>
-                    <div>C) Immediately upon discovery</div>
-                    <div>D) During the next scheduled meeting</div>
-                  </div>
-                </div>
-
-                <div>
-                  <p className="font-medium mb-2">4. What is the lowest risk method for parts procurement?</p>
-                  <div className="pl-4 space-y-1 text-sm">
-                    <div>A) Online marketplaces</div>
-                    <div>B) Lowest bidder regardless of source</div>
-                    <div>C) Original Component or Equipment manufacturers (OCM/OEM)</div>
-                    <div>D) Unauthorized distributors with good prices</div>
-                  </div>
-                </div>
-
-                <div>
-                  <p className="font-medium mb-2">5. If you suspect a part is counterfeit, what should you do first?</p>
-                  <div className="pl-4 space-y-1 text-sm">
-                    <div>A) Use it anyway if it looks close enough</div>
-                    <div>B) Quarantine the part and document thoroughly</div>
-                    <div>C) Return it to the supplier immediately</div>
-                    <div>D) Ask a coworker for their opinion</div>
-                  </div>
-                </div>
-
-                <div>
-                  <p className="font-medium mb-2">6. According to AG policy, what happens to suppliers who knowingly provide counterfeit materials?</p>
-                  <div className="pl-4 space-y-1 text-sm">
-                    <div>A) They receive a warning letter</div>
-                    <div>B) They get a discount on future orders</div>
-                    <div>C) Investigation and possible removal from approved supplier list</div>
-                    <div>D) Nothing, as long as they provide a refund</div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Answer key section for instructor */}
-              <div className="mt-12 pt-8 border-t-2 border-gray-400">
-                <h3 className="text-md font-semibold mb-4">Answer Key (For Instructor Use Only)</h3>
-                <div className="grid grid-cols-3 gap-4 text-sm">
-                  {questions.map((question, index) => (
-                    <div key={question.id}>
-                      {index + 1}. {question.correctAnswer}) {question.options.find(opt => opt.charAt(0) === question.correctAnswer)?.substring(3)}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </PrintLayout>
-        </div>
-
-        {/* Attendance Printable Content - Hidden on screen, visible in print */}
-        <div id="printable-attendance-content" className="hidden print:block">
-          <PrintLayout
-            title="Counterfeit Prevention Training - Attendance"
-            companyName="AG Advanced Technologies LLC"
-            includeSignatures={true}
-            attendeeCount={15}
-          >
-            <div className="mb-6">
-              <h2 className="text-lg font-semibold mb-4">Training Attendance Record</h2>
-              <p className="mb-4 text-sm">
-                All attendees must sign below to confirm participation in the Counterfeit Prevention Training session.
-              </p>
-              <div className="mb-4 text-sm">
-                <p><strong>Training Topic:</strong> Counterfeit Materials Prevention</p>
-                <p><strong>Training Date:</strong> ___________________</p>
-                <p><strong>Training Duration:</strong> ___________________</p>
-                <p><strong>Training Location:</strong> ___________________</p>
-                <p><strong>Instructor:</strong> ___________________</p>
-              </div>
-            </div>
-          </PrintLayout>
-        </div>
       </div>
     </div>
   );

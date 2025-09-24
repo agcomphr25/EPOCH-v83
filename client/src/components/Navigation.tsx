@@ -70,6 +70,7 @@ export default function Navigation() {
 
   const [verifiedModulesExpanded, setVerifiedModulesExpanded] = useState(false);
   const [formsReportsExpanded, setFormsReportsExpanded] = useState(false);
+  const [trainingExpanded, setTrainingExpanded] = useState(false);
   const [inventoryExpanded, setInventoryExpanded] = useState(false);
   const [employeesExpanded, setEmployeesExpanded] = useState(false);
   const [qcMaintenanceExpanded, setQcMaintenanceExpanded] = useState(false);
@@ -82,6 +83,7 @@ export default function Navigation() {
   // Helper function to close all dropdowns
   const closeAllDropdowns = useCallback(() => {
     setFormsReportsExpanded(false);
+    setTrainingExpanded(false);
     setInventoryExpanded(false);
     setQcMaintenanceExpanded(false);
     setEmployeesExpanded(false);
@@ -100,6 +102,7 @@ export default function Navigation() {
     // Close other dropdowns when opening a new one
     if (!isExpanded) {
       if (dropdownName !== 'formsReports') setFormsReportsExpanded(false);
+      if (dropdownName !== 'training') setTrainingExpanded(false);
       if (dropdownName !== 'inventory') setInventoryExpanded(false);
       if (dropdownName !== 'qcMaintenance') setQcMaintenanceExpanded(false);
       if (dropdownName !== 'employees') setEmployeesExpanded(false);
@@ -278,7 +281,11 @@ export default function Navigation() {
       label: 'Document Management',
       icon: FileText,
       description: 'Unified document repository with advanced tagging and organization'
+
     },
+  ];
+
+  const trainingItems = [
     {
       path: '/shutdown-training',
       label: 'Shutdown Training',
@@ -290,6 +297,13 @@ export default function Navigation() {
       label: 'Fire Safety Training',
       icon: GraduationCap,
       description: 'Presentation-style fire safety training with attendance signatures'
+    },
+    {
+      path: '/counterfeit-prevention-training',
+      label: 'Counterfeit Prevention Training',
+      icon: Shield,
+      description: 'Comprehensive counterfeit materials prevention training with multiple choice quiz'
+
     }
   ];
 
@@ -311,6 +325,21 @@ export default function Navigation() {
       label: 'Maintenance',
       icon: Wrench,
       description: 'Preventive maintenance schedules'
+    }
+  ];
+
+  const trainingItems = [
+    {
+      path: '/shutdown-training',
+      label: 'Shutdown Training',
+      icon: GraduationCap,
+      description: 'Presentation-style shutdown procedures training with attendance signatures'
+    },
+    {
+      path: '/counterfeit-prevention-training',
+      label: 'Counterfeit Prevention Training',
+      icon: Shield,
+      description: 'Comprehensive counterfeit materials prevention training with multiple choice quiz'
     }
   ];
 
@@ -601,6 +630,7 @@ export default function Navigation() {
 
   const isVerifiedModulesActive = verifiedModulesItems.some(item => location === item.path);
   const isFormsReportsActive = formsReportsItems.some(item => location === item.path);
+  const isTrainingActive = trainingItems.some(item => location === item.path);
   const isInventoryActive = inventoryItems.some(item => location === item.path);
   const isQcMaintenanceActive = qcMaintenanceItems.some(item => location === item.path);
   const isEmployeesActive = employeesItems.some(item => location === item.path);
@@ -623,6 +653,9 @@ export default function Navigation() {
       }
       if (isFormsReportsActive) {
         setFormsReportsExpanded(true);
+      }
+      if (isTrainingActive) {
+        setTrainingExpanded(true);
       }
       if (isInventoryActive) {
         setInventoryExpanded(true);
@@ -651,7 +684,7 @@ export default function Navigation() {
     }, 100); // Small delay to prevent conflicts with manual dropdown closing
 
     return () => clearTimeout(timer);
-  }, [isVerifiedModulesActive, isFormsReportsActive, isInventoryActive, isQcMaintenanceActive, isEmployeesActive, isFinanceActive, isUserDashboardsActive, isPurchaseOrdersActive, isProductionSchedulingActive, isDepartmentQueueActive]);
+  }, [isVerifiedModulesActive, isFormsReportsActive, isTrainingActive, isInventoryActive, isQcMaintenanceActive, isEmployeesActive, isFinanceActive, isUserDashboardsActive, isPurchaseOrdersActive, isProductionSchedulingActive, isDepartmentQueueActive]);
 
   return (
     <header className="bg-white shadow-sm border-b border-gray-200">
@@ -718,6 +751,50 @@ export default function Navigation() {
               {formsReportsExpanded && (
                 <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
                   {formsReportsItems.map((item) => {
+                    const Icon = item.icon;
+                    const isActive = location === item.path;
+
+                    return (
+                      <Link key={item.path} href={item.path}>
+                        <button
+                          className={cn(
+                            "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
+                            isActive && "bg-primary text-white hover:bg-primary"
+                          )}
+                          onClick={closeAllDropdowns}
+                        >
+                          <Icon className="h-4 w-4" />
+                          {item.label}
+                        </button>
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Training Dropdown */}
+            <div className="relative">
+              <Button
+                variant={isTrainingActive ? "default" : "ghost"}
+                className={cn(
+                  "flex items-center gap-2 text-sm",
+                  isTrainingActive && "bg-primary text-white"
+                )}
+                onClick={() => toggleDropdown('training', trainingExpanded, setTrainingExpanded)}
+              >
+                <GraduationCap className="h-4 w-4" />
+                Training
+                {trainingExpanded ? (
+                  <ChevronDown className="h-4 w-4" />
+                ) : (
+                  <ChevronRight className="h-4 w-4" />
+                )}
+              </Button>
+
+              {trainingExpanded && (
+                <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
+                  {trainingItems.map((item) => {
                     const Icon = item.icon;
                     const isActive = location === item.path;
 

@@ -281,6 +281,7 @@ export default function Navigation() {
       label: 'Document Management',
       icon: FileText,
       description: 'Unified document repository with advanced tagging and organization'
+
     },
   ];
 
@@ -302,6 +303,7 @@ export default function Navigation() {
       label: 'Counterfeit Prevention Training',
       icon: Shield,
       description: 'Comprehensive counterfeit materials prevention training with multiple choice quiz'
+
     }
   ];
 
@@ -323,6 +325,21 @@ export default function Navigation() {
       label: 'Maintenance',
       icon: Wrench,
       description: 'Preventive maintenance schedules'
+    }
+  ];
+
+  const trainingItems = [
+    {
+      path: '/shutdown-training',
+      label: 'Shutdown Training',
+      icon: GraduationCap,
+      description: 'Presentation-style shutdown procedures training with attendance signatures'
+    },
+    {
+      path: '/counterfeit-prevention-training',
+      label: 'Counterfeit Prevention Training',
+      icon: Shield,
+      description: 'Comprehensive counterfeit materials prevention training with multiple choice quiz'
     }
   ];
 

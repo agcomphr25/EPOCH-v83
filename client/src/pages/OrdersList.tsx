@@ -165,7 +165,7 @@ export default function OrdersList() {
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status/paginated'] });
       showToast({
         title: "Order Cancelled",
         description: "The order has been cancelled successfully.",
@@ -289,7 +289,7 @@ export default function OrdersList() {
         newSet.delete(variables.orderId);
         return newSet;
       });
-      queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status/paginated'] });
       toast.error('Failed to update department');
     }
   });
@@ -411,11 +411,14 @@ export default function OrdersList() {
   };
 
   try {
-  const { data: orders, isLoading, error } = useQuery<Order[]>({
-    queryKey: ['/api/orders'],
+  const { data: ordersResponse, isLoading, error } = useQuery({
+    queryKey: ['/api/orders/with-payment-status/paginated', 'ordersList'],
+    queryFn: () => apiRequest('/api/orders/with-payment-status/paginated?page=1&limit=1000'),
     staleTime: 30000, // 30 seconds
     gcTime: 60000, // 1 minute
   });
+  
+  const orders: Order[] = ordersResponse?.orders || [];
 
 
     const { data: customers } = useQuery<Customer[]>({

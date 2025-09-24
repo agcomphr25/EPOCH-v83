@@ -142,8 +142,8 @@ interface TrainingPDFProps {
   content?: string[];
 }
 
-// Quiz PDF Document Component
-const QuizPDFDocument = ({ title, companyName, questions = [], includeAnswerKey = true }: TrainingPDFProps) => (
+// Quiz PDF Document Component (without answer key, with signature)
+const QuizPDFDocument = ({ title, companyName, questions = [] }: TrainingPDFProps) => (
   <Document>
     <Page size="A4" style={styles.page}>
       <View style={styles.header}>
@@ -172,18 +172,72 @@ const QuizPDFDocument = ({ title, companyName, questions = [], includeAnswerKey 
         ))}
       </View>
 
-      {includeAnswerKey && questions.length > 0 && (
-        <View style={styles.answerKey}>
-          <Text style={styles.answerKeyTitle}>Answer Key (For Instructor Use Only)</Text>
-          <View style={styles.answerGrid}>
-            {questions.map((question, index) => (
-              <Text key={question.id} style={styles.answerItem}>
-                {index + 1}. {question.correctAnswer}) {question.options.find(opt => opt.charAt(0) === question.correctAnswer)?.substring(3)}
-              </Text>
-            ))}
+      {/* Signature Section */}
+      <View style={{ marginTop: 30, paddingTop: 15, borderTopWidth: 1, borderTopStyle: 'solid', borderTopColor: '#9CA3AF' }}>
+        <Text style={{ fontSize: 12, fontWeight: 'bold', marginBottom: 15, color: '#1F2937' }}>
+          Training Completion Certification
+        </Text>
+        
+        <View style={{ flexDirection: 'row', marginBottom: 15 }}>
+          <View style={{ flex: 1, marginRight: 20 }}>
+            <Text style={{ fontSize: 10, marginBottom: 20, color: '#374151' }}>Employee Name (Print):</Text>
+            <View style={{ borderBottomWidth: 1, borderBottomStyle: 'solid', borderBottomColor: '#000', minHeight: 15, marginBottom: 5 }}></View>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 10, marginBottom: 20, color: '#374151' }}>Date:</Text>
+            <View style={{ borderBottomWidth: 1, borderBottomStyle: 'solid', borderBottomColor: '#000', minHeight: 15, marginBottom: 5 }}></View>
           </View>
         </View>
-      )}
+
+        <View style={{ flexDirection: 'row', marginBottom: 15 }}>
+          <View style={{ flex: 1, marginRight: 20 }}>
+            <Text style={{ fontSize: 10, marginBottom: 20, color: '#374151' }}>Employee Signature:</Text>
+            <View style={{ borderBottomWidth: 1, borderBottomStyle: 'solid', borderBottomColor: '#000', minHeight: 15, marginBottom: 5 }}></View>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 10, marginBottom: 20, color: '#374151' }}>Score: _____ / {questions.length}</Text>
+            <View style={{ borderBottomWidth: 1, borderBottomStyle: 'solid', borderBottomColor: '#000', minHeight: 15, marginBottom: 5 }}></View>
+          </View>
+        </View>
+
+        <View style={{ marginTop: 15 }}>
+          <Text style={{ fontSize: 10, marginBottom: 20, color: '#374151' }}>Instructor Signature:</Text>
+          <View style={{ borderBottomWidth: 1, borderBottomStyle: 'solid', borderBottomColor: '#000', minHeight: 15, marginBottom: 5 }}></View>
+        </View>
+      </View>
+    </Page>
+  </Document>
+);
+
+// Answer Key PDF Document Component
+const AnswerKeyPDFDocument = ({ title, companyName, questions = [] }: TrainingPDFProps) => (
+  <Document>
+    <Page size="A4" style={styles.page}>
+      <View style={styles.header}>
+        <Text style={styles.companyName}>{companyName}</Text>
+        <Text style={styles.title}>{title.replace(' - Assessment', ' - Answer Key')}</Text>
+        <Text style={styles.subtitle}>Responsive • Reliable • Supportive</Text>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Answer Key (For Instructor Use Only)</Text>
+        <Text style={{ fontSize: 10, marginBottom: 15, color: '#6B7280' }}>
+          Correct answers for the training assessment questions.
+        </Text>
+        
+        <View style={styles.answerGrid}>
+          {questions.map((question, index) => (
+            <View key={question.id} style={{ marginBottom: 15 }}>
+              <Text style={{ fontSize: 11, fontWeight: 'bold', marginBottom: 5, color: '#374151' }}>
+                {index + 1}. {question.question}
+              </Text>
+              <Text style={{ fontSize: 10, color: '#059669', fontWeight: 'bold' }}>
+                Answer: {question.correctAnswer}) {question.options.find(opt => opt.charAt(0) === question.correctAnswer)?.substring(3)}
+              </Text>
+            </View>
+          ))}
+        </View>
+      </View>
     </Page>
   </Document>
 );
@@ -264,6 +318,14 @@ export const generateQuizPDF = async (props: TrainingPDFProps) => {
   const asPdf = pdf(doc);
   const blob = await asPdf.toBlob();
   const filename = `${props.title.replace(/[^a-zA-Z0-9]/g, '_')}_Quiz_${new Date().toISOString().split('T')[0]}.pdf`;
+  saveAs(blob, filename);
+};
+
+export const generateAnswerKeyPDF = async (props: TrainingPDFProps) => {
+  const doc = <AnswerKeyPDFDocument {...props} />;
+  const asPdf = pdf(doc);
+  const blob = await asPdf.toBlob();
+  const filename = `${props.title.replace(/[^a-zA-Z0-9]/g, '_')}_Answer_Key_${new Date().toISOString().split('T')[0]}.pdf`;
   saveAs(blob, filename);
 };
 

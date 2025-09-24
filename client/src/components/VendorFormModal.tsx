@@ -9,6 +9,7 @@ import { z } from 'zod';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
@@ -152,6 +153,7 @@ export default function VendorFormModal({
   vendor,
   mode = 'create'
 }: VendorFormModalProps) {
+  const isEditing = mode === 'edit';
   const [activeTab, setActiveTab] = useState('basic');
   const [documents, setDocuments] = useState<VendorDocument[]>([]);
   const [isUploadingDocument, setIsUploadingDocument] = useState(false);
@@ -514,7 +516,6 @@ export default function VendorFormModal({
       });
 
       queryClient.invalidateQueries({ queryKey: ["/api/vendors"] });
-      onSaved();
       onClose();
 
     },
@@ -731,7 +732,7 @@ export default function VendorFormModal({
       });
 
       queryClient.invalidateQueries({ queryKey: ["/api/vendors"] });
-      onSaved();
+      onClose();
 
     },
     onError: (error: any) => {
@@ -747,7 +748,7 @@ export default function VendorFormModal({
   const isPending = createVendorMutation.isPending || updateVendorMutation.isPending;
 
   return (
-    <Dialog open={open} onOpenChange={onClose}>
+    <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto" data-testid="dialog-vendor-form">
         <DialogHeader>
           <DialogTitle data-testid="text-vendor-form-title">

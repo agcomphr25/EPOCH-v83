@@ -9,33 +9,22 @@ interface DeploymentAuthWrapperProps {
 function isDeploymentEnvironment(): boolean {
   const hostname = window.location.hostname;
   
-  // Check for production deployment domains (same logic as backend)
-  const isProductionDomain = hostname.includes('.replit.app') || 
-                           hostname.includes('.repl.co') || 
-                           import.meta.env.NODE_ENV === 'production';
-  
-  // Development overrides - skip auth for development environments
+  // Development overrides - skip auth for known development environments
   const isLocalhost = hostname.includes('localhost') || hostname.includes('127.0.0.1');
   const isReplitDev = hostname.includes('replit.dev'); // All replit.dev domains (including workspaces)
   const isDevelopment = import.meta.env.NODE_ENV === 'development' || 
                        import.meta.env.VITE_NODE_ENV === 'development' || 
                        import.meta.env.MODE === 'development';
   
-  // Skip auth for development environments
+  // Skip auth for development environments only
   if (isLocalhost || isReplitDev || isDevelopment) {
     console.log('🔧 FRONTEND AUTH BYPASS: Development environment detected, skipping authentication');
     return false;
   }
   
-  // Require auth for production domains
-  if (isProductionDomain) {
-    console.log('🔐 FRONTEND PRODUCTION MODE: Authentication required for deployed site:', hostname);
-    return true;
-  }
-  
-  // Default to no auth for unrecognized domains
-  console.log('🔧 FRONTEND AUTH BYPASS: Unrecognized domain, skipping authentication:', hostname);
-  return false;
+  // All other domains (including custom domains like apcompepoch.xyz) require authentication
+  console.log('🔐 FRONTEND PRODUCTION MODE: Authentication required for deployed site:', hostname);
+  return true;
 }
 
 export default function DeploymentAuthWrapper({ children }: DeploymentAuthWrapperProps) {

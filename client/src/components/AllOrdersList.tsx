@@ -87,12 +87,13 @@ export default function AllOrdersList() {
     queryFn: () => apiRequest('/api/stock-models'),
   });
 
-  // Fetch all kickbacks to determine which orders have kickbacks
-  const { data: allKickbacks = [] } = useQuery<Kickback[]>({
-    queryKey: ['/api/kickbacks'],
-    refetchInterval: false, // Disable auto-refresh to prevent cache conflicts, but keep manual refresh options
-    // Keep default behavior for refetchOnWindowFocus and refetchOnReconnect
-  });
+  // Temporarily disable kickbacks query to prevent cache conflicts
+  // const { data: allKickbacks = [] } = useQuery<Kickback[]>({
+  //   queryKey: ['/api/kickbacks'],
+  //   refetchInterval: false, // Disable auto-refresh to prevent cache conflicts, but keep manual refresh options
+  //   // Keep default behavior for refetchOnWindowFocus and refetchOnReconnect
+  // });
+  const allKickbacks: Kickback[] = []; // Temporarily empty for debugging
 
   // Helper function to get model display name
   const getModelDisplayName = (modelId: string) => {
@@ -338,7 +339,7 @@ export default function AllOrdersList() {
         ...old,
         orders: old.orders.map((order: any) => {
           if (order.orderId === orderId) {
-            console.log(`✅ Cache updated: ${orderId} -> ${nextDepartment}`);
+            console.log(`✅ IMMEDIATE Cache updated: ${orderId} -> ${nextDepartment} (timestamp: ${new Date().toISOString()})`);
             return { ...order, currentDepartment: nextDepartment };
           }
           return order;
@@ -346,6 +347,15 @@ export default function AllOrdersList() {
       };
       return updated;
     });
+
+    // Add a listener to detect when cache gets overwritten
+    setTimeout(() => {
+      const currentData = queryClient.getQueryData(['/api/orders/with-payment-status/paginated']) as any;
+      const order = currentData?.orders?.find((o: any) => o.orderId === orderId);
+      if (order && order.currentDepartment !== nextDepartment) {
+        console.error(`🚨 CACHE OVERWRITTEN! Order ${orderId} was set to ${nextDepartment} but is now ${order.currentDepartment}`);
+      }
+    }, 5000); // Check after 5 seconds
     
     // Also update local state for redundancy
     setLocalOrderUpdates(prev => ({ ...prev, [orderId]: nextDepartment }));

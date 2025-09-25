@@ -351,11 +351,13 @@ export default function RefundRequest() {
                     <div data-testid="summary-date">Date: {formatDate(selectedOrder.orderDate)}</div>
                     <div data-testid="summary-order-total">
                       Order Total: {liveOrderTotals ? calcFormatCurrency(liveOrderTotals.finalTotal) : formatCurrency(selectedOrder.orderTotal || 0)}
+                      {/* REMOVED: Stored total notice - no longer showing stored vs calculated differences
                       {liveOrderTotals && selectedOrder.orderTotal && Math.abs(liveOrderTotals.finalTotal - (selectedOrder.orderTotal + (selectedOrder.shipping || 0))) > 0.01 && (
                         <span className="ml-2 text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded">
                           (Stored: {formatCurrency(selectedOrder.orderTotal + (selectedOrder.shipping || 0))})
                         </span>
                       )}
+                      */}
                     </div>
                     <div data-testid="summary-total-paid">Total Paid: {formatCurrency(selectedOrder.paymentTotal)}</div>
                     <div data-testid="summary-balance-due" className="font-medium">Balance Due: {formatCurrency(selectedOrder.balanceDue || 0)}</div>

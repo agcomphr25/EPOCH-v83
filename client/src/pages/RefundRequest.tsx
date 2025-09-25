@@ -12,6 +12,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import CustomerSearchInput from '@/components/CustomerSearchInput';
 import { apiRequest } from '@/lib/queryClient';
 import type { Customer } from '@shared/schema';
+import { calculateOrderTotals, formatCurrency as calcFormatCurrency, type OrderCalculationData } from '@/utils/orderCalculations';
 
 interface Order {
   id: number;
@@ -30,6 +31,10 @@ interface Order {
   balanceDue?: number;
   isFullyPaid: boolean;
   customerPO?: string;
+  features?: Record<string, any>;
+  discountCode?: string;
+  priceOverride?: number | null;
+  featureQuantities?: Record<string, number>;
 }
 
 interface RefundRequestData {
@@ -60,6 +65,37 @@ export default function RefundRequest() {
       return response as Order[];
     },
     enabled: !!selectedCustomer?.id,
+  });
+
+  // Fetch feature definitions for calculations
+  const { data: featureDefs = [] } = useQuery({
+    queryKey: ['/api/features'],
+    queryFn: async () => {
+      const response = await apiRequest('/api/features');
+      return response as any[];
+    },
+  });
+
+  // Fetch stock models for calculations
+  const { data: stockModels = [] } = useQuery({
+    queryKey: ['/api/stock-models'],
+    queryFn: async () => {
+      const response = await apiRequest('/api/stock-models');
+      return response as any[];
+    },
+  });
+
+  // Fetch discount details when order is selected
+  const { data: discountDetails } = useQuery({
+    queryKey: ['/api/discounts/details', selectedOrder?.discountCode],
+    queryFn: async () => {
+      if (!selectedOrder?.discountCode || selectedOrder.discountCode === 'none') {
+        return null;
+      }
+      const response = await apiRequest(`/api/discounts/details/${selectedOrder.discountCode}`);
+      return response;
+    },
+    enabled: !!selectedOrder?.discountCode && selectedOrder.discountCode !== 'none',
   });
 
   // Create refund request mutation
@@ -95,6 +131,34 @@ export default function RefundRequest() {
     // Set max refund amount to the actual payment amount (not order total)
     setRefundAmount((order.paymentTotal || 0).toString());
   };
+
+  // Calculate live order totals using the same logic as Order Entry
+  const liveOrderTotals = React.useMemo(() => {
+    if (!selectedOrder || !featureDefs.length || !stockModels.length) {
+      return null;
+    }
+
+    const stockModel = stockModels.find(model => model.id === selectedOrder.modelId);
+    if (!stockModel) {
+      return null;
+    }
+
+    const calculationData: OrderCalculationData = {
+      stockModel: {
+        id: stockModel.id,
+        price: stockModel.price || 0,
+      },
+      features: selectedOrder.features || {},
+      discountCode: selectedOrder.discountCode,
+      discountDetails: discountDetails || undefined,
+      priceOverride: selectedOrder.priceOverride,
+      shipping: selectedOrder.shipping || 0,
+      featureDefs: featureDefs,
+      otherOptionsQuantities: selectedOrder.featureQuantities || {},
+    };
+
+    return calculateOrderTotals(calculationData);
+  }, [selectedOrder, featureDefs, stockModels, discountDetails]);
 
   const handleSubmitRefund = () => {
     if (!selectedCustomer || !selectedOrder) {
@@ -285,7 +349,14 @@ export default function RefundRequest() {
                   <div className="text-xs text-gray-600 space-y-1">
                     <div data-testid="summary-customer">Customer: {selectedCustomer?.name}</div>
                     <div data-testid="summary-date">Date: {formatDate(selectedOrder.orderDate)}</div>
-                    <div data-testid="summary-order-total">Order Total: {formatCurrency(selectedOrder.orderTotal || 0)}</div>
+                    <div data-testid="summary-order-total">
+                      Order Total: {liveOrderTotals ? calcFormatCurrency(liveOrderTotals.finalTotal) : formatCurrency(selectedOrder.orderTotal || 0)}
+                      {liveOrderTotals && selectedOrder.orderTotal && Math.abs(liveOrderTotals.finalTotal - (selectedOrder.orderTotal + (selectedOrder.shipping || 0))) > 0.01 && (
+                        <span className="ml-2 text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded">
+                          (Stored: {formatCurrency(selectedOrder.orderTotal + (selectedOrder.shipping || 0))})
+                        </span>
+                      )}
+                    </div>
                     <div data-testid="summary-total-paid">Total Paid: {formatCurrency(selectedOrder.paymentTotal)}</div>
                     <div data-testid="summary-balance-due" className="font-medium">Balance Due: {formatCurrency(selectedOrder.balanceDue || 0)}</div>
                   </div>

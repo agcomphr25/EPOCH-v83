@@ -2735,6 +2735,8 @@ export class DatabaseStorage implements IStorage {
         actionLength: sql<string>`${allOrders.features}->>'action_length'`,
         // Customer name
         customerName: customers.name,
+        // 🔄 STORED TOTALS: Include calculated total to prevent N+1 query fallback
+        calculatedTotal: allOrders.calculatedTotal,
       })
       .from(allOrders)
       .leftJoin(customers, eq(allOrders.customerId, sql`${customers.id}::text`))

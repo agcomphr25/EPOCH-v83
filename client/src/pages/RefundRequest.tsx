@@ -285,7 +285,7 @@ export default function RefundRequest() {
                   <div className="text-xs text-gray-600 space-y-1">
                     <div data-testid="summary-customer">Customer: {selectedCustomer?.name}</div>
                     <div data-testid="summary-date">Date: {formatDate(selectedOrder.orderDate)}</div>
-                    <div data-testid="summary-order-total">Total with Shipping: {formatCurrency((selectedOrder.orderTotal || 0) + (selectedOrder.shipping || 0))}</div>
+                    <div data-testid="summary-order-total">Order Total: {formatCurrency(selectedOrder.orderTotal || 0)}</div>
                     <div data-testid="summary-total-paid">Total Paid: {formatCurrency(selectedOrder.paymentTotal)}</div>
                     <div data-testid="summary-balance-due" className="font-medium">Balance Due: {formatCurrency(selectedOrder.balanceDue || 0)}</div>
                   </div>

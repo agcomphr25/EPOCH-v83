@@ -1913,6 +1913,20 @@ export class DatabaseStorage implements IStorage {
   // Helper function to calculate order total from features and pricing 
   public async calculateOrderTotal(order: AllOrder): Promise<number> {
     let total = 0;
+    
+    // DEBUG: Log calculation details for EI038
+    if (order.orderId === 'EI038') {
+      console.log(`🔍 DEBUG EI038 - Starting calculation for order:`, {
+        orderId: order.orderId,
+        modelId: order.modelId,
+        discountCode: order.discountCode,
+        customDiscountType: order.customDiscountType,
+        customDiscountValue: order.customDiscountValue,
+        showCustomDiscount: order.showCustomDiscount,
+        priceOverride: order.priceOverride,
+        shipping: order.shipping
+      });
+    }
 
     // Add base stock model price (use override if set, otherwise use standard price)
     if (order.modelId) {

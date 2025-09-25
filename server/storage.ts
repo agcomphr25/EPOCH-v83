@@ -2760,43 +2760,13 @@ export class DatabaseStorage implements IStorage {
     // Create payment map for fast lookup
     const paymentMap = new Map(paymentTotals.map(p => [p.orderId, p.totalPayments]));
 
-    // Process orders with payment info using CORRECTED payment logic
-    const ordersWithPaymentInfo = await Promise.all(ordersWithCustomers.map(async order => {
+    // 🔄 PERFORMANCE OPTIMIZED: Process orders with stored totals only (no expensive database calls)
+    const ordersWithPaymentInfo = ordersWithCustomers.map(order => {
       const paymentTotal = paymentMap.get(order.orderId) || 0;
       
-      // OPTIMIZED: Use stored calculatedTotal when available, fallback to dynamic calculation
-      // This ensures consistent and accurate payment status across all systems
-      let actualOrderTotal;
-      try {
-        // First check if we have a stored calculated total (more accurate and faster)
-        const storedTotal = Number(order.calculatedTotal);
-        if (storedTotal && !isNaN(storedTotal) && storedTotal > 0) {
-          actualOrderTotal = storedTotal;
-          console.log(`✅ Using stored total for ${order.orderId}: $${storedTotal.toFixed(2)}`);
-        } else {
-          // Fallback to dynamic calculation if no stored total
-          console.log(`⚠️ No stored total for ${order.orderId}, falling back to dynamic calculation`);
-          const orderSummaryData = await this.getOrderById(order.orderId);
-          if (orderSummaryData && (orderSummaryData as any).totalAmount) {
-            actualOrderTotal = Number((orderSummaryData as any).totalAmount);
-          } else {
-            const fullOrder = await this.getOrderById(order.orderId);
-            if (fullOrder) {
-              actualOrderTotal = await this.calculateOrderTotal(fullOrder as any);
-            } else {
-              actualOrderTotal = Number(order.shipping) || 0;
-            }
-          }
-        }
-        
-        // Final fallback to shipping cost if calculation fails
-        if (actualOrderTotal === null || actualOrderTotal === undefined || isNaN(actualOrderTotal)) {
-          actualOrderTotal = Number(order.shipping) || 0;
-        }
-      } catch (error) {
-        console.error(`❌ Error getting order total for ${order.orderId}:`, error);
-        actualOrderTotal = Number(order.shipping) || 0;
-      }
+      // ALWAYS use stored calculatedTotal - this prevents expensive N+1 queries
+      // All orders should have calculated totals from the migration
+      const actualOrderTotal = Number(order.calculatedTotal) || Number(order.shipping) || 0;
       
       const isFullyPaid = paymentTotal >= actualOrderTotal && actualOrderTotal > 0;
 
@@ -2806,7 +2776,7 @@ export class DatabaseStorage implements IStorage {
         paymentTotal,
         isFullyPaid
       } as any; // Type assertion to avoid complex type errors
-    }));
+    });
 
     return {
       orders: ordersWithPaymentInfo,

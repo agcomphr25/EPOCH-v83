@@ -136,6 +136,7 @@ router.get('/customer/:customerId', async (req: Request, res: Response) => {
       isCancelled: allOrders.isCancelled,
       cancelledAt: allOrders.cancelledAt,
       cancelReason: allOrders.cancelReason,
+      calculatedTotal: allOrders.calculatedTotal, // 🔄 STORED TOTALS: Include stored calculated total
       createdAt: allOrders.createdAt,
       updatedAt: allOrders.updatedAt
     })

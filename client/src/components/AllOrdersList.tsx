@@ -324,6 +324,12 @@ export default function AllOrdersList() {
   };
 
   const handleProgressOrder = React.useCallback((orderId: string, currentDepartment: string, orderFeatures?: any) => {
+    // Prevent multiple clicks on the same order
+    if (updatingOrders.has(orderId)) {
+      console.log(`⚠️ Order ${orderId} is already being updated, ignoring click`);
+      return;
+    }
+    
     const nextDepartment = getNextDepartment(currentDepartment, orderFeatures);
     if (!nextDepartment) {
       toast.error('No next department available');
@@ -332,14 +338,28 @@ export default function AllOrdersList() {
     
     console.log(`🔄 Progressing order ${orderId} from ${currentDepartment} to ${nextDepartment}`);
     
+    // Mark order as updating
+    setUpdatingOrders(prev => new Set(prev).add(orderId));
+    
+    // IMMEDIATELY update local state for instant UI response
+    setLocalOrderUpdates(prev => {
+      const newState = { ...prev, [orderId]: nextDepartment };
+      console.log(`✅ LOCAL STATE updated: ${orderId} -> ${nextDepartment}`);
+      return newState;
+    });
+    
     // IMMEDIATELY update React Query cache - this prevents any reversion
     queryClient.setQueryData(['/api/orders/with-payment-status/paginated'], (old: any) => {
-      if (!old?.orders) return old;
+      if (!old?.orders) {
+        console.warn('❌ Cache update failed: no orders data');
+        return old;
+      }
+      
       const updated = {
         ...old,
         orders: old.orders.map((order: any) => {
           if (order.orderId === orderId) {
-            console.log(`✅ IMMEDIATE Cache updated: ${orderId} -> ${nextDepartment} (timestamp: ${new Date().toISOString()})`);
+            console.log(`✅ CACHE updated: ${orderId} -> ${nextDepartment} (was: ${order.currentDepartment})`);
             return { ...order, currentDepartment: nextDepartment };
           }
           return order;
@@ -348,21 +368,21 @@ export default function AllOrdersList() {
       return updated;
     });
 
-    // Add a listener to detect when cache gets overwritten
+    // Add debug logging to detect cache overwrites
     setTimeout(() => {
       const currentData = queryClient.getQueryData(['/api/orders/with-payment-status/paginated']) as any;
       const order = currentData?.orders?.find((o: any) => o.orderId === orderId);
       if (order && order.currentDepartment !== nextDepartment) {
         console.error(`🚨 CACHE OVERWRITTEN! Order ${orderId} was set to ${nextDepartment} but is now ${order.currentDepartment}`);
+        console.error('Current cache data:', currentData?.orders?.filter((o: any) => o.orderId === orderId));
+      } else if (order) {
+        console.log(`✅ Cache still correct for ${orderId}: ${order.currentDepartment}`);
       }
-    }, 5000); // Check after 5 seconds
-    
-    // Also update local state for redundancy
-    setLocalOrderUpdates(prev => ({ ...prev, [orderId]: nextDepartment }));
+    }, 3000);
     
     // Make the API call in the background
     progressOrderMutation.mutate({ orderId, nextDepartment });
-  }, [progressOrderMutation, queryClient]);
+  }, [progressOrderMutation, queryClient, updatingOrders]);
 
   const handlePushToLayupPlugging = (orderId: string) => {
     const nextDepartment = 'Layup/Plugging';

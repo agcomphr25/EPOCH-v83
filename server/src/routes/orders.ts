@@ -102,6 +102,13 @@ router.get('/customer/:customerId', async (req: Request, res: Response) => {
     const { customerId } = req.params;
     console.log(`Getting all orders for customer ${customerId}`);
     
+    // Force cache busting for refund system fixes
+    res.set({
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0'
+    });
+    
     // Get orders from allOrders table with payment information
     const orders = await db.select({
       id: allOrders.id,

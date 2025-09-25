@@ -1842,7 +1842,7 @@ export class DatabaseStorage implements IStorage {
             let bottomMetalPrice = Number(option.price);
             
             // Special pricing: SepFG10 or SepCF25 seasonal sale + AG bottom metal = $100 instead of $149
-            if ((order.discountCode === 'short_term_3' || order.discountCode === 'short_term_1') && orderFeatures.bottom_metal.includes('ag_') && option.price === 149) {
+            if ((order.discountCode === 'short_term_3' || order.discountCode === 'short_term_1' || order.discountCode === 'SepCF25' || order.discountCode === 'SepFG10') && orderFeatures.bottom_metal.includes('ag_') && option.price === 149) {
               bottomMetalPrice = 100;
             }
             
@@ -2027,7 +2027,7 @@ export class DatabaseStorage implements IStorage {
             let bottomMetalPrice = Number(option.price);
             
             // Special pricing: SepFG10 or SepCF25 seasonal sale + AG bottom metal = $100 instead of $149
-            if ((order.discountCode === 'short_term_3' || order.discountCode === 'short_term_1') && orderFeatures.bottom_metal.includes('ag_') && option.price === 149) {
+            if ((order.discountCode === 'short_term_3' || order.discountCode === 'short_term_1' || order.discountCode === 'SepCF25' || order.discountCode === 'SepFG10') && orderFeatures.bottom_metal.includes('ag_') && option.price === 149) {
               bottomMetalPrice = 100;
             }
             
@@ -2073,17 +2073,30 @@ export class DatabaseStorage implements IStorage {
       }
     }
 
-    // Apply persistent discount if present
+    // Apply discount if present - check both persistent and short-term discounts
     if (order.discountCode && order.discountCode !== 'none') {
+      let discount = null;
+      
+      // First check persistent discounts
       const persistentDiscounts = await this.getAllPersistentDiscounts();
       
       // Handle both "persistent_2" format and direct name lookup
-      let discount = null;
       if (order.discountCode.startsWith('persistent_')) {
         const discountId = parseInt(order.discountCode.replace('persistent_', ''));
         discount = persistentDiscounts.find(d => d.id === discountId);
       } else {
         discount = persistentDiscounts.find(d => d.name === order.discountCode);
+      }
+      
+      // If not found in persistent discounts, check short-term sales
+      if (!discount) {
+        const shortTermSales = await this.getAllShortTermSales();
+        discount = shortTermSales.find(d => d.name === order.discountCode && d.isActive);
+        
+        // Short-term sales have a default appliesTo of 'stock_model'
+        if (discount) {
+          discount.appliesTo = discount.appliesTo || 'stock_model';
+        }
       }
       
       if (discount && discount.isActive) {

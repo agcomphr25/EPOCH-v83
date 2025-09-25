@@ -85,18 +85,40 @@ export default function RefundRequest() {
     },
   });
 
-  // Fetch discount details when order is selected
-  const { data: discountDetails } = useQuery({
-    queryKey: ['/api/discounts/details', selectedOrder?.discountCode],
+  // Fetch short-term sales to manually find discount details
+  const { data: shortTermSales = [] } = useQuery({
+    queryKey: ['/api/short-term-sales'],
     queryFn: async () => {
-      if (!selectedOrder?.discountCode || selectedOrder.discountCode === 'none') {
-        return null;
-      }
-      const response = await apiRequest(`/api/discounts/details/${selectedOrder.discountCode}`);
-      return response;
+      const response = await apiRequest('/api/short-term-sales');
+      return response as any[];
     },
-    enabled: !!selectedOrder?.discountCode && selectedOrder.discountCode !== 'none',
   });
+
+  // Calculate discount details from short-term sales based on order discount code  
+  const discountDetails = React.useMemo(() => {
+    if (!selectedOrder?.discountCode || selectedOrder.discountCode === 'none') {
+      return null;
+    }
+    
+    // Debug removed - discount lookup is now working
+    
+    // Handle "short_term_1" format - extract ID and find matching discount
+    if (selectedOrder.discountCode.startsWith('short_term_')) {
+      const discountId = parseInt(selectedOrder.discountCode.replace('short_term_', ''));
+      const discount = shortTermSales.find(d => d.id === discountId && d.isActive);
+      
+      if (discount) {
+        console.log('🔍 Found matching short-term discount:', discount);
+        return {
+          ...discount,
+          appliesTo: discount.appliesTo || 'stock_model'
+        };
+      }
+    }
+    
+    console.log('🔍 No matching discount found');
+    return null;
+  }, [selectedOrder?.discountCode, shortTermSales]);
 
   // Create refund request mutation
   const createRefundRequestMutation = useMutation({
@@ -135,13 +157,28 @@ export default function RefundRequest() {
   // Calculate live order totals using the same logic as Order Entry
   const liveOrderTotals = React.useMemo(() => {
     if (!selectedOrder || !featureDefs.length || !stockModels.length) {
+      console.log('🔍 RefundRequest calculation skipped - missing dependencies:', {
+        selectedOrder: !!selectedOrder,
+        featureDefs: featureDefs.length,
+        stockModels: stockModels.length
+      });
       return null;
     }
 
     const stockModel = stockModels.find(model => model.id === selectedOrder.modelId);
     if (!stockModel) {
+      console.log('🔍 RefundRequest calculation skipped - stock model not found:', selectedOrder.modelId);
       return null;
     }
+
+    console.log('🔍 RefundRequest calculation data:', {
+      orderId: selectedOrder.orderId,
+      discountCode: selectedOrder.discountCode,
+      discountDetails: discountDetails,
+      stockModelPrice: stockModel.price,
+      shipping: selectedOrder.shipping,
+      features: selectedOrder.features
+    });
 
     const calculationData: OrderCalculationData = {
       stockModel: {
@@ -157,7 +194,9 @@ export default function RefundRequest() {
       otherOptionsQuantities: selectedOrder.featureQuantities || {},
     };
 
-    return calculateOrderTotals(calculationData);
+    const result = calculateOrderTotals(calculationData);
+    console.log('🔍 RefundRequest calculation result:', result);
+    return result;
   }, [selectedOrder, featureDefs, stockModels, discountDetails]);
 
   const handleSubmitRefund = () => {

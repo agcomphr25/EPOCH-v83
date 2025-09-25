@@ -98,6 +98,7 @@ router.delete('/short-term-sales/:id', async (req: Request, res: Response) => {
 router.get('/discounts/details/:code', async (req: Request, res: Response) => {
   try {
     const discountCode = req.params.code;
+    console.log(`🔍 DEBUG: Discount details requested for code: ${discountCode}`);
     let discount = null;
     
     // First check persistent discounts

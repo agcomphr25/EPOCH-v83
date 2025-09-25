@@ -2188,6 +2188,51 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
+  // Migration function to populate calculated totals for all existing finalized orders
+  public async populateAllCalculatedTotals(): Promise<void> {
+    try {
+      console.log('🔄 Starting migration to populate calculated totals for all finalized orders...');
+      
+      // Get all finalized orders that don't have calculated totals yet
+      const ordersNeedingTotals = await db.select({
+        orderId: allOrders.orderId
+      })
+      .from(allOrders)
+      .where(isNull(allOrders.calculatedTotal));
+      
+      console.log(`📊 Found ${ordersNeedingTotals.length} orders that need calculated totals`);
+      
+      let processedCount = 0;
+      let errorCount = 0;
+      
+      // Process orders in batches to avoid overwhelming the database
+      const batchSize = 10;
+      for (let i = 0; i < ordersNeedingTotals.length; i += batchSize) {
+        const batch = ordersNeedingTotals.slice(i, i + batchSize);
+        
+        await Promise.all(batch.map(async (orderRef) => {
+          try {
+            await this.calculateAndStoreOrderTotal(orderRef.orderId);
+            processedCount++;
+            
+            if (processedCount % 20 === 0) {
+              console.log(`✅ Processed ${processedCount}/${ordersNeedingTotals.length} orders...`);
+            }
+          } catch (error) {
+            console.error(`❌ Error processing order ${orderRef.orderId}:`, error);
+            errorCount++;
+          }
+        }));
+      }
+      
+      console.log(`🎉 Migration complete! Processed ${processedCount} orders successfully, ${errorCount} errors`);
+      
+    } catch (error) {
+      console.error('❌ Error in populateAllCalculatedTotals migration:', error);
+      throw error;
+    }
+  }
+
   // Get stored order total using Order Summary calculation logic (for refund consistency)
   async getStoredOrderTotal(orderId: string): Promise<number> {
     // Get the order data

@@ -1914,9 +1914,9 @@ export class DatabaseStorage implements IStorage {
   public async calculateOrderTotal(order: AllOrder): Promise<number> {
     let total = 0;
     
-    // DEBUG: Log calculation details for EI038
-    if (order.orderId === 'EI038') {
-      console.log(`🔍 DEBUG EI038 - Starting calculation for order:`, {
+    // DEBUG: Log calculation details for EI038 and EI039
+    if (order.orderId === 'EI038' || order.orderId === 'EI039') {
+      console.log(`🔍 DEBUG ${order.orderId} - Starting calculation for order:`, {
         orderId: order.orderId,
         modelId: order.modelId,
         discountCode: order.discountCode,
@@ -1924,7 +1924,8 @@ export class DatabaseStorage implements IStorage {
         customDiscountValue: order.customDiscountValue,
         showCustomDiscount: order.showCustomDiscount,
         priceOverride: order.priceOverride,
-        shipping: order.shipping
+        shipping: order.shipping,
+        features: order.features
       });
     }
 

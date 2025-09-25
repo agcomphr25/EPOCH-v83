@@ -1514,4 +1514,24 @@ router.get('/export/csv-all', async (req: Request, res: Response) => {
   }
 });
 
+// Migration endpoint to populate calculated totals for all existing finalized orders
+router.post('/migrate/populate-calculated-totals', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    console.log('🔄 Starting migration to populate calculated totals...');
+    
+    await storage.populateAllCalculatedTotals();
+    
+    res.json({ 
+      success: true, 
+      message: 'Successfully populated calculated totals for all finalized orders' 
+    });
+  } catch (error) {
+    console.error('❌ Migration failed:', error);
+    res.status(500).json({ 
+      error: 'Migration failed', 
+      details: (error as any).message 
+    });
+  }
+});
+
 export default router;

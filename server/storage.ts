@@ -2764,7 +2764,7 @@ export class DatabaseStorage implements IStorage {
         // Customer name
         customerName: customers.name,
         // 🔄 STORED TOTALS: Include calculated total to prevent N+1 query fallback
-        calculatedTotal: allOrders.calculatedTotal,
+        // COMMENTED OUT: calculatedTotal: allOrders.calculatedTotal, // Field removed from schema
       })
       .from(allOrders)
       .leftJoin(customers, eq(allOrders.customerId, sql`${customers.id}::text`))
@@ -2792,9 +2792,9 @@ export class DatabaseStorage implements IStorage {
     const ordersWithPaymentInfo = ordersWithCustomers.map(order => {
       const paymentTotal = paymentMap.get(order.orderId) || 0;
       
-      // ALWAYS use stored calculatedTotal - this prevents expensive N+1 queries
-      // All orders should have calculated totals from the migration
-      const actualOrderTotal = Number(order.calculatedTotal) || Number(order.shipping) || 0;
+      // FALLBACK: Use shipping amount since calculatedTotal was removed from schema
+      // This prevents expensive N+1 queries but provides basic total for payment status
+      const actualOrderTotal = Number(order.shipping) || 0;
       
       const isFullyPaid = paymentTotal >= actualOrderTotal && actualOrderTotal > 0;
 

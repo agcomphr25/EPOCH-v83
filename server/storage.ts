@@ -2586,15 +2586,34 @@ export class DatabaseStorage implements IStorage {
     const ordersWithPaymentInfo = await Promise.all(ordersWithCustomers.map(async order => {
       const paymentTotal = paymentMap.get(order.orderId) || 0;
       
-      // ULTRA SIMPLE FIX: Just compare payments to stored order total
-      // Use the same logic as Order Summary: if no stored total, assume payment covers it
-      const storedOrderTotal = Number(order.paymentAmount) || 0;
+      // FIXED: Use the same calculation logic as Refund Request page
+      // This ensures consistent payment status badges across All Orders and Refund Request pages
+      let actualOrderTotal;
+      try {
+        // Use the exact same data source as Order Summary: /api/orders/:id endpoint
+        const orderSummaryData = await this.getOrderById(order.orderId);
+        if (orderSummaryData && (orderSummaryData as any).totalAmount) {
+          actualOrderTotal = Number((orderSummaryData as any).totalAmount);
+        } else {
+          // Calculate using same logic as Order Summary (includes paint, bottom metal, etc.)
+          const fullOrder = await this.getOrderById(order.orderId);
+          if (fullOrder) {
+            actualOrderTotal = await this.calculateOrderTotal(fullOrder as any);
+          } else {
+            actualOrderTotal = Number(order.shipping) || 0;
+          }
+        }
+        
+        // Fallback to shipping cost if calculation fails
+        if (actualOrderTotal === null || actualOrderTotal === undefined || isNaN(actualOrderTotal)) {
+          actualOrderTotal = Number(order.shipping) || 0;
+        }
+      } catch (error) {
+        console.error(`❌ Error getting Order Summary data for ${order.orderId}:`, error);
+        actualOrderTotal = Number(order.shipping) || 0;
+      }
       
-      // If there's a stored order total, compare against it
-      // If no stored total but there are payments, consider it paid (like Order Summary shows)
-      const isFullyPaid = storedOrderTotal > 0 
-        ? (paymentTotal >= storedOrderTotal) 
-        : (paymentTotal > 0);
+      const isFullyPaid = paymentTotal >= actualOrderTotal && actualOrderTotal > 0;
 
       return {
         ...order,

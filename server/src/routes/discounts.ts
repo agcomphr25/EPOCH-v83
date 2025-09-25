@@ -94,4 +94,50 @@ router.delete('/short-term-sales/:id', async (req: Request, res: Response) => {
   }
 });
 
+// Get discount details by code (handles both persistent_X and short_term_X formats)
+router.get('/discounts/details/:code', async (req: Request, res: Response) => {
+  try {
+    const discountCode = req.params.code;
+    let discount = null;
+    
+    // First check persistent discounts
+    const persistentDiscounts = await storage.getAllPersistentDiscounts();
+    
+    // Handle both "persistent_2" format and direct name lookup
+    if (discountCode.startsWith('persistent_')) {
+      const discountId = parseInt(discountCode.replace('persistent_', ''));
+      discount = persistentDiscounts.find(d => d.id === discountId);
+    } else {
+      discount = persistentDiscounts.find(d => d.name === discountCode);
+    }
+    
+    // If not found in persistent discounts, check short-term sales
+    if (!discount) {
+      const shortTermSales = await storage.getAllShortTermSales();
+      
+      // Handle both "short_term_1" format and direct name lookup
+      if (discountCode.startsWith('short_term_')) {
+        const discountId = parseInt(discountCode.replace('short_term_', ''));
+        discount = shortTermSales.find(d => d.id === discountId && d.isActive);
+      } else {
+        discount = shortTermSales.find(d => d.name === discountCode && d.isActive);
+      }
+      
+      // Short-term sales have a default appliesTo of 'stock_model'
+      if (discount) {
+        discount.appliesTo = discount.appliesTo || 'stock_model';
+      }
+    }
+    
+    if (discount && discount.isActive) {
+      res.json(discount);
+    } else {
+      res.status(404).json({ error: "Discount not found or inactive" });
+    }
+  } catch (error) {
+    console.error('Error retrieving discount details:', error);
+    res.status(500).json({ error: "Failed to retrieve discount details" });
+  }
+});
+
 export default router;

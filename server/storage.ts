@@ -2092,7 +2092,14 @@ export class DatabaseStorage implements IStorage {
       // If not found in persistent discounts, check short-term sales
       if (!discount) {
         const shortTermSales = await this.getAllShortTermSales();
-        discount = shortTermSales.find(d => d.name === order.discountCode && d.isActive);
+        
+        // Handle both "short_term_1" format and direct name lookup
+        if (order.discountCode.startsWith('short_term_')) {
+          const discountId = parseInt(order.discountCode.replace('short_term_', ''));
+          discount = shortTermSales.find(d => d.id === discountId && d.isActive);
+        } else {
+          discount = shortTermSales.find(d => d.name === order.discountCode && d.isActive);
+        }
         
         // Short-term sales have a default appliesTo of 'stock_model'
         if (discount) {
@@ -2108,17 +2115,29 @@ export class DatabaseStorage implements IStorage {
             const selectedModel = stockModels.find(model => model.id === order.modelId);
             if (selectedModel) {
               const basePrice = Number(order.priceOverride || selectedModel.price || 0);
-              const discountAmount = (discount.percent && discount.percent > 0) 
-                ? (basePrice * discount.percent / 100)
-                : Number(discount.fixedAmount || 0);
+              let discountAmount = 0;
+              
+              if (discount.percent && discount.percent > 0) {
+                discountAmount = basePrice * discount.percent / 100;
+              } else if ('fixedAmount' in discount && discount.fixedAmount) {
+                // Only persistent discounts have fixedAmount
+                discountAmount = Number(discount.fixedAmount);
+              }
+              
               total -= discountAmount;
             }
           }
         } else if (discount.appliesTo === 'total_order') {
           // Apply discount to entire order total
-          const discountAmount = (discount.percent && discount.percent > 0) 
-            ? (total * discount.percent / 100)
-            : Number(discount.fixedAmount || 0);
+          let discountAmount = 0;
+          
+          if (discount.percent && discount.percent > 0) {
+            discountAmount = total * discount.percent / 100;
+          } else if ('fixedAmount' in discount && discount.fixedAmount) {
+            // Only persistent discounts have fixedAmount
+            discountAmount = Number(discount.fixedAmount);
+          }
+          
           total -= discountAmount;
         }
       }

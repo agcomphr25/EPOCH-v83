@@ -2179,7 +2179,8 @@ export class DatabaseStorage implements IStorage {
     return isNaN(total) ? 0 : total;
   }
 
-  // Calculate and store order total for finalized orders - ensures stored totals are accurate
+  // COMMENTED OUT: Calculate and store order total for finalized orders - ensures stored totals are accurate
+  /*
   public async calculateAndStoreOrderTotal(orderId: string): Promise<number> {
     try {
       // Get the full order data
@@ -2207,8 +2208,10 @@ export class DatabaseStorage implements IStorage {
       throw error;
     }
   }
+  */
 
-  // Migration function to populate calculated totals for all existing finalized orders
+  // COMMENTED OUT: Migration function to populate calculated totals for all existing finalized orders
+  /*
   public async populateAllCalculatedTotals(): Promise<void> {
     try {
       console.log('🔄 Starting migration to populate calculated totals for all finalized orders...');
@@ -2252,8 +2255,10 @@ export class DatabaseStorage implements IStorage {
       throw error;
     }
   }
+  */
 
-  // Validation function to compare stored vs calculated totals for accuracy
+  // COMMENTED OUT: Validation function to compare stored vs calculated totals for accuracy
+  /*
   public async validateStoredOrderTotal(orderId: string): Promise<{isValid: boolean, storedTotal: number | null, calculatedTotal: number, difference: number}> {
     try {
       // Get the order with stored total
@@ -2284,8 +2289,10 @@ export class DatabaseStorage implements IStorage {
       throw error;
     }
   }
+  */
 
-  // Bulk validation function to check multiple orders
+  // COMMENTED OUT: Bulk validation function to check multiple orders
+  /*
   public async validateAllStoredTotals(limit: number = 50): Promise<{valid: number, invalid: number, errors: string[]}> {
     try {
       console.log(`🔍 Starting validation of stored totals (checking ${limit} orders)...`);
@@ -2327,6 +2334,7 @@ export class DatabaseStorage implements IStorage {
       throw error;
     }
   }
+  */
 
   // Get stored order total using Order Summary calculation logic (for refund consistency)
   async getStoredOrderTotal(orderId: string): Promise<number> {

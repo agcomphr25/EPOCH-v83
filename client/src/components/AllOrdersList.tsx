@@ -153,8 +153,8 @@ export default function AllOrdersList() {
       console.log(`✅ API Success: ${variables.orderId} -> ${variables.nextDepartment}`);
       toast.success('Department updated');
       
-      // Invalidate kickbacks cache to ensure fresh data
-      queryClient.invalidateQueries({ queryKey: ['/api/kickbacks'] });
+      // DO NOT invalidate any queries here - this causes cache race conditions
+      // The immediate setQueryData update in handleProgressOrder should be the final word
       
       // Cache is already updated from button click - just clean up local state
       setTimeout(() => {

@@ -1,0 +1,18 @@
+Application Error
+An error occurred while loading the application:
+
+generateQuizPDF is not defined
+
+Stack trace:
+ReferenceError: generateQuizPDF is not defined
+    at CounterfeitPreventionTraining (https://8630266f-cacd-4ee0-b134-fa048e8ac221-00-7i6onah293q9.spock.replit.dev/src/pages/CounterfeitPreventionTraining.tsx?t=1758729132471:152:169)
+    at renderWithHooks (https://8630266f-cacd-4ee0-b134-fa048e8ac221-00-7i6onah293q9.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-276SZO74.js?v=a2532008:11548:26)
+    at updateFunctionComponent (https://8630266f-cacd-4ee0-b134-fa048e8ac221-00-7i6onah293q9.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-276SZO74.js?v=a2532008:14582:28)
+    at beginWork (https://8630266f-cacd-4ee0-b134-fa048e8ac221-00-7i6onah293q9.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-276SZO74.js?v=a2532008:15924:22)
+    at beginWork$1 (https://8630266f-cacd-4ee0-b134-fa048e8ac221-00-7i6onah293q9.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-276SZO74.js?v=a2532008:19753:22)
+    at performUnitOfWork (https://8630266f-cacd-4ee0-b134-fa048e8ac221-00-7i6onah293q9.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-276SZO74.js?v=a2532008:19198:20)
+    at workLoopSync (https://8630266f-cacd-4ee0-b134-fa048e8ac221-00-7i6onah293q9.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-276SZO74.js?v=a2532008:19137:13)
+    at renderRootSync (https://8630266f-cacd-4ee0-b134-fa048e8ac221-00-7i6onah293q9.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-276SZO74.js?v=a2532008:19116:15)
+    at performSyncWorkOnRoot (https://8630266f-cacd-4ee0-b134-fa048e8ac221-00-7i6onah293q9.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-276SZO74.js?v=a2532008:18874:28)
+    at flushSyncCallbacks (https://8630266f-cacd-4ee0-b134-fa048e8ac221-00-7i6onah293q9.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-276SZO74.js?v=a2532008:9119:30)
+Reload Application

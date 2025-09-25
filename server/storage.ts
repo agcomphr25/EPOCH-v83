@@ -2159,6 +2159,35 @@ export class DatabaseStorage implements IStorage {
     return isNaN(total) ? 0 : total;
   }
 
+  // Calculate and store order total for finalized orders - ensures stored totals are accurate
+  public async calculateAndStoreOrderTotal(orderId: string): Promise<number> {
+    try {
+      // Get the full order data
+      const order = await this.getOrderById(orderId) as AllOrder;
+      if (!order) {
+        throw new Error(`Order ${orderId} not found`);
+      }
+
+      // Calculate the total using existing logic
+      const calculatedTotal = await this.calculateOrderTotal(order);
+      
+      // Round to 2 decimal places for currency precision
+      const roundedTotal = Math.round(calculatedTotal * 100) / 100;
+      
+      // Store the calculated total in the database
+      await db.update(allOrders)
+        .set({ calculatedTotal: roundedTotal.toString() })
+        .where(eq(allOrders.orderId, orderId));
+        
+      console.log(`✅ Stored calculated total for order ${orderId}: $${roundedTotal.toFixed(2)}`);
+      
+      return roundedTotal;
+    } catch (error) {
+      console.error(`❌ Error calculating and storing total for order ${orderId}:`, error);
+      throw error;
+    }
+  }
+
   // Get stored order total using Order Summary calculation logic (for refund consistency)
   async getStoredOrderTotal(orderId: string): Promise<number> {
     // Get the order data

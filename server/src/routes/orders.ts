@@ -136,7 +136,7 @@ router.get('/customer/:customerId', async (req: Request, res: Response) => {
       isCancelled: allOrders.isCancelled,
       cancelledAt: allOrders.cancelledAt,
       cancelReason: allOrders.cancelReason,
-      calculatedTotal: allOrders.calculatedTotal, // 🔄 STORED TOTALS: Include stored calculated total
+      // COMMENTED OUT: calculatedTotal: allOrders.calculatedTotal, // 🔄 STORED TOTALS: Include stored calculated total
       createdAt: allOrders.createdAt,
       updatedAt: allOrders.updatedAt
     })
@@ -155,9 +155,9 @@ router.get('/customer/:customerId', async (req: Request, res: Response) => {
 
         const paymentTotal = Number(paymentResults[0]?.total || 0);
         
-        // 🔄 PERFORMANCE OPTIMIZED: Always use stored calculatedTotal (no expensive fallback calculations)
+        // COMMENTED OUT: Performance optimized stored calculatedTotal logic
         // This ensures fast refund request loading and accurate payment-based refund limits
-        const actualOrderTotal = Number(order.calculatedTotal) || Number(order.shipping) || 0;
+        const actualOrderTotal = Number(order.shipping) || 0; // Fallback to shipping only since calculatedTotal removed
         const balanceDue = Math.max(0, actualOrderTotal - paymentTotal);
         
         return {
@@ -1497,7 +1497,8 @@ router.get('/export/csv-all', async (req: Request, res: Response) => {
   }
 });
 
-// Migration endpoint to populate calculated totals for all existing finalized orders
+// COMMENTED OUT: Migration endpoint to populate calculated totals for all existing finalized orders
+/*
 router.post('/migrate/populate-calculated-totals', authenticateToken, async (req: Request, res: Response) => {
   try {
     console.log('🔄 Starting migration to populate calculated totals...');
@@ -1516,8 +1517,10 @@ router.post('/migrate/populate-calculated-totals', authenticateToken, async (req
     });
   }
 });
+*/
 
-// Validation endpoint to check stored vs calculated totals accuracy
+// COMMENTED OUT: Validation endpoint to check stored vs calculated totals accuracy
+/*
 router.post('/validate/stored-totals', authenticateToken, async (req: Request, res: Response) => {
   try {
     const { limit = 50 } = req.body;
@@ -1538,5 +1541,6 @@ router.post('/validate/stored-totals', authenticateToken, async (req: Request, r
     });
   }
 });
+*/
 
 export default router;

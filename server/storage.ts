@@ -2233,6 +2233,81 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
+  // Validation function to compare stored vs calculated totals for accuracy
+  public async validateStoredOrderTotal(orderId: string): Promise<{isValid: boolean, storedTotal: number | null, calculatedTotal: number, difference: number}> {
+    try {
+      // Get the order with stored total
+      const [order] = await db.select().from(allOrders).where(eq(allOrders.orderId, orderId));
+      if (!order) {
+        throw new Error(`Order ${orderId} not found`);
+      }
+
+      const storedTotal = order.calculatedTotal ? Number(order.calculatedTotal) : null;
+      const calculatedTotal = await this.calculateOrderTotal(order);
+      
+      // Calculate difference (allow for small floating point differences)
+      const difference = storedTotal !== null ? Math.abs(storedTotal - calculatedTotal) : calculatedTotal;
+      const isValid = storedTotal !== null && difference < 0.01; // Within 1 cent tolerance
+      
+      if (!isValid && storedTotal !== null) {
+        console.warn(`⚠️ VALIDATION WARNING: Order ${orderId} stored total ($${storedTotal.toFixed(2)}) doesn't match calculated total ($${calculatedTotal.toFixed(2)}), difference: $${difference.toFixed(2)}`);
+      }
+      
+      return {
+        isValid,
+        storedTotal,
+        calculatedTotal,
+        difference
+      };
+    } catch (error) {
+      console.error(`❌ Error validating stored total for order ${orderId}:`, error);
+      throw error;
+    }
+  }
+
+  // Bulk validation function to check multiple orders
+  public async validateAllStoredTotals(limit: number = 50): Promise<{valid: number, invalid: number, errors: string[]}> {
+    try {
+      console.log(`🔍 Starting validation of stored totals (checking ${limit} orders)...`);
+      
+      // Get orders that have stored totals
+      const orders = await db.select({
+        orderId: allOrders.orderId,
+        calculatedTotal: allOrders.calculatedTotal
+      })
+      .from(allOrders)
+      .where(not(isNull(allOrders.calculatedTotal)))
+      .limit(limit);
+
+      let validCount = 0;
+      let invalidCount = 0;
+      const errors: string[] = [];
+
+      // Validate each order
+      for (const orderRef of orders) {
+        try {
+          const validation = await this.validateStoredOrderTotal(orderRef.orderId);
+          if (validation.isValid) {
+            validCount++;
+          } else {
+            invalidCount++;
+            errors.push(`${orderRef.orderId}: stored $${validation.storedTotal?.toFixed(2) || 'null'} vs calculated $${validation.calculatedTotal.toFixed(2)}`);
+          }
+        } catch (error) {
+          invalidCount++;
+          errors.push(`${orderRef.orderId}: validation error - ${(error as any).message}`);
+        }
+      }
+
+      console.log(`✅ Validation complete: ${validCount} valid, ${invalidCount} invalid`);
+      return { valid: validCount, invalid: invalidCount, errors };
+      
+    } catch (error) {
+      console.error('❌ Error in bulk validation:', error);
+      throw error;
+    }
+  }
+
   // Get stored order total using Order Summary calculation logic (for refund consistency)
   async getStoredOrderTotal(orderId: string): Promise<number> {
     // Get the order data
@@ -2687,30 +2762,37 @@ export class DatabaseStorage implements IStorage {
     const ordersWithPaymentInfo = await Promise.all(ordersWithCustomers.map(async order => {
       const paymentTotal = paymentMap.get(order.orderId) || 0;
       
-      // FIXED: Use the same calculation logic as Refund Request page
-      // This ensures consistent payment status badges across All Orders and Refund Request pages
+      // OPTIMIZED: Use stored calculatedTotal when available, fallback to dynamic calculation
+      // This ensures consistent and accurate payment status across all systems
       let actualOrderTotal;
       try {
-        // Use the exact same data source as Order Summary: /api/orders/:id endpoint
-        const orderSummaryData = await this.getOrderById(order.orderId);
-        if (orderSummaryData && (orderSummaryData as any).totalAmount) {
-          actualOrderTotal = Number((orderSummaryData as any).totalAmount);
+        // First check if we have a stored calculated total (more accurate and faster)
+        const storedTotal = Number(order.calculatedTotal);
+        if (storedTotal && !isNaN(storedTotal) && storedTotal > 0) {
+          actualOrderTotal = storedTotal;
+          console.log(`✅ Using stored total for ${order.orderId}: $${storedTotal.toFixed(2)}`);
         } else {
-          // Calculate using same logic as Order Summary (includes paint, bottom metal, etc.)
-          const fullOrder = await this.getOrderById(order.orderId);
-          if (fullOrder) {
-            actualOrderTotal = await this.calculateOrderTotal(fullOrder as any);
+          // Fallback to dynamic calculation if no stored total
+          console.log(`⚠️ No stored total for ${order.orderId}, falling back to dynamic calculation`);
+          const orderSummaryData = await this.getOrderById(order.orderId);
+          if (orderSummaryData && (orderSummaryData as any).totalAmount) {
+            actualOrderTotal = Number((orderSummaryData as any).totalAmount);
           } else {
-            actualOrderTotal = Number(order.shipping) || 0;
+            const fullOrder = await this.getOrderById(order.orderId);
+            if (fullOrder) {
+              actualOrderTotal = await this.calculateOrderTotal(fullOrder as any);
+            } else {
+              actualOrderTotal = Number(order.shipping) || 0;
+            }
           }
         }
         
-        // Fallback to shipping cost if calculation fails
+        // Final fallback to shipping cost if calculation fails
         if (actualOrderTotal === null || actualOrderTotal === undefined || isNaN(actualOrderTotal)) {
           actualOrderTotal = Number(order.shipping) || 0;
         }
       } catch (error) {
-        console.error(`❌ Error getting Order Summary data for ${order.orderId}:`, error);
+        console.error(`❌ Error getting order total for ${order.orderId}:`, error);
         actualOrderTotal = Number(order.shipping) || 0;
       }
       
@@ -6964,6 +7046,21 @@ export class DatabaseStorage implements IStorage {
 
     if (!order) {
       throw new Error(`Finalized order with ID ${orderId} not found`);
+    }
+
+    // AUTO-RECALCULATION: Check if any fields that affect total calculation were updated
+    const fieldsAffectingTotal = ['features', 'modelId', 'discountCode', 'customDiscountType', 'customDiscountValue', 'showCustomDiscount', 'priceOverride', 'shipping'];
+    const shouldRecalculate = fieldsAffectingTotal.some(field => data.hasOwnProperty(field));
+    
+    if (shouldRecalculate) {
+      try {
+        // Recalculate and store the new total
+        await this.calculateAndStoreOrderTotal(orderId);
+        console.log(`🔄 Auto-recalculated stored total for order ${orderId} after update`);
+      } catch (error) {
+        console.error(`❌ Failed to recalculate total for order ${orderId} after update:`, error);
+        // Don't throw - the order update itself succeeded
+      }
     }
 
     return order;

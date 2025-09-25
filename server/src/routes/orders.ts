@@ -154,25 +154,32 @@ router.get('/customer/:customerId', async (req: Request, res: Response) => {
 
         const paymentTotal = Number(paymentResults[0]?.total || 0);
         
-        // FIXED: Always use calculateOrderTotal to ensure proper discount application
-        // This ensures refund amounts match exactly what customers actually paid
+        // OPTIMIZED: Use stored calculatedTotal when available, fallback to dynamic calculation
+        // This ensures accurate refund amounts with better performance
         let actualOrderTotal;
         try {
-          // Get full order data for calculation - bypass unreliable cached totalAmount
-          const fullOrder = await storage.getOrderById(order.orderId);
-          if (fullOrder) {
-            // Always calculate fresh to ensure discounts are properly applied
-            actualOrderTotal = await storage.calculateOrderTotal(fullOrder as any);
+          // First check if we have a stored calculated total (more accurate and faster)
+          const storedTotal = Number(order.calculatedTotal);
+          if (storedTotal && !isNaN(storedTotal) && storedTotal > 0) {
+            actualOrderTotal = storedTotal;
+            console.log(`✅ Using stored total for ${order.orderId}: $${storedTotal.toFixed(2)}`);
           } else {
-            actualOrderTotal = Number(order.shipping) || 0;
+            // Fallback to dynamic calculation if no stored total
+            console.log(`⚠️ No stored total for ${order.orderId}, falling back to dynamic calculation`);
+            const fullOrder = await storage.getOrderById(order.orderId);
+            if (fullOrder) {
+              actualOrderTotal = await storage.calculateOrderTotal(fullOrder as any);
+            } else {
+              actualOrderTotal = Number(order.shipping) || 0;
+            }
           }
           
-          // Fallback to shipping cost if calculation fails
+          // Final fallback to shipping cost if calculation fails
           if (actualOrderTotal === null || actualOrderTotal === undefined || isNaN(actualOrderTotal)) {
             actualOrderTotal = Number(order.shipping) || 0;
           }
         } catch (error) {
-          console.error(`❌ Error calculating order total for ${order.orderId}:`, error);
+          console.error(`❌ Error getting order total for ${order.orderId}:`, error);
           actualOrderTotal = Number(order.shipping) || 0;
         }
         const balanceDue = Math.max(0, actualOrderTotal - paymentTotal);
@@ -1529,6 +1536,28 @@ router.post('/migrate/populate-calculated-totals', authenticateToken, async (req
     console.error('❌ Migration failed:', error);
     res.status(500).json({ 
       error: 'Migration failed', 
+      details: (error as any).message 
+    });
+  }
+});
+
+// Validation endpoint to check stored vs calculated totals accuracy
+router.post('/validate/stored-totals', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { limit = 50 } = req.body;
+    console.log(`🔍 Starting validation of stored totals (limit: ${limit})...`);
+    
+    const results = await storage.validateAllStoredTotals(limit);
+    
+    res.json({ 
+      success: true, 
+      message: `Validation complete: ${results.valid} valid, ${results.invalid} invalid`,
+      results 
+    });
+  } catch (error) {
+    console.error('❌ Validation failed:', error);
+    res.status(500).json({ 
+      error: 'Validation failed', 
       details: (error as any).message 
     });
   }

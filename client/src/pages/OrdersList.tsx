@@ -326,7 +326,7 @@ export default function OrdersList() {
     });
 
     // IMMEDIATELY update React Query cache with CORRECT query key - this prevents any reversion
-    queryClient.setQueryData(['/api/orders/with-payment-status/paginated'], (old: any) => {
+    queryClient.setQueryData(['/api/orders/with-payment-status/paginated', 'ordersList'], (old: any) => {
       if (!old?.orders) {
         console.warn('❌ Cache update failed: no orders data');
         return old;
@@ -347,7 +347,7 @@ export default function OrdersList() {
     
     // Debug: Check cache after 2 seconds
     setTimeout(() => {
-      const currentData = queryClient.getQueryData(['/api/orders/with-payment-status/paginated']) as any;
+      const currentData = queryClient.getQueryData(['/api/orders/with-payment-status/paginated', 'ordersList']) as any;
       const order = currentData?.orders?.find((o: any) => o.orderId === orderId);
       if (order && order.currentDepartment !== nextDepartment) {
         console.error(`🚨 CACHE OVERWRITTEN! Order ${orderId} was set to ${nextDepartment} but is now ${order.currentDepartment}`);

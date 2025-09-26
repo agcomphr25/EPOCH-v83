@@ -165,11 +165,13 @@ router.delete('/events/:id/attendees/:userId', async (req: Request, res: Respons
   }
 });
 
-// POST /api/calendar/blank-pdf - Generate blank calendar PDF
-router.post('/blank-pdf', async (req: Request, res: Response) => {
-  console.log('🔍 PDF Route called with:', { month: req.body?.month, view: req.body?.view });
+// Generate blank calendar PDF (shared function)
+const generateBlankPDF = async (req: Request, res: Response) => {
+  // Support both GET (query params) and POST (body) parameters
+  const params = req.method === 'GET' ? req.query : req.body;
+  console.log('🔍 PDF Route called with:', { method: req.method, month: params?.month, view: params?.view });
   try {
-    const { month, view } = req.body;
+    const { month, view } = params;
     
     // Create a new PDF document
     const pdfDoc = await PDFDocument.create();
@@ -404,6 +406,12 @@ router.post('/blank-pdf', async (req: Request, res: Response) => {
     console.error('❌ Full error stack:', error instanceof Error ? error.stack : 'No stack trace');
     res.status(500).json({ error: 'Failed to generate calendar PDF' });
   }
-});
+};
+
+// GET /api/calendar/blank-pdf - Direct URL access for PDF (Chrome-safe)
+router.get('/blank-pdf', generateBlankPDF);
+
+// POST /api/calendar/blank-pdf - Generate blank calendar PDF (original method)
+router.post('/blank-pdf', generateBlankPDF);
 
 export default router;

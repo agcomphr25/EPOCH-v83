@@ -7,6 +7,7 @@ import ordersRoutes from './orders';
 import formsRoutes from './forms';
 import tasksRoutes from './tasks';
 import kickbackRoutes from './kickbacks';
+import calendarRoutes from './calendar';
 import inventoryRoutes from './inventory';
 import customersRoutes from './customers';
 import vendorsRoutes, { contactRouter, vendorDocumentRouter } from './vendors';
@@ -70,6 +71,9 @@ export function registerRoutes(app: Express): Server {
 
   // Kickback tracking routes
   app.use('/api/kickbacks', kickbackRoutes);
+
+  // Calendar system routes
+  app.use('/api/calendar', calendarRoutes);
 
   // Inventory management routes
   app.use('/api/inventory', inventoryRoutes);

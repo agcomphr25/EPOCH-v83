@@ -125,10 +125,8 @@ router.get('/', authenticateToken, requireRole('ADMIN', 'HR'), async (req: Reque
         refundAmount: refundRequests.refundAmount,
         rejectionReason: refundRequests.rejectionReason,
         originalTransactionId: refundRequests.originalTransactionId,
-        // Temporarily exclude new columns that don't exist in database yet:
-        // gatewayTransactionId: refundRequests.gatewayTransactionId,
-        // gatewayRefundId: refundRequests.gatewayRefundId,
-        // gateway: refundRequests.gateway,
+        authNetTransactionId: refundRequests.authNetTransactionId,
+        authNetRefundId: refundRequests.authNetRefundId,
       })
       .from(refundRequests)
       .orderBy(desc(refundRequests.createdAt));

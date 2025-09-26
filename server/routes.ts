@@ -496,6 +496,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Past Due Orders Tracker API
+  app.get("/api/orders/past-due", async (req, res) => {
+    try {
+      const { 
+        status, 
+        department, 
+        daysOverdue, 
+        sortBy = 'dueDate',
+        sortOrder = 'asc',
+        limit = 100,
+        offset = 0
+      } = req.query;
+
+      const orders = await storage.getPastDueOrders({
+        status: status as string,
+        department: department as string,
+        daysOverdue: daysOverdue ? parseInt(daysOverdue as string) : undefined,
+        sortBy: sortBy as string,
+        sortOrder: sortOrder as 'asc' | 'desc',
+        limit: parseInt(limit as string),
+        offset: parseInt(offset as string)
+      });
+
+      res.json(orders);
+    } catch (error) {
+      console.error('Error retrieving past due orders:', error);
+      res.status(500).json({ error: "Failed to retrieve past due orders", details: (error as any).message });
+    }
+  });
+
   app.post("/api/orders", async (req, res) => {
     try {
       // Mock order creation - in real implementation, save to orders table

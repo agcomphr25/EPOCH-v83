@@ -140,6 +140,12 @@ export default function Navigation() {
       icon: XCircle,
       description: 'View cancelled orders'
     },
+    {
+      path: '/past-due-orders',
+      label: 'Past Due Orders Tracker',
+      icon: TrendingDown,
+      description: 'Monitor and manage orders past their due date'
+    },
 
     {
       path: '/customers',
@@ -337,10 +343,6 @@ export default function Navigation() {
     }
   ];
 
-<<<<<<< HEAD
-
-=======
->>>>>>> refs/remotes/origin/Develop
   const employeesItems = [
     {
       path: '/employee',

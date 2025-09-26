@@ -67,16 +67,11 @@ export default function CounterfeitPreventionTraining() {
     date: new Date().toISOString().split('T')[0],
     time: '',
     location: '',
-<<<<<<< HEAD
     instructor: '',
-    duration: '45 minutes'
-  });
-
-=======
+    duration: '45 minutes',
     startTime: '',
     endTime: ''
   });
-
 
   const [quizAnswers, setQuizAnswers] = useState<QuizAnswer[]>([]);
   const [employeeSignature, setEmployeeSignature] = useState('');
@@ -153,25 +148,19 @@ export default function CounterfeitPreventionTraining() {
     }
   ];
 
->>>>>>> refs/remotes/origin/Develop
   const addParticipant = () => {
     setParticipants([...participants, {name: '', signature: '', date: '', department: ''}]);
   };
 
-<<<<<<< HEAD
-=======
   const removeParticipant = (index: number) => {
     setParticipants(participants.filter((_, i) => i !== index));
   };
 
->>>>>>> refs/remotes/origin/Develop
   const updateParticipant = (index: number, field: string, value: string) => {
     const updated = [...participants];
     updated[index] = {...updated[index], [field]: value};
     setParticipants(updated);
   };
-
-<<<<<<< HEAD
   const generatePDF = () => {
     const element = document.querySelector('.print-content') as HTMLElement;
     if (!element) return;
@@ -513,7 +502,11 @@ export default function CounterfeitPreventionTraining() {
             <p>© 2024 AG Composites - Counterfeit Prevention Training Program</p>
             <p>For questions or to report suspected counterfeit materials, contact Quality Control immediately.</p>
           </div>
-=======
+        </div>
+      </div>
+    );
+  }
+
   const updateTrainingInfo = (field: string, value: string) => {
     setTrainingInfo(prev => ({...prev, [field]: value}));
   };

@@ -8,16 +8,19 @@ interface DeploymentAuthWrapperProps {
 
 function isDeploymentEnvironment(): boolean {
   // SECURITY UPDATE: Login requirements re-enabled for all sites
-  // Only skip authentication for localhost during development
+  // Only skip authentication for development environments
   const hostname = window.location.hostname;
   const isLocalhost = hostname.includes('localhost') || hostname.includes('127.0.0.1');
+  const isReplitDev = hostname.includes('replit.dev');
   
-  // Only bypass authentication for true localhost development
-  if (isLocalhost) {
+  // Bypass authentication for development environments
+  if (isLocalhost || isReplitDev) {
+    console.log('🔧 FRONTEND AUTH BYPASS: Development environment detected:', hostname);
     return false;
   }
   
-  // Require authentication for ALL other environments including replit.dev and deployments
+  // Require authentication for production deployments (including custom domains)
+  console.log('🔧 FRONTEND PRODUCTION MODE: Authentication required for:', hostname);
   return true;
 }
 

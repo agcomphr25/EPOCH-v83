@@ -102,6 +102,13 @@ router.get('/customer/:customerId', async (req: Request, res: Response) => {
     const { customerId } = req.params;
     console.log(`Getting all orders for customer ${customerId}`);
     
+    // Force cache busting for refund system fixes
+    res.set({
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0'
+    });
+    
     // Get orders from allOrders table with payment information
     const orders = await db.select({
       id: allOrders.id,
@@ -129,6 +136,7 @@ router.get('/customer/:customerId', async (req: Request, res: Response) => {
       isCancelled: allOrders.isCancelled,
       cancelledAt: allOrders.cancelledAt,
       cancelReason: allOrders.cancelReason,
+      // COMMENTED OUT: calculatedTotal: allOrders.calculatedTotal, // 🔄 STORED TOTALS: Include stored calculated total
       createdAt: allOrders.createdAt,
       updatedAt: allOrders.updatedAt
     })
@@ -147,33 +155,9 @@ router.get('/customer/:customerId', async (req: Request, res: Response) => {
 
         const paymentTotal = Number(paymentResults[0]?.total || 0);
         
-        // FIXED: Use the exact same calculation logic as Order Summary
-        // This ensures refund amounts match exactly what's shown in Order Summary
-        let actualOrderTotal;
-        try {
-          // Use the exact same data source as Order Summary: /api/orders/:id endpoint
-          const orderSummaryData = await storage.getOrderById(order.orderId);
-          if (orderSummaryData && (orderSummaryData as any).totalAmount) {
-            actualOrderTotal = Number((orderSummaryData as any).totalAmount);
-          } else {
-            // Calculate using same logic as Order Summary (includes paint, bottom metal, etc.)
-            // Get full order data for calculation
-            const fullOrder = await storage.getOrderById(order.orderId);
-            if (fullOrder) {
-              actualOrderTotal = await storage.calculateOrderTotal(fullOrder as any);
-            } else {
-              actualOrderTotal = Number(order.shipping) || 0;
-            }
-          }
-          
-          // Fallback to shipping cost if calculation fails
-          if (actualOrderTotal === null || actualOrderTotal === undefined || isNaN(actualOrderTotal)) {
-            actualOrderTotal = Number(order.shipping) || 0;
-          }
-        } catch (error) {
-          console.error(`❌ Error getting Order Summary data for ${order.orderId}:`, error);
-          actualOrderTotal = Number(order.shipping) || 0;
-        }
+        // COMMENTED OUT: Performance optimized stored calculatedTotal logic
+        // This ensures fast refund request loading and accurate payment-based refund limits
+        const actualOrderTotal = Number(order.shipping) || 0; // Fallback to shipping only since calculatedTotal removed
         const balanceDue = Math.max(0, actualOrderTotal - paymentTotal);
         
         return {
@@ -946,7 +930,7 @@ router.post('/:orderId/progress', async (req: Request, res: Response) => {
     // Define the departments sequence for automatic progression
     const departments = [
       'P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 
-      'Finish', 'Gunsmith', 'Paint', 'Shipping QC', 'Shipping'
+      'Gunsmith', 'Finish', 'Finish QC', 'Paint', 'Shipping QC', 'Shipping'
     ];
 
     // CRITICAL SAFEGUARD: Prevent backwards department progression
@@ -1512,5 +1496,51 @@ router.get('/export/csv-all', async (req: Request, res: Response) => {
     res.status(500).json({ error: 'Failed to export all orders to CSV' });
   }
 });
+
+// COMMENTED OUT: Migration endpoint to populate calculated totals for all existing finalized orders
+/*
+router.post('/migrate/populate-calculated-totals', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    console.log('🔄 Starting migration to populate calculated totals...');
+    
+    await storage.populateAllCalculatedTotals();
+    
+    res.json({ 
+      success: true, 
+      message: 'Successfully populated calculated totals for all finalized orders' 
+    });
+  } catch (error) {
+    console.error('❌ Migration failed:', error);
+    res.status(500).json({ 
+      error: 'Migration failed', 
+      details: (error as any).message 
+    });
+  }
+});
+*/
+
+// COMMENTED OUT: Validation endpoint to check stored vs calculated totals accuracy
+/*
+router.post('/validate/stored-totals', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { limit = 50 } = req.body;
+    console.log(`🔍 Starting validation of stored totals (limit: ${limit})...`);
+    
+    const results = await storage.validateAllStoredTotals(limit);
+    
+    res.json({ 
+      success: true, 
+      message: `Validation complete: ${results.valid} valid, ${results.invalid} invalid`,
+      results 
+    });
+  } catch (error) {
+    console.error('❌ Validation failed:', error);
+    res.status(500).json({ 
+      error: 'Validation failed', 
+      details: (error as any).message 
+    });
+  }
+});
+*/
 
 export default router;

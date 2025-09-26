@@ -245,48 +245,20 @@ export default function Calendar() {
     }
   };
 
-  // Generate blank calendar PDF and show in modal  
+  // Generate blank calendar PDF - Chrome-safe approach
   const handleGenerateBlankPDF = async () => {
     try {
-      // Chrome workaround: Use XMLHttpRequest for better blob handling
-      const fetchPdfBlob = (): Promise<Blob> => {
-        return new Promise((resolve, reject) => {
-          const xhr = new XMLHttpRequest();
-          xhr.open('POST', `${window.location.origin}/api/calendar/blank-pdf`);
-          xhr.setRequestHeader('Content-Type', 'application/json');
-          xhr.responseType = 'blob';
-          
-          xhr.onreadystatechange = function() {
-            if (this.readyState === 4) {
-              if (this.status === 200) {
-                resolve(this.response);
-              } else {
-                reject(new Error(`HTTP error! status: ${this.status}`));
-              }
-            }
-          };
-          
-          xhr.onerror = () => reject(new Error('Network error'));
-          
-          xhr.send(JSON.stringify({
-            month: moment(currentDate).format('YYYY-MM'),
-            view: currentView,
-          }));
-        });
-      };
-
-      const blob = await fetchPdfBlob();
+      // Generate a unique PDF URL that bypasses blob issues
+      const pdfParams = new URLSearchParams({
+        month: moment(currentDate).format('YYYY-MM'),
+        view: currentView,
+        timestamp: Date.now().toString()
+      });
       
-      // Check if blob is valid PDF
-      if (blob.size === 0) {
-        throw new Error('Received empty PDF file');
-      }
+      const pdfDirectUrl = `${window.location.origin}/api/calendar/blank-pdf?${pdfParams.toString()}`;
       
-      // Create object URL (Chrome-compatible approach)
-      const objectUrl = URL.createObjectURL(blob);
-      console.log('PDF object URL created:', { size: blob.size, type: blob.type, url: objectUrl });
-      
-      setPdfUrl(objectUrl);
+      // Store the direct URL for the modal
+      setPdfUrl(pdfDirectUrl);
       setIsPdfModalOpen(true);
       
       toast({
@@ -822,52 +794,53 @@ export default function Calendar() {
           <div className="flex-1 w-full h-full min-h-[500px] border rounded-lg overflow-hidden bg-gray-100">
             {pdfUrl ? (
               <div className="w-full h-full relative">
-                {/* Chrome-compatible PDF display approach */}
-                <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center bg-gray-50">
-                  <div className="max-w-md">
-                    <FileDown className="h-16 w-16 mx-auto mb-4 text-blue-500" />
-                    <h3 className="text-lg font-semibold text-gray-700 mb-2">
-                      Calendar PDF Ready
-                    </h3>
-                    <p className="text-gray-500 mb-4">
-                      Your AG Composites LLC calendar PDF has been generated successfully! Choose how you'd like to view it:
-                    </p>
-                    <div className="space-y-3">
-                      <Button
-                        onClick={() => {
-                          if (pdfUrl) {
-                            window.open(pdfUrl, '_blank', 'noopener,noreferrer');
-                          }
-                        }}
-                        className="w-full"
-                        size="lg"
-                      >
-                        <FileDown className="h-4 w-4 mr-2" />
-                        Open PDF in New Tab
-                      </Button>
-                      <Button
-                        variant="outline"
-                        onClick={() => {
-                          if (pdfUrl) {
-                            const a = document.createElement('a');
-                            a.href = pdfUrl;
-                            a.download = `AG-Composites-Calendar-${moment(currentDate).format('YYYY-MM')}.pdf`;
-                            document.body.appendChild(a);
-                            a.click();
-                            document.body.removeChild(a);
-                          }
-                        }}
-                        className="w-full"
-                        size="lg"
-                      >
-                        <FileDown className="h-4 w-4 mr-2" />
-                        Download PDF
-                      </Button>
-                    </div>
-                    <div className="mt-4 text-xs text-gray-400">
-                      PDF Size: {pdfUrl ? '~2KB' : 'Unknown'} • Format: Professional Calendar
-                    </div>
-                  </div>
+                {/* Direct PDF display - Chrome safe approach */}
+                <iframe
+                  src={pdfUrl}
+                  className="w-full h-full border-0"
+                  title="AG Composites LLC Calendar PDF"
+                  style={{ minHeight: '500px' }}
+                  onLoad={() => {
+                    console.log('✅ Direct PDF URL loaded successfully in iframe');
+                  }}
+                  onError={() => {
+                    console.log('❌ Direct PDF URL failed to load');
+                  }}
+                />
+                
+                {/* Fallback buttons overlay (hidden by default, shown if needed) */}
+                <div className="absolute top-4 right-4 flex space-x-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      if (pdfUrl) {
+                        window.open(pdfUrl, '_blank', 'noopener,noreferrer');
+                      }
+                    }}
+                    className="bg-white shadow-md"
+                  >
+                    <FileDown className="h-4 w-4 mr-1" />
+                    New Tab
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      if (pdfUrl) {
+                        const a = document.createElement('a');
+                        a.href = pdfUrl;
+                        a.download = `AG-Composites-Calendar-${moment(currentDate).format('YYYY-MM')}.pdf`;
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                      }
+                    }}
+                    className="bg-white shadow-md"
+                  >
+                    <FileDown className="h-4 w-4 mr-1" />
+                    Download
+                  </Button>
                 </div>
               </div>
             ) : (

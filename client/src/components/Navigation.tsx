@@ -337,7 +337,10 @@ export default function Navigation() {
     }
   ];
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> refs/remotes/origin/Develop
   const employeesItems = [
     {
       path: '/employee',

@@ -1,5 +1,5 @@
 
-import { pgTable, text, serial, integer, timestamp, jsonb, boolean, json, real, date, pgEnum, uniqueIndex, unique } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, timestamp, jsonb, boolean, json, real, date, pgEnum, uniqueIndex, unique, primaryKey } from "drizzle-orm/pg-core";
 
 
 import { createInsertSchema } from "drizzle-zod";
@@ -2458,6 +2458,63 @@ export const insertKickbackSchema = createInsertSchema(kickbacks).omit({
 
 export type InsertKickback = z.infer<typeof insertKickbackSchema>;
 export type Kickback = typeof kickbacks.$inferSelect;
+
+// Calendar System Tables
+export const calendarEvents = pgTable("calendar_events", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  description: text("description"),
+  location: text("location"),
+  startDate: timestamp("start_date").notNull(),
+  endDate: timestamp("end_date").notNull(),
+  allDay: boolean("all_day").default(false).notNull(),
+  recurrence: jsonb("recurrence"), // For future recurring events support
+  color: text("color").default("#3B82F6"), // Event color for UI
+  isPublic: boolean("is_public").default(false).notNull(), // Public events visible to all users
+  createdBy: text("created_by").notNull(), // User who created the event
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const calendarEventAttendees = pgTable("calendar_event_attendees", {
+  eventId: integer("event_id").references(() => calendarEvents.id, { onDelete: "cascade" }).notNull(),
+  userId: text("user_id").notNull(), // User ID (can be username or email)
+  status: text("status").default("invited").notNull(), // invited, accepted, declined, tentative
+  isOrganizer: boolean("is_organizer").default(false).notNull(),
+  addedAt: timestamp("added_at").defaultNow(),
+}, (table) => ({
+  pk: primaryKey({ columns: [table.eventId, table.userId] }),
+}));
+
+export const insertCalendarEventSchema = createInsertSchema(calendarEvents).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  title: z.string().min(1, "Event title is required").max(255, "Title must be less than 255 characters"),
+  description: z.string().max(1000, "Description must be less than 1000 characters").optional().nullable(),
+  location: z.string().max(255, "Location must be less than 255 characters").optional().nullable(),
+  startDate: z.coerce.date(),
+  endDate: z.coerce.date(),
+  allDay: z.boolean().default(false),
+  color: z.string().regex(/^#[0-9A-F]{6}$/i, "Color must be a valid hex color").default("#3B82F6"),
+  isPublic: z.boolean().default(false),
+  createdBy: z.string().min(1, "Creator is required"),
+});
+
+export const insertCalendarEventAttendeeSchema = createInsertSchema(calendarEventAttendees).omit({
+  addedAt: true,
+}).extend({
+  eventId: z.number().int().positive(),
+  userId: z.string().min(1, "User ID is required"),
+  status: z.enum(['invited', 'accepted', 'declined', 'tentative']).default('invited'),
+  isOrganizer: z.boolean().default(false),
+});
+
+export type InsertCalendarEvent = z.infer<typeof insertCalendarEventSchema>;
+export type CalendarEvent = typeof calendarEvents.$inferSelect;
+export type InsertCalendarEventAttendee = z.infer<typeof insertCalendarEventAttendeeSchema>;
+export type CalendarEventAttendee = typeof calendarEventAttendees.$inferSelect;
 
 // Document Management System Tables
 export const documents = pgTable("documents", {

@@ -10,6 +10,8 @@ import {
   taskItems,
   // Kickback tracking table
   kickbacks,
+  // Calendar system tables
+  calendarEvents, calendarEventAttendees,
   // Document management tables
   documents, documentTags, documentTagRelations, documentCollections, documentCollectionRelations,
   // New employee management tables
@@ -96,6 +98,8 @@ import {
   type TaskItem, type InsertTaskItem,
   // Kickback tracking types
   type Kickback, type InsertKickback,
+  // Calendar system types
+  type CalendarEvent, type InsertCalendarEvent, type CalendarEventAttendee, type InsertCalendarEventAttendee,
   // Document management types
   type Document, type InsertDocument,
   type DocumentTag, type InsertDocumentTag,
@@ -613,6 +617,21 @@ export interface IStorage {
   createKickback(data: InsertKickback): Promise<Kickback>;
   updateKickback(id: number, data: Partial<InsertKickback>): Promise<Kickback>;
   deleteKickback(id: number): Promise<void>;
+
+  // Calendar Event CRUD
+  getAllCalendarEvents(): Promise<CalendarEvent[]>;
+  getCalendarEventsByDateRange(startDate: Date, endDate: Date): Promise<CalendarEvent[]>;
+  getCalendarEvent(id: number): Promise<CalendarEvent | undefined>;
+  createCalendarEvent(data: InsertCalendarEvent): Promise<CalendarEvent>;
+  updateCalendarEvent(id: number, data: Partial<InsertCalendarEvent>): Promise<CalendarEvent>;
+  deleteCalendarEvent(id: number): Promise<void>;
+  
+  // Calendar Event Attendees CRUD
+  getEventAttendees(eventId: number): Promise<CalendarEventAttendee[]>;
+  addEventAttendee(data: InsertCalendarEventAttendee): Promise<CalendarEventAttendee>;
+  updateAttendeeStatus(eventId: number, userId: string, status: 'invited' | 'accepted' | 'declined' | 'tentative'): Promise<CalendarEventAttendee>;
+  removeEventAttendee(eventId: number, userId: string): Promise<void>;
+  getUserCalendarEvents(userId: string): Promise<CalendarEvent[]>;
 
   // Kickback Analytics Methods
   getKickbackAnalytics(dateRange?: { start: Date; end: Date }): Promise<{
@@ -6390,6 +6409,95 @@ export class DatabaseStorage implements IStorage {
 
   async deleteKickback(id: number): Promise<void> {
     await db.delete(kickbacks).where(eq(kickbacks.id, id));
+  }
+
+  // Calendar Event CRUD Implementation
+  async getAllCalendarEvents(): Promise<CalendarEvent[]> {
+    return await db.select().from(calendarEvents).orderBy(asc(calendarEvents.startDate));
+  }
+
+  async getCalendarEventsByDateRange(startDate: Date, endDate: Date): Promise<CalendarEvent[]> {
+    return await db.select()
+      .from(calendarEvents)
+      .where(
+        and(
+          gte(calendarEvents.startDate, startDate),
+          lte(calendarEvents.endDate, endDate)
+        )
+      )
+      .orderBy(asc(calendarEvents.startDate));
+  }
+
+  async getCalendarEvent(id: number): Promise<CalendarEvent | undefined> {
+    const results = await db.select().from(calendarEvents).where(eq(calendarEvents.id, id));
+    return results[0];
+  }
+
+  async createCalendarEvent(data: InsertCalendarEvent): Promise<CalendarEvent> {
+    const [newEvent] = await db.insert(calendarEvents).values(data).returning();
+    return newEvent;
+  }
+
+  async updateCalendarEvent(id: number, data: Partial<InsertCalendarEvent>): Promise<CalendarEvent> {
+    const [updatedEvent] = await db.update(calendarEvents)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(calendarEvents.id, id))
+      .returning();
+    return updatedEvent;
+  }
+
+  async deleteCalendarEvent(id: number): Promise<void> {
+    await db.delete(calendarEvents).where(eq(calendarEvents.id, id));
+  }
+
+  // Calendar Event Attendees CRUD Implementation
+  async getEventAttendees(eventId: number): Promise<CalendarEventAttendee[]> {
+    return await db.select()
+      .from(calendarEventAttendees)
+      .where(eq(calendarEventAttendees.eventId, eventId))
+      .orderBy(asc(calendarEventAttendees.userId));
+  }
+
+  async addEventAttendee(data: InsertCalendarEventAttendee): Promise<CalendarEventAttendee> {
+    const [newAttendee] = await db.insert(calendarEventAttendees).values(data).returning();
+    return newAttendee;
+  }
+
+  async updateAttendeeStatus(eventId: number, userId: string, status: 'invited' | 'accepted' | 'declined' | 'tentative'): Promise<CalendarEventAttendee> {
+    const [updatedAttendee] = await db.update(calendarEventAttendees)
+      .set({ status })
+      .where(
+        and(
+          eq(calendarEventAttendees.eventId, eventId),
+          eq(calendarEventAttendees.userId, userId)
+        )
+      )
+      .returning();
+    return updatedAttendee;
+  }
+
+  async removeEventAttendee(eventId: number, userId: string): Promise<void> {
+    await db.delete(calendarEventAttendees)
+      .where(
+        and(
+          eq(calendarEventAttendees.eventId, eventId),
+          eq(calendarEventAttendees.userId, userId)
+        )
+      );
+  }
+
+  async getUserCalendarEvents(userId: string): Promise<CalendarEvent[]> {
+    return await db.select()
+      .from(calendarEvents)
+      .leftJoin(calendarEventAttendees, eq(calendarEvents.id, calendarEventAttendees.eventId))
+      .where(
+        or(
+          eq(calendarEvents.createdBy, userId),
+          eq(calendarEventAttendees.userId, userId),
+          eq(calendarEvents.isPublic, true)
+        )
+      )
+      .orderBy(asc(calendarEvents.startDate));
   }
 
   // Kickback Analytics Methods

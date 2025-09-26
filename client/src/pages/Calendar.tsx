@@ -815,30 +815,62 @@ export default function Calendar() {
             </DialogTitle>
           </DialogHeader>
           
-          <div className="flex-1 w-full h-full min-h-[500px] border rounded-lg overflow-hidden">
+          <div className="flex-1 w-full h-full min-h-[500px] border rounded-lg overflow-hidden bg-gray-100">
             {pdfUrl ? (
-              <div className="w-full h-full">
-                {/* Try to display as object first, fallback to direct download */}
-                <object
-                  data={pdfUrl}
-                  type="application/pdf"
-                  className="w-full h-full"
+              <div className="w-full h-full relative">
+                {/* Try multiple approaches for PDF display */}
+                <iframe
+                  src={pdfUrl}
+                  className="w-full h-full border-0"
+                  title="Calendar PDF Preview"
                   style={{ minHeight: '500px' }}
+                  onLoad={(e) => {
+                    console.log('PDF iframe loaded successfully');
+                    // Hide the fallback when PDF loads
+                    const fallback = document.getElementById('pdf-fallback');
+                    if (fallback) {
+                      fallback.style.display = 'none';
+                    }
+                  }}
+                  onError={(e) => {
+                    console.log('PDF iframe failed to load');
+                    // Show the fallback when PDF fails
+                    const fallback = document.getElementById('pdf-fallback');
+                    if (fallback) {
+                      fallback.style.display = 'flex';
+                    }
+                  }}
+                />
+                
+                {/* Fallback content - shown by default, hidden when PDF loads */}
+                <div 
+                  id="pdf-fallback"
+                  className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center bg-gray-50"
                 >
-                  {/* Fallback content if object fails */}
-                  <div className="flex flex-col items-center justify-center h-full p-6 text-center">
-                    <div className="max-w-md">
-                      <FileDown className="h-16 w-16 mx-auto mb-4 text-gray-400" />
-                      <h3 className="text-lg font-semibold text-gray-700 mb-2">
-                        PDF Preview Not Available
-                      </h3>
-                      <p className="text-gray-500 mb-4">
-                        Your calendar PDF has been generated successfully, but cannot be previewed in this browser.
-                      </p>
+                  <div className="max-w-md">
+                    <FileDown className="h-16 w-16 mx-auto mb-4 text-gray-400" />
+                    <h3 className="text-lg font-semibold text-gray-700 mb-2">
+                      Calendar PDF Ready
+                    </h3>
+                    <p className="text-gray-500 mb-4">
+                      Your calendar PDF has been generated successfully! If it doesn't appear above, use the buttons below.
+                    </p>
+                    <div className="space-y-2">
                       <Button
                         onClick={() => {
                           if (pdfUrl) {
-                            // Force download
+                            window.open(pdfUrl, '_blank');
+                          }
+                        }}
+                        className="w-full"
+                      >
+                        <FileDown className="h-4 w-4 mr-2" />
+                        Open in New Tab
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          if (pdfUrl) {
                             const a = document.createElement('a');
                             a.href = pdfUrl;
                             a.download = `calendar-${moment(currentDate).format('YYYY-MM')}.pdf`;
@@ -847,25 +879,14 @@ export default function Calendar() {
                             document.body.removeChild(a);
                           }
                         }}
-                        className="mb-2"
+                        className="w-full"
                       >
                         <FileDown className="h-4 w-4 mr-2" />
-                        Download Calendar PDF
-                      </Button>
-                      <br />
-                      <Button
-                        variant="outline"
-                        onClick={() => {
-                          if (pdfUrl) {
-                            window.open(pdfUrl, '_blank');
-                          }
-                        }}
-                      >
-                        Open in New Tab
+                        Download PDF
                       </Button>
                     </div>
                   </div>
-                </object>
+                </div>
               </div>
             ) : (
               <div className="flex items-center justify-center h-full text-gray-500">

@@ -10,6 +10,8 @@ import {
   taskItems,
   // Kickback tracking table
   kickbacks,
+  // Calendar system tables
+  calendarEvents, calendarEventAttendees,
   // Document management tables
   documents, documentTags, documentTagRelations, documentCollections, documentCollectionRelations,
   // New employee management tables
@@ -96,6 +98,8 @@ import {
   type TaskItem, type InsertTaskItem,
   // Kickback tracking types
   type Kickback, type InsertKickback,
+  // Calendar system types
+  type CalendarEvent, type InsertCalendarEvent, type CalendarEventAttendee, type InsertCalendarEventAttendee,
   // Document management types
   type Document, type InsertDocument,
   type DocumentTag, type InsertDocumentTag,

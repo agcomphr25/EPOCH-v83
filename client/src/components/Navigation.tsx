@@ -281,6 +281,12 @@ export default function Navigation() {
       label: 'Document Management',
       icon: FileText,
       description: 'Unified document repository with advanced tagging and organization'
+    },
+    {
+      path: '/calendar',
+      label: 'Calendar',
+      icon: Calendar,
+      description: 'Multi-user calendar system'
     }
   ];
 

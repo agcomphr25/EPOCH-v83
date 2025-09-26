@@ -273,13 +273,21 @@ export default function Calendar() {
       }
       
       // Create URL for PDF and show in modal
-      const url = window.URL.createObjectURL(blob);
+      const url = window.URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
+      console.log('PDF blob created:', { size: blob.size, type: blob.type, url });
       setPdfUrl(url);
       setIsPdfModalOpen(true);
       
+      // Also create a direct download link as fallback
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = `calendar-${moment(currentDate).format('YYYY-MM')}.pdf`;
+      // Don't auto-click, just prepare it
+      
       toast({
         title: 'PDF Generated',
-        description: 'Your blank calendar PDF is ready to view.',
+        description: 'Your blank calendar PDF is ready to view or download.',
       });
       
     } catch (error) {
@@ -808,13 +816,64 @@ export default function Calendar() {
           </DialogHeader>
           
           <div className="flex-1 w-full h-full min-h-[500px] border rounded-lg overflow-hidden">
-            {pdfUrl && (
-              <iframe
-                src={pdfUrl}
-                className="w-full h-full"
-                title="Calendar PDF Preview"
-                style={{ minHeight: '500px' }}
-              />
+            {pdfUrl ? (
+              <div className="w-full h-full">
+                {/* Try to display as object first, fallback to direct download */}
+                <object
+                  data={pdfUrl}
+                  type="application/pdf"
+                  className="w-full h-full"
+                  style={{ minHeight: '500px' }}
+                >
+                  {/* Fallback content if object fails */}
+                  <div className="flex flex-col items-center justify-center h-full p-6 text-center">
+                    <div className="max-w-md">
+                      <FileDown className="h-16 w-16 mx-auto mb-4 text-gray-400" />
+                      <h3 className="text-lg font-semibold text-gray-700 mb-2">
+                        PDF Preview Not Available
+                      </h3>
+                      <p className="text-gray-500 mb-4">
+                        Your calendar PDF has been generated successfully, but cannot be previewed in this browser.
+                      </p>
+                      <Button
+                        onClick={() => {
+                          if (pdfUrl) {
+                            // Force download
+                            const a = document.createElement('a');
+                            a.href = pdfUrl;
+                            a.download = `calendar-${moment(currentDate).format('YYYY-MM')}.pdf`;
+                            document.body.appendChild(a);
+                            a.click();
+                            document.body.removeChild(a);
+                          }
+                        }}
+                        className="mb-2"
+                      >
+                        <FileDown className="h-4 w-4 mr-2" />
+                        Download Calendar PDF
+                      </Button>
+                      <br />
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          if (pdfUrl) {
+                            window.open(pdfUrl, '_blank');
+                          }
+                        }}
+                      >
+                        Open in New Tab
+                      </Button>
+                    </div>
+                  </div>
+                </object>
+              </div>
+            ) : (
+              <div className="flex items-center justify-center h-full text-gray-500">
+                <div className="text-center">
+                  <FileDown className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                  <p>No PDF loaded. Click "View Blank PDF" to generate.</p>
+                </div>
+              </div>
             )}
           </div>
         </DialogContent>

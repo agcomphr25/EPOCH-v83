@@ -475,12 +475,24 @@ export default function RefundQueue() {
                         {formatCurrency(request.refundAmount)}
                       </span>
                     </div>
-                    <div className="text-sm text-gray-500" data-testid={`processed-date-${request.id}`}>
-                      {request.status === 'PROCESSED' && request.processedAt 
-                        ? formatDate(request.processedAt)
-                        : request.approvedAt 
-                        ? formatDate(request.approvedAt) 
-                        : formatDate(request.updatedAt)}
+                    <div className="flex items-center gap-3">
+                      <div className="text-sm text-gray-500" data-testid={`processed-date-${request.id}`}>
+                        {request.status === 'PROCESSED' && request.processedAt 
+                          ? formatDate(request.processedAt)
+                          : request.approvedAt 
+                          ? formatDate(request.approvedAt) 
+                          : formatDate(request.updatedAt)}
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled
+                        className="opacity-50"
+                        data-testid={`processed-placeholder-${request.id}`}
+                      >
+                        <CheckCircle className="h-4 w-4 mr-1" />
+                        Processed
+                      </Button>
                     </div>
                   </div>
                   {request.rejectionReason && (

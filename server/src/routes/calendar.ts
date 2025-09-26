@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { storage } from '../../storage';
 import { insertCalendarEventSchema, insertCalendarEventAttendeeSchema } from '../../schema';
+import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 
 const router = Router();
 
@@ -161,6 +162,239 @@ router.delete('/events/:id/attendees/:userId', async (req: Request, res: Respons
   } catch (error) {
     console.error('Remove event attendee error:', error);
     res.status(500).json({ error: 'Failed to remove event attendee' });
+  }
+});
+
+// POST /api/calendar/blank-pdf - Generate blank calendar PDF
+router.post('/blank-pdf', async (req: Request, res: Response) => {
+  try {
+    const { month, view } = req.body;
+    
+    // Create a new PDF document
+    const pdfDoc = await PDFDocument.create();
+    const page = pdfDoc.addPage([612, 792]); // Standard letter size
+    const { width, height } = page.getSize();
+    
+    // Load a font
+    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+    
+    // Define colors
+    const black = rgb(0, 0, 0);
+    const gray = rgb(0.7, 0.7, 0.7);
+    const lightGray = rgb(0.9, 0.9, 0.9);
+    
+    // Parse month and year from the input (format: YYYY-MM)
+    const [year, monthNum] = month ? month.split('-').map(Number) : [new Date().getFullYear(), new Date().getMonth() + 1];
+    const monthNames = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+    const monthName = monthNames[monthNum - 1];
+    
+    // Add header with company logo space and title
+    const headerY = height - 50;
+    page.drawText('AG Composites LLC', {
+      x: 50,
+      y: headerY,
+      size: 16,
+      font: boldFont,
+      color: black,
+    });
+    
+    page.drawText(`${monthName} ${year} Calendar`, {
+      x: width / 2 - 80,
+      y: headerY,
+      size: 20,
+      font: boldFont,
+      color: black,
+    });
+    
+    // Add calendar grid based on view type
+    const startY = headerY - 60;
+    
+    if (view === 'month' || !view) {
+      // Generate monthly calendar grid
+      const cellWidth = (width - 100) / 7;
+      const cellHeight = (startY - 100) / 6;
+      
+      // Days of week header
+      const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+      dayNames.forEach((day, index) => {
+        const x = 50 + (index * cellWidth);
+        const y = startY;
+        
+        // Header background
+        page.drawRectangle({
+          x,
+          y: y - cellHeight / 4,
+          width: cellWidth,
+          height: cellHeight / 4,
+          color: lightGray,
+        });
+        
+        page.drawText(day.substring(0, 3), {
+          x: x + 10,
+          y: y - 15,
+          size: 10,
+          font: boldFont,
+          color: black,
+        });
+      });
+      
+      // Get first day of month and number of days
+      const firstDay = new Date(year, monthNum - 1, 1).getDay();
+      const daysInMonth = new Date(year, monthNum, 0).getDate();
+      
+      // Draw calendar grid and numbers
+      let dayCounter = 1;
+      for (let week = 0; week < 6; week++) {
+        for (let day = 0; day < 7; day++) {
+          const x = 50 + (day * cellWidth);
+          const y = startY - (cellHeight / 4) - ((week + 1) * cellHeight);
+          
+          // Draw cell border
+          page.drawRectangle({
+            x,
+            y,
+            width: cellWidth,
+            height: cellHeight,
+            borderColor: gray,
+            borderWidth: 1,
+          });
+          
+          // Add day number
+          if ((week === 0 && day >= firstDay) || (week > 0 && dayCounter <= daysInMonth)) {
+            if (week === 0 && day < firstDay) {
+              // Skip days before month starts
+            } else if (dayCounter <= daysInMonth) {
+              page.drawText(dayCounter.toString(), {
+                x: x + 5,
+                y: y + cellHeight - 20,
+                size: 12,
+                font: boldFont,
+                color: black,
+              });
+              dayCounter++;
+            }
+          }
+        }
+      }
+    } else if (view === 'week') {
+      // Generate weekly calendar grid
+      const cellWidth = (width - 150) / 7;
+      const cellHeight = 30;
+      const hoursPerDay = 12; // 8 AM to 8 PM
+      
+      // Time column header
+      page.drawText('Time', {
+        x: 50,
+        y: startY,
+        size: 12,
+        font: boldFont,
+        color: black,
+      });
+      
+      // Days of week header
+      const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+      dayNames.forEach((day, index) => {
+        const x = 150 + (index * cellWidth);
+        page.drawText(day, {
+          x: x + 10,
+          y: startY,
+          size: 10,
+          font: boldFont,
+          color: black,
+        });
+      });
+      
+      // Draw time slots and grid
+      for (let hour = 8; hour <= 20; hour++) {
+        const y = startY - ((hour - 7) * cellHeight);
+        const timeText = hour <= 12 ? `${hour}:00 AM` : `${hour - 12}:00 PM`;
+        
+        // Time label
+        page.drawText(timeText, {
+          x: 50,
+          y: y - 10,
+          size: 9,
+          font,
+          color: black,
+        });
+        
+        // Draw day cells
+        for (let day = 0; day < 7; day++) {
+          const x = 150 + (day * cellWidth);
+          page.drawRectangle({
+            x,
+            y: y - cellHeight,
+            width: cellWidth,
+            height: cellHeight,
+            borderColor: gray,
+            borderWidth: 0.5,
+          });
+        }
+      }
+    } else if (view === 'day') {
+      // Generate daily calendar view
+      const cellWidth = width - 200;
+      const cellHeight = 30;
+      
+      page.drawText('Daily Schedule', {
+        x: 100,
+        y: startY,
+        size: 14,
+        font: boldFont,
+        color: black,
+      });
+      
+      // Draw time slots
+      for (let hour = 6; hour <= 22; hour++) {
+        const y = startY - ((hour - 5) * cellHeight);
+        const timeText = hour <= 12 ? `${hour}:00 AM` : `${hour - 12}:00 PM`;
+        
+        page.drawText(timeText, {
+          x: 50,
+          y: y - 10,
+          size: 10,
+          font,
+          color: black,
+        });
+        
+        page.drawRectangle({
+          x: 150,
+          y: y - cellHeight,
+          width: cellWidth,
+          height: cellHeight,
+          borderColor: gray,
+          borderWidth: 0.5,
+        });
+      }
+    }
+    
+    // Add footer
+    page.drawText('Generated by EPOCH v8 Manufacturing ERP System', {
+      x: 50,
+      y: 30,
+      size: 10,
+      font,
+      color: gray,
+    });
+    
+    // Generate PDF bytes
+    const pdfBytes = await pdfDoc.save();
+    
+    // Set response headers
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="calendar-${monthName}-${year}.pdf"`);
+    res.setHeader('Content-Length', pdfBytes.length);
+    
+    // Send PDF
+    res.send(Buffer.from(pdfBytes));
+    
+  } catch (error) {
+    console.error('Generate blank calendar PDF error:', error);
+    res.status(500).json({ error: 'Failed to generate calendar PDF' });
   }
 });
 

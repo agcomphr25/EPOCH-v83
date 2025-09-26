@@ -246,12 +246,12 @@ export default function Navigation() {
       icon: PieChart,
       description: 'Advanced reporting with PDF/CSV export'
     },
-    {
-      path: '/ag-bottom-metal-report',
-      label: 'AG Bottom Metal Report',
-      icon: DollarSign,
-      description: 'Comprehensive pricing analysis for AG bottom metal orders by price tiers'
-    },
+    // {
+    //   path: '/ag-bottom-metal-report',
+    //   label: 'AG Bottom Metal Report',
+    //   icon: DollarSign,
+    //   description: 'Comprehensive pricing analysis for AG bottom metal orders by price tiers'
+    // },
     {
       path: '/p2-forms',
       label: 'P2 Forms',

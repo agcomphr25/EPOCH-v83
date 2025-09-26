@@ -257,9 +257,35 @@ export default function Calendar() {
         }),
       });
       
-      if (response.ok) {
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
+      if (!response.ok) {
+        const errorData = await response.text();
+        console.error('PDF generation failed:', response.status, errorData);
+        throw new Error(`Server returned ${response.status}: ${errorData}`);
+      }
+      
+      const blob = await response.blob();
+      
+      // Check if blob is valid PDF
+      if (blob.size === 0) {
+        throw new Error('Received empty PDF file');
+      }
+      
+      // Open in new tab instead of downloading for better debugging
+      const url = window.URL.createObjectURL(blob);
+      const newWindow = window.open(url, '_blank');
+      
+      if (newWindow) {
+        // Clean up URL after a delay
+        setTimeout(() => {
+          window.URL.revokeObjectURL(url);
+        }, 5000);
+        
+        toast({
+          title: 'PDF Generated',
+          description: 'Your blank calendar PDF has opened in a new tab.',
+        });
+      } else {
+        // Fallback to download if popup blocked
         const a = document.createElement('a');
         a.href = url;
         a.download = `calendar-${moment(currentDate).format('YYYY-MM')}.pdf`;
@@ -269,16 +295,16 @@ export default function Calendar() {
         document.body.removeChild(a);
         
         toast({
-          title: 'PDF Generated',
+          title: 'PDF Downloaded',
           description: 'Your blank calendar PDF has been downloaded.',
         });
-      } else {
-        throw new Error('Failed to generate PDF');
       }
+      
     } catch (error) {
+      console.error('PDF generation error:', error);
       toast({
         title: 'Error Generating PDF',
-        description: 'Failed to generate calendar PDF. Please try again.',
+        description: `Failed to generate calendar PDF: ${error instanceof Error ? error.message : 'Unknown error'}`,
         variant: 'destructive',
       });
     }

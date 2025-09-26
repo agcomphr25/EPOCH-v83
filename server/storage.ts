@@ -243,6 +243,15 @@ export interface IStorage {
   getAllOrderDrafts(): Promise<OrderDraft[]>;
   getLastOrderId(): Promise<string>;
   getAllOrders(): Promise<AllOrder[]>;
+  getPastDueOrders(options: {
+    status?: string;
+    department?: string;
+    daysOverdue?: number;
+    sortBy?: string;
+    sortOrder?: 'asc' | 'desc';
+    limit?: number;
+    offset?: number;
+  }): Promise<(AllOrder & { daysOverdue: number; customerName?: string })[]>;
   getCancelledOrders(): Promise<AllOrder[]>; // Returns finalized orders from allOrders table
   getAllOrdersWithPaymentStatus(): Promise<(AllOrder & { paymentTotal: number; isFullyPaid: boolean })[]>; // Returns finalized orders with payment status
   getAllOrdersWithPaymentStatusPaginated(page: number, limit: number): Promise<{ 
@@ -1762,6 +1771,108 @@ export class DatabaseStorage implements IStorage {
       product: order.modelId || 'Unknown Product',
       isFlattop: false // Add missing field
     })) as any;
+  }
+
+  async getPastDueOrders(options: {
+    status?: string;
+    department?: string;
+    daysOverdue?: number;
+    sortBy?: string;
+    sortOrder?: 'asc' | 'desc';
+    limit?: number;
+    offset?: number;
+  }): Promise<(AllOrder & { daysOverdue: number; customerName?: string })[]> {
+    const {
+      status,
+      department,
+      daysOverdue,
+      sortBy = 'dueDate',
+      sortOrder = 'asc',
+      limit = 100,
+      offset = 0
+    } = options;
+
+    // Build where conditions
+    let conditions = [
+      // Only unfulfilled orders (not shipped)
+      isNull(allOrders.shippingCompletedAt),
+      // Past due date
+      lt(allOrders.dueDate, new Date()),
+      // Not cancelled
+      ne(allOrders.status, 'CANCELLED'),
+      or(isNull(allOrders.isCancelled), eq(allOrders.isCancelled, false)),
+      // Exclude purchase order generated orders
+      sql`${allOrders.orderId} NOT LIKE 'P1-%'`,
+      sql`${allOrders.orderId} NOT LIKE 'PO-%'`,
+      sql`${allOrders.orderId} NOT LIKE 'PO%'`,
+      sql`("all_orders"."source" IS NULL OR "all_orders"."source" NOT LIKE 'PO_%')`
+    ];
+
+    // Add optional filters
+    if (status) {
+      conditions.push(eq(allOrders.status, status));
+    }
+
+    if (department) {
+      conditions.push(eq(allOrders.currentDepartment, department));
+    }
+
+    if (daysOverdue !== undefined) {
+      const cutoffDate = new Date();
+      cutoffDate.setDate(cutoffDate.getDate() - daysOverdue);
+      conditions.push(lt(allOrders.dueDate, cutoffDate));
+    }
+
+    // Query orders with customer data joined for proper sorting
+    const baseQuery = db
+      .select({
+        ...getTableColumns(allOrders),
+        customerName: customers.name
+      })
+      .from(allOrders)
+      .leftJoin(customers, eq(allOrders.customerId, sql`${customers.id}::text`))
+      .where(and(...conditions));
+
+    // Build order by clause based on sortBy
+    let orderedQuery;
+    switch (sortBy) {
+      case 'customerName':
+        orderedQuery = baseQuery.orderBy(sortOrder === 'desc' ? desc(customers.name) : asc(customers.name));
+        break;
+      case 'currentDepartment':
+        orderedQuery = baseQuery.orderBy(sortOrder === 'desc' ? desc(allOrders.currentDepartment) : asc(allOrders.currentDepartment));
+        break;
+      case 'status':
+        orderedQuery = baseQuery.orderBy(sortOrder === 'desc' ? desc(allOrders.status) : asc(allOrders.status));
+        break;
+      case 'orderDate':
+        orderedQuery = baseQuery.orderBy(sortOrder === 'desc' ? desc(allOrders.orderDate) : asc(allOrders.orderDate));
+        break;
+      case 'daysOverdue':
+        // Sort by days overdue (calculated from current date - due date)
+        // For ascending: more recent due dates (fewer days overdue) first
+        // For descending: older due dates (more days overdue) first
+        orderedQuery = baseQuery.orderBy(sortOrder === 'desc' ? asc(allOrders.dueDate) : desc(allOrders.dueDate));
+        break;
+      case 'dueDate':
+      default:
+        orderedQuery = baseQuery.orderBy(sortOrder === 'desc' ? desc(allOrders.dueDate) : asc(allOrders.dueDate));
+        break;
+    }
+
+    // Apply limit and offset
+    const orders = await orderedQuery.limit(limit).offset(offset);
+
+    // Calculate days overdue for each order
+    const now = new Date();
+    return orders.map(order => {
+      const daysOverdue = Math.ceil((now.getTime() - new Date(order.dueDate).getTime()) / (1000 * 60 * 60 * 24));
+      return {
+        ...order,
+        daysOverdue,
+        customerName: order.customerName || 'Unknown Customer'
+      };
+    });
   }
 
   // PERFORMANCE: Synchronous version that uses pre-fetched data to prevent DB connection overload

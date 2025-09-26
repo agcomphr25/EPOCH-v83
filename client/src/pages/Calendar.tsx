@@ -14,7 +14,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { CalendarIcon, Plus, FileDown, Edit, Trash2 } from 'lucide-react';
+import { CalendarIcon, Plus, FileDown, Edit, Trash2, Printer } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
 import type { CalendarEvent } from '@shared/schema';
@@ -756,6 +756,30 @@ export default function Calendar() {
             <DialogTitle className="flex items-center justify-between">
               <span>Calendar PDF - {moment(currentDate).format('MMMM YYYY')}</span>
               <div className="flex items-center space-x-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    if (pdfUrl) {
+                      // Create a new window with the PDF for printing
+                      const printWindow = window.open(pdfUrl, '_blank');
+                      if (printWindow) {
+                        printWindow.onload = () => {
+                          printWindow.print();
+                        };
+                      }
+                      
+                      toast({
+                        title: 'Printing Calendar',
+                        description: 'Opening print dialog for your calendar.',
+                      });
+                    }
+                  }}
+                  data-testid="button-print-pdf"
+                >
+                  <Printer className="h-4 w-4 mr-2" />
+                  Print
+                </Button>
                 <Button
                   size="sm"
                   variant="outline"

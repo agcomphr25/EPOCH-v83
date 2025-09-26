@@ -384,9 +384,9 @@ router.post('/blank-pdf', async (req: Request, res: Response) => {
     // Generate PDF bytes
     const pdfBytes = await pdfDoc.save();
     
-    // Set response headers
+    // Set response headers for inline display
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="calendar-${monthName}-${year}.pdf"`);
+    res.setHeader('Content-Disposition', `inline; filename="calendar-${monthName}-${year}.pdf"`);
     res.setHeader('Content-Length', pdfBytes.length);
     
     // Send PDF

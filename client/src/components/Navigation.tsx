@@ -337,20 +337,6 @@ export default function Navigation() {
     }
   ];
 
-  const trainingItems = [
-    {
-      path: '/shutdown-training',
-      label: 'Shutdown Training',
-      icon: GraduationCap,
-      description: 'Presentation-style shutdown procedures training with attendance signatures'
-    },
-    {
-      path: '/counterfeit-prevention-training',
-      label: 'Counterfeit Prevention Training',
-      icon: Shield,
-      description: 'Comprehensive counterfeit materials prevention training with multiple choice quiz'
-    }
-  ];
 
   const employeesItems = [
     {

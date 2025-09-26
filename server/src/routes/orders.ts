@@ -22,19 +22,18 @@ const router = Router();
 // Get all orders for All Orders List (root endpoint)
 router.get('/', async (req: Request, res: Response) => {
   try {
-    const orders = await storage.getAllOrders();
-    const poCount = orders.filter(o => o.orderId.startsWith('PO')).length;
+    const allOrders = await storage.getAllOrders();
+    
+    // Filter out purchase orders - only return regular orders (AG, EH, etc.)
+    const orders = allOrders.filter(o => !o.orderId.startsWith('PO'));
+    
+    const poCount = allOrders.filter(o => o.orderId.startsWith('PO')).length;
     const agCount = orders.filter(o => o.orderId.startsWith('AG')).length;
     const sampleOrderIds = orders.slice(0, 10).map(o => o.orderId);
-    console.log(`📊 ALL ORDERS API: Total=${orders.length}, AG orders=${agCount}, PO orders=${poCount}`);
+    console.log(`📊 ALL ORDERS API: Total before filter=${allOrders.length}, After filter=${orders.length}, AG orders=${agCount}, PO orders filtered out=${poCount}`);
     console.log(`📊 Sample Order IDs: ${sampleOrderIds.join(', ')}`);
     console.log(`📊 ACTUAL RESPONSE BEING SENT TO FRONTEND: ${JSON.stringify(orders.slice(0, 3).map(o => ({id: o.id, orderId: o.orderId})))}`);
     
-    // Log any orders that might look like PO orders
-    const suspiciousOrders = orders.filter(o => o.orderId.includes('PO'));
-    if (suspiciousOrders.length > 0) {
-      console.log(`⚠️  SUSPICIOUS: Found ${suspiciousOrders.length} orders with 'PO' in orderId:`, suspiciousOrders.map(o => o.orderId));
-    }
     res.json(orders);
   } catch (error) {
     console.error('Error retrieving orders:', error);
@@ -58,7 +57,7 @@ router.get('/with-payment-status', async (req: Request, res: Response) => {
 router.get('/with-payment-status/paginated', async (req: Request, res: Response) => {
   try {
     const page = parseInt(req.query.page as string) || 1;
-    const limit = Math.min(parseInt(req.query.limit as string) || 50, 100); // Max 100 per page
+    const limit = Math.min(parseInt(req.query.limit as string) || 50, 1000); // Max 1000 per page
     
     // Add basic caching headers
     res.set({

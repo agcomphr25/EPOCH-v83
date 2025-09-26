@@ -283,6 +283,14 @@ export default function Navigation() {
       description: 'Unified document repository with advanced tagging and organization'
 
     },
+    {
+      path: '/calendar',
+      label: 'Calendar',
+      icon: Calendar,
+      description: 'Multi-user calendar system'
+
+
+    },
   ];
 
   const trainingItems = [
@@ -303,6 +311,7 @@ export default function Navigation() {
       label: 'Counterfeit Prevention Training',
       icon: Shield,
       description: 'Comprehensive counterfeit materials prevention training with multiple choice quiz'
+
 
     }
   ];

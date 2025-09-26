@@ -3,7 +3,7 @@ import { db } from '../../db';
 import { refundRequests, allOrders, customers, payments, creditCardTransactions } from '../../schema';
 import { insertRefundRequestSchema } from '../../schema';
 import { eq, desc, and, sql } from 'drizzle-orm';
-import { authenticateToken } from '../../middleware/auth';
+import { authenticateToken, requireRole } from '../../middleware/auth';
 // @ts-ignore - AuthorizeNet doesn't have proper TypeScript definitions
 import AuthorizeNet from 'authorizenet';
 
@@ -98,7 +98,7 @@ async function processAuthorizeNetRefund(transactionId: string, refundAmount: nu
 }
 
 // GET /api/refund-requests - Get all refund requests
-router.get('/', async (req: Request, res: Response) => {
+router.get('/', authenticateToken, requireRole('ADMIN', 'HR'), async (req: Request, res: Response) => {
   try {
     console.log('🔍 Getting all refund requests');
     
@@ -125,10 +125,8 @@ router.get('/', async (req: Request, res: Response) => {
         refundAmount: refundRequests.refundAmount,
         rejectionReason: refundRequests.rejectionReason,
         originalTransactionId: refundRequests.originalTransactionId,
-        // Temporarily exclude new columns that don't exist in database yet:
-        // gatewayTransactionId: refundRequests.gatewayTransactionId,
-        // gatewayRefundId: refundRequests.gatewayRefundId,
-        // gateway: refundRequests.gateway,
+        authNetTransactionId: refundRequests.authNetTransactionId,
+        authNetRefundId: refundRequests.authNetRefundId,
       })
       .from(refundRequests)
       .orderBy(desc(refundRequests.createdAt));
@@ -142,15 +140,15 @@ router.get('/', async (req: Request, res: Response) => {
 });
 
 // POST /api/refund-requests - Create a new refund request
-router.post('/', async (req: Request, res: Response) => {
+router.post('/', authenticateToken, async (req: Request, res: Response) => {
   try {
     console.log('📝 Creating new refund request:', req.body);
     
     // Validate request data
     const validatedData = insertRefundRequestSchema.parse(req.body);
     
-    // For now, we'll use a hardcoded user. In production, this would come from auth
-    const requestedBy = 'CSR'; // TODO: Get from authentication context
+    // Get the authenticated user
+    const requestedBy = (req as any).user?.username || 'Unknown';
     
     const [newRequest] = await db
       .insert(refundRequests)
@@ -169,7 +167,7 @@ router.post('/', async (req: Request, res: Response) => {
 });
 
 // POST /api/refund-requests/:id/approve - Approve a refund request
-router.post('/:id/approve', async (req: Request, res: Response) => {
+router.post('/:id/approve', authenticateToken, requireRole('ADMIN', 'HR'), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     console.log(`✅ Approving refund request ${id}`);
@@ -226,7 +224,7 @@ router.post('/:id/approve', async (req: Request, res: Response) => {
 });
 
 // POST /api/refund-requests/:id/reject - Reject a refund request
-router.post('/:id/reject', async (req: Request, res: Response) => {
+router.post('/:id/reject', authenticateToken, requireRole('ADMIN', 'HR'), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { rejectionReason } = req.body;
@@ -261,6 +259,106 @@ router.post('/:id/reject', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('❌ Error rejecting refund request:', error);
     res.status(500).json({ error: 'Failed to reject refund request' });
+  }
+});
+
+// POST /api/refund-requests/:id/process - Mark a refund request as processed
+router.post('/:id/process', authenticateToken, requireRole('ADMIN', 'HR'), async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    console.log(`🔄 Processing refund request ${id}`);
+    
+    // Get the refund request details first
+    const [existingRequest] = await db
+      .select()
+      .from(refundRequests)
+      .where(eq(refundRequests.id, parseInt(id)));
+
+    if (!existingRequest) {
+      return res.status(404).json({ error: 'Refund request not found' });
+    }
+
+    if (existingRequest.status !== 'APPROVED') {
+      return res.status(400).json({ error: 'Only approved refund requests can be processed' });
+    }
+    
+    // For now, we'll use a hardcoded processor. In production, this would come from auth
+    const processedBy = 'MANAGER'; // TODO: Get from authentication context
+    
+    const [updatedRequest] = await db
+      .update(refundRequests)
+      .set({
+        status: 'PROCESSED',
+        processedBy,
+        processedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(refundRequests.id, parseInt(id)))
+      .returning();
+
+    console.log('✅ Processed refund request:', updatedRequest.id);
+
+    // CSR Notification Logic
+    // TODO: In a real system, this would send an email/notification to the requestedBy user
+    console.log(`📧 CSR Notification: Notifying ${existingRequest.requestedBy} that refund request ${existingRequest.orderId} has been processed`);
+    
+    // For now, we'll just log the notification. In production, this would:
+    // 1. Send an email to the CSR
+    // 2. Create an in-app notification
+    // 3. Update a notification queue/system
+    console.log(`📧 Notification Details:
+      - To: ${existingRequest.requestedBy}
+      - Subject: Refund Request Processed - Order ${existingRequest.orderId}
+      - Message: Your refund request for $${existingRequest.refundAmount} on order ${existingRequest.orderId} has been processed.`);
+    
+    res.json({
+      ...updatedRequest,
+      message: `Refund processed successfully. CSR ${existingRequest.requestedBy} has been notified.`
+    });
+    
+  } catch (error) {
+    console.error('❌ Error processing refund request:', error);
+    res.status(500).json({ error: 'Failed to process refund request' });
+  }
+});
+
+// GET /api/refund-requests/order/:orderId - Get refund requests for a specific order
+router.get('/order/:orderId', async (req: Request, res: Response) => {
+  try {
+    const { orderId } = req.params;
+    console.log(`🔍 Getting refund requests for order ${orderId}`);
+    
+    // Select only the columns that exist in the current database schema
+    const requests = await db
+      .select({
+        id: refundRequests.id,
+        orderId: refundRequests.orderId,
+        refundType: refundRequests.refundType,
+        amount: refundRequests.amount,
+        reason: refundRequests.reason,
+        notes: refundRequests.notes,
+        status: refundRequests.status,
+        requestedBy: refundRequests.requestedBy,
+        requestedAt: refundRequests.requestedAt,
+        approvedBy: refundRequests.approvedBy,
+        approvedAt: refundRequests.approvedAt,
+        processedBy: refundRequests.processedBy,
+        processedAt: refundRequests.processedAt,
+        transactionId: refundRequests.transactionId,
+        createdAt: refundRequests.createdAt,
+        updatedAt: refundRequests.updatedAt,
+        customerId: refundRequests.customerId,
+        refundAmount: refundRequests.refundAmount,
+      })
+      .from(refundRequests)
+      .where(eq(refundRequests.orderId, orderId))
+      .orderBy(desc(refundRequests.createdAt));
+
+    console.log(`✅ Found ${requests.length} refund requests for order ${orderId}`);
+    res.json(requests);
+  } catch (error) {
+    console.error('❌ Error fetching order refund requests:', error);
+    res.status(500).json({ error: 'Failed to fetch order refund requests' });
   }
 });
 

@@ -477,9 +477,8 @@ export const refundRequests = pgTable("refund_requests", {
   customerId: text("customer_id"), // Reference to customer (nullable for compatibility)
   refundAmount: real("refund_amount"), // Amount to be refunded
   rejectionReason: text("rejection_reason"), // Reason for rejection if applicable
-  gatewayTransactionId: text("gateway_transaction_id"), // Gateway refund transaction ID
-  gatewayRefundId: text("gateway_refund_id"), // Gateway refund reference
-  gateway: text("gateway").default("authorize_net"), // authorize_net, accept_blue
+  authNetTransactionId: text("auth_net_transaction_id"), // Authorize.Net transaction ID
+  authNetRefundId: text("auth_net_refund_id"), // Authorize.Net refund reference
   originalTransactionId: text("original_transaction_id"), // Original transaction being refunded
 });
 
@@ -2805,8 +2804,8 @@ export const insertRefundRequestSchema = createInsertSchema(refundRequests).omit
   approvedAt: true,
   processedAt: true,
   rejectionReason: true,
-  gatewayTransactionId: true,
-  gatewayRefundId: true,
+  authNetTransactionId: true,
+  authNetRefundId: true,
   createdAt: true,
   updatedAt: true,
 }).extend({

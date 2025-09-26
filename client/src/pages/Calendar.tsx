@@ -52,6 +52,8 @@ export default function Calendar() {
   const [selectedEvent, setSelectedEvent] = useState<CalendarEventExtended | null>(null);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [currentView, setCurrentView] = useState<string>('month');
   const [currentDate, setCurrentDate] = useState(new Date());
   
@@ -243,7 +245,7 @@ export default function Calendar() {
     }
   };
 
-  // Generate blank calendar PDF
+  // Generate blank calendar PDF and show in modal
   const handleGenerateBlankPDF = async () => {
     try {
       const response = await fetch('/api/calendar/blank-pdf', {
@@ -270,35 +272,15 @@ export default function Calendar() {
         throw new Error('Received empty PDF file');
       }
       
-      // Open in new tab instead of downloading for better debugging
+      // Create URL for PDF and show in modal
       const url = window.URL.createObjectURL(blob);
-      const newWindow = window.open(url, '_blank');
+      setPdfUrl(url);
+      setIsPdfModalOpen(true);
       
-      if (newWindow) {
-        // Clean up URL after a delay
-        setTimeout(() => {
-          window.URL.revokeObjectURL(url);
-        }, 5000);
-        
-        toast({
-          title: 'PDF Generated',
-          description: 'Your blank calendar PDF has opened in a new tab.',
-        });
-      } else {
-        // Fallback to download if popup blocked
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `calendar-${moment(currentDate).format('YYYY-MM')}.pdf`;
-        document.body.appendChild(a);
-        a.click();
-        window.URL.revokeObjectURL(url);
-        document.body.removeChild(a);
-        
-        toast({
-          title: 'PDF Downloaded',
-          description: 'Your blank calendar PDF has been downloaded.',
-        });
-      }
+      toast({
+        title: 'PDF Generated',
+        description: 'Your blank calendar PDF is ready to view.',
+      });
       
     } catch (error) {
       console.error('PDF generation error:', error);
@@ -307,6 +289,15 @@ export default function Calendar() {
         description: `Failed to generate calendar PDF: ${error instanceof Error ? error.message : 'Unknown error'}`,
         variant: 'destructive',
       });
+    }
+  };
+
+  // Clean up PDF URL when modal closes
+  const handleClosePdfModal = () => {
+    setIsPdfModalOpen(false);
+    if (pdfUrl) {
+      window.URL.revokeObjectURL(pdfUrl);
+      setPdfUrl(null);
     }
   };
 
@@ -368,7 +359,7 @@ export default function Calendar() {
             data-testid="button-generate-blank-pdf"
           >
             <FileDown className="h-4 w-4" />
-            <span>Download Blank PDF</span>
+            <span>View Blank PDF</span>
           </Button>
           
           <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
@@ -755,6 +746,53 @@ export default function Calendar() {
               </div>
             </form>
           </Form>
+        </DialogContent>
+      </Dialog>
+
+      {/* PDF Modal */}
+      <Dialog open={isPdfModalOpen} onOpenChange={handleClosePdfModal}>
+        <DialogContent className="max-w-4xl h-[80vh] p-6">
+          <DialogHeader>
+            <DialogTitle className="flex items-center justify-between">
+              <span>Calendar PDF - {moment(currentDate).format('MMMM YYYY')}</span>
+              <div className="flex items-center space-x-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    if (pdfUrl) {
+                      const a = document.createElement('a');
+                      a.href = pdfUrl;
+                      a.download = `calendar-${moment(currentDate).format('YYYY-MM')}.pdf`;
+                      document.body.appendChild(a);
+                      a.click();
+                      document.body.removeChild(a);
+                      
+                      toast({
+                        title: 'PDF Downloaded',
+                        description: 'Calendar PDF has been saved to your computer.',
+                      });
+                    }
+                  }}
+                  data-testid="button-download-pdf"
+                >
+                  <FileDown className="h-4 w-4 mr-2" />
+                  Download
+                </Button>
+              </div>
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="flex-1 w-full h-full min-h-[500px] border rounded-lg overflow-hidden">
+            {pdfUrl && (
+              <iframe
+                src={pdfUrl}
+                className="w-full h-full"
+                title="Calendar PDF Preview"
+                style={{ minHeight: '500px' }}
+              />
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </div>

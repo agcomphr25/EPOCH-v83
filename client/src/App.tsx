@@ -78,6 +78,7 @@ import KickbackTracking from '@/components/KickbackTracking';
 import DocumentManagement from "./pages/DocumentManagement";
 import ShutdownProceduresTraining from "@/pages/ShutdownProceduresTraining";
 import CounterfeitPreventionTraining from "@/pages/CounterfeitPreventionTraining";
+import Calendar from "./pages/Calendar";
 import PurchaseOrderItemsQueuePage from "./pages/PurchaseOrderItemsQueuePage";
 import LayupPluggingQueuePage from "./pages/LayupPluggingQueuePage";
 import BarcodeQueuePage from "./pages/BarcodeQueuePage";
@@ -302,6 +303,7 @@ function App() {
                   <Route path="/document-management" component={DocumentManagement} />
                   <Route path="/shutdown-training" component={ShutdownProceduresTraining} />
                   <Route path="/counterfeit-prevention-training" component={CounterfeitPreventionTraining} />
+                  <Route path="/calendar" component={Calendar} />
 
                   {/* Queue Management Routes */}
                   <Route path="/purchase-order-items-queue" component={PurchaseOrderItemsQueuePage} />

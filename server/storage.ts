@@ -2526,24 +2526,20 @@ export class DatabaseStorage implements IStorage {
     limit: number, 
     totalPages: number 
   }> {
-    // First, get the total count for pagination
+    // First, get the total count for pagination (exclude purchase orders and purchase order customers by ID and name)
     const totalCountResult = await db
       .select({ count: sql<number>`COUNT(*)` })
       .from(allOrders)
-      .where(
-        and(
-          sql`${allOrders.orderId} NOT LIKE 'P1-%'`,
-          sql`${allOrders.orderId} NOT LIKE 'PO%'`,
-          sql`${allOrders.orderId} != 'AG1'`,
-          sql`${allOrders.orderId} NOT LIKE '%PO%'`
-        )
-      );
+      .leftJoin(customers, eq(allOrders.customerId, sql`${customers.id}::text`))
+      .where(sql`${allOrders.orderId} NOT LIKE 'PO%' 
+        AND ${allOrders.customerId} NOT IN (SELECT DISTINCT customer_id FROM purchase_orders WHERE customer_id IS NOT NULL)
+        AND ${customers.name} NOT IN (SELECT DISTINCT customer_name FROM purchase_orders WHERE customer_name IS NOT NULL)`);
     
     const total = totalCountResult[0]?.count || 0;
     const totalPages = Math.ceil(total / limit);
     const offset = (page - 1) * limit;
 
-    // Use the same field selection as the original method but with pagination
+    // Use the same field selection as the original method but with pagination (exclude purchase orders and purchase order customers)
     const ordersWithCustomers = await db
       .select({
         // Order fields - using the same selection as original method
@@ -2585,17 +2581,13 @@ export class DatabaseStorage implements IStorage {
       })
       .from(allOrders)
       .leftJoin(customers, eq(allOrders.customerId, sql`${customers.id}::text`))
-      .where(
-        and(
-          sql`${allOrders.orderId} NOT LIKE 'P1-%'`,
-          sql`${allOrders.orderId} NOT LIKE 'PO%'`,
-          sql`${allOrders.orderId} != 'AG1'`,
-          sql`${allOrders.orderId} NOT LIKE '%PO%'`
-        )
-      )
+      .where(sql`${allOrders.orderId} NOT LIKE 'PO%' 
+        AND ${allOrders.customerId} NOT IN (SELECT DISTINCT customer_id FROM purchase_orders WHERE customer_id IS NOT NULL)
+        AND ${customers.name} NOT IN (SELECT DISTINCT customer_name FROM purchase_orders WHERE customer_name IS NOT NULL)`)
       .orderBy(desc(allOrders.updatedAt))
       .limit(limit)
       .offset(offset);
+    
 
     // Get all payments aggregated by order ID in parallel
     const paymentTotals = await db

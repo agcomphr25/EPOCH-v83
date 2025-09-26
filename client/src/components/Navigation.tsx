@@ -246,12 +246,12 @@ export default function Navigation() {
       icon: PieChart,
       description: 'Advanced reporting with PDF/CSV export'
     },
-    {
-      path: '/ag-bottom-metal-report',
-      label: 'AG Bottom Metal Report',
-      icon: DollarSign,
-      description: 'Comprehensive pricing analysis for AG bottom metal orders by price tiers'
-    },
+    // {
+    //   path: '/ag-bottom-metal-report',
+    //   label: 'AG Bottom Metal Report',
+    //   icon: DollarSign,
+    //   description: 'Comprehensive pricing analysis for AG bottom metal orders by price tiers'
+    // },
     {
       path: '/p2-forms',
       label: 'P2 Forms',
@@ -283,6 +283,14 @@ export default function Navigation() {
       description: 'Unified document repository with advanced tagging and organization'
 
     },
+    {
+      path: '/calendar',
+      label: 'Calendar',
+      icon: Calendar,
+      description: 'Multi-user calendar system'
+
+
+    },
   ];
 
   const trainingItems = [
@@ -303,6 +311,7 @@ export default function Navigation() {
       label: 'Counterfeit Prevention Training',
       icon: Shield,
       description: 'Comprehensive counterfeit materials prevention training with multiple choice quiz'
+
 
     }
   ];

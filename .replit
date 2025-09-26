@@ -77,8 +77,6 @@ localPort = 37215
 externalPort = 6000
 
 [[ports]]
-<<<<<<< HEAD
-=======
 localPort = 41433
 externalPort = 8000
 
@@ -91,7 +89,6 @@ localPort = 42315
 externalPort = 8008
 
 [[ports]]
->>>>>>> refs/remotes/origin/Develop
 localPort = 46245
 externalPort = 5173
 

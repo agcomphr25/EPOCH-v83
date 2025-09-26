@@ -168,7 +168,7 @@ window.$RefreshSig$ = () => (type) => type;</script>
         shouldUpdateReactFresh: function() { return false; }
       };
     </script>
-    <script type="module" src="/src/main.tsx?v=e1K-lkCdIacxL__BQkvLG"></script>
+    <script type="module" src="/src/main.tsx?v=U8SxknHWSsJijf7AOTKPA"></script>
     <!-- This is a replit script which adds a banner on the top of the page when opened in development mode outside the replit environment -->
     <script type="text/javascript" src="https://replit.com/public/js/replit-dev-banner.js"></script>
   </body>

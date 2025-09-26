@@ -24,17 +24,15 @@ declare global {
 function isDeploymentEnvironment(req: Request): boolean {
   const host = req.get('host') || '';
   
-  // Check for production deployment domains
-  const isProduction = host.includes('.replit.app') || 
-                      host.includes('.repl.co') || 
-                      process.env.NODE_ENV === 'production';
+  // SECURITY UPDATE: Only bypass authentication for localhost
+  const isLocalhost = host.includes('localhost') || host.includes('127.0.0.1');
   
-  if (isProduction) {
-    console.log('🔧 BACKEND PRODUCTION MODE: Authentication enabled for deployed site');
-    return true;
-  } else {
-    console.log('🔧 BACKEND AUTH BYPASS: Local development - authentication disabled');
+  if (isLocalhost) {
+    console.log('🔧 BACKEND AUTH BYPASS: Localhost only - authentication disabled');
     return false;
+  } else {
+    console.log('🔧 BACKEND PRODUCTION MODE: Authentication enabled for all non-localhost sites');
+    return true;
   }
 }
 

@@ -167,6 +167,7 @@ router.delete('/events/:id/attendees/:userId', async (req: Request, res: Respons
 
 // POST /api/calendar/blank-pdf - Generate blank calendar PDF
 router.post('/blank-pdf', async (req: Request, res: Response) => {
+  console.log('🔍 PDF Route called with:', { month: req.body?.month, view: req.body?.view });
   try {
     const { month, view } = req.body;
     
@@ -383,17 +384,24 @@ router.post('/blank-pdf', async (req: Request, res: Response) => {
     
     // Generate PDF bytes
     const pdfBytes = await pdfDoc.save();
+    console.log(`📄 Generated PDF: ${pdfBytes.length} bytes for ${monthName} ${year}`);
     
     // Set response headers for inline display
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `inline; filename="calendar-${monthName}-${year}.pdf"`);
     res.setHeader('Content-Length', pdfBytes.length);
     
+    console.log('📤 Sending PDF response with headers:', {
+      contentType: 'application/pdf',
+      contentLength: pdfBytes.length
+    });
+    
     // Send PDF
     res.send(Buffer.from(pdfBytes));
     
   } catch (error) {
-    console.error('Generate blank calendar PDF error:', error);
+    console.error('❌ Generate blank calendar PDF error:', error);
+    console.error('❌ Full error stack:', error instanceof Error ? error.stack : 'No stack trace');
     res.status(500).json({ error: 'Failed to generate calendar PDF' });
   }
 });

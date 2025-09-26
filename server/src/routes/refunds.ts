@@ -298,6 +298,38 @@ router.post('/:id/process', authenticateToken, requireRole('ADMIN', 'HR'), async
 
     console.log('✅ Processed refund request:', updatedRequest.id);
 
+    // Update order balance due by reducing payment amount to reflect the refund
+    const refundAmount = existingRequest.refundAmount || 0;
+    console.log(`💰 Updating order ${existingRequest.orderId} balance due for refund amount: $${refundAmount}`);
+    
+    // Get the current order to check payment amount
+    const [currentOrder] = await db
+      .select({
+        paymentAmount: allOrders.paymentAmount
+      })
+      .from(allOrders)
+      .where(eq(allOrders.orderId, existingRequest.orderId));
+
+    if (currentOrder && refundAmount > 0) {
+      const currentPaymentAmount = currentOrder.paymentAmount || 0;
+      const newPaymentAmount = Math.max(0, currentPaymentAmount - refundAmount);
+      
+      console.log(`💰 Order ${existingRequest.orderId} payment update: $${currentPaymentAmount} → $${newPaymentAmount}`);
+      
+      // Update the order payment amount to reflect the refund
+      await db
+        .update(allOrders)
+        .set({
+          paymentAmount: newPaymentAmount,
+          updatedAt: new Date(),
+        })
+        .where(eq(allOrders.orderId, existingRequest.orderId));
+        
+      console.log(`✅ Updated order ${existingRequest.orderId} payment amount to $${newPaymentAmount}`);
+    } else {
+      console.log(`⚠️ Warning: Order ${existingRequest.orderId} not found for payment update`);
+    }
+
     // CSR Notification Logic
     // TODO: In a real system, this would send an email/notification to the requestedBy user
     console.log(`📧 CSR Notification: Notifying ${existingRequest.requestedBy} that refund request ${existingRequest.orderId} has been processed`);

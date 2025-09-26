@@ -1,5 +1,7 @@
 
+
 import { pgTable, text, serial, integer, timestamp, jsonb, boolean, json, real, date, pgEnum, uniqueIndex, unique, primaryKey } from "drizzle-orm/pg-core";
+
 
 
 import { createInsertSchema } from "drizzle-zod";
@@ -49,6 +51,7 @@ export const allOrders = pgTable("all_orders", {
   showCustomDiscount: boolean("show_custom_discount").default(false),
   priceOverride: real("price_override"), // Manual price override for stock model
   shipping: real("shipping").default(0),
+  // COMMENTED OUT: calculatedTotal: numeric("calculated_total", { precision: 10, scale: 2 }), // Stored order total (2 decimal places for currency)
   tikkaOption: text("tikka_option"),
   status: text("status").default("FINALIZED"),
   barcode: text("barcode").unique(), // Code 39 barcode for order identification

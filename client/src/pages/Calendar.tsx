@@ -248,7 +248,7 @@ export default function Calendar() {
   // Generate blank calendar PDF and show in modal
   const handleGenerateBlankPDF = async () => {
     try {
-      const response = await fetch('/api/calendar/blank-pdf', {
+      const response = await fetch(`${window.location.origin}/api/calendar/blank-pdf`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

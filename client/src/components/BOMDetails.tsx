@@ -78,30 +78,29 @@ export function BOMDetails({ bomId, onBack }: BOMDetailsProps) {
 
   // Fetch BOM details with items
   const { data: bom, isLoading } = useQuery<BomDefinition>({
-    queryKey: [`/api/p2-boms/${bomId}/details`],
+    queryKey: [`/api/boms/${bomId}/details`],
   });
 
   // Also fetch hierarchical structure
   const { data: hierarchyData } = useQuery({
-    queryKey: [`/api/p2-boms/${bomId}/hierarchy`],
+    queryKey: [`/api/boms/${bomId}/hierarchy`],
     enabled: viewMode === 'hierarchical',
   });
 
   // Fetch inventory items to get part numbers
   const { data: inventoryItems = [] } = useQuery<InventoryItem[]>({
-    queryKey: ["/api/inventory/items"],
+    queryKey: ["/api/inventory"],
   });
 
   // Delete item mutation
   const deleteItemMutation = useMutation({
     mutationFn: async (itemId: number) => {
-      await apiRequest(`/api/p2-boms/${bomId}/items/${itemId}`, {
+      await apiRequest(`/api/boms/${bomId}/items/${itemId}`, {
         method: "DELETE",
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [`/api/p2-boms/${bomId}/details`] });
-      queryClient.invalidateQueries({ queryKey: [`/api/p2-boms/${bomId}/hierarchy`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/boms", bomId] });
       toast.success("Item deleted successfully");
     },
     onError: () => {
@@ -137,19 +136,19 @@ export function BOMDetails({ bomId, onBack }: BOMDetailsProps) {
 
   const handleItemCreated = () => {
     setIsNewItemOpen(false);
-    queryClient.invalidateQueries({ queryKey: [`/api/p2-boms/${bomId}/details`] });
+    queryClient.invalidateQueries({ queryKey: [`/api/boms/${bomId}/details`] });
     toast.success("Item added successfully");
   };
 
   const handleItemUpdated = () => {
     setEditingItem(null);
-    queryClient.invalidateQueries({ queryKey: [`/api/p2-boms/${bomId}/details`] });
+    queryClient.invalidateQueries({ queryKey: [`/api/boms/${bomId}/details`] });
     toast.success("Item updated successfully");
   };
 
   const handleSubAssemblyCreated = () => {
-    queryClient.invalidateQueries({ queryKey: [`/api/p2-boms/${bomId}/details`] });
-    queryClient.invalidateQueries({ queryKey: [`/api/p2-boms/${bomId}/hierarchy`] });
+    queryClient.invalidateQueries({ queryKey: [`/api/boms/${bomId}/details`] });
+    queryClient.invalidateQueries({ queryKey: [`/api/boms/${bomId}/hierarchy`] });
     toast.success("Sub-assembly created successfully");
   };
 

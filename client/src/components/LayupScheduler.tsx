@@ -4205,6 +4205,102 @@ export default function LayupScheduler() {
                 <Dialog>
                   <DialogTrigger asChild>
                     <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                      <Package className="w-4 h-4 mr-2" />
+                      OEM Priority Settings
+                    </DropdownMenuItem>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-md">
+                    <DialogHeader>
+                      <DialogTitle>OEM Priority Scheduling</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                        Configure how OEM orders are prioritized in the scheduling system.
+                      </p>
+                      
+                      <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                        <h4 className="font-medium text-green-800 dark:text-green-200 mb-2">
+                          Two-Step OEM Workflow
+                        </h4>
+                        <div className="space-y-2 text-sm text-green-700 dark:text-green-300">
+                          <p><strong>Step 1:</strong> Click "Save Priority" to schedule OEM orders first</p>
+                          <p><strong>Step 2:</strong> Click "Add Regular Orders" to fill remaining capacity</p>
+                        </div>
+                      </div>
+
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium">OEM Production Orders:</span>
+                          <span className="text-sm text-green-600 font-medium">
+                            {processedOrders.filter(o => o.source === 'production_order').length} orders
+                          </span>
+                        </div>
+                        
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium">Regular Orders:</span>
+                          <span className="text-sm text-blue-600 font-medium">
+                            {processedOrders.filter(o => o.source === 'main_orders').length} orders
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Button
+                          onClick={async () => {
+                            try {
+                              const response = await apiRequest('/api/scheduler/oem-priority-only', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: { 
+                                  selectionMode: 'entire_po',
+                                  selectedStockItemIds: [],
+                                  selectedOemOrderIds: processedOrders.filter(o => o.source === 'production_order').map(o => o.orderId)
+                                }
+                              });
+                              
+                              if (response.success) {
+                                toast({
+                                  title: "OEM Priority Scheduled",
+                                  description: `${response.scheduled || 0} OEM orders scheduled with priority`,
+                                });
+                                window.location.reload();
+                              } else {
+                                throw new Error(response.error || 'Failed to schedule OEM priority');
+                              }
+                            } catch (error) {
+                              console.error('❌ OEM Priority scheduling failed:', error);
+                              toast({
+                                title: "OEM Priority Failed",
+                                description: error instanceof Error ? error.message : 'Unknown error occurred',
+                                variant: "destructive"
+                              });
+                            }
+                          }}
+                          disabled={processedOrders.filter(o => o.source === 'production_order').length === 0}
+                          className="w-full bg-green-600 hover:bg-green-700"
+                          size="sm"
+                        >
+                          <Package className="w-4 h-4 mr-2" />
+                          Save Priority ({processedOrders.filter(o => o.source === 'production_order').length} OEM)
+                        </Button>
+
+                        <Button
+                          onClick={generateAlgorithmicSchedule}
+                          disabled={processedOrders.filter(o => o.source === 'main_orders' && !getDisplayedAssignmentEntries().find(([id]) => id === o.orderId)).length === 0}
+                          className="w-full bg-blue-600 hover:bg-blue-700"
+                          size="sm"
+                        >
+                          <Zap className="w-4 h-4 mr-2" />
+                          Add Regular Orders ({processedOrders.filter(o => o.source === 'main_orders' && !getDisplayedAssignmentEntries().find(([id]) => id === o.orderId)).length} remaining)
+                        </Button>
+                      </div>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+
+                <Dialog>
+                  <DialogTrigger asChild>
+                    <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
                       <Users className="w-4 h-4 mr-2" />
                       Employee Settings
                     </DropdownMenuItem>

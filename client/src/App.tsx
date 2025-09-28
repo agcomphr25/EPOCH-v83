@@ -25,7 +25,6 @@ import InventoryScannerPage from "./pages/InventoryScannerPage";
 import InventoryDashboardPage from "./pages/InventoryDashboardPage";
 import InventoryManagerPage from "./pages/InventoryManagerPage";
 import InventoryReceivingPage from "./pages/InventoryReceivingPage";
-import EnhancedInventoryMRPPage from "./pages/EnhancedInventoryMRPPage";
 import QCPage from "./pages/QCPage";
 import MaintenancePage from "./pages/MaintenancePage";
 import EmployeePortalPage from "./pages/EmployeePortalPage";
@@ -41,7 +40,6 @@ import EnhancedReportsPage from './pages/EnhancedReportsPage';
 import FormRendererPage from "./pages/FormRendererPage";
 import DocumentationPageNew from "./pages/DocumentationPageNew";
 import CustomerManagement from "./pages/CustomerManagement";
-import VendorManagement from "./pages/VendorManagement";
 import PurchaseOrders from "./pages/PurchaseOrders";
 import P2PurchaseOrders from "./pages/P2PurchaseOrders";
 import POProductsPage from "./pages/POProductsPage";
@@ -63,7 +61,6 @@ import FALEESHAHTestDashboard from "./pages/FALEESHAHTestDashboard";
 import JOEYBTestDashboard from "./pages/JOEYBTestDashboard";
 import OrderDepartmentTransfer from "./pages/OrderDepartmentTransfer";
 import { BOMAdministration } from "./pages/BOMAdministration";
-import RobustBOMAdministration from "./pages/RobustBOMAdministration";
 import AGBottomMetalReport from "./pages/AGBottomMetalReport";
 import EmployeeDashboard from "./pages/EmployeeDashboard";
 import EmployeeDetail from "./pages/EmployeeDetail";
@@ -76,10 +73,6 @@ import WasteManagementForm from '@/pages/WasteManagementForm';
 import TaskTracker from '@/pages/TaskTracker';
 import KickbackTracking from '@/components/KickbackTracking';
 import DocumentManagement from "./pages/DocumentManagement";
-import ShutdownProceduresTraining from "@/pages/ShutdownProceduresTraining";
-
-import CounterfeitPreventionTraining from "@/pages/CounterfeitPreventionTraining";
-import Calendar from "./pages/Calendar";
 import PurchaseOrderItemsQueuePage from "./pages/PurchaseOrderItemsQueuePage";
 import LayupPluggingQueuePage from "./pages/LayupPluggingQueuePage";
 import BarcodeQueuePage from "./pages/BarcodeQueuePage";
@@ -108,9 +101,6 @@ import RefundQueue from "./pages/RefundQueue";
 import ProductionQueuePage from "./pages/ProductionQueuePage";
 import SimplifiedLayupScheduler from "./components/SimplifiedLayupScheduler";
 import CustomerSatisfaction from "./pages/CustomerSatisfaction";
-import VendorsPage from "./pages/VendorsPage";
-import VendorPOPage from "./pages/VendorPOPage";
-import PastDueOrdersTracker from "./pages/PastDueOrdersTracker";
 
 import { Toaster as HotToaster } from 'react-hot-toast';
 import DeploymentAuthWrapper from './components/DeploymentAuthWrapper';
@@ -195,7 +185,6 @@ function App() {
                   <Route path="/orders-simple" component={OrdersListSimple} />
                   <Route path="/all-orders" component={OrdersList} />
                   <Route path="/cancelled-orders" component={CancelledOrdersPage} />
-                  <Route path="/past-due-orders" component={PastDueOrdersTracker} />
                   <Route path="/discounts" component={DiscountManagement} />
                   <Route path="/feature-manager" component={FeatureManager} />
                   <Route path="/stock-models" component={StockModels} />
@@ -206,12 +195,6 @@ function App() {
                   <Route path="/customers" component={CustomerManagement} />
                   <Route path="/customer-satisfaction" component={CustomerSatisfaction} />
 
-                  {/* Vendor Management Routes */}
-
-                  <Route path="/vendors" component={VendorsPage} />
-                  <Route path="/vendor-pos" component={VendorPOPage} />
-
-
                   {/* Purchase Order Routes */}
                   <Route path="/purchase-orders" component={PurchaseOrders} />
                   <Route path="/p1-purchase-orders" component={PurchaseOrders} />
@@ -221,21 +204,16 @@ function App() {
                   {/* Production and BOM Routes */}
                   <Route path="/production-tracking" component={ProductionTracking} />
                   <Route path="/bom-administration" component={BOMAdministration} />
-                  <Route path="/robust-bom-administration" component={RobustBOMAdministration} />
 
                   {/* Barcode and Scanner Routes */}
                   <Route path="/barcode-scanner" component={BarcodeScannerPage} />
 
-                  {/* Inventory Routes (Legacy) */}
+                  {/* Inventory Routes */}
                   <Route path="/inventory" component={InventoryManagerPage} />
                   <Route path="/inventory/scanner" component={InventoryScannerPage} />
                   <Route path="/inventory/dashboard" component={InventoryDashboardPage} />
                   <Route path="/inventory/manager" component={InventoryManagerPage} />
                   <Route path="/inventory/receiving" component={InventoryReceivingPage} />
-                  <Route path="/inventory/enhanced-mrp" component={EnhancedInventoryMRPPage} />
-                  
-                  {/* Enhanced System Routes (Independent) */}
-                  <Route path="/enhanced-inventory" component={EnhancedInventoryMRPPage} />
 
                   {/* QC and Maintenance Routes */}
                   <Route path="/qc" component={QCPage} />
@@ -304,10 +282,6 @@ function App() {
                   <Route path="/task-tracker" component={TaskTracker} />
                   <Route path="/kickback-tracking" component={KickbackTracking} />
                   <Route path="/document-management" component={DocumentManagement} />
-                  <Route path="/shutdown-training" component={ShutdownProceduresTraining} />
-
-                  <Route path="/counterfeit-prevention-training" component={CounterfeitPreventionTraining} />
-                  <Route path="/calendar" component={Calendar} />
 
                   {/* Queue Management Routes */}
                   <Route path="/purchase-order-items-queue" component={PurchaseOrderItemsQueuePage} />

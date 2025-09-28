@@ -494,12 +494,13 @@ router.post('/oem-priority-only', async (req, res) => {
             WHERE mold_id = $1 AND DATE(scheduled_date) = DATE($2)
           `, [mold.mold_id, scheduledDateStr]);
           
-          // FIXED: Proper parsing of PostgreSQL result object
-          const collisionCount = parseInt(liveCollisionCheck.rows[0].count) || 0;
+          // FIXED: Safer parsing of PostgreSQL result with proper null checks
+          const rows = liveCollisionCheck?.rows || [];
+          const collisionCount = rows.length > 0 ? parseInt(rows[0]?.count) || 0 : 0;
           const hasDbCollision = collisionCount > 0;
           const hasMemoryCollision = currentOemAllocations.has(moldDateKey);
           
-          console.log(`🔍 Results: DB collision=${hasDbCollision}, Memory collision=${hasMemoryCollision}, Count=${collisionCount}`);
+          console.log(`🔍 Results: DB collision=${hasDbCollision}, Memory collision=${hasMemoryCollision}, Count=${collisionCount}, Rows=${rows.length}`);
           
           if (!hasDbCollision && !hasMemoryCollision) {
             selectedMold = mold;

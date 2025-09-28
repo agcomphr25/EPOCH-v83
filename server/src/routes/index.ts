@@ -320,12 +320,12 @@ export function registerRoutes(app: Express): Server {
           id,
           order_id as "orderId",
           customer_id as "customer",
-          product,
-          date,
+          model_id as "modelId",
+          order_date as "orderDate",
           due_date as "dueDate",
           current_department as "currentDepartment",
           status
-        FROM orders 
+        FROM all_orders 
         WHERE current_department = 'P1 Production Queue'
       `);
       
@@ -335,13 +335,15 @@ export function registerRoutes(app: Express): Server {
       const formattedActiveOrders = activeOrders.map((order: any) => ({
         id: order.id,
         orderId: order.orderId,
-        orderDate: order.date, // Use date field directly
+        orderDate: order.orderDate,
         dueDate: order.dueDate,
-        currentDepartment: (order as any).currentDepartment,
+        currentDepartment: order.currentDepartment,
         customerId: order.customer,
         features: {},
-        modelId: order.product,
-        status: (order as any).status,
+        modelId: order.modelId,
+        stockModelId: order.modelId,
+        status: order.status,
+        source: 'main_orders',
         poId: null,
         productionOrderId: null
       }));
@@ -382,7 +384,6 @@ export function registerRoutes(app: Express): Server {
         features: po.features || {},
         modelId: po.stockModelId,
         stockModelId: po.stockModelId,
-        product: po.stockModelId,
         status: po.status,
         source: po.source,  // This will be 'p1_purchase_order'
         priorityScore: po.priorityScore || 1500
@@ -402,7 +403,7 @@ export function registerRoutes(app: Express): Server {
           // customerPO field is unreliable - often contains customer names instead of PO numbers
           const sourceType = (order as any).poId || (order as any).productionOrderId ? 'production_order' : 'main_orders';
           
-          const { stockModelId, product } = inferStockModelFromFeatures({
+          const { stockModelId } = inferStockModelFromFeatures({
             ...order,
             source: sourceType
           });
@@ -419,8 +420,7 @@ export function registerRoutes(app: Express): Server {
             orderId: order.orderId,
             stockModelId,
             modelId: stockModelId, // Ensure modelId matches stockModelId for consistent material detection
-            product,
-            stockModelName: product
+            stockModelName: stockModelId
           };
         })
       ];

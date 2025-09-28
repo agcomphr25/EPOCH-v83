@@ -221,7 +221,10 @@ router.post('/add-regular-orders', async (req, res) => {
               WHERE mold_id = $1 AND scheduled_date = $2
             `, [mold.mold_id, scheduledDateStr]);
             
-            const hasDbCollision = (liveCollisionCheck as any).rows?.[0]?.count > 0;
+            // FIXED: Safer parsing of PostgreSQL result with proper null checks (same fix as OEM scheduler)
+            const rows = liveCollisionCheck?.rows || [];
+            const collisionCount = rows.length > 0 ? parseInt(rows[0]?.count) || 0 : 0;
+            const hasDbCollision = collisionCount > 0;
             const hasMemoryCollision = currentAllocations.has(moldDateKey);
             
             if (!hasDbCollision && !hasMemoryCollision) {

@@ -261,26 +261,37 @@ router.post('/add-regular-orders', async (req, res) => {
             
             // FIXED: Real-time collision detection - check database for live conflicts
             // CRITICAL: Use TRIM and LOWER in SQL to match normalized mold IDs
+            // BUSINESS RULE: Check for PO orders that have exclusive mold access (unless capacity > 2)
             const liveCollisionCheck = await pool.query(`
-              SELECT COUNT(*) as count 
-              FROM layup_schedule 
-              WHERE TRIM(LOWER(mold_id)) = TRIM(LOWER($1)) AND DATE(scheduled_date) = DATE($2)
+              SELECT COUNT(*) as count,
+                     COUNT(CASE WHEN order_id LIKE 'PO-%' THEN 1 END) as po_count,
+                     m.multiplier as capacity
+              FROM layup_schedule ls
+              LEFT JOIN molds m ON TRIM(LOWER(m.mold_id)) = TRIM(LOWER(ls.mold_id))
+              WHERE TRIM(LOWER(ls.mold_id)) = TRIM(LOWER($1)) AND DATE(ls.scheduled_date) = DATE($2)
+              GROUP BY m.multiplier
             `, [mold.mold_id, scheduledDateStr]);
             
             // FIXED: Safer parsing of PostgreSQL result with proper null checks (same fix as OEM scheduler)
             const result = liveCollisionCheck as any;
             const rows = result?.rows || [];
             const collisionCount = rows.length > 0 ? parseInt(rows[0]?.count) || 0 : 0;
-            const hasDbCollision = collisionCount > 0;
+            const poCount = rows.length > 0 ? parseInt(rows[0]?.po_count) || 0 : 0;
+            const moldCapacity = rows.length > 0 ? parseInt(rows[0]?.capacity) || 1 : 1;
             const hasMemoryCollision = currentAllocations.has(moldDateKey);
+            
+            // BUSINESS RULE: PO orders have exclusive mold access unless capacity > 2
+            const hasPOExclusivity = poCount > 0 && moldCapacity <= 2;
+            const hasDbCollision = collisionCount > 0 && (collisionCount >= moldCapacity || hasPOExclusivity);
             
             if (!hasDbCollision && !hasMemoryCollision) {
               selectedMold = mold;
               currentAllocations.add(moldDateKey);
-              console.log(`📋 ✅ Found available mold: ${mold.mold_id} for ${order.orderId} on ${scheduledDateStr} (DB: ${hasDbCollision ? 'conflict' : 'free'}, Memory: ${hasMemoryCollision ? 'conflict' : 'free'})`);
+              console.log(`📋 ✅ Found available mold: ${mold.mold_id} for ${order.orderId} on ${scheduledDateStr} (Capacity: ${moldCapacity}, Used: ${collisionCount}, PO: ${poCount}, PO Exclusive: ${hasPOExclusivity})`);
               break;
             } else {
-              console.log(`📋 ❌ Mold collision detected: ${mold.mold_id} already assigned on ${scheduledDateStr} (DB: ${hasDbCollision ? 'conflict' : 'free'}, Memory: ${hasMemoryCollision ? 'conflict' : 'free'})`);
+              const reason = hasPOExclusivity ? 'PO exclusive access' : hasMemoryCollision ? 'memory collision' : `capacity full (${collisionCount}/${moldCapacity})`;
+              console.log(`📋 ❌ Mold collision detected: ${mold.mold_id} blocked on ${scheduledDateStr} - ${reason}`);
             }
           }
           

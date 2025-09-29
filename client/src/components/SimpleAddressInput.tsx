@@ -38,17 +38,8 @@ export default function SimpleAddressInput({ label, value, onChange, required = 
       const results = await autocompleteAddress(q);
       console.log('SmartyStreets suggestions received:', results);
       
-
-      const data = await response.json();
-      console.log('Address suggestions received:', data);
-      
-      const newSuggestions = data.suggestions || [];
-      console.log('🔧 Setting suggestions:', newSuggestions.length, 'items');
-      setSuggestions(newSuggestions);
-      setShowSuggestions(newSuggestions.length > 0);
-      console.log('🔧 showSuggestions set to:', newSuggestions.length > 0);
-
-
+      setSuggestions(results);
+      setShowSuggestions(results.length > 0);
       setSelectedIndex(-1);
     } catch (error) {
       console.error('Address autocomplete error:', error);
@@ -243,11 +234,7 @@ export default function SimpleAddressInput({ label, value, onChange, required = 
                 onClick={() => handleSelect(suggestion)}
                 className="p-2 mb-1 bg-white border border-gray-300 rounded cursor-pointer hover:bg-blue-50"
               >
-                <div className="font-medium">{suggestion.streetLine}</div>
-                <div className="text-sm text-gray-600">
-                  {suggestion.city}, {suggestion.state} {suggestion.zipCode}
-                </div>
-
+                <div className="font-medium">{suggestion}</div>
               </div>
             ))}
           </div>

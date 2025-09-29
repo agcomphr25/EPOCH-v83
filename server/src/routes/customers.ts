@@ -350,12 +350,13 @@ router.post('/address-autocomplete-bypass', async (req: Request, res: Response) 
     });
     
     if (!smartyAuthId || !smartyAuthToken) {
+
       console.log('🔧 Missing SmartyStreets credentials');
       return res.status(500).json({ 
         error: "SmartyStreets credentials not configured" 
       });
     }
-    
+
     // Import SmartyStreets address validation utility
     const { getSmartyStreetsAutocomplete, validateAddressWithSmartyStreets } = await import('../utils/smartyStreetsValidation');
     
@@ -375,10 +376,11 @@ router.post('/address-autocomplete-bypass', async (req: Request, res: Response) 
         } else {
           // Handle "City State" format
           const cityStateParts = addressParts[1].split(' ');
-          state = cityStateParts.pop() || ''; // Last part is state
+          state = cityStateParts.pop(); // Last part is state
           city = cityStateParts.join(' '); // Rest is city
         }
         
+
         console.log('🔧 SmartyStreets Address Validation params:', { street, city, state });
         
         try {
@@ -392,24 +394,27 @@ router.post('/address-autocomplete-bypass', async (req: Request, res: Response) 
           
           if (validationResult.isValid && validationResult.suggestions.length > 0) {
             const result = validationResult.suggestions[0];
+
             const fullAddress = {
-              delivery_line_1: result.street,
+              delivery_line_1: result.delivery_line_1,
               components: {
-                city_name: result.city,
-                state_abbreviation: result.state,
-                zipcode: result.postalCode
+                city_name: result.components.city_name,
+                state_abbreviation: result.components.state_abbreviation,
+                zipcode: result.components.zipcode + (result.components.plus4_code ? '-' + result.components.plus4_code : '')
               }
             };
             
             console.log('🔧 Returning full address with ZIP:', fullAddress);
             return res.json({ fullAddress: fullAddress });
           } else {
+
             console.log('🔧 SmartyStreets validation returned no valid results, falling back to autocomplete');
           }
         } catch (validationError) {
           console.log('🔧 SmartyStreets validation error:', validationError);
           
           // If SmartyStreets validation fails, try to extract ZIP from the search text
+
           const zipMatch = search.match(/\b(\d{5}(?:-\d{4})?)\b/);
           if (zipMatch) {
             console.log('🔧 Extracted ZIP code from search text:', zipMatch[1]);
@@ -456,7 +461,36 @@ router.post('/address-autocomplete-bypass', async (req: Request, res: Response) 
       res.json({
         suggestions: fallbackSuggestions
       });
-    }
+    const data = await response.json();
+    console.log('🔧 SmartyStreets raw response:', data);
+    
+    // Transform SmartyStreets autocomplete response
+    const suggestions = data.suggestions?.map((item: any) => {
+      // Extract ZIP code from text if zipcode field is empty but text contains it
+      let zipCode = item.zipcode;
+      if (!zipCode && item.text) {
+        const zipMatch = item.text.match(/\b(\d{5}(?:-\d{4})?)\b/);
+        if (zipMatch) {
+          zipCode = zipMatch[1];
+        }
+      }
+      
+      return {
+        text: item.text,
+        streetLine: item.street_line,
+        city: item.city,
+        state: item.state,
+        zipCode: zipCode,
+        entries: item.entries
+      };
+    }) || [];
+    
+    console.log('🔧 Transformed suggestions:', suggestions);
+    console.log('🔧 Sending response with suggestions count:', suggestions.length);
+    
+    res.json({
+      suggestions: suggestions
+    });
     
   } catch (error) {
     console.error('🔧 Address autocomplete error:', error);

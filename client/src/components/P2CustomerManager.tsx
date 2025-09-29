@@ -14,7 +14,7 @@ import { z } from "zod";
 import { useToast } from "@/hooks/use-toast";
 import { Pencil, Trash2, Plus, Building2 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
-import AddressInput from "@/components/AddressInput";
+import SimpleAddressInput from "@/components/SimpleAddressInput";
 import { type AddressData } from "@/utils/addressUtils";
 
 const p2CustomerSchema = z.object({
@@ -275,7 +275,7 @@ export function P2CustomerManager() {
                 </div>
                 {/* Billing Address with UPS Autocomplete */}
                 <div>
-                  <AddressInput
+                  <SimpleAddressInput
                     label="Billing Address"
                     value={billingAddressData}
                     onChange={(addressData) => {
@@ -289,7 +289,7 @@ export function P2CustomerManager() {
                 
                 {/* Shipping Address with UPS Autocomplete */}
                 <div>
-                  <AddressInput
+                  <SimpleAddressInput
                     label="Shipping Address"
                     value={shippingAddressData}
                     onChange={(addressData) => {

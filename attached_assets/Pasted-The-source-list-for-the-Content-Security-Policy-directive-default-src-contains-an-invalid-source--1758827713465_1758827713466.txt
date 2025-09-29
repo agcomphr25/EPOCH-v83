@@ -1,0 +1,114 @@
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.Understand this error
+10The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?Understand this error
+10The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.Understand this error
+_app-e4029606e7f89d87.js:34 
+      /////////////////////
+   ///////////////////////////
+  ////////@@@@@@@//////////////
+  ////////@@@@@@@//////////////
+  ////////@@@@@@@//////////////        Curious and driven?
+  ///////////////@@@@@@@///////        Work with us!
+  ///////////////@@@@@@@///////
+  ///////////////@@@@@@@///////        https://join.replit.com/hack.with.us
+  ////////@@@@@@@//////////////
+  ////////@@@@@@@//////////////
+  ////////@@@@@@#//////////////
+   ///////////////////////////
+      /////////////////////
+      
+_app-e4029606e7f89d87.js:4 DD_RUM is already initialized.
+(anonymous) @ _app-e4029606e7f89d87.js:4Understand this error
+_app-e4029606e7f89d87.js:34 
+      /////////////////////
+   ///////////////////////////
+  ////////@@@@@@@//////////////
+  ////////@@@@@@@//////////////
+  ////////@@@@@@@//////////////        Curious and driven?
+  ///////////////@@@@@@@///////        Work with us!
+  ///////////////@@@@@@@///////
+  ///////////////@@@@@@@///////        https://join.replit.com/hack.with.us
+  ////////@@@@@@@//////////////
+  ////////@@@@@@@//////////////
+  ////////@@@@@@#//////////////
+   ///////////////////////////
+      /////////////////////
+      
+framework-1f00f78986576b71.js:1 Uncaught Error: Minified React error #418; visit https://reactjs.org/docs/error-decoder.html?invariant=418 for the full message or use the non-minified dev environment for full errors and additional helpful warnings.
+    at av (framework-1f00f78986576b71.js:1:88174)
+    at framework-1f00f78986576b71.js:1:141213
+    at uD (framework-1f00f78986576b71.js:1:147433)
+    at uI (framework-1f00f78986576b71.js:1:140381)
+    at uM (framework-1f00f78986576b71.js:1:140191)
+    at uS (framework-1f00f78986576b71.js:1:135264)
+    at C (framework-1f00f78986576b71.js:1:206173)
+    at MessagePort.z (framework-1f00f78986576b71.js:1:206703)Understand this error
+7framework-1f00f78986576b71.js:1 Uncaught Error: Minified React error #418; visit https://reactjs.org/docs/error-decoder.html?invariant=418 for the full message or use the non-minified dev environment for full errors and additional helpful warnings.
+    at ag (framework-1f00f78986576b71.js:1:87720)
+    at i (framework-1f00f78986576b71.js:1:162339)
+    at uI (framework-1f00f78986576b71.js:1:140321)
+    at uM (framework-1f00f78986576b71.js:1:140191)
+    at uS (framework-1f00f78986576b71.js:1:135264)
+    at C (framework-1f00f78986576b71.js:1:206173)
+    at MessagePort.z (framework-1f00f78986576b71.js:1:206703)Understand this error
+framework-1f00f78986576b71.js:1 Uncaught Error: Minified React error #423; visit https://reactjs.org/docs/error-decoder.html?invariant=423 for the full message or use the non-minified dev environment for full errors and additional helpful warnings.
+    at i (framework-1f00f78986576b71.js:1:161998)
+    at uI (framework-1f00f78986576b71.js:1:140321)
+    at uM (framework-1f00f78986576b71.js:1:140191)
+    at ux (framework-1f00f78986576b71.js:1:136962)
+    at uS (framework-1f00f78986576b71.js:1:135517)
+    at C (framework-1f00f78986576b71.js:1:206173)
+    at MessagePort.z (framework-1f00f78986576b71.js:1:206703)Understand this error
+/t/ag-composites/repls:1 The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.Understand this error
+/t/ag-composites/repls:1 The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?Understand this error
+/t/ag-composites/repls:1 The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.Understand this error
+_app-e4029606e7f89d87.js:34 [LaunchDarkly] LaunchDarkly client initialized
+main.MWI4MDAwODU3MQ.js:1 Deprecated API for given entry type.
+(anonymous) @ main.MWI4MDAwODU3MQ.js:1Understand this warning
+/t/ag-composites/repls:1 Banner not shown: beforeinstallpromptevent.preventDefault() called. The page must call beforeinstallpromptevent.prompt() to show the banner.
+framework-1f00f78986576b71.js:1 Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+_ @ framework-1f00f78986576b71.js:1Understand this error
+framework-1f00f78986576b71.js:1 Unrecognized feature: 'ambient-light-sensor'.
+_ @ framework-1f00f78986576b71.js:1Understand this warning
+framework-1f00f78986576b71.js:1 Unrecognized feature: 'battery'.
+_ @ framework-1f00f78986576b71.js:1Understand this warning
+framework-1f00f78986576b71.js:1 Unrecognized feature: 'execution-while-not-rendered'.
+_ @ framework-1f00f78986576b71.js:1Understand this warning
+framework-1f00f78986576b71.js:1 Unrecognized feature: 'execution-while-out-of-viewport'.
+_ @ framework-1f00f78986576b71.js:1Understand this warning
+framework-1f00f78986576b71.js:1 Unrecognized feature: 'layout-animations'.
+_ @ framework-1f00f78986576b71.js:1Understand this warning
+framework-1f00f78986576b71.js:1 Unrecognized feature: 'legacy-image-formats'.
+_ @ framework-1f00f78986576b71.js:1Understand this warning
+framework-1f00f78986576b71.js:1 Unrecognized feature: 'navigation-override'.
+_ @ framework-1f00f78986576b71.js:1Understand this warning
+framework-1f00f78986576b71.js:1 Unrecognized feature: 'oversized-images'.
+_ @ framework-1f00f78986576b71.js:1Understand this warning
+framework-1f00f78986576b71.js:1 Unrecognized feature: 'publickey-credentials'.
+_ @ framework-1f00f78986576b71.js:1Understand this warning
+framework-1f00f78986576b71.js:1 Unrecognized feature: 'speaker-selection'.
+_ @ framework-1f00f78986576b71.js:1Understand this warning
+framework-1f00f78986576b71.js:1 Unrecognized feature: 'unoptimized-images'.
+_ @ framework-1f00f78986576b71.js:1Understand this warning
+framework-1f00f78986576b71.js:1 Unrecognized feature: 'unsized-media'.
+_ @ framework-1f00f78986576b71.js:1Understand this warning
+framework-1f00f78986576b71.js:1 Unrecognized feature: 'pointer-lock'.
+_ @ framework-1f00f78986576b71.js:1Understand this warning
+framework-1f00f78986576b71.js:1 Allow attribute will take precedence over 'allowfullscreen'.
+_ @ framework-1f00f78986576b71.js:1Understand this warning
+framework-1f00f78986576b71.js:1 Allow attribute will take precedence over 'allowpaymentrequest'.
+_ @ framework-1f00f78986576b71.js:1Understand this warning
+workspace_iframe.html?initialPath=%2F&id=%3Ar9s%3A:32 Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.Understand this error
+workspace_iframe.html?initialPath=%2F&id=%3Ar9s%3A:32 Unrecognized feature: 'ambient-light-sensor'.Understand this warning
+workspace_iframe.html?initialPath=%2F&id=%3Ar9s%3A:32 Unrecognized feature: 'battery'.Understand this warning
+workspace_iframe.html?initialPath=%2F&id=%3Ar9s%3A:32 Unrecognized feature: 'execution-while-not-rendered'.Understand this warning
+workspace_iframe.html?initialPath=%2F&id=%3Ar9s%3A:32 Unrecognized feature: 'execution-while-out-of-viewport'.Understand this warning
+workspace_iframe.html?initialPath=%2F&id=%3Ar9s%3A:32 Unrecognized feature: 'layout-animations'.Understand this warning
+workspace_iframe.html?initialPath=%2F&id=%3Ar9s%3A:32 Unrecognized feature: 'legacy-image-formats'.Understand this warning
+workspace_iframe.html?initialPath=%2F&id=%3Ar9s%3A:32 Unrecognized feature: 'navigation-override'.Understand this warning
+workspace_iframe.html?initialPath=%2F&id=%3Ar9s%3A:32 Unrecognized feature: 'oversized-images'.Understand this warning
+workspace_iframe.html?initialPath=%2F&id=%3Ar9s%3A:32 Unrecognized feature: 'publickey-credentials'.Understand this warning
+workspace_iframe.html?initialPath=%2F&id=%3Ar9s%3A:32 Unrecognized feature: 'speaker-selection'.Understand this warning
+workspace_iframe.html?initialPath=%2F&id=%3Ar9s%3A:32 Unrecognized feature: 'unoptimized-images'.Understand this warning
+workspace_iframe.html?initialPath=%2F&id=%3Ar9s%3A:32 Unrecognized feature: 'unsized-media'.Understand this warning
+workspace_iframe.html?initialPath=%2F&id=%3Ar9s%3A:32 Allow attribute will take precedence over 'allowfullscreen'.Understand this warning
+workspace_iframe.html?initialPath=%2F&id=%3Ar9s%3A:32 Allow attribute will take precedence over 'allowpaymentrequest'.

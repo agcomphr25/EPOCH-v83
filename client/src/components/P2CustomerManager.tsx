@@ -14,8 +14,6 @@ import { z } from "zod";
 import { useToast } from "@/hooks/use-toast";
 import { Pencil, Trash2, Plus, Building2 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
-import SimpleAddressInput from "@/components/SimpleAddressInput";
-import { type AddressData } from "@/utils/addressUtils";
 
 const p2CustomerSchema = z.object({
   customerId: z.string().min(1, "Customer ID is required"),
@@ -42,23 +40,6 @@ export function P2CustomerManager() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  
-  // State for structured address data
-  const [billingAddressData, setBillingAddressData] = useState<AddressData>({
-    street: '',
-    city: '',
-    state: '',
-    zipCode: '',
-    country: 'United States',
-  });
-  
-  const [shippingAddressData, setShippingAddressData] = useState<AddressData>({
-    street: '',
-    city: '',
-    state: '',
-    zipCode: '',
-    country: 'United States',
-  });
 
   const { data: customers = [], isLoading } = useQuery<P2Customer[]>({
     queryKey: ["/api/p2-customers-bypass"],
@@ -145,46 +126,12 @@ export function P2CustomerManager() {
       status: customer.status,
       notes: customer.notes || "",
     });
-    
-    // Reset address data - for existing customers, we'll use legacy string format
-    setBillingAddressData({
-      street: customer.billingAddress || '',
-      city: '',
-      state: '',
-      zipCode: '',
-      country: 'United States',
-    });
-    setShippingAddressData({
-      street: customer.shippingAddress || '',
-      city: '',
-      state: '',
-      zipCode: '',
-      country: 'United States',
-    });
-    
     setDialogOpen(true);
   };
 
   const openCreateDialog = () => {
     setSelectedCustomer(null);
     form.reset();
-    
-    // Reset address data
-    setBillingAddressData({
-      street: '',
-      city: '',
-      state: '',
-      zipCode: '',
-      country: 'United States',
-    });
-    setShippingAddressData({
-      street: '',
-      city: '',
-      state: '',
-      zipCode: '',
-      country: 'United States',
-    });
-    
     setDialogOpen(true);
   };
 
@@ -273,33 +220,32 @@ export function P2CustomerManager() {
                     )}
                   />
                 </div>
-                {/* Billing Address with UPS Autocomplete */}
-                <div>
-                  <SimpleAddressInput
-                    label="Billing Address"
-                    value={billingAddressData}
-                    onChange={(addressData) => {
-                      setBillingAddressData(addressData);
-                      // Update the form field with structured address string
-                      const addressString = `${addressData.street}, ${addressData.city}, ${addressData.state} ${addressData.zipCode}`;
-                      form.setValue('billingAddress', addressString);
-                    }}
-                  />
-                </div>
-                
-                {/* Shipping Address with UPS Autocomplete */}
-                <div>
-                  <SimpleAddressInput
-                    label="Shipping Address"
-                    value={shippingAddressData}
-                    onChange={(addressData) => {
-                      setShippingAddressData(addressData);
-                      // Update the form field with structured address string
-                      const addressString = `${addressData.street}, ${addressData.city}, ${addressData.state} ${addressData.zipCode}`;
-                      form.setValue('shippingAddress', addressString);
-                    }}
-                  />
-                </div>
+                <FormField
+                  control={form.control}
+                  name="billingAddress"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Billing Address</FormLabel>
+                      <FormControl>
+                        <Textarea placeholder="Billing address..." {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="shippingAddress"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Shipping Address</FormLabel>
+                      <FormControl>
+                        <Textarea placeholder="Shipping address..." {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
                 <div className="grid grid-cols-2 gap-4">
                   <FormField
                     control={form.control}

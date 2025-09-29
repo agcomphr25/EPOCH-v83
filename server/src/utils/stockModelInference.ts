@@ -13,10 +13,7 @@ export function inferStockModelFromFeatures(order: any): { stockModelId: string;
     
     // Check action_inlet for Mesa Precision Summit
     if (features.action_inlet === 'mesa_precision_summit') {
-      // Production-safe logging - only in development
-      if (process.env.NODE_ENV === 'development') {
-        console.log(`🏔️ MESA PRECISION SUMMIT (action_inlet): ${order.orderId || order.order_id} → Mesa Universal`);
-      }
+      console.log(`🏔️ MESA PRECISION SUMMIT (action_inlet): ${order.orderId || order.order_id} → Mesa Universal`);
       return { stockModelId: 'mesa_universal', product: 'Mesa Universal' };
     }
     
@@ -24,10 +21,7 @@ export function inferStockModelFromFeatures(order: any): { stockModelId: string;
     if (features.specialInstructions && typeof features.specialInstructions === 'string') {
       const instructions = features.specialInstructions.toLowerCase();
       if (instructions.includes('mesa precision summit') || instructions.includes('mesa_precision_summit')) {
-        // Production-safe logging - only in development
-        if (process.env.NODE_ENV === 'development') {
-          console.log(`🏔️ MESA PRECISION SUMMIT (specialInstructions): ${order.orderId || order.order_id} → Mesa Universal`);
-        }
+        console.log(`🏔️ MESA PRECISION SUMMIT (specialInstructions): ${order.orderId || order.order_id} → Mesa Universal`);
         return { stockModelId: 'mesa_universal', product: 'Mesa Universal' };
       }
     }
@@ -36,10 +30,7 @@ export function inferStockModelFromFeatures(order: any): { stockModelId: string;
   // PRIORITY: Respect existing valid stockModelId field first
   if (stockModelId && stockModelId !== 'universal' && stockModelId !== 'UNPROCESSED') {
     product = stockModelId;
-    // Production-safe logging - only in development
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`✅ EXISTING MODEL ID: ${order.orderId || order.order_id} → ${stockModelId} (preserved)`);
-    }
+    console.log(`✅ EXISTING MODEL ID: ${order.orderId || order.order_id} → ${stockModelId} (preserved)`);
     return { stockModelId, product };
   }
   
@@ -47,10 +38,7 @@ export function inferStockModelFromFeatures(order: any): { stockModelId: string;
   if (order.source === 'mesa_production_order' && order.itemName?.toLowerCase().includes('mesa')) {
     stockModelId = 'mesa_universal';
     product = 'Mesa Universal';
-    // Production-safe logging - only in development
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`🎯 MESA INFERENCE: ${order.orderId || order.order_id} → Mesa Universal (itemName: ${order.itemName})`);
-    }
+    console.log(`🎯 MESA INFERENCE: ${order.orderId || order.order_id} → Mesa Universal (itemName: ${order.itemName})`);
     return { stockModelId, product };
   }
   

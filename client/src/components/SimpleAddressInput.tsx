@@ -43,7 +43,6 @@ export default function SimpleAddressInput({ label, value, onChange, required = 
     
     setIsLoading(true);
     try {
-      console.log('Fetching address suggestions for:', q);
       const response = await fetch('/api/customers/address-autocomplete-bypass', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -51,7 +50,6 @@ export default function SimpleAddressInput({ label, value, onChange, required = 
       });
       
       const data = await response.json();
-      console.log('Address suggestions received:', data);
       
       setSuggestions(data.suggestions || []);
       setShowSuggestions((data.suggestions || []).length > 0);
@@ -79,8 +77,6 @@ export default function SimpleAddressInput({ label, value, onChange, required = 
   }, [value.street]);
 
   const handleSelect = (suggestion: SuggestionData) => {
-    console.log('🔧 SimpleAddressInput handleSelect called with:', suggestion);
-    
     // Use the structured data directly from the suggestion
     const addressData: AddressData = {
       street: suggestion.streetLine,
@@ -89,8 +85,6 @@ export default function SimpleAddressInput({ label, value, onChange, required = 
       zipCode: suggestion.zipCode,
       country: 'United States'
     };
-    
-    console.log('🔧 Using structured address data:', addressData);
     
     setQuery(addressData.street);
     setShowSuggestions(false);

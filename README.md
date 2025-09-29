@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # EPOCH v8 - Manufacturing ERP System
 
 A full-stack manufacturing ERP system built for small manufacturing companies, focusing on robust order management, inventory tracking, and streamlined operations.
@@ -124,6 +123,3 @@ npm start
 ```
 
 The application is optimized for Replit deployment with automatic database provisioning and environment setup.
-=======
-# EPOCH-v83
->>>>>>> origin/main

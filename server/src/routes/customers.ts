@@ -515,18 +515,20 @@ router.post('/address-autocomplete-bypass', async (req: Request, res: Response) 
         }
       }
       
-      // If no location info provided, try some common US cities for real address suggestions
+      // If no location info provided, try multiple cities for diverse address suggestions
       if (!hasLocationInfo && search.trim().length > 3) {
-        console.log('🔧 No location info - trying common cities for real addresses');
+        console.log('🔧 No location info - trying multiple cities for diverse addresses');
         
         const commonCities = [
           { city: 'New York', state: 'NY' },
           { city: 'Chicago', state: 'IL' },
           { city: 'Los Angeles', state: 'CA' },
-          { city: 'Houston', state: 'TX' }
+          { city: 'Houston', state: 'TX' },
+          { city: 'Phoenix', state: 'AZ' },
+          { city: 'Philadelphia', state: 'PA' }
         ];
         
-        for (const { city, state } of commonCities.slice(0, 2)) {
+        for (const { city, state } of commonCities.slice(0, 4)) {
           try {
             const validationResult = await validateAddressWithUPS({
               street: search.trim(),
@@ -535,7 +537,7 @@ router.post('/address-autocomplete-bypass', async (req: Request, res: Response) 
             });
             
             if (validationResult.suggestions && validationResult.suggestions.length > 0) {
-              // Only take the first valid address from each city
+              // Take the first valid address from this city
               const result = validationResult.suggestions[0];
               upsSuggestions.push({
                 text: `${result.street}, ${result.city}, ${result.state} ${result.postalCode}`,
@@ -547,7 +549,13 @@ router.post('/address-autocomplete-bypass', async (req: Request, res: Response) 
               });
               
               console.log('🔧 Found real address in', city, state);
-              break; // Found a real address, stop searching
+              
+              // Don't break - continue to try other cities for more diverse suggestions
+              // Limit to 3 real address suggestions to avoid overwhelming the user
+              if (upsSuggestions.length >= 3) {
+                console.log('🔧 Found enough diverse addresses, stopping search');
+                break;
+              }
             }
           } catch (upsError) {
             console.log('🔧 UPS validation failed for', city, state);

@@ -430,14 +430,15 @@ router.post('/address-autocomplete-bypass', async (req: Request, res: Response) 
       }
     }
     
-    // Simple address autocomplete - try to find real addresses when user provides city/state
+    // Address autocomplete with smart location detection
     console.log('🔧 UPS address autocomplete for:', search);
     
     try {
       let upsSuggestions = [];
       
-      // Parse the search query to extract potential location information
+      // Parse the search query to detect if city/state provided
       const searchParts = search.split(',').map(s => s.trim());
+      let hasLocationInfo = false;
       
       // Check if user provided city and state information
       if (searchParts.length >= 3) {
@@ -446,8 +447,9 @@ router.post('/address-autocomplete-bypass', async (req: Request, res: Response) 
         const city = searchParts[1];
         const state = searchParts[2];
         
-        if (state.length === 2) {
-          console.log('🔧 User provided full address, validating with UPS:', { street, city, state });
+        if (state.length === 2 && street.length > 0) {
+          hasLocationInfo = true;
+          console.log('🔧 Full address format, validating with UPS:', { street, city, state });
           
           try {
             const validationResult = await validateAddressWithUPS({
@@ -480,11 +482,12 @@ router.post('/address-autocomplete-bypass', async (req: Request, res: Response) 
         
         // Try to extract state from the second part
         const cityStateMatch = cityStatePart.match(/^(.+?)\s+([A-Z]{2})$/);
-        if (cityStateMatch) {
+        if (cityStateMatch && street.length > 0) {
+          hasLocationInfo = true;
           const city = cityStateMatch[1];
           const state = cityStateMatch[2];
           
-          console.log('🔧 User provided city and state, validating with UPS:', { street, city, state });
+          console.log('🔧 City/State format, validating with UPS:', { street, city, state });
           
           try {
             const validationResult = await validateAddressWithUPS({
@@ -508,6 +511,47 @@ router.post('/address-autocomplete-bypass', async (req: Request, res: Response) 
             }
           } catch (upsError) {
             console.log('🔧 UPS validation failed:', (upsError as Error).message);
+          }
+        }
+      }
+      
+      // If no location info provided, try some common US cities for real address suggestions
+      if (!hasLocationInfo && search.trim().length > 3) {
+        console.log('🔧 No location info - trying common cities for real addresses');
+        
+        const commonCities = [
+          { city: 'New York', state: 'NY' },
+          { city: 'Chicago', state: 'IL' },
+          { city: 'Los Angeles', state: 'CA' },
+          { city: 'Houston', state: 'TX' }
+        ];
+        
+        for (const { city, state } of commonCities.slice(0, 2)) {
+          try {
+            const validationResult = await validateAddressWithUPS({
+              street: search.trim(),
+              city,
+              state
+            });
+            
+            if (validationResult.suggestions && validationResult.suggestions.length > 0) {
+              // Only take the first valid address from each city
+              const result = validationResult.suggestions[0];
+              upsSuggestions.push({
+                text: `${result.street}, ${result.city}, ${result.state} ${result.postalCode}`,
+                streetLine: result.street,
+                city: result.city,
+                state: result.state,
+                zipCode: result.postalCode,
+                entries: 1
+              });
+              
+              console.log('🔧 Found real address in', city, state);
+              break; // Found a real address, stop searching
+            }
+          } catch (upsError) {
+            console.log('🔧 UPS validation failed for', city, state);
+            continue;
           }
         }
       }

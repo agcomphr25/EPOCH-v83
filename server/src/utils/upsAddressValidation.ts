@@ -113,7 +113,9 @@ export async function validateAddressWithUPS(
         };
       });
 
-      const isValid = !!validationResult.ValidAddressIndicator;
+      // Accept both single valid matches and multiple valid matches
+      // UPS uses empty strings to indicate presence of indicators
+      const isValid = ('ValidAddressIndicator' in validationResult) || ('AmbiguousAddressIndicator' in validationResult);
       console.log(`✅ UPS Address Validation: Found ${suggestions.length} address suggestions, valid: ${isValid}`);
       console.log('✅ UPS suggestions:', suggestions);
 

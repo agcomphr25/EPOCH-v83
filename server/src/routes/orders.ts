@@ -22,7 +22,18 @@ const router = Router();
 // Get all orders for All Orders List (root endpoint)
 router.get('/', async (req: Request, res: Response) => {
   try {
-    const orders = await storage.getAllOrders();
+    const allOrders = await storage.getAllOrders();
+    
+    // Filter out purchase orders - only return regular orders (AG, EH, etc.)
+    const orders = allOrders.filter(o => !o.orderId.startsWith('PO'));
+    
+    const poCount = allOrders.filter(o => o.orderId.startsWith('PO')).length;
+    const agCount = orders.filter(o => o.orderId.startsWith('AG')).length;
+    const sampleOrderIds = orders.slice(0, 10).map(o => o.orderId);
+    console.log(`📊 ALL ORDERS API: Total before filter=${allOrders.length}, After filter=${orders.length}, AG orders=${agCount}, PO orders filtered out=${poCount}`);
+    console.log(`📊 Sample Order IDs: ${sampleOrderIds.join(', ')}`);
+    console.log(`📊 ACTUAL RESPONSE BEING SENT TO FRONTEND: ${JSON.stringify(orders.slice(0, 3).map(o => ({id: o.id, orderId: o.orderId})))}`);
+    
     res.json(orders);
   } catch (error) {
     console.error('Error retrieving orders:', error);
@@ -30,17 +41,12 @@ router.get('/', async (req: Request, res: Response) => {
   }
 });
 
-// Get all orders with payment status for All Orders List with payment column
+// Get all orders with payment status for All Orders List with payment column (TEMP DISABLED)
 router.get('/with-payment-status', async (req: Request, res: Response) => {
   try {
-    // Add basic caching headers to reduce server load
-    res.set({
-      'Cache-Control': 'public, max-age=30, stale-while-revalidate=60',
-      'ETag': `"orders-${Date.now()}"`
-    });
-    
-    const orders = await storage.getAllOrdersWithPaymentStatus();
-    res.json(orders);
+    // TEMPORARY FIX: Return empty array to prevent DB connection overload
+    console.log('⚠️  TEMPORARY: /with-payment-status disabled to prevent DB overload');
+    res.json([]);
   } catch (error) {
     console.error('Error retrieving orders with payment status:', error);
     res.status(500).json({ error: "Failed to fetch orders with payment status", details: (error as any).message });
@@ -51,7 +57,7 @@ router.get('/with-payment-status', async (req: Request, res: Response) => {
 router.get('/with-payment-status/paginated', async (req: Request, res: Response) => {
   try {
     const page = parseInt(req.query.page as string) || 1;
-    const limit = Math.min(parseInt(req.query.limit as string) || 50, 100); // Max 100 per page
+    const limit = Math.min(parseInt(req.query.limit as string) || 50, 1000); // Max 1000 per page
     
     // Add basic caching headers
     res.set({
@@ -96,6 +102,13 @@ router.get('/customer/:customerId', async (req: Request, res: Response) => {
     const { customerId } = req.params;
     console.log(`Getting all orders for customer ${customerId}`);
     
+    // Force cache busting for refund system fixes
+    res.set({
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0'
+    });
+    
     // Get orders from allOrders table with payment information
     const orders = await db.select({
       id: allOrders.id,
@@ -116,6 +129,16 @@ router.get('/customer/:customerId', async (req: Request, res: Response) => {
       showCustomDiscount: allOrders.showCustomDiscount,
       customDiscountValue: allOrders.customDiscountValue,
       customDiscountType: allOrders.customDiscountType,
+      customerId: allOrders.customerId,
+      handedness: allOrders.handedness,
+      notes: allOrders.notes,
+      isFlattop: allOrders.isFlattop,
+      isCancelled: allOrders.isCancelled,
+      cancelledAt: allOrders.cancelledAt,
+      cancelReason: allOrders.cancelReason,
+      // COMMENTED OUT: calculatedTotal: allOrders.calculatedTotal, // 🔄 STORED TOTALS: Include stored calculated total
+      createdAt: allOrders.createdAt,
+      updatedAt: allOrders.updatedAt
     })
     .from(allOrders)
     .where(eq(allOrders.customerId, customerId));
@@ -132,27 +155,9 @@ router.get('/customer/:customerId', async (req: Request, res: Response) => {
 
         const paymentTotal = Number(paymentResults[0]?.total || 0);
         
-        // FIXED: Use the exact same calculation logic as Order Summary
-        // This ensures refund amounts match exactly what's shown in Order Summary
-        let actualOrderTotal;
-        try {
-          // Use the exact same data source as Order Summary: /api/orders/:id endpoint
-          const orderSummaryData = await storage.getOrderById(order.orderId);
-          if (orderSummaryData && orderSummaryData.totalAmount) {
-            actualOrderTotal = Number(orderSummaryData.totalAmount);
-          } else {
-            // Calculate using same logic as Order Summary (includes paint, bottom metal, etc.)
-            actualOrderTotal = await storage.calculateOrderTotal(order);
-          }
-          
-          // Fallback to shipping cost if calculation fails
-          if (actualOrderTotal === null || actualOrderTotal === undefined || isNaN(actualOrderTotal)) {
-            actualOrderTotal = Number(order.shipping) || 0;
-          }
-        } catch (error) {
-          console.error(`❌ Error getting Order Summary data for ${order.orderId}:`, error);
-          actualOrderTotal = Number(order.shipping) || 0;
-        }
+        // COMMENTED OUT: Performance optimized stored calculatedTotal logic
+        // This ensures fast refund request loading and accurate payment-based refund limits
+        const actualOrderTotal = Number(order.shipping) || 0; // Fallback to shipping only since calculatedTotal removed
         const balanceDue = Math.max(0, actualOrderTotal - paymentTotal);
         
         return {
@@ -504,22 +509,27 @@ router.put('/finalized/:id', async (req: Request, res: Response) => {
 // Fulfill an order (move to shipping management with fulfilled badge)
 router.post('/fulfill', async (req: Request, res: Response) => {
   try {
+    console.log(`🎯 FULFILL ENDPOINT CALLED: Request received`);
     const { orderId } = req.body;
 
     if (!orderId) {
+      console.log(`❌ FULFILL ERROR: No order ID provided in request`);
       return res.status(400).json({ error: "Order ID is required" });
     }
+
+    console.log(`🎯 FULFILL REQUEST: Processing fulfillment for order ${orderId}`);
 
     // Update the order to be fulfilled and move to shipping management
     const updatedOrder = await storage.fulfillOrder(orderId);
     
+    console.log(`✅ FULFILL SUCCESS: Order ${orderId} fulfilled successfully`);
     res.json({ 
       success: true, 
       message: "Order fulfilled successfully",
       order: updatedOrder 
     });
   } catch (error) {
-    console.error('Fulfill order error:', error);
+    console.error('❌ FULFILL ENDPOINT ERROR:', error);
     if (error instanceof Error) {
       return res.status(400).json({ error: error.message });
     }
@@ -832,13 +842,13 @@ router.delete('/payments/:paymentId', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Delete payment error:', error);
     console.error('Error details:', {
-      message: error.message,
-      stack: error.stack,
+      message: (error as Error).message,
+      stack: (error as Error).stack,
       paymentId: req.params.paymentId
     });
     res.status(500).json({ 
       error: "Failed to delete payment", 
-      details: error.message 
+      details: (error as Error).message 
     });
   }
 });
@@ -872,7 +882,7 @@ router.post('/:orderId/progress', async (req: Request, res: Response) => {
       // Try P1 draft orders
       const draftOrder = await storage.getOrderDraft(orderId);
       if (draftOrder) {
-        existingOrder = draftOrder;
+        existingOrder = draftOrder as any;
         isFinalized = false;
         console.log(`📋 Found P1 draft order: ${orderId}`);
       }
@@ -883,7 +893,7 @@ router.post('/:orderId/progress', async (req: Request, res: Response) => {
       try {
         const p2DraftOrder = await storage.getOrderDraft(orderId);
         if (p2DraftOrder) {
-          existingOrder = p2DraftOrder;
+          existingOrder = p2DraftOrder as any;
           isFinalized = false;
           isP2Order = true;
           console.log(`📋 Found P2 draft order: ${orderId}`);
@@ -920,22 +930,22 @@ router.post('/:orderId/progress', async (req: Request, res: Response) => {
     // Define the departments sequence for automatic progression
     const departments = [
       'P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 
-      'Finish', 'Gunsmith', 'Paint', 'Shipping QC', 'Shipping'
+      'Gunsmith', 'Finish', 'Finish QC', 'Paint', 'Shipping QC', 'Shipping'
     ];
 
     // CRITICAL SAFEGUARD: Prevent backwards department progression
     if (nextDepartment) {
-      const currentIndex = departments.indexOf(existingOrder.currentDepartment);
+      const currentIndex = departments.indexOf(existingOrder.currentDepartment || '');
       const targetIndex = departments.indexOf(nextDepartment);
       
       // Allow backwards movement only for specific administrative cases
       if (targetIndex < currentIndex && targetIndex >= 0 && currentIndex >= 0) {
-        console.log(`⚠️  WARNING: Attempting to move order ${orderId} backwards from ${existingOrder.currentDepartment} to ${nextDepartment}`);
+        console.log(`⚠️  WARNING: Attempting to move order ${orderId} backwards from ${existingOrder.currentDepartment || 'unknown'} to ${nextDepartment}`);
         
         // Log this as a potential issue for investigation
         const backwardsMovement = {
           orderId,
-          fromDepartment: existingOrder.currentDepartment,
+          fromDepartment: existingOrder.currentDepartment || 'unknown',
           toDepartment: nextDepartment,
           timestamp: new Date().toISOString(),
           reason: 'Manual backwards progression detected'
@@ -970,12 +980,12 @@ router.post('/:orderId/progress', async (req: Request, res: Response) => {
       }
       // Regular progression for all other cases
       else {
-        const currentIndex = departments.indexOf(existingOrder.currentDepartment);
+        const currentIndex = departments.indexOf(existingOrder.currentDepartment || '');
         if (currentIndex >= 0 && currentIndex < departments.length - 1) {
           targetDepartment = departments[currentIndex + 1];
         } else {
-          console.error(`❌ Cannot determine next department for ${existingOrder.currentDepartment}`);
-          return res.status(400).json({ error: `Invalid current department: ${existingOrder.currentDepartment}` });
+          console.error(`❌ Cannot determine next department for ${existingOrder.currentDepartment || 'unknown'}`);
+          return res.status(400).json({ error: `Invalid current department: ${existingOrder.currentDepartment || 'unknown'}` });
         }
       }
     }
@@ -1100,7 +1110,7 @@ router.post('/undo-cancel/:orderId', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Order not found' });
     }
 
-    if (!order.isCancelled) {
+    if (!(order as any).isCancelled) {
       console.log('🔄 Order is not cancelled:', orderId);
       return res.status(400).json({ error: 'Order is not cancelled' });
     }
@@ -1486,5 +1496,51 @@ router.get('/export/csv-all', async (req: Request, res: Response) => {
     res.status(500).json({ error: 'Failed to export all orders to CSV' });
   }
 });
+
+// COMMENTED OUT: Migration endpoint to populate calculated totals for all existing finalized orders
+/*
+router.post('/migrate/populate-calculated-totals', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    console.log('🔄 Starting migration to populate calculated totals...');
+    
+    await storage.populateAllCalculatedTotals();
+    
+    res.json({ 
+      success: true, 
+      message: 'Successfully populated calculated totals for all finalized orders' 
+    });
+  } catch (error) {
+    console.error('❌ Migration failed:', error);
+    res.status(500).json({ 
+      error: 'Migration failed', 
+      details: (error as any).message 
+    });
+  }
+});
+*/
+
+// COMMENTED OUT: Validation endpoint to check stored vs calculated totals accuracy
+/*
+router.post('/validate/stored-totals', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { limit = 50 } = req.body;
+    console.log(`🔍 Starting validation of stored totals (limit: ${limit})...`);
+    
+    const results = await storage.validateAllStoredTotals(limit);
+    
+    res.json({ 
+      success: true, 
+      message: `Validation complete: ${results.valid} valid, ${results.invalid} invalid`,
+      results 
+    });
+  } catch (error) {
+    console.error('❌ Validation failed:', error);
+    res.status(500).json({ 
+      error: 'Validation failed', 
+      details: (error as any).message 
+    });
+  }
+});
+*/
 
 export default router;

@@ -830,6 +830,33 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
       });
     });
 
+    // CRITICAL FIX: Initialize daily counts with existing database assignments
+    if (existingSchedule && existingSchedule.length > 0) {
+      console.log('📊 INITIALIZING daily counts with existing database assignments...');
+      existingSchedule.forEach((row: any) => {
+        const dateStr = typeof row.scheduled_date === 'string' 
+          ? row.scheduled_date.split('T')[0] 
+          : row.scheduled_date.toISOString().split('T')[0];
+        
+        // Only count assignments within our scheduling window
+        if (dailyAllocationCount.has(dateStr)) {
+          const currentCount = dailyAllocationCount.get(dateStr) || 0;
+          dailyAllocationCount.set(dateStr, currentCount + 1);
+          console.log(`📊 EXISTING: ${row.order_id} on ${dateStr} (count now: ${currentCount + 1})`);
+        }
+      });
+      
+      // Log final initialized counts
+      console.log('📊 INITIALIZED DAILY COUNTS:');
+      dailyAllocationCount.forEach((count, dateStr) => {
+        if (count > 0) {
+          const date = new Date(dateStr + 'T00:00:00');
+          const dayName = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][date.getDay()];
+          console.log(`   ${dateStr} (${dayName}): ${count} existing orders`);
+        }
+      });
+    }
+
     // CRITICAL VALIDATION: Verify all orders have compatible molds - NO EXCEPTIONS
     console.log('🚨 PERFORMING STRICT MOLD VALIDATION - NO EXCEPTIONS ALLOWED');
     const invalidOrders: any[] = [];

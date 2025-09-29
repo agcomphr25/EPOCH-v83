@@ -513,15 +513,11 @@ const AddressManagementTabs = ({
   // Handle shipping address selection (radio button change)
   const handleShippingAddressSelect = async (address: CustomerAddress) => {
     try {
-      console.log('🔍 handleShippingAddressSelect called with address:', address);
-      
       // Set all other shipping addresses to not default
       const otherShippingAddresses = shippingAddresses.filter(addr => addr.id !== address.id && addr.isDefault);
-      console.log('🔍 Other shipping addresses to unset:', otherShippingAddresses.map(a => ({ id: a.id, street: a.street })));
       
       for (const addr of otherShippingAddresses) {
         // Only send the fields that need to be updated
-        console.log('🔍 Setting isDefault=false for address:', addr.id);
         await apiRequest(`/api/addresses/${addr.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
@@ -531,7 +527,6 @@ const AddressManagementTabs = ({
 
       // Set the selected address as default
       // Only send the fields that need to be updated
-      console.log('🔍 Setting isDefault=true for address:', address.id);
       await apiRequest(`/api/addresses/${address.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -1669,51 +1664,9 @@ export default function CustomerManagement() {
         },
       });
       
-      // Also handle address update if address fields are filled
-      if (formData.street || formData.street2 || formData.city || formData.state || formData.zipCode) {
-        try {
-          // Find existing address for this customer
-          const customerAddresses = addressesData?.filter(addr => {
-            const addrCustomerId = typeof addr.customerId === 'string' ? 
-              parseInt(addr.customerId) : addr.customerId;
-            return addrCustomerId === selectedCustomer.id;
-          }) || [];
-          const existingAddress = customerAddresses.find(addr => addr.isDefault) || customerAddresses[0];
-          
-          const addressData = {
-            customerId: selectedCustomer.id.toString(),
-            street: formData.street,
-            street2: formData.street2,
-            city: formData.city,
-            state: formData.state,
-            zipCode: formData.zipCode,
-            country: formData.country,
-            type: formData.addressType,
-            isDefault: true
-          };
-          
-          if (existingAddress) {
-            // Update existing address
-            await apiRequest(`/api/addresses/${existingAddress.id}`, {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(addressData)
-            });
-          } else {
-            // Create new address
-            await apiRequest('/api/addresses', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(addressData)
-            });
-          }
-          
-          // Refresh addresses data
-          queryClient.invalidateQueries({ queryKey: ['/api/addresses/all'] });
-        } catch (error) {
-          console.error('Error updating address:', error);
-        }
-      }
+      // Note: Address management is now handled in the dedicated Addresses tab
+      // The old address update code has been removed to prevent overwriting addresses
+      // when updating customer details
     }
   };
 

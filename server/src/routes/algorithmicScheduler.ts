@@ -129,15 +129,16 @@ router.post('/add-regular-orders', async (req, res) => {
     
     // Check for existing PO assignments to find the latest date
     const existingPOAssignments = await pool.query(`
-      SELECT MAX(scheduled_date) as last_po_date
+      SELECT MAX(DATE(scheduled_date)) as last_po_date,
+             COUNT(*) as po_count
       FROM layup_schedule 
       WHERE order_id LIKE 'PO-%'
     `);
     
     // FIXED: Properly extract rows from PostgreSQL result
     const poRows = (existingPOAssignments as any).rows ?? [];
-    console.log(`🔍 PO QUERY RESULT: Found ${poRows.length} rows`);
-    if (poRows.length > 0) {
+    console.log(`🔍 PO QUERY RESULT: Found ${poRows.length} rows, PO count: ${poRows[0]?.po_count || 0}`);
+    if (poRows.length > 0 && poRows[0]?.last_po_date) {
       console.log(`🔍 PO QUERY RESULT: last_po_date = ${poRows[0].last_po_date}`);
     }
     

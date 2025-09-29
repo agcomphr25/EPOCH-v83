@@ -203,15 +203,48 @@ router.post('/add-regular-orders', async (req, res) => {
         if (employeeCapacity.has(dateStr)) {
           const dayCapacity = employeeCapacity.get(dateStr)!;
           
-          // Reduce capacity for the first available employee (since we don't track which employee)
-          // This approximates the impact of existing assignments
+          // CRITICAL FIX: Parse employee assignments and reduce specific employee capacity
+          let assignments = {};
+          try {
+            assignments = typeof row.employee_assignments === 'string' 
+              ? JSON.parse(row.employee_assignments) 
+              : row.employee_assignments || {};
+          } catch (e) {
+            // Default to Jessica for OEM orders if parsing fails
+            assignments = row.order_id.startsWith('PO-') ? {'jessica_pena': 1} : {};
+          }
+          
+          // Reduce capacity for each specifically assigned employee
           let reducedCapacity = false;
-          for (const [empId, capacity] of Array.from(dayCapacity.entries())) {
-            if (capacity > 0 && !reducedCapacity) {
-              dayCapacity.set(empId, Math.max(0, capacity - 1));
-              console.log(`📊 ADD-REGULAR: Reduced employee ${empId} capacity on ${dateStr} from ${capacity} to ${Math.max(0, capacity - 1)} (existing: ${row.order_id})`);
+          for (const [empName, units] of Object.entries(assignments)) {
+            // Map employee names to IDs (jessica_pena -> Jessica Pena -> ID 6)
+            const empNameCleaned = empName.toLowerCase().replace(/[_\s]+/g, ' ').trim();
+            const emp = employees.find(e => {
+              const employeeName = e.name.toLowerCase().trim();
+              return employeeName.includes(empNameCleaned) || 
+                     empNameCleaned.includes(employeeName) ||
+                     (empNameCleaned === 'jessica_pena' && employeeName.includes('jessica')) ||
+                     (empNameCleaned === 'theresa_flores' && employeeName.includes('theresa'));
+            });
+            
+            if (emp) {
+              const empId = emp.id;
+              const capacity = dayCapacity.get(empId) || 0;
+              const reduction = typeof units === 'number' ? units : 1;
+              dayCapacity.set(empId, Math.max(0, capacity - reduction));
+              console.log(`📊 ADD-REGULAR: Reduced employee ${empId} (${emp.name}) capacity on ${dateStr} from ${capacity} to ${Math.max(0, capacity - reduction)} (existing: ${row.order_id})`);
               reducedCapacity = true;
-              break;
+            }
+          }
+          
+          // Fallback: If no specific assignments found, reduce first available employee
+          if (!reducedCapacity) {
+            for (const [empId, capacity] of Array.from(dayCapacity.entries())) {
+              if (capacity > 0) {
+                dayCapacity.set(empId, Math.max(0, capacity - 1));
+                console.log(`📊 ADD-REGULAR: Reduced employee ${empId} capacity on ${dateStr} from ${capacity} to ${Math.max(0, capacity - 1)} (existing: ${row.order_id} - fallback)`);
+                break;
+              }
             }
           }
         }

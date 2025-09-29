@@ -145,11 +145,20 @@ router.post('/add-regular-orders', async (req, res) => {
       console.log(`🔍 PO QUERY RESULT: last_po_date = ${poRows[0].last_po_date}`);
     }
     
-    // FIXED: Always start regular orders from beginning of scheduling window (tomorrow)
-    // This allows regular orders to fill Monday/Tuesday alongside existing PO orders
-    startDate.setDate(startDate.getDate() + 1); 
-    console.log(`📅 SCHEDULING FIX: Starting regular orders from beginning of window: ${startDate.toDateString()} (day ${startDate.getDay()})`);
-    console.log(`📅 SCHEDULING FIX: This allows regular orders to fill Monday/Tuesday slots alongside existing PO orders`);
+    // FIXED: Start regular orders from current production week to fill alongside PO orders
+    // Use the same week as existing PO orders for efficient capacity utilization
+    startDate = new Date();
+    startDate.setHours(0, 0, 0, 0);
+    
+    // If today is weekend, start from Monday, otherwise start from today
+    if (startDate.getDay() === 0 || startDate.getDay() === 6) { // Sunday=0, Saturday=6
+      // Move to next Monday
+      const daysUntilMonday = startDate.getDay() === 0 ? 1 : 2;
+      startDate.setDate(startDate.getDate() + daysUntilMonday);
+    }
+    
+    console.log(`📅 SCHEDULING FIX: Starting regular orders from: ${startDate.toDateString()} (day ${startDate.getDay()})`);
+    console.log(`📅 SCHEDULING FIX: This allows regular orders to share current week capacity with PO orders`);
     
     if (poRows.length > 0 && poRows[0].last_po_date) {
       console.log(`📅 INFO: Found existing PO orders through ${poRows[0].last_po_date}, but regular orders will start from schedule beginning`);

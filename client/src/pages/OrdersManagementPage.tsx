@@ -50,6 +50,7 @@ const DEPARTMENTS = [
   'Gunsmith',
   'Finish QC',
   'Paint',
+  'Shipping QC',
   'Shipping'
 ];
 
@@ -64,13 +65,11 @@ export default function OrdersManagementPage() {
   const { toast } = useToast();
 
   // Fetch orders data
-  const { data: ordersResponse, isLoading, error, refetch } = useQuery({
-    queryKey: ['/api/orders/with-payment-status/paginated', 'ordersManagement'],
-    queryFn: () => apiRequest('/api/orders/with-payment-status/paginated?page=1&limit=1000'),
+  const { data: orders = [], isLoading, error, refetch } = useQuery<Order[]>({
+    queryKey: ['/api/orders/with-payment-status'],
+    queryFn: () => apiRequest('/api/orders/with-payment-status'),
     refetchOnWindowFocus: false,
   });
-  
-  const orders: Order[] = ordersResponse?.orders || [];
 
   // Fetch customers for name lookup
   const { data: customers = [] } = useQuery<Customer[]>({
@@ -115,7 +114,8 @@ export default function OrdersManagementPage() {
       'Gunsmith': 'bg-purple-500',
       'Finish QC': 'bg-yellow-600',
       'Paint': 'bg-pink-500',
-      'Shipping': 'bg-indigo-500'
+      'Shipping QC': 'bg-indigo-500',
+      'Shipping': 'bg-gray-500'
     };
     return colors[department] || 'bg-gray-400';
   };
@@ -253,7 +253,7 @@ export default function OrdersManagementPage() {
 
   // Handle refresh
   const handleRefresh = () => {
-    queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
     refetch();
     toast({
       title: "Data Refreshed",

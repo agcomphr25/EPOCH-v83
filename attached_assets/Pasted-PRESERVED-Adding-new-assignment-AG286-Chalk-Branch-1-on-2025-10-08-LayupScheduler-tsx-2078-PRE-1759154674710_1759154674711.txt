@@ -1,0 +1,342 @@
+PRESERVED: Adding new assignment AG286 → Chalk Branch-1 on 2025-10-08
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment EH164 → Privateer-1 on 2025-10-13
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment EH160 → K2-3 on 2025-10-09
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment EH158 → Alpine Hunter-4 on 2025-10-08
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment EH126 → Cat-1 on 2025-10-08
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment AG011 → Alpine Hunter Adjustable-1 on 2025-10-08
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment AG013 → Adj K2-3 on 2025-10-13
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment AG122 → Alpine Hunter-5 on 2025-10-08
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment AG144 → Gladius Adjustable-1 on 2025-10-14
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment EH055 → Alpine Hunter-1 on 2025-10-09
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment AG125 → Adj Chalk Branch-1 on 2025-10-09
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment AG164 → Chalk Branch-3 on 2025-10-09
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment AG478 → Visigoth-1 on 2025-10-09
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment AG509 → Alpine Hunter Adjustable-1 on 2025-10-09
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment AG548 → Alpine Hunter-2 on 2025-10-09
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment AG571 → Privateer-2 on 2025-10-13
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment AG575 → K2-3 on 2025-10-13
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment AG591 → Adj K2-3 on 2025-10-14
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment AG634 → Alpine Hunter-3 on 2025-10-09
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment AG641 → Alpine Hunter-4 on 2025-10-09
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment AG642 → Privateer-1 on 2025-10-14
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment AG644 → Sportsman-1 on 2025-10-09
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment AG645 → Privateer-2 on 2025-10-14
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment AG647 → Alpine Hunter Adjustable-2 on 2025-10-09
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment AG649 → Gladius Adjustable-1 on 2025-10-15
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment AG651 → Alpine Hunter Adjustable-3 on 2025-10-09
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment AG654 → Sportsman-2 on 2025-10-09
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment AG656 → Ferrata-1 on 2025-10-09
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment AG726 → Alpine Hunter-1 on 2025-10-13
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment AG745 → Alpine Hunter Adjustable-1 on 2025-10-13
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment AG753 → Privateer-1 on 2025-10-15
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment AG755 → Privateer-2 on 2025-10-15
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment AG756 → Adj Chalk Branch-1 on 2025-10-13
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment AG774 → Adj K2-3 on 2025-10-15
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment AG775 → Adj K2-3 on 2025-10-16
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment AG786 → Alpine Hunter Adjustable-2 on 2025-10-13
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment AG796 → Sportsman-1 on 2025-10-13
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment AG803 → Visigoth-1 on 2025-10-13
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment AG161 → Alpine Hunter-2 on 2025-10-13
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment AG156 → Alpine Hunter-3 on 2025-10-13
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment AG098 → Adj Chalk Branch-2 on 2025-10-13
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment AG104 → Alpine Hunter-4 on 2025-10-13
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment AG141 → Alpine Hunter-5 on 2025-10-13
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment AG151 → Chalk Branch-3 on 2025-10-13
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment AG145 → Alpine Hunter-6 on 2025-10-13
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment AG149 → Alpine Hunter-1 on 2025-10-14
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment AG152 → Privateer-1 on 2025-10-16
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment AG147 → Alpine Hunter-2 on 2025-10-14
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment AG124 → Adj Chalk Branch-1 on 2025-10-14
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment AG105 → K2-3 on 2025-10-14
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment AG099 → Adj Chalk Branch-2 on 2025-10-14
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment AG092 → Alpine Hunter Adjustable-1 on 2025-10-14
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment AG079 → Gladius-1 on 2025-10-14
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment AG109 → APR-1 on 2025-10-14
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment AG119 → Alpine Hunter-3 on 2025-10-14
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment AG121 → Alpine Hunter-4 on 2025-10-14
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment AG082 → Chalk Branch-3 on 2025-10-14
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment AG062 → Alpine Hunter-5 on 2025-10-14
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment AG049 → Adj Chalk Branch-3 on 2025-10-14
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment AG056 → Alpine Hunter Adjustable-2 on 2025-10-14
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment AG061 → Alpine Hunter-1 on 2025-10-15
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment AG048 → Adj Chalk Branch-1 on 2025-10-15
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment AG047 → Alpine Hunter Adjustable-1 on 2025-10-15
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment EH111 → Chalk Branch-3 on 2025-10-15
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment AG039 → Privateer-2 on 2025-10-16
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment AG040 → Privateer-1 on 2025-10-20
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment AG036 → Gladius-1 on 2025-10-15
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment AG017 → Sportsman-1 on 2025-10-15
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment AG007 → Adj Chalk Branch-2 on 2025-10-15
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment AG790 → Visigoth-1 on 2025-10-15
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment AG521 → Adj Chalk Branch-3 on 2025-10-15
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment AG524 → Ferrata-1 on 2025-10-15
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment AG543 → Cat-1 on 2025-10-15
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment EH112 → Alpine Hunter-2 on 2025-10-15
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment EH212 → Alpine Hunter Adjustable-2 on 2025-10-15
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment EH211 → Privateer-2 on 2025-10-20
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment EH209 → Sportsman-2 on 2025-10-15
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment EH207 → Alpine Hunter-1 on 2025-10-16
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment EH118 → Sportsman-1 on 2025-10-16
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment AG769 → Alpine Hunter-2 on 2025-10-16
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment AG815 → Alpine Hunter-3 on 2025-10-16
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment EH030 → Chalk Branch-3 on 2025-10-16
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment EH134 → Alpine Hunter Adjustable-1 on 2025-10-16
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment EH063 → Chalk Branch-1 on 2025-10-16
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment EH067 → Privateer-1 on 2025-10-21
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment EH071 → Visigoth-1 on 2025-10-16
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment EH078 → Alpine Hunter-4 on 2025-10-16
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment EH092 → Gladius-1 on 2025-10-16
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment EH093 → Gladius-1 on 2025-10-20
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment EH107 → Alpine Hunter-5 on 2025-10-16
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment EH113 → M1A-1 on 2025-10-16
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment EH114 → Alpine Hunter-6 on 2025-10-16
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment EH128 → Alpine Hunter-7 on 2025-10-16
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment EH133 → Alpine Hunter-8 on 2025-10-16
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment EH137 → Alpine Hunter-1 on 2025-10-20
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment EH139 → Alpine Hunter-2 on 2025-10-20
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment EH143 → Alpine Hunter-3 on 2025-10-20
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment EH145 → Chalk Branch-3 on 2025-10-20
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment EH150 → Visigoth-1 on 2025-10-20
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment EH162 → Privateer-2 on 2025-10-21
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment EH227 → Chalk Branch-1 on 2025-10-20
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment EH215 → Gladius Adjustable-1 on 2025-10-20
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment EH217 → Gladius Adjustable-1 on 2025-10-21
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment EH088 → Alpine Hunter Adjustable-1 on 2025-10-20
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment EH135 → Gladius Adjustable-1 on 2025-10-22
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment EH213 → Alpine Hunter-4 on 2025-10-20
+LayupScheduler.tsx:2078 📅 PRESERVED: Adding new assignment AG004 → Alpine Hunter Adjustable-2 on 2025-10-20
+LayupScheduler.tsx:2092 🔧 PRODUCTION FLOW: Mold assignments: Object
+LayupScheduler.tsx:2094 📅 PRODUCTION FLOW: Regular orders added to schedule, ready for review
+LayupScheduler.tsx:1100 🔍 RAW SCHEDULE DATA FROM DATABASE: 6 total entries
+LayupScheduler.tsx:1109   Entry 0: PO-P18261-2-1 → 2025-09-29T00:00:00.000Z → Mon Sep 29 2025 (Monday, day 1)
+LayupScheduler.tsx:1109   Entry 1: PO-P18261-3-1 → 2025-09-30T00:00:00.000Z → Tue Sep 30 2025 (Tuesday, day 2)
+LayupScheduler.tsx:1109   Entry 2: PO-P18261-2-1 → 2025-09-30T00:00:00.000Z → Tue Sep 30 2025 (Tuesday, day 2)
+LayupScheduler.tsx:1109   Entry 3: PO-P18261-1-1 → 2025-10-01T00:00:00.000Z → Wed Oct 01 2025 (Wednesday, day 3)
+LayupScheduler.tsx:1109   Entry 4: PO-P18261-3-1 → 2025-10-01T00:00:00.000Z → Wed Oct 01 2025 (Wednesday, day 3)
+LayupScheduler.tsx:1124 ✅ DATABASE FILTER: Keeping Monday assignment - PO-P18261-2-1 on Mon Sep 29 2025
+LayupScheduler.tsx:1124 ✅ DATABASE FILTER: Keeping Tuesday assignment - PO-P18261-3-1 on Tue Sep 30 2025
+LayupScheduler.tsx:1124 ✅ DATABASE FILTER: Keeping Tuesday assignment - PO-P18261-2-1 on Tue Sep 30 2025
+LayupScheduler.tsx:1124 ✅ DATABASE FILTER: Keeping Wednesday assignment - PO-P18261-1-1 on Wed Oct 01 2025
+LayupScheduler.tsx:1124 ✅ DATABASE FILTER: Keeping Wednesday assignment - PO-P18261-3-1 on Wed Oct 01 2025
+LayupScheduler.tsx:1124 ✅ DATABASE FILTER: Keeping Thursday assignment - PO-P18261-1-1 on Thu Oct 02 2025
+LayupScheduler.tsx:1130 📋 Database filter: Removed 0 non-work-day assignments, kept 6 work-day assignments
+LayupScheduler.tsx:1131 📋 Selected work days: Mon, Tue, Wed, Thu
+useUnifiedLayupOrders.ts:52 ✅ Processing 218 orders in select transform
+useUnifiedLayupOrders.ts:63 🔧 useUnifiedLayupOrders hook state: Object
+useUnifiedLayupOrders.ts:88 🔧 Final hook return: Object
+LayupScheduler.tsx:1513 🏔️ MESA UNIVERSAL DEBUG: Object
+LayupScheduler.tsx:1519 🔍 LayupScheduler orders debug: Object
+LayupScheduler.tsx:1539 🏔️ FINAL ORDERS: Returning 218 total orders, 0 are Mesa Universal
+LayupScheduler.tsx:1553 🚫 LOP Scheduler auto-run DISABLED for complete manual control
+LayupScheduler.tsx:3130 ✅ FRIDAY VALIDATION PASSED: 218 assignments, no Friday conflicts
+LayupScheduler.tsx:3136 🏭 LayupScheduler - Production/P1 orders: 3
+LayupScheduler.tsx:3138 🏭 LayupScheduler - Sample production/P1 order: Object
+LayupScheduler.tsx:3139 🏭 LayupScheduler - Production/P1 order stockModelId: cf_privateer
+LayupScheduler.tsx:3140 🏭 LayupScheduler - Production/P1 order modelId: cf_privateer
+LayupScheduler.tsx:3144 🏭 LayupScheduler - Assigned production/P1 orders: 3
+LayupScheduler.tsx:3148 ✅ Production/P1 orders assigned: Array(3)
+LayupScheduler.tsx:3154 🏭 Production/P1 orders loaded and ready for manual scheduling via Generate Schedule button
+LayupScheduler.tsx:3159 🏔️ LayupScheduler - Mesa molds: Array(8)
+LayupScheduler.tsx:3161 📋 LayupScheduler - Order Assignments: Object
+LayupScheduler.tsx:3162 🏭 LayupScheduler - All Molds: Array(74)
+LayupScheduler.tsx:3163 ⚙️ LayupScheduler - Employees: 2 employees loaded
+LayupScheduler.tsx:3168 🔄 Unassigned orders: 0 Array(0)
+LayupScheduler.tsx:3169 🏭 Unassigned PRODUCTION/P1 orders: 0 Array(0)
+LayupScheduler.tsx:4999 📅 MONDAY DEBUG: Date 2025-09-29, 1 assignments found
+LayupScheduler.tsx:5001    📅 PO-P18261-2-1 → Privateer-1
+LayupScheduler.tsx:5027 ✅ Monday assignment found: PO-P18261-2-1 → Privateer-1 on 2025-09-29
+35main.tsx:33 Warning: Invalid prop `data-replit-metadata` supplied to `React.Fragment`. React.Fragment can only have `key` and `children` props.
+    at LayupScheduler (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/src/components/LayupScheduler.tsx:565:35)
+    at div
+    at LayupSchedulerPage
+    at Route (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=7a20245f:280:16)
+    at Switch (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=7a20245f:336:17)
+    at main
+    at div
+    at Router (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=7a20245f:235:17)
+    at DeploymentAuthWrapper (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/src/components/DeploymentAuthWrapper.tsx:34:49)
+    at QueryClientProvider (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-65LAIXSP.js?v=7a20245f:2934:3)
+    at App (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/src/App.tsx?v=Dg1cDUm2c7sg4gUpeJJ-A:138:35)
+    at Router (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=7a20245f:6332:13)
+    at BrowserRouter (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=7a20245f:9416:3)
+    at QueryClientProvider (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-65LAIXSP.js?v=7a20245f:2934:3)
+console.error @ main.tsx:33Understand this error
+LayupScheduler.tsx:1100 🔍 RAW SCHEDULE DATA FROM DATABASE: 6 total entries
+LayupScheduler.tsx:1109   Entry 0: PO-P18261-2-1 → 2025-09-29T00:00:00.000Z → Mon Sep 29 2025 (Monday, day 1)
+LayupScheduler.tsx:1109   Entry 1: PO-P18261-3-1 → 2025-09-30T00:00:00.000Z → Tue Sep 30 2025 (Tuesday, day 2)
+LayupScheduler.tsx:1109   Entry 2: PO-P18261-2-1 → 2025-09-30T00:00:00.000Z → Tue Sep 30 2025 (Tuesday, day 2)
+LayupScheduler.tsx:1109   Entry 3: PO-P18261-1-1 → 2025-10-01T00:00:00.000Z → Wed Oct 01 2025 (Wednesday, day 3)
+LayupScheduler.tsx:1109   Entry 4: PO-P18261-3-1 → 2025-10-01T00:00:00.000Z → Wed Oct 01 2025 (Wednesday, day 3)
+LayupScheduler.tsx:1124 ✅ DATABASE FILTER: Keeping Monday assignment - PO-P18261-2-1 on Mon Sep 29 2025
+LayupScheduler.tsx:1124 ✅ DATABASE FILTER: Keeping Tuesday assignment - PO-P18261-3-1 on Tue Sep 30 2025
+LayupScheduler.tsx:1124 ✅ DATABASE FILTER: Keeping Tuesday assignment - PO-P18261-2-1 on Tue Sep 30 2025
+LayupScheduler.tsx:1124 ✅ DATABASE FILTER: Keeping Wednesday assignment - PO-P18261-1-1 on Wed Oct 01 2025
+LayupScheduler.tsx:1124 ✅ DATABASE FILTER: Keeping Wednesday assignment - PO-P18261-3-1 on Wed Oct 01 2025
+LayupScheduler.tsx:1124 ✅ DATABASE FILTER: Keeping Thursday assignment - PO-P18261-1-1 on Thu Oct 02 2025
+LayupScheduler.tsx:1130 📋 Database filter: Removed 0 non-work-day assignments, kept 6 work-day assignments
+LayupScheduler.tsx:1131 📋 Selected work days: Mon, Tue, Wed, Thu
+useUnifiedLayupOrders.ts:52 ✅ Processing 218 orders in select transform
+useUnifiedLayupOrders.ts:63 🔧 useUnifiedLayupOrders hook state: Object
+useUnifiedLayupOrders.ts:88 🔧 Final hook return: Object
+LayupScheduler.tsx:1513 🏔️ MESA UNIVERSAL DEBUG: Object
+LayupScheduler.tsx:1519 🔍 LayupScheduler orders debug: Object
+LayupScheduler.tsx:1539 🏔️ FINAL ORDERS: Returning 218 total orders, 0 are Mesa Universal
+LayupScheduler.tsx:1553 🚫 LOP Scheduler auto-run DISABLED for complete manual control
+LayupScheduler.tsx:3130 ✅ FRIDAY VALIDATION PASSED: 218 assignments, no Friday conflicts
+LayupScheduler.tsx:3136 🏭 LayupScheduler - Production/P1 orders: 3
+LayupScheduler.tsx:3138 🏭 LayupScheduler - Sample production/P1 order: Object
+LayupScheduler.tsx:3139 🏭 LayupScheduler - Production/P1 order stockModelId: cf_privateer
+LayupScheduler.tsx:3140 🏭 LayupScheduler - Production/P1 order modelId: cf_privateer
+LayupScheduler.tsx:3144 🏭 LayupScheduler - Assigned production/P1 orders: 3
+LayupScheduler.tsx:3148 ✅ Production/P1 orders assigned: Array(3)
+LayupScheduler.tsx:3154 🏭 Production/P1 orders loaded and ready for manual scheduling via Generate Schedule button
+LayupScheduler.tsx:3159 🏔️ LayupScheduler - Mesa molds: Array(8)
+LayupScheduler.tsx:3161 📋 LayupScheduler - Order Assignments: Object
+LayupScheduler.tsx:3162 🏭 LayupScheduler - All Molds: Array(74)
+LayupScheduler.tsx:3163 ⚙️ LayupScheduler - Employees: 2 employees loaded
+LayupScheduler.tsx:3168 🔄 Unassigned orders: 0 Array(0)
+LayupScheduler.tsx:3169 🏭 Unassigned PRODUCTION/P1 orders: 0 Array(0)
+LayupScheduler.tsx:4999 📅 MONDAY DEBUG: Date 2025-09-29, 1 assignments found
+LayupScheduler.tsx:5001    📅 PO-P18261-2-1 → Privateer-1
+LayupScheduler.tsx:5027 ✅ Monday assignment found: PO-P18261-2-1 → Privateer-1 on 2025-09-29
+35main.tsx:33 Warning: Invalid prop `data-replit-metadata` supplied to `React.Fragment`. React.Fragment can only have `key` and `children` props.
+    at LayupScheduler (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/src/components/LayupScheduler.tsx:565:35)
+    at div
+    at LayupSchedulerPage
+    at Route (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=7a20245f:280:16)
+    at Switch (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=7a20245f:336:17)
+    at main
+    at div
+    at Router (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=7a20245f:235:17)
+    at DeploymentAuthWrapper (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/src/components/DeploymentAuthWrapper.tsx:34:49)
+    at QueryClientProvider (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-65LAIXSP.js?v=7a20245f:2934:3)
+    at App (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/src/App.tsx?v=Dg1cDUm2c7sg4gUpeJJ-A:138:35)
+    at Router (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=7a20245f:6332:13)
+    at BrowserRouter (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=7a20245f:9416:3)
+    at QueryClientProvider (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-65LAIXSP.js?v=7a20245f:2934:3)
+console.error @ main.tsx:33Understand this error
+LayupScheduler.tsx:1563 🏭 LayupScheduler: Total orders from API: 218
+LayupScheduler.tsx:1564 🏭 LayupScheduler: Regular orders for scheduling: 215
+LayupScheduler.tsx:1565 🏭 LayupScheduler: P1 PO orders for scheduling: 0
+LayupScheduler.tsx:1567 🏭 LayupScheduler: Sample regular order for scheduling: Object
+LayupScheduler.tsx:1568 🏭 LayupScheduler: First 5 regular orders: Array(5)
+LayupScheduler.tsx:1581 🏭 LayupScheduler: Filtered orders by source: Object
+LayupScheduler.tsx:1585 🚀 LayupScheduler: All data loaded, ready for manual scheduling
+LayupScheduler.tsx:1587 📋 SCHEDULE STATUS: Ready for manual scheduling (Generate Schedule button) - Has existing assignments
+LayupScheduler.tsx:2174 🚫 AUTO-TRIGGER DISABLED: Algorithmic scheduling will NOT auto-trigger. Use manual buttons for complete control.
+LayupScheduler.tsx:1100 🔍 RAW SCHEDULE DATA FROM DATABASE: 6 total entries
+LayupScheduler.tsx:1109   Entry 0: PO-P18261-2-1 → 2025-09-29T00:00:00.000Z → Mon Sep 29 2025 (Monday, day 1)
+LayupScheduler.tsx:1109   Entry 1: PO-P18261-3-1 → 2025-09-30T00:00:00.000Z → Tue Sep 30 2025 (Tuesday, day 2)
+LayupScheduler.tsx:1109   Entry 2: PO-P18261-2-1 → 2025-09-30T00:00:00.000Z → Tue Sep 30 2025 (Tuesday, day 2)
+LayupScheduler.tsx:1109   Entry 3: PO-P18261-1-1 → 2025-10-01T00:00:00.000Z → Wed Oct 01 2025 (Wednesday, day 3)
+LayupScheduler.tsx:1109   Entry 4: PO-P18261-3-1 → 2025-10-01T00:00:00.000Z → Wed Oct 01 2025 (Wednesday, day 3)
+LayupScheduler.tsx:1124 ✅ DATABASE FILTER: Keeping Monday assignment - PO-P18261-2-1 on Mon Sep 29 2025
+LayupScheduler.tsx:1124 ✅ DATABASE FILTER: Keeping Tuesday assignment - PO-P18261-3-1 on Tue Sep 30 2025
+LayupScheduler.tsx:1124 ✅ DATABASE FILTER: Keeping Tuesday assignment - PO-P18261-2-1 on Tue Sep 30 2025
+LayupScheduler.tsx:1124 ✅ DATABASE FILTER: Keeping Wednesday assignment - PO-P18261-1-1 on Wed Oct 01 2025
+LayupScheduler.tsx:1124 ✅ DATABASE FILTER: Keeping Wednesday assignment - PO-P18261-3-1 on Wed Oct 01 2025
+LayupScheduler.tsx:1124 ✅ DATABASE FILTER: Keeping Thursday assignment - PO-P18261-1-1 on Thu Oct 02 2025
+LayupScheduler.tsx:1130 📋 Database filter: Removed 0 non-work-day assignments, kept 6 work-day assignments
+LayupScheduler.tsx:1131 📋 Selected work days: Mon, Tue, Wed, Thu
+useUnifiedLayupOrders.ts:52 ✅ Processing 218 orders in select transform
+useUnifiedLayupOrders.ts:63 🔧 useUnifiedLayupOrders hook state: Object
+useUnifiedLayupOrders.ts:88 🔧 Final hook return: Object
+LayupScheduler.tsx:1513 🏔️ MESA UNIVERSAL DEBUG: Object
+LayupScheduler.tsx:1519 🔍 LayupScheduler orders debug: Object
+LayupScheduler.tsx:1539 🏔️ FINAL ORDERS: Returning 218 total orders, 0 are Mesa Universal
+LayupScheduler.tsx:1553 🚫 LOP Scheduler auto-run DISABLED for complete manual control
+LayupScheduler.tsx:3130 ✅ FRIDAY VALIDATION PASSED: 218 assignments, no Friday conflicts
+LayupScheduler.tsx:3136 🏭 LayupScheduler - Production/P1 orders: 3
+LayupScheduler.tsx:3138 🏭 LayupScheduler - Sample production/P1 order: Object
+LayupScheduler.tsx:3139 🏭 LayupScheduler - Production/P1 order stockModelId: cf_privateer
+LayupScheduler.tsx:3140 🏭 LayupScheduler - Production/P1 order modelId: cf_privateer
+LayupScheduler.tsx:3144 🏭 LayupScheduler - Assigned production/P1 orders: 3
+LayupScheduler.tsx:3148 ✅ Production/P1 orders assigned: Array(3)
+LayupScheduler.tsx:3154 🏭 Production/P1 orders loaded and ready for manual scheduling via Generate Schedule button
+LayupScheduler.tsx:3159 🏔️ LayupScheduler - Mesa molds: Array(8)
+LayupScheduler.tsx:3161 📋 LayupScheduler - Order Assignments: Object
+LayupScheduler.tsx:3162 🏭 LayupScheduler - All Molds: Array(74)
+LayupScheduler.tsx:3163 ⚙️ LayupScheduler - Employees: 2 employees loaded
+LayupScheduler.tsx:3168 🔄 Unassigned orders: 0 Array(0)
+LayupScheduler.tsx:3169 🏭 Unassigned PRODUCTION/P1 orders: 0 Array(0)
+LayupScheduler.tsx:4999 📅 MONDAY DEBUG: Date 2025-09-29, 1 assignments found
+LayupScheduler.tsx:5001    📅 PO-P18261-2-1 → Privateer-1
+LayupScheduler.tsx:5027 ✅ Monday assignment found: PO-P18261-2-1 → Privateer-1 on 2025-09-29
+35main.tsx:33 Warning: Invalid prop `data-replit-metadata` supplied to `React.Fragment`. React.Fragment can only have `key` and `children` props.
+    at LayupScheduler (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/src/components/LayupScheduler.tsx:565:35)
+    at div
+    at LayupSchedulerPage
+    at Route (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=7a20245f:280:16)
+    at Switch (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=7a20245f:336:17)
+    at main
+    at div
+    at Router (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=7a20245f:235:17)
+    at DeploymentAuthWrapper (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/src/components/DeploymentAuthWrapper.tsx:34:49)
+    at QueryClientProvider (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-65LAIXSP.js?v=7a20245f:2934:3)
+    at App (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/src/App.tsx?v=Dg1cDUm2c7sg4gUpeJJ-A:138:35)
+    at Router (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=7a20245f:6332:13)
+    at BrowserRouter (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=7a20245f:9416:3)
+    at QueryClientProvider (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-65LAIXSP.js?v=7a20245f:2934:3)
+console.error @ main.tsx:33Understand this error
+LayupScheduler.tsx:1100 🔍 RAW SCHEDULE DATA FROM DATABASE: 6 total entries
+LayupScheduler.tsx:1109   Entry 0: PO-P18261-2-1 → 2025-09-29T00:00:00.000Z → Mon Sep 29 2025 (Monday, day 1)
+LayupScheduler.tsx:1109   Entry 1: PO-P18261-3-1 → 2025-09-30T00:00:00.000Z → Tue Sep 30 2025 (Tuesday, day 2)
+LayupScheduler.tsx:1109   Entry 2: PO-P18261-2-1 → 2025-09-30T00:00:00.000Z → Tue Sep 30 2025 (Tuesday, day 2)
+LayupScheduler.tsx:1109   Entry 3: PO-P18261-1-1 → 2025-10-01T00:00:00.000Z → Wed Oct 01 2025 (Wednesday, day 3)
+LayupScheduler.tsx:1109   Entry 4: PO-P18261-3-1 → 2025-10-01T00:00:00.000Z → Wed Oct 01 2025 (Wednesday, day 3)
+LayupScheduler.tsx:1124 ✅ DATABASE FILTER: Keeping Monday assignment - PO-P18261-2-1 on Mon Sep 29 2025
+LayupScheduler.tsx:1124 ✅ DATABASE FILTER: Keeping Tuesday assignment - PO-P18261-3-1 on Tue Sep 30 2025
+LayupScheduler.tsx:1124 ✅ DATABASE FILTER: Keeping Tuesday assignment - PO-P18261-2-1 on Tue Sep 30 2025
+LayupScheduler.tsx:1124 ✅ DATABASE FILTER: Keeping Wednesday assignment - PO-P18261-1-1 on Wed Oct 01 2025
+LayupScheduler.tsx:1124 ✅ DATABASE FILTER: Keeping Wednesday assignment - PO-P18261-3-1 on Wed Oct 01 2025
+LayupScheduler.tsx:1124 ✅ DATABASE FILTER: Keeping Thursday assignment - PO-P18261-1-1 on Thu Oct 02 2025
+LayupScheduler.tsx:1130 📋 Database filter: Removed 0 non-work-day assignments, kept 6 work-day assignments
+LayupScheduler.tsx:1131 📋 Selected work days: Mon, Tue, Wed, Thu
+useUnifiedLayupOrders.ts:52 ✅ Processing 218 orders in select transform
+useUnifiedLayupOrders.ts:63 🔧 useUnifiedLayupOrders hook state: Object
+useUnifiedLayupOrders.ts:88 🔧 Final hook return: Object
+LayupScheduler.tsx:1513 🏔️ MESA UNIVERSAL DEBUG: Object
+LayupScheduler.tsx:1519 🔍 LayupScheduler orders debug: Object
+LayupScheduler.tsx:1539 🏔️ FINAL ORDERS: Returning 218 total orders, 0 are Mesa Universal
+LayupScheduler.tsx:1553 🚫 LOP Scheduler auto-run DISABLED for complete manual control
+LayupScheduler.tsx:3130 ✅ FRIDAY VALIDATION PASSED: 218 assignments, no Friday conflicts
+LayupScheduler.tsx:3136 🏭 LayupScheduler - Production/P1 orders: 3
+LayupScheduler.tsx:3138 🏭 LayupScheduler - Sample production/P1 order: Object
+LayupScheduler.tsx:3139 🏭 LayupScheduler - Production/P1 order stockModelId: cf_privateer
+LayupScheduler.tsx:3140 🏭 LayupScheduler - Production/P1 order modelId: cf_privateer
+LayupScheduler.tsx:3144 🏭 LayupScheduler - Assigned production/P1 orders: 3
+LayupScheduler.tsx:3148 ✅ Production/P1 orders assigned: Array(3)
+LayupScheduler.tsx:3154 🏭 Production/P1 orders loaded and ready for manual scheduling via Generate Schedule button
+LayupScheduler.tsx:3159 🏔️ LayupScheduler - Mesa molds: Array(8)
+LayupScheduler.tsx:3161 📋 LayupScheduler - Order Assignments: Object
+LayupScheduler.tsx:3162 🏭 LayupScheduler - All Molds: Array(74)
+LayupScheduler.tsx:3163 ⚙️ LayupScheduler - Employees: 2 employees loaded
+LayupScheduler.tsx:3168 🔄 Unassigned orders: 0 Array(0)
+LayupScheduler.tsx:3169 🏭 Unassigned PRODUCTION/P1 orders: 0 Array(0)
+LayupScheduler.tsx:4999 📅 MONDAY DEBUG: Date 2025-09-29, 1 assignments found
+LayupScheduler.tsx:5001    📅 PO-P18261-2-1 → Privateer-1
+LayupScheduler.tsx:5027 ✅ Monday assignment found: PO-P18261-2-1 → Privateer-1 on 2025-09-29
+35main.tsx:33 Warning: Invalid prop `data-replit-metadata` supplied to `React.Fragment`. React.Fragment can only have `key` and `children` props.
+    at LayupScheduler (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/src/components/LayupScheduler.tsx:565:35)
+    at div
+    at LayupSchedulerPage
+    at Route (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=7a20245f:280:16)
+    at Switch (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=7a20245f:336:17)
+    at main
+    at div
+    at Router (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=7a20245f:235:17)
+    at DeploymentAuthWrapper (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/src/components/DeploymentAuthWrapper.tsx:34:49)
+    at QueryClientProvider (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-65LAIXSP.js?v=7a20245f:2934:3)
+    at App (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/src/App.tsx?v=Dg1cDUm2c7sg4gUpeJJ-A:138:35)
+    at Router (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=7a20245f:6332:13)
+    at BrowserRouter (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=7a20245f:9416:3)
+    at QueryClientProvider (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-65LAIXSP.js?v=7a20245f:2934:3)
+console.error @ main.tsx:33Understand this error
+LayupScheduler.tsx:1563 🏭 LayupScheduler: Total orders from API: 218
+LayupScheduler.tsx:1564 🏭 LayupScheduler: Regular orders for scheduling: 215
+LayupScheduler.tsx:1565 🏭 LayupScheduler: P1 PO orders for scheduling: 0
+LayupScheduler.tsx:1567 🏭 LayupScheduler: Sample regular order for scheduling: Object
+LayupScheduler.tsx:1568 🏭 LayupScheduler: First 5 regular orders: Array(5)
+LayupScheduler.tsx:1581 🏭 LayupScheduler: Filtered orders by source: Object
+LayupScheduler.tsx:1585 🚀 LayupScheduler: All data loaded, ready for manual scheduling
+LayupScheduler.tsx:1587 📋 SCHEDULE STATUS: Ready for manual scheduling (Generate Schedule button) - Has existing assignments

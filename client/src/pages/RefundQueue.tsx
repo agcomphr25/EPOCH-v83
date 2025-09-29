@@ -40,7 +40,7 @@ interface RefundRequest {
   paymentTotal?: number;
 }
 
-type ActionType = 'approve' | 'reject' | 'process';
+type ActionType = 'approve' | 'reject';
 
 export default function RefundQueue() {
   const { toast } = useToast();
@@ -59,32 +59,6 @@ export default function RefundQueue() {
     },
   });
 
-  // Fetch current user to check admin permissions
-  const { data: currentUser } = useQuery({
-    queryKey: ['currentUser'],
-    queryFn: async () => {
-      try {
-        const response = await fetch('/api/auth/session', {
-          credentials: 'include' // Include cookies for session-based auth
-        });
-        
-        if (response.ok) {
-          const userData = await response.json();
-          return userData;
-        }
-        return null;
-      } catch (error) {
-        console.error('Failed to fetch user data:', error);
-        return null;
-      }
-    },
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    retry: false
-  });
-
-  // Check if user is admin (using exact role strings from backend)
-  const isAdmin = currentUser?.role === 'ADMIN' || currentUser?.role === 'HR';
-
   // Update refund request status mutation
   const updateRefundRequestMutation = useMutation({
     mutationFn: async ({ id, action, rejectionReason }: { id: number; action: ActionType; rejectionReason?: string }) => {
@@ -94,23 +68,11 @@ export default function RefundQueue() {
       });
     },
     onSuccess: (_, variables) => {
-      const getSuccessMessage = () => {
-        switch (variables.action) {
-          case 'approve':
-            return { title: 'Request Approved', description: 'The refund request has been approved.' };
-          case 'reject':
-            return { title: 'Request Rejected', description: 'The refund request has been rejected.' };
-          case 'process':
-            return { title: 'Request Processed', description: 'The refund has been processed and the CSR has been notified.' };
-          default:
-            return { title: 'Request Updated', description: 'The refund request has been updated.' };
-        }
-      };
-      
-      const message = getSuccessMessage();
       toast({
-        title: message.title,
-        description: message.description,
+        title: variables.action === 'approve' ? 'Request Approved' : 'Request Rejected',
+        description: variables.action === 'approve' 
+          ? 'The refund request has been approved and processed.'
+          : 'The refund request has been rejected.',
       });
       queryClient.invalidateQueries({ queryKey: ['/api/refund-requests'] });
       setShowActionDialog(false);
@@ -184,8 +146,7 @@ export default function RefundQueue() {
   };
 
   const pendingRequests = refundRequests.filter(req => req.status === 'PENDING');
-  const approvedRequests = refundRequests.filter(req => req.status === 'APPROVED');
-  const processedRequests = refundRequests.filter(req => req.status !== 'PENDING' && req.status !== 'APPROVED');
+  const processedRequests = refundRequests.filter(req => req.status !== 'PENDING');
 
   if (isLoading) {
     return (
@@ -309,28 +270,26 @@ export default function RefundQueue() {
                       <div className="text-2xl font-bold text-green-600 mb-2" data-testid={`request-amount-${request.id}`}>
                         {formatCurrency(request.refundAmount)}
                       </div>
-                      {isAdmin && (
-                        <div className="flex gap-2">
-                          <Button
-                            size="sm"
-                            onClick={() => handleAction(request, 'approve')}
-                            className="bg-green-600 hover:bg-green-700"
-                            data-testid={`approve-button-${request.id}`}
-                          >
-                            <CheckCircle className="h-4 w-4 mr-1" />
-                            Approve
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="destructive"
-                            onClick={() => handleAction(request, 'reject')}
-                            data-testid={`reject-button-${request.id}`}
-                          >
-                            <XCircle className="h-4 w-4 mr-1" />
-                            Reject
-                          </Button>
-                        </div>
-                      )}
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          onClick={() => handleAction(request, 'approve')}
+                          className="bg-green-600 hover:bg-green-700"
+                          data-testid={`approve-button-${request.id}`}
+                        >
+                          <CheckCircle className="h-4 w-4 mr-1" />
+                          Approve
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          onClick={() => handleAction(request, 'reject')}
+                          data-testid={`reject-button-${request.id}`}
+                        >
+                          <XCircle className="h-4 w-4 mr-1" />
+                          Reject
+                        </Button>
+                      </div>
                     </div>
                   </div>
                   <div className="border-t pt-3 space-y-2">
@@ -344,93 +303,6 @@ export default function RefundQueue() {
                       <div>
                         <span className="text-sm font-medium text-gray-700">Notes: </span>
                         <span className="text-sm text-gray-600" data-testid={`request-notes-${request.id}`}>
-                          {request.notes}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Approved Requests - Ready for Processing */}
-      {approvedRequests.length > 0 && (
-        <Card className="mb-8" data-testid="approved-requests-card">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <CheckCircle className="h-5 w-5 text-green-600" />
-              Approved - Ready for Processing ({approvedRequests.length})
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4" data-testid="approved-requests-list">
-              {approvedRequests.map((request) => (
-                <div
-                  key={request.id}
-                  className="p-4 border border-green-200 rounded-lg bg-green-50"
-                  data-testid={`approved-request-${request.id}`}
-                >
-                  <div className="flex justify-between items-start mb-3">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <Link 
-                          href={`/orders?search=${request.orderId}`}
-                          className="font-medium text-lg text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1"
-                          data-testid={`approved-order-${request.id}`}
-                        >
-                          {request.orderId}
-                          <ExternalLink className="h-3 w-3" />
-                        </Link>
-                        {getStatusBadge(request.status)}
-                      </div>
-                      <div className="text-sm text-gray-600 space-y-1">
-                        <div className="flex items-center gap-1" data-testid={`approved-customer-${request.id}`}>
-                          <User className="h-3 w-3" />
-                          Customer: {request.customerName || request.customerId}
-                        </div>
-                        <div className="flex items-center gap-1" data-testid={`approved-date-${request.id}`}>
-                          <Calendar className="h-3 w-3" />
-                          Approved: {request.approvedAt ? formatDate(request.approvedAt) : 'N/A'}
-                        </div>
-                        <div data-testid={`approved-by-${request.id}`}>
-                          Approved by: {request.approvedBy || 'N/A'}
-                        </div>
-                        <div data-testid={`requested-by-${request.id}`}>
-                          Requested by: {request.requestedBy}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-2xl font-bold text-green-600 mb-2" data-testid={`approved-amount-${request.id}`}>
-                        {formatCurrency(request.refundAmount)}
-                      </div>
-                      {isAdmin && (
-                        <Button
-                          size="sm"
-                          onClick={() => handleAction(request, 'process')}
-                          className="bg-blue-600 hover:bg-blue-700"
-                          data-testid={`process-button-${request.id}`}
-                        >
-                          <CheckCircle className="h-4 w-4 mr-1" />
-                          Mark as Processed
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                  <div className="border-t pt-3 space-y-2">
-                    <div>
-                      <span className="text-sm font-medium text-gray-700">Reason: </span>
-                      <span className="text-sm text-gray-600" data-testid={`approved-reason-${request.id}`}>
-                        {request.reason}
-                      </span>
-                    </div>
-                    {request.notes && (
-                      <div>
-                        <span className="text-sm font-medium text-gray-700">Notes: </span>
-                        <span className="text-sm text-gray-600" data-testid={`approved-notes-${request.id}`}>
                           {request.notes}
                         </span>
                       </div>
@@ -475,24 +347,8 @@ export default function RefundQueue() {
                         {formatCurrency(request.refundAmount)}
                       </span>
                     </div>
-                    <div className="flex items-center gap-3">
-                      <div className="text-sm text-gray-500" data-testid={`processed-date-${request.id}`}>
-                        {request.status === 'PROCESSED' && request.processedAt 
-                          ? formatDate(request.processedAt)
-                          : request.approvedAt 
-                          ? formatDate(request.approvedAt) 
-                          : formatDate(request.updatedAt)}
-                      </div>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled
-                        className="opacity-50"
-                        data-testid={`processed-placeholder-${request.id}`}
-                      >
-                        <CheckCircle className="h-4 w-4 mr-1" />
-                        Processed
-                      </Button>
+                    <div className="text-sm text-gray-500" data-testid={`processed-date-${request.id}`}>
+                      {request.approvedAt ? formatDate(request.approvedAt) : formatDate(request.updatedAt)}
                     </div>
                   </div>
                   {request.rejectionReason && (
@@ -523,16 +379,14 @@ export default function RefundQueue() {
         <DialogContent data-testid="action-dialog">
           <DialogHeader>
             <DialogTitle data-testid="dialog-title">
-              {actionType === 'approve' ? 'Approve' : actionType === 'reject' ? 'Reject' : 'Mark as Processed'} Refund Request
+              {actionType === 'approve' ? 'Approve' : 'Reject'} Refund Request
             </DialogTitle>
             <DialogDescription data-testid="dialog-description">
               {selectedRequest && (
                 <>
                   {actionType === 'approve' 
                     ? `Approve a ${formatCurrency(selectedRequest.refundAmount)} refund for order ${selectedRequest.orderId}?`
-                    : actionType === 'reject'
-                    ? `Reject the refund request for order ${selectedRequest.orderId}?`
-                    : `Mark the ${formatCurrency(selectedRequest.refundAmount)} refund for order ${selectedRequest.orderId} as processed and notify the CSR?`
+                    : `Reject the refund request for order ${selectedRequest.orderId}?`
                   }
                 </>
               )}
@@ -570,7 +424,7 @@ export default function RefundQueue() {
               data-testid="confirm-action-button"
             >
               {updateRefundRequestMutation.isPending ? 'Processing...' : 
-                actionType === 'approve' ? 'Approve Refund' : actionType === 'reject' ? 'Reject Request' : 'Mark as Processed'
+                actionType === 'approve' ? 'Approve Refund' : 'Reject Request'
               }
             </Button>
           </div>

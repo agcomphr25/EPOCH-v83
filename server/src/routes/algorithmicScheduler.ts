@@ -134,8 +134,13 @@ router.post('/add-regular-orders', async (req, res) => {
       WHERE order_id LIKE 'PO-%'
     `);
     
-    if (existingPOAssignments.rows.length > 0 && existingPOAssignments.rows[0].last_po_date) {
-      const lastPODate = new Date(existingPOAssignments.rows[0].last_po_date);
+    // FIXED: Properly extract rows from PostgreSQL result
+    const poRows = Array.isArray(existingPOAssignments) 
+      ? existingPOAssignments 
+      : (existingPOAssignments as any).rows ?? [];
+    
+    if (poRows.length > 0 && poRows[0].last_po_date) {
+      const lastPODate = new Date(poRows[0].last_po_date);
       lastPODate.setDate(lastPODate.getDate() + 1); // Start the day after the last PO order
       
       // Use the later of "today" or "day after last PO"

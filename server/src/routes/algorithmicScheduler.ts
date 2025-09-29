@@ -145,11 +145,19 @@ router.post('/add-regular-orders', async (req, res) => {
       
       // Use the later of "today" or "day after last PO"
       startDate = lastPODate > startDate ? lastPODate : startDate;
-      console.log(`📅 CONTINUITY FIX: Last PO order date found, starting regular orders from ${startDate.toDateString()}`);
+      console.log(`📅 CONTINUITY FIX: Last PO order date found, calculated start date ${startDate.toDateString()} (day ${startDate.getDay()})`);
     } else {
       startDate.setDate(startDate.getDate() + 1); // Fallback to tomorrow if no PO orders found
       console.log(`📅 CONTINUITY FIX: No PO orders found, starting regular orders from ${startDate.toDateString()}`);
     }
+    
+    // CRITICAL FIX: Advance to next work day if calculated date is not a work day
+    while (!workDays.includes(startDate.getDay())) {
+      startDate.setDate(startDate.getDate() + 1);
+      console.log(`📅 CONTINUITY FIX: Advancing to next work day: ${startDate.toDateString()} (day ${startDate.getDay()})`);
+    }
+    
+    console.log(`📅 CONTINUITY FIX: Final start date for regular orders: ${startDate.toDateString()} (${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][startDate.getDay()]})`);
     
     // Initialize capacity for each work day for next 30 days
     for (let i = 0; i < 30; i++) {

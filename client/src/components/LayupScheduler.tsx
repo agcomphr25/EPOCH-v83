@@ -2981,7 +2981,7 @@ export default function LayupScheduler() {
                               const modelName = getModelDisplayName(modelId || '');
                               const actionLength = getActionLengthDisplay(order);
                               const lopDisplay = getLOPDisplay(order);
-                              const hasHeavyFill = getHeavyFillDisplay(order);
+                              const hasHeavyFill = getHeavyFillDisplay(order.features);
                               const customer = order.customerName || order.customer || order.customerId || 'Unknown Customer';
 
                               return `

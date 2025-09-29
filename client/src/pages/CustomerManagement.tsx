@@ -2303,11 +2303,6 @@ export default function CustomerManagement() {
                             </div>
                             <div className="text-gray-600">{defaultAddress.city}, {defaultAddress.state} {defaultAddress.zipCode}</div>
                             <div className="text-gray-500">{defaultAddress.country}</div>
-                            {defaultAddress.type !== 'shipping' && (
-                              <Badge variant="outline" className="mt-1 text-xs">
-                                {defaultAddress.type}
-                              </Badge>
-                            )}
                           </div>
                         ) : (
                           <span className="text-gray-500 text-sm">No address</span>

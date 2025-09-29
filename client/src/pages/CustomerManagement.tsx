@@ -517,16 +517,20 @@ const AddressManagementTabs = ({
       const otherShippingAddresses = shippingAddresses.filter(addr => addr.id !== address.id && addr.isDefault);
       
       for (const addr of otherShippingAddresses) {
-        await updateAddressMutation.mutateAsync({
-          ...addr,
-          isDefault: false,
+        // Only send the fields that need to be updated
+        await apiRequest(`/api/addresses/${addr.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ isDefault: false }),
         });
       }
 
       // Set the selected address as default
-      await updateAddressMutation.mutateAsync({
-        ...address,
-        isDefault: true,
+      // Only send the fields that need to be updated
+      await apiRequest(`/api/addresses/${address.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isDefault: true }),
       });
 
       // Auto-sync billing address when billingSameAsShipping is enabled
@@ -534,9 +538,10 @@ const AddressManagementTabs = ({
         // Find current default billing address and unset it
         const currentDefaultBilling = billingAddresses.find(addr => addr.isDefault);
         if (currentDefaultBilling) {
-          await updateAddressMutation.mutateAsync({
-            ...currentDefaultBilling,
-            isDefault: false,
+          await apiRequest(`/api/addresses/${currentDefaultBilling.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ isDefault: false }),
           });
         }
 
@@ -544,10 +549,10 @@ const AddressManagementTabs = ({
         if (address.type === 'shipping' || address.type === 'both') {
           // If it's type 'shipping', we need to update it to 'both' to serve billing needs
           if (address.type === 'shipping') {
-            await updateAddressMutation.mutateAsync({
-              ...address,
-              type: 'both',
-              isDefault: true,
+            await apiRequest(`/api/addresses/${address.id}`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ type: 'both', isDefault: true }),
             });
           }
           // If it's already 'both', it's already set as default above
@@ -568,6 +573,10 @@ const AddressManagementTabs = ({
         }
       }
 
+      // Invalidate queries to refresh the UI
+      queryClient.invalidateQueries({ queryKey: ['/api/addresses', selectedCustomer?.id] });
+      queryClient.invalidateQueries({ queryKey: ['/api/addresses/all'] });
+
       toast({
         title: "Success",
         description: billingSameAsShipping 
@@ -575,6 +584,7 @@ const AddressManagementTabs = ({
           : `Shipping will now use this address`,
       });
     } catch (error) {
+      console.error('Error updating shipping address:', error);
       toast({
         title: "Error",
         description: "Failed to update shipping address",

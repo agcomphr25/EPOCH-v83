@@ -137,6 +137,45 @@ router.post('/add-regular-orders', async (req, res) => {
         }
       }
     }
+
+    // CRITICAL FIX: Reduce employee capacity based on existing database assignments
+    if (existingSchedule && existingSchedule.length > 0) {
+      console.log('📊 ADD-REGULAR: Reducing employee capacity based on existing database assignments...');
+      
+      for (const row of existingSchedule) {
+        const dateStr = typeof row.scheduled_date === 'string' 
+          ? row.scheduled_date.split('T')[0] 
+          : row.scheduled_date.toISOString().split('T')[0];
+        
+        // Only reduce capacity for dates we're tracking
+        if (employeeCapacity.has(dateStr)) {
+          const dayCapacity = employeeCapacity.get(dateStr)!;
+          
+          // Reduce capacity for the first available employee (since we don't track which employee)
+          // This approximates the impact of existing assignments
+          let reducedCapacity = false;
+          for (const [empId, capacity] of dayCapacity.entries()) {
+            if (capacity > 0 && !reducedCapacity) {
+              dayCapacity.set(empId, Math.max(0, capacity - 1));
+              console.log(`📊 ADD-REGULAR: Reduced employee ${empId} capacity on ${dateStr} from ${capacity} to ${Math.max(0, capacity - 1)} (existing: ${row.order_id})`);
+              reducedCapacity = true;
+              break;
+            }
+          }
+        }
+      }
+      
+      // Log updated capacity for Monday to verify fix
+      const mondayStr = '2025-09-29';
+      if (employeeCapacity.has(mondayStr)) {
+        const mondayCapacity = employeeCapacity.get(mondayStr)!;
+        console.log(`📊 ADD-REGULAR: Monday ${mondayStr} updated capacity:`);
+        mondayCapacity.forEach((capacity, empId) => {
+          const emp = employees.find(e => e.id === empId);
+          console.log(`   Employee ${empId} (${emp?.name}): ${capacity} capacity remaining`);
+        });
+      }
+    }
     
     const allocations = [];
     

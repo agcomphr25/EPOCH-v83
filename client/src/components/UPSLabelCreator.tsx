@@ -10,6 +10,8 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Package, Truck, Download, DollarSign, Weight, Ruler, MapPin } from 'lucide-react';
+import AddressInput from '@/components/AddressInput';
+import { type AddressData } from '@/utils/addressUtils';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
 
@@ -62,6 +64,14 @@ export default function UPSLabelCreator({ orderId, isOpen, onClose, onSuccess }:
     state: '',
     zipCode: '',
     country: 'US',
+  });
+  
+  const [shipToAddressData, setShipToAddressData] = useState<AddressData>({
+    street: '',
+    city: '',
+    state: '',
+    zipCode: '',
+    country: 'United States',
   });
   
   const [shipFromAddress, setShipFromAddress] = useState<Address>({
@@ -139,6 +149,15 @@ export default function UPSLabelCreator({ orderId, isOpen, onClose, onSuccess }:
           state: shippingAddress.state || '',
           zipCode: shippingAddress.zipCode || '',
           country: shippingAddress.country || 'US',
+        });
+        
+        // Also update the AddressData for the AddressInput component
+        setShipToAddressData({
+          street: shippingAddress.street || '',
+          city: shippingAddress.city || '',
+          state: shippingAddress.state || '',
+          zipCode: shippingAddress.zipCode || '',
+          country: shippingAddress.country || 'United States',
         });
         console.log('✅ Auto-populated full shipping address');
       } else {
@@ -384,44 +403,32 @@ export default function UPSLabelCreator({ orderId, isOpen, onClose, onSuccess }:
                 </div>
               </div>
               
-              <div>
-                <Label>Street Address *</Label>
-                <Input
-                  value={shipToAddress.street}
-                  onChange={(e) => setShipToAddress(prev => ({ ...prev, street: e.target.value }))}
-                />
-              </div>
+              {/* Use AddressInput with UPS autocomplete */}
+              <AddressInput
+                label="Shipping Address"
+                value={shipToAddressData}
+                onChange={(addressData) => {
+                  setShipToAddressData(addressData);
+                  // Also update the shipToAddress state
+                  setShipToAddress(prev => ({
+                    ...prev,
+                    street: addressData.street,
+                    city: addressData.city,
+                    state: addressData.state,
+                    zipCode: addressData.zipCode,
+                    country: addressData.country === 'United States' ? 'US' : addressData.country,
+                  }));
+                }}
+                required
+              />
               
               <div>
                 <Label>Apt/Suite/Unit</Label>
                 <Input
                   value={shipToAddress.street2}
                   onChange={(e) => setShipToAddress(prev => ({ ...prev, street2: e.target.value }))}
+                  placeholder="Apt, Suite, Unit"
                 />
-              </div>
-              
-              <div className="grid grid-cols-3 gap-4">
-                <div>
-                  <Label>City *</Label>
-                  <Input
-                    value={shipToAddress.city}
-                    onChange={(e) => setShipToAddress(prev => ({ ...prev, city: e.target.value }))}
-                  />
-                </div>
-                <div>
-                  <Label>State *</Label>
-                  <Input
-                    value={shipToAddress.state}
-                    onChange={(e) => setShipToAddress(prev => ({ ...prev, state: e.target.value }))}
-                  />
-                </div>
-                <div>
-                  <Label>ZIP Code *</Label>
-                  <Input
-                    value={shipToAddress.zipCode}
-                    onChange={(e) => setShipToAddress(prev => ({ ...prev, zipCode: e.target.value }))}
-                  />
-                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">

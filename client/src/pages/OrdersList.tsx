@@ -116,6 +116,7 @@ interface StockModel {
 }
 
 export default function OrdersList() {
+  console.log('OrdersList component rendering - with CSV export');
   
   // Read search parameter from URL
   const searchParams = new URLSearchParams(window.location.search);
@@ -165,7 +166,7 @@ export default function OrdersList() {
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status/paginated'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
       showToast({
         title: "Order Cancelled",
         description: "The order has been cancelled successfully.",
@@ -225,17 +226,11 @@ export default function OrdersList() {
   // Department progression functions
   const getNextDepartment = (currentDepartment: string) => {
     const departmentFlow = [
-      'P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 'Gunsmith', 'Finish', 'Finish QC', 'Paint', 'Shipping QC', 'Shipping'
+      'P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 'Finish', 'Gunsmith', 'Paint', 'Shipping QC', 'Shipping'
     ];
 
     // Handle alternative department names
     const normalizedDepartment = currentDepartment === 'Layup' ? 'Layup/Plugging' : currentDepartment;
-    
-    // Special case: CNC splits to Gunsmith or Finish based on features  
-    if (normalizedDepartment === 'CNC') {
-      // For now, all CNC orders go to Gunsmith (can be enhanced later for rail_type logic)
-      return 'Gunsmith';
-    }
 
     const currentIndex = departmentFlow.indexOf(normalizedDepartment);
     if (currentIndex >= 0 && currentIndex < departmentFlow.length - 1) {
@@ -295,18 +290,12 @@ export default function OrdersList() {
         newSet.delete(variables.orderId);
         return newSet;
       });
-      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status/paginated'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
       toast.error('Failed to update department');
     }
   });
 
   const handleProgressOrder = React.useCallback((orderId: string, currentDepartment: string) => {
-    // Prevent multiple clicks on the same order
-    if (updatingOrders.has(orderId)) {
-      console.log(`⚠️ Order ${orderId} is already being updated, ignoring click`);
-      return;
-    }
-    
     const nextDepartment = getNextDepartment(currentDepartment);
     if (!nextDepartment) {
       toast.error('No next department available');
@@ -314,51 +303,26 @@ export default function OrdersList() {
     }
 
     console.log(`🔄 Progressing order ${orderId} from ${currentDepartment} to ${nextDepartment}`);
-    
-    // Mark order as updating
-    setUpdatingOrders(prev => new Set(prev).add(orderId));
 
-    // IMMEDIATELY update local state for instant UI response
-    setLocalOrderUpdates(prev => {
-      const newState = { ...prev, [orderId]: nextDepartment };
-      console.log(`✅ LOCAL STATE updated: ${orderId} -> ${nextDepartment}`);
-      return newState;
-    });
-
-    // IMMEDIATELY update React Query cache with CORRECT query key - this prevents any reversion
-    queryClient.setQueryData(['/api/orders/with-payment-status/paginated', 'ordersList'], (old: any) => {
-      if (!old?.orders) {
-        console.warn('❌ Cache update failed: no orders data');
-        return old;
-      }
-      
-      const updated = {
-        ...old,
-        orders: old.orders.map((order: any) => {
-          if (order.orderId === orderId) {
-            console.log(`✅ CACHE updated: ${orderId} -> ${nextDepartment} (was: ${order.currentDepartment})`);
-            return { ...order, currentDepartment: nextDepartment };
-          }
-          return order;
-        })
-      };
+    // IMMEDIATELY update React Query cache - this prevents any reversion
+    queryClient.setQueryData(['/api/orders/with-payment-status', 'v2'], (old: any[]) => {
+      if (!old) return old;
+      const updated = old.map((order: any) => {
+        if (order.orderId === orderId) {
+          console.log(`✅ Cache updated: ${orderId} -> ${nextDepartment}`);
+          return { ...order, currentDepartment: nextDepartment };
+        }
+        return order;
+      });
       return updated;
     });
-    
-    // Debug: Check cache after 2 seconds
-    setTimeout(() => {
-      const currentData = queryClient.getQueryData(['/api/orders/with-payment-status/paginated', 'ordersList']) as any;
-      const order = currentData?.orders?.find((o: any) => o.orderId === orderId);
-      if (order && order.currentDepartment !== nextDepartment) {
-        console.error(`🚨 CACHE OVERWRITTEN! Order ${orderId} was set to ${nextDepartment} but is now ${order.currentDepartment}`);
-      } else if (order) {
-        console.log(`✅ Cache still correct for ${orderId}: ${order.currentDepartment}`);
-      }
-    }, 2000);
+
+    // Also update local state for redundancy
+    setLocalOrderUpdates(prev => ({ ...prev, [orderId]: nextDepartment }));
 
     // Make the API call in the background
     progressOrderMutation.mutate({ orderId, nextDepartment });
-  }, [progressOrderMutation, queryClient, updatingOrders]);
+  }, [progressOrderMutation, queryClient]);
 
   const handleOpenCommunication = (order: Order, customersList: Customer[]) => {
     const customer = customersList?.find(c => c.id.toString() === order.customerId);
@@ -448,15 +412,23 @@ export default function OrdersList() {
   };
 
   try {
-  const { data: ordersResponse, isLoading, error } = useQuery({
-    queryKey: ['/api/orders/with-payment-status/paginated', 'ordersList'],
-    queryFn: () => apiRequest('/api/orders/with-payment-status/paginated?page=1&limit=1000'),
-    staleTime: 30000, // 30 seconds
-    gcTime: 60000, // 1 minute
-  });
-  
-  const orders: Order[] = ordersResponse?.orders || [];
+    const { data: orders, isLoading, error } = useQuery<Order[]>({
+      queryKey: ['/api/orders/with-payment-status', 'v2'],
+      queryFn: () => apiRequest('/api/orders/with-payment-status'),
+      refetchInterval: false, // Completely disable automatic refetching
+      refetchOnWindowFocus: false, // Disable refetch on window focus
+      refetchOnReconnect: false, // Disable refetch on network reconnect
+    });
 
+    // Debug logging to check if isVerified field is present
+    if (orders && orders.length > 0) {
+      const testOrder = orders.find(o => o.orderId === 'AG640');
+      if (testOrder) {
+        console.log('🔍 DEBUG: AG640 order data:', testOrder);
+        console.log('🔍 DEBUG: AG640 isVerified:', testOrder.isVerified);
+        console.log('🔍 DEBUG: AG640 keys:', Object.keys(testOrder));
+      }
+    }
 
     const { data: customers } = useQuery<Customer[]>({
       queryKey: ['/api/customers'],
@@ -472,6 +444,10 @@ export default function OrdersList() {
       refetchInterval: 60000, // Auto-refresh every 60 seconds
     });
 
+    console.log('Orders data:', orders);
+    console.log('Customers data:', customers);
+    console.log('Loading state:', isLoading);
+    console.log('Error state:', error);
 
   const getCustomerName = (customerId: string) => {
     if (!customers || !customerId) return customerId || '';
@@ -942,8 +918,8 @@ export default function OrdersList() {
                     <TableCell className="font-medium" title={order.fbOrderNumber ? `FB Order: ${order.fbOrderNumber} (Order ID: ${order.orderId})` : `Order ID: ${order.orderId}`}>
                       <div className="flex items-center gap-2">
                         <OrderSummaryTooltip orderId={order.orderId}>
-                          <span className="text-blue-600 hover:text-blue-800 cursor-pointer" title={`Raw orderId: ${order.orderId}, Display: ${getDisplayOrderId(order)}`}>
-                            {order.orderId}
+                          <span className="text-blue-600 hover:text-blue-800 cursor-pointer">
+                            {getDisplayOrderId(order)}
                           </span>
                         </OrderSummaryTooltip>
                         {hasUnresolvedKickback(order.orderId) && (
@@ -1318,7 +1294,7 @@ export default function OrdersList() {
                     <FormItem>
                       <FormLabel>Reported By</FormLabel>
                       <FormControl>
-                        <Input id="kickback-reportedBy" autoComplete="name" placeholder="Employee name" {...field} />
+                        <Input placeholder="Employee name" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>

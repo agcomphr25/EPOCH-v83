@@ -1221,8 +1221,10 @@ export function registerRoutes(app: Express): Server {
       const { storage } = await import('../../storage');
       const { id } = req.params;
       const addressData = req.body;
+      console.log('🔧 Address ID:', id);
+      console.log('🔧 Data received:', JSON.stringify(addressData, null, 2));
       const address = await storage.updateCustomerAddress(parseInt(id), addressData);
-      console.log('🔧 Updated address:', address.id);
+      console.log('🔧 Updated address:', address.id, '- Street:', address.street);
       res.json(address);
     } catch (error) {
       console.error('🔧 Address update error:', error);

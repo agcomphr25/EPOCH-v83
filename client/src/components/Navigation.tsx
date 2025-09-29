@@ -246,6 +246,12 @@ export default function Navigation() {
       icon: PieChart,
       description: 'Advanced reporting with PDF/CSV export'
     },
+    {
+      path: '/ag-metal-unfulfilled-report',
+      label: 'AG Metal Products Report',
+      icon: Wrench,
+      description: 'Comprehensive AG metal products and rails on unfulfilled orders'
+    },
     // {
     //   path: '/ag-bottom-metal-report',
     //   label: 'AG Bottom Metal Report',

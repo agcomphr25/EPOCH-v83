@@ -141,12 +141,9 @@ router.post('/add-regular-orders', async (req, res) => {
     
     if (poRows.length > 0 && poRows[0].last_po_date) {
       const lastPODate = new Date(poRows[0].last_po_date);
-      // CRITICAL FIX: Don't automatically skip to next day - allow sharing same day if capacity exists
-      // Only advance if the last PO date is before today
-      if (lastPODate >= startDate) {
-        startDate = lastPODate;
-      }
-      console.log(`📅 CONTINUITY FIX: Last PO order date found, allowing same-day scheduling from ${startDate.toDateString()} (day ${startDate.getDay()})`);
+      // CRITICAL FIX: Start regular orders from the same day as the last PO order to allow sharing capacity
+      startDate = lastPODate;
+      console.log(`📅 CONTINUITY FIX: Last PO order date found, starting regular orders from ${startDate.toDateString()} (day ${startDate.getDay()})`);
     } else {
       startDate.setDate(startDate.getDate() + 1); // Fallback to tomorrow if no PO orders found
       console.log(`📅 CONTINUITY FIX: No PO orders found, starting regular orders from ${startDate.toDateString()}`);

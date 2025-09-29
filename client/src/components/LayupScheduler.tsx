@@ -147,10 +147,8 @@ const DraggableOrderItem = React.memo(({ order, priority, totalOrdersInCell, mol
   // Determine card styling based on source and material
   const getCardStyling = () => {
     // Check if this is a purchase order (has poId or productionOrderId)
-    // BUT exclude Mesa Universal orders - they should always be colored by material type
-    // OEM Production orders get GREEN badges for priority indication
-    if ((order.poId || order.productionOrderId || order.source === 'production_order') && 
-        modelId !== 'mesa_universal') {
+    // ALL OEM Production orders get GREEN badges for priority indication - regardless of model ID
+    if (order.poId || order.productionOrderId || order.source === 'production_order') {
       return {
         bg: 'bg-green-100 dark:bg-green-800/50 hover:bg-green-200 dark:hover:bg-green-800/70 border-2 border-green-300 dark:border-green-600',
         text: 'text-green-800 dark:text-green-200'

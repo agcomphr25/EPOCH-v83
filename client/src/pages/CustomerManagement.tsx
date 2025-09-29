@@ -983,6 +983,38 @@ const AddressManagementTabs = ({
           </div>
         )}
 
+        {/* Show "Add Address" button when there are no shipping addresses */}
+        {shippingAddresses.length === 0 && !showAddressForm && (
+          <div className="p-6 border-2 border-dashed rounded-lg bg-gray-50 text-center">
+            <MapPin className="h-12 w-12 mx-auto text-gray-400 mb-3" />
+            <h4 className="font-medium text-gray-900 mb-2">No Shipping Address</h4>
+            <p className="text-sm text-gray-600 mb-4">
+              This customer doesn't have a shipping address yet. Add one to enable order fulfillment.
+            </p>
+            <Button 
+              onClick={() => setShowAddressForm(true)}
+              className="bg-blue-600 hover:bg-blue-700"
+              data-testid="button-add-first-address"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Add Shipping Address
+            </Button>
+          </div>
+        )}
+
+        {/* Show "Add Another Address" button when there are existing addresses */}
+        {shippingAddresses.length > 0 && !showAddressForm && (
+          <Button 
+            onClick={() => setShowAddressForm(true)}
+            variant="outline"
+            className="w-full"
+            data-testid="button-add-another-address"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Add Another Shipping Address
+          </Button>
+        )}
+
           {/* Add New Address Form - Unified for both shipping and billing */}
           {showAddressForm && (
             <div className="space-y-4 p-4 border rounded-lg bg-blue-50">
@@ -1395,7 +1427,16 @@ export default function CustomerManagement() {
       });
 
       // If address fields are filled, create the initial shipping address
+      console.log('🔧 Checking if address should be created:', {
+        hasStreet: !!data.street,
+        hasCity: !!data.city,
+        hasState: !!data.state,
+        hasZipCode: !!data.zipCode,
+        willCreate: !!(data.street && data.city && data.state && data.zipCode)
+      });
+      
       if (data.street && data.city && data.state && data.zipCode) {
+        console.log('🔧 Creating address for customer:', customer.id);
         await apiRequest('/api/addresses', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1582,6 +1623,14 @@ export default function CustomerManagement() {
 
   const handleCreateCustomer = () => {
     if (!validateForm()) return;
+    
+    console.log('🔧 Creating customer with formData:', formData);
+    console.log('🔧 Address fields:', {
+      street: formData.street,
+      city: formData.city,
+      state: formData.state,
+      zipCode: formData.zipCode
+    });
     
     createCustomerMutation.mutate(formData);
   };
@@ -1950,7 +1999,13 @@ export default function CustomerManagement() {
               </Button>
             </DialogTrigger>
           </Dialog>
-          <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+          <Dialog open={isCreateDialogOpen} onOpenChange={(open) => {
+            setIsCreateDialogOpen(open);
+            if (open) {
+              // Reset form when opening dialog
+              resetForm();
+            }
+          }}>
             <DialogTrigger asChild>
               <Button>
                 <Plus className="h-4 w-4 mr-2" />

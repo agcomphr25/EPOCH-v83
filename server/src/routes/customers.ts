@@ -458,7 +458,8 @@ router.post('/address-autocomplete-bypass', async (req: Request, res: Response) 
               state
             });
             
-            if (validationResult.suggestions && validationResult.suggestions.length > 0) {
+            // Only use UPS suggestions if they are actually validated addresses (not just echoed back)
+            if (validationResult.suggestions && validationResult.suggestions.length > 0 && validationResult.isValid) {
               for (const result of validationResult.suggestions.slice(0, 5)) {
                 upsSuggestions.push({
                   text: `${result.street}, ${result.city}, ${result.state} ${result.postalCode}`,
@@ -496,7 +497,8 @@ router.post('/address-autocomplete-bypass', async (req: Request, res: Response) 
               state
             });
             
-            if (validationResult.suggestions && validationResult.suggestions.length > 0) {
+            // Only use UPS suggestions if they are actually validated addresses (not just echoed back)
+            if (validationResult.suggestions && validationResult.suggestions.length > 0 && validationResult.isValid) {
               for (const result of validationResult.suggestions.slice(0, 5)) {
                 upsSuggestions.push({
                   text: `${result.street}, ${result.city}, ${result.state} ${result.postalCode}`,
@@ -536,7 +538,8 @@ router.post('/address-autocomplete-bypass', async (req: Request, res: Response) 
               state
             });
             
-            if (validationResult.suggestions && validationResult.suggestions.length > 0) {
+            // Only use UPS suggestions if they are actually validated addresses (not just echoed back)
+            if (validationResult.suggestions && validationResult.suggestions.length > 0 && validationResult.isValid) {
               // Take the first valid address from this city
               const result = validationResult.suggestions[0];
               upsSuggestions.push({
@@ -556,6 +559,8 @@ router.post('/address-autocomplete-bypass', async (req: Request, res: Response) 
                 console.log('🔧 Found enough diverse addresses, stopping search');
                 break;
               }
+            } else {
+              console.log('🔧 No valid addresses found in', city, state);
             }
           } catch (upsError) {
             console.log('🔧 UPS validation failed for', city, state);

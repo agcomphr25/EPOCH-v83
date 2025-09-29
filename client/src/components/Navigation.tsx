@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link, useLocation } from 'wouter';
-import { Factory, User, FileText, TrendingDown, Plus, Settings, Package, FilePenLine, ClipboardList, BarChart, ChevronDown, ChevronRight, FormInput, PieChart, Scan, Warehouse, Shield, Wrench, Users, TestTube, DollarSign, Receipt, TrendingUp, List, BookOpen, Calendar, CheckSquare, Truck, Mail, MessageSquare, CreditCard, XCircle, Cog, ArrowRight, LogOut } from "lucide-react";
+import { Factory, User, FileText, TrendingDown, Plus, Settings, Package, FilePenLine, ClipboardList, BarChart, ChevronDown, ChevronRight, FormInput, PieChart, Scan, Warehouse, Shield, Wrench, Users, TestTube, DollarSign, Receipt, TrendingUp, List, BookOpen, Calendar, CheckSquare, Truck, Mail, MessageSquare, CreditCard, XCircle, Cog, ArrowRight, LogOut, GraduationCap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import InstallPWAButton from "./InstallPWAButton";
@@ -73,6 +73,7 @@ export default function Navigation() {
   const [qcMaintenanceExpanded, setQcMaintenanceExpanded] = useState(false);
   const [financeExpanded, setFinanceExpanded] = useState(false);
   const [userDashboardsExpanded, setUserDashboardsExpanded] = useState(false);
+  const [trainingExpanded, setTrainingExpanded] = useState(false);
   const [purchaseOrdersExpanded, setPurchaseOrdersExpanded] = useState(false);
   const [productionSchedulingExpanded, setProductionSchedulingExpanded] = useState(false);
   const [departmentQueueExpanded, setDepartmentQueueExpanded] = useState(false);
@@ -85,6 +86,7 @@ export default function Navigation() {
     setEmployeesExpanded(false);
     setFinanceExpanded(false);
     setUserDashboardsExpanded(false);
+    setTrainingExpanded(false);
     setPurchaseOrdersExpanded(false);
     setProductionSchedulingExpanded(false);
     setDepartmentQueueExpanded(false);
@@ -103,6 +105,7 @@ export default function Navigation() {
       if (dropdownName !== 'employees') setEmployeesExpanded(false);
       if (dropdownName !== 'finance') setFinanceExpanded(false);
       if (dropdownName !== 'userDashboards') setUserDashboardsExpanded(false);
+      if (dropdownName !== 'training') setTrainingExpanded(false);
       if (dropdownName !== 'purchaseOrders') setPurchaseOrdersExpanded(false);
       if (dropdownName !== 'productionScheduling') setProductionSchedulingExpanded(false);
       if (dropdownName !== 'departmentQueue') setDepartmentQueueExpanded(false);
@@ -304,6 +307,27 @@ export default function Navigation() {
       label: 'Time Clock Admin',
       icon: Settings,
       description: 'Manage time clock entries and punches'
+    }
+  ];
+
+  const trainingItems = [
+    {
+      path: '/shutdown-procedures-training',
+      label: 'Shutdown Training',
+      icon: Shield,
+      description: 'Shutdown procedures training and certification'
+    },
+    {
+      path: '/fire-safety-training',
+      label: 'Fire Safety Training',
+      icon: Shield,
+      description: 'Fire safety procedures and emergency response'
+    },
+    {
+      path: '/counterfeit-prevention-training',
+      label: 'Counterfeit Prevention Training',
+      icon: Shield,
+      description: 'Counterfeit prevention and detection training'
     }
   ];
 
@@ -572,6 +596,7 @@ export default function Navigation() {
   const isEmployeesActive = employeesItems.some(item => location === item.path);
   const isFinanceActive = financeItems.some(item => location === item.path);
   const isUserDashboardsActive = userDashboardsItems.some(item => location === item.path);
+  const isTrainingActive = trainingItems.some(item => location === item.path);
   const isPurchaseOrdersActive = purchaseOrdersItems.some(item => location === item.path);
   const isProductionSchedulingActive = productionSchedulingItems.some(item => location === item.path);
   const isDepartmentQueueActive = departmentQueueItems.some(item => location === item.path);
@@ -816,6 +841,50 @@ export default function Navigation() {
               {employeesExpanded && (
                 <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
                   {employeesItems.map((item) => {
+                    const Icon = item.icon;
+                    const isActive = location === item.path;
+
+                    return (
+                      <Link key={item.path} href={item.path}>
+                        <button
+                          className={cn(
+                            "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
+                            isActive && "bg-primary text-white hover:bg-primary"
+                          )}
+                          onClick={closeAllDropdowns}
+                        >
+                          <Icon className="h-4 w-4" />
+                          {item.label}
+                        </button>
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Training Dropdown */}
+            <div className="relative">
+              <Button
+                variant={isTrainingActive ? "default" : "ghost"}
+                className={cn(
+                  "flex items-center gap-2 text-sm",
+                  isTrainingActive && "bg-primary text-white"
+                )}
+                onClick={() => toggleDropdown('training', trainingExpanded, setTrainingExpanded)}
+              >
+                <GraduationCap className="h-4 w-4" />
+                Training
+                {trainingExpanded ? (
+                  <ChevronDown className="h-4 w-4" />
+                ) : (
+                  <ChevronRight className="h-4 w-4" />
+                )}
+              </Button>
+
+              {trainingExpanded && (
+                <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
+                  {trainingItems.map((item) => {
                     const Icon = item.icon;
                     const isActive = location === item.path;
 

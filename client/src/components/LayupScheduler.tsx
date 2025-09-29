@@ -1679,7 +1679,14 @@ export default function LayupScheduler() {
 
     // Enhanced intelligent stock model detection (define before usage)
     const getOrderStockModelId = (order: any) => {
-      // If already has stockModelId, use it
+      // CRITICAL FIX: Preserve PO/OEM order model IDs to prevent Mesa fallback regression
+      if (order.source === 'production_order' || order.poId || order.productionOrderId || order.orderId?.startsWith('PO-')) {
+        // PO orders should keep their original model identifiers (apr_hunter_tikka, etc.)
+        if (order.stockModelId) return order.stockModelId;
+        if (order.modelId) return order.modelId;
+      }
+      
+      // Regular order processing: If already has stockModelId, use it
       if (order.stockModelId) return order.stockModelId;
       if (order.modelId) return order.modelId;
 

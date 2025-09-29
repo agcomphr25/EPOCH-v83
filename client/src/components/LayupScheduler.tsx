@@ -1048,9 +1048,17 @@ export default function LayupScheduler() {
 
       console.log(`✅ UNSCHEDULE: Successfully removed ${orderId} from schedule`);
       
-      // Invalidate relevant queries to refresh data
-      queryClient.invalidateQueries({ queryKey: ['/api/layup-schedule'] });
+      // TARGETED cache update instead of broad invalidation to prevent UI data loss
+      queryClient.setQueryData(['/api/layup-schedule'], (prev: any) => {
+        if (!prev || !Array.isArray(prev)) return prev;
+        // Remove only the specific order that was unscheduled
+        return prev.filter((entry: any) => entry.orderId !== orderId);
+      });
+
+      // Also update the P1 queue to show the returned order
       queryClient.invalidateQueries({ queryKey: ['/api/p1-layup-queue'] });
+
+      console.log(`🎯 TARGETED UPDATE: Removed ${orderId} from schedule cache without affecting other orders`);
 
       toast({
         title: "Order Unscheduled",

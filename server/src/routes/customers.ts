@@ -434,25 +434,56 @@ router.post('/address-autocomplete-bypass', async (req: Request, res: Response) 
     console.log('🔧 Trying UPS-based address autocomplete for:', search);
     
     try {
-      // For basic street addresses, try common city/state combinations with UPS
-      const commonCityStates = [
-        'New York, NY', 'Los Angeles, CA', 'Chicago, IL', 'Houston, TX', 'Phoenix, AZ',
-        'Philadelphia, PA', 'San Antonio, TX', 'San Diego, CA', 'Dallas, TX', 'San Jose, CA',
-        'Austin, TX', 'Jacksonville, FL', 'Fort Worth, TX', 'Columbus, OH', 'Charlotte, NC',
-        'San Francisco, CA', 'Indianapolis, IN', 'Seattle, WA', 'Denver, CO', 'Washington, DC'
-      ];
-      
       let upsSuggestions = [];
       
-      // Try UPS validation with the most common cities for this address
-      for (const cityState of commonCityStates.slice(0, 3)) { // Limit to 3 attempts for performance
+      // Parse the search query to extract potential location information
+      const searchParts = search.split(',').map(s => s.trim());
+      let targetCityStates = [];
+      
+      if (searchParts.length >= 2) {
+        // User provided city/state in their input - use that
+        const potentialCity = searchParts[1];
+        const potentialState = searchParts[2] || '';
+        
+        if (potentialState && potentialState.length === 2) {
+          // Full format: "123 Main St, Dallas, TX"
+          targetCityStates.push(`${potentialCity}, ${potentialState}`);
+        } else if (potentialCity.includes(' ')) {
+          // Format: "123 Main St, Dallas TX"
+          const cityStateParts = potentialCity.split(' ');
+          const state = cityStateParts[cityStateParts.length - 1];
+          const city = cityStateParts.slice(0, -1).join(' ');
+          if (state.length === 2) {
+            targetCityStates.push(`${city}, ${state}`);
+          }
+        }
+      }
+      
+      // If no location provided in search, try a few common states but focus on more likely matches
+      if (targetCityStates.length === 0) {
+        console.log('🔧 No location info in search, using broad approach');
+        // Instead of hardcoding, return just the street address for manual completion
+        upsSuggestions.push({
+          text: search,
+          streetLine: search,
+          city: '',
+          state: '',
+          zipCode: '',
+          entries: 1
+        });
+        
+        console.log('🔧 Returning street-only suggestion for manual completion');
+        return res.json({ suggestions: upsSuggestions });
+      }
+      
+      // Try UPS validation with the identified city/state
+      for (const cityState of targetCityStates.slice(0, 2)) { // Limit to 2 attempts for performance
         try {
-          const fullAddress = `${search}, ${cityState}`;
-          console.log('🔧 Trying UPS validation for:', fullAddress);
+          console.log('🔧 Trying UPS validation for:', `${searchParts[0]}, ${cityState}`);
           
           const [city, state] = cityState.split(', ');
           const validationResult = await validateAddressWithUPS({
-            street: search,
+            street: searchParts[0], // Use just the street part
             city: city,
             state: state
           });

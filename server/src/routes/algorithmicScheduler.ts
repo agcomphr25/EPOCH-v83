@@ -123,8 +123,28 @@ router.post('/add-regular-orders', async (req, res) => {
     
     // Initialize employee capacity tracking per day
     const employeeCapacity = new Map<string, Map<number, number>>();
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() + 1);
+    
+    // CONTINUITY FIX: Start scheduling immediately after the last PO order date
+    let startDate = new Date();
+    
+    // Check for existing PO assignments to find the latest date
+    const existingPOAssignments = await pool.query(`
+      SELECT MAX(scheduled_date) as last_po_date
+      FROM layup_schedule 
+      WHERE order_id LIKE 'PO-%'
+    `);
+    
+    if (existingPOAssignments.rows.length > 0 && existingPOAssignments.rows[0].last_po_date) {
+      const lastPODate = new Date(existingPOAssignments.rows[0].last_po_date);
+      lastPODate.setDate(lastPODate.getDate() + 1); // Start the day after the last PO order
+      
+      // Use the later of "today" or "day after last PO"
+      startDate = lastPODate > startDate ? lastPODate : startDate;
+      console.log(`📅 CONTINUITY FIX: Last PO order date found, starting regular orders from ${startDate.toDateString()}`);
+    } else {
+      startDate.setDate(startDate.getDate() + 1); // Fallback to tomorrow if no PO orders found
+      console.log(`📅 CONTINUITY FIX: No PO orders found, starting regular orders from ${startDate.toDateString()}`);
+    }
     
     // Initialize capacity for each work day for next 30 days
     for (let i = 0; i < 30; i++) {

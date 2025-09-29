@@ -46,27 +46,20 @@ router.post('/save', async (req: Request, res: Response) => {
         // Convert scheduledDate to Date object if it's a string
         const processedScheduledDate = typeof scheduledDate === 'string' ? new Date(scheduledDate) : scheduledDate;
 
-        // Extract business day from scheduled date as YYYY-MM-DD string
-        const layupDayStr = new Date(processedScheduledDate).toISOString().slice(0, 10);
-
-        // Insert schedule entry with upsert to handle conflicts
+        // Insert schedule entry
         await pool.query(`
           INSERT INTO layup_schedule (
-            order_id, scheduled_date, layup_day, mold_id, employee_assignments,
+            order_id, scheduled_date, mold_id, employee_assignments,
             is_override, created_at, updated_at
-          ) VALUES ($1, $2, $3::date, $4, $5, $6, NOW(), NOW())
-          ON CONFLICT (layup_day, mold_id) DO UPDATE SET
-            order_id = EXCLUDED.order_id,
-            scheduled_date = EXCLUDED.scheduled_date,
-            employee_assignments = EXCLUDED.employee_assignments,
-            updated_at = NOW()
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7)
         `, [
           orderId,
           processedScheduledDate,
-          layupDayStr,
           moldId || 'auto',
           JSON.stringify(employeeAssignments || []),
-          true // This is a manual schedule save (preserve is_override on conflict)
+          true, // This is a manual schedule save
+          new Date().toISOString(),
+          new Date().toISOString()
         ]);
 
         savedCount++;
@@ -166,6 +159,98 @@ router.get('/current-week', async (req: Request, res: Response) => {
     res.status(500).json({
       success: false,
       error: "Failed to fetch current week schedule",
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// Add individual order assignment endpoint for drag and drop
+router.post('/', async (req: Request, res: Response) => {
+  try {
+    console.log('💾 INDIVIDUAL SAVE: Saving single order assignment...');
+    
+    const { orderId, scheduledDate, moldId, instanceNumber, employeeAssignments, isOverride, overriddenBy } = req.body;
+    
+    if (!orderId || !scheduledDate || !moldId) {
+      return res.status(400).json({
+        success: false,
+        error: "Missing required fields: orderId, scheduledDate, moldId"
+      });
+    }
+
+    console.log(`📋 Saving assignment: ${orderId} → ${moldId} on ${scheduledDate}`);
+
+    // Convert scheduledDate to Date object if it's a string
+    const processedScheduledDate = typeof scheduledDate === 'string' ? new Date(scheduledDate) : scheduledDate;
+
+    // Insert schedule entry
+    await pool.query(`
+      INSERT INTO layup_schedule (
+        order_id, scheduled_date, mold_id, employee_assignments,
+        is_override, overridden_by, created_at, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    `, [
+      orderId,
+      processedScheduledDate,
+      moldId,
+      JSON.stringify(employeeAssignments || []),
+      isOverride || true,
+      overriddenBy || 'user',
+      new Date().toISOString(),
+      new Date().toISOString()
+    ]);
+
+    console.log(`✅ Successfully saved assignment: ${orderId} → ${moldId}`);
+    
+    res.json({
+      success: true,
+      message: `Order ${orderId} assigned to ${moldId}`,
+      orderId,
+      moldId,
+      scheduledDate: processedScheduledDate
+    });
+    
+  } catch (error) {
+    console.error('❌ INDIVIDUAL SAVE ERROR:', error);
+    res.status(500).json({
+      success: false,
+      error: "Failed to save order assignment",
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// Delete individual order assignment endpoint for drag and drop
+router.delete('/by-order/:orderId', async (req: Request, res: Response) => {
+  try {
+    const { orderId } = req.params;
+    console.log(`🗑️ INDIVIDUAL DELETE: Removing assignment for order ${orderId}`);
+    
+    const result = await pool.query(`
+      DELETE FROM layup_schedule 
+      WHERE order_id = $1
+    `, [orderId]);
+
+    const deletedRows = (result as any).rowCount || 0;
+    
+    if (deletedRows > 0) {
+      console.log(`✅ Successfully deleted ${deletedRows} assignment(s) for order ${orderId}`);
+    } else {
+      console.log(`ℹ️ No existing assignment found for order ${orderId}`);
+    }
+    
+    res.json({
+      success: true,
+      message: `Removed ${deletedRows} assignment(s) for order ${orderId}`,
+      orderId,
+      deletedRows
+    });
+    
+  } catch (error) {
+    console.error('❌ INDIVIDUAL DELETE ERROR:', error);
+    res.status(500).json({
+      success: false,
+      error: "Failed to delete order assignment",
       details: error instanceof Error ? error.message : 'Unknown error'
     });
   }

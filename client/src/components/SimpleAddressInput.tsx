@@ -171,21 +171,28 @@ export default function SimpleAddressInput({ label, value, onChange, required = 
           )}
         </div>
         
-        {showSuggestions && suggestions.length > 0 && (
+        {suggestions.length > 0 && (
           <div 
             ref={suggestionsRef}
-            className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-auto"
+            className="absolute z-[9999] w-full mt-1 bg-yellow-50 border-2 border-yellow-400 rounded-md shadow-xl max-h-72 overflow-auto"
+            style={{ top: '100%', left: 0, right: 0 }}
           >
+            <div className="p-2 bg-yellow-100 border-b border-yellow-300 text-xs font-semibold text-yellow-800">
+              ✨ SmartyStreets Address Suggestions (Click to select)
+            </div>
             {suggestions.map((suggestion, index) => (
               <div
                 key={index}
-                onClick={() => handleSelect(suggestion)}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  handleSelect(suggestion);
+                }}
                 className={cn(
-                  "px-3 py-2 cursor-pointer text-sm hover:bg-gray-100",
-                  selectedIndex === index && "bg-blue-50 text-blue-600"
+                  "px-4 py-3 cursor-pointer text-sm border-b border-yellow-200 hover:bg-yellow-100 transition-colors",
+                  selectedIndex === index && "bg-yellow-200 font-semibold"
                 )}
               >
-                {suggestion.text}
+                <div className="font-medium text-gray-900">{suggestion.text}</div>
               </div>
             ))}
           </div>

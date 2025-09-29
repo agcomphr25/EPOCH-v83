@@ -91,17 +91,21 @@ router.post('/add-regular-orders', async (req, res) => {
       FROM layup_schedule 
       WHERE scheduled_date >= CURRENT_DATE
     `);
+    // CRITICAL FIX: Normalize mold IDs to prevent collision detection failures
     const existingAssignments = new Set((existingSchedule || []).map((row: any) => {
       // FIXED: Handle both string and Date objects from PostgreSQL
       const dateStr = typeof row.scheduled_date === 'string' 
         ? row.scheduled_date.split('T')[0] 
         : row.scheduled_date.toISOString().split('T')[0];
-      return `${row.mold_id}:${dateStr}`;
+      // CRITICAL: Normalize mold_id (trim whitespace, lowercase) to match collision detection
+      const normalizedMoldId = (row.mold_id || '').toString().trim().toLowerCase();
+      return `${normalizedMoldId}:${dateStr}`;
     }));
     console.log(`📋 Found ${existingSchedule.length} existing schedule assignments to avoid collisions`);
 
-    // Track current scheduling to avoid internal collisions
-    const currentAllocations = new Set();
+    // CRITICAL FIX: Pre-populate currentAllocations with existing assignments to prevent double-booking
+    const currentAllocations = new Set(existingAssignments);
+    console.log(`📋 COLLISION FIX: Pre-populated currentAllocations with ${existingAssignments.size} existing assignments`);
     
     // Get employee data with production rates
     const employeeResult = await pool.query(`
@@ -154,7 +158,7 @@ router.post('/add-regular-orders', async (req, res) => {
           // Reduce capacity for the first available employee (since we don't track which employee)
           // This approximates the impact of existing assignments
           let reducedCapacity = false;
-          for (const [empId, capacity] of dayCapacity.entries()) {
+          for (const [empId, capacity] of Array.from(dayCapacity.entries())) {
             if (capacity > 0 && !reducedCapacity) {
               dayCapacity.set(empId, Math.max(0, capacity - 1));
               console.log(`📊 ADD-REGULAR: Reduced employee ${empId} capacity on ${dateStr} from ${capacity} to ${Math.max(0, capacity - 1)} (existing: ${row.order_id})`);
@@ -251,13 +255,16 @@ router.post('/add-regular-orders', async (req, res) => {
           let selectedMold = null;
           
           for (const mold of compatibleMolds) {
-            const moldDateKey = `${mold.mold_id}:${scheduledDateStr}`;
+            // CRITICAL FIX: Normalize mold ID to prevent collision detection failures
+            const normalizedMoldId = (mold.mold_id || '').toString().trim().toLowerCase();
+            const moldDateKey = `${normalizedMoldId}:${scheduledDateStr}`;
             
             // FIXED: Real-time collision detection - check database for live conflicts
+            // CRITICAL: Use TRIM and LOWER in SQL to match normalized mold IDs
             const liveCollisionCheck = await pool.query(`
               SELECT COUNT(*) as count 
               FROM layup_schedule 
-              WHERE mold_id = $1 AND DATE(scheduled_date) = DATE($2)
+              WHERE TRIM(LOWER(mold_id)) = TRIM(LOWER($1)) AND DATE(scheduled_date) = DATE($2)
             `, [mold.mold_id, scheduledDateStr]);
             
             // FIXED: Safer parsing of PostgreSQL result with proper null checks (same fix as OEM scheduler)
@@ -869,32 +876,6 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
       });
     });
 
-    // CRITICAL FIX: Initialize daily counts with existing database assignments
-    if (existingSchedule && existingSchedule.length > 0) {
-      console.log('📊 INITIALIZING daily counts with existing database assignments...');
-      existingSchedule.forEach((row: any) => {
-        const dateStr = typeof row.scheduled_date === 'string' 
-          ? row.scheduled_date.split('T')[0] 
-          : row.scheduled_date.toISOString().split('T')[0];
-        
-        // Only count assignments within our scheduling window
-        if (dailyAllocationCount.has(dateStr)) {
-          const currentCount = dailyAllocationCount.get(dateStr) || 0;
-          dailyAllocationCount.set(dateStr, currentCount + 1);
-          console.log(`📊 EXISTING: ${row.order_id} on ${dateStr} (count now: ${currentCount + 1})`);
-        }
-      });
-      
-      // Log final initialized counts
-      console.log('📊 INITIALIZED DAILY COUNTS:');
-      dailyAllocationCount.forEach((count, dateStr) => {
-        if (count > 0) {
-          const date = new Date(dateStr + 'T00:00:00');
-          const dayName = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][date.getDay()];
-          console.log(`   ${dateStr} (${dayName}): ${count} existing orders`);
-        }
-      });
-    }
 
     // CRITICAL VALIDATION: Verify all orders have compatible molds - NO EXCEPTIONS
     console.log('🚨 PERFORMING STRICT MOLD VALIDATION - NO EXCEPTIONS ALLOWED');

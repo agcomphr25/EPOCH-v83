@@ -461,37 +461,7 @@ router.post('/address-autocomplete-bypass', async (req: Request, res: Response) 
       res.json({
         suggestions: fallbackSuggestions
       });
-    const data = await response.json();
-    console.log('🔧 SmartyStreets raw response:', data);
-    
-    // Transform SmartyStreets autocomplete response
-    const suggestions = data.suggestions?.map((item: any) => {
-      // Extract ZIP code from text if zipcode field is empty but text contains it
-      let zipCode = item.zipcode;
-      if (!zipCode && item.text) {
-        const zipMatch = item.text.match(/\b(\d{5}(?:-\d{4})?)\b/);
-        if (zipMatch) {
-          zipCode = zipMatch[1];
-        }
-      }
-      
-      return {
-        text: item.text,
-        streetLine: item.street_line,
-        city: item.city,
-        state: item.state,
-        zipCode: zipCode,
-        entries: item.entries
-      };
-    }) || [];
-    
-    console.log('🔧 Transformed suggestions:', suggestions);
-    console.log('🔧 Sending response with suggestions count:', suggestions.length);
-    
-    res.json({
-      suggestions: suggestions
-    });
-    
+    }
   } catch (error) {
     console.error('🔧 Address autocomplete error:', error);
     res.status(500).json({ 

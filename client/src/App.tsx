@@ -72,6 +72,9 @@ import ProtectedRoute from "./components/auth/ProtectedRoute";
 import P2Forms from '@/pages/P2Forms';
 import WasteManagementForm from '@/pages/WasteManagementForm';
 import TaskTracker from '@/pages/TaskTracker';
+import ShutdownProceduresTraining from '@/pages/ShutdownProceduresTraining';
+import FireSafetyTraining from '@/pages/FireSafetyTraining';
+import CounterfeitPreventionTraining from '@/pages/CounterfeitPreventionTraining';
 import KickbackTracking from '@/components/KickbackTracking';
 import DocumentManagement from "./pages/DocumentManagement";
 import PurchaseOrderItemsQueuePage from "./pages/PurchaseOrderItemsQueuePage";
@@ -228,6 +231,11 @@ function App() {
                   <Route path="/employee-detail/:id" component={EmployeeDetail} />
                   <Route path="/employee-portal-new" component={EmployeePortal} />
                   <Route path="/time-clock-admin" component={TimeClockAdminPage} />
+
+                  {/* Training Routes */}
+                  <Route path="/shutdown-procedures-training" component={ShutdownProceduresTraining} />
+                  <Route path="/fire-safety-training" component={FireSafetyTraining} />
+                  <Route path="/counterfeit-prevention-training" component={CounterfeitPreventionTraining} />
 
                   {/* Auth Routes */}
                   <Route path="/login" component={LoginPage} />

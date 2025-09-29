@@ -513,11 +513,15 @@ const AddressManagementTabs = ({
   // Handle shipping address selection (radio button change)
   const handleShippingAddressSelect = async (address: CustomerAddress) => {
     try {
+      console.log('🔍 handleShippingAddressSelect called with address:', address);
+      
       // Set all other shipping addresses to not default
       const otherShippingAddresses = shippingAddresses.filter(addr => addr.id !== address.id && addr.isDefault);
+      console.log('🔍 Other shipping addresses to unset:', otherShippingAddresses.map(a => ({ id: a.id, street: a.street })));
       
       for (const addr of otherShippingAddresses) {
         // Only send the fields that need to be updated
+        console.log('🔍 Setting isDefault=false for address:', addr.id);
         await apiRequest(`/api/addresses/${addr.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
@@ -527,6 +531,7 @@ const AddressManagementTabs = ({
 
       // Set the selected address as default
       // Only send the fields that need to be updated
+      console.log('🔍 Setting isDefault=true for address:', address.id);
       await apiRequest(`/api/addresses/${address.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },

@@ -1161,10 +1161,34 @@ export default function LayupScheduler() {
         else if (dayOfWeek === 5) fridayCount++;
 
         // ALWAYS load assignments regardless of selectedWorkDays to show existing schedule
-        assignments[entry.orderId] = {
-          moldId: entry.moldId,
-          date: entry.scheduledDate
-        };
+        // BUT prioritize Monday assignments when there are duplicates
+        const existingAssignment = assignments[entry.orderId];
+        if (!existingAssignment) {
+          // No existing assignment, add it
+          assignments[entry.orderId] = {
+            moldId: entry.moldId,
+            date: entry.scheduledDate
+          };
+        } else {
+          // There's already an assignment - prioritize Monday (day 1)
+          const existingDate = new Date(existingAssignment.date);
+          const existingDayOfWeek = existingDate.getDay();
+          
+          if (dayOfWeek === 1 && existingDayOfWeek !== 1) {
+            // New assignment is Monday, existing is not - prioritize Monday
+            console.log(`🔒 DUPLICATE PRIORITY: Keeping Monday assignment for ${entry.orderId} (overwriting ${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][existingDayOfWeek]})`);
+            assignments[entry.orderId] = {
+              moldId: entry.moldId,
+              date: entry.scheduledDate
+            };
+          } else if (dayOfWeek !== 1 && existingDayOfWeek === 1) {
+            // Existing is Monday, new is not - keep Monday
+            console.log(`🔒 DUPLICATE PRIORITY: Keeping existing Monday assignment for ${entry.orderId} (rejecting ${dayName})`);
+          } else {
+            // Both same priority level or neither Monday - keep existing
+            console.log(`🔒 DUPLICATE DETECTED: Keeping first assignment for ${entry.orderId} (${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][existingDayOfWeek]} over ${dayName})`);
+          }
+        }
 
         // Log Monday orders specifically
         if (dayOfWeek === 1) {

@@ -23,10 +23,18 @@ export async function autocompleteAddress(query: string): Promise<string[]> {
     console.log('SmartyStreets autocomplete response:', response);
     
     // Transform the response to extract the text property from each suggestion
-    if (response.suggestions && Array.isArray(response.suggestions)) {
-      return response.suggestions.map((suggestion: any) => suggestion.text || suggestion);
+    if (response && response.suggestions && Array.isArray(response.suggestions)) {
+      const suggestions = response.suggestions.map((suggestion: any) => {
+        if (typeof suggestion === 'string') {
+          return suggestion;
+        }
+        return suggestion.text || suggestion.streetLine || suggestion;
+      });
+      console.log('SmartyStreets suggestions received:', suggestions);
+      return suggestions;
     }
     
+    console.log('No suggestions found in response');
     return [];
   } catch (error) {
     console.error('Error fetching address autocomplete:', error);

@@ -2043,11 +2043,22 @@ export default function LayupScheduler() {
         // Apply Friday validation to new regular orders based on work days setting
         const validatedNewAssignments = selectedWorkDays.includes(5) ? newRegularAssignments : validateNoFridayAssignments(newRegularAssignments);
         
-        // Merge with existing assignments (OEM priority orders preserved)
-        setOrderAssignments(prev => ({
-          ...prev,
-          ...validatedNewAssignments
-        }));
+        // Merge with existing assignments (preserve existing database assignments - NO overwrites)
+        setOrderAssignments(prev => {
+          const merged = { ...prev };
+          
+          // Only add new assignments for orders that DON'T already have assignments
+          Object.entries(validatedNewAssignments).forEach(([orderId, assignment]) => {
+            if (!merged[orderId]) {
+              merged[orderId] = assignment;
+              console.log(`📅 PRESERVED: Adding new assignment ${orderId} → ${assignment.moldId} on ${assignment.date}`);
+            } else {
+              console.log(`🔒 PRESERVED: Keeping existing assignment ${orderId} → ${merged[orderId].moldId} on ${merged[orderId].date} (not overwriting)`);
+            }
+          });
+          
+          return merged;
+        });
 
         // Log mold assignments for verification
         const moldAssignments = response.allocations.reduce((acc: any, alloc: any) => {

@@ -14,6 +14,7 @@ import { format } from 'date-fns';
 import { getDisplayOrderId } from '@/lib/orderUtils';
 import { useLocation } from 'wouter';
 import FBNumberSearch from '@/components/FBNumberSearch';
+import { OrderSearchBox } from '@/components/OrderSearchBox';
 import { SalesOrderModal } from '@/components/SalesOrderModal';
 
 export default function PaintQueuePage() {
@@ -190,8 +191,8 @@ export default function PaintQueuePage() {
     setSelectAll(false);
   };
 
-  // Progress orders to Shipping mutation
-  const progressToShippingMutation = useMutation({
+  // Progress orders to Shipping QC mutation
+  const progressToShippingQCMutation = useMutation({
     mutationFn: async (orderIds: string[]) => {
       const response = await apiRequest('/api/orders/update-department', {
         method: 'POST',
@@ -216,9 +217,9 @@ export default function PaintQueuePage() {
     }
   });
 
-  const handleProgressToShipping = () => {
+  const handleProgressToShippingQC = () => {
     if (selectedOrders.size === 0) return;
-    progressToShippingMutation.mutate(Array.from(selectedOrders));
+    progressToShippingQCMutation.mutate(Array.from(selectedOrders));
   };
 
   // Auto-select order when scanned
@@ -335,6 +336,28 @@ export default function PaintQueuePage() {
       {/* FishBowl Number Search */}
       <FBNumberSearch onOrderFound={handleOrderFound} />
 
+      {/* Order Search Box */}
+      <Card>
+        <CardContent className="p-4">
+          <div className="flex items-center gap-4">
+            <OrderSearchBox 
+              orders={paintOrders}
+              placeholder="Search orders by Order ID or FishBowl Number..."
+              onOrderSelect={handleOrderSearchSelect}
+            />
+            {highlightedOrderId && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setHighlightedOrderId(null)}
+                className="text-sm"
+              >
+                Clear highlight
+              </Button>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Department Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
@@ -361,7 +384,7 @@ export default function PaintQueuePage() {
           <CardHeader className="pb-3">
             <CardTitle className="text-green-700 dark:text-green-300 flex items-center gap-2">
               <ArrowRight className="h-5 w-5" />
-              Shipping
+              Shipping QC
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -397,13 +420,13 @@ export default function PaintQueuePage() {
                   Select All
                 </label>
                 <Button
-                  onClick={handleProgressToShipping}
-                  disabled={selectedOrders.size === 0 || progressToShippingMutation.isPending}
+                  onClick={handleProgressToShippingQC}
+                  disabled={selectedOrders.size === 0 || progressToShippingQCMutation.isPending}
                   className="bg-green-600 hover:bg-green-700"
                   size="sm"
                 >
                   <ArrowRight className="h-4 w-4 mr-1" />
-                  Move to Shipping ({selectedOrders.size})
+                  Move to Shipping QC ({selectedOrders.size})
                 </Button>
                 {selectedOrders.size > 0 && (
                   <Button
@@ -585,14 +608,14 @@ export default function PaintQueuePage() {
                   Clear Selection
                 </Button>
                 <Button
-                  onClick={handleProgressToShipping}
-                  disabled={selectedOrders.size === 0 || progressToShippingMutation.isPending}
+                  onClick={handleProgressToShippingQC}
+                  disabled={selectedOrders.size === 0 || progressToShippingQCMutation.isPending}
                   className="bg-purple-600 hover:bg-purple-700 text-white"
                 >
                   <ArrowRight className="h-4 w-4 mr-2" />
-                  {progressToShippingMutation.isPending 
+                  {progressToShippingQCMutation.isPending 
                     ? 'Progressing...' 
-                    : `Progress to Shipping (${selectedOrders.size})`}
+                    : `Progress to Shipping QC (${selectedOrders.size})`}
                 </Button>
               </div>
             </div>

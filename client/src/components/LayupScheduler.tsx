@@ -48,7 +48,7 @@ import { useToast } from '@/hooks/use-toast';
 
 
 // Draggable Order Item Component with responsive sizing - memoized for performance
-const DraggableOrderItem = React.memo(({ order, priority, totalOrdersInCell, moldInfo, getModelDisplayName, features, processedOrders, isLocked }: { order: any, priority: number, totalOrdersInCell?: number, moldInfo?: { moldId: string, instanceNumber?: number }, getModelDisplayName?: (modelId: string) => string, features?: any[], processedOrders?: any[], isLocked?: boolean }) => {
+const DraggableOrderItem = React.memo(({ order, priority, totalOrdersInCell, moldInfo, getModelDisplayName, features, processedOrders, isLocked, onRemoveOrder }: { order: any, priority: number, totalOrdersInCell?: number, moldInfo?: { moldId: string, instanceNumber?: number }, getModelDisplayName?: (modelId: string) => string, features?: any[], processedOrders?: any[], isLocked?: boolean, onRemoveOrder?: (orderId: string) => void }) => {
   const {
     attributes,
     listeners,
@@ -184,7 +184,7 @@ const DraggableOrderItem = React.memo(({ order, priority, totalOrdersInCell, mol
       style={style}
       {...attributes}
       {...(isLocked ? {} : listeners)}
-      className={`${sizing.padding} ${sizing.margin} ${sizing.height} ${cardStyling.bg} rounded-lg shadow-md transition-all duration-200 touch-manipulation select-none ${
+      className={`group relative ${sizing.padding} ${sizing.margin} ${sizing.height} ${cardStyling.bg} rounded-lg shadow-md transition-all duration-200 touch-manipulation select-none ${
         isLocked ? 'cursor-default opacity-75 border-dashed' : 'cursor-grab active:cursor-grabbing'
       }`}
     >
@@ -497,6 +497,21 @@ const DraggableOrderItem = React.memo(({ order, priority, totalOrdersInCell, mol
           </div>
         )}
       </div>
+
+      {/* Trash button for scheduled orders - only show if scheduled and not locked */}
+      {moldInfo && !isLocked && onRemoveOrder && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onRemoveOrder(order.orderId);
+          }}
+          className="absolute top-1 right-1 w-5 h-5 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+          title="Remove from schedule"
+          data-testid={`button-remove-${order.orderId}`}
+        >
+          <Trash2 className="w-3 h-3" />
+        </button>
+      )}
     </div>
   );
 });
@@ -512,7 +527,8 @@ function DroppableCell({
   features,
   processedOrders,
   selectedWorkDays = [1, 2, 3, 4], // Default Mon-Thu
-  isWeekLocked
+  isWeekLocked,
+  onRemoveOrder
 }: {
   moldId: string;
   date: Date;
@@ -524,6 +540,7 @@ function DroppableCell({
   processedOrders?: any[];
   selectedWorkDays?: number[];
   isWeekLocked: (date: Date) => boolean;
+  onRemoveOrder?: (orderId: string) => void;
 }) {
   // Responsive cell height based on order count
   const getCellHeight = (orderCount: number) => {
@@ -593,6 +610,7 @@ function DroppableCell({
                 features={features}
                 processedOrders={processedOrders}
                 isLocked={weekIsLocked}
+                onRemoveOrder={onRemoveOrder}
               />
             );
           })}
@@ -1006,6 +1024,44 @@ export default function LayupScheduler() {
       toast({
         title: "Save Failed",
         description: `Failed to save assignment for ${orderId}. Please try again.`,
+        variant: "destructive"
+      });
+    }
+  };
+
+  // Handle order removal from schedule (unschedule)
+  const handleRemoveOrder = async (orderId: string) => {
+    try {
+      console.log(`🗑️ UNSCHEDULE: Removing order ${orderId} from schedule`);
+
+      // Remove from local state immediately for UI responsiveness
+      setOrderAssignments(prev => {
+        const updated = { ...prev };
+        delete updated[orderId];
+        return updated;
+      });
+
+      // Delete from database
+      await apiRequest(`/api/layup-schedule/by-order/${orderId}`, {
+        method: 'DELETE'
+      });
+
+      console.log(`✅ UNSCHEDULE: Successfully removed ${orderId} from schedule`);
+      
+      // Invalidate relevant queries to refresh data
+      queryClient.invalidateQueries({ queryKey: ['/api/layup-schedule'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/p1-layup-queue'] });
+
+      toast({
+        title: "Order Unscheduled",
+        description: `Order ${orderId} removed from schedule and returned to P1 Production Queue`,
+      });
+
+    } catch (error) {
+      console.error('❌ UNSCHEDULE ERROR: Failed to remove order:', error);
+      toast({
+        title: "Unschedule Failed",
+        description: `Failed to remove ${orderId} from schedule. Please try again.`,
         variant: "destructive"
       });
     }
@@ -5054,6 +5110,7 @@ export default function LayupScheduler() {
                                 processedOrders={processedOrders}
                                 selectedWorkDays={selectedWorkDays}
                                 isWeekLocked={isWeekLocked}
+                                onRemoveOrder={handleRemoveOrder}
                               />
                             );
                           });

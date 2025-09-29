@@ -39,21 +39,12 @@ export async function validateAddressWithUPS(
     
     const token = await getAccessToken();
     
-    // UPS Address Validation API payload
+    // UPS Address Validation API payload (correct format)
     const requestPayload = {
-      AddressValidationRequest: {
-        Request: {
-          RequestOption: "1", // Return both valid and invalid addresses
-          TransactionReference: {
-            CustomerContext: "Address Validation",
-            TransactionIdentifier: `AV${Date.now()}`
-          }
-        },
-        MaximumListSize: "5",
+      XAVRequest: {
         AddressKeyFormat: {
           ConsigneeName: "Customer",
-          BuildingName: "",
-          AddressLine: address.street,
+          AddressLine: [address.street],
           PoliticalDivision2: address.city,
           PoliticalDivision1: address.state,
           PostcodePrimaryLow: address.postalCode || "",
@@ -98,36 +89,51 @@ export async function validateAddressWithUPS(
     const data = await response.json() as any;
     console.log('✅ UPS Address Validation: Response received:', JSON.stringify(data, null, 2));
 
-    // Parse UPS response
-    const validationResult = data.AddressValidationResponse;
+    // Parse UPS response (XAVRequest format)
+    const validationResult = data.XAVResponse;
     
-    if (validationResult && validationResult.AddressValidationResult) {
-      const results = Array.isArray(validationResult.AddressValidationResult) 
-        ? validationResult.AddressValidationResult 
-        : [validationResult.AddressValidationResult];
-
-      const suggestions = results.map((result: any) => {
-        const addr = result.AddressKeyFormat || result.Address;
+    if (validationResult && validationResult.Candidate) {
+      // Handle both single candidate (object) and multiple candidates (array)
+      const candidates = Array.isArray(validationResult.Candidate) ? 
+        validationResult.Candidate : [validationResult.Candidate];
+      
+      const suggestions = candidates.map((candidate: any) => {
+        const addr = candidate.AddressKeyFormat || candidate;
+        const addressLine = Array.isArray(addr.AddressLine) ? addr.AddressLine[0] : addr.AddressLine;
+        const postalCode = addr.PostcodePrimaryLow || "";
+        const extendedCode = addr.PostcodeExtendedLow || "";
+        const fullZip = extendedCode ? `${postalCode}-${extendedCode}` : postalCode;
+        
         return {
-          street: addr.AddressLine || addr.AddressLine1 || address.street,
+          street: addressLine || address.street,
           city: addr.PoliticalDivision2 || address.city,
           state: addr.PoliticalDivision1 || address.state,
-          postalCode: addr.PostcodePrimaryLow || addr.PostalCode || address.postalCode || "",
+          postalCode: fullZip,
           country: addr.CountryCode || address.country || "US"
         };
       });
 
-      // Check if any results indicate a valid address
-      const isValid = results.some((result: any) => 
-        result.Quality?.Match || result.Rank === "1.0" || !result.Quality?.Match
-      );
-
-      console.log('✅ UPS Address Validation: Processed suggestions:', suggestions);
+      const isValid = !!validationResult.ValidAddressIndicator;
+      console.log(`✅ UPS Address Validation: Found ${suggestions.length} address suggestions, valid: ${isValid}`);
+      console.log('✅ UPS suggestions:', suggestions);
 
       return {
         isValid,
         suggestions: suggestions.filter(Boolean),
-        message: isValid ? "Address validated successfully" : "Address needs correction"
+        message: isValid ? "Address validated successfully" : "Multiple address matches found"
+      };
+    } else if (validationResult && validationResult.NoCandidatesIndicator) {
+      console.log('⚠️ UPS Address Validation: No valid address found');
+      return {
+        isValid: false,
+        suggestions: [{
+          street: address.street,
+          city: address.city,
+          state: address.state,
+          postalCode: address.postalCode || "",
+          country: address.country || "US"
+        }],
+        message: "No valid address found"
       };
     }
 

@@ -430,11 +430,67 @@ router.post('/address-autocomplete-bypass', async (req: Request, res: Response) 
       }
     }
     
-    // Use Nominatim (OpenStreetMap) for free address autocomplete
-    console.log('🔧 Making Nominatim Address Autocomplete API call for:', search);
+    // Use UPS Address Validation for basic autocomplete suggestions
+    console.log('🔧 Trying UPS-based address autocomplete for:', search);
     
     try {
-      // Using Nominatim API (free, no API key required)
+      // For basic street addresses, try common city/state combinations with UPS
+      const commonCityStates = [
+        'New York, NY', 'Los Angeles, CA', 'Chicago, IL', 'Houston, TX', 'Phoenix, AZ',
+        'Philadelphia, PA', 'San Antonio, TX', 'San Diego, CA', 'Dallas, TX', 'San Jose, CA',
+        'Austin, TX', 'Jacksonville, FL', 'Fort Worth, TX', 'Columbus, OH', 'Charlotte, NC',
+        'San Francisco, CA', 'Indianapolis, IN', 'Seattle, WA', 'Denver, CO', 'Washington, DC'
+      ];
+      
+      let upsSuggestions = [];
+      
+      // Try UPS validation with the most common cities for this address
+      for (const cityState of commonCityStates.slice(0, 3)) { // Limit to 3 attempts for performance
+        try {
+          const fullAddress = `${search}, ${cityState}`;
+          console.log('🔧 Trying UPS validation for:', fullAddress);
+          
+          const [city, state] = cityState.split(', ');
+          const validationResult = await validateAddressWithUPS({
+            street: search,
+            city: city,
+            state: state
+          });
+          
+          if (validationResult.suggestions && validationResult.suggestions.length > 0) {
+            // Take first few suggestions from UPS
+            const suggestionsToAdd = validationResult.suggestions.slice(0, 3);
+            for (const result of suggestionsToAdd) {
+              upsSuggestions.push({
+                text: `${result.street}, ${result.city}, ${result.state} ${result.postalCode}`,
+                streetLine: result.street,
+                city: result.city,
+                state: result.state,
+                zipCode: result.postalCode,
+                entries: 1
+              });
+            }
+            
+            console.log('🔧 UPS found', validationResult.suggestions.length, 'address suggestions');
+            break; // Found addresses, stop searching
+          }
+        } catch (upsError) {
+          console.log('🔧 UPS validation failed for city/state:', cityState, (upsError as Error).message);
+          continue;
+        }
+      }
+      
+      // If UPS found suggestions, return them
+      if (upsSuggestions.length > 0) {
+        console.log('🔧 Returning UPS-based suggestions:', upsSuggestions);
+        return res.json({
+          suggestions: upsSuggestions
+        });
+      }
+      
+      // If UPS didn't find anything, try Nominatim as fallback
+      console.log('🔧 UPS found no results, trying Nominatim fallback for:', search);
+      
       const nominatimUrl = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(search)}&format=json&addressdetails=1&limit=5&countrycodes=us`;
       
       const response = await fetch(nominatimUrl, {
@@ -445,39 +501,40 @@ router.post('/address-autocomplete-bypass', async (req: Request, res: Response) 
       
       console.log('🔧 Nominatim response status:', response.status);
       
-      if (!response.ok) {
-        throw new Error(`Nominatim API error: ${response.status}`);
+      if (response.ok) {
+        const data = await response.json();
+        console.log('🔧 Nominatim raw response:', JSON.stringify(data, null, 2));
+        
+        // Transform Nominatim response to match expected format
+        const transformedSuggestions = data.map((result: any) => {
+          const address = result.address || {};
+          const houseNumber = address.house_number || '';
+          const street = address.road || '';
+          const streetLine = houseNumber && street ? `${houseNumber} ${street}` : (street || result.display_name.split(',')[0]);
+          
+          return {
+            text: result.display_name,
+            streetLine: streetLine,
+            city: address.city || address.town || address.village || '',
+            state: address.state || '',
+            zipCode: address.postcode || '',
+            entries: 1
+          };
+        });
+        
+        console.log('🔧 Transformed Nominatim suggestions:', transformedSuggestions);
+        
+        if (transformedSuggestions.length > 0) {
+          return res.json({
+            suggestions: transformedSuggestions
+          });
+        }
       }
       
-      const data = await response.json();
-      console.log('🔧 Nominatim raw response:', JSON.stringify(data, null, 2));
+      throw new Error('Both UPS and Nominatim failed to provide suggestions');
       
-      // Transform Nominatim response to match expected format
-      const transformedSuggestions = data.map((result: any) => {
-        const address = result.address || {};
-        const houseNumber = address.house_number || '';
-        const street = address.road || '';
-        const streetLine = houseNumber && street ? `${houseNumber} ${street}` : (street || result.display_name.split(',')[0]);
-        
-        return {
-          text: result.display_name,
-          streetLine: streetLine,
-          city: address.city || address.town || address.village || '',
-          state: address.state || '',
-          zipCode: address.postcode || '',
-          entries: 1
-        };
-      });
-      
-      console.log('🔧 Transformed Nominatim suggestions:', transformedSuggestions);
-      console.log('🔧 Sending response with suggestions count:', transformedSuggestions.length);
-      
-      res.json({
-        suggestions: transformedSuggestions
-      });
-      
-    } catch (nominatimError) {
-      console.error('🔧 Nominatim Autocomplete error:', nominatimError);
+    } catch (autocompleteError) {
+      console.error('🔧 Address Autocomplete error:', autocompleteError);
       
       // Fallback: try a simple address parsing approach
       const fallbackSuggestions = [{

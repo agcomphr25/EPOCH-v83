@@ -21,7 +21,7 @@ import { useLocation, useRoute } from 'wouter';
 import CustomerSearchInput from '@/components/CustomerSearchInput';
 import PaymentManager from '@/components/PaymentManager';
 import { OrderAttachments } from '@/components/OrderAttachments';
-import AddressInput from '@/components/AddressInput';
+import SimpleAddressInput from '@/components/SimpleAddressInput';
 import { type AddressData } from '@/utils/addressUtils';
 import type { Customer } from '@shared/schema';
 import { useFeatureValidation, useFeatureStateValidation } from '@/hooks/useFeatureValidation';
@@ -1862,7 +1862,7 @@ export default function OrderEntry() {
                                   </div>
                                   <div className="col-span-2">
                                     {/* Use AddressInput with UPS autocomplete for alternative shipping address */}
-                                    <AddressInput
+                                    <SimpleAddressInput
                                       label="Alternative Shipping Address"
                                       value={altShipToAddress as AddressData}
                                       onChange={(addressData) => {

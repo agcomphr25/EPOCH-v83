@@ -374,19 +374,6 @@ export default function POManager() {
 
       // Refresh PO list
       refetch();
-
-      // 🟢 AUTO-SCHEDULE: Automatically schedule the new OEM production orders
-      try {
-        console.log('🟢 Auto-scheduling new OEM production orders...');
-        const scheduleResult = await apiRequest('/api/algorithmic-schedule', {
-          method: 'POST'
-        });
-        console.log('✅ OEM orders automatically scheduled:', scheduleResult);
-        toast.success(`OEM orders scheduled! ${result.createdOrders} green cards now visible on schedule.`);
-      } catch (scheduleError) {
-        console.error('❌ Auto-schedule failed:', scheduleError);
-        toast.error("Production orders created but auto-scheduling failed. Use Generate Schedule button.");
-      }
     } catch (error) {
       console.error('Generate production orders error:', error);
       toast.error("Failed to generate production orders");

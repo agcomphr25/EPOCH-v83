@@ -16,6 +16,7 @@ interface Order {
   paymentTotal?: number;
   isFullyPaid?: boolean;
   isVerified?: boolean;
+  features?: any; // Add features field for CNC branching logic
 }
 
 interface Kickback {
@@ -41,7 +42,7 @@ import { getDisplayOrderId } from '@/lib/orderUtils';
 import CustomerDetailsTooltip from './CustomerDetailsTooltip';
 import CommunicationCompose from './CommunicationCompose';
 
-const departments = ['P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 'Finish', 'Gunsmith', 'Finish QC', 'Paint', 'Shipping QC', 'Shipping'];
+const departments = ['P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 'Gunsmith', 'Finish', 'Finish QC', 'Paint', 'Shipping'];
 
 export default function AllOrdersList() {
   const [selectedDepartment, setSelectedDepartment] = useState('all');
@@ -62,16 +63,19 @@ export default function AllOrdersList() {
     };
   }, []);
 
-  const { data: orders, isLoading, refetch } = useQuery<Order[]>({
-    queryKey: ['/api/orders/with-payment-status'],
+  const { data: ordersResponse, isLoading, refetch } = useQuery({
+    queryKey: ['/api/orders/with-payment-status/paginated', 'v2'], // Force cache refresh
+    queryFn: () => apiRequest('/api/orders/with-payment-status/paginated?page=1&limit=1000'),
     refetchInterval: false, // Completely disable automatic refetching
     refetchOnWindowFocus: false, // Disable refetch on window focus
     refetchOnReconnect: false, // Disable refetch on network reconnect
   });
+
+  const orders: Order[] = ordersResponse?.orders || [];
   
   // Add a manual refresh button for debugging
   const handleRefresh = () => {
-    queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status/paginated'] });
     refetch();
   };
 
@@ -83,11 +87,13 @@ export default function AllOrdersList() {
     queryFn: () => apiRequest('/api/stock-models'),
   });
 
-  // Fetch all kickbacks to determine which orders have kickbacks
-  const { data: allKickbacks = [] } = useQuery<Kickback[]>({
-    queryKey: ['/api/kickbacks'],
-    refetchInterval: 30000 // Refresh every 30 seconds
-  });
+  // Temporarily disable kickbacks query to prevent cache conflicts
+  // const { data: allKickbacks = [] } = useQuery<Kickback[]>({
+  //   queryKey: ['/api/kickbacks'],
+  //   refetchInterval: false, // Disable auto-refresh to prevent cache conflicts, but keep manual refresh options
+  //   // Keep default behavior for refetchOnWindowFocus and refetchOnReconnect
+  // });
+  const allKickbacks: Kickback[] = []; // Temporarily empty for debugging
 
   // Helper function to get model display name
   const getModelDisplayName = (modelId: string) => {
@@ -148,6 +154,9 @@ export default function AllOrdersList() {
       console.log(`✅ API Success: ${variables.orderId} -> ${variables.nextDepartment}`);
       toast.success('Department updated');
       
+      // DO NOT invalidate any queries here - this causes cache race conditions
+      // The immediate setQueryData update in handleProgressOrder should be the final word
+      
       // Cache is already updated from button click - just clean up local state
       setTimeout(() => {
         setLocalOrderUpdates(prev => {
@@ -174,7 +183,7 @@ export default function AllOrdersList() {
         newSet.delete(variables.orderId);
         return newSet;
       });
-      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status/paginated'] });
       toast.error('Failed to update department');
     }
   });
@@ -188,7 +197,7 @@ export default function AllOrdersList() {
     },
     onSuccess: () => {
       toast.success('Order scrapped successfully');
-      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status/paginated'] });
       queryClient.invalidateQueries({ queryKey: ['/api/orders/pipeline-counts'] });
       setScrapModalOrder(null);
     },
@@ -205,7 +214,7 @@ export default function AllOrdersList() {
     },
     onSuccess: () => {
       toast.success('Replacement order created successfully');
-      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status/paginated'] });
     },
     onError: (error) => {
       toast.error(`Failed to create replacement: ${error.message}`);
@@ -221,7 +230,7 @@ export default function AllOrdersList() {
     },
     onSuccess: () => {
       toast.success('Order cancelled successfully');
-      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status/paginated'] });
       queryClient.invalidateQueries({ queryKey: ['/api/orders/pipeline-counts'] });
       queryClient.invalidateQueries({ queryKey: ['/api/production-queue/prioritized'] });
       queryClient.invalidateQueries({ queryKey: ['/api/p1-layup-queue'] });
@@ -293,13 +302,19 @@ export default function AllOrdersList() {
     }
   });
 
-  const departments = [
-    'P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 'Finish', 'Gunsmith', 'Finish QC', 'Paint', 'Shipping QC', 'Shipping'
-  ];
-
-  const getNextDepartment = (currentDepartment: string) => {
+  const getNextDepartment = (currentDepartment: string, orderFeatures?: any) => {
     // Handle alternative department names
     const normalizedDepartment = currentDepartment === 'Layup' ? 'Layup/Plugging' : currentDepartment;
+    
+    // Special case: CNC splits to Gunsmith or Finish based on features
+    if (normalizedDepartment === 'CNC') {
+      // Orders with "no_rail" bypass gunsmith work entirely and go directly to Finish
+      if (orderFeatures && orderFeatures.rail_type === 'no_rail') {
+        return 'Finish';
+      }
+      // All other CNC orders go to Gunsmith
+      return 'Gunsmith';
+    }
     
     const currentIndex = departments.indexOf(normalizedDepartment);
     if (currentIndex >= 0 && currentIndex < departments.length - 1) {
@@ -308,8 +323,14 @@ export default function AllOrdersList() {
     return null;
   };
 
-  const handleProgressOrder = React.useCallback((orderId: string, currentDepartment: string) => {
-    const nextDepartment = getNextDepartment(currentDepartment);
+  const handleProgressOrder = React.useCallback((orderId: string, currentDepartment: string, orderFeatures?: any) => {
+    // Prevent multiple clicks on the same order
+    if (updatingOrders.has(orderId)) {
+      console.log(`⚠️ Order ${orderId} is already being updated, ignoring click`);
+      return;
+    }
+    
+    const nextDepartment = getNextDepartment(currentDepartment, orderFeatures);
     if (!nextDepartment) {
       toast.error('No next department available');
       return;
@@ -317,25 +338,51 @@ export default function AllOrdersList() {
     
     console.log(`🔄 Progressing order ${orderId} from ${currentDepartment} to ${nextDepartment}`);
     
-    // IMMEDIATELY update React Query cache - this prevents any reversion
-    queryClient.setQueryData(['/api/orders/with-payment-status'], (old: any[]) => {
-      if (!old) return old;
-      const updated = old.map((order: any) => {
-        if (order.orderId === orderId) {
-          console.log(`✅ Cache updated: ${orderId} -> ${nextDepartment}`);
-          return { ...order, currentDepartment: nextDepartment };
-        }
-        return order;
-      });
-      return updated;
+    // Mark order as updating
+    setUpdatingOrders(prev => new Set(prev).add(orderId));
+    
+    // IMMEDIATELY update local state for instant UI response
+    setLocalOrderUpdates(prev => {
+      const newState = { ...prev, [orderId]: nextDepartment };
+      console.log(`✅ LOCAL STATE updated: ${orderId} -> ${nextDepartment}`);
+      return newState;
     });
     
-    // Also update local state for redundancy
-    setLocalOrderUpdates(prev => ({ ...prev, [orderId]: nextDepartment }));
+    // IMMEDIATELY update React Query cache - this prevents any reversion
+    queryClient.setQueryData(['/api/orders/with-payment-status/paginated'], (old: any) => {
+      if (!old?.orders) {
+        console.warn('❌ Cache update failed: no orders data');
+        return old;
+      }
+      
+      const updated = {
+        ...old,
+        orders: old.orders.map((order: any) => {
+          if (order.orderId === orderId) {
+            console.log(`✅ CACHE updated: ${orderId} -> ${nextDepartment} (was: ${order.currentDepartment})`);
+            return { ...order, currentDepartment: nextDepartment };
+          }
+          return order;
+        })
+      };
+      return updated;
+    });
+
+    // Add debug logging to detect cache overwrites
+    setTimeout(() => {
+      const currentData = queryClient.getQueryData(['/api/orders/with-payment-status/paginated']) as any;
+      const order = currentData?.orders?.find((o: any) => o.orderId === orderId);
+      if (order && order.currentDepartment !== nextDepartment) {
+        console.error(`🚨 CACHE OVERWRITTEN! Order ${orderId} was set to ${nextDepartment} but is now ${order.currentDepartment}`);
+        console.error('Current cache data:', currentData?.orders?.filter((o: any) => o.orderId === orderId));
+      } else if (order) {
+        console.log(`✅ Cache still correct for ${orderId}: ${order.currentDepartment}`);
+      }
+    }, 3000);
     
     // Make the API call in the background
     progressOrderMutation.mutate({ orderId, nextDepartment });
-  }, [progressOrderMutation, queryClient]);
+  }, [progressOrderMutation, queryClient, updatingOrders]);
 
   const handlePushToLayupPlugging = (orderId: string) => {
     const nextDepartment = 'Layup/Plugging';
@@ -343,15 +390,18 @@ export default function AllOrdersList() {
     console.log(`🔄 Pushing order ${orderId} to ${nextDepartment}`);
     
     // IMMEDIATELY update React Query cache - this prevents any reversion
-    queryClient.setQueryData(['/api/orders/with-payment-status'], (old: any[]) => {
-      if (!old) return old;
-      const updated = old.map((order: any) => {
-        if (order.orderId === orderId) {
-          console.log(`✅ Cache updated: ${orderId} -> ${nextDepartment}`);
-          return { ...order, currentDepartment: nextDepartment };
-        }
-        return order;
-      });
+    queryClient.setQueryData(['/api/orders/with-payment-status/paginated'], (old: any) => {
+      if (!old?.orders) return old;
+      const updated = {
+        ...old,
+        orders: old.orders.map((order: any) => {
+          if (order.orderId === orderId) {
+            console.log(`✅ Cache updated: ${orderId} -> ${nextDepartment}`);
+            return { ...order, currentDepartment: nextDepartment };
+          }
+          return order;
+        })
+      };
       return updated;
     });
     
@@ -520,7 +570,7 @@ export default function AllOrdersList() {
               {sortedOrders.map(order => {
                 // Use local update if available, otherwise server data
                 const displayDepartment = localOrderUpdates[order.orderId] || order.currentDepartment;
-                const nextDept = getNextDepartment(displayDepartment);
+                const nextDept = getNextDepartment(displayDepartment, order.features);
                 const isComplete = displayDepartment === 'Shipping';
                 const isScrapped = order.status === 'SCRAPPED';
                 const isFulfilled = order.status === 'FULFILLED'; // Only exclude FULFILLED, not FINALIZED
@@ -671,7 +721,7 @@ export default function AllOrdersList() {
                         {!isScrapped && !isComplete && !isFulfilled && nextDept && order.currentDepartment !== 'P1 Production Queue' && (
                           <Button
                             size="sm"
-                            onClick={() => handleProgressOrder(order.orderId, displayDepartment)}
+                            onClick={() => handleProgressOrder(order.orderId, displayDepartment, order.features)}
                             className="bg-blue-600 hover:bg-blue-700 text-white"
                           >
                             <ArrowRight className="w-4 h-4 mr-1" />

@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
@@ -21,8 +21,6 @@ import { useLocation, useRoute } from 'wouter';
 import CustomerSearchInput from '@/components/CustomerSearchInput';
 import PaymentManager from '@/components/PaymentManager';
 import { OrderAttachments } from '@/components/OrderAttachments';
-import SimpleAddressInput from '@/components/SimpleAddressInput';
-import { type AddressData } from '@/utils/addressUtils';
 import type { Customer } from '@shared/schema';
 import { useFeatureValidation, useFeatureStateValidation } from '@/hooks/useFeatureValidation';
 import { useDataConsistencyValidation } from '@/hooks/useDataConsistencyValidation';
@@ -1861,20 +1859,43 @@ export default function OrderEntry() {
                                     />
                                   </div>
                                   <div className="col-span-2">
-                                    {/* Use AddressInput with UPS autocomplete for alternative shipping address */}
-                                    <SimpleAddressInput
-                                      label="Alternative Shipping Address"
-                                      value={altShipToAddress as AddressData}
-                                      onChange={(addressData) => {
-                                        setAltShipToAddress({
-                                          street: addressData.street,
-                                          city: addressData.city,
-                                          state: addressData.state,
-                                          zipCode: addressData.zipCode,
-                                          country: addressData.country
-                                        });
-                                      }}
-                                      required
+                                    <Label>Street Address *</Label>
+                                    <Input
+                                      value={altShipToAddress.street}
+                                      onChange={(e) => setAltShipToAddress(prev => ({ ...prev, street: e.target.value }))}
+                                      placeholder="Enter street address"
+                                    />
+                                  </div>
+                                  <div>
+                                    <Label>City *</Label>
+                                    <Input
+                                      value={altShipToAddress.city}
+                                      onChange={(e) => setAltShipToAddress(prev => ({ ...prev, city: e.target.value }))}
+                                      placeholder="Enter city"
+                                    />
+                                  </div>
+                                  <div>
+                                    <Label>State *</Label>
+                                    <Input
+                                      value={altShipToAddress.state}
+                                      onChange={(e) => setAltShipToAddress(prev => ({ ...prev, state: e.target.value }))}
+                                      placeholder="Enter state"
+                                    />
+                                  </div>
+                                  <div>
+                                    <Label>ZIP Code *</Label>
+                                    <Input
+                                      value={altShipToAddress.zipCode}
+                                      onChange={(e) => setAltShipToAddress(prev => ({ ...prev, zipCode: e.target.value }))}
+                                      placeholder="Enter ZIP code"
+                                    />
+                                  </div>
+                                  <div>
+                                    <Label>Country</Label>
+                                    <Input
+                                      value={altShipToAddress.country}
+                                      onChange={(e) => setAltShipToAddress(prev => ({ ...prev, country: e.target.value }))}
+                                      placeholder="United States"
                                     />
                                   </div>
                                 </div>

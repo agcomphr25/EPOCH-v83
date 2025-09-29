@@ -1679,6 +1679,25 @@ export default function LayupScheduler() {
     const getOrderStockModelId = (order: any) => {
       // CRITICAL FIX: Preserve PO/OEM order model IDs to prevent Mesa fallback regression
       if (order.source === 'production_order' || order.poId || order.productionOrderId || order.orderId?.startsWith('PO-')) {
+        // FRONTEND MAPPING FIX: Map numeric item IDs to proper stock models for PO orders
+        if (order.orderId?.startsWith('PO-')) {
+          // Extract item ID from orderId pattern: PO-P18261-1-1, PO-P18261-2-1, PO-P18261-3-1
+          const parts = order.orderId.split('-');
+          if (parts.length >= 4) {
+            const itemId = parts[2]; // Get the '1', '2', '3' part
+            // Map to proper stock model IDs
+            if (itemId === '1') return 'cf_alpine_hunter';
+            if (itemId === '2') return 'cf_privateer';
+            if (itemId === '3') return 'fg_privateer';
+          }
+        }
+        
+        // Also check if modelId/stockModelId contains numeric values that need mapping
+        const modelId = order.stockModelId || order.modelId;
+        if (modelId === '10') return 'cf_alpine_hunter';
+        if (modelId === '11') return 'cf_privateer';
+        if (modelId === '12') return 'fg_privateer';
+        
         // PO orders should keep their original model identifiers (apr_hunter_tikka, etc.)
         if (order.stockModelId) return order.stockModelId;
         if (order.modelId) return order.modelId;

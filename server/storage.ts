@@ -1,5 +1,5 @@
 import {
-  users, csvData, customerTypes, persistentDiscounts, shortTermSales, featureCategories, featureSubCategories, features, stockModels, orders, orderDrafts, payments, forms, formSubmissions, vendors, vendorPurchaseOrders, vendorPurchaseOrderItems,
+  users, csvData, customerTypes, persistentDiscounts, shortTermSales, featureCategories, featureSubCategories, features, stockModels, orders, orderDrafts, payments, forms, formSubmissions,
   inventoryItems, inventoryScans, partsRequests, employees, qcDefinitions, qcSubmissions, maintenanceSchedules, maintenanceLogs,
   timeClockEntries, checklistItems, onboardingDocs, customers, customerAddresses, communicationLogs, pdfDocuments,
   enhancedFormCategories, enhancedForms, enhancedFormVersions, enhancedFormSubmissions,
@@ -10,8 +10,6 @@ import {
   taskItems,
   // Kickback tracking table
   kickbacks,
-  // Calendar system tables
-  calendarEvents, calendarEventAttendees,
   // Document management tables
   documents, documentTags, documentTagRelations, documentCollections, documentCollectionRelations,
   // New employee management tables
@@ -25,21 +23,8 @@ import {
   poProducts,
   // Refund requests table
   refundRequests,
-
-  // Robust Parts and BOM tables
-  robustParts, robustBomLines, partCostHistory, partAuditLog, bomAuditLog,
-  // Inventory Management tables
-  inventoryBalances, inventoryTransactions,
-  // MRP tables
-  mrpRequirements, mrpCalculationHistory,
-  // Outside Processing tables
-  outsideProcessingLocations, outsideProcessingJobs,
-  // Vendor Parts table
-  vendorParts,
-
-  // Vendor management tables
-  vendors, vendorContacts, vendorAddresses, vendorContactPhones, vendorContactEmails, vendorDocuments, vendorScoringCriteria, vendorScores,
-
+  // OEM Priority Settings table
+  oemPrioritySettings,
   // Types
   type User, type InsertUser, type Order, type InsertOrder, type CSVData, type InsertCSVData,
   type CustomerType, type InsertCustomerType,
@@ -98,8 +83,6 @@ import {
   type TaskItem, type InsertTaskItem,
   // Kickback tracking types
   type Kickback, type InsertKickback,
-  // Calendar system types
-  type CalendarEvent, type InsertCalendarEvent, type CalendarEventAttendee, type InsertCalendarEventAttendee,
   // Document management types
   type Document, type InsertDocument,
   type DocumentTag, type InsertDocumentTag,
@@ -113,50 +96,15 @@ import {
   type POProduct, type InsertPOProduct,
   // Refund request types
   type RefundRequest, type InsertRefundRequest,
-
-  // Vendor types
-  type Vendor, type InsertVendor,
-  // Vendor Purchase Order types
-  type VendorPurchaseOrder, type InsertVendorPurchaseOrder,
-  type VendorPurchaseOrderItem, type InsertVendorPurchaseOrderItem,
-  // Robust Parts and BOM types
-  type RobustPart, type InsertRobustPart,
-  type RobustBomLine, type InsertRobustBomLine,
-  // Inventory Management types
-  type InventoryBalance, type InsertInventoryBalance,
-  type InventoryTransaction, type InsertInventoryTransaction,
-  // MRP types
-  type MrpRequirement, type InsertMrpRequirement,
-  type MrpCalculationHistory,
-  // Outside Processing types
-  type OutsideProcessingLocation, type InsertOutsideProcessingLocation,
-  type OutsideProcessingJob, type InsertOutsideProcessingJob,
-  // Vendor Parts types
-  type VendorPart, type InsertVendorPart,
-  // Enhanced Inventory Management types
-  type AllocationDetail, type InsertAllocationDetail,
-  type VendorPriceBreak, type InsertVendorPriceBreak,
-  type OutsideProcessingBatch, type InsertOutsideProcessingBatch,
-  type MrpPlanningParameters, type InsertMrpPlanningParameters,
-
-  // Vendor management types
-  type Vendor, type InsertVendor,
-  type VendorContact, type InsertVendorContact,
-  type VendorAddress, type InsertVendorAddress,
-  type VendorContactPhone, type InsertVendorContactPhone,
-  type VendorContactEmail, type InsertVendorContactEmail,
-  type VendorDocument, type InsertVendorDocument,
-  type VendorScoringCriteria, type InsertVendorScoringCriteria,
-  type VendorScore, type InsertVendorScore,
-
+  // OEM Priority Settings types
+  type OemPrioritySettings, type InsertOemPrioritySettings,
 
 
 } from "./schema";
 import { db } from "./db";
-import { eq, desc, asc, and, or, ilike, isNull, sql, ne, like, lt, gt, gte, lte, inArray, getTableColumns, count, sum, max, notInArray, not } from "drizzle-orm";
+import { eq, desc, asc, and, or, ilike, isNull, sql, ne, like, lt, gt, gte, lte, inArray, getTableColumns, count, sum, max, notInArray } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import bcrypt from 'bcrypt';
-import axios from 'axios';
 import { generateP1OrderId, getCurrentYearMonthPrefix, parseOrderId, formatOrderId } from "./utils/orderIdGenerator";
 
 // modify the interface with any CRUD methods
@@ -280,23 +228,6 @@ export interface IStorage {
   getFormSubmission(id: number): Promise<FormSubmission | undefined>;
   createFormSubmission(data: InsertFormSubmission): Promise<FormSubmission>;
   deleteFormSubmission(id: number): Promise<void>;
-
-  // Enhanced Form Categories CRUD
-  getAllEnhancedFormCategories(): Promise<EnhancedFormCategory[]>;
-  getEnhancedFormCategory(id: number): Promise<EnhancedFormCategory | undefined>;
-  createEnhancedFormCategory(data: InsertEnhancedFormCategory): Promise<EnhancedFormCategory>;
-  updateEnhancedFormCategory(id: number, data: Partial<InsertEnhancedFormCategory>): Promise<EnhancedFormCategory>;
-  deleteEnhancedFormCategory(id: number): Promise<void>;
-
-  // Enhanced Forms CRUD
-  getAllEnhancedForms(): Promise<EnhancedForm[]>;
-  getEnhancedFormById(id: number): Promise<EnhancedForm | undefined>;
-  createEnhancedForm(data: InsertEnhancedForm): Promise<EnhancedForm>;
-  updateEnhancedForm(id: number, data: Partial<InsertEnhancedForm>): Promise<EnhancedForm>;
-  deleteEnhancedForm(id: number): Promise<void>;
-
-  // Enhanced Form Submissions CRUD
-  getFormSubmissions(formId: number): Promise<EnhancedFormSubmission[]>;
 
   // Inventory Items CRUD
   getAllInventoryItems(): Promise<InventoryItem[]>;
@@ -537,6 +468,17 @@ export interface IStorage {
   updateEmployeeLayupSettings(employeeId: string, data: Partial<InsertEmployeeLayupSettings>): Promise<EmployeeLayupSettings>;
   deleteEmployeeLayupSettings(employeeId: string): Promise<void>;
 
+  // OEM Priority Settings CRUD
+  getAllOemPrioritySettings(): Promise<OemPrioritySettings[]>;
+  getOemPrioritySettings(id: number): Promise<OemPrioritySettings | undefined>;
+  getOemPrioritySettingsByVendor(vendorId: string): Promise<OemPrioritySettings[]>;
+  getOemPrioritySettingsByPO(poId: number): Promise<OemPrioritySettings[]>;
+  createOemPrioritySettings(data: InsertOemPrioritySettings): Promise<OemPrioritySettings>;
+  updateOemPrioritySettings(id: number, data: Partial<InsertOemPrioritySettings>): Promise<OemPrioritySettings>;
+  deleteOemPrioritySettings(id: number): Promise<void>;
+  deleteOemPrioritySettingsByPO(poId: number): Promise<void>;
+  getActivePrioritySettings(): Promise<OemPrioritySettings[]>;
+
   // Layup Scheduler: Orders CRUD
   getAllProductionQueue(filters?: { status?: string; department?: string }): Promise<any[]>;
   getProductionQueueItem(orderId: string): Promise<ProductionQueue | undefined>;
@@ -618,21 +560,6 @@ export interface IStorage {
   updateKickback(id: number, data: Partial<InsertKickback>): Promise<Kickback>;
   deleteKickback(id: number): Promise<void>;
 
-  // Calendar Event CRUD
-  getAllCalendarEvents(): Promise<CalendarEvent[]>;
-  getCalendarEventsByDateRange(startDate: Date, endDate: Date): Promise<CalendarEvent[]>;
-  getCalendarEvent(id: number): Promise<CalendarEvent | undefined>;
-  createCalendarEvent(data: InsertCalendarEvent): Promise<CalendarEvent>;
-  updateCalendarEvent(id: number, data: Partial<InsertCalendarEvent>): Promise<CalendarEvent>;
-  deleteCalendarEvent(id: number): Promise<void>;
-  
-  // Calendar Event Attendees CRUD
-  getEventAttendees(eventId: number): Promise<CalendarEventAttendee[]>;
-  addEventAttendee(data: InsertCalendarEventAttendee): Promise<CalendarEventAttendee>;
-  updateAttendeeStatus(eventId: number, userId: string, status: 'invited' | 'accepted' | 'declined' | 'tentative'): Promise<CalendarEventAttendee>;
-  removeEventAttendee(eventId: number, userId: string): Promise<void>;
-  getUserCalendarEvents(userId: string): Promise<CalendarEvent[]>;
-
   // Kickback Analytics Methods
   getKickbackAnalytics(dateRange?: { start: Date; end: Date }): Promise<{
     totalKickbacks: number;
@@ -707,229 +634,6 @@ export interface IStorage {
   createPOProduct(data: InsertPOProduct): Promise<POProduct>;
   updatePOProduct(id: number, data: Partial<InsertPOProduct>): Promise<POProduct>;
   deletePOProduct(id: number): Promise<void>;
-
-
-
-  // P2 PO Products methods
-  getAllP2POProducts(): Promise<any[]>;
-  getP2POProduct(id: number): Promise<any | undefined>;
-  createP2POProduct(data: any): Promise<any>;
-  updateP2POProduct(id: number, data: any): Promise<any>;
-  deleteP2POProduct(id: number): Promise<void>;
-
-  // Vendor CRUD methods
-  getAllVendors(params?: { q?: string; approved?: string; evaluated?: string; page?: number; limit?: number }): Promise<{ data: Vendor[]; total: number; page: number; limit: number }>;
-  getVendor(id: number): Promise<Vendor | undefined>;
-  createVendor(data: InsertVendor): Promise<Vendor>;
-  updateVendor(id: number, data: Partial<InsertVendor>): Promise<Vendor>;
-  deleteVendor(id: number): Promise<void>;
-
-  // Vendor Purchase Order CRUD methods
-  getAllVendorPurchaseOrders(): Promise<VendorPurchaseOrder[]>;
-  getVendorPurchaseOrder(id: number): Promise<VendorPurchaseOrder | undefined>;
-  createVendorPurchaseOrder(data: InsertVendorPurchaseOrder & { poNumber: string; barcode: string; totalCost?: number }): Promise<VendorPurchaseOrder>;
-  updateVendorPurchaseOrder(id: number, data: Partial<InsertVendorPurchaseOrder & { totalCost?: number }>): Promise<VendorPurchaseOrder | undefined>;
-  deleteVendorPurchaseOrder(id: number): Promise<boolean>;
-  
-  // Vendor Purchase Order Items CRUD methods
-  getVendorPurchaseOrderItems(vendorPoId: number): Promise<VendorPurchaseOrderItem[]>;
-  getVendorPurchaseOrderItem(id: number): Promise<VendorPurchaseOrderItem | undefined>;
-  createVendorPurchaseOrderItem(data: InsertVendorPurchaseOrderItem & { totalPrice: number }): Promise<VendorPurchaseOrderItem>;
-  updateVendorPurchaseOrderItem(id: number, data: Partial<InsertVendorPurchaseOrderItem & { totalPrice?: number }>): Promise<VendorPurchaseOrderItem | undefined>;
-  deleteVendorPurchaseOrderItem(id: number): Promise<boolean>;
-
-  // ============================================================================
-  // INVENTORY MANAGEMENT & MRP METHODS
-  // ============================================================================
-
-  // Robust Parts Management
-  getAllRobustParts(params?: { q?: string; type?: string; active?: boolean; page?: number; limit?: number }): Promise<{ data: RobustPart[]; total: number }>;
-  getRobustPart(id: string): Promise<RobustPart | undefined>;
-  getRobustPartBySku(sku: string): Promise<RobustPart | undefined>;
-  createRobustPart(data: InsertRobustPart): Promise<RobustPart>;
-  updateRobustPart(id: string, data: Partial<InsertRobustPart>): Promise<RobustPart>;
-  deleteRobustPart(id: string): Promise<void>;
-
-  // Robust BOM Management
-  getBomLinesForPart(partId: string): Promise<RobustBomLine[]>;
-  getBomLinesByParent(parentPartId: string): Promise<RobustBomLine[]>;
-  createBomLine(data: InsertRobustBomLine): Promise<RobustBomLine>;
-  updateBomLine(id: string, data: Partial<InsertRobustBomLine>): Promise<RobustBomLine>;
-  deleteBomLine(id: string): Promise<void>;
-  explodeBom(partId: string, quantity: number): Promise<{ partId: string; totalQtyNeeded: number; level: number }[]>;
-
-  // Inventory Balance Management
-  getInventoryBalance(partId: string, locationId?: string): Promise<InventoryBalance | undefined>;
-  getAllInventoryBalances(params?: { partId?: string; locationId?: string; lowStock?: boolean }): Promise<InventoryBalance[]>;
-  updateInventoryBalance(partId: string, locationId: string, data: Partial<InsertInventoryBalance>): Promise<InventoryBalance>;
-  
-  // Inventory Transaction Management
-  getAllInventoryTransactions(params?: { partId?: string; transactionType?: string; dateFrom?: Date; dateTo?: Date; page?: number; limit?: number }): Promise<{ data: InventoryTransaction[]; total: number }>;
-  getInventoryTransaction(transactionId: string): Promise<InventoryTransaction | undefined>;
-  createInventoryTransaction(data: InsertInventoryTransaction): Promise<InventoryTransaction>;
-  processInventoryTransaction(data: InsertInventoryTransaction): Promise<{ transaction: InventoryTransaction; updatedBalance: InventoryBalance }>;
-
-  // Progressive Allocation Management
-  allocateInventoryToOrder(partId: string, quantity: number, customerOrderId: string): Promise<{ success: boolean; allocated: number; shortage: number }>;
-  commitInventoryFromOrder(partId: string, quantity: number, customerOrderId: string): Promise<void>;
-  consumeAllocatedInventory(partId: string, quantity: number, productionOrderId: string): Promise<void>;
-  releaseAllocatedInventory(partId: string, customerOrderId: string): Promise<void>;
-
-  // MRP Calculation Methods
-  calculateMrpRequirements(scope?: 'ALL' | 'SPECIFIC_PART' | 'SPECIFIC_ORDER', scopeId?: string): Promise<{ calculationId: string; requirementsGenerated: number; shortagesIdentified: number }>;
-  getMrpRequirements(params?: { partId?: string; status?: string; needDateFrom?: Date; needDateTo?: Date }): Promise<MrpRequirement[]>;
-  getMrpShortages(): Promise<MrpRequirement[]>;
-  updateMrpRequirement(requirementId: string, data: Partial<InsertMrpRequirement>): Promise<MrpRequirement>;
-  closeMrpRequirement(requirementId: string): Promise<void>;
-
-  // Outside Processing Management
-  getAllOutsideProcessingLocations(): Promise<OutsideProcessingLocation[]>;
-  getOutsideProcessingLocation(locationId: string): Promise<OutsideProcessingLocation | undefined>;
-  createOutsideProcessingLocation(data: InsertOutsideProcessingLocation): Promise<OutsideProcessingLocation>;
-  updateOutsideProcessingLocation(locationId: string, data: Partial<InsertOutsideProcessingLocation>): Promise<OutsideProcessingLocation>;
-  
-  getAllOutsideProcessingJobs(params?: { vendorId?: string; status?: string; locationId?: string }): Promise<OutsideProcessingJob[]>;
-  getOutsideProcessingJob(jobId: string): Promise<OutsideProcessingJob | undefined>;
-  createOutsideProcessingJob(data: InsertOutsideProcessingJob): Promise<OutsideProcessingJob>;
-  updateOutsideProcessingJob(jobId: string, data: Partial<InsertOutsideProcessingJob>): Promise<OutsideProcessingJob>;
-  returnPartsFromOutsideProcessing(jobId: string, partsReturned: number, scrapQty?: number): Promise<OutsideProcessingJob>;
-
-  // Vendor Parts Management
-  getVendorPartsForPart(partId: string): Promise<VendorPart[]>;
-  getVendorPartsForVendor(vendorId: string): Promise<VendorPart[]>;
-  createVendorPart(data: InsertVendorPart): Promise<VendorPart>;
-  updateVendorPart(id: number, data: Partial<InsertVendorPart>): Promise<VendorPart>;
-  deleteVendorPart(id: number): Promise<void>;
-  getPreferredVendorForPart(partId: string): Promise<VendorPart | undefined>;
-
-  // Purchase Order Suggestions
-  generatePurchaseOrderSuggestions(): Promise<{ partId: string; suggestedQty: number; preferredVendor?: VendorPart; estimatedCost: number }[]>;
-
-  // MRP Calculation History
-  getMrpCalculationHistory(limit?: number): Promise<MrpCalculationHistory[]>;
-
-  // ============================================================================
-  // ENHANCED INVENTORY MANAGEMENT & MRP METHODS
-  // ============================================================================
-
-  // Allocation Detail Management - Demand-to-Supply Pegging
-  getAllAllocationDetails(params?: { partId?: string; demandOrderId?: string; supplyOrderId?: string; status?: string }): Promise<AllocationDetail[]>;
-  getAllocationDetail(allocationId: string): Promise<AllocationDetail | undefined>;
-  createAllocationDetail(data: InsertAllocationDetail): Promise<AllocationDetail>;
-  updateAllocationDetail(allocationId: string, data: Partial<InsertAllocationDetail>): Promise<AllocationDetail>;
-  deleteAllocationDetail(allocationId: string): Promise<void>;
-  consumeAllocation(allocationId: string, consumedQty: number, consumedBy: string): Promise<AllocationDetail>;
-  releaseAllocation(allocationId: string, releasedBy: string): Promise<AllocationDetail>;
-  lockAllocation(allocationId: string, lockedBy: string): Promise<AllocationDetail>;
-  unlockAllocation(allocationId: string, unlockedBy: string): Promise<AllocationDetail>;
-  getAllocationsByDemand(demandOrderId: string): Promise<AllocationDetail[]>;
-  getAllocationsBySupply(supplyOrderId: string): Promise<AllocationDetail[]>;
-  
-  // Enhanced MRP Service Interface
-  runFullMrp(parameters?: { planningHorizonDays?: number; includeForecast?: boolean; includeOnHand?: boolean }): Promise<{ calculationId: string; summary: MrpRunSummary }>;
-  runIncrementalMrp(changedOrderIds: string[]): Promise<{ calculationId: string; summary: MrpRunSummary }>;
-  performMrpNetting(partId: string, requirementDate: Date): Promise<{ netRequirement: number; availableSupply: number; shortage: number }>;
-  createPeggedAllocations(mrpRequirementId: string, supplyOrderId: string, quantity: number): Promise<AllocationDetail[]>;
-  getMrpPeggingDetails(partId: string): Promise<MrpPeggingDetail[]>;
-  optimizeLotSizes(partId?: string): Promise<{ partId: string; originalLotSize: number; optimizedLotSize: number; savings: number }[]>;
-  
-  // Vendor Price Breaks Management
-  getAllVendorPriceBreaks(vendorPartId?: number): Promise<VendorPriceBreak[]>;
-  getVendorPriceBreak(id: number): Promise<VendorPriceBreak | undefined>;
-  createVendorPriceBreak(data: InsertVendorPriceBreak): Promise<VendorPriceBreak>;
-  updateVendorPriceBreak(id: number, data: Partial<InsertVendorPriceBreak>): Promise<VendorPriceBreak>;
-  deleteVendorPriceBreak(id: number): Promise<void>;
-  getBestPriceForQuantity(vendorPartId: number, quantity: number): Promise<{ unitPrice: number; totalPrice: number; priceBreak?: VendorPriceBreak }>;
-  
-  // Enhanced Vendor Selection
-  getPreferredVendorsForPart(partId: string, requiredQty: number): Promise<VendorSelectionResult[]>;
-  calculateVendorScore(vendorPartId: number, evaluationCriteria: VendorEvaluationCriteria): Promise<number>;
-  
-  // Outside Processing Batch Management
-  getAllOutsideProcessingBatches(params?: { jobId?: string; status?: string; partId?: string }): Promise<OutsideProcessingBatch[]>;
-  getOutsideProcessingBatch(batchId: string): Promise<OutsideProcessingBatch | undefined>;
-  createOutsideProcessingBatch(data: InsertOutsideProcessingBatch): Promise<OutsideProcessingBatch>;
-  updateOutsideProcessingBatch(batchId: string, data: Partial<InsertOutsideProcessingBatch>): Promise<OutsideProcessingBatch>;
-  deleteOutsideProcessingBatch(batchId: string): Promise<void>;
-  shipBatch(batchId: string, shippedQty: number, packingSlipNumber?: string): Promise<OutsideProcessingBatch>;
-  receivePartialBatch(batchId: string, receivedQty: number, scrapQty?: number, notes?: string): Promise<OutsideProcessingBatch>;
-  completeBatchReceipt(batchId: string): Promise<OutsideProcessingBatch>;
-  
-  // MRP Planning Parameters
-  getAllMrpPlanningParameters(partId?: string): Promise<MrpPlanningParameters[]>;
-  getMrpPlanningParameters(parameterId: string): Promise<MrpPlanningParameters | undefined>;
-  createMrpPlanningParameters(data: InsertMrpPlanningParameters): Promise<MrpPlanningParameters>;
-  updateMrpPlanningParameters(parameterId: string, data: Partial<InsertMrpPlanningParameters>): Promise<MrpPlanningParameters>;
-  deleteMrpPlanningParameters(parameterId: string): Promise<void>;
-  
-  // Atomicity Protection Methods
-  withInventoryTransaction<T>(operation: (trx: any) => Promise<T>): Promise<T>;
-  checkInventoryAvailability(partId: string, locationId: string, requiredQty: number): Promise<{ available: boolean; shortfall: number }>;
-  reserveInventoryWithLock(partId: string, locationId: string, quantity: number, reservedBy: string): Promise<{ success: boolean; allocationId?: string; error?: string }>;
-  validateAllocationConsistency(partId: string): Promise<{ isConsistent: boolean; discrepancies: AllocationDiscrepancy[] }>;
-  reconcileInventoryBalances(partId?: string): Promise<{ partId: string; balanceBefore: number; balanceAfter: number; adjustmentMade: boolean }[]>;
-
-
-  // ===== VENDOR MANAGEMENT CRUD =====
-  
-  // Vendors CRUD
-  getAllVendors(): Promise<Vendor[]>;
-  getVendor(id: number): Promise<Vendor | undefined>;
-  getVendorWithDetails(id: number): Promise<(Vendor & { contacts: VendorContact[], addresses: VendorAddress[], documents: VendorDocument[] }) | undefined>;
-  createVendor(data: InsertVendor): Promise<Vendor>;
-  updateVendor(id: number, data: Partial<InsertVendor>): Promise<Vendor>;
-  deleteVendor(id: number): Promise<void>;
-  searchVendors(query: string): Promise<Vendor[]>;
-
-  // Vendor Contacts CRUD
-  getVendorContacts(vendorId: number): Promise<VendorContact[]>;
-  getVendorContact(id: number): Promise<VendorContact | undefined>;
-  createVendorContact(data: InsertVendorContact): Promise<VendorContact>;
-  updateVendorContact(id: number, data: Partial<InsertVendorContact>): Promise<VendorContact>;
-  deleteVendorContact(id: number): Promise<void>;
-
-  // Vendor Addresses CRUD  
-  getVendorAddresses(vendorId: number): Promise<VendorAddress[]>;
-  getVendorAddress(id: number): Promise<VendorAddress | undefined>;
-  createVendorAddress(data: InsertVendorAddress): Promise<VendorAddress>;
-  updateVendorAddress(id: number, data: Partial<InsertVendorAddress>): Promise<VendorAddress>;
-  deleteVendorAddress(id: number): Promise<void>;
-
-  // Vendor Contact Phones CRUD
-  getContactPhones(contactId: number): Promise<VendorContactPhone[]>;
-  getContactPhone(id: number): Promise<VendorContactPhone | undefined>;
-  createContactPhone(data: InsertVendorContactPhone): Promise<VendorContactPhone>;
-  updateContactPhone(id: number, data: Partial<InsertVendorContactPhone>): Promise<VendorContactPhone>;
-  deleteContactPhone(id: number): Promise<void>;
-
-  // Vendor Contact Emails CRUD
-  getContactEmails(contactId: number): Promise<VendorContactEmail[]>;
-  getContactEmail(id: number): Promise<VendorContactEmail | undefined>;
-  createContactEmail(data: InsertVendorContactEmail): Promise<VendorContactEmail>;
-  updateContactEmail(id: number, data: Partial<InsertVendorContactEmail>): Promise<VendorContactEmail>;
-  deleteContactEmail(id: number): Promise<void>;
-
-  // Vendor Documents CRUD
-  getVendorDocuments(vendorId: number): Promise<VendorDocument[]>;
-  getVendorDocument(id: number): Promise<VendorDocument | undefined>;
-  createVendorDocument(data: InsertVendorDocument): Promise<VendorDocument>;
-  updateVendorDocument(id: number, data: Partial<InsertVendorDocument>): Promise<VendorDocument>;
-  deleteVendorDocument(id: number): Promise<void>;
-
-  // Vendor Scoring CRUD
-  getAllScoringCriteria(): Promise<VendorScoringCriteria[]>;
-  getScoringCriteria(id: number): Promise<VendorScoringCriteria | undefined>;
-  createScoringCriteria(data: InsertVendorScoringCriteria): Promise<VendorScoringCriteria>;
-  updateScoringCriteria(id: number, data: Partial<InsertVendorScoringCriteria>): Promise<VendorScoringCriteria>;
-  deleteScoringCriteria(id: number): Promise<void>;
-
-  getVendorScores(vendorId: number): Promise<VendorScore[]>;
-  getVendorScore(id: number): Promise<VendorScore | undefined>;
-  createVendorScore(data: InsertVendorScore): Promise<VendorScore>;
-  updateVendorScore(id: number, data: Partial<InsertVendorScore>): Promise<VendorScore>;
-  deleteVendorScore(id: number): Promise<void>;
-  calculateVendorTotalScore(vendorId: number): Promise<number>;
-
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1658,7 +1362,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAllOrders(): Promise<AllOrder[]> {
-    // Select ALL columns from the all_orders table and order by ID to get consistent results
+    // Select only the columns that actually exist in the all_orders table
     const orders = await db.select({
       id: allOrders.id,
       orderId: allOrders.orderId,
@@ -1728,15 +1432,11 @@ export class DatabaseStorage implements IStorage {
     .where(
       and(
         ne(allOrders.status, 'CANCELLED'),
-        or(isNull(allOrders.isCancelled), eq(allOrders.isCancelled, false)),
-        sql`${allOrders.orderId} NOT LIKE 'P1-%'`,
-        sql`${allOrders.orderId} NOT LIKE 'PO-%'`,
-        sql`${allOrders.orderId} NOT LIKE 'PO%'`,
-        // Exclude orders created from purchase orders (source starts with PO_)
-        sql`("all_orders"."source" IS NULL OR "all_orders"."source" NOT LIKE 'PO_%')`
+        eq(allOrders.isCancelled, false),
+        sql`${allOrders.orderId} NOT LIKE 'P1-%'`
       )
     )
-    .orderBy(desc(allOrders.id));
+    .orderBy(desc(allOrders.updatedAt));
 
     // Get all customers to create a lookup map
     const allCustomers = await db.select({
@@ -1764,189 +1464,9 @@ export class DatabaseStorage implements IStorage {
     })) as any;
   }
 
-  // PERFORMANCE: Synchronous version that uses pre-fetched data to prevent DB connection overload
-  public calculateOrderTotalSync(order: AllOrder, stockModels: any[], features: any[]): number {
+  // Helper function to calculate order total from features and pricing
+  private async calculateOrderTotal(order: AllOrder): Promise<number> {
     let total = 0;
-
-    // Add base stock model price (use override if set, otherwise use standard price)
-    if (order.modelId) {
-      const selectedModel = stockModels.find(model => model.id === order.modelId);
-      if (selectedModel) {
-        // CRITICAL FIX: Ensure all values are proper numbers to prevent NaN
-        const rawPrice = selectedModel.price;
-        const modelPrice = (rawPrice === null || rawPrice === undefined || isNaN(Number(rawPrice))) ? 0 : Number(rawPrice);
-        const priceOverride = order.priceOverride;
-        const basePrice = (priceOverride !== null && priceOverride !== undefined && !isNaN(Number(priceOverride))) 
-                          ? Number(priceOverride) 
-                          : modelPrice;
-        
-        // Ensure we're adding a valid number
-        if (!isNaN(basePrice)) {
-          total += basePrice;
-        }
-      }
-    }
-
-    // Add feature prices from features object (but NOT bottom_metal, paint_options, rail_accessory, other_options as they are handled separately)
-    if (order.features && typeof order.features === 'object') {
-      Object.entries(order.features).forEach(([featureId, value]) => {
-        // Skip features that have separate state variables to avoid double counting (MATCH FRONTEND LOGIC)
-        if (featureId === 'bottom_metal' || featureId === 'paint_options' || featureId === 'rail_accessory' || featureId === 'other_options') {
-          return;
-        }
-
-        if (value && value !== 'none') {
-          const feature = features.find(f => f.id === featureId);
-          if (feature?.options) {
-            if (Array.isArray(value)) {
-              // Handle multi-select features
-              value.forEach(optionValue => {
-                const option = (feature.options as any[])?.find((opt: any) => opt.value === optionValue);
-                if (option?.price) {
-                  const featurePrice = Number(option.price);
-                  if (!isNaN(featurePrice)) {
-                    total += featurePrice;
-                  }
-                }
-              });
-            } else {
-              // Handle single-select features
-              const option = (feature.options as any)?.find?.((opt: any) => opt.value === value);
-              if (option?.price) {
-                const featurePrice = Number(option.price);
-                if (!isNaN(featurePrice)) {
-                  total += featurePrice;
-                }
-              }
-            }
-          }
-        }
-      });
-    }
-
-    // Add paint options price (separately handled like frontend)
-    const orderFeatures = order.features as any;
-    if (orderFeatures) {
-      const currentPaint = orderFeatures.metallic_finishes || orderFeatures.paint_options || orderFeatures.paint_options_combined;
-      
-      if (currentPaint && currentPaint !== 'none') {
-        const paintFeatures = features.filter(f => 
-          f.displayName?.includes('Options') || 
-          f.displayName?.includes('Camo') || 
-          f.displayName?.includes('Cerakote') ||
-          f.displayName?.includes('Paint') ||
-          f.category === 'paint'
-        );
-        
-        for (const feature of paintFeatures) {
-          if (feature.options) {
-            const option = (feature.options as any[])?.find((opt: any) => opt.value === currentPaint);
-            if (option?.price) {
-              const paintPrice = Number(option.price);
-              if (!isNaN(paintPrice)) {
-                total += paintPrice;
-                break; // Found the paint option, no need to check other features
-              }
-            }
-          }
-        }
-      }
-
-      // Add bottom metal price (separately handled like frontend)
-      if (orderFeatures.bottom_metal && orderFeatures.bottom_metal !== 'none') {
-        const bottomMetalFeature = features.find(f => f.id === 'bottom_metal');
-        if (bottomMetalFeature?.options) {
-          const option = (bottomMetalFeature.options as any[])?.find((opt: any) => opt.value === orderFeatures.bottom_metal);
-          if (option?.price) {
-            let bottomMetalPrice = Number(option.price);
-            
-            // Special pricing: SepFG10 or SepCF25 seasonal sale + AG bottom metal = $100 instead of $149
-            if ((order.discountCode === 'short_term_3' || order.discountCode === 'short_term_1' || order.discountCode === 'SepCF25' || order.discountCode === 'SepFG10') && orderFeatures.bottom_metal.includes('ag_') && option.price === 149) {
-              bottomMetalPrice = 100;
-            }
-            
-            if (!isNaN(bottomMetalPrice)) {
-              total += bottomMetalPrice;
-            }
-          }
-        }
-      }
-
-      // Add rail accessory price (separately handled like frontend)
-      if (orderFeatures.rail_accessory && Array.isArray(orderFeatures.rail_accessory) && orderFeatures.rail_accessory.length > 0) {
-        const railFeature = features.find(f => f.id === 'rail_accessory');
-        if (railFeature?.options) {
-          orderFeatures.rail_accessory.forEach((railValue: string) => {
-            const option = (railFeature.options as any[])?.find((opt: any) => opt.value === railValue);
-            if (option?.price) {
-              const railPrice = Number(option.price);
-              if (!isNaN(railPrice)) {
-                total += railPrice;
-              }
-            }
-          });
-        }
-      }
-
-      // Add other options price (separately handled like frontend)
-      if (orderFeatures.other_options && Array.isArray(orderFeatures.other_options) && orderFeatures.other_options.length > 0) {
-        const otherOptionsFeature = features.find(f => f.id === 'other_options');
-        if (otherOptionsFeature?.options) {
-          orderFeatures.other_options.forEach((optionValue: string) => {
-            const option = (otherOptionsFeature.options as any[])?.find((opt: any) => opt.value === optionValue);
-            if (option?.price) {
-              const optionPrice = Number(option.price);
-              if (!isNaN(optionPrice)) {
-                total += optionPrice;
-              }
-            }
-          });
-        }
-      }
-    }
-
-    // Add miscellaneous items (stored in features.miscItems from OrderEntry fix)
-    if (order.features && typeof order.features === 'object') {
-      const features = order.features as any;
-      if (features.miscItems && Array.isArray(features.miscItems)) {
-        features.miscItems.forEach((item: any) => {
-          const itemPrice = Number(item.price || 0);
-          const itemQuantity = Number(item.quantity || 1);
-          if (!isNaN(itemPrice) && !isNaN(itemQuantity)) {
-            total += itemPrice * itemQuantity;
-          }
-        });
-      }
-    }
-
-    // Add shipping - CRITICAL FIX: Ensure shipping is a valid number
-    const shippingCost = Number(order.shipping || 0);
-    if (!isNaN(shippingCost)) {
-      total += shippingCost;
-    }
-
-    // Final safeguard: If total is still NaN, return 0
-    return isNaN(total) ? 0 : total;
-  }
-
-  // Helper function to calculate order total from features and pricing 
-  public async calculateOrderTotal(order: AllOrder): Promise<number> {
-    let total = 0;
-    
-    // DEBUG: Log calculation details for EI038 and EI039
-    if (order.orderId === 'EI038' || order.orderId === 'EI039') {
-      console.log(`🔍 DEBUG ${order.orderId} - Starting calculation for order:`, {
-        orderId: order.orderId,
-        modelId: order.modelId,
-        discountCode: order.discountCode,
-        customDiscountType: order.customDiscountType,
-        customDiscountValue: order.customDiscountValue,
-        showCustomDiscount: order.showCustomDiscount,
-        priceOverride: order.priceOverride,
-        shipping: order.shipping,
-        features: order.features
-      });
-    }
 
     // Add base stock model price (use override if set, otherwise use standard price)
     if (order.modelId) {
@@ -2047,7 +1567,7 @@ export class DatabaseStorage implements IStorage {
             let bottomMetalPrice = Number(option.price);
             
             // Special pricing: SepFG10 or SepCF25 seasonal sale + AG bottom metal = $100 instead of $149
-            if ((order.discountCode === 'short_term_3' || order.discountCode === 'short_term_1' || order.discountCode === 'SepCF25' || order.discountCode === 'SepFG10') && orderFeatures.bottom_metal.includes('ag_') && option.price === 149) {
+            if ((order.discountCode === 'short_term_3' || order.discountCode === 'short_term_1') && orderFeatures.bottom_metal.includes('ag_') && option.price === 149) {
               bottomMetalPrice = 100;
             }
             
@@ -2093,37 +1613,17 @@ export class DatabaseStorage implements IStorage {
       }
     }
 
-    // Apply discount if present - check both persistent and short-term discounts
+    // Apply persistent discount if present
     if (order.discountCode && order.discountCode !== 'none') {
-      let discount = null;
-      
-      // First check persistent discounts
       const persistentDiscounts = await this.getAllPersistentDiscounts();
       
       // Handle both "persistent_2" format and direct name lookup
+      let discount = null;
       if (order.discountCode.startsWith('persistent_')) {
         const discountId = parseInt(order.discountCode.replace('persistent_', ''));
         discount = persistentDiscounts.find(d => d.id === discountId);
       } else {
         discount = persistentDiscounts.find(d => d.name === order.discountCode);
-      }
-      
-      // If not found in persistent discounts, check short-term sales
-      if (!discount) {
-        const shortTermSales = await this.getAllShortTermSales();
-        
-        // Handle both "short_term_1" format and direct name lookup
-        if (order.discountCode.startsWith('short_term_')) {
-          const discountId = parseInt(order.discountCode.replace('short_term_', ''));
-          discount = shortTermSales.find(d => d.id === discountId && d.isActive);
-        } else {
-          discount = shortTermSales.find(d => d.name === order.discountCode && d.isActive);
-        }
-        
-        // Short-term sales have a default appliesTo of 'stock_model'
-        if (discount) {
-          discount.appliesTo = discount.appliesTo || 'stock_model';
-        }
       }
       
       if (discount && discount.isActive) {
@@ -2134,29 +1634,17 @@ export class DatabaseStorage implements IStorage {
             const selectedModel = stockModels.find(model => model.id === order.modelId);
             if (selectedModel) {
               const basePrice = Number(order.priceOverride || selectedModel.price || 0);
-              let discountAmount = 0;
-              
-              if (discount.percent && discount.percent > 0) {
-                discountAmount = basePrice * discount.percent / 100;
-              } else if ('fixedAmount' in discount && discount.fixedAmount) {
-                // Only persistent discounts have fixedAmount
-                discountAmount = Number(discount.fixedAmount);
-              }
-              
+              const discountAmount = discount.percent > 0 
+                ? (basePrice * discount.percent / 100)
+                : Number(discount.fixedAmount || 0);
               total -= discountAmount;
             }
           }
         } else if (discount.appliesTo === 'total_order') {
           // Apply discount to entire order total
-          let discountAmount = 0;
-          
-          if (discount.percent && discount.percent > 0) {
-            discountAmount = total * discount.percent / 100;
-          } else if ('fixedAmount' in discount && discount.fixedAmount) {
-            // Only persistent discounts have fixedAmount
-            discountAmount = Number(discount.fixedAmount);
-          }
-          
+          const discountAmount = discount.percent > 0 
+            ? (total * discount.percent / 100)
+            : Number(discount.fixedAmount || 0);
           total -= discountAmount;
         }
       }
@@ -2197,163 +1685,6 @@ export class DatabaseStorage implements IStorage {
     // Final safeguard: If total is still NaN, return 0
     return isNaN(total) ? 0 : total;
   }
-
-  // COMMENTED OUT: Calculate and store order total for finalized orders - ensures stored totals are accurate
-  /*
-  public async calculateAndStoreOrderTotal(orderId: string): Promise<number> {
-    try {
-      // Get the full order data
-      const order = await this.getOrderById(orderId) as AllOrder;
-      if (!order) {
-        throw new Error(`Order ${orderId} not found`);
-      }
-
-      // Calculate the total using existing logic
-      const calculatedTotal = await this.calculateOrderTotal(order);
-      
-      // Round to 2 decimal places for currency precision
-      const roundedTotal = Math.round(calculatedTotal * 100) / 100;
-      
-      // Store the calculated total in the database
-      await db.update(allOrders)
-        .set({ calculatedTotal: roundedTotal.toString() })
-        .where(eq(allOrders.orderId, orderId));
-        
-      console.log(`✅ Stored calculated total for order ${orderId}: $${roundedTotal.toFixed(2)}`);
-      
-      return roundedTotal;
-    } catch (error) {
-      console.error(`❌ Error calculating and storing total for order ${orderId}:`, error);
-      throw error;
-    }
-  }
-  */
-
-  // COMMENTED OUT: Migration function to populate calculated totals for all existing finalized orders
-  /*
-  public async populateAllCalculatedTotals(): Promise<void> {
-    try {
-      console.log('🔄 Starting migration to populate calculated totals for all finalized orders...');
-      
-      // Get all finalized orders that don't have calculated totals yet
-      const ordersNeedingTotals = await db.select({
-        orderId: allOrders.orderId
-      })
-      .from(allOrders)
-      .where(isNull(allOrders.calculatedTotal));
-      
-      console.log(`📊 Found ${ordersNeedingTotals.length} orders that need calculated totals`);
-      
-      let processedCount = 0;
-      let errorCount = 0;
-      
-      // Process orders in batches to avoid overwhelming the database
-      const batchSize = 10;
-      for (let i = 0; i < ordersNeedingTotals.length; i += batchSize) {
-        const batch = ordersNeedingTotals.slice(i, i + batchSize);
-        
-        await Promise.all(batch.map(async (orderRef) => {
-          try {
-            await this.calculateAndStoreOrderTotal(orderRef.orderId);
-            processedCount++;
-            
-            if (processedCount % 20 === 0) {
-              console.log(`✅ Processed ${processedCount}/${ordersNeedingTotals.length} orders...`);
-            }
-          } catch (error) {
-            console.error(`❌ Error processing order ${orderRef.orderId}:`, error);
-            errorCount++;
-          }
-        }));
-      }
-      
-      console.log(`🎉 Migration complete! Processed ${processedCount} orders successfully, ${errorCount} errors`);
-      
-    } catch (error) {
-      console.error('❌ Error in populateAllCalculatedTotals migration:', error);
-      throw error;
-    }
-  }
-  */
-
-  // COMMENTED OUT: Validation function to compare stored vs calculated totals for accuracy
-  /*
-  public async validateStoredOrderTotal(orderId: string): Promise<{isValid: boolean, storedTotal: number | null, calculatedTotal: number, difference: number}> {
-    try {
-      // Get the order with stored total
-      const [order] = await db.select().from(allOrders).where(eq(allOrders.orderId, orderId));
-      if (!order) {
-        throw new Error(`Order ${orderId} not found`);
-      }
-
-      const storedTotal = order.calculatedTotal ? Number(order.calculatedTotal) : null;
-      const calculatedTotal = await this.calculateOrderTotal(order);
-      
-      // Calculate difference (allow for small floating point differences)
-      const difference = storedTotal !== null ? Math.abs(storedTotal - calculatedTotal) : calculatedTotal;
-      const isValid = storedTotal !== null && difference < 0.01; // Within 1 cent tolerance
-      
-      if (!isValid && storedTotal !== null) {
-        console.warn(`⚠️ VALIDATION WARNING: Order ${orderId} stored total ($${storedTotal.toFixed(2)}) doesn't match calculated total ($${calculatedTotal.toFixed(2)}), difference: $${difference.toFixed(2)}`);
-      }
-      
-      return {
-        isValid,
-        storedTotal,
-        calculatedTotal,
-        difference
-      };
-    } catch (error) {
-      console.error(`❌ Error validating stored total for order ${orderId}:`, error);
-      throw error;
-    }
-  }
-  */
-
-  // COMMENTED OUT: Bulk validation function to check multiple orders
-  /*
-  public async validateAllStoredTotals(limit: number = 50): Promise<{valid: number, invalid: number, errors: string[]}> {
-    try {
-      console.log(`🔍 Starting validation of stored totals (checking ${limit} orders)...`);
-      
-      // Get orders that have stored totals
-      const orders = await db.select({
-        orderId: allOrders.orderId,
-        calculatedTotal: allOrders.calculatedTotal
-      })
-      .from(allOrders)
-      .where(not(isNull(allOrders.calculatedTotal)))
-      .limit(limit);
-
-      let validCount = 0;
-      let invalidCount = 0;
-      const errors: string[] = [];
-
-      // Validate each order
-      for (const orderRef of orders) {
-        try {
-          const validation = await this.validateStoredOrderTotal(orderRef.orderId);
-          if (validation.isValid) {
-            validCount++;
-          } else {
-            invalidCount++;
-            errors.push(`${orderRef.orderId}: stored $${validation.storedTotal?.toFixed(2) || 'null'} vs calculated $${validation.calculatedTotal.toFixed(2)}`);
-          }
-        } catch (error) {
-          invalidCount++;
-          errors.push(`${orderRef.orderId}: validation error - ${(error as any).message}`);
-        }
-      }
-
-      console.log(`✅ Validation complete: ${validCount} valid, ${invalidCount} invalid`);
-      return { valid: validCount, invalid: invalidCount, errors };
-      
-    } catch (error) {
-      console.error('❌ Error in bulk validation:', error);
-      throw error;
-    }
-  }
-  */
 
   // Get stored order total using Order Summary calculation logic (for refund consistency)
   async getStoredOrderTotal(orderId: string): Promise<number> {
@@ -2452,7 +1783,7 @@ export class DatabaseStorage implements IStorage {
             const selectedModel = stockModels.find(model => model.id === order.modelId);
             if (selectedModel) {
               const basePrice = Number(order.priceOverride || selectedModel.price || 0);
-              const discountAmount = (discount.percent && discount.percent > 0) 
+              const discountAmount = discount.percent > 0 
                 ? (basePrice * discount.percent / 100)
                 : Number(discount.fixedAmount || 0);
               totalPrice -= discountAmount;
@@ -2664,8 +1995,6 @@ export class DatabaseStorage implements IStorage {
         altShipToEmail: allOrders.altShipToEmail,
         altShipToPhone: allOrders.altShipToPhone,
         altShipToAddress: allOrders.altShipToAddress,
-        // Extract only action_length from features for performance
-        actionLength: sql<string>`${allOrders.features}->>'action_length'`,
         // Customer name
         customerName: customers.name,
       })
@@ -2695,20 +2024,14 @@ export class DatabaseStorage implements IStorage {
     // Create payment map for fast lookup
     const paymentMap = new Map(paymentTotals.map(p => [p.orderId, p.totalPayments]));
 
-    // PERFORMANCE FIX: Fetch data once instead of per-order to prevent DB connection overload
-    console.log('🚀 Fetching shared data for order total calculations...');
-    const [stockModels, features] = await Promise.all([
-      this.getAllStockModels(),
-      this.getAllFeatures()
-    ]);
-    console.log(`📊 Processing ${ordersWithCustomers.length} orders with shared data`);
-
-    // TEMPORARY FIX: Simplified processing to prevent DB overload - just return basic data
-    const ordersWithPaymentInfo = ordersWithCustomers.map(order => {
+    // Process orders with payment info (using proper order total calculation)
+    const ordersWithPaymentInfo = await Promise.all(ordersWithCustomers.map(async order => {
       const paymentTotal = paymentMap.get(order.orderId) || 0;
       
-      // Use stored paymentAmount as fallback to prevent DB overload
-      const actualOrderTotal = Number(order.paymentAmount || 0);
+      // CRITICAL FIX: Use actual calculated order total, not stale paymentAmount field
+      const actualOrderTotal = await this.calculateOrderTotal(order);
+
+      // Fixed payment status logic using real current order total
       const isFullyPaid = paymentTotal >= actualOrderTotal && actualOrderTotal > 0;
 
       return {
@@ -2717,7 +2040,7 @@ export class DatabaseStorage implements IStorage {
         paymentTotal,
         isFullyPaid
       };
-    });
+    }));
 
     return ordersWithPaymentInfo;
   }
@@ -2730,20 +2053,24 @@ export class DatabaseStorage implements IStorage {
     limit: number, 
     totalPages: number 
   }> {
-    // First, get the total count for pagination (exclude purchase orders and purchase order customers by ID and name)
+    // First, get the total count for pagination
     const totalCountResult = await db
       .select({ count: sql<number>`COUNT(*)` })
       .from(allOrders)
-      .leftJoin(customers, eq(allOrders.customerId, sql`${customers.id}::text`))
-      .where(sql`${allOrders.orderId} NOT LIKE 'PO%' 
-        AND ${allOrders.customerId} NOT IN (SELECT DISTINCT customer_id FROM purchase_orders WHERE customer_id IS NOT NULL)
-        AND ${customers.name} NOT IN (SELECT DISTINCT customer_name FROM purchase_orders WHERE customer_name IS NOT NULL)`);
+      .where(
+        and(
+          sql`${allOrders.orderId} NOT LIKE 'P1-%'`,
+          sql`${allOrders.orderId} NOT LIKE 'PO%'`,
+          sql`${allOrders.orderId} != 'AG1'`,
+          sql`${allOrders.orderId} NOT LIKE '%PO%'`
+        )
+      );
     
     const total = totalCountResult[0]?.count || 0;
     const totalPages = Math.ceil(total / limit);
     const offset = (page - 1) * limit;
 
-    // Use the same field selection as the original method but with pagination (exclude purchase orders and purchase order customers)
+    // Use the same field selection as the original method but with pagination
     const ordersWithCustomers = await db
       .select({
         // Order fields - using the same selection as original method
@@ -2778,22 +2105,22 @@ export class DatabaseStorage implements IStorage {
         altShipToEmail: allOrders.altShipToEmail,
         altShipToPhone: allOrders.altShipToPhone,
         altShipToAddress: allOrders.altShipToAddress,
-        // Extract only action_length from features for performance
-        actionLength: sql<string>`${allOrders.features}->>'action_length'`,
         // Customer name
         customerName: customers.name,
-        // 🔄 STORED TOTALS: Include calculated total to prevent N+1 query fallback
-        // COMMENTED OUT: calculatedTotal: allOrders.calculatedTotal, // Field removed from schema
       })
       .from(allOrders)
       .leftJoin(customers, eq(allOrders.customerId, sql`${customers.id}::text`))
-      .where(sql`${allOrders.orderId} NOT LIKE 'PO%' 
-        AND ${allOrders.customerId} NOT IN (SELECT DISTINCT customer_id FROM purchase_orders WHERE customer_id IS NOT NULL)
-        AND ${customers.name} NOT IN (SELECT DISTINCT customer_name FROM purchase_orders WHERE customer_name IS NOT NULL)`)
+      .where(
+        and(
+          sql`${allOrders.orderId} NOT LIKE 'P1-%'`,
+          sql`${allOrders.orderId} NOT LIKE 'PO%'`,
+          sql`${allOrders.orderId} != 'AG1'`,
+          sql`${allOrders.orderId} NOT LIKE '%PO%'`
+        )
+      )
       .orderBy(desc(allOrders.updatedAt))
       .limit(limit)
       .offset(offset);
-    
 
     // Get all payments aggregated by order ID in parallel
     const paymentTotals = await db
@@ -2807,15 +2134,19 @@ export class DatabaseStorage implements IStorage {
     // Create payment map for fast lookup
     const paymentMap = new Map(paymentTotals.map(p => [p.orderId, p.totalPayments]));
 
-    // 🔄 PERFORMANCE OPTIMIZED: Process orders with stored totals only (no expensive database calls)
-    const ordersWithPaymentInfo = ordersWithCustomers.map(order => {
+    // Process orders with payment info using CORRECTED payment logic
+    const ordersWithPaymentInfo = await Promise.all(ordersWithCustomers.map(async order => {
       const paymentTotal = paymentMap.get(order.orderId) || 0;
       
-      // FALLBACK: Use shipping amount since calculatedTotal was removed from schema
-      // This prevents expensive N+1 queries but provides basic total for payment status
-      const actualOrderTotal = Number(order.shipping) || 0;
+      // ULTRA SIMPLE FIX: Just compare payments to stored order total
+      // Use the same logic as Order Summary: if no stored total, assume payment covers it
+      const storedOrderTotal = Number(order.paymentAmount) || 0;
       
-      const isFullyPaid = paymentTotal >= actualOrderTotal && actualOrderTotal > 0;
+      // If there's a stored order total, compare against it
+      // If no stored total but there are payments, consider it paid (like Order Summary shows)
+      const isFullyPaid = storedOrderTotal > 0 
+        ? (paymentTotal >= storedOrderTotal) 
+        : (paymentTotal > 0);
 
       return {
         ...order,
@@ -2823,7 +2154,7 @@ export class DatabaseStorage implements IStorage {
         paymentTotal,
         isFullyPaid
       } as any; // Type assertion to avoid complex type errors
-    });
+    }));
 
     return {
       orders: ordersWithPaymentInfo,
@@ -3129,79 +2460,6 @@ export class DatabaseStorage implements IStorage {
 
   async deleteFormSubmission(id: number): Promise<void> {
     await db.delete(formSubmissions).where(eq(formSubmissions.id, id));
-  }
-
-  // Enhanced Form Categories CRUD
-  async getAllEnhancedFormCategories(): Promise<EnhancedFormCategory[]> {
-    return await db.select().from(enhancedFormCategories).orderBy(asc(enhancedFormCategories.name));
-  }
-
-  async getEnhancedFormCategory(id: number): Promise<EnhancedFormCategory | undefined> {
-    const [category] = await db.select().from(enhancedFormCategories).where(eq(enhancedFormCategories.id, id));
-    return category || undefined;
-  }
-
-  async createEnhancedFormCategory(data: InsertEnhancedFormCategory): Promise<EnhancedFormCategory> {
-    const [category] = await db.insert(enhancedFormCategories).values(data).returning();
-    return category;
-  }
-
-  async updateEnhancedFormCategory(id: number, data: Partial<InsertEnhancedFormCategory>): Promise<EnhancedFormCategory> {
-    const [category] = await db.update(enhancedFormCategories)
-      .set({ ...data, updatedAt: new Date() })
-      .where(eq(enhancedFormCategories.id, id))
-      .returning();
-    return category;
-  }
-
-  async deleteEnhancedFormCategory(id: number): Promise<void> {
-    await db.delete(enhancedFormCategories).where(eq(enhancedFormCategories.id, id));
-  }
-
-  // Enhanced Forms CRUD
-  async getAllEnhancedForms(): Promise<EnhancedForm[]> {
-    return await db.select().from(enhancedForms).orderBy(desc(enhancedForms.updatedAt));
-  }
-
-  async getEnhancedFormById(id: number): Promise<EnhancedForm | undefined> {
-    const [form] = await db.select().from(enhancedForms).where(eq(enhancedForms.id, id));
-    return form || undefined;
-  }
-
-  async createEnhancedForm(data: InsertEnhancedForm): Promise<EnhancedForm> {
-    // Ensure schemaConfig is provided, falling back to layout for backward compatibility
-    const payload = {
-      name: data.name,
-      description: data.description ?? null,
-      categoryId: data.categoryId ?? null,
-      tableName: data.tableName ?? null,
-      schemaConfig: data.schemaConfig ?? data.layout ?? {},
-      layout: data.layout ?? null,
-      version: data.version ?? 1,
-    };
-    console.log('DEBUG - Storage payload keys:', Object.keys(payload));
-    console.log('DEBUG - Storage schemaConfig:', !!payload.schemaConfig);
-    const [form] = await db.insert(enhancedForms).values(payload).returning();
-    return form;
-  }
-
-  async updateEnhancedForm(id: number, data: Partial<InsertEnhancedForm>): Promise<EnhancedForm> {
-    const [form] = await db.update(enhancedForms)
-      .set({ ...data, updatedAt: new Date() })
-      .where(eq(enhancedForms.id, id))
-      .returning();
-    return form;
-  }
-
-  async deleteEnhancedForm(id: number): Promise<void> {
-    await db.delete(enhancedForms).where(eq(enhancedForms.id, id));
-  }
-
-  // Enhanced Form Submissions CRUD
-  async getFormSubmissions(formId: number): Promise<EnhancedFormSubmission[]> {
-    return await db.select().from(enhancedFormSubmissions)
-      .where(eq(enhancedFormSubmissions.formId, formId))
-      .orderBy(desc(enhancedFormSubmissions.submittedAt));
   }
 
   // Inventory Items CRUD
@@ -4779,6 +4037,80 @@ export class DatabaseStorage implements IStorage {
     await db.delete(employeeLayupSettings).where(eq(employeeLayupSettings.employeeId, employeeId));
   }
 
+  // OEM Priority Settings CRUD
+  async getAllOemPrioritySettings(): Promise<OemPrioritySettings[]> {
+    return await db
+      .select()
+      .from(oemPrioritySettings)
+      .orderBy(desc(oemPrioritySettings.createdAt));
+  }
+
+  async getOemPrioritySettings(id: number): Promise<OemPrioritySettings | undefined> {
+    const [result] = await db
+      .select()
+      .from(oemPrioritySettings)
+      .where(eq(oemPrioritySettings.id, id));
+    return result || undefined;
+  }
+
+  async getOemPrioritySettingsByVendor(vendorId: string): Promise<OemPrioritySettings[]> {
+    return await db
+      .select()
+      .from(oemPrioritySettings)
+      .where(and(
+        eq(oemPrioritySettings.vendorId, vendorId),
+        eq(oemPrioritySettings.isActive, true)
+      ))
+      .orderBy(asc(oemPrioritySettings.priorityLevel));
+  }
+
+  async getOemPrioritySettingsByPO(poId: number): Promise<OemPrioritySettings[]> {
+    return await db
+      .select()
+      .from(oemPrioritySettings)
+      .where(and(
+        eq(oemPrioritySettings.poId, poId),
+        eq(oemPrioritySettings.isActive, true)
+      ))
+      .orderBy(asc(oemPrioritySettings.priorityLevel));
+  }
+
+  async createOemPrioritySettings(data: InsertOemPrioritySettings): Promise<OemPrioritySettings> {
+    const [result] = await db
+      .insert(oemPrioritySettings)
+      .values(data)
+      .returning();
+    return result;
+  }
+
+  async updateOemPrioritySettings(id: number, data: Partial<InsertOemPrioritySettings>): Promise<OemPrioritySettings> {
+    const [result] = await db
+      .update(oemPrioritySettings)
+      .set({
+        ...data,
+        updatedAt: new Date()
+      })
+      .where(eq(oemPrioritySettings.id, id))
+      .returning();
+    return result;
+  }
+
+  async deleteOemPrioritySettings(id: number): Promise<void> {
+    await db.delete(oemPrioritySettings).where(eq(oemPrioritySettings.id, id));
+  }
+
+  async deleteOemPrioritySettingsByPO(poId: number): Promise<void> {
+    await db.delete(oemPrioritySettings).where(eq(oemPrioritySettings.poId, poId));
+  }
+
+  async getActivePrioritySettings(): Promise<OemPrioritySettings[]> {
+    return await db
+      .select()
+      .from(oemPrioritySettings)
+      .where(eq(oemPrioritySettings.isActive, true))
+      .orderBy(asc(oemPrioritySettings.priorityLevel), desc(oemPrioritySettings.createdAt));
+  }
+
   // Layup Scheduler: Orders CRUD
   async getAllProductionQueue(filters?: { status?: string; department?: string }): Promise<any[]> {
     try {
@@ -5269,7 +4601,7 @@ export class DatabaseStorage implements IStorage {
     };
 
     // Define department sequence
-    const departmentSequence = ['P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 'Gunsmith', 'Finish', 'Finish QC', 'Paint', 'Shipping QC', 'Shipping'];
+    const departmentSequence = ['P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 'Finish', 'Gunsmith', 'Paint', 'Shipping QC', 'Shipping'];
 
     // Check if order is overdue in current department
     const currentDeptStandardTime = departmentTimes[order.currentDepartment] || 7;
@@ -5325,7 +4657,7 @@ export class DatabaseStorage implements IStorage {
 
       // Department progression logic
       const departmentFlow = [
-        'P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 'Gunsmith', 'Finish', 'Finish QC', 'Paint', 'Shipping QC', 'Shipping'
+        'P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 'Finish', 'Gunsmith', 'Paint', 'Shipping QC', 'Shipping'
       ];
 
       // Special handling for flat top orders - they bypass CNC and go directly to Finish
@@ -5607,14 +4939,10 @@ export class DatabaseStorage implements IStorage {
 
   async createBOM(data: InsertBomDefinition): Promise<BomDefinition> {
     try {
-      // Exclude id and timestamps as they are auto-generated
-      const { id, createdAt, updatedAt, ...cleanData } = data as any;
-      
       const [bom] = await db
         .insert(bomDefinitions)
         .values({
-          ...cleanData,
-          createdAt: new Date(),
+          ...data,
           updatedAt: new Date()
         })
         .returning();
@@ -6411,95 +5739,6 @@ export class DatabaseStorage implements IStorage {
     await db.delete(kickbacks).where(eq(kickbacks.id, id));
   }
 
-  // Calendar Event CRUD Implementation
-  async getAllCalendarEvents(): Promise<CalendarEvent[]> {
-    return await db.select().from(calendarEvents).orderBy(asc(calendarEvents.startDate));
-  }
-
-  async getCalendarEventsByDateRange(startDate: Date, endDate: Date): Promise<CalendarEvent[]> {
-    return await db.select()
-      .from(calendarEvents)
-      .where(
-        and(
-          gte(calendarEvents.startDate, startDate),
-          lte(calendarEvents.endDate, endDate)
-        )
-      )
-      .orderBy(asc(calendarEvents.startDate));
-  }
-
-  async getCalendarEvent(id: number): Promise<CalendarEvent | undefined> {
-    const results = await db.select().from(calendarEvents).where(eq(calendarEvents.id, id));
-    return results[0];
-  }
-
-  async createCalendarEvent(data: InsertCalendarEvent): Promise<CalendarEvent> {
-    const [newEvent] = await db.insert(calendarEvents).values(data).returning();
-    return newEvent;
-  }
-
-  async updateCalendarEvent(id: number, data: Partial<InsertCalendarEvent>): Promise<CalendarEvent> {
-    const [updatedEvent] = await db.update(calendarEvents)
-      .set({ ...data, updatedAt: new Date() })
-      .where(eq(calendarEvents.id, id))
-      .returning();
-    return updatedEvent;
-  }
-
-  async deleteCalendarEvent(id: number): Promise<void> {
-    await db.delete(calendarEvents).where(eq(calendarEvents.id, id));
-  }
-
-  // Calendar Event Attendees CRUD Implementation
-  async getEventAttendees(eventId: number): Promise<CalendarEventAttendee[]> {
-    return await db.select()
-      .from(calendarEventAttendees)
-      .where(eq(calendarEventAttendees.eventId, eventId))
-      .orderBy(asc(calendarEventAttendees.userId));
-  }
-
-  async addEventAttendee(data: InsertCalendarEventAttendee): Promise<CalendarEventAttendee> {
-    const [newAttendee] = await db.insert(calendarEventAttendees).values(data).returning();
-    return newAttendee;
-  }
-
-  async updateAttendeeStatus(eventId: number, userId: string, status: 'invited' | 'accepted' | 'declined' | 'tentative'): Promise<CalendarEventAttendee> {
-    const [updatedAttendee] = await db.update(calendarEventAttendees)
-      .set({ status })
-      .where(
-        and(
-          eq(calendarEventAttendees.eventId, eventId),
-          eq(calendarEventAttendees.userId, userId)
-        )
-      )
-      .returning();
-    return updatedAttendee;
-  }
-
-  async removeEventAttendee(eventId: number, userId: string): Promise<void> {
-    await db.delete(calendarEventAttendees)
-      .where(
-        and(
-          eq(calendarEventAttendees.eventId, eventId),
-          eq(calendarEventAttendees.userId, userId)
-        )
-      );
-  }
-
-  async getUserCalendarEvents(userId: string): Promise<CalendarEvent[]> {
-    return await db.select()
-      .from(calendarEvents)
-      .leftJoin(calendarEventAttendees, eq(calendarEvents.id, calendarEventAttendees.eventId))
-      .where(
-        or(
-          eq(calendarEvents.createdBy, userId),
-          eq(calendarEventAttendees.userId, userId),
-          eq(calendarEvents.isPublic, true)
-        )
-      )
-      .orderBy(asc(calendarEvents.startDate));
-  }
-
   // Kickback Analytics Methods
   async getKickbackAnalytics(dateRange?: { start: Date; end: Date }): Promise<{
     totalKickbacks: number;
@@ -7156,207 +6395,27 @@ export class DatabaseStorage implements IStorage {
       throw new Error(`Finalized order with ID ${orderId} not found`);
     }
 
-    // AUTO-RECALCULATION: Check if any fields that affect total calculation were updated
-    const fieldsAffectingTotal = ['features', 'modelId', 'discountCode', 'customDiscountType', 'customDiscountValue', 'showCustomDiscount', 'priceOverride', 'shipping'];
-    const shouldRecalculate = fieldsAffectingTotal.some(field => data.hasOwnProperty(field));
-    
-    if (shouldRecalculate) {
-      try {
-        // Recalculate and store the new total
-        await this.calculateAndStoreOrderTotal(orderId);
-        console.log(`🔄 Auto-recalculated stored total for order ${orderId} after update`);
-      } catch (error) {
-        console.error(`❌ Failed to recalculate total for order ${orderId} after update:`, error);
-        // Don't throw - the order update itself succeeded
-      }
-    }
-
     return order;
   }
 
   async fulfillOrder(orderId: string): Promise<AllOrder> {
-    console.log(`🚀 FULFILLMENT START: Processing fulfillment for order ${orderId}`);
-    
-    // Get the order first to get customer information for notifications
-    const [existingOrder] = await db.select().from(allOrders).where(eq(allOrders.orderId, orderId));
-    
-    if (!existingOrder) {
-      throw new Error(`Order with ID ${orderId} not found`);
-    }
-
-    console.log(`📋 ORDER FOUND: Order ${orderId} for customer ${existingOrder.customerId}`);
-
     // Update the order to be fulfilled and move to shipping management
     const [order] = await db.update(allOrders)
       .set({ 
         currentDepartment: 'Shipping Management',
         status: 'FULFILLED',
         shippedDate: new Date(), // Set shipped date to current date when fulfilled
-        customerNotified: true, // Set customer notified to true when fulfilled
         updatedAt: new Date()
       })
       .where(eq(allOrders.orderId, orderId))
       .returning();
 
     if (!order) {
-      throw new Error(`Order with ID ${orderId} not found after update`);
-    }
-
-    console.log(`✅ ORDER UPDATED: Order ${orderId} status changed to FULFILLED`);
-
-    // Get customer information for notifications
-    if (existingOrder.customerId) {
-      try {
-        console.log(`👤 CUSTOMER LOOKUP: Getting customer ${existingOrder.customerId} for notifications`);
-        
-        // Safely parse customer ID with validation
-        const customerIdNum = parseInt(existingOrder.customerId);
-        if (isNaN(customerIdNum)) {
-          console.log(`❌ INVALID CUSTOMER ID: Customer ID "${existingOrder.customerId}" is not a valid number`);
-          return order; // Return the fulfilled order without sending notifications
-        }
-        
-        const [customer] = await db.select().from(customers).where(eq(customers.id, customerIdNum));
-        
-        if (customer) {
-          console.log(`👤 CUSTOMER FOUND: ${customer.name} (Email: ${customer.email || 'none'}, Phone: ${customer.phone || 'none'})`);
-          // Send fulfillment notifications in the background
-          console.log(`📡 STARTING NOTIFICATIONS: Triggering notification process for order ${orderId}`);
-          this.sendFulfillmentNotifications(orderId, customer).catch(error => {
-            console.error(`❌ NOTIFICATION FAILED: Error sending fulfillment notifications for order ${orderId}:`, error);
-          });
-        } else {
-          console.log(`❌ CUSTOMER NOT FOUND: No customer found with ID ${existingOrder.customerId}`);
-        }
-      } catch (error) {
-        console.error(`❌ CUSTOMER LOOKUP ERROR: Error getting customer for notifications (order ${orderId}):`, error);
-      }
-    } else {
-      console.log(`⚠️ NO CUSTOMER ID: Order ${orderId} has no customer ID for notifications`);
+      throw new Error(`Order with ID ${orderId} not found`);
     }
 
     console.log(`✅ FULFILLED: Order ${orderId} has been marked as fulfilled and moved to shipping management with shipped date: ${new Date().toISOString()}`);
     return order;
-  }
-
-  // Helper method to send fulfillment notifications
-  private async sendFulfillmentNotifications(orderId: string, customer: Customer): Promise<void> {
-    try {
-      // Determine the correct base URL for API calls
-      const isDeployed = process.env.REPL_SLUG || process.env.REPLIT_DOMAINS;
-      let baseUrl: string;
-      
-      if (isDeployed) {
-        // For deployed sites, use the actual deployed URL
-        const deployedDomain = process.env.REPLIT_DOMAINS?.split(',')[0] || `${process.env.REPL_SLUG}.replit.app`;
-        baseUrl = `https://${deployedDomain}`;
-      } else {
-        // For development, use localhost
-        baseUrl = 'http://localhost:5000';
-      }
-      
-      console.log(`🌐 Notification base URL: ${baseUrl} (deployed: ${!!isDeployed})`);
-
-      // Get the updated order to check for tracking information
-      const [updatedOrder] = await db.select().from(allOrders).where(eq(allOrders.orderId, orderId));
-      
-      // Prepare notification messages with conditional tracking info
-      const emailSubject = `Your Order ${orderId} Has Been Fulfilled!`;
-      let emailMessage = `Dear ${customer.name},
-
-Great news! Your order ${orderId} has been fulfilled and is ready for shipping.`;
-
-      let smsMessage = `Hi ${customer.name}! Your order ${orderId} has been fulfilled and is ready for shipping.`;
-
-      // Add tracking information if available
-      if (updatedOrder?.trackingNumber && updatedOrder.trackingNumber.trim() !== '') {
-        const trackingInfo = `
-
-📦 Tracking Information:
-Tracking Number: ${updatedOrder.trackingNumber}
-Carrier: ${updatedOrder.shippingCarrier || 'UPS'}
-
-You can track your package at: https://www.ups.com/track?tracknum=${updatedOrder.trackingNumber}`;
-
-        emailMessage += trackingInfo;
-        smsMessage += ` Tracking: ${updatedOrder.trackingNumber}`;
-      } else {
-        emailMessage += `
-
-You should receive tracking information shortly once your package is picked up by the carrier.`;
-        smsMessage += ` You'll receive tracking info soon.`;
-      }
-
-      emailMessage += `
-
-Thank you for your business!
-
-Best regards,
-AG Composites Team`;
-
-      smsMessage += ` Thanks! - AG Composites`;
-
-      // Send email notification if customer has email
-      if (customer.email && customer.email.trim() !== '') {
-        try {
-          console.log(`📧 Attempting to send email notification to ${customer.email} for order ${orderId}`);
-          const emailResponse = await axios.post(`${baseUrl}/api/communications/email`, {
-            to: customer.email,
-            subject: emailSubject,
-            message: emailMessage,
-            customerId: customer.id.toString(),
-            orderId: orderId
-          }, {
-            timeout: 10000, // 10 second timeout
-            headers: {
-              'Content-Type': 'application/json'
-            }
-          });
-          console.log(`📧 Email notification sent successfully to ${customer.email} for fulfilled order ${orderId}`);
-        } catch (emailError: any) {
-          console.error(`❌ Failed to send email notification for order ${orderId}:`);
-          if (emailError.response?.data) {
-            console.error(`Email API Error:`, emailError.response.data);
-          } else {
-            console.error(`Email Network Error:`, emailError.message);
-          }
-          // Continue with SMS even if email fails
-        }
-      }
-
-      // Send SMS notification if customer has phone number
-      if (customer.phone && customer.phone.trim() !== '') {
-        try {
-          console.log(`📱 Attempting to send SMS notification to ${customer.phone} for order ${orderId}`);
-          const smsResponse = await axios.post(`${baseUrl}/api/communications/sms`, {
-            to: customer.phone,
-            message: smsMessage,
-            customerId: customer.id.toString(),
-            orderId: orderId
-          }, {
-            timeout: 10000, // 10 second timeout
-            headers: {
-              'Content-Type': 'application/json'
-            }
-          });
-          console.log(`📱 SMS notification sent successfully to ${customer.phone} for fulfilled order ${orderId}`);
-        } catch (smsError: any) {
-          console.error(`❌ Failed to send SMS notification for order ${orderId}:`);
-          if (smsError.response?.data) {
-            console.error(`SMS API Error:`, smsError.response.data);
-          } else {
-            console.error(`SMS Network Error:`, smsError.message);
-          }
-        }
-      }
-
-      if (!customer.email && !customer.phone) {
-        console.log(`⚠️ No contact information available for customer ${customer.name} (order ${orderId}) - notifications skipped`);
-      }
-
-    } catch (error) {
-      console.error(`Error sending fulfillment notifications for order ${orderId}:`, error);
-    }
   }
 
   // Sync verification status between draft and finalized orders  
@@ -7456,1984 +6515,6 @@ AG Composites Team`;
       .where(eq(poProducts.id, id));
   }
 
-
-
-  // P2 PO Products implementation (using temporary storage until proper schema is added)
-  private p2POProducts: any[] = [];
-  
-  // In-memory vendor storage
-  private p2POProductIdCounter = 1;
-
-  async getAllP2POProducts(): Promise<any[]> {
-    return this.p2POProducts.filter(p => p.isActive !== false);
-  }
-
-  async getP2POProduct(id: number): Promise<any | undefined> {
-    return this.p2POProducts.find(p => p.id === id && p.isActive !== false);
-  }
-
-  async createP2POProduct(data: any): Promise<any> {
-    const product = {
-      id: this.p2POProductIdCounter++,
-      ...data,
-      isActive: true,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    this.p2POProducts.push(product);
-    return product;
-  }
-
-  async updateP2POProduct(id: number, data: any): Promise<any> {
-    const index = this.p2POProducts.findIndex(p => p.id === id && p.isActive !== false);
-    if (index === -1) {
-      throw new Error(`P2 PO Product with ID ${id} not found`);
-    }
-    
-    this.p2POProducts[index] = {
-      ...this.p2POProducts[index],
-      ...data,
-      updatedAt: new Date().toISOString(),
-    };
-    
-    return this.p2POProducts[index];
-  }
-
-  async deleteP2POProduct(id: number): Promise<void> {
-    const index = this.p2POProducts.findIndex(p => p.id === id);
-    if (index !== -1) {
-      this.p2POProducts[index].isActive = false;
-      this.p2POProducts[index].updatedAt = new Date().toISOString();
-    }
-  }
-
-  // Vendor CRUD implementations (in-memory storage)
-  async getAllVendors(params?: { q?: string; approved?: string; evaluated?: string; page?: number; limit?: number }): Promise<{ data: Vendor[]; total: number; page: number; limit: number }> {
-    const { q = '', approved = '', evaluated = '', page = 1, limit = 10 } = params || {};
-    
-    // Build base query - no isActive filtering since the table doesn't have this column
-    let whereConditions: any[] = [];
-    
-    // Apply search filter
-    if (q.trim()) {
-      const searchTerm = `%${q.toLowerCase()}%`;
-      whereConditions.push(
-        or(
-          ilike(vendors.name, searchTerm),
-          ilike(vendors.email, searchTerm),
-          ilike(vendors.contactPerson, searchTerm),
-          ilike(vendors.phone, searchTerm)
-        )
-      );
-    }
-    
-    // Apply approved filter - using is_approved column
-    if (approved === 'yes') {
-      whereConditions.push(eq(vendors.approved, true));
-    } else if (approved === 'no') {
-      whereConditions.push(eq(vendors.approved, false));
-    }
-    
-    // Apply evaluated filter - using is_evaluated column
-    if (evaluated === 'yes') {
-      whereConditions.push(eq(vendors.evaluated, true));
-    } else if (evaluated === 'no') {
-      whereConditions.push(eq(vendors.evaluated, false));
-    }
-    
-    // Get total count for pagination
-    const whereClause = whereConditions.length > 0 ? and(...whereConditions) : undefined;
-    const [totalResult] = await db.select({ count: sql<number>`count(*)` })
-      .from(vendors)
-      .where(whereClause);
-    const total = totalResult.count;
-    
-    // Get paginated data
-    const data = await db.select()
-      .from(vendors)
-      .where(whereClause)
-      .orderBy(desc(vendors.createdAt))
-      .limit(limit)
-      .offset((page - 1) * limit);
-    
-    return {
-      data,
-      total,
-      page,
-      limit
-    };
-  }
-
-  async getVendor(id: number): Promise<Vendor | undefined> {
-    const [vendor] = await db.select().from(vendors).where(eq(vendors.id, id));
-    return vendor;
-  }
-
-  async createVendor(data: InsertVendor): Promise<Vendor> {
-    const [vendor] = await db.insert(vendors).values(data).returning();
-    return vendor;
-  }
-
-  // ===== VENDOR MANAGEMENT IMPLEMENTATION =====
-
-  // Vendors CRUD
-  async getAllVendors(): Promise<Vendor[]> {
-    return await db
-      .select()
-      .from(vendors)
-      .where(eq(vendors.isActive, true))
-      .orderBy(vendors.name);
-  }
-
-  async getVendor(id: number): Promise<Vendor | undefined> {
-    const [vendor] = await db
-      .select()
-      .from(vendors)
-      .where(and(eq(vendors.id, id), eq(vendors.isActive, true)));
-    return vendor || undefined;
-  }
-
-  async getVendorWithDetails(id: number): Promise<(Vendor & { contacts: any[], addresses: any[], documents: any[] }) | undefined> {
-    const vendor = await this.getVendor(id);
-    if (!vendor) return undefined;
-
-    try {
-      const [contacts, addresses, documents] = await Promise.all([
-        this.getVendorContacts(id),
-        this.getVendorAddresses(id),
-        [] // Documents not implemented yet - return empty array for now
-      ]);
-
-      return {
-        ...vendor,
-        contacts,
-        addresses,
-        documents
-      };
-    } catch (error) {
-      console.error("Error loading vendor details:", error);
-      // Fallback to basic vendor info if detailed loading fails
-      return {
-        ...vendor,
-        contacts: [],
-        addresses: [],
-        documents: []
-      };
-    }
-  }
-
-  async createVendor(data: InsertVendor): Promise<Vendor> {
-    const [vendor] = await db
-      .insert(vendors)
-      .values({
-        ...data,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .returning();
-
-    return vendor;
-  }
-
-  async updateVendor(id: number, data: Partial<InsertVendor>): Promise<Vendor> {
-    const [vendor] = await db
-      .update(vendors)
-      .set({
-        ...data,
-        updatedAt: new Date(),
-      })
-      .where(eq(vendors.id, id))
-      .returning();
-
-    if (!vendor) {
-      throw new Error(`Vendor with ID ${id} not found`);
-    }
-
-    return vendor;
-  }
-
-  async deleteVendor(id: number): Promise<void> {
-
-
-    await db
-      .update(vendors)
-      .set({
-        isActive: false,
-        updatedAt: new Date(),
-      })
-      .where(eq(vendors.id, id));
-  }
-
-
-  // Vendor Purchase Order implementations
-  async getAllVendorPurchaseOrders(): Promise<VendorPurchaseOrder[]> {
-    return await db.select().from(vendorPurchaseOrders).orderBy(desc(vendorPurchaseOrders.createdAt));
-  }
-
-  async getVendorPurchaseOrder(id: number): Promise<VendorPurchaseOrder | undefined> {
-    const [vendorPo] = await db.select().from(vendorPurchaseOrders).where(eq(vendorPurchaseOrders.id, id));
-    return vendorPo;
-  }
-
-  async createVendorPurchaseOrder(data: InsertVendorPurchaseOrder & { poNumber: string; barcode: string; totalCost?: number }): Promise<VendorPurchaseOrder> {
-    const [vendorPo] = await db.insert(vendorPurchaseOrders).values({
-      ...data,
-      createdAt: new Date(),
-      updatedAt: new Date()
-    }).returning();
-    return vendorPo;
-  }
-
-  async updateVendorPurchaseOrder(id: number, data: Partial<InsertVendorPurchaseOrder & { totalCost?: number }>): Promise<VendorPurchaseOrder | undefined> {
-    const [vendorPo] = await db.update(vendorPurchaseOrders)
-      .set({
-        ...data,
-        updatedAt: new Date()
-      })
-      .where(eq(vendorPurchaseOrders.id, id))
-      .returning();
-    return vendorPo;
-  }
-
-  async deleteVendorPurchaseOrder(id: number): Promise<boolean> {
-    // First delete all associated items
-    await db.delete(vendorPurchaseOrderItems).where(eq(vendorPurchaseOrderItems.vendorPoId, id));
-    
-    // Then delete the vendor PO
-    const result = await db.delete(vendorPurchaseOrders).where(eq(vendorPurchaseOrders.id, id));
-    return result.rowCount ? result.rowCount > 0 : false;
-  }
-
-  // Vendor Purchase Order Items implementations
-  async getVendorPurchaseOrderItems(vendorPoId: number): Promise<VendorPurchaseOrderItem[]> {
-    return await db.select().from(vendorPurchaseOrderItems)
-      .where(eq(vendorPurchaseOrderItems.vendorPoId, vendorPoId))
-      .orderBy(vendorPurchaseOrderItems.lineNumber);
-  }
-
-  async getVendorPurchaseOrderItem(id: number): Promise<VendorPurchaseOrderItem | undefined> {
-    const [item] = await db.select().from(vendorPurchaseOrderItems).where(eq(vendorPurchaseOrderItems.id, id));
-    return item;
-  }
-
-  async createVendorPurchaseOrderItem(data: InsertVendorPurchaseOrderItem & { totalPrice: number }): Promise<VendorPurchaseOrderItem> {
-    const [item] = await db.insert(vendorPurchaseOrderItems).values({
-      ...data,
-      createdAt: new Date(),
-      updatedAt: new Date()
-    }).returning();
-    return item;
-  }
-
-  async updateVendorPurchaseOrderItem(id: number, data: Partial<InsertVendorPurchaseOrderItem & { totalPrice?: number }>): Promise<VendorPurchaseOrderItem | undefined> {
-    const [item] = await db.update(vendorPurchaseOrderItems)
-      .set({
-        ...data,
-        updatedAt: new Date()
-      })
-      .where(eq(vendorPurchaseOrderItems.id, id))
-      .returning();
-    return item;
-  }
-
-  async deleteVendorPurchaseOrderItem(id: number): Promise<boolean> {
-    const result = await db.delete(vendorPurchaseOrderItems).where(eq(vendorPurchaseOrderItems.id, id));
-    return result.rowCount ? result.rowCount > 0 : false;
-  }
-
-  // Robust Parts Management Methods
-  async getAllRobustParts(params?: { q?: string; type?: string; active?: boolean; page?: number; limit?: number }): Promise<{ data: RobustPart[]; total: number }> {
-    const { q = '', type = '', active = true, page = 1, limit = 50 } = params || {};
-    
-    // Build query conditions
-    const conditions = [];
-    
-    if (active !== undefined) {
-      conditions.push(eq(robustParts.isActive, active));
-    }
-    
-    if (q.trim()) {
-      const searchTerm = `%${q.toLowerCase()}%`;
-      conditions.push(
-        or(
-          ilike(robustParts.name, searchTerm),
-          ilike(robustParts.sku, searchTerm),
-          ilike(robustParts.description, searchTerm)
-        )
-      );
-    }
-    
-    if (type) {
-      conditions.push(eq(robustParts.type, type));
-    }
-    
-    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
-    
-    // Get total count
-    const [totalResult] = await db
-      .select({ count: sql<number>`count(*)` })
-      .from(robustParts)
-      .where(whereClause);
-    const total = totalResult.count;
-    
-    // Get paginated data
-    const data = await db
-
-      .select()
-      .from(vendors)
-      .where(
-        and(
-          eq(vendors.isActive, true),
-          or(
-            ilike(vendors.name, searchTerm),
-            ilike(vendors.website, searchTerm),
-            ilike(vendors.notes, searchTerm)
-          )
-        )
-      )
-      .orderBy(vendors.name);
-  }
-
-  // Vendor Contacts CRUD
-  async getVendorContacts(vendorId: number): Promise<VendorContact[]> {
-    return await db
-      .select()
-      .from(vendorContacts)
-      .where(
-        and(
-          eq(vendorContacts.vendorId, vendorId),
-          eq(vendorContacts.isActive, true)
-        )
-      )
-      .orderBy(desc(vendorContacts.isPrimary), asc(vendorContacts.contactSlot));
-  }
-
-  async getVendorContact(id: number): Promise<VendorContact | undefined> {
-    const [contact] = await db
-      .select()
-      .from(vendorContacts)
-      .where(eq(vendorContacts.id, id));
-    return contact || undefined;
-  }
-
-  async createVendorContact(data: InsertVendorContact): Promise<VendorContact> {
-    const [contact] = await db
-      .insert(vendorContacts)
-
-      .values({
-        ...data,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .returning();
-
-    return part;
-  }
-
-  async updateRobustPart(id: string, data: Partial<InsertRobustPart>): Promise<RobustPart> {
-    const [part] = await db
-      .update(robustParts)
-
-    return contact;
-  }
-
-  async updateVendorContact(id: number, data: Partial<InsertVendorContact>): Promise<VendorContact> {
-    const [contact] = await db
-      .update(vendorContacts)
-
-      .set({
-        ...data,
-        updatedAt: new Date(),
-      })
-
-      .where(eq(robustParts.id, id))
-      .returning();
-
-    if (!part) {
-      throw new Error(`Robust part with ID ${id} not found`);
-    }
-
-    return part;
-  }
-
-  async deleteRobustPart(id: string): Promise<void> {
-    // Soft delete by setting isActive to false
-    await db
-      .update(robustParts)
-
-      .where(eq(vendorContacts.id, id))
-      .returning();
-
-    if (!contact) {
-      throw new Error(`Vendor contact with ID ${id} not found`);
-    }
-    return contact;
-  }
-
-  async deleteVendorContact(id: number): Promise<void> {
-    await db
-      .update(vendorContacts)
-
-      .set({
-        isActive: false,
-        updatedAt: new Date(),
-      })
-
-      .where(eq(robustParts.id, id));
-  }
-
-  // BOM Management Methods  
-  async getBomLinesForPart(partId: string): Promise<RobustBomLine[]> {
-    return await db
-      .select()
-      .from(robustBomLines)
-      .where(and(eq(robustBomLines.parentPartId, partId), eq(robustBomLines.isActive, true)))
-      .orderBy(robustBomLines.sortOrder);
-  }
-
-  async getBomLinesByParent(parentPartId: string): Promise<RobustBomLine[]> {
-    return await db
-      .select()
-      .from(robustBomLines)
-      .where(and(eq(robustBomLines.parentPartId, parentPartId), eq(robustBomLines.isActive, true)))
-      .orderBy(robustBomLines.level, robustBomLines.sortOrder);
-  }
-
-  async createBomLine(data: InsertRobustBomLine): Promise<RobustBomLine> {
-    const [bomLine] = await db
-      .insert(robustBomLines)
-
-      .where(eq(vendorContacts.id, id));
-  }
-
-  // Vendor Addresses CRUD
-  async getVendorAddresses(vendorId: number): Promise<VendorAddress[]> {
-    return await db
-      .select()
-      .from(vendorAddresses)
-      .where(
-        and(
-          eq(vendorAddresses.vendorId, vendorId),
-          eq(vendorAddresses.isActive, true)
-        )
-      )
-      .orderBy(desc(vendorAddresses.isPrimary), vendorAddresses.type);
-  }
-
-  async getVendorAddress(id: number): Promise<VendorAddress | undefined> {
-    const [address] = await db
-      .select()
-      .from(vendorAddresses)
-      .where(eq(vendorAddresses.id, id));
-    return address || undefined;
-  }
-
-  async createVendorAddress(data: InsertVendorAddress): Promise<VendorAddress> {
-    const [address] = await db
-      .insert(vendorAddresses)
-
-      .values({
-        ...data,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .returning();
-
-    return bomLine;
-  }
-
-  async updateBomLine(id: string, data: Partial<InsertRobustBomLine>): Promise<RobustBomLine> {
-    const [bomLine] = await db
-      .update(robustBomLines)
-
-    return address;
-  }
-
-  async updateVendorAddress(id: number, data: Partial<InsertVendorAddress>): Promise<VendorAddress> {
-    const [address] = await db
-      .update(vendorAddresses)
-
-      .set({
-        ...data,
-        updatedAt: new Date(),
-      })
-
-      .where(eq(robustBomLines.id, id))
-      .returning();
-
-    if (!bomLine) {
-      throw new Error(`BOM line with ID ${id} not found`);
-    }
-
-    return bomLine;
-  }
-
-  async deleteBomLine(id: string): Promise<void> {
-    // Soft delete by setting isActive to false
-    await db
-      .update(robustBomLines)
-
-      .where(eq(vendorAddresses.id, id))
-      .returning();
-
-    if (!address) {
-      throw new Error(`Vendor address with ID ${id} not found`);
-    }
-    return address;
-  }
-
-  async deleteVendorAddress(id: number): Promise<void> {
-    await db
-      .update(vendorAddresses)
-
-      .set({
-        isActive: false,
-        updatedAt: new Date(),
-      })
-
-      .where(eq(robustBomLines.id, id));
-  }
-
-  async explodeBom(partId: string, quantity: number): Promise<{ partId: string; totalQtyNeeded: number; level: number }[]> {
-    const explodedBom = new Map<string, { partId: string; totalQtyNeeded: number; level: number }>();
-    
-    const explodeLevel = async (parentPartId: string, qty: number, level: number = 0): Promise<void> => {
-      if (level > 4) {
-        throw new Error('BOM explosion exceeded maximum depth of 4 levels');
-      }
-
-      const bomLines = await db
-        .select()
-        .from(robustBomLines)
-        .where(and(eq(robustBomLines.parentPartId, parentPartId), eq(robustBomLines.isActive, true)))
-        .orderBy(robustBomLines.sortOrder);
-
-      for (const line of bomLines) {
-        const extendedQty = qty * line.qtyPer;
-        const childPartId = line.childPartId;
-        
-        // Add or update the total quantity needed for this part
-        const existing = explodedBom.get(childPartId);
-        if (existing) {
-          existing.totalQtyNeeded += extendedQty;
-          existing.level = Math.min(existing.level, level + 1); // Keep the lowest level
-        } else {
-          explodedBom.set(childPartId, {
-            partId: childPartId,
-            totalQtyNeeded: extendedQty,
-            level: level + 1,
-          });
-        }
-
-        // Recursively explode child BOMs
-        await explodeLevel(childPartId, extendedQty, level + 1);
-      }
-    };
-
-    await explodeLevel(partId, quantity);
-    return Array.from(explodedBom.values()).sort((a, b) => a.level - b.level);
-  }
-
-  // Inventory Balance Methods
-  async getInventoryBalance(partId: string, locationId?: string): Promise<InventoryBalance | undefined> {
-    const location = locationId || 'MAIN';
-    const [balance] = await db
-      .select()
-      .from(inventoryBalances)
-      .where(and(eq(inventoryBalances.partId, partId), eq(inventoryBalances.locationId, location)));
-    return balance || undefined;
-  }
-
-  async getAllInventoryBalances(params?: { partId?: string; locationId?: string; lowStock?: boolean }): Promise<InventoryBalance[]> {
-    const { partId, locationId, lowStock } = params || {};
-    
-    const conditions = [];
-    
-    if (partId) {
-      conditions.push(eq(inventoryBalances.partId, partId));
-    }
-    
-    if (locationId) {
-      conditions.push(eq(inventoryBalances.locationId, locationId));
-    }
-    
-    if (lowStock) {
-      conditions.push(lte(inventoryBalances.onHandQty, inventoryBalances.safetyStock));
-    }
-    
-    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
-    
-    return await db
-      .select()
-      .from(inventoryBalances)
-      .where(whereClause)
-      .orderBy(inventoryBalances.partId, inventoryBalances.locationId);
-  }
-
-  async updateInventoryBalance(partId: string, locationId: string, data: Partial<InsertInventoryBalance>): Promise<InventoryBalance> {
-    // Try to update existing balance
-    const [existingBalance] = await db
-      .update(inventoryBalances)
-      .set({
-        ...data,
-        updatedAt: new Date(),
-      })
-      .where(and(eq(inventoryBalances.partId, partId), eq(inventoryBalances.locationId, locationId)))
-      .returning();
-
-    if (existingBalance) {
-      return existingBalance;
-    }
-
-    // Create new balance if it doesn't exist
-    const [newBalance] = await db
-      .insert(inventoryBalances)
-      .values({
-        partId,
-        locationId,
-        ...data,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .returning();
-
-    return newBalance;
-  }
-
-  // Vendor Contact Phones CRUD
-  async getContactPhones(contactId: number): Promise<VendorContactPhone[]> {
-    return await db
-      .select()
-      .from(vendorContactPhones)
-      .where(
-        and(
-          eq(vendorContactPhones.contactId, contactId),
-          eq(vendorContactPhones.isActive, true)
-        )
-      )
-      .orderBy(desc(vendorContactPhones.isPrimary), vendorContactPhones.type);
-  }
-
-  async getContactPhone(id: number): Promise<VendorContactPhone | undefined> {
-    const [phone] = await db
-      .select()
-      .from(vendorContactPhones)
-      .where(eq(vendorContactPhones.id, id));
-    return phone || undefined;
-  }
-
-  async createContactPhone(data: InsertVendorContactPhone): Promise<VendorContactPhone> {
-    const [phone] = await db
-      .insert(vendorContactPhones)
-      .values({
-
-        ...data,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .returning();
-
-
-    return newBalance;
-  }
-
-  // Inventory Transaction Methods
-  async getAllInventoryTransactions(params?: { partId?: string; transactionType?: string; dateFrom?: Date; dateTo?: Date; page?: number; limit?: number }): Promise<{ data: InventoryTransaction[]; total: number }> {
-    const { partId, transactionType, dateFrom, dateTo, page = 1, limit = 50 } = params || {};
-    
-    const conditions = [];
-    
-    if (partId) {
-      conditions.push(eq(inventoryTransactions.partId, partId));
-    }
-    
-    if (transactionType) {
-      conditions.push(eq(inventoryTransactions.transactionType, transactionType));
-    }
-    
-    if (dateFrom) {
-      conditions.push(gte(inventoryTransactions.transactionDate, dateFrom));
-    }
-    
-    if (dateTo) {
-      conditions.push(lte(inventoryTransactions.transactionDate, dateTo));
-    }
-    
-    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
-    
-    // Get total count
-    const [totalResult] = await db
-      .select({ count: sql<number>`count(*)` })
-      .from(inventoryTransactions)
-      .where(whereClause);
-    const total = totalResult.count;
-    
-    // Get paginated data
-    const data = await db
-      .select()
-      .from(inventoryTransactions)
-      .where(whereClause)
-      .orderBy(desc(inventoryTransactions.transactionDate))
-      .limit(limit)
-      .offset((page - 1) * limit);
-    
-    return { data, total };
-  }
-
-  async getInventoryTransaction(transactionId: string): Promise<InventoryTransaction | undefined> {
-    const [transaction] = await db
-      .select()
-      .from(inventoryTransactions)
-      .where(eq(inventoryTransactions.transactionId, transactionId));
-    return transaction || undefined;
-  }
-
-  async createInventoryTransaction(data: InsertInventoryTransaction): Promise<InventoryTransaction> {
-    // Generate unique transaction ID
-    const transactionId = `INV-${Date.now()}-${nanoid(8)}`;
-
-    const [transaction] = await db
-      .insert(inventoryTransactions)
-      .values({
-        ...data,
-        transactionId,
-        createdAt: new Date(),
-      })
-      .returning();
-
-    return transaction;
-  }
-
-  async processInventoryTransaction(data: InsertInventoryTransaction): Promise<{ transaction: InventoryTransaction; updatedBalance: InventoryBalance }> {
-    // Create the transaction first
-    const transaction = await this.createInventoryTransaction(data);
-
-    // Update inventory balance based on transaction
-    const currentBalance = await this.getInventoryBalance(transaction.partId, transaction.locationId);
-    
-    let newOnHandQty = (currentBalance?.onHandQty || 0);
-    
-    // Apply quantity change based on transaction type
-    if (['RECEIPT', 'RETURN'].includes(transaction.transactionType)) {
-      newOnHandQty += transaction.quantity;
-    } else if (['ISSUE', 'SCRAP', 'ADJUSTMENT'].includes(transaction.transactionType)) {
-      newOnHandQty -= transaction.quantity;
-    }
-
-    // Calculate available quantity
-    const committedQty = currentBalance?.committedQty || 0;
-    const allocatedQty = currentBalance?.allocatedQty || 0;
-    const availableQty = newOnHandQty - committedQty - allocatedQty;
-
-    const updatedBalance = await this.updateInventoryBalance(transaction.partId, transaction.locationId, {
-      onHandQty: newOnHandQty,
-      availableQty,
-      unitCost: transaction.unitCost > 0 ? transaction.unitCost : currentBalance?.unitCost || 0,
-      totalValue: newOnHandQty * (transaction.unitCost > 0 ? transaction.unitCost : currentBalance?.unitCost || 0),
-      lastTransactionAt: new Date(),
-    });
-
-    return { transaction, updatedBalance };
-  }
-
-  // Progressive Allocation Methods
-  async allocateInventoryToOrder(partId: string, quantity: number, customerOrderId: string): Promise<{ success: boolean; allocated: number; shortage: number }> {
-    const locationId = 'MAIN'; // Default location
-    const balance = await this.getInventoryBalance(partId, locationId);
-    
-    const availableQty = balance?.availableQty || 0;
-    const allocatedQty = Math.min(quantity, availableQty);
-    const shortage = Math.max(0, quantity - availableQty);
-
-    if (allocatedQty > 0) {
-      // Update inventory balance to reflect allocation
-      await this.updateInventoryBalance(partId, locationId, {
-        allocatedQty: (balance?.allocatedQty || 0) + allocatedQty,
-        availableQty: availableQty - allocatedQty,
-      });
-    }
-
-    return {
-      success: shortage === 0,
-      allocated: allocatedQty,
-      shortage,
-    };
-  }
-
-  async commitInventoryFromOrder(partId: string, quantity: number, customerOrderId: string): Promise<void> {
-    const locationId = 'MAIN';
-    const balance = await this.getInventoryBalance(partId, locationId);
-    if (!balance) {
-      throw new Error(`No inventory balance found for part ${partId} at location ${locationId}`);
-    }
-
-    // Move quantity from allocated to committed
-    await this.updateInventoryBalance(partId, locationId, {
-      allocatedQty: Math.max(0, (balance.allocatedQty || 0) - quantity),
-      committedQty: (balance.committedQty || 0) + quantity,
-    });
-  }
-
-  async consumeAllocatedInventory(partId: string, quantity: number, productionOrderId: string): Promise<void> {
-    const locationId = 'MAIN';
-    const balance = await this.getInventoryBalance(partId, locationId);
-    if (!balance) {
-      throw new Error(`No inventory balance found for part ${partId} at location ${locationId}`);
-    }
-
-    // Create consumption transaction
-    await this.createInventoryTransaction({
-      partId,
-      locationId,
-      transactionType: 'ISSUE',
-      quantity,
-      unitCost: balance.unitCost,
-      totalCost: quantity * balance.unitCost,
-      orderId: productionOrderId,
-      allocationStatus: 'CONSUMED',
-      reason: `Consumed for production order ${productionOrderId}`,
-      transactionDate: new Date(),
-    });
-
-    // Update balances directly since we're consuming allocated inventory
-    await this.updateInventoryBalance(partId, locationId, {
-      onHandQty: balance.onHandQty - quantity,
-      allocatedQty: Math.max(0, (balance.allocatedQty || 0) - quantity),
-      totalValue: (balance.onHandQty - quantity) * balance.unitCost,
-      lastTransactionAt: new Date(),
-    });
-  }
-
-  async releaseAllocatedInventory(partId: string, customerOrderId: string): Promise<void> {
-    const locationId = 'MAIN';
-    const balance = await this.getInventoryBalance(partId, locationId);
-    if (!balance) {
-      throw new Error(`No inventory balance found for part ${partId} at location ${locationId}`);
-    }
-
-    // For this simplified implementation, we'll release all allocated inventory for the order
-    // In a real implementation, you'd track specific allocations per order
-    const allocatedQty = balance.allocatedQty || 0;
-    
-    // Release allocation back to available
-    await this.updateInventoryBalance(partId, locationId, {
-      allocatedQty: 0,
-      availableQty: balance.availableQty + allocatedQty,
-    });
-  }
-
-  // MRP Methods
-  async calculateMrpRequirements(scope?: 'ALL' | 'SPECIFIC_PART' | 'SPECIFIC_ORDER', scopeId?: string): Promise<{ calculationId: string; requirementsGenerated: number; shortagesIdentified: number }> {
-    const calculationId = `MRP-${Date.now()}-${nanoid(8)}`;
-    const planningHorizonDays = 90; // Default planning horizon
-    
-    try {
-      let requirementsGenerated = 0;
-      let shortagesIdentified = 0;
-
-      // Determine which parts to process based on scope
-      let partsToProcess: { id: string; type: string }[] = [];
-      
-      if (scope === 'SPECIFIC_PART' && scopeId) {
-        const part = await this.getRobustPart(scopeId);
-        if (part) {
-          partsToProcess = [{ id: part.id, type: part.type }];
-        }
-      } else if (scope === 'SPECIFIC_ORDER' && scopeId) {
-        // Get parts from BOM explosion for specific order
-        const orderParts = await this.explodeBom(scopeId, 1);
-        partsToProcess = orderParts.map(p => ({ id: p.partId, type: 'PURCHASED' })); // Simplified
-      } else {
-        // Default to ALL active parts
-        const activeParts = await db
-          .select({ id: robustParts.id, type: robustParts.type })
-          .from(robustParts)
-          .where(and(eq(robustParts.isActive, true), ne(robustParts.type, 'PHANTOM')));
-        partsToProcess = activeParts;
-      }
-
-      // Clear existing requirements for these parts
-      if (partsToProcess.length > 0) {
-        const partIds = partsToProcess.map(p => p.id);
-        await db.delete(mrpRequirements).where(inArray(mrpRequirements.partId, partIds));
-      }
-
-      // Process each part
-      for (const part of partsToProcess) {
-        // Get current inventory balance
-        const balance = await this.getInventoryBalance(part.id);
-        const onHandQty = balance?.onHandQty || 0;
-        const committedQty = balance?.committedQty || 0;
-        const safetyStock = balance?.safetyStock || 0;
-
-        // Calculate requirements from customer orders (simplified)
-        const customerOrders = await db
-          .select({ quantity: sql<number>`1`, dueDate: allOrders.dueDate })
-          .from(allOrders)
-          .where(and(
-            eq(allOrders.modelId, part.id), // Simplified - assuming direct part to order mapping
-            gte(allOrders.dueDate, new Date()),
-            lte(allOrders.dueDate, new Date(Date.now() + planningHorizonDays * 24 * 60 * 60 * 1000))
-          ));
-
-        for (const order of customerOrders) {
-          const requiredQty = 1; // Simplified
-          const availableQty = onHandQty - committedQty;
-          const shortageQty = Math.max(0, requiredQty - availableQty + safetyStock);
-
-          if (shortageQty > 0) {
-            // Create MRP requirement
-            const requirementId = `MRP-${Date.now()}-${nanoid(8)}`;
-            
-            await db.insert(mrpRequirements).values({
-              requirementId,
-              partId: part.id,
-              requiredQty,
-              availableQty,
-              shortageQty,
-              needDate: order.dueDate,
-              sourceType: 'CUSTOMER_ORDER',
-              priority: 50,
-              status: 'OPEN',
-              createdAt: new Date(),
-            });
-
-            requirementsGenerated++;
-            shortagesIdentified++;
-          }
-        }
-      }
-
-      return {
-        calculationId,
-        requirementsGenerated,
-        shortagesIdentified,
-      };
-    } catch (error) {
-      console.error('Error calculating MRP requirements:', error);
-      throw new Error(`MRP calculation failed: ${(error as Error).message}`);
-    }
-  }
-
-  async getMrpRequirements(params?: { partId?: string; status?: string; needDateFrom?: Date; needDateTo?: Date }): Promise<MrpRequirement[]> {
-    const { partId, status, needDateFrom, needDateTo } = params || {};
-    
-    const conditions = [];
-    
-    if (partId) {
-      conditions.push(eq(mrpRequirements.partId, partId));
-    }
-    
-    if (status) {
-      conditions.push(eq(mrpRequirements.status, status));
-    }
-    
-    if (needDateFrom) {
-      conditions.push(gte(mrpRequirements.needDate, needDateFrom));
-    }
-    
-    if (needDateTo) {
-      conditions.push(lte(mrpRequirements.needDate, needDateTo));
-    }
-
-    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
-
-    return await db
-      .select()
-      .from(mrpRequirements)
-      .where(whereClause)
-      .orderBy(mrpRequirements.needDate, mrpRequirements.priority);
-  }
-
-  async getMrpShortages(): Promise<MrpRequirement[]> {
-    return await db
-      .select()
-      .from(mrpRequirements)
-      .where(and(gt(mrpRequirements.shortageQty, 0), eq(mrpRequirements.status, 'OPEN')))
-      .orderBy(mrpRequirements.needDate, mrpRequirements.priority);
-  }
-
-  async updateMrpRequirement(requirementId: string, data: Partial<InsertMrpRequirement>): Promise<MrpRequirement> {
-    const [requirement] = await db
-      .update(mrpRequirements)
-      .set({
-        ...data,
-        updatedAt: new Date(),
-      })
-      .where(eq(mrpRequirements.requirementId, requirementId))
-      .returning();
-
-    if (!requirement) {
-      throw new Error(`MRP requirement ${requirementId} not found`);
-    }
-
-    return requirement;
-  }
-
-  async closeMrpRequirement(requirementId: string): Promise<void> {
-    await this.updateMrpRequirement(requirementId, {
-      status: 'CLOSED',
-      closedAt: new Date(),
-    });
-  }
-
-  // Outside Processing Methods
-  async getAllOutsideProcessingLocations(): Promise<OutsideProcessingLocation[]> {
-    return await db
-      .select()
-      .from(outsideProcessingLocations)
-      .where(eq(outsideProcessingLocations.isActive, true))
-      .orderBy(outsideProcessingLocations.vendorName);
-  }
-
-  async getOutsideProcessingLocation(locationId: string): Promise<OutsideProcessingLocation | undefined> {
-    const [location] = await db
-      .select()
-      .from(outsideProcessingLocations)
-      .where(eq(outsideProcessingLocations.locationId, locationId));
-    return location || undefined;
-  }
-
-  async createOutsideProcessingLocation(data: InsertOutsideProcessingLocation): Promise<OutsideProcessingLocation> {
-    // Generate location ID if not provided
-    const locationId = data.locationId || `VENDOR_${data.vendorId}_${Date.now()}`;
-
-    const [location] = await db
-      .insert(outsideProcessingLocations)
-      .values({
-        ...data,
-        locationId,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .returning();
-
-    return location;
-  }
-
-  async updateContactPhone(id: number, data: Partial<InsertVendorContactPhone>): Promise<VendorContactPhone> {
-    const [phone] = await db
-      .update(vendorContactPhones)
-      .set({
-        ...data,
-        updatedAt: new Date(),
-      })
-      .where(eq(vendorContactPhones.id, id))
-      .returning();
-
-    if (!phone) {
-      throw new Error(`Contact phone with ID ${id} not found`);
-    }
-    return phone;
-  }
-
-  async deleteContactPhone(id: number): Promise<void> {
-    await db
-      .update(vendorContactPhones)
-      .set({
-        isActive: false,
-        updatedAt: new Date(),
-      })
-      .where(eq(vendorContactPhones.id, id));
-  }
-
-  // Vendor Contact Emails CRUD
-  async getContactEmails(contactId: number): Promise<VendorContactEmail[]> {
-    return await db
-      .select()
-      .from(vendorContactEmails)
-      .where(
-        and(
-          eq(vendorContactEmails.contactId, contactId),
-          eq(vendorContactEmails.isActive, true)
-        )
-      )
-      .orderBy(desc(vendorContactEmails.isPrimary), vendorContactEmails.type);
-  }
-
-  async getContactEmail(id: number): Promise<VendorContactEmail | undefined> {
-    const [email] = await db
-      .select()
-      .from(vendorContactEmails)
-      .where(eq(vendorContactEmails.id, id));
-    return email || undefined;
-  }
-
-  async createContactEmail(data: InsertVendorContactEmail): Promise<VendorContactEmail> {
-    const [email] = await db
-      .insert(vendorContactEmails)
-      .values({
-        ...data,
-
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .returning();
-
-
-    return location;
-  }
-
-  async updateOutsideProcessingLocation(locationId: string, data: Partial<InsertOutsideProcessingLocation>): Promise<OutsideProcessingLocation> {
-    const [location] = await db
-      .update(outsideProcessingLocations)
-
-    return email;
-  }
-
-  async updateContactEmail(id: number, data: Partial<InsertVendorContactEmail>): Promise<VendorContactEmail> {
-    const [email] = await db
-      .update(vendorContactEmails)
-
-      .set({
-        ...data,
-        updatedAt: new Date(),
-      })
-
-      .where(eq(outsideProcessingLocations.locationId, locationId))
-      .returning();
-
-    if (!location) {
-      throw new Error(`Outside processing location ${locationId} not found`);
-    }
-
-    return location;
-  }
-
-  async getAllOutsideProcessingJobs(): Promise<OutsideProcessingJob[]> {
-    return await db
-      .select()
-      .from(outsideProcessingJobs)
-      .orderBy(desc(outsideProcessingJobs.dateShipped));
-  }
-
-  async getOutsideProcessingJob(jobId: string): Promise<OutsideProcessingJob | undefined> {
-    const [job] = await db
-      .select()
-      .from(outsideProcessingJobs)
-      .where(eq(outsideProcessingJobs.jobId, jobId));
-    return job || undefined;
-  }
-
-  async createOutsideProcessingJob(data: InsertOutsideProcessingJob): Promise<OutsideProcessingJob> {
-    // Generate job ID if not provided
-    const jobId = data.jobId || `JOB-${Date.now()}-${nanoid(8)}`;
-
-    const [job] = await db
-      .insert(outsideProcessingJobs)
-      .values({
-        ...data,
-        jobId,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .returning();
-
-    return job;
-  }
-
-  async deleteContactEmail(id: number): Promise<void> {
-    await db
-      .update(vendorContactEmails)
-      .set({
-        isActive: false,
-        updatedAt: new Date(),
-      })
-      .where(eq(vendorContactEmails.id, id));
-  }
-
-  // Vendor Documents CRUD
-  async getVendorDocuments(vendorId: number): Promise<VendorDocument[]> {
-    return await db
-      .select()
-      .from(vendorDocuments)
-      .where(
-        and(
-          eq(vendorDocuments.vendorId, vendorId),
-          eq(vendorDocuments.isActive, true)
-        )
-      )
-      .orderBy(desc(vendorDocuments.createdAt));
-  }
-
-  async getVendorDocument(id: number): Promise<VendorDocument | undefined> {
-    const [document] = await db
-      .select()
-      .from(vendorDocuments)
-      .where(eq(vendorDocuments.id, id));
-    return document || undefined;
-  }
-
-  async createVendorDocument(data: InsertVendorDocument): Promise<VendorDocument> {
-    const [document] = await db
-      .insert(vendorDocuments)
-      .values({
-        ...data,
-
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .returning();
-
-
-    return job;
-  }
-
-  async updateOutsideProcessingJob(jobId: string, data: Partial<InsertOutsideProcessingJob>): Promise<OutsideProcessingJob> {
-    const [job] = await db
-      .update(outsideProcessingJobs)
-
-    return document;
-  }
-
-  async updateVendorDocument(id: number, data: Partial<InsertVendorDocument>): Promise<VendorDocument> {
-    const [document] = await db
-      .update(vendorDocuments)
-
-      .set({
-        ...data,
-        updatedAt: new Date(),
-      })
-
-      .where(eq(outsideProcessingJobs.jobId, jobId))
-      .returning();
-
-    if (!job) {
-      throw new Error(`Outside processing job ${jobId} not found`);
-    }
-
-    return job;
-  }
-
-  async returnPartsFromOutsideProcessing(jobId: string, returnedQty: number, scrapQty: number = 0): Promise<OutsideProcessingJob> {
-    const job = await this.getOutsideProcessingJob(jobId);
-    if (!job) {
-      throw new Error(`Outside processing job ${jobId} not found`);
-    }
-
-    // Update job with return quantities
-    const updatedJob = await this.updateOutsideProcessingJob(jobId, {
-      totalPartsBack: (job.totalPartsBack || 0) + returnedQty,
-      scrapQty: (job.scrapQty || 0) + scrapQty,
-      actualReturn: new Date(),
-      status: 'COMPLETED',
-    });
-
-    // Create inventory transaction for returned parts
-    // Note: This assumes we have part information in the job record
-    // You may need to adjust based on your actual job-to-part relationship
-    
-    return updatedJob;
-  }
-
-  // Vendor Parts Methods
-  async getVendorPartsForPart(partId: string): Promise<VendorPart[]> {
-    return await db
-      .select()
-      .from(vendorParts)
-      .where(and(eq(vendorParts.partId, partId), eq(vendorParts.isActive, true)))
-      .orderBy(desc(vendorParts.isPreferred), vendorParts.unitPrice);
-  }
-
-  async getVendorPartsForVendor(vendorId: string): Promise<VendorPart[]> {
-    return await db
-      .select()
-      .from(vendorParts)
-      .where(and(eq(vendorParts.vendorId, vendorId), eq(vendorParts.isActive, true)))
-      .orderBy(vendorParts.vendorPartNumber);
-  }
-
-  async createVendorPart(data: InsertVendorPart): Promise<VendorPart> {
-    const [vendorPart] = await db
-      .insert(vendorParts)
-
-      .where(eq(vendorDocuments.id, id))
-      .returning();
-
-    if (!document) {
-      throw new Error(`Vendor document with ID ${id} not found`);
-    }
-    return document;
-  }
-
-  async deleteVendorDocument(id: number): Promise<void> {
-    await db
-      .update(vendorDocuments)
-      .set({
-        isActive: false,
-        updatedAt: new Date(),
-      })
-      .where(eq(vendorDocuments.id, id));
-  }
-
-  // Vendor Scoring CRUD
-  async getAllScoringCriteria(): Promise<VendorScoringCriteria[]> {
-    return await db
-      .select()
-      .from(vendorScoringCriteria)
-      .where(eq(vendorScoringCriteria.isActive, true))
-      .orderBy(vendorScoringCriteria.sortOrder, vendorScoringCriteria.category, vendorScoringCriteria.name);
-  }
-
-  async getScoringCriteria(id: number): Promise<VendorScoringCriteria | undefined> {
-    const [criteria] = await db
-      .select()
-      .from(vendorScoringCriteria)
-      .where(eq(vendorScoringCriteria.id, id));
-    return criteria || undefined;
-  }
-
-  async createScoringCriteria(data: InsertVendorScoringCriteria): Promise<VendorScoringCriteria> {
-    const [criteria] = await db
-      .insert(vendorScoringCriteria)
-
-      .values({
-        ...data,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .returning();
-
-
-    return vendorPart;
-  }
-
-  async updateVendorPart(id: number, data: Partial<InsertVendorPart>): Promise<VendorPart> {
-    const [vendorPart] = await db
-      .update(vendorParts)
-
-    return criteria;
-  }
-
-  async updateScoringCriteria(id: number, data: Partial<InsertVendorScoringCriteria>): Promise<VendorScoringCriteria> {
-    const [criteria] = await db
-      .update(vendorScoringCriteria)
-
-      .set({
-        ...data,
-        updatedAt: new Date(),
-      })
-
-      .where(eq(vendorParts.id, id))
-      .returning();
-
-    if (!vendorPart) {
-      throw new Error(`Vendor part with ID ${id} not found`);
-    }
-
-    return vendorPart;
-  }
-
-  async deleteVendorPart(id: number): Promise<void> {
-    // Soft delete by setting isActive to false
-    await db
-      .update(vendorParts)
-
-      .where(eq(vendorScoringCriteria.id, id))
-      .returning();
-
-    if (!criteria) {
-      throw new Error(`Scoring criteria with ID ${id} not found`);
-    }
-    return criteria;
-  }
-
-  async deleteScoringCriteria(id: number): Promise<void> {
-    await db
-      .update(vendorScoringCriteria)
-
-      .set({
-        isActive: false,
-        updatedAt: new Date(),
-      })
-
-      .where(eq(vendorParts.id, id));
-  }
-
-  async getPreferredVendorForPart(partId: string): Promise<VendorPart | undefined> {
-    const [preferredVendor] = await db
-      .select()
-      .from(vendorParts)
-      .where(and(
-        eq(vendorParts.partId, partId),
-        eq(vendorParts.isPreferred, true),
-        eq(vendorParts.isActive, true)
-      ))
-      .orderBy(vendorParts.unitPrice)
-      .limit(1);
-
-    return preferredVendor || undefined;
-  }
-
-  async generatePurchaseOrderSuggestions(): Promise<Array<{ partId: string; vendorId: string; suggestedQty: number; unitPrice: number; totalPrice: number }>> {
-    // Get all shortages from MRP
-    const shortages = await this.getMrpShortages();
-    const suggestions: Array<{ partId: string; vendorId: string; suggestedQty: number; unitPrice: number; totalPrice: number }> = [];
-
-    for (const shortage of shortages) {
-      // Find preferred vendor for this part
-      const preferredVendor = await this.getPreferredVendorForPart(shortage.partId);
-      
-      if (preferredVendor) {
-        const suggestedQty = Math.max(shortage.shortageQty, preferredVendor.minOrderQty || 1);
-        const totalPrice = suggestedQty * preferredVendor.unitPrice;
-
-        suggestions.push({
-          partId: shortage.partId,
-          vendorId: preferredVendor.vendorId,
-          suggestedQty,
-          unitPrice: preferredVendor.unitPrice,
-          totalPrice,
-        });
-      }
-    }
-
-    return suggestions;
-  }
-
-  async getMrpCalculationHistory(limit?: number): Promise<MrpCalculationHistory[]> {
-    return await db
-      .select()
-      .from(mrpCalculationHistory)
-      .orderBy(desc(mrpCalculationHistory.calculationDate))
-      .limit(limit || 50);
-  }
-
-  // Enhanced Inventory Management & MRP Methods Implementation
-  
-  // Allocation Detail Management - Demand-to-Supply Pegging
-  async getAllAllocationDetails(params?: { partId?: string; demandOrderId?: string; supplyOrderId?: string; status?: string }): Promise<AllocationDetail[]> {
-    // Mock implementation since allocationDetails table structure is not fully defined
-    // In a real implementation, this would query the allocationDetails table
-    return [];
-  }
-
-  async getAllocationDetail(allocationId: string): Promise<AllocationDetail | undefined> {
-    // Mock implementation
-    return undefined;
-  }
-
-  async createAllocationDetail(data: InsertAllocationDetail): Promise<AllocationDetail> {
-    // Mock implementation
-    const allocationDetail: AllocationDetail = {
-      id: `ALLOC-${Date.now()}-${nanoid(8)}`,
-      ...data,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    } as AllocationDetail;
-    
-    return allocationDetail;
-  }
-
-  async updateAllocationDetail(allocationId: string, data: Partial<InsertAllocationDetail>): Promise<AllocationDetail> {
-    throw new Error('AllocationDetail update not implemented');
-  }
-
-  async deleteAllocationDetail(allocationId: string): Promise<void> {
-    // Mock implementation
-  }
-
-  async consumeAllocation(allocationId: string, consumedQty: number, consumedBy: string): Promise<AllocationDetail> {
-    throw new Error('Consume allocation not implemented');
-  }
-
-  async releaseAllocation(allocationId: string, releasedBy: string): Promise<AllocationDetail> {
-    throw new Error('Release allocation not implemented');
-  }
-
-  async lockAllocation(allocationId: string, lockedBy: string): Promise<AllocationDetail> {
-    throw new Error('Lock allocation not implemented');
-  }
-
-  async unlockAllocation(allocationId: string, unlockedBy: string): Promise<AllocationDetail> {
-    throw new Error('Unlock allocation not implemented');
-  }
-
-  async getAllocationsByDemand(demandOrderId: string): Promise<AllocationDetail[]> {
-    return [];
-  }
-
-  async getAllocationsBySupply(supplyOrderId: string): Promise<AllocationDetail[]> {
-    return [];
-  }
-
-  // Enhanced MRP Service Interface
-  async runFullMrp(parameters?: { planningHorizonDays?: number; includeForecast?: boolean; includeOnHand?: boolean }): Promise<{ calculationId: string; summary: MrpRunSummary }> {
-    const { planningHorizonDays = 90, includeForecast = false, includeOnHand = true } = parameters || {};
-    
-    const startTime = new Date();
-    const result = await this.calculateMrpRequirements('ALL');
-    const endTime = new Date();
-    
-    const summary: MrpRunSummary = {
-      totalPartsProcessed: 0, // Would be calculated in real implementation
-      requirementsGenerated: result.requirementsGenerated,
-      shortagesIdentified: result.shortagesIdentified,
-      poSuggestionsCreated: 0,
-      allocationsCreated: 0,
-      startTime,
-      endTime,
-      duration: (endTime.getTime() - startTime.getTime()) / 1000,
-    };
-
-    return {
-      calculationId: result.calculationId,
-      summary,
-    };
-  }
-
-  async runIncrementalMrp(changedOrderIds: string[]): Promise<{ calculationId: string; summary: MrpRunSummary }> {
-    // Simplified implementation - run MRP for all parts
-    return await this.runFullMrp();
-  }
-
-  async performMrpNetting(partId: string, requirementDate: Date): Promise<{ netRequirement: number; availableSupply: number; shortage: number }> {
-    const balance = await this.getInventoryBalance(partId);
-    const availableSupply = (balance?.onHandQty || 0) - (balance?.committedQty || 0) - (balance?.allocatedQty || 0);
-    
-    // Get requirements for this part around the date
-    const requirements = await this.getMrpRequirements({
-      partId,
-      needDateFrom: new Date(requirementDate.getTime() - 24 * 60 * 60 * 1000), // 1 day before
-      needDateTo: new Date(requirementDate.getTime() + 24 * 60 * 60 * 1000), // 1 day after
-    });
-
-    const totalRequirement = requirements.reduce((sum, req) => sum + req.requiredQty, 0);
-    const netRequirement = Math.max(0, totalRequirement - availableSupply);
-    const shortage = netRequirement;
-
-    return { netRequirement, availableSupply, shortage };
-  }
-
-  async createPeggedAllocations(mrpRequirementId: string, supplyOrderId: string, quantity: number): Promise<AllocationDetail[]> {
-    // Mock implementation
-    return [];
-  }
-
-  async getMrpPeggingDetails(partId: string): Promise<MrpPeggingDetail[]> {
-    // Mock implementation
-    return [];
-  }
-
-  async optimizeLotSizes(partId?: string): Promise<{ partId: string; originalLotSize: number; optimizedLotSize: number; savings: number }[]> {
-    // Mock implementation
-    return [];
-  }
-
-  // Vendor Price Breaks Management
-  async getAllVendorPriceBreaks(vendorPartId?: number): Promise<VendorPriceBreak[]> {
-    // Mock implementation - VendorPriceBreak table structure not fully defined
-    return [];
-  }
-
-  async getVendorPriceBreak(id: number): Promise<VendorPriceBreak | undefined> {
-    return undefined;
-  }
-
-  async createVendorPriceBreak(data: InsertVendorPriceBreak): Promise<VendorPriceBreak> {
-    throw new Error('VendorPriceBreak creation not implemented');
-  }
-
-  async updateVendorPriceBreak(id: number, data: Partial<InsertVendorPriceBreak>): Promise<VendorPriceBreak> {
-    throw new Error('VendorPriceBreak update not implemented');
-  }
-
-  async deleteVendorPriceBreak(id: number): Promise<void> {
-    // Mock implementation
-  }
-
-  async getBestPriceForQuantity(vendorPartId: number, quantity: number): Promise<{ unitPrice: number; totalPrice: number; priceBreak?: VendorPriceBreak }> {
-    // Mock implementation
-    const vendorPart = await db.select().from(vendorParts).where(eq(vendorParts.id, vendorPartId)).limit(1);
-    
-    if (vendorPart.length === 0) {
-      throw new Error(`Vendor part ${vendorPartId} not found`);
-    }
-
-    const unitPrice = vendorPart[0].unitPrice;
-    const totalPrice = unitPrice * quantity;
-
-    return { unitPrice, totalPrice };
-  }
-
-  // Enhanced Vendor Selection
-  async getPreferredVendorsForPart(partId: string, requiredQty: number): Promise<VendorSelectionResult[]> {
-    const vendorPartsForPart = await this.getVendorPartsForPart(partId);
-    
-    const results: VendorSelectionResult[] = [];
-    
-    for (const vendorPart of vendorPartsForPart) {
-      const pricing = await this.getBestPriceForQuantity(vendorPart.id, requiredQty);
-      
-      results.push({
-        vendorPart,
-        unitPrice: pricing.unitPrice,
-        totalPrice: pricing.totalPrice,
-        leadTimeDays: vendorPart.leadTimeDays || 7,
-        qualityScore: vendorPart.qualityRating || 5,
-        deliveryScore: vendorPart.deliveryRating || 5,
-        overallScore: (vendorPart.qualityRating || 5) * (vendorPart.deliveryRating || 5) / 25, // Normalized 0-1
-        isPreferred: vendorPart.isPreferred || false,
-        priceBreak: pricing.priceBreak,
-      });
-    }
-
-    return results.sort((a, b) => b.overallScore - a.overallScore);
-  }
-
-  async calculateVendorScore(vendorPartId: number, evaluationCriteria: VendorEvaluationCriteria): Promise<number> {
-    const vendorPart = await db.select().from(vendorParts).where(eq(vendorParts.id, vendorPartId)).limit(1);
-    
-    if (vendorPart.length === 0) {
-      throw new Error(`Vendor part ${vendorPartId} not found`);
-    }
-
-    const part = vendorPart[0];
-    
-    // Normalize scores (assuming ratings are 1-5)
-    const qualityScore = (part.qualityRating || 5) / 5;
-    const deliveryScore = (part.deliveryRating || 5) / 5;
-    const priceScore = 1 / (part.unitPrice || 1); // Lower price = higher score
-    const preferenceScore = part.isPreferred ? 1 : 0.5;
-    const leadTimeScore = 1 / Math.max(1, part.leadTimeDays || 7); // Shorter lead time = higher score
-
-    // Calculate weighted score
-    const totalScore = 
-      (qualityScore * evaluationCriteria.qualityWeight) +
-      (deliveryScore * evaluationCriteria.deliveryWeight) +
-      (priceScore * evaluationCriteria.priceWeight) +
-      (preferenceScore * evaluationCriteria.preferenceWeight) +
-      (leadTimeScore * evaluationCriteria.leadTimeWeight);
-
-    // Normalize to 0-100
-    const totalWeight = Object.values(evaluationCriteria).reduce((sum, weight) => sum + weight, 0);
-    return (totalScore / totalWeight) * 100;
-  }
-
-  // Outside Processing Batch Management
-  async getAllOutsideProcessingBatches(params?: { jobId?: string; status?: string; partId?: string }): Promise<OutsideProcessingBatch[]> {
-    // Mock implementation - OutsideProcessingBatch table structure not fully defined
-    return [];
-  }
-
-  async getOutsideProcessingBatch(batchId: string): Promise<OutsideProcessingBatch | undefined> {
-    return undefined;
-  }
-
-  async createOutsideProcessingBatch(data: InsertOutsideProcessingBatch): Promise<OutsideProcessingBatch> {
-    throw new Error('OutsideProcessingBatch creation not implemented');
-  }
-
-  async updateOutsideProcessingBatch(batchId: string, data: Partial<InsertOutsideProcessingBatch>): Promise<OutsideProcessingBatch> {
-    throw new Error('OutsideProcessingBatch update not implemented');
-  }
-
-  async deleteOutsideProcessingBatch(batchId: string): Promise<void> {
-    // Mock implementation
-  }
-
-  async shipBatch(batchId: string, shippedQty: number, packingSlipNumber?: string): Promise<OutsideProcessingBatch> {
-    throw new Error('Ship batch not implemented');
-  }
-
-  async receivePartialBatch(batchId: string, receivedQty: number, scrapQty?: number, notes?: string): Promise<OutsideProcessingBatch> {
-    throw new Error('Receive partial batch not implemented');
-  }
-
-  async completeBatchReceipt(batchId: string): Promise<OutsideProcessingBatch> {
-    throw new Error('Complete batch receipt not implemented');
-  }
-
-  // MRP Planning Parameters
-  async getAllMrpPlanningParameters(partId?: string): Promise<MrpPlanningParameters[]> {
-    const conditions = [];
-    
-    if (partId) {
-      conditions.push(eq(mrpPlanningParameters.partId, partId));
-    }
-    
-    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
-    
-    return await db
-      .select()
-      .from(mrpPlanningParameters)
-      .where(whereClause)
-      .orderBy(mrpPlanningParameters.effectiveDate);
-  }
-
-  async getMrpPlanningParameters(parameterId: string): Promise<MrpPlanningParameters | undefined> {
-    const [parameters] = await db
-      .select()
-      .from(mrpPlanningParameters)
-      .where(eq(mrpPlanningParameters.parameterId, parameterId));
-    return parameters || undefined;
-  }
-
-  async createMrpPlanningParameters(data: InsertMrpPlanningParameters): Promise<MrpPlanningParameters> {
-    const parameterId = `PARAM-${Date.now()}-${nanoid(8)}`;
-    
-    const [parameters] = await db
-      .insert(mrpPlanningParameters)
-      .values({
-        ...data,
-        parameterId,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .returning();
-
-    return parameters;
-  }
-
-  async getVendorScores(vendorId: number): Promise<VendorScore[]> {
-    return await db
-      .select()
-      .from(vendorScores)
-      .where(eq(vendorScores.vendorId, vendorId))
-      .orderBy(desc(vendorScores.scoredAt));
-  }
-
-  async getVendorScore(id: number): Promise<VendorScore | undefined> {
-    const [score] = await db
-      .select()
-      .from(vendorScores)
-      .where(eq(vendorScores.id, id));
-    return score || undefined;
-  }
-
-  async createVendorScore(data: InsertVendorScore): Promise<VendorScore> {
-    const [score] = await db
-      .insert(vendorScores)
-      .values({
-        ...data,
-        scoredAt: data.scoredAt ? new Date(data.scoredAt) : new Date(),
-
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .returning();
-    
-
-    return parameters;
-  }
-
-  async updateMrpPlanningParameters(parameterId: string, data: Partial<InsertMrpPlanningParameters>): Promise<MrpPlanningParameters> {
-    const [parameters] = await db
-      .update(mrpPlanningParameters)
-
-    // Update vendor total score after creating new score
-    await this.calculateVendorTotalScore(data.vendorId);
-    
-    return score;
-  }
-
-  async updateVendorScore(id: number, data: Partial<InsertVendorScore>): Promise<VendorScore> {
-    const [score] = await db
-      .update(vendorScores)
-
-      .set({
-        ...data,
-        updatedAt: new Date(),
-      })
-
-      .where(eq(mrpPlanningParameters.parameterId, parameterId))
-      .returning();
-
-    if (!parameters) {
-      throw new Error(`MRP planning parameters ${parameterId} not found`);
-    }
-
-    return parameters;
-  }
-
-  async deleteMrpPlanningParameters(parameterId: string): Promise<void> {
-    await db.delete(mrpPlanningParameters).where(eq(mrpPlanningParameters.parameterId, parameterId));
-  }
-
-  // Atomicity Protection Methods
-  async withInventoryTransaction<T>(operation: (trx: any) => Promise<T>): Promise<T> {
-    // This would use Drizzle transactions in a real implementation
-    // For now, just execute the operation without transaction protection
-    return await operation(db);
-  }
-
-  async checkInventoryAvailability(partId: string, locationId: string, requiredQty: number): Promise<{ available: boolean; shortfall: number }> {
-    const balance = await this.getInventoryBalance(partId, locationId);
-    const availableQty = balance?.availableQty || 0;
-    
-    return {
-      available: availableQty >= requiredQty,
-      shortfall: Math.max(0, requiredQty - availableQty),
-    };
-  }
-
-  async reserveInventoryWithLock(partId: string, locationId: string, quantity: number, reservedBy: string): Promise<{ success: boolean; allocationId?: string; error?: string }> {
-    try {
-      const availability = await this.checkInventoryAvailability(partId, locationId, quantity);
-      
-      if (!availability.available) {
-        return {
-          success: false,
-          error: `Insufficient inventory. Available: ${(await this.getInventoryBalance(partId, locationId))?.availableQty || 0}, Required: ${quantity}`,
-        };
-      }
-
-      const allocationResult = await this.allocateInventoryToOrder(partId, quantity, reservedBy);
-      
-      return {
-        success: allocationResult.success,
-        allocationId: `ALLOC-${Date.now()}-${nanoid(8)}`,
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: (error as Error).message,
-      };
-    }
-  }
-
-  async validateAllocationConsistency(partId: string): Promise<{ isConsistent: boolean; discrepancies: AllocationDiscrepancy[] }> {
-    const balance = await this.getInventoryBalance(partId, 'MAIN');
-    const discrepancies: AllocationDiscrepancy[] = [];
-    
-    if (!balance) {
-      return { isConsistent: true, discrepancies: [] };
-    }
-
-    // Check for negative balances
-    if (balance.onHandQty < 0) {
-      discrepancies.push({
-        partId,
-        locationId: 'MAIN',
-        discrepancyType: 'NEGATIVE_BALANCE',
-        expectedValue: 0,
-        actualValue: balance.onHandQty,
-        difference: Math.abs(balance.onHandQty),
-        description: 'On-hand quantity is negative',
-      });
-    }
-
-    // Check allocation math
-    const calculatedAvailable = balance.onHandQty - balance.committedQty - balance.allocatedQty;
-    if (Math.abs(calculatedAvailable - balance.availableQty) > 0.001) { // Allow for floating point precision
-      discrepancies.push({
-        partId,
-        locationId: 'MAIN',
-        discrepancyType: 'OVER_ALLOCATION',
-        expectedValue: calculatedAvailable,
-        actualValue: balance.availableQty,
-        difference: Math.abs(calculatedAvailable - balance.availableQty),
-        description: 'Available quantity calculation mismatch',
-      });
-    }
-
-    return {
-      isConsistent: discrepancies.length === 0,
-      discrepancies,
-    };
-  }
-
-  async reconcileInventoryBalances(partId?: string): Promise<{ partId: string; balanceBefore: number; balanceAfter: number; adjustmentMade: boolean }[]> {
-    const results: { partId: string; balanceBefore: number; balanceAfter: number; adjustmentMade: boolean }[] = [];
-    
-    // Get all balances or just the specific part
-    const conditions = [];
-    if (partId) {
-      conditions.push(eq(inventoryBalances.partId, partId));
-    }
-    
-    const balances = await db
-      .select()
-      .from(inventoryBalances)
-      .where(conditions.length > 0 ? and(...conditions) : undefined);
-
-    for (const balance of balances) {
-      const balanceBefore = balance.onHandQty;
-      
-      // Recalculate available quantity
-      const calculatedAvailable = balance.onHandQty - balance.committedQty - balance.allocatedQty;
-      
-      let adjustmentMade = false;
-      let balanceAfter = balanceBefore;
-      
-      if (Math.abs(calculatedAvailable - balance.availableQty) > 0.001) {
-        await this.updateInventoryBalance(balance.partId, balance.locationId, {
-          availableQty: calculatedAvailable,
-        });
-        adjustmentMade = true;
-        balanceAfter = balanceBefore; // On-hand quantity didn't change in this reconciliation
-      }
-
-      results.push({
-        partId: balance.partId,
-        balanceBefore,
-        balanceAfter,
-        adjustmentMade,
-      });
-    }
-
-    return results;
-  }
-
 }
-
-// Enhanced MRP Types for Storage Interface
-export interface MrpRunSummary {
-  totalPartsProcessed: number;
-  requirementsGenerated: number;
-  shortagesIdentified: number;
-  poSuggestionsCreated: number;
-  allocationsCreated: number;
-  startTime: Date;
-  endTime: Date;
-  duration: number; // in seconds
-}
-
-export interface MrpPeggingDetail {
-  partId: string;
-  demandOrderId: string;
-  demandCustomerId?: string;
-  demandDueDate: Date;
-  demandQty: number;
-  supplyType: string;
-  supplyOrderId?: string;
-  supplyVendorId?: string;
-  supplyAvailableDate?: Date;
-  supplyQty: number;
-  allocationId: string;
-  peggedQty: number;
-}
-
-export interface VendorSelectionResult {
-  vendorPart: VendorPart;
-  priceBreak?: VendorPriceBreak;
-  unitPrice: number;
-  totalPrice: number;
-  leadTimeDays: number;
-  qualityScore: number;
-  deliveryScore: number;
-  overallScore: number;
-  isPreferred: boolean;
-}
-
-export interface VendorEvaluationCriteria {
-  priceWeight: number; // 0-1
-  qualityWeight: number; // 0-1
-  deliveryWeight: number; // 0-1
-  preferenceWeight: number; // 0-1
-  leadTimeWeight: number; // 0-1
-}
-
-export interface AllocationDiscrepancy {
-  partId: string;
-  locationId: string;
-  discrepancyType: 'OVER_ALLOCATION' | 'UNDER_ALLOCATION' | 'NEGATIVE_BALANCE' | 'ORPHANED_ALLOCATION';
-  expectedValue: number;
-  actualValue: number;
-  difference: number;
-  description: string;
-}
-
-// End of interfaces and types
 
 export const storage = new DatabaseStorage();

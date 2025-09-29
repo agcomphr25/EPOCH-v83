@@ -7,21 +7,18 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { CheckCircle, XCircle, Clock, Plus, FileText, Settings, Edit, Trash2, Wrench } from 'lucide-react';
+import { CheckCircle, XCircle, Clock, Plus, FileText, Settings, Edit, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { insertQcSubmissionSchema } from '@shared/schema';
 import { z } from 'zod';
 import type { QcDefinition, QcSubmission } from '@shared/schema';
-import AccessoriesQCChecklist from '@/components/AccessoriesQCChecklist';
 
 export default function QCManager() {
   const [activeTab, setActiveTab] = useState("submissions");
-  const [selectedOrderId, setSelectedOrderId] = useState<string>('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingSubmission, setEditingSubmission] = useState<QcSubmission | null>(null);
   const { toast } = useToast();
@@ -302,9 +299,8 @@ export default function QCManager() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="submissions">QC Submissions</TabsTrigger>
-          <TabsTrigger value="accessories">Accessories QC</TabsTrigger>
           <TabsTrigger value="definitions">QC Definitions</TabsTrigger>
           <TabsTrigger value="analytics">Analytics</TabsTrigger>
         </TabsList>
@@ -385,43 +381,6 @@ export default function QCManager() {
                   ))}
                 </div>
               )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="accessories" className="mt-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Wrench className="h-5 w-5" />
-                Accessories QC Checklist
-              </CardTitle>
-              <CardDescription>
-                Quality control checklist for accessories with extra charges
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="order-id-input">Order ID</Label>
-                  <Input
-                    id="order-id-input"
-                    data-testid="input-order-id"
-                    placeholder="Enter order ID (e.g., AG001, EH233)"
-                    value={selectedOrderId}
-                    onChange={(e) => setSelectedOrderId(e.target.value)}
-                  />
-                </div>
-                {selectedOrderId && (
-                  <AccessoriesQCChecklist
-                    orderId={selectedOrderId}
-                    onSubmit={(data) => {
-                      toast({ title: 'Accessories QC completed successfully' });
-                      setActiveTab('submissions'); // Switch back to submissions tab
-                    }}
-                  />
-                )}
-              </div>
             </CardContent>
           </Card>
         </TabsContent>

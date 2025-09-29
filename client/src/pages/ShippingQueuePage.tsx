@@ -55,12 +55,7 @@ export default function ShippingQueuePage() {
   
   // Get all orders from production pipeline with payment status
   const { data: allOrders = [] } = useQuery({
-    queryKey: ['/api/orders/all'],
-  });
-
-  // Get shipping-ready orders directly (this returns all shipping-related orders - 298 total)
-  const { data: shippingReadyOrders = [] } = useQuery({
-    queryKey: ['/api/shipping/ready-for-shipping'],
+    queryKey: ['/api/orders/with-payment-status'],
   });
 
   // Fetch all kickbacks to determine which orders have kickbacks
@@ -138,7 +133,7 @@ export default function ShippingQueuePage() {
         description: `Order ${orderId} has been marked as fulfilled and moved to shipping management`,
       });
       // Invalidate and refetch orders to update the UI
-      queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
       queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
       setSelectedCard(null);
       setSelectedOrders([]);
@@ -152,17 +147,16 @@ export default function ShippingQueuePage() {
     }
   });
 
-  // Get orders in Shipping department only (not all shipping-related orders)
+  // Get orders in Shipping department, categorized by due date
   const shippingOrders = useMemo(() => {
     const orders = allOrders as any[];
-    
-    // Filter to only orders specifically in "Shipping" department
-    const shippingDeptOrders = orders.filter((order: any) => 
-      order.currentDepartment === 'Shipping'
+    const filteredOrders = orders.filter((order: any) => 
+      order.currentDepartment === 'Shipping' || 
+      (order.department === 'Shipping' && order.status === 'IN_PROGRESS')
     );
     
     // Sort by due date - most urgent first
-    return shippingDeptOrders.sort((a: any, b: any) => {
+    return filteredOrders.sort((a: any, b: any) => {
       const dateA = a.dueDate ? new Date(a.dueDate).getTime() : 0;
       const dateB = b.dueDate ? new Date(b.dueDate).getTime() : 0;
       return dateA - dateB; // Earliest due date first (most urgent)
@@ -221,8 +215,8 @@ export default function ShippingQueuePage() {
   const shippingQCCount = useMemo(() => {
     const orders = allOrders as any[];
     return orders.filter((order: any) => 
-      order.currentDepartment === 'Shipping QC' || 
-      (order.department === 'Shipping QC' && order.status === 'IN_PROGRESS')
+      order.currentDepartment === 'QC' || 
+      (order.department === 'QC' && order.status === 'IN_PROGRESS')
     ).length;
   }, [allOrders]);
 
@@ -238,10 +232,15 @@ export default function ShippingQueuePage() {
 
   // Get unique customer IDs from shipping orders for address lookup (including alt ship-to customers)
   const uniqueCustomerIds = useMemo(() => {
-    const orders = shippingReadyOrders as any[];
+    const orders = allOrders as any[];
+    const shippingOrdersList = orders.filter((order: any) => 
+      order.currentDepartment === 'Shipping' || 
+      (order.department === 'Shipping' && order.status === 'IN_PROGRESS')
+    );
+    
     const customerIds = new Set<string>();
     
-    orders.forEach(order => {
+    shippingOrdersList.forEach(order => {
       // Add main customer ID
       if (order.customerId) {
         customerIds.add(order.customerId);
@@ -253,7 +252,7 @@ export default function ShippingQueuePage() {
     });
     
     return Array.from(customerIds);
-  }, [shippingReadyOrders]);
+  }, [allOrders]);
 
   // Fetch customer addresses for all shipping orders at once
   const { data: customerAddressesMap = {} } = useQuery({
@@ -289,7 +288,6 @@ export default function ShippingQueuePage() {
   };
 
   const getCustomerInfo = (customerId: string) => {
-    if (!customerId) return null;
     const customerList = customers as any[];
     return customerList.find((c: any) => c.id.toString() === customerId.toString());
   };
@@ -1210,23 +1208,6 @@ export default function ShippingQueuePage() {
                   
                   {/* Shipping Actions for Selected Order */}
                   <ShippingActions orderId={selectedCard || ''} orderData={getSelectedOrder()} />
-                  
-                  {/* NEW: Advanced UPS Label Creator with Rate Shopping */}
-                  <div className="mt-4 p-4 border-2 border-blue-300 bg-blue-50 rounded-lg">
-                    <div className="flex items-center justify-between mb-2">
-                      <h3 className="text-lg font-semibold text-blue-800">🚚 Advanced Shipping with Rate Shopping</h3>
-                    </div>
-                    <p className="text-sm text-blue-600 mb-3">Get rates from multiple shipping services and create labels with the best price!</p>
-                    <Button
-                      onClick={() => {
-                        setSelectedOrderId(selectedCard);
-                        setShowLabelCreator(true);
-                      }}
-                      className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 text-lg"
-                    >
-                      💰 CREATE LABEL WITH RATE SHOPPING
-                    </Button>
-                  </div>
                 </div>
               ) : (
                 <div className="text-center py-8 text-gray-500">
@@ -1239,16 +1220,18 @@ export default function ShippingQueuePage() {
         </div>
       </div>
 
-      {/* UPS Label Creator Dialog - Always rendered */}
-      <UPSLabelCreator
-        orderId={getSelectedOrder()?.orderId || selectedCard || ''}
-        isOpen={showLabelCreator}
-        onClose={() => {
-          setShowLabelCreator(false);
-          setSelectedOrderId(null);
-        }}
-        onSuccess={handleLabelSuccess}
-      />
+      {/* UPS Label Creator Dialog */}
+      {showLabelCreator && selectedOrderId && (
+        <UPSLabelCreator
+          orderId={selectedOrderId || ''}
+          isOpen={showLabelCreator}
+          onClose={() => {
+            setShowLabelCreator(false);
+            setSelectedOrderId(null);
+          }}
+          onSuccess={handleLabelSuccess}
+        />
+      )}
 
       {/* Working Shipping Details Modal - DEBUG VERSION */}
       {showShippingDialog && (

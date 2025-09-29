@@ -327,10 +327,10 @@ router.delete('/customers/:id', async (req: Request, res: Response) => {
   }
 });
 
-// Address autocomplete route using UPS Address Validation
+// Address autocomplete route using SmartyStreets Address Validation
 router.post('/address-autocomplete-bypass', async (req: Request, res: Response) => {
   try {
-    console.log('🔧 UPS ADDRESS AUTOCOMPLETE CALLED');
+    console.log('🔧 SMARTYSTREETS ADDRESS AUTOCOMPLETE CALLED');
     console.log('🔧 Request body:', req.body);
     
     const { search, getZipCode } = req.body;
@@ -340,32 +340,30 @@ router.post('/address-autocomplete-bypass', async (req: Request, res: Response) 
       return res.status(400).json({ error: "Search parameter is required" });
     }
     
-    // Check if we have UPS credentials
-    const upsClientId = process.env.UPS_CLIENT_ID;
-    const upsClientSecret = process.env.UPS_CLIENT_SECRET;
-    const upsAccountNumber = process.env.UPS_ACCOUNT_NUMBER;
+    // Check if we have SmartyStreets credentials
+    const smartyAuthId = process.env.SMARTYSTREETS_AUTH_ID;
+    const smartyAuthToken = process.env.SMARTYSTREETS_AUTH_TOKEN;
     
-    console.log('🔧 UPS credentials check:', { 
-      hasClientId: !!upsClientId, 
-      hasClientSecret: !!upsClientSecret,
-      hasAccountNumber: !!upsAccountNumber
+    console.log('🔧 SmartyStreets credentials check:', { 
+      hasAuthId: !!smartyAuthId, 
+      hasAuthToken: !!smartyAuthToken
     });
     
-    if (!upsClientId || !upsClientSecret || !upsAccountNumber) {
-      console.log('🔧 Missing UPS credentials');
+    if (!smartyAuthId || !smartyAuthToken) {
+      console.log('🔧 Missing SmartyStreets credentials');
       return res.status(500).json({ 
-        error: "UPS credentials not configured" 
+        error: "SmartyStreets credentials not configured" 
       });
     }
     
-    // Import UPS address validation utility
-    const { validateAddressWithUPS, getUPSAddressAutocomplete } = await import('../utils/upsAddressValidation');
+    // Import SmartyStreets address validation utility
+    const { getSmartyStreetsAutocomplete, validateAddressWithSmartyStreets } = await import('../utils/smartyStreetsValidation');
     
-    // If getZipCode is true and we have a complete address, use UPS validation
+    // If getZipCode is true and we have a complete address, use SmartyStreets validation
     if (getZipCode && search.includes(',')) {
-      console.log('🔧 Using UPS Address Validation for ZIP code lookup');
+      console.log('🔧 Using SmartyStreets Address Validation for ZIP code lookup');
       
-      // Parse the complete address for UPS validation
+      // Parse the complete address for SmartyStreets validation
       const addressParts = search.split(', ');
       if (addressParts.length >= 2) {
         const street = addressParts[0];
@@ -381,16 +379,16 @@ router.post('/address-autocomplete-bypass', async (req: Request, res: Response) 
           city = cityStateParts.join(' '); // Rest is city
         }
         
-        console.log('🔧 UPS Address Validation params:', { street, city, state });
+        console.log('🔧 SmartyStreets Address Validation params:', { street, city, state });
         
         try {
-          const validationResult = await validateAddressWithUPS({
+          const validationResult = await validateAddressWithSmartyStreets({
             street,
             city,
             state
           });
           
-          console.log('🔧 UPS Address Validation response:', validationResult);
+          console.log('🔧 SmartyStreets Address Validation response:', validationResult);
           
           if (validationResult.isValid && validationResult.suggestions.length > 0) {
             const result = validationResult.suggestions[0];
@@ -406,12 +404,12 @@ router.post('/address-autocomplete-bypass', async (req: Request, res: Response) 
             console.log('🔧 Returning full address with ZIP:', fullAddress);
             return res.json({ fullAddress: fullAddress });
           } else {
-            console.log('🔧 UPS validation returned no valid results, falling back to autocomplete');
+            console.log('🔧 SmartyStreets validation returned no valid results, falling back to autocomplete');
           }
         } catch (validationError) {
-          console.log('🔧 UPS validation error:', validationError);
+          console.log('🔧 SmartyStreets validation error:', validationError);
           
-          // If UPS validation fails, try to extract ZIP from the search text
+          // If SmartyStreets validation fails, try to extract ZIP from the search text
           const zipMatch = search.match(/\b(\d{5}(?:-\d{4})?)\b/);
           if (zipMatch) {
             console.log('🔧 Extracted ZIP code from search text:', zipMatch[1]);
@@ -430,162 +428,22 @@ router.post('/address-autocomplete-bypass', async (req: Request, res: Response) 
       }
     }
     
-    // Address autocomplete with smart location detection
-    console.log('🔧 UPS address autocomplete for:', search);
+    // SmartyStreets address autocomplete
+    console.log('🔧 SmartyStreets address autocomplete for:', search);
     
     try {
-      let upsSuggestions = [];
+      // Use SmartyStreets autocomplete directly - it handles location detection automatically
+      const smartyResponse = await getSmartyStreetsAutocomplete(search);
       
-      // Parse the search query to detect if city/state provided
-      const searchParts = search.split(',').map(s => s.trim());
-      let hasLocationInfo = false;
+      console.log('🔧 SmartyStreets autocomplete response:', smartyResponse);
+      console.log('🔧 Returning', smartyResponse.suggestions.length, 'address suggestions');
       
-      // Check if user provided city and state information
-      if (searchParts.length >= 3) {
-        // Format: "123 Main St, Dallas, TX"
-        const street = searchParts[0];
-        const city = searchParts[1];
-        const state = searchParts[2];
-        
-        if (state.length === 2 && street.length > 0) {
-          hasLocationInfo = true;
-          console.log('🔧 Full address format, validating with UPS:', { street, city, state });
-          
-          try {
-            const validationResult = await validateAddressWithUPS({
-              street,
-              city,
-              state
-            });
-            
-            // Only use UPS suggestions if they are actually validated addresses (not just echoed back)
-            if (validationResult.suggestions && validationResult.suggestions.length > 0 && validationResult.isValid) {
-              for (const result of validationResult.suggestions.slice(0, 5)) {
-                upsSuggestions.push({
-                  text: `${result.street}, ${result.city}, ${result.state} ${result.postalCode}`,
-                  streetLine: result.street,
-                  city: result.city,
-                  state: result.state,
-                  zipCode: result.postalCode,
-                  entries: 1
-                });
-              }
-              console.log('🔧 UPS found', validationResult.suggestions.length, 'validated addresses');
-            }
-          } catch (upsError) {
-            console.log('🔧 UPS validation failed:', (upsError as Error).message);
-          }
-        }
-      } else if (searchParts.length === 2) {
-        // Format: "123 Main St, Dallas TX" or "123 Main St, Dallas"
-        const street = searchParts[0];
-        const cityStatePart = searchParts[1];
-        
-        // Try to extract state from the second part
-        const cityStateMatch = cityStatePart.match(/^(.+?)\s+([A-Z]{2})$/);
-        if (cityStateMatch && street.length > 0) {
-          hasLocationInfo = true;
-          const city = cityStateMatch[1];
-          const state = cityStateMatch[2];
-          
-          console.log('🔧 City/State format, validating with UPS:', { street, city, state });
-          
-          try {
-            const validationResult = await validateAddressWithUPS({
-              street,
-              city,
-              state
-            });
-            
-            // Only use UPS suggestions if they are actually validated addresses (not just echoed back)
-            if (validationResult.suggestions && validationResult.suggestions.length > 0 && validationResult.isValid) {
-              for (const result of validationResult.suggestions.slice(0, 5)) {
-                upsSuggestions.push({
-                  text: `${result.street}, ${result.city}, ${result.state} ${result.postalCode}`,
-                  streetLine: result.street,
-                  city: result.city,
-                  state: result.state,
-                  zipCode: result.postalCode,
-                  entries: 1
-                });
-              }
-              console.log('🔧 UPS found', validationResult.suggestions.length, 'validated addresses');
-            }
-          } catch (upsError) {
-            console.log('🔧 UPS validation failed:', (upsError as Error).message);
-          }
-        }
-      }
-      
-      // If no location info provided, try multiple cities for diverse address suggestions
-      if (!hasLocationInfo && search.trim().length > 3) {
-        console.log('🔧 No location info - trying multiple cities for diverse addresses');
-        
-        const commonCities = [
-          { city: 'New York', state: 'NY' },
-          { city: 'Chicago', state: 'IL' },
-          { city: 'Los Angeles', state: 'CA' },
-          { city: 'Houston', state: 'TX' },
-          { city: 'Phoenix', state: 'AZ' },
-          { city: 'Philadelphia', state: 'PA' }
-        ];
-        
-        for (const { city, state } of commonCities.slice(0, 4)) {
-          try {
-            const validationResult = await validateAddressWithUPS({
-              street: search.trim(),
-              city,
-              state
-            });
-            
-            // Only use UPS suggestions if they are actually validated addresses (not just echoed back)
-            if (validationResult.suggestions && validationResult.suggestions.length > 0 && validationResult.isValid) {
-              // Take the first valid address from this city
-              const result = validationResult.suggestions[0];
-              upsSuggestions.push({
-                text: `${result.street}, ${result.city}, ${result.state} ${result.postalCode}`,
-                streetLine: result.street,
-                city: result.city,
-                state: result.state,
-                zipCode: result.postalCode,
-                entries: 1
-              });
-              
-              console.log('🔧 Found real address in', city, state);
-              
-              // Don't break - continue to try other cities for more diverse suggestions
-              // Limit to 3 real address suggestions to avoid overwhelming the user
-              if (upsSuggestions.length >= 3) {
-                console.log('🔧 Found enough diverse addresses, stopping search');
-                break;
-              }
-            } else {
-              console.log('🔧 No valid addresses found in', city, state);
-            }
-          } catch (upsError) {
-            console.log('🔧 UPS validation failed for', city, state);
-            continue;
-          }
-        }
-      }
-      
-      // Always add the user's input as a manual completion option
-      upsSuggestions.push({
-        text: search,
-        streetLine: searchParts[0] || search,
-        city: searchParts[1] || '',
-        state: searchParts[2] || '',
-        zipCode: '',
-        entries: 1
-      });
-      
-      console.log('🔧 Returning', upsSuggestions.length, 'address suggestions');
-      return res.json({ suggestions: upsSuggestions });
+      return res.json({ suggestions: smartyResponse.suggestions });
       
     } catch (autocompleteError) {
-      console.error('🔧 Address Autocomplete error:', autocompleteError);
+      console.error('🔧 SmartyStreets Autocomplete error:', autocompleteError);
       
-      // Fallback: try a simple address parsing approach
+      // Fallback: return manual input only
       const fallbackSuggestions = [{
         text: search,
         streetLine: search,
@@ -594,31 +452,6 @@ router.post('/address-autocomplete-bypass', async (req: Request, res: Response) 
         zipCode: '',
         entries: 1
       }];
-      
-      // If search looks like a street number + name, provide some basic suggestions
-      if (/^\d+\s+\w+/.test(search)) {
-        const parts = search.split(' ');
-        const streetNum = parts[0];
-        const streetName = parts.slice(1).join(' ');
-        
-        fallbackSuggestions.push({
-          text: `${streetNum} ${streetName} St`,
-          streetLine: `${streetNum} ${streetName} St`,
-          city: '',
-          state: '',
-          zipCode: '',
-          entries: 1
-        });
-        
-        fallbackSuggestions.push({
-          text: `${streetNum} ${streetName} Ave`,
-          streetLine: `${streetNum} ${streetName} Ave`,
-          city: '',
-          state: '',
-          zipCode: '',
-          entries: 1
-        });
-      }
       
       res.json({
         suggestions: fallbackSuggestions

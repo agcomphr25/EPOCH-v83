@@ -22,19 +22,14 @@ export default function FBNumberSearch({
     queryKey: ['/api/orders/all'],
   });
 
-  // Filter orders by FishBowl number or Order ID
+  // Filter orders by FishBowl number
   const searchResults = useMemo(() => {
     if (!searchValue.trim()) return [];
     
     const query = searchValue.toLowerCase().trim();
     return (allOrders as any[]).filter((order: any) => {
       const fbNumber = order.fbOrderNumber?.toLowerCase();
-      const orderId = order.orderId?.toLowerCase();
-      
-      return (
-        (fbNumber && fbNumber.includes(query)) ||
-        (orderId && orderId.includes(query))
-      );
+      return fbNumber && fbNumber.includes(query);
     });
   }, [allOrders, searchValue]);
 
@@ -54,7 +49,7 @@ export default function FBNumberSearch({
       <div className="flex items-center gap-2 mb-2">
         <Search className="h-4 w-4" />
         <Label htmlFor="fb-search" className="text-sm font-medium">
-          Search by FishBowl Number or Order ID
+          Search by FishBowl Number
         </Label>
       </div>
       
@@ -62,7 +57,7 @@ export default function FBNumberSearch({
         <Input
           id="fb-search"
           type="text"
-          placeholder="Enter FishBowl order number or Order ID..."
+          placeholder="Enter FishBowl order number..."
           value={searchValue}
           onChange={(e) => setSearchValue(e.target.value)}
           className="pr-8"

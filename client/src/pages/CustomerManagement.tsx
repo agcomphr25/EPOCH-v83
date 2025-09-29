@@ -682,29 +682,65 @@ export default function CustomerManagement() {
   };
 
   // Handle customer form suggestion selection
-  const handleCustomerFormSuggestionSelect = (suggestion: any) => {
+  const handleCustomerFormSuggestionSelect = async (suggestion: any) => {
     console.log('🔧 Customer form suggestion selected:', suggestion);
     
-    // Use structured data directly from suggestion
-    const addressData = {
-      street: suggestion.streetLine || suggestion.text || '',
-      city: suggestion.city || '',
-      state: suggestion.state || '',
-      zipCode: suggestion.zipCode || '',
-    };
+    // Parse the address from suggestion
+    const parsedAddress = parseAddressString(suggestion.text || suggestion.streetLine || '');
     
-    console.log('🔧 Using structured address data for customer:', addressData);
-    
-    setFormData(prev => ({
-      ...prev,
-      street: addressData.street,
-      city: addressData.city,
-      state: addressData.state,
-      zipCode: addressData.zipCode,
-    }));
+    // Try to get full address details using SmartyStreets Street API for ZIP code
+    try {
+      const response = await fetch('/api/customers/address-autocomplete-bypass', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          search: suggestion.text || suggestion.streetLine || '',
+          getZipCode: true
+        })
+      });
+      
+      const data = await response.json();
+      console.log('🔧 Full address details:', data);
+      
+      if (data.fullAddress) {
+        // Use full address details if available
+        setFormData(prev => ({
+          ...prev,
+          street: data.fullAddress.delivery_line_1 || parsedAddress.street,
+          city: data.fullAddress.components?.city_name || parsedAddress.city,
+          state: data.fullAddress.components?.state_abbreviation || parsedAddress.state,
+          zipCode: data.fullAddress.components?.zipcode || parsedAddress.zipCode,
+        }));
+      } else {
+        // Fall back to parsed address
+        setFormData(prev => ({
+          ...prev,
+          street: parsedAddress.street,
+          city: parsedAddress.city,
+          state: parsedAddress.state,
+          zipCode: parsedAddress.zipCode,
+        }));
+      }
+    } catch (error) {
+      console.error('Error getting full address details:', error);
+      // Fall back to parsed address
+      setFormData(prev => ({
+        ...prev,
+        street: parsedAddress.street,
+        city: parsedAddress.city,
+        state: parsedAddress.state,
+        zipCode: parsedAddress.zipCode,
+      }));
+    }
     
     setShowCustomerFormSuggestions(false);
     setCustomerFormSuggestions([]);
+    
+    toast({
+      title: "Address Selected",
+      description: "Address fields have been filled automatically.",
+      duration: 2000
+    });
   };
 
   // Create customer mutation with address support

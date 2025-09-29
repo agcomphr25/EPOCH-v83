@@ -1,0 +1,20 @@
+[{…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}]
+Console.js:61 ⚙️ LayupScheduler - Employees: 2 employees loaded
+Console.js:61 🔄 Unassigned orders: 35 (35) ['AG775', 'AG152', 'AG039', 'AG040', 'EH215', 'EH227', 'EH217', 'EH213', 'EH211', 'EH207', 'EH030', 'EH150', 'EH145', 'EH143', 'EH139', 'EH137', 'EH135', 'EH133', 'EH134', 'EH128', 'EH118', 'EH113', 'EH114', 'EH107', 'EH093', 'EH092', 'EH088', 'EH078', 'EH071', 'EH063', 'AG815', 'AG769', 'AG004', 'PO-P18261-2-1', 'PO-P18261-3-1']
+Console.js:61 🏭 Unassigned PRODUCTION/P1 orders: 2 (2) ['PO-P18261-2-1', 'PO-P18261-3-1']
+Console.js:61 📅 MONDAY DEBUG: Date 2025-09-22, 0 assignments found
+34Console.js:61 Warning: Invalid prop `data-replit-metadata` supplied to `React.Fragment`. React.Fragment can only have `key` and `children` props.
+    at LayupScheduler (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/src/components/LayupScheduler.tsx:534:35)
+    at div
+    at LayupSchedulerPage
+    at Route (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=7a20245f:280:16)
+    at Switch (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=7a20245f:336:17)
+    at main
+    at div
+    at Router (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=7a20245f:235:17)
+    at DeploymentAuthWrapper (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/src/components/DeploymentAuthWrapper.tsx:34:49)
+    at QueryClientProvider (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-65LAIXSP.js?v=7a20245f:2934:3)
+    at App (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/src/App.tsx?v=TfiGXCP27GQ4wpwquVVgS:138:35)
+    at Router (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=7a20245f:6332:13)
+    at BrowserRouter (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=7a20245f:9416:3)
+    at QueryClientProvider (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-65LAIXSP.js?v=7a20245f:2934:3)

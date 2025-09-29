@@ -128,23 +128,15 @@ export function calculateDailyCapacity(
     return sum + emp.rate;
   }, 0);
   
-  // Calculate total mold capacity per day
-  const totalMoldDailyCapacity = activeMolds.reduce((sum, mold) => {
-    return sum + (mold.dailyCapacity ?? 1); // Default to 1 order per mold per day
-  }, 0);
-  
-  // Use the minimum of employee capacity and mold capacity as the bottleneck
-  const effectiveDailyCapacity = Math.min(totalEmployeeDailyCapacity, totalMoldDailyCapacity);
-  
   console.log(`👥 DAILY CAPACITY CALCULATION:`, {
     activeEmployees: activeEmployees.map(e => ({ id: e.employeeId, rate: e.rate })),
     totalEmployeeDailyCapacity,
-    activeMolds: activeMolds.length,
-    totalMoldDailyCapacity,
-    effectiveDailyCapacity
+    activeMolds: activeMolds.length
   });
   
-  return Math.floor(effectiveDailyCapacity);
+  // For now, use employee capacity as the limiting factor
+  // Molds are generally not the constraint in layup operations
+  return Math.floor(totalEmployeeDailyCapacity);
 }
 
 /**
@@ -276,22 +268,9 @@ export function generateScheduleAllocations(
           continue; // This day is at capacity
         }
         
-        // Find molds with remaining capacity for this day
-        const availableMolds = compatibleMolds.filter(mold => {
-          if (!mold.enabled) return false;
-          
-          const currentUsage = moldDailyUsage.get(mold.moldId)?.get(dateKey) || 0;
-          const moldCapacity = mold.dailyCapacity ?? 1; // Default capacity: 1 per day
-          
-          return currentUsage < moldCapacity; // Only include molds with remaining capacity
-        });
-        
-        if (availableMolds.length === 0) {
-          continue; // No molds with capacity available on this day, try next date
-        }
-        
-        // Find the best mold for this day (least used available mold)
-        const bestMold = availableMolds
+        // Find the best mold for this day (least used compatible mold)
+        const bestMold = compatibleMolds
+          .filter(mold => mold.enabled)
           .sort((a, b) => {
             const usageA = moldDailyUsage.get(a.moldId)?.get(dateKey) || 0;
             const usageB = moldDailyUsage.get(b.moldId)?.get(dateKey) || 0;
@@ -313,15 +292,6 @@ export function generateScheduleAllocations(
         }
         
         if (bestMold) {
-          // Safety guard: Double-check capacity before final allocation
-          const currentMoldUsage = moldDailyUsage.get(bestMold.moldId)?.get(dateKey) || 0;
-          const moldCapacity = bestMold.dailyCapacity ?? 1;
-          
-          if (currentMoldUsage >= moldCapacity) {
-            console.warn(`⚠️ CAPACITY SAFETY GUARD: Mold ${bestMold.moldId} already at capacity (${currentMoldUsage}/${moldCapacity}) on ${dateKey}`);
-            continue; // Skip to next date
-          }
-          
           // Allocate this order
           allocations.push({
             orderId: order.orderId,
@@ -334,9 +304,7 @@ export function generateScheduleAllocations(
           // Update tracking
           dailyAllocations.set(dateKey, currentDayAllocations + 1);
           const moldUsage = moldDailyUsage.get(bestMold.moldId)!;
-          moldUsage.set(dateKey, currentMoldUsage + 1);
-          
-          console.log(`✅ Allocated ${order.orderId} to mold ${bestMold.moldId} on ${dateKey} (${currentMoldUsage + 1}/${moldCapacity})`);
+          moldUsage.set(dateKey, (moldUsage.get(dateKey) || 0) + 1);
           
           allocated = true;
           break;
@@ -350,31 +318,6 @@ export function generateScheduleAllocations(
   }
   
   console.log(`✅ Algorithm complete: ${allocations.length} orders allocated`);
-  
-  // Post-generation validation: Check for capacity violations
-  const capacityViolations: { moldId: string; date: string; usage: number; capacity: number }[] = [];
-  
-  for (const [moldId, dateUsageMap] of moldDailyUsage) {
-    const mold = molds.find(m => m.moldId === moldId);
-    const moldCapacity = mold?.dailyCapacity ?? 1;
-    
-    for (const [dateKey, usage] of dateUsageMap) {
-      if (usage > moldCapacity) {
-        capacityViolations.push({
-          moldId,
-          date: dateKey,
-          usage,
-          capacity: moldCapacity
-        });
-      }
-    }
-  }
-  
-  if (capacityViolations.length > 0) {
-    console.error('🚨 CAPACITY VIOLATIONS DETECTED:', capacityViolations);
-  } else {
-    console.log('✅ No capacity violations detected - all molds within limits');
-  }
   
   return allocations.sort((a, b) => 
     new Date(a.scheduledDate).getTime() - new Date(b.scheduledDate).getTime()

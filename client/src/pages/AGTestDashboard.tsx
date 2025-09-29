@@ -30,9 +30,9 @@ export default function AGTestDashboard() {
     window.location.href = '/login';
   };
 
-  // Get all customer orders (excluding purchase orders)
+  // Get all orders with payment status
   const { data: allOrders = [] } = useQuery({
-    queryKey: ['/api/orders'],
+    queryKey: ['/api/orders/with-payment-status'],
   });
 
   // Get stock models for display names

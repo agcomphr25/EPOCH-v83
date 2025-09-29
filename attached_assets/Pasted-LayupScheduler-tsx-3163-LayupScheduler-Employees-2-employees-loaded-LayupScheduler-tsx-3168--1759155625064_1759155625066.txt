@@ -1,0 +1,1079 @@
+LayupScheduler.tsx:3163 ⚙️ LayupScheduler - Employees: 2 employees loaded
+LayupScheduler.tsx:3168 🔄 Unassigned orders: 0 []
+LayupScheduler.tsx:3169 🏭 Unassigned PRODUCTION/P1 orders: 0 []
+useMoldSettings.ts:19 🔧 useMoldSettings: Received molds data: (74) [{…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}]
+useMoldSettings.ts:20 🔧 useMoldSettings: Data type: object Array? true
+useMoldSettings.ts:22 🔧 useMoldSettings: Set molds state to: (74) [{…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}]
+useEmployeeSettings.ts:19 🔧 useEmployeeSettings: Received employees data: (2) [{…}, {…}]
+useEmployeeSettings.ts:20 🔧 useEmployeeSettings: Data type: object Array? true
+useEmployeeSettings.ts:22 🔧 useEmployeeSettings: Set employees state to: (2) [{…}, {…}]
+useMoldSettings.ts:11 🔧 useMoldSettings: Molds state changed: (74) [{…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}]
+useEmployeeSettings.ts:11 🔧 useEmployeeSettings: Employees state changed: (2) [{…}, {…}]
+LayupScheduler.tsx:1140 🔍 ASSIGNMENT LOADING DEBUG: Loading existing schedule from database: 6 entries
+LayupScheduler.tsx:1195 📅 MONDAY ORDER LOADED: PO-P18261-2-1 → Privateer-1 on Mon Sep 29 2025
+LayupScheduler.tsx:1189 🔒 DUPLICATE DETECTED: Keeping first assignment for PO-P18261-2-1 (Sun over Tuesday)
+LayupScheduler.tsx:1186 🔒 DUPLICATE PRIORITY: Keeping existing Monday assignment for PO-P18261-3-1 (rejecting Wednesday)
+LayupScheduler.tsx:1189 🔒 DUPLICATE DETECTED: Keeping first assignment for PO-P18261-1-1 (Tue over Thursday)
+LayupScheduler.tsx:1199 📊 ASSIGNMENT LOADING SUMMARY:
+LayupScheduler.tsx:1200    Monday: 1 orders loaded
+LayupScheduler.tsx:1201    Tuesday: 2 orders loaded
+LayupScheduler.tsx:1202    Wednesday: 2 orders loaded
+LayupScheduler.tsx:1203    Thursday: 1 orders loaded
+LayupScheduler.tsx:1204    Friday: 0 orders loaded
+LayupScheduler.tsx:1205    Total assignments loaded: 3
+LayupScheduler.tsx:1563 🏭 LayupScheduler: Total orders from API: 0
+LayupScheduler.tsx:1564 🏭 LayupScheduler: Regular orders for scheduling: 0
+LayupScheduler.tsx:1565 🏭 LayupScheduler: P1 PO orders for scheduling: 0
+LayupScheduler.tsx:1581 🏭 LayupScheduler: Filtered orders by source: {}
+LayupScheduler.tsx:1589 ❌ LayupScheduler: Missing data for manual schedule generation: {orders: 0, molds: 74, employees: 2}
+LayupScheduler.tsx:2014 📅 AUTO-ADVANCE: DISABLED to prevent continuous reloading
+LayupScheduler.tsx:2015 💡 Use navigation buttons to manually change weeks
+LayupScheduler.tsx:2121 🚫 AUTO-SCHEDULE DISABLED: Generated schedule will NOT be auto-loaded. Use manual buttons for complete control.
+LayupScheduler.tsx:2174 🚫 AUTO-TRIGGER DISABLED: Algorithmic scheduling will NOT auto-trigger. Use manual buttons for complete control.
+LayupScheduler.tsx:1100 🔍 RAW SCHEDULE DATA FROM DATABASE: 6 total entries
+LayupScheduler.tsx:1109   Entry 0: PO-P18261-2-1 → 2025-09-29T00:00:00.000Z → Mon Sep 29 2025 (Monday, day 1)
+LayupScheduler.tsx:1109   Entry 1: PO-P18261-3-1 → 2025-09-30T00:00:00.000Z → Tue Sep 30 2025 (Tuesday, day 2)
+LayupScheduler.tsx:1109   Entry 2: PO-P18261-2-1 → 2025-09-30T00:00:00.000Z → Tue Sep 30 2025 (Tuesday, day 2)
+LayupScheduler.tsx:1109   Entry 3: PO-P18261-1-1 → 2025-10-01T00:00:00.000Z → Wed Oct 01 2025 (Wednesday, day 3)
+LayupScheduler.tsx:1109   Entry 4: PO-P18261-3-1 → 2025-10-01T00:00:00.000Z → Wed Oct 01 2025 (Wednesday, day 3)
+LayupScheduler.tsx:1124 ✅ DATABASE FILTER: Keeping Monday assignment - PO-P18261-2-1 on Mon Sep 29 2025
+LayupScheduler.tsx:1124 ✅ DATABASE FILTER: Keeping Tuesday assignment - PO-P18261-3-1 on Tue Sep 30 2025
+LayupScheduler.tsx:1124 ✅ DATABASE FILTER: Keeping Tuesday assignment - PO-P18261-2-1 on Tue Sep 30 2025
+LayupScheduler.tsx:1124 ✅ DATABASE FILTER: Keeping Wednesday assignment - PO-P18261-1-1 on Wed Oct 01 2025
+LayupScheduler.tsx:1124 ✅ DATABASE FILTER: Keeping Wednesday assignment - PO-P18261-3-1 on Wed Oct 01 2025
+LayupScheduler.tsx:1124 ✅ DATABASE FILTER: Keeping Thursday assignment - PO-P18261-1-1 on Thu Oct 02 2025
+LayupScheduler.tsx:1130 📋 Database filter: Removed 0 non-work-day assignments, kept 6 work-day assignments
+LayupScheduler.tsx:1131 📋 Selected work days: Mon, Tue, Wed, Thu
+useUnifiedLayupOrders.ts:63 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 0, loading: true, error: null, hasData: true, p1OrdersFirst3: Array(0)}
+useUnifiedLayupOrders.ts:88 🔧 Final hook return: {ordersReturned: 0, isLoading: true, hasError: false, firstOrderId: undefined}
+LayupScheduler.tsx:1513 🏔️ MESA UNIVERSAL DEBUG: {totalOrders: 0, mesaUniversalCount: 0, mesaOrders: Array(0)}
+LayupScheduler.tsx:1519 🔍 LayupScheduler orders debug: {allOrdersCount: 0, rawData: 'has data', dataType: 'object', isArray: true, sourceCounts: {…}, …}
+main.tsx:33 ❌ LayupScheduler: No orders loaded from useUnifiedLayupOrders
+console.error @ main.tsx:33
+(anonymous) @ LayupScheduler.tsx:1533
+updateMemo @ chunk-276SZO74.js?v=7a20245f:12210
+useMemo @ chunk-276SZO74.js?v=7a20245f:12726
+useMemo @ chunk-ZMLY2J2T.js?v=7a20245f:1094
+LayupScheduler @ LayupScheduler.tsx:1510
+renderWithHooks @ chunk-276SZO74.js?v=7a20245f:11548
+updateFunctionComponent @ chunk-276SZO74.js?v=7a20245f:14582
+beginWork @ chunk-276SZO74.js?v=7a20245f:15924
+beginWork$1 @ chunk-276SZO74.js?v=7a20245f:19753
+performUnitOfWork @ chunk-276SZO74.js?v=7a20245f:19198
+workLoopSync @ chunk-276SZO74.js?v=7a20245f:19137
+renderRootSync @ chunk-276SZO74.js?v=7a20245f:19116
+performSyncWorkOnRoot @ chunk-276SZO74.js?v=7a20245f:18874
+flushSyncCallbacks @ chunk-276SZO74.js?v=7a20245f:9119
+(anonymous) @ chunk-276SZO74.js?v=7a20245f:18627
+setTimeout
+defaultScheduler @ chunk-65LAIXSP.js?v=7a20245f:560
+flush @ chunk-65LAIXSP.js?v=7a20245f:584
+batch @ chunk-65LAIXSP.js?v=7a20245f:602
+dispatch_fn @ chunk-65LAIXSP.js?v=7a20245f:1038
+setData @ chunk-65LAIXSP.js?v=7a20245f:713
+fetch @ chunk-65LAIXSP.js?v=7a20245f:927
+await in fetch
+executeFetch_fn @ chunk-65LAIXSP.js?v=7a20245f:2280
+onSubscribe @ chunk-65LAIXSP.js?v=7a20245f:1976
+subscribe @ chunk-65LAIXSP.js?v=7a20245f:24
+(anonymous) @ chunk-65LAIXSP.js?v=7a20245f:3147
+subscribeToStore @ chunk-276SZO74.js?v=7a20245f:11984
+commitHookEffectListMount @ chunk-276SZO74.js?v=7a20245f:16915
+commitPassiveMountOnFiber @ chunk-276SZO74.js?v=7a20245f:18156
+commitPassiveMountEffects_complete @ chunk-276SZO74.js?v=7a20245f:18129
+commitPassiveMountEffects_begin @ chunk-276SZO74.js?v=7a20245f:18119
+commitPassiveMountEffects @ chunk-276SZO74.js?v=7a20245f:18109
+flushPassiveEffectsImpl @ chunk-276SZO74.js?v=7a20245f:19490
+flushPassiveEffects @ chunk-276SZO74.js?v=7a20245f:19447
+performSyncWorkOnRoot @ chunk-276SZO74.js?v=7a20245f:18868
+flushSyncCallbacks @ chunk-276SZO74.js?v=7a20245f:9119
+commitRootImpl @ chunk-276SZO74.js?v=7a20245f:19432
+commitRoot @ chunk-276SZO74.js?v=7a20245f:19277
+finishConcurrentRender @ chunk-276SZO74.js?v=7a20245f:18805
+performConcurrentWorkOnRoot @ chunk-276SZO74.js?v=7a20245f:18718
+workLoop @ chunk-276SZO74.js?v=7a20245f:197
+flushWork @ chunk-276SZO74.js?v=7a20245f:176
+performWorkUntilDeadline @ chunk-276SZO74.js?v=7a20245f:384Understand this error
+main.tsx:33 ❌ Backend shows orders but frontend received empty array
+console.error @ main.tsx:33
+(anonymous) @ LayupScheduler.tsx:1534
+updateMemo @ chunk-276SZO74.js?v=7a20245f:12210
+useMemo @ chunk-276SZO74.js?v=7a20245f:12726
+useMemo @ chunk-ZMLY2J2T.js?v=7a20245f:1094
+LayupScheduler @ LayupScheduler.tsx:1510
+renderWithHooks @ chunk-276SZO74.js?v=7a20245f:11548
+updateFunctionComponent @ chunk-276SZO74.js?v=7a20245f:14582
+beginWork @ chunk-276SZO74.js?v=7a20245f:15924
+beginWork$1 @ chunk-276SZO74.js?v=7a20245f:19753
+performUnitOfWork @ chunk-276SZO74.js?v=7a20245f:19198
+workLoopSync @ chunk-276SZO74.js?v=7a20245f:19137
+renderRootSync @ chunk-276SZO74.js?v=7a20245f:19116
+performSyncWorkOnRoot @ chunk-276SZO74.js?v=7a20245f:18874
+flushSyncCallbacks @ chunk-276SZO74.js?v=7a20245f:9119
+(anonymous) @ chunk-276SZO74.js?v=7a20245f:18627
+setTimeout
+defaultScheduler @ chunk-65LAIXSP.js?v=7a20245f:560
+flush @ chunk-65LAIXSP.js?v=7a20245f:584
+batch @ chunk-65LAIXSP.js?v=7a20245f:602
+dispatch_fn @ chunk-65LAIXSP.js?v=7a20245f:1038
+setData @ chunk-65LAIXSP.js?v=7a20245f:713
+fetch @ chunk-65LAIXSP.js?v=7a20245f:927
+await in fetch
+executeFetch_fn @ chunk-65LAIXSP.js?v=7a20245f:2280
+onSubscribe @ chunk-65LAIXSP.js?v=7a20245f:1976
+subscribe @ chunk-65LAIXSP.js?v=7a20245f:24
+(anonymous) @ chunk-65LAIXSP.js?v=7a20245f:3147
+subscribeToStore @ chunk-276SZO74.js?v=7a20245f:11984
+commitHookEffectListMount @ chunk-276SZO74.js?v=7a20245f:16915
+commitPassiveMountOnFiber @ chunk-276SZO74.js?v=7a20245f:18156
+commitPassiveMountEffects_complete @ chunk-276SZO74.js?v=7a20245f:18129
+commitPassiveMountEffects_begin @ chunk-276SZO74.js?v=7a20245f:18119
+commitPassiveMountEffects @ chunk-276SZO74.js?v=7a20245f:18109
+flushPassiveEffectsImpl @ chunk-276SZO74.js?v=7a20245f:19490
+flushPassiveEffects @ chunk-276SZO74.js?v=7a20245f:19447
+performSyncWorkOnRoot @ chunk-276SZO74.js?v=7a20245f:18868
+flushSyncCallbacks @ chunk-276SZO74.js?v=7a20245f:9119
+commitRootImpl @ chunk-276SZO74.js?v=7a20245f:19432
+commitRoot @ chunk-276SZO74.js?v=7a20245f:19277
+finishConcurrentRender @ chunk-276SZO74.js?v=7a20245f:18805
+performConcurrentWorkOnRoot @ chunk-276SZO74.js?v=7a20245f:18718
+workLoop @ chunk-276SZO74.js?v=7a20245f:197
+flushWork @ chunk-276SZO74.js?v=7a20245f:176
+performWorkUntilDeadline @ chunk-276SZO74.js?v=7a20245f:384Understand this error
+LayupScheduler.tsx:1539 🏔️ FINAL ORDERS: Returning 0 total orders, 0 are Mesa Universal
+LayupScheduler.tsx:3136 🏭 LayupScheduler - Production/P1 orders: 0
+LayupScheduler.tsx:3159 🏔️ LayupScheduler - Mesa molds: (8) [{…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}]
+LayupScheduler.tsx:3161 📋 LayupScheduler - Order Assignments: {}
+LayupScheduler.tsx:3162 🏭 LayupScheduler - All Molds: (74) [{…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}]
+LayupScheduler.tsx:3163 ⚙️ LayupScheduler - Employees: 2 employees loaded
+LayupScheduler.tsx:3168 🔄 Unassigned orders: 0 []
+LayupScheduler.tsx:3169 🏭 Unassigned PRODUCTION/P1 orders: 0 []
+LayupScheduler.tsx:1100 🔍 RAW SCHEDULE DATA FROM DATABASE: 6 total entries
+LayupScheduler.tsx:1109   Entry 0: PO-P18261-2-1 → 2025-09-29T00:00:00.000Z → Mon Sep 29 2025 (Monday, day 1)
+LayupScheduler.tsx:1109   Entry 1: PO-P18261-3-1 → 2025-09-30T00:00:00.000Z → Tue Sep 30 2025 (Tuesday, day 2)
+LayupScheduler.tsx:1109   Entry 2: PO-P18261-2-1 → 2025-09-30T00:00:00.000Z → Tue Sep 30 2025 (Tuesday, day 2)
+LayupScheduler.tsx:1109   Entry 3: PO-P18261-1-1 → 2025-10-01T00:00:00.000Z → Wed Oct 01 2025 (Wednesday, day 3)
+LayupScheduler.tsx:1109   Entry 4: PO-P18261-3-1 → 2025-10-01T00:00:00.000Z → Wed Oct 01 2025 (Wednesday, day 3)
+LayupScheduler.tsx:1124 ✅ DATABASE FILTER: Keeping Monday assignment - PO-P18261-2-1 on Mon Sep 29 2025
+LayupScheduler.tsx:1124 ✅ DATABASE FILTER: Keeping Tuesday assignment - PO-P18261-3-1 on Tue Sep 30 2025
+LayupScheduler.tsx:1124 ✅ DATABASE FILTER: Keeping Tuesday assignment - PO-P18261-2-1 on Tue Sep 30 2025
+LayupScheduler.tsx:1124 ✅ DATABASE FILTER: Keeping Wednesday assignment - PO-P18261-1-1 on Wed Oct 01 2025
+LayupScheduler.tsx:1124 ✅ DATABASE FILTER: Keeping Wednesday assignment - PO-P18261-3-1 on Wed Oct 01 2025
+LayupScheduler.tsx:1124 ✅ DATABASE FILTER: Keeping Thursday assignment - PO-P18261-1-1 on Thu Oct 02 2025
+LayupScheduler.tsx:1130 📋 Database filter: Removed 0 non-work-day assignments, kept 6 work-day assignments
+LayupScheduler.tsx:1131 📋 Selected work days: Mon, Tue, Wed, Thu
+useUnifiedLayupOrders.ts:63 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 0, loading: true, error: null, hasData: true, p1OrdersFirst3: Array(0)}
+useUnifiedLayupOrders.ts:88 🔧 Final hook return: {ordersReturned: 0, isLoading: true, hasError: false, firstOrderId: undefined}
+LayupScheduler.tsx:1513 🏔️ MESA UNIVERSAL DEBUG: {totalOrders: 0, mesaUniversalCount: 0, mesaOrders: Array(0)}
+LayupScheduler.tsx:1519 🔍 LayupScheduler orders debug: {allOrdersCount: 0, rawData: 'has data', dataType: 'object', isArray: true, sourceCounts: {…}, …}
+main.tsx:33 ❌ LayupScheduler: No orders loaded from useUnifiedLayupOrders
+console.error @ main.tsx:33
+(anonymous) @ LayupScheduler.tsx:1533
+updateMemo @ chunk-276SZO74.js?v=7a20245f:12210
+useMemo @ chunk-276SZO74.js?v=7a20245f:12726
+useMemo @ chunk-ZMLY2J2T.js?v=7a20245f:1094
+LayupScheduler @ LayupScheduler.tsx:1510
+renderWithHooks @ chunk-276SZO74.js?v=7a20245f:11548
+updateFunctionComponent @ chunk-276SZO74.js?v=7a20245f:14587
+beginWork @ chunk-276SZO74.js?v=7a20245f:15924
+beginWork$1 @ chunk-276SZO74.js?v=7a20245f:19753
+performUnitOfWork @ chunk-276SZO74.js?v=7a20245f:19198
+workLoopSync @ chunk-276SZO74.js?v=7a20245f:19137
+renderRootSync @ chunk-276SZO74.js?v=7a20245f:19116
+performSyncWorkOnRoot @ chunk-276SZO74.js?v=7a20245f:18874
+flushSyncCallbacks @ chunk-276SZO74.js?v=7a20245f:9119
+(anonymous) @ chunk-276SZO74.js?v=7a20245f:18627
+setTimeout
+defaultScheduler @ chunk-65LAIXSP.js?v=7a20245f:560
+flush @ chunk-65LAIXSP.js?v=7a20245f:584
+batch @ chunk-65LAIXSP.js?v=7a20245f:602
+dispatch_fn @ chunk-65LAIXSP.js?v=7a20245f:1038
+setData @ chunk-65LAIXSP.js?v=7a20245f:713
+fetch @ chunk-65LAIXSP.js?v=7a20245f:927
+await in fetch
+executeFetch_fn @ chunk-65LAIXSP.js?v=7a20245f:2280
+onSubscribe @ chunk-65LAIXSP.js?v=7a20245f:1976
+subscribe @ chunk-65LAIXSP.js?v=7a20245f:24
+(anonymous) @ chunk-65LAIXSP.js?v=7a20245f:3147
+subscribeToStore @ chunk-276SZO74.js?v=7a20245f:11984
+commitHookEffectListMount @ chunk-276SZO74.js?v=7a20245f:16915
+commitPassiveMountOnFiber @ chunk-276SZO74.js?v=7a20245f:18156
+commitPassiveMountEffects_complete @ chunk-276SZO74.js?v=7a20245f:18129
+commitPassiveMountEffects_begin @ chunk-276SZO74.js?v=7a20245f:18119
+commitPassiveMountEffects @ chunk-276SZO74.js?v=7a20245f:18109
+flushPassiveEffectsImpl @ chunk-276SZO74.js?v=7a20245f:19490
+flushPassiveEffects @ chunk-276SZO74.js?v=7a20245f:19447
+performSyncWorkOnRoot @ chunk-276SZO74.js?v=7a20245f:18868
+flushSyncCallbacks @ chunk-276SZO74.js?v=7a20245f:9119
+commitRootImpl @ chunk-276SZO74.js?v=7a20245f:19432
+commitRoot @ chunk-276SZO74.js?v=7a20245f:19277
+finishConcurrentRender @ chunk-276SZO74.js?v=7a20245f:18805
+performConcurrentWorkOnRoot @ chunk-276SZO74.js?v=7a20245f:18718
+workLoop @ chunk-276SZO74.js?v=7a20245f:197
+flushWork @ chunk-276SZO74.js?v=7a20245f:176
+performWorkUntilDeadline @ chunk-276SZO74.js?v=7a20245f:384Understand this error
+main.tsx:33 ❌ Backend shows orders but frontend received empty array
+console.error @ main.tsx:33
+(anonymous) @ LayupScheduler.tsx:1534
+updateMemo @ chunk-276SZO74.js?v=7a20245f:12210
+useMemo @ chunk-276SZO74.js?v=7a20245f:12726
+useMemo @ chunk-ZMLY2J2T.js?v=7a20245f:1094
+LayupScheduler @ LayupScheduler.tsx:1510
+renderWithHooks @ chunk-276SZO74.js?v=7a20245f:11548
+updateFunctionComponent @ chunk-276SZO74.js?v=7a20245f:14587
+beginWork @ chunk-276SZO74.js?v=7a20245f:15924
+beginWork$1 @ chunk-276SZO74.js?v=7a20245f:19753
+performUnitOfWork @ chunk-276SZO74.js?v=7a20245f:19198
+workLoopSync @ chunk-276SZO74.js?v=7a20245f:19137
+renderRootSync @ chunk-276SZO74.js?v=7a20245f:19116
+performSyncWorkOnRoot @ chunk-276SZO74.js?v=7a20245f:18874
+flushSyncCallbacks @ chunk-276SZO74.js?v=7a20245f:9119
+(anonymous) @ chunk-276SZO74.js?v=7a20245f:18627
+setTimeout
+defaultScheduler @ chunk-65LAIXSP.js?v=7a20245f:560
+flush @ chunk-65LAIXSP.js?v=7a20245f:584
+batch @ chunk-65LAIXSP.js?v=7a20245f:602
+dispatch_fn @ chunk-65LAIXSP.js?v=7a20245f:1038
+setData @ chunk-65LAIXSP.js?v=7a20245f:713
+fetch @ chunk-65LAIXSP.js?v=7a20245f:927
+await in fetch
+executeFetch_fn @ chunk-65LAIXSP.js?v=7a20245f:2280
+onSubscribe @ chunk-65LAIXSP.js?v=7a20245f:1976
+subscribe @ chunk-65LAIXSP.js?v=7a20245f:24
+(anonymous) @ chunk-65LAIXSP.js?v=7a20245f:3147
+subscribeToStore @ chunk-276SZO74.js?v=7a20245f:11984
+commitHookEffectListMount @ chunk-276SZO74.js?v=7a20245f:16915
+commitPassiveMountOnFiber @ chunk-276SZO74.js?v=7a20245f:18156
+commitPassiveMountEffects_complete @ chunk-276SZO74.js?v=7a20245f:18129
+commitPassiveMountEffects_begin @ chunk-276SZO74.js?v=7a20245f:18119
+commitPassiveMountEffects @ chunk-276SZO74.js?v=7a20245f:18109
+flushPassiveEffectsImpl @ chunk-276SZO74.js?v=7a20245f:19490
+flushPassiveEffects @ chunk-276SZO74.js?v=7a20245f:19447
+performSyncWorkOnRoot @ chunk-276SZO74.js?v=7a20245f:18868
+flushSyncCallbacks @ chunk-276SZO74.js?v=7a20245f:9119
+commitRootImpl @ chunk-276SZO74.js?v=7a20245f:19432
+commitRoot @ chunk-276SZO74.js?v=7a20245f:19277
+finishConcurrentRender @ chunk-276SZO74.js?v=7a20245f:18805
+performConcurrentWorkOnRoot @ chunk-276SZO74.js?v=7a20245f:18718
+workLoop @ chunk-276SZO74.js?v=7a20245f:197
+flushWork @ chunk-276SZO74.js?v=7a20245f:176
+performWorkUntilDeadline @ chunk-276SZO74.js?v=7a20245f:384Understand this error
+LayupScheduler.tsx:1539 🏔️ FINAL ORDERS: Returning 0 total orders, 0 are Mesa Universal
+LayupScheduler.tsx:3136 🏭 LayupScheduler - Production/P1 orders: 0
+LayupScheduler.tsx:3159 🏔️ LayupScheduler - Mesa molds: (8) [{…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}]
+LayupScheduler.tsx:3161 📋 LayupScheduler - Order Assignments: {}
+LayupScheduler.tsx:3162 🏭 LayupScheduler - All Molds: (74) [{…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}]
+LayupScheduler.tsx:3163 ⚙️ LayupScheduler - Employees: 2 employees loaded
+LayupScheduler.tsx:3168 🔄 Unassigned orders: 0 []
+LayupScheduler.tsx:3169 🏭 Unassigned PRODUCTION/P1 orders: 0 []
+LayupScheduler.tsx:1100 🔍 RAW SCHEDULE DATA FROM DATABASE: 6 total entries
+LayupScheduler.tsx:1109   Entry 0: PO-P18261-2-1 → 2025-09-29T00:00:00.000Z → Mon Sep 29 2025 (Monday, day 1)
+LayupScheduler.tsx:1109   Entry 1: PO-P18261-3-1 → 2025-09-30T00:00:00.000Z → Tue Sep 30 2025 (Tuesday, day 2)
+LayupScheduler.tsx:1109   Entry 2: PO-P18261-2-1 → 2025-09-30T00:00:00.000Z → Tue Sep 30 2025 (Tuesday, day 2)
+LayupScheduler.tsx:1109   Entry 3: PO-P18261-1-1 → 2025-10-01T00:00:00.000Z → Wed Oct 01 2025 (Wednesday, day 3)
+LayupScheduler.tsx:1109   Entry 4: PO-P18261-3-1 → 2025-10-01T00:00:00.000Z → Wed Oct 01 2025 (Wednesday, day 3)
+LayupScheduler.tsx:1124 ✅ DATABASE FILTER: Keeping Monday assignment - PO-P18261-2-1 on Mon Sep 29 2025
+LayupScheduler.tsx:1124 ✅ DATABASE FILTER: Keeping Tuesday assignment - PO-P18261-3-1 on Tue Sep 30 2025
+LayupScheduler.tsx:1124 ✅ DATABASE FILTER: Keeping Tuesday assignment - PO-P18261-2-1 on Tue Sep 30 2025
+LayupScheduler.tsx:1124 ✅ DATABASE FILTER: Keeping Wednesday assignment - PO-P18261-1-1 on Wed Oct 01 2025
+LayupScheduler.tsx:1124 ✅ DATABASE FILTER: Keeping Wednesday assignment - PO-P18261-3-1 on Wed Oct 01 2025
+LayupScheduler.tsx:1124 ✅ DATABASE FILTER: Keeping Thursday assignment - PO-P18261-1-1 on Thu Oct 02 2025
+LayupScheduler.tsx:1130 📋 Database filter: Removed 0 non-work-day assignments, kept 6 work-day assignments
+LayupScheduler.tsx:1131 📋 Selected work days: Mon, Tue, Wed, Thu
+useUnifiedLayupOrders.ts:63 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 0, loading: true, error: null, hasData: true, p1OrdersFirst3: Array(0)}
+useUnifiedLayupOrders.ts:88 🔧 Final hook return: {ordersReturned: 0, isLoading: true, hasError: false, firstOrderId: undefined}
+LayupScheduler.tsx:1513 🏔️ MESA UNIVERSAL DEBUG: {totalOrders: 0, mesaUniversalCount: 0, mesaOrders: Array(0)}
+LayupScheduler.tsx:1519 🔍 LayupScheduler orders debug: {allOrdersCount: 0, rawData: 'has data', dataType: 'object', isArray: true, sourceCounts: {…}, …}
+main.tsx:33 ❌ LayupScheduler: No orders loaded from useUnifiedLayupOrders
+console.error @ main.tsx:33
+(anonymous) @ LayupScheduler.tsx:1533
+updateMemo @ chunk-276SZO74.js?v=7a20245f:12210
+useMemo @ chunk-276SZO74.js?v=7a20245f:12726
+useMemo @ chunk-ZMLY2J2T.js?v=7a20245f:1094
+LayupScheduler @ LayupScheduler.tsx:1510
+renderWithHooks @ chunk-276SZO74.js?v=7a20245f:11548
+updateFunctionComponent @ chunk-276SZO74.js?v=7a20245f:14582
+beginWork @ chunk-276SZO74.js?v=7a20245f:15924
+beginWork$1 @ chunk-276SZO74.js?v=7a20245f:19753
+performUnitOfWork @ chunk-276SZO74.js?v=7a20245f:19198
+workLoopSync @ chunk-276SZO74.js?v=7a20245f:19137
+renderRootSync @ chunk-276SZO74.js?v=7a20245f:19116
+performConcurrentWorkOnRoot @ chunk-276SZO74.js?v=7a20245f:18678
+workLoop @ chunk-276SZO74.js?v=7a20245f:197
+flushWork @ chunk-276SZO74.js?v=7a20245f:176
+performWorkUntilDeadline @ chunk-276SZO74.js?v=7a20245f:384Understand this error
+main.tsx:33 ❌ Backend shows orders but frontend received empty array
+console.error @ main.tsx:33
+(anonymous) @ LayupScheduler.tsx:1534
+updateMemo @ chunk-276SZO74.js?v=7a20245f:12210
+useMemo @ chunk-276SZO74.js?v=7a20245f:12726
+useMemo @ chunk-ZMLY2J2T.js?v=7a20245f:1094
+LayupScheduler @ LayupScheduler.tsx:1510
+renderWithHooks @ chunk-276SZO74.js?v=7a20245f:11548
+updateFunctionComponent @ chunk-276SZO74.js?v=7a20245f:14582
+beginWork @ chunk-276SZO74.js?v=7a20245f:15924
+beginWork$1 @ chunk-276SZO74.js?v=7a20245f:19753
+performUnitOfWork @ chunk-276SZO74.js?v=7a20245f:19198
+workLoopSync @ chunk-276SZO74.js?v=7a20245f:19137
+renderRootSync @ chunk-276SZO74.js?v=7a20245f:19116
+performConcurrentWorkOnRoot @ chunk-276SZO74.js?v=7a20245f:18678
+workLoop @ chunk-276SZO74.js?v=7a20245f:197
+flushWork @ chunk-276SZO74.js?v=7a20245f:176
+performWorkUntilDeadline @ chunk-276SZO74.js?v=7a20245f:384Understand this error
+LayupScheduler.tsx:1539 🏔️ FINAL ORDERS: Returning 0 total orders, 0 are Mesa Universal
+LayupScheduler.tsx:3130 ✅ FRIDAY VALIDATION PASSED: 3 assignments, no Friday conflicts
+LayupScheduler.tsx:3136 🏭 LayupScheduler - Production/P1 orders: 0
+LayupScheduler.tsx:3159 🏔️ LayupScheduler - Mesa molds: (8) [{…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}]
+LayupScheduler.tsx:3161 📋 LayupScheduler - Order Assignments: {PO-P18261-2-1: {…}, PO-P18261-3-1: {…}, PO-P18261-1-1: {…}}
+LayupScheduler.tsx:3162 🏭 LayupScheduler - All Molds: (74) [{…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}]
+LayupScheduler.tsx:3163 ⚙️ LayupScheduler - Employees: 2 employees loaded
+LayupScheduler.tsx:3168 🔄 Unassigned orders: 0 []
+LayupScheduler.tsx:3169 🏭 Unassigned PRODUCTION/P1 orders: 0 []
+LayupScheduler.tsx:1100 🔍 RAW SCHEDULE DATA FROM DATABASE: 6 total entries
+LayupScheduler.tsx:1109   Entry 0: PO-P18261-2-1 → 2025-09-29T00:00:00.000Z → Mon Sep 29 2025 (Monday, day 1)
+LayupScheduler.tsx:1109   Entry 1: PO-P18261-3-1 → 2025-09-30T00:00:00.000Z → Tue Sep 30 2025 (Tuesday, day 2)
+LayupScheduler.tsx:1109   Entry 2: PO-P18261-2-1 → 2025-09-30T00:00:00.000Z → Tue Sep 30 2025 (Tuesday, day 2)
+LayupScheduler.tsx:1109   Entry 3: PO-P18261-1-1 → 2025-10-01T00:00:00.000Z → Wed Oct 01 2025 (Wednesday, day 3)
+LayupScheduler.tsx:1109   Entry 4: PO-P18261-3-1 → 2025-10-01T00:00:00.000Z → Wed Oct 01 2025 (Wednesday, day 3)
+LayupScheduler.tsx:1124 ✅ DATABASE FILTER: Keeping Monday assignment - PO-P18261-2-1 on Mon Sep 29 2025
+LayupScheduler.tsx:1124 ✅ DATABASE FILTER: Keeping Tuesday assignment - PO-P18261-3-1 on Tue Sep 30 2025
+LayupScheduler.tsx:1124 ✅ DATABASE FILTER: Keeping Tuesday assignment - PO-P18261-2-1 on Tue Sep 30 2025
+LayupScheduler.tsx:1124 ✅ DATABASE FILTER: Keeping Wednesday assignment - PO-P18261-1-1 on Wed Oct 01 2025
+LayupScheduler.tsx:1124 ✅ DATABASE FILTER: Keeping Wednesday assignment - PO-P18261-3-1 on Wed Oct 01 2025
+LayupScheduler.tsx:1124 ✅ DATABASE FILTER: Keeping Thursday assignment - PO-P18261-1-1 on Thu Oct 02 2025
+LayupScheduler.tsx:1130 📋 Database filter: Removed 0 non-work-day assignments, kept 6 work-day assignments
+LayupScheduler.tsx:1131 📋 Selected work days: Mon, Tue, Wed, Thu
+useUnifiedLayupOrders.ts:63 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 0, loading: true, error: null, hasData: true, p1OrdersFirst3: Array(0)}
+useUnifiedLayupOrders.ts:88 🔧 Final hook return: {ordersReturned: 0, isLoading: true, hasError: false, firstOrderId: undefined}
+LayupScheduler.tsx:1513 🏔️ MESA UNIVERSAL DEBUG: {totalOrders: 0, mesaUniversalCount: 0, mesaOrders: Array(0)}
+LayupScheduler.tsx:1519 🔍 LayupScheduler orders debug: {allOrdersCount: 0, rawData: 'has data', dataType: 'object', isArray: true, sourceCounts: {…}, …}
+main.tsx:33 ❌ LayupScheduler: No orders loaded from useUnifiedLayupOrders
+console.error @ main.tsx:33
+(anonymous) @ LayupScheduler.tsx:1533
+updateMemo @ chunk-276SZO74.js?v=7a20245f:12210
+useMemo @ chunk-276SZO74.js?v=7a20245f:12726
+useMemo @ chunk-ZMLY2J2T.js?v=7a20245f:1094
+LayupScheduler @ LayupScheduler.tsx:1510
+renderWithHooks @ chunk-276SZO74.js?v=7a20245f:11548
+updateFunctionComponent @ chunk-276SZO74.js?v=7a20245f:14587
+beginWork @ chunk-276SZO74.js?v=7a20245f:15924
+beginWork$1 @ chunk-276SZO74.js?v=7a20245f:19753
+performUnitOfWork @ chunk-276SZO74.js?v=7a20245f:19198
+workLoopSync @ chunk-276SZO74.js?v=7a20245f:19137
+renderRootSync @ chunk-276SZO74.js?v=7a20245f:19116
+performConcurrentWorkOnRoot @ chunk-276SZO74.js?v=7a20245f:18678
+workLoop @ chunk-276SZO74.js?v=7a20245f:197
+flushWork @ chunk-276SZO74.js?v=7a20245f:176
+performWorkUntilDeadline @ chunk-276SZO74.js?v=7a20245f:384Understand this error
+main.tsx:33 ❌ Backend shows orders but frontend received empty array
+console.error @ main.tsx:33
+(anonymous) @ LayupScheduler.tsx:1534
+updateMemo @ chunk-276SZO74.js?v=7a20245f:12210
+useMemo @ chunk-276SZO74.js?v=7a20245f:12726
+useMemo @ chunk-ZMLY2J2T.js?v=7a20245f:1094
+LayupScheduler @ LayupScheduler.tsx:1510
+renderWithHooks @ chunk-276SZO74.js?v=7a20245f:11548
+updateFunctionComponent @ chunk-276SZO74.js?v=7a20245f:14587
+beginWork @ chunk-276SZO74.js?v=7a20245f:15924
+beginWork$1 @ chunk-276SZO74.js?v=7a20245f:19753
+performUnitOfWork @ chunk-276SZO74.js?v=7a20245f:19198
+workLoopSync @ chunk-276SZO74.js?v=7a20245f:19137
+renderRootSync @ chunk-276SZO74.js?v=7a20245f:19116
+performConcurrentWorkOnRoot @ chunk-276SZO74.js?v=7a20245f:18678
+workLoop @ chunk-276SZO74.js?v=7a20245f:197
+flushWork @ chunk-276SZO74.js?v=7a20245f:176
+performWorkUntilDeadline @ chunk-276SZO74.js?v=7a20245f:384Understand this error
+LayupScheduler.tsx:1539 🏔️ FINAL ORDERS: Returning 0 total orders, 0 are Mesa Universal
+LayupScheduler.tsx:3130 ✅ FRIDAY VALIDATION PASSED: 3 assignments, no Friday conflicts
+LayupScheduler.tsx:3136 🏭 LayupScheduler - Production/P1 orders: 0
+LayupScheduler.tsx:3159 🏔️ LayupScheduler - Mesa molds: (8) [{…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}]
+LayupScheduler.tsx:3161 📋 LayupScheduler - Order Assignments: {PO-P18261-2-1: {…}, PO-P18261-3-1: {…}, PO-P18261-1-1: {…}}
+LayupScheduler.tsx:3162 🏭 LayupScheduler - All Molds: (74) [{…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}]
+LayupScheduler.tsx:3163 ⚙️ LayupScheduler - Employees: 2 employees loaded
+LayupScheduler.tsx:3168 🔄 Unassigned orders: 0 []
+LayupScheduler.tsx:3169 🏭 Unassigned PRODUCTION/P1 orders: 0 []
+useMoldSettings.ts:11 🔧 useMoldSettings: Molds state changed: (74) [{…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}]
+useEmployeeSettings.ts:11 🔧 useEmployeeSettings: Employees state changed: (2) [{…}, {…}]
+LayupScheduler.tsx:1563 🏭 LayupScheduler: Total orders from API: 0
+LayupScheduler.tsx:1564 🏭 LayupScheduler: Regular orders for scheduling: 0
+LayupScheduler.tsx:1565 🏭 LayupScheduler: P1 PO orders for scheduling: 0
+LayupScheduler.tsx:1581 🏭 LayupScheduler: Filtered orders by source: {}
+LayupScheduler.tsx:1589 ❌ LayupScheduler: Missing data for manual schedule generation: {orders: 0, molds: 74, employees: 2}
+LayupScheduler.tsx:2174 🚫 AUTO-TRIGGER DISABLED: Algorithmic scheduling will NOT auto-trigger. Use manual buttons for complete control.
+LayupScheduler.tsx:3234 🔧 Initial Friday cleanup: DISABLED to prevent scheduling cycles
+LayupScheduler.tsx:3235 📊 Loaded 3 existing assignments
+LayupScheduler.tsx:1100 🔍 RAW SCHEDULE DATA FROM DATABASE: 6 total entries
+LayupScheduler.tsx:1109   Entry 0: PO-P18261-2-1 → 2025-09-29T00:00:00.000Z → Mon Sep 29 2025 (Monday, day 1)
+LayupScheduler.tsx:1109   Entry 1: PO-P18261-3-1 → 2025-09-30T00:00:00.000Z → Tue Sep 30 2025 (Tuesday, day 2)
+LayupScheduler.tsx:1109   Entry 2: PO-P18261-2-1 → 2025-09-30T00:00:00.000Z → Tue Sep 30 2025 (Tuesday, day 2)
+LayupScheduler.tsx:1109   Entry 3: PO-P18261-1-1 → 2025-10-01T00:00:00.000Z → Wed Oct 01 2025 (Wednesday, day 3)
+LayupScheduler.tsx:1109   Entry 4: PO-P18261-3-1 → 2025-10-01T00:00:00.000Z → Wed Oct 01 2025 (Wednesday, day 3)
+LayupScheduler.tsx:1124 ✅ DATABASE FILTER: Keeping Monday assignment - PO-P18261-2-1 on Mon Sep 29 2025
+LayupScheduler.tsx:1124 ✅ DATABASE FILTER: Keeping Tuesday assignment - PO-P18261-3-1 on Tue Sep 30 2025
+LayupScheduler.tsx:1124 ✅ DATABASE FILTER: Keeping Tuesday assignment - PO-P18261-2-1 on Tue Sep 30 2025
+LayupScheduler.tsx:1124 ✅ DATABASE FILTER: Keeping Wednesday assignment - PO-P18261-1-1 on Wed Oct 01 2025
+LayupScheduler.tsx:1124 ✅ DATABASE FILTER: Keeping Wednesday assignment - PO-P18261-3-1 on Wed Oct 01 2025
+LayupScheduler.tsx:1124 ✅ DATABASE FILTER: Keeping Thursday assignment - PO-P18261-1-1 on Thu Oct 02 2025
+LayupScheduler.tsx:1130 📋 Database filter: Removed 0 non-work-day assignments, kept 6 work-day assignments
+LayupScheduler.tsx:1131 📋 Selected work days: Mon, Tue, Wed, Thu
+useUnifiedLayupOrders.ts:63 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 0, loading: true, error: null, hasData: true, p1OrdersFirst3: Array(0)}
+useUnifiedLayupOrders.ts:88 🔧 Final hook return: {ordersReturned: 0, isLoading: true, hasError: false, firstOrderId: undefined}
+LayupScheduler.tsx:1513 🏔️ MESA UNIVERSAL DEBUG: {totalOrders: 0, mesaUniversalCount: 0, mesaOrders: Array(0)}
+LayupScheduler.tsx:1519 🔍 LayupScheduler orders debug: {allOrdersCount: 0, rawData: 'has data', dataType: 'object', isArray: true, sourceCounts: {…}, …}
+main.tsx:33 ❌ LayupScheduler: No orders loaded from useUnifiedLayupOrders
+console.error @ main.tsx:33
+(anonymous) @ LayupScheduler.tsx:1533
+updateMemo @ chunk-276SZO74.js?v=7a20245f:12210
+useMemo @ chunk-276SZO74.js?v=7a20245f:12726
+useMemo @ chunk-ZMLY2J2T.js?v=7a20245f:1094
+LayupScheduler @ LayupScheduler.tsx:1510
+renderWithHooks @ chunk-276SZO74.js?v=7a20245f:11548
+updateFunctionComponent @ chunk-276SZO74.js?v=7a20245f:14582
+beginWork @ chunk-276SZO74.js?v=7a20245f:15924
+beginWork$1 @ chunk-276SZO74.js?v=7a20245f:19753
+performUnitOfWork @ chunk-276SZO74.js?v=7a20245f:19198
+workLoopSync @ chunk-276SZO74.js?v=7a20245f:19137
+renderRootSync @ chunk-276SZO74.js?v=7a20245f:19116
+performConcurrentWorkOnRoot @ chunk-276SZO74.js?v=7a20245f:18678
+workLoop @ chunk-276SZO74.js?v=7a20245f:197
+flushWork @ chunk-276SZO74.js?v=7a20245f:176
+performWorkUntilDeadline @ chunk-276SZO74.js?v=7a20245f:384Understand this error
+main.tsx:33 ❌ Backend shows orders but frontend received empty array
+console.error @ main.tsx:33
+(anonymous) @ LayupScheduler.tsx:1534
+updateMemo @ chunk-276SZO74.js?v=7a20245f:12210
+useMemo @ chunk-276SZO74.js?v=7a20245f:12726
+useMemo @ chunk-ZMLY2J2T.js?v=7a20245f:1094
+LayupScheduler @ LayupScheduler.tsx:1510
+renderWithHooks @ chunk-276SZO74.js?v=7a20245f:11548
+updateFunctionComponent @ chunk-276SZO74.js?v=7a20245f:14582
+beginWork @ chunk-276SZO74.js?v=7a20245f:15924
+beginWork$1 @ chunk-276SZO74.js?v=7a20245f:19753
+performUnitOfWork @ chunk-276SZO74.js?v=7a20245f:19198
+workLoopSync @ chunk-276SZO74.js?v=7a20245f:19137
+renderRootSync @ chunk-276SZO74.js?v=7a20245f:19116
+performConcurrentWorkOnRoot @ chunk-276SZO74.js?v=7a20245f:18678
+workLoop @ chunk-276SZO74.js?v=7a20245f:197
+flushWork @ chunk-276SZO74.js?v=7a20245f:176
+performWorkUntilDeadline @ chunk-276SZO74.js?v=7a20245f:384Understand this error
+LayupScheduler.tsx:1539 🏔️ FINAL ORDERS: Returning 0 total orders, 0 are Mesa Universal
+LayupScheduler.tsx:3130 ✅ FRIDAY VALIDATION PASSED: 3 assignments, no Friday conflicts
+LayupScheduler.tsx:3136 🏭 LayupScheduler - Production/P1 orders: 0
+LayupScheduler.tsx:3159 🏔️ LayupScheduler - Mesa molds: (8) [{…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}]
+LayupScheduler.tsx:3161 📋 LayupScheduler - Order Assignments: {PO-P18261-2-1: {…}, PO-P18261-3-1: {…}, PO-P18261-1-1: {…}}
+LayupScheduler.tsx:3162 🏭 LayupScheduler - All Molds: (74) [{…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}]
+LayupScheduler.tsx:3163 ⚙️ LayupScheduler - Employees: 2 employees loaded
+LayupScheduler.tsx:3168 🔄 Unassigned orders: 0 []
+LayupScheduler.tsx:3169 🏭 Unassigned PRODUCTION/P1 orders: 0 []
+LayupScheduler.tsx:1100 🔍 RAW SCHEDULE DATA FROM DATABASE: 6 total entries
+LayupScheduler.tsx:1109   Entry 0: PO-P18261-2-1 → 2025-09-29T00:00:00.000Z → Mon Sep 29 2025 (Monday, day 1)
+LayupScheduler.tsx:1109   Entry 1: PO-P18261-3-1 → 2025-09-30T00:00:00.000Z → Tue Sep 30 2025 (Tuesday, day 2)
+LayupScheduler.tsx:1109   Entry 2: PO-P18261-2-1 → 2025-09-30T00:00:00.000Z → Tue Sep 30 2025 (Tuesday, day 2)
+LayupScheduler.tsx:1109   Entry 3: PO-P18261-1-1 → 2025-10-01T00:00:00.000Z → Wed Oct 01 2025 (Wednesday, day 3)
+LayupScheduler.tsx:1109   Entry 4: PO-P18261-3-1 → 2025-10-01T00:00:00.000Z → Wed Oct 01 2025 (Wednesday, day 3)
+LayupScheduler.tsx:1124 ✅ DATABASE FILTER: Keeping Monday assignment - PO-P18261-2-1 on Mon Sep 29 2025
+LayupScheduler.tsx:1124 ✅ DATABASE FILTER: Keeping Tuesday assignment - PO-P18261-3-1 on Tue Sep 30 2025
+LayupScheduler.tsx:1124 ✅ DATABASE FILTER: Keeping Tuesday assignment - PO-P18261-2-1 on Tue Sep 30 2025
+LayupScheduler.tsx:1124 ✅ DATABASE FILTER: Keeping Wednesday assignment - PO-P18261-1-1 on Wed Oct 01 2025
+LayupScheduler.tsx:1124 ✅ DATABASE FILTER: Keeping Wednesday assignment - PO-P18261-3-1 on Wed Oct 01 2025
+LayupScheduler.tsx:1124 ✅ DATABASE FILTER: Keeping Thursday assignment - PO-P18261-1-1 on Thu Oct 02 2025
+LayupScheduler.tsx:1130 📋 Database filter: Removed 0 non-work-day assignments, kept 6 work-day assignments
+LayupScheduler.tsx:1131 📋 Selected work days: Mon, Tue, Wed, Thu
+useUnifiedLayupOrders.ts:63 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 0, loading: true, error: null, hasData: true, p1OrdersFirst3: Array(0)}
+useUnifiedLayupOrders.ts:88 🔧 Final hook return: {ordersReturned: 0, isLoading: true, hasError: false, firstOrderId: undefined}
+LayupScheduler.tsx:1513 🏔️ MESA UNIVERSAL DEBUG: {totalOrders: 0, mesaUniversalCount: 0, mesaOrders: Array(0)}
+LayupScheduler.tsx:1519 🔍 LayupScheduler orders debug: {allOrdersCount: 0, rawData: 'has data', dataType: 'object', isArray: true, sourceCounts: {…}, …}
+main.tsx:33 ❌ LayupScheduler: No orders loaded from useUnifiedLayupOrders
+console.error @ main.tsx:33
+(anonymous) @ LayupScheduler.tsx:1533
+updateMemo @ chunk-276SZO74.js?v=7a20245f:12210
+useMemo @ chunk-276SZO74.js?v=7a20245f:12726
+useMemo @ chunk-ZMLY2J2T.js?v=7a20245f:1094
+LayupScheduler @ LayupScheduler.tsx:1510
+renderWithHooks @ chunk-276SZO74.js?v=7a20245f:11548
+updateFunctionComponent @ chunk-276SZO74.js?v=7a20245f:14587
+beginWork @ chunk-276SZO74.js?v=7a20245f:15924
+beginWork$1 @ chunk-276SZO74.js?v=7a20245f:19753
+performUnitOfWork @ chunk-276SZO74.js?v=7a20245f:19198
+workLoopSync @ chunk-276SZO74.js?v=7a20245f:19137
+renderRootSync @ chunk-276SZO74.js?v=7a20245f:19116
+performConcurrentWorkOnRoot @ chunk-276SZO74.js?v=7a20245f:18678
+workLoop @ chunk-276SZO74.js?v=7a20245f:197
+flushWork @ chunk-276SZO74.js?v=7a20245f:176
+performWorkUntilDeadline @ chunk-276SZO74.js?v=7a20245f:384Understand this error
+main.tsx:33 ❌ Backend shows orders but frontend received empty array
+console.error @ main.tsx:33
+(anonymous) @ LayupScheduler.tsx:1534
+updateMemo @ chunk-276SZO74.js?v=7a20245f:12210
+useMemo @ chunk-276SZO74.js?v=7a20245f:12726
+useMemo @ chunk-ZMLY2J2T.js?v=7a20245f:1094
+LayupScheduler @ LayupScheduler.tsx:1510
+renderWithHooks @ chunk-276SZO74.js?v=7a20245f:11548
+updateFunctionComponent @ chunk-276SZO74.js?v=7a20245f:14587
+beginWork @ chunk-276SZO74.js?v=7a20245f:15924
+beginWork$1 @ chunk-276SZO74.js?v=7a20245f:19753
+performUnitOfWork @ chunk-276SZO74.js?v=7a20245f:19198
+workLoopSync @ chunk-276SZO74.js?v=7a20245f:19137
+renderRootSync @ chunk-276SZO74.js?v=7a20245f:19116
+performConcurrentWorkOnRoot @ chunk-276SZO74.js?v=7a20245f:18678
+workLoop @ chunk-276SZO74.js?v=7a20245f:197
+flushWork @ chunk-276SZO74.js?v=7a20245f:176
+performWorkUntilDeadline @ chunk-276SZO74.js?v=7a20245f:384Understand this error
+LayupScheduler.tsx:1539 🏔️ FINAL ORDERS: Returning 0 total orders, 0 are Mesa Universal
+LayupScheduler.tsx:3130 ✅ FRIDAY VALIDATION PASSED: 3 assignments, no Friday conflicts
+LayupScheduler.tsx:3136 🏭 LayupScheduler - Production/P1 orders: 0
+LayupScheduler.tsx:3159 🏔️ LayupScheduler - Mesa molds: (8) [{…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}]
+LayupScheduler.tsx:3161 📋 LayupScheduler - Order Assignments: {PO-P18261-2-1: {…}, PO-P18261-3-1: {…}, PO-P18261-1-1: {…}}
+LayupScheduler.tsx:3162 🏭 LayupScheduler - All Molds: (74) [{…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}]
+LayupScheduler.tsx:3163 ⚙️ LayupScheduler - Employees: 2 employees loaded
+LayupScheduler.tsx:3168 🔄 Unassigned orders: 0 []
+LayupScheduler.tsx:3169 🏭 Unassigned PRODUCTION/P1 orders: 0 []
+LayupScheduler.tsx:1563 🏭 LayupScheduler: Total orders from API: 0
+LayupScheduler.tsx:1564 🏭 LayupScheduler: Regular orders for scheduling: 0
+LayupScheduler.tsx:1565 🏭 LayupScheduler: P1 PO orders for scheduling: 0
+LayupScheduler.tsx:1581 🏭 LayupScheduler: Filtered orders by source: {}
+LayupScheduler.tsx:1589 ❌ LayupScheduler: Missing data for manual schedule generation: {orders: 0, molds: 74, employees: 2}
+layup-scheduler:1 Banner not shown: beforeinstallpromptevent.preventDefault() called. The page must call beforeinstallpromptevent.prompt() to show the banner.
+useUnifiedLayupOrders.ts:39 🎯 Direct API response: {status: 200, length: 215, firstItem: 'AG501'}
+useUnifiedLayupOrders.ts:52 ✅ Processing 215 orders in select transform
+LayupScheduler.tsx:1100 🔍 RAW SCHEDULE DATA FROM DATABASE: 6 total entries
+LayupScheduler.tsx:1109   Entry 0: PO-P18261-2-1 → 2025-09-29T00:00:00.000Z → Mon Sep 29 2025 (Monday, day 1)
+LayupScheduler.tsx:1109   Entry 1: PO-P18261-3-1 → 2025-09-30T00:00:00.000Z → Tue Sep 30 2025 (Tuesday, day 2)
+LayupScheduler.tsx:1109   Entry 2: PO-P18261-2-1 → 2025-09-30T00:00:00.000Z → Tue Sep 30 2025 (Tuesday, day 2)
+LayupScheduler.tsx:1109   Entry 3: PO-P18261-1-1 → 2025-10-01T00:00:00.000Z → Wed Oct 01 2025 (Wednesday, day 3)
+LayupScheduler.tsx:1109   Entry 4: PO-P18261-3-1 → 2025-10-01T00:00:00.000Z → Wed Oct 01 2025 (Wednesday, day 3)
+LayupScheduler.tsx:1124 ✅ DATABASE FILTER: Keeping Monday assignment - PO-P18261-2-1 on Mon Sep 29 2025
+LayupScheduler.tsx:1124 ✅ DATABASE FILTER: Keeping Tuesday assignment - PO-P18261-3-1 on Tue Sep 30 2025
+LayupScheduler.tsx:1124 ✅ DATABASE FILTER: Keeping Tuesday assignment - PO-P18261-2-1 on Tue Sep 30 2025
+LayupScheduler.tsx:1124 ✅ DATABASE FILTER: Keeping Wednesday assignment - PO-P18261-1-1 on Wed Oct 01 2025
+LayupScheduler.tsx:1124 ✅ DATABASE FILTER: Keeping Wednesday assignment - PO-P18261-3-1 on Wed Oct 01 2025
+LayupScheduler.tsx:1124 ✅ DATABASE FILTER: Keeping Thursday assignment - PO-P18261-1-1 on Thu Oct 02 2025
+LayupScheduler.tsx:1130 📋 Database filter: Removed 0 non-work-day assignments, kept 6 work-day assignments
+LayupScheduler.tsx:1131 📋 Selected work days: Mon, Tue, Wed, Thu
+useUnifiedLayupOrders.ts:52 ✅ Processing 215 orders in select transform
+useUnifiedLayupOrders.ts:63 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 215, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+useUnifiedLayupOrders.ts:88 🔧 Final hook return: {ordersReturned: 215, isLoading: false, hasError: false, firstOrderId: 'AG501'}
+LayupScheduler.tsx:1513 🏔️ MESA UNIVERSAL DEBUG: {totalOrders: 215, mesaUniversalCount: 0, mesaOrders: Array(0)}
+LayupScheduler.tsx:1519 🔍 LayupScheduler orders debug: {allOrdersCount: 215, rawData: 'has data', dataType: 'object', isArray: true, sourceCounts: {…}, …}
+LayupScheduler.tsx:1539 🏔️ FINAL ORDERS: Returning 215 total orders, 0 are Mesa Universal
+LayupScheduler.tsx:1553 🚫 LOP Scheduler auto-run DISABLED for complete manual control
+LayupScheduler.tsx:3130 ✅ FRIDAY VALIDATION PASSED: 3 assignments, no Friday conflicts
+LayupScheduler.tsx:3136 🏭 LayupScheduler - Production/P1 orders: 0
+LayupScheduler.tsx:3159 🏔️ LayupScheduler - Mesa molds: (8) [{…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}]
+LayupScheduler.tsx:3161 📋 LayupScheduler - Order Assignments: {PO-P18261-2-1: {…}, PO-P18261-3-1: {…}, PO-P18261-1-1: {…}}
+LayupScheduler.tsx:3162 🏭 LayupScheduler - All Molds: (74) [{…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}]
+LayupScheduler.tsx:3163 ⚙️ LayupScheduler - Employees: 2 employees loaded
+LayupScheduler.tsx:3168 🔄 Unassigned orders: 215 (215) ['AG501', 'AG493', 'AG491', 'AG489', 'AG466', 'AG464', 'AG487', 'EH223', 'AG125', 'AG079', 'AG122', 'AG098', 'AG049', 'AG109', 'AG756', 'AG786', 'EH191', 'AG753', 'AG571', 'EH178', 'EH164', 'EH160', 'EH158', 'EH126', 'EH055', 'AG651', 'AG441', 'AG656', 'AG654', 'AG444', 'AG452', 'AG406', 'AG434', 'AG359', 'AG307', 'AG345', 'AG119', 'AG455', 'AG121', 'AG479', 'AG480', 'AG481', 'AG482', 'AG483', 'AG530', 'AG463', 'AG492', 'AG495', 'AG500', 'AG082', 'AG062', 'AG104', 'AG056', 'AG141', 'AG151', 'AG161', 'AG164', 'AG286', 'AG145', 'AG331', 'AG467', 'AG473', 'AG544', 'AG553', 'AG555', 'AG564', 'AG565', 'AG566', 'AG579', 'AG638', 'AG639', 'AG658', 'AG666', 'AG670', 'AG568', 'AG581', 'AG582', 'AG583', 'AG584', 'AG595', 'AG688', 'AG625', 'AG635', 'AG149', 'AG644', 'AG796', 'AG679', 'AG389', 'AG548', 'AG634', 'AG641', 'AG642', 'AG645', 'AG755', 'AG726', 'AG474', 'AG624', 'AG803', 'AG775', 'AG774', …]
+LayupScheduler.tsx:3169 🏭 Unassigned PRODUCTION/P1 orders: 0 []
+LayupScheduler.tsx:4999 📅 MONDAY DEBUG: Date 2025-09-29, 1 assignments found
+LayupScheduler.tsx:5001    📅 PO-P18261-2-1 → Privateer-1
+LayupScheduler.tsx:5027 ✅ Monday assignment found: PO-P18261-2-1 → Privateer-1 on 2025-09-29
+LayupScheduler.tsx:5111 ⚠️ Order PO-P18261-2-1 not found in processedOrders or orders arrays
+(anonymous) @ LayupScheduler.tsx:5111
+(anonymous) @ LayupScheduler.tsx:5100
+(anonymous) @ LayupScheduler.tsx:5009
+(anonymous) @ LayupScheduler.tsx:5160
+(anonymous) @ LayupScheduler.tsx:5005
+LayupScheduler @ LayupScheduler.tsx:5163
+renderWithHooks @ chunk-276SZO74.js?v=7a20245f:11548
+updateFunctionComponent @ chunk-276SZO74.js?v=7a20245f:14582
+beginWork @ chunk-276SZO74.js?v=7a20245f:15924
+beginWork$1 @ chunk-276SZO74.js?v=7a20245f:19753
+performUnitOfWork @ chunk-276SZO74.js?v=7a20245f:19198
+workLoopSync @ chunk-276SZO74.js?v=7a20245f:19137
+renderRootSync @ chunk-276SZO74.js?v=7a20245f:19116
+performSyncWorkOnRoot @ chunk-276SZO74.js?v=7a20245f:18874
+flushSyncCallbacks @ chunk-276SZO74.js?v=7a20245f:9119
+(anonymous) @ chunk-276SZO74.js?v=7a20245f:18627
+setTimeout
+defaultScheduler @ chunk-65LAIXSP.js?v=7a20245f:560
+flush @ chunk-65LAIXSP.js?v=7a20245f:584
+batch @ chunk-65LAIXSP.js?v=7a20245f:602
+dispatch_fn @ chunk-65LAIXSP.js?v=7a20245f:1038
+setData @ chunk-65LAIXSP.js?v=7a20245f:713
+fetch @ chunk-65LAIXSP.js?v=7a20245f:927
+await in fetch
+executeFetch_fn @ chunk-65LAIXSP.js?v=7a20245f:2280
+onSubscribe @ chunk-65LAIXSP.js?v=7a20245f:1976
+subscribe @ chunk-65LAIXSP.js?v=7a20245f:24
+(anonymous) @ chunk-65LAIXSP.js?v=7a20245f:3147
+subscribeToStore @ chunk-276SZO74.js?v=7a20245f:11984
+commitHookEffectListMount @ chunk-276SZO74.js?v=7a20245f:16915
+commitPassiveMountOnFiber @ chunk-276SZO74.js?v=7a20245f:18156
+commitPassiveMountEffects_complete @ chunk-276SZO74.js?v=7a20245f:18129
+commitPassiveMountEffects_begin @ chunk-276SZO74.js?v=7a20245f:18119
+commitPassiveMountEffects @ chunk-276SZO74.js?v=7a20245f:18109
+flushPassiveEffectsImpl @ chunk-276SZO74.js?v=7a20245f:19490
+flushPassiveEffects @ chunk-276SZO74.js?v=7a20245f:19447
+performSyncWorkOnRoot @ chunk-276SZO74.js?v=7a20245f:18868
+flushSyncCallbacks @ chunk-276SZO74.js?v=7a20245f:9119
+commitRootImpl @ chunk-276SZO74.js?v=7a20245f:19432
+commitRoot @ chunk-276SZO74.js?v=7a20245f:19277
+finishConcurrentRender @ chunk-276SZO74.js?v=7a20245f:18805
+performConcurrentWorkOnRoot @ chunk-276SZO74.js?v=7a20245f:18718
+workLoop @ chunk-276SZO74.js?v=7a20245f:197
+flushWork @ chunk-276SZO74.js?v=7a20245f:176
+performWorkUntilDeadline @ chunk-276SZO74.js?v=7a20245f:384Understand this warning
+LayupScheduler.tsx:5111 ⚠️ Order PO-P18261-3-1 not found in processedOrders or orders arrays
+(anonymous) @ LayupScheduler.tsx:5111
+(anonymous) @ LayupScheduler.tsx:5100
+(anonymous) @ LayupScheduler.tsx:5009
+(anonymous) @ LayupScheduler.tsx:5160
+(anonymous) @ LayupScheduler.tsx:5005
+LayupScheduler @ LayupScheduler.tsx:5163
+renderWithHooks @ chunk-276SZO74.js?v=7a20245f:11548
+updateFunctionComponent @ chunk-276SZO74.js?v=7a20245f:14582
+beginWork @ chunk-276SZO74.js?v=7a20245f:15924
+beginWork$1 @ chunk-276SZO74.js?v=7a20245f:19753
+performUnitOfWork @ chunk-276SZO74.js?v=7a20245f:19198
+workLoopSync @ chunk-276SZO74.js?v=7a20245f:19137
+renderRootSync @ chunk-276SZO74.js?v=7a20245f:19116
+performSyncWorkOnRoot @ chunk-276SZO74.js?v=7a20245f:18874
+flushSyncCallbacks @ chunk-276SZO74.js?v=7a20245f:9119
+(anonymous) @ chunk-276SZO74.js?v=7a20245f:18627
+setTimeout
+defaultScheduler @ chunk-65LAIXSP.js?v=7a20245f:560
+flush @ chunk-65LAIXSP.js?v=7a20245f:584
+batch @ chunk-65LAIXSP.js?v=7a20245f:602
+dispatch_fn @ chunk-65LAIXSP.js?v=7a20245f:1038
+setData @ chunk-65LAIXSP.js?v=7a20245f:713
+fetch @ chunk-65LAIXSP.js?v=7a20245f:927
+await in fetch
+executeFetch_fn @ chunk-65LAIXSP.js?v=7a20245f:2280
+onSubscribe @ chunk-65LAIXSP.js?v=7a20245f:1976
+subscribe @ chunk-65LAIXSP.js?v=7a20245f:24
+(anonymous) @ chunk-65LAIXSP.js?v=7a20245f:3147
+subscribeToStore @ chunk-276SZO74.js?v=7a20245f:11984
+commitHookEffectListMount @ chunk-276SZO74.js?v=7a20245f:16915
+commitPassiveMountOnFiber @ chunk-276SZO74.js?v=7a20245f:18156
+commitPassiveMountEffects_complete @ chunk-276SZO74.js?v=7a20245f:18129
+commitPassiveMountEffects_begin @ chunk-276SZO74.js?v=7a20245f:18119
+commitPassiveMountEffects @ chunk-276SZO74.js?v=7a20245f:18109
+flushPassiveEffectsImpl @ chunk-276SZO74.js?v=7a20245f:19490
+flushPassiveEffects @ chunk-276SZO74.js?v=7a20245f:19447
+performSyncWorkOnRoot @ chunk-276SZO74.js?v=7a20245f:18868
+flushSyncCallbacks @ chunk-276SZO74.js?v=7a20245f:9119
+commitRootImpl @ chunk-276SZO74.js?v=7a20245f:19432
+commitRoot @ chunk-276SZO74.js?v=7a20245f:19277
+finishConcurrentRender @ chunk-276SZO74.js?v=7a20245f:18805
+performConcurrentWorkOnRoot @ chunk-276SZO74.js?v=7a20245f:18718
+workLoop @ chunk-276SZO74.js?v=7a20245f:197
+flushWork @ chunk-276SZO74.js?v=7a20245f:176
+performWorkUntilDeadline @ chunk-276SZO74.js?v=7a20245f:384Understand this warning
+main.tsx:33 Warning: Invalid prop `data-replit-metadata` supplied to `React.Fragment`. React.Fragment can only have `key` and `children` props.
+    at LayupScheduler (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/src/components/LayupScheduler.tsx:565:35)
+    at div
+    at LayupSchedulerPage
+    at Route (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=7a20245f:280:16)
+    at Switch (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=7a20245f:336:17)
+    at main
+    at div
+    at Router (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=7a20245f:235:17)
+    at DeploymentAuthWrapper (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/src/components/DeploymentAuthWrapper.tsx:34:49)
+    at QueryClientProvider (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-65LAIXSP.js?v=7a20245f:2934:3)
+    at App (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/src/App.tsx?v=x9XeZQg4psaYsedP1lurc:138:35)
+    at Router (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=7a20245f:6332:13)
+    at BrowserRouter (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=7a20245f:9416:3)
+    at QueryClientProvider (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-65LAIXSP.js?v=7a20245f:2934:3)
+console.error @ main.tsx:33
+printWarning @ react_jsx-dev-runtime.js?v=7a20245f:64
+error @ react_jsx-dev-runtime.js?v=7a20245f:48
+validateFragmentProps @ react_jsx-dev-runtime.js?v=7a20245f:796
+jsxWithValidation @ react_jsx-dev-runtime.js?v=7a20245f:874
+(anonymous) @ LayupScheduler.tsx:5006
+(anonymous) @ LayupScheduler.tsx:5005
+LayupScheduler @ LayupScheduler.tsx:5163
+renderWithHooks @ chunk-276SZO74.js?v=7a20245f:11548
+updateFunctionComponent @ chunk-276SZO74.js?v=7a20245f:14582
+beginWork @ chunk-276SZO74.js?v=7a20245f:15924
+beginWork$1 @ chunk-276SZO74.js?v=7a20245f:19753
+performUnitOfWork @ chunk-276SZO74.js?v=7a20245f:19198
+workLoopSync @ chunk-276SZO74.js?v=7a20245f:19137
+renderRootSync @ chunk-276SZO74.js?v=7a20245f:19116
+performSyncWorkOnRoot @ chunk-276SZO74.js?v=7a20245f:18874
+flushSyncCallbacks @ chunk-276SZO74.js?v=7a20245f:9119
+(anonymous) @ chunk-276SZO74.js?v=7a20245f:18627
+setTimeout
+defaultScheduler @ chunk-65LAIXSP.js?v=7a20245f:560
+flush @ chunk-65LAIXSP.js?v=7a20245f:584
+batch @ chunk-65LAIXSP.js?v=7a20245f:602
+dispatch_fn @ chunk-65LAIXSP.js?v=7a20245f:1038
+setData @ chunk-65LAIXSP.js?v=7a20245f:713
+fetch @ chunk-65LAIXSP.js?v=7a20245f:927
+await in fetch
+executeFetch_fn @ chunk-65LAIXSP.js?v=7a20245f:2280
+onSubscribe @ chunk-65LAIXSP.js?v=7a20245f:1976
+subscribe @ chunk-65LAIXSP.js?v=7a20245f:24
+(anonymous) @ chunk-65LAIXSP.js?v=7a20245f:3147
+subscribeToStore @ chunk-276SZO74.js?v=7a20245f:11984
+commitHookEffectListMount @ chunk-276SZO74.js?v=7a20245f:16915
+commitPassiveMountOnFiber @ chunk-276SZO74.js?v=7a20245f:18156
+commitPassiveMountEffects_complete @ chunk-276SZO74.js?v=7a20245f:18129
+commitPassiveMountEffects_begin @ chunk-276SZO74.js?v=7a20245f:18119
+commitPassiveMountEffects @ chunk-276SZO74.js?v=7a20245f:18109
+flushPassiveEffectsImpl @ chunk-276SZO74.js?v=7a20245f:19490
+flushPassiveEffects @ chunk-276SZO74.js?v=7a20245f:19447
+performSyncWorkOnRoot @ chunk-276SZO74.js?v=7a20245f:18868
+flushSyncCallbacks @ chunk-276SZO74.js?v=7a20245f:9119
+commitRootImpl @ chunk-276SZO74.js?v=7a20245f:19432
+commitRoot @ chunk-276SZO74.js?v=7a20245f:19277
+finishConcurrentRender @ chunk-276SZO74.js?v=7a20245f:18805
+performConcurrentWorkOnRoot @ chunk-276SZO74.js?v=7a20245f:18718
+workLoop @ chunk-276SZO74.js?v=7a20245f:197
+flushWork @ chunk-276SZO74.js?v=7a20245f:176
+performWorkUntilDeadline @ chunk-276SZO74.js?v=7a20245f:384Understand this error
+LayupScheduler.tsx:5111 ⚠️ Order PO-P18261-1-1 not found in processedOrders or orders arrays
+(anonymous) @ LayupScheduler.tsx:5111
+(anonymous) @ LayupScheduler.tsx:5100
+(anonymous) @ LayupScheduler.tsx:5009
+(anonymous) @ LayupScheduler.tsx:5160
+(anonymous) @ LayupScheduler.tsx:5005
+LayupScheduler @ LayupScheduler.tsx:5163
+renderWithHooks @ chunk-276SZO74.js?v=7a20245f:11548
+updateFunctionComponent @ chunk-276SZO74.js?v=7a20245f:14582
+beginWork @ chunk-276SZO74.js?v=7a20245f:15924
+beginWork$1 @ chunk-276SZO74.js?v=7a20245f:19753
+performUnitOfWork @ chunk-276SZO74.js?v=7a20245f:19198
+workLoopSync @ chunk-276SZO74.js?v=7a20245f:19137
+renderRootSync @ chunk-276SZO74.js?v=7a20245f:19116
+performSyncWorkOnRoot @ chunk-276SZO74.js?v=7a20245f:18874
+flushSyncCallbacks @ chunk-276SZO74.js?v=7a20245f:9119
+(anonymous) @ chunk-276SZO74.js?v=7a20245f:18627
+setTimeout
+defaultScheduler @ chunk-65LAIXSP.js?v=7a20245f:560
+flush @ chunk-65LAIXSP.js?v=7a20245f:584
+batch @ chunk-65LAIXSP.js?v=7a20245f:602
+dispatch_fn @ chunk-65LAIXSP.js?v=7a20245f:1038
+setData @ chunk-65LAIXSP.js?v=7a20245f:713
+fetch @ chunk-65LAIXSP.js?v=7a20245f:927
+await in fetch
+executeFetch_fn @ chunk-65LAIXSP.js?v=7a20245f:2280
+onSubscribe @ chunk-65LAIXSP.js?v=7a20245f:1976
+subscribe @ chunk-65LAIXSP.js?v=7a20245f:24
+(anonymous) @ chunk-65LAIXSP.js?v=7a20245f:3147
+subscribeToStore @ chunk-276SZO74.js?v=7a20245f:11984
+commitHookEffectListMount @ chunk-276SZO74.js?v=7a20245f:16915
+commitPassiveMountOnFiber @ chunk-276SZO74.js?v=7a20245f:18156
+commitPassiveMountEffects_complete @ chunk-276SZO74.js?v=7a20245f:18129
+commitPassiveMountEffects_begin @ chunk-276SZO74.js?v=7a20245f:18119
+commitPassiveMountEffects @ chunk-276SZO74.js?v=7a20245f:18109
+flushPassiveEffectsImpl @ chunk-276SZO74.js?v=7a20245f:19490
+flushPassiveEffects @ chunk-276SZO74.js?v=7a20245f:19447
+performSyncWorkOnRoot @ chunk-276SZO74.js?v=7a20245f:18868
+flushSyncCallbacks @ chunk-276SZO74.js?v=7a20245f:9119
+commitRootImpl @ chunk-276SZO74.js?v=7a20245f:19432
+commitRoot @ chunk-276SZO74.js?v=7a20245f:19277
+finishConcurrentRender @ chunk-276SZO74.js?v=7a20245f:18805
+performConcurrentWorkOnRoot @ chunk-276SZO74.js?v=7a20245f:18718
+workLoop @ chunk-276SZO74.js?v=7a20245f:197
+flushWork @ chunk-276SZO74.js?v=7a20245f:176
+performWorkUntilDeadline @ chunk-276SZO74.js?v=7a20245f:384Understand this warning
+main.tsx:33 Warning: Invalid prop `data-replit-metadata` supplied to `React.Fragment`. React.Fragment can only have `key` and `children` props.
+    at LayupScheduler (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/src/components/LayupScheduler.tsx:565:35)
+    at div
+    at LayupSchedulerPage
+    at Route (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=7a20245f:280:16)
+    at Switch (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=7a20245f:336:17)
+    at main
+    at div
+    at Router (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=7a20245f:235:17)
+    at DeploymentAuthWrapper (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/src/components/DeploymentAuthWrapper.tsx:34:49)
+    at QueryClientProvider (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-65LAIXSP.js?v=7a20245f:2934:3)
+    at App (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/src/App.tsx?v=x9XeZQg4psaYsedP1lurc:138:35)
+    at Router (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=7a20245f:6332:13)
+    at BrowserRouter (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=7a20245f:9416:3)
+    at QueryClientProvider (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-65LAIXSP.js?v=7a20245f:2934:3)
+console.error @ main.tsx:33
+printWarning @ react_jsx-dev-runtime.js?v=7a20245f:64
+error @ react_jsx-dev-runtime.js?v=7a20245f:48
+validateFragmentProps @ react_jsx-dev-runtime.js?v=7a20245f:796
+jsxWithValidation @ react_jsx-dev-runtime.js?v=7a20245f:874
+(anonymous) @ LayupScheduler.tsx:5006
+(anonymous) @ LayupScheduler.tsx:5005
+LayupScheduler @ LayupScheduler.tsx:5163
+renderWithHooks @ chunk-276SZO74.js?v=7a20245f:11548
+updateFunctionComponent @ chunk-276SZO74.js?v=7a20245f:14582
+beginWork @ chunk-276SZO74.js?v=7a20245f:15924
+beginWork$1 @ chunk-276SZO74.js?v=7a20245f:19753
+performUnitOfWork @ chunk-276SZO74.js?v=7a20245f:19198
+workLoopSync @ chunk-276SZO74.js?v=7a20245f:19137
+renderRootSync @ chunk-276SZO74.js?v=7a20245f:19116
+performSyncWorkOnRoot @ chunk-276SZO74.js?v=7a20245f:18874
+flushSyncCallbacks @ chunk-276SZO74.js?v=7a20245f:9119
+(anonymous) @ chunk-276SZO74.js?v=7a20245f:18627
+setTimeout
+defaultScheduler @ chunk-65LAIXSP.js?v=7a20245f:560
+flush @ chunk-65LAIXSP.js?v=7a20245f:584
+batch @ chunk-65LAIXSP.js?v=7a20245f:602
+dispatch_fn @ chunk-65LAIXSP.js?v=7a20245f:1038
+setData @ chunk-65LAIXSP.js?v=7a20245f:713
+fetch @ chunk-65LAIXSP.js?v=7a20245f:927
+await in fetch
+executeFetch_fn @ chunk-65LAIXSP.js?v=7a20245f:2280
+onSubscribe @ chunk-65LAIXSP.js?v=7a20245f:1976
+subscribe @ chunk-65LAIXSP.js?v=7a20245f:24
+(anonymous) @ chunk-65LAIXSP.js?v=7a20245f:3147
+subscribeToStore @ chunk-276SZO74.js?v=7a20245f:11984
+commitHookEffectListMount @ chunk-276SZO74.js?v=7a20245f:16915
+commitPassiveMountOnFiber @ chunk-276SZO74.js?v=7a20245f:18156
+commitPassiveMountEffects_complete @ chunk-276SZO74.js?v=7a20245f:18129
+commitPassiveMountEffects_begin @ chunk-276SZO74.js?v=7a20245f:18119
+commitPassiveMountEffects @ chunk-276SZO74.js?v=7a20245f:18109
+flushPassiveEffectsImpl @ chunk-276SZO74.js?v=7a20245f:19490
+flushPassiveEffects @ chunk-276SZO74.js?v=7a20245f:19447
+performSyncWorkOnRoot @ chunk-276SZO74.js?v=7a20245f:18868
+flushSyncCallbacks @ chunk-276SZO74.js?v=7a20245f:9119
+commitRootImpl @ chunk-276SZO74.js?v=7a20245f:19432
+commitRoot @ chunk-276SZO74.js?v=7a20245f:19277
+finishConcurrentRender @ chunk-276SZO74.js?v=7a20245f:18805
+performConcurrentWorkOnRoot @ chunk-276SZO74.js?v=7a20245f:18718
+workLoop @ chunk-276SZO74.js?v=7a20245f:197
+flushWork @ chunk-276SZO74.js?v=7a20245f:176
+performWorkUntilDeadline @ chunk-276SZO74.js?v=7a20245f:384Understand this error
+LayupScheduler.tsx:1100 🔍 RAW SCHEDULE DATA FROM DATABASE: 6 total entries
+LayupScheduler.tsx:1109   Entry 0: PO-P18261-2-1 → 2025-09-29T00:00:00.000Z → Mon Sep 29 2025 (Monday, day 1)
+LayupScheduler.tsx:1109   Entry 1: PO-P18261-3-1 → 2025-09-30T00:00:00.000Z → Tue Sep 30 2025 (Tuesday, day 2)
+LayupScheduler.tsx:1109   Entry 2: PO-P18261-2-1 → 2025-09-30T00:00:00.000Z → Tue Sep 30 2025 (Tuesday, day 2)
+LayupScheduler.tsx:1109   Entry 3: PO-P18261-1-1 → 2025-10-01T00:00:00.000Z → Wed Oct 01 2025 (Wednesday, day 3)
+LayupScheduler.tsx:1109   Entry 4: PO-P18261-3-1 → 2025-10-01T00:00:00.000Z → Wed Oct 01 2025 (Wednesday, day 3)
+LayupScheduler.tsx:1124 ✅ DATABASE FILTER: Keeping Monday assignment - PO-P18261-2-1 on Mon Sep 29 2025
+LayupScheduler.tsx:1124 ✅ DATABASE FILTER: Keeping Tuesday assignment - PO-P18261-3-1 on Tue Sep 30 2025
+LayupScheduler.tsx:1124 ✅ DATABASE FILTER: Keeping Tuesday assignment - PO-P18261-2-1 on Tue Sep 30 2025
+LayupScheduler.tsx:1124 ✅ DATABASE FILTER: Keeping Wednesday assignment - PO-P18261-1-1 on Wed Oct 01 2025
+LayupScheduler.tsx:1124 ✅ DATABASE FILTER: Keeping Wednesday assignment - PO-P18261-3-1 on Wed Oct 01 2025
+LayupScheduler.tsx:1124 ✅ DATABASE FILTER: Keeping Thursday assignment - PO-P18261-1-1 on Thu Oct 02 2025
+LayupScheduler.tsx:1130 📋 Database filter: Removed 0 non-work-day assignments, kept 6 work-day assignments
+LayupScheduler.tsx:1131 📋 Selected work days: Mon, Tue, Wed, Thu
+useUnifiedLayupOrders.ts:52 ✅ Processing 215 orders in select transform
+useUnifiedLayupOrders.ts:63 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 215, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+useUnifiedLayupOrders.ts:88 🔧 Final hook return: {ordersReturned: 215, isLoading: false, hasError: false, firstOrderId: 'AG501'}
+LayupScheduler.tsx:1513 🏔️ MESA UNIVERSAL DEBUG: {totalOrders: 215, mesaUniversalCount: 0, mesaOrders: Array(0)}
+LayupScheduler.tsx:1519 🔍 LayupScheduler orders debug: {allOrdersCount: 215, rawData: 'has data', dataType: 'object', isArray: true, sourceCounts: {…}, …}
+LayupScheduler.tsx:1539 🏔️ FINAL ORDERS: Returning 215 total orders, 0 are Mesa Universal
+LayupScheduler.tsx:1553 🚫 LOP Scheduler auto-run DISABLED for complete manual control
+LayupScheduler.tsx:3130 ✅ FRIDAY VALIDATION PASSED: 3 assignments, no Friday conflicts
+LayupScheduler.tsx:3136 🏭 LayupScheduler - Production/P1 orders: 0
+LayupScheduler.tsx:3159 🏔️ LayupScheduler - Mesa molds: (8) [{…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}]
+LayupScheduler.tsx:3161 📋 LayupScheduler - Order Assignments: {PO-P18261-2-1: {…}, PO-P18261-3-1: {…}, PO-P18261-1-1: {…}}
+LayupScheduler.tsx:3162 🏭 LayupScheduler - All Molds: (74) [{…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}]
+LayupScheduler.tsx:3163 ⚙️ LayupScheduler - Employees: 2 employees loaded
+LayupScheduler.tsx:3168 🔄 Unassigned orders: 215 (215) ['AG501', 'AG493', 'AG491', 'AG489', 'AG466', 'AG464', 'AG487', 'EH223', 'AG125', 'AG079', 'AG122', 'AG098', 'AG049', 'AG109', 'AG756', 'AG786', 'EH191', 'AG753', 'AG571', 'EH178', 'EH164', 'EH160', 'EH158', 'EH126', 'EH055', 'AG651', 'AG441', 'AG656', 'AG654', 'AG444', 'AG452', 'AG406', 'AG434', 'AG359', 'AG307', 'AG345', 'AG119', 'AG455', 'AG121', 'AG479', 'AG480', 'AG481', 'AG482', 'AG483', 'AG530', 'AG463', 'AG492', 'AG495', 'AG500', 'AG082', 'AG062', 'AG104', 'AG056', 'AG141', 'AG151', 'AG161', 'AG164', 'AG286', 'AG145', 'AG331', 'AG467', 'AG473', 'AG544', 'AG553', 'AG555', 'AG564', 'AG565', 'AG566', 'AG579', 'AG638', 'AG639', 'AG658', 'AG666', 'AG670', 'AG568', 'AG581', 'AG582', 'AG583', 'AG584', 'AG595', 'AG688', 'AG625', 'AG635', 'AG149', 'AG644', 'AG796', 'AG679', 'AG389', 'AG548', 'AG634', 'AG641', 'AG642', 'AG645', 'AG755', 'AG726', 'AG474', 'AG624', 'AG803', 'AG775', 'AG774', …]
+LayupScheduler.tsx:3169 🏭 Unassigned PRODUCTION/P1 orders: 0 []
+LayupScheduler.tsx:4999 📅 MONDAY DEBUG: Date 2025-09-29, 1 assignments found
+LayupScheduler.tsx:5001    📅 PO-P18261-2-1 → Privateer-1
+LayupScheduler.tsx:5027 ✅ Monday assignment found: PO-P18261-2-1 → Privateer-1 on 2025-09-29
+LayupScheduler.tsx:5111 ⚠️ Order PO-P18261-2-1 not found in processedOrders or orders arrays
+(anonymous) @ LayupScheduler.tsx:5111
+(anonymous) @ LayupScheduler.tsx:5100
+(anonymous) @ LayupScheduler.tsx:5009
+(anonymous) @ LayupScheduler.tsx:5160
+(anonymous) @ LayupScheduler.tsx:5005
+LayupScheduler @ LayupScheduler.tsx:5163
+renderWithHooks @ chunk-276SZO74.js?v=7a20245f:11548
+updateFunctionComponent @ chunk-276SZO74.js?v=7a20245f:14587
+beginWork @ chunk-276SZO74.js?v=7a20245f:15924
+beginWork$1 @ chunk-276SZO74.js?v=7a20245f:19753
+performUnitOfWork @ chunk-276SZO74.js?v=7a20245f:19198
+workLoopSync @ chunk-276SZO74.js?v=7a20245f:19137
+renderRootSync @ chunk-276SZO74.js?v=7a20245f:19116
+performSyncWorkOnRoot @ chunk-276SZO74.js?v=7a20245f:18874
+flushSyncCallbacks @ chunk-276SZO74.js?v=7a20245f:9119
+(anonymous) @ chunk-276SZO74.js?v=7a20245f:18627
+setTimeout
+defaultScheduler @ chunk-65LAIXSP.js?v=7a20245f:560
+flush @ chunk-65LAIXSP.js?v=7a20245f:584
+batch @ chunk-65LAIXSP.js?v=7a20245f:602
+dispatch_fn @ chunk-65LAIXSP.js?v=7a20245f:1038
+setData @ chunk-65LAIXSP.js?v=7a20245f:713
+fetch @ chunk-65LAIXSP.js?v=7a20245f:927
+await in fetch
+executeFetch_fn @ chunk-65LAIXSP.js?v=7a20245f:2280
+onSubscribe @ chunk-65LAIXSP.js?v=7a20245f:1976
+subscribe @ chunk-65LAIXSP.js?v=7a20245f:24
+(anonymous) @ chunk-65LAIXSP.js?v=7a20245f:3147
+subscribeToStore @ chunk-276SZO74.js?v=7a20245f:11984
+commitHookEffectListMount @ chunk-276SZO74.js?v=7a20245f:16915
+commitPassiveMountOnFiber @ chunk-276SZO74.js?v=7a20245f:18156
+commitPassiveMountEffects_complete @ chunk-276SZO74.js?v=7a20245f:18129
+commitPassiveMountEffects_begin @ chunk-276SZO74.js?v=7a20245f:18119
+commitPassiveMountEffects @ chunk-276SZO74.js?v=7a20245f:18109
+flushPassiveEffectsImpl @ chunk-276SZO74.js?v=7a20245f:19490
+flushPassiveEffects @ chunk-276SZO74.js?v=7a20245f:19447
+performSyncWorkOnRoot @ chunk-276SZO74.js?v=7a20245f:18868
+flushSyncCallbacks @ chunk-276SZO74.js?v=7a20245f:9119
+commitRootImpl @ chunk-276SZO74.js?v=7a20245f:19432
+commitRoot @ chunk-276SZO74.js?v=7a20245f:19277
+finishConcurrentRender @ chunk-276SZO74.js?v=7a20245f:18805
+performConcurrentWorkOnRoot @ chunk-276SZO74.js?v=7a20245f:18718
+workLoop @ chunk-276SZO74.js?v=7a20245f:197
+flushWork @ chunk-276SZO74.js?v=7a20245f:176
+performWorkUntilDeadline @ chunk-276SZO74.js?v=7a20245f:384Understand this warning
+LayupScheduler.tsx:5111 ⚠️ Order PO-P18261-3-1 not found in processedOrders or orders arrays
+(anonymous) @ LayupScheduler.tsx:5111
+(anonymous) @ LayupScheduler.tsx:5100
+(anonymous) @ LayupScheduler.tsx:5009
+(anonymous) @ LayupScheduler.tsx:5160
+(anonymous) @ LayupScheduler.tsx:5005
+LayupScheduler @ LayupScheduler.tsx:5163
+renderWithHooks @ chunk-276SZO74.js?v=7a20245f:11548
+updateFunctionComponent @ chunk-276SZO74.js?v=7a20245f:14587
+beginWork @ chunk-276SZO74.js?v=7a20245f:15924
+beginWork$1 @ chunk-276SZO74.js?v=7a20245f:19753
+performUnitOfWork @ chunk-276SZO74.js?v=7a20245f:19198
+workLoopSync @ chunk-276SZO74.js?v=7a20245f:19137
+renderRootSync @ chunk-276SZO74.js?v=7a20245f:19116
+performSyncWorkOnRoot @ chunk-276SZO74.js?v=7a20245f:18874
+flushSyncCallbacks @ chunk-276SZO74.js?v=7a20245f:9119
+(anonymous) @ chunk-276SZO74.js?v=7a20245f:18627
+setTimeout
+defaultScheduler @ chunk-65LAIXSP.js?v=7a20245f:560
+flush @ chunk-65LAIXSP.js?v=7a20245f:584
+batch @ chunk-65LAIXSP.js?v=7a20245f:602
+dispatch_fn @ chunk-65LAIXSP.js?v=7a20245f:1038
+setData @ chunk-65LAIXSP.js?v=7a20245f:713
+fetch @ chunk-65LAIXSP.js?v=7a20245f:927
+await in fetch
+executeFetch_fn @ chunk-65LAIXSP.js?v=7a20245f:2280
+onSubscribe @ chunk-65LAIXSP.js?v=7a20245f:1976
+subscribe @ chunk-65LAIXSP.js?v=7a20245f:24
+(anonymous) @ chunk-65LAIXSP.js?v=7a20245f:3147
+subscribeToStore @ chunk-276SZO74.js?v=7a20245f:11984
+commitHookEffectListMount @ chunk-276SZO74.js?v=7a20245f:16915
+commitPassiveMountOnFiber @ chunk-276SZO74.js?v=7a20245f:18156
+commitPassiveMountEffects_complete @ chunk-276SZO74.js?v=7a20245f:18129
+commitPassiveMountEffects_begin @ chunk-276SZO74.js?v=7a20245f:18119
+commitPassiveMountEffects @ chunk-276SZO74.js?v=7a20245f:18109
+flushPassiveEffectsImpl @ chunk-276SZO74.js?v=7a20245f:19490
+flushPassiveEffects @ chunk-276SZO74.js?v=7a20245f:19447
+performSyncWorkOnRoot @ chunk-276SZO74.js?v=7a20245f:18868
+flushSyncCallbacks @ chunk-276SZO74.js?v=7a20245f:9119
+commitRootImpl @ chunk-276SZO74.js?v=7a20245f:19432
+commitRoot @ chunk-276SZO74.js?v=7a20245f:19277
+finishConcurrentRender @ chunk-276SZO74.js?v=7a20245f:18805
+performConcurrentWorkOnRoot @ chunk-276SZO74.js?v=7a20245f:18718
+workLoop @ chunk-276SZO74.js?v=7a20245f:197
+flushWork @ chunk-276SZO74.js?v=7a20245f:176
+performWorkUntilDeadline @ chunk-276SZO74.js?v=7a20245f:384Understand this warning
+main.tsx:33 Warning: Invalid prop `data-replit-metadata` supplied to `React.Fragment`. React.Fragment can only have `key` and `children` props.
+    at LayupScheduler (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/src/components/LayupScheduler.tsx:565:35)
+    at div
+    at LayupSchedulerPage
+    at Route (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=7a20245f:280:16)
+    at Switch (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=7a20245f:336:17)
+    at main
+    at div
+    at Router (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=7a20245f:235:17)
+    at DeploymentAuthWrapper (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/src/components/DeploymentAuthWrapper.tsx:34:49)
+    at QueryClientProvider (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-65LAIXSP.js?v=7a20245f:2934:3)
+    at App (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/src/App.tsx?v=x9XeZQg4psaYsedP1lurc:138:35)
+    at Router (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=7a20245f:6332:13)
+    at BrowserRouter (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=7a20245f:9416:3)
+    at QueryClientProvider (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-65LAIXSP.js?v=7a20245f:2934:3)
+console.error @ main.tsx:33
+printWarning @ react_jsx-dev-runtime.js?v=7a20245f:64
+error @ react_jsx-dev-runtime.js?v=7a20245f:48
+validateFragmentProps @ react_jsx-dev-runtime.js?v=7a20245f:796
+jsxWithValidation @ react_jsx-dev-runtime.js?v=7a20245f:874
+(anonymous) @ LayupScheduler.tsx:5006
+(anonymous) @ LayupScheduler.tsx:5005
+LayupScheduler @ LayupScheduler.tsx:5163
+renderWithHooks @ chunk-276SZO74.js?v=7a20245f:11548
+updateFunctionComponent @ chunk-276SZO74.js?v=7a20245f:14587
+beginWork @ chunk-276SZO74.js?v=7a20245f:15924
+beginWork$1 @ chunk-276SZO74.js?v=7a20245f:19753
+performUnitOfWork @ chunk-276SZO74.js?v=7a20245f:19198
+workLoopSync @ chunk-276SZO74.js?v=7a20245f:19137
+renderRootSync @ chunk-276SZO74.js?v=7a20245f:19116
+performSyncWorkOnRoot @ chunk-276SZO74.js?v=7a20245f:18874
+flushSyncCallbacks @ chunk-276SZO74.js?v=7a20245f:9119
+(anonymous) @ chunk-276SZO74.js?v=7a20245f:18627
+setTimeout
+defaultScheduler @ chunk-65LAIXSP.js?v=7a20245f:560
+flush @ chunk-65LAIXSP.js?v=7a20245f:584
+batch @ chunk-65LAIXSP.js?v=7a20245f:602
+dispatch_fn @ chunk-65LAIXSP.js?v=7a20245f:1038
+setData @ chunk-65LAIXSP.js?v=7a20245f:713
+fetch @ chunk-65LAIXSP.js?v=7a20245f:927
+await in fetch
+executeFetch_fn @ chunk-65LAIXSP.js?v=7a20245f:2280
+onSubscribe @ chunk-65LAIXSP.js?v=7a20245f:1976
+subscribe @ chunk-65LAIXSP.js?v=7a20245f:24
+(anonymous) @ chunk-65LAIXSP.js?v=7a20245f:3147
+subscribeToStore @ chunk-276SZO74.js?v=7a20245f:11984
+commitHookEffectListMount @ chunk-276SZO74.js?v=7a20245f:16915
+commitPassiveMountOnFiber @ chunk-276SZO74.js?v=7a20245f:18156
+commitPassiveMountEffects_complete @ chunk-276SZO74.js?v=7a20245f:18129
+commitPassiveMountEffects_begin @ chunk-276SZO74.js?v=7a20245f:18119
+commitPassiveMountEffects @ chunk-276SZO74.js?v=7a20245f:18109
+flushPassiveEffectsImpl @ chunk-276SZO74.js?v=7a20245f:19490
+flushPassiveEffects @ chunk-276SZO74.js?v=7a20245f:19447
+performSyncWorkOnRoot @ chunk-276SZO74.js?v=7a20245f:18868
+flushSyncCallbacks @ chunk-276SZO74.js?v=7a20245f:9119
+commitRootImpl @ chunk-276SZO74.js?v=7a20245f:19432
+commitRoot @ chunk-276SZO74.js?v=7a20245f:19277
+finishConcurrentRender @ chunk-276SZO74.js?v=7a20245f:18805
+performConcurrentWorkOnRoot @ chunk-276SZO74.js?v=7a20245f:18718
+workLoop @ chunk-276SZO74.js?v=7a20245f:197
+flushWork @ chunk-276SZO74.js?v=7a20245f:176
+performWorkUntilDeadline @ chunk-276SZO74.js?v=7a20245f:384Understand this error
+LayupScheduler.tsx:5111 ⚠️ Order PO-P18261-1-1 not found in processedOrders or orders arrays
+(anonymous) @ LayupScheduler.tsx:5111
+(anonymous) @ LayupScheduler.tsx:5100
+(anonymous) @ LayupScheduler.tsx:5009
+(anonymous) @ LayupScheduler.tsx:5160
+(anonymous) @ LayupScheduler.tsx:5005
+LayupScheduler @ LayupScheduler.tsx:5163
+renderWithHooks @ chunk-276SZO74.js?v=7a20245f:11548
+updateFunctionComponent @ chunk-276SZO74.js?v=7a20245f:14587
+beginWork @ chunk-276SZO74.js?v=7a20245f:15924
+beginWork$1 @ chunk-276SZO74.js?v=7a20245f:19753
+performUnitOfWork @ chunk-276SZO74.js?v=7a20245f:19198
+workLoopSync @ chunk-276SZO74.js?v=7a20245f:19137
+renderRootSync @ chunk-276SZO74.js?v=7a20245f:19116
+performSyncWorkOnRoot @ chunk-276SZO74.js?v=7a20245f:18874
+flushSyncCallbacks @ chunk-276SZO74.js?v=7a20245f:9119
+(anonymous) @ chunk-276SZO74.js?v=7a20245f:18627
+setTimeout
+defaultScheduler @ chunk-65LAIXSP.js?v=7a20245f:560
+flush @ chunk-65LAIXSP.js?v=7a20245f:584
+batch @ chunk-65LAIXSP.js?v=7a20245f:602
+dispatch_fn @ chunk-65LAIXSP.js?v=7a20245f:1038
+setData @ chunk-65LAIXSP.js?v=7a20245f:713
+fetch @ chunk-65LAIXSP.js?v=7a20245f:927
+await in fetch
+executeFetch_fn @ chunk-65LAIXSP.js?v=7a20245f:2280
+onSubscribe @ chunk-65LAIXSP.js?v=7a20245f:1976
+subscribe @ chunk-65LAIXSP.js?v=7a20245f:24
+(anonymous) @ chunk-65LAIXSP.js?v=7a20245f:3147
+subscribeToStore @ chunk-276SZO74.js?v=7a20245f:11984
+commitHookEffectListMount @ chunk-276SZO74.js?v=7a20245f:16915
+commitPassiveMountOnFiber @ chunk-276SZO74.js?v=7a20245f:18156
+commitPassiveMountEffects_complete @ chunk-276SZO74.js?v=7a20245f:18129
+commitPassiveMountEffects_begin @ chunk-276SZO74.js?v=7a20245f:18119
+commitPassiveMountEffects @ chunk-276SZO74.js?v=7a20245f:18109
+flushPassiveEffectsImpl @ chunk-276SZO74.js?v=7a20245f:19490
+flushPassiveEffects @ chunk-276SZO74.js?v=7a20245f:19447
+performSyncWorkOnRoot @ chunk-276SZO74.js?v=7a20245f:18868
+flushSyncCallbacks @ chunk-276SZO74.js?v=7a20245f:9119
+commitRootImpl @ chunk-276SZO74.js?v=7a20245f:19432
+commitRoot @ chunk-276SZO74.js?v=7a20245f:19277
+finishConcurrentRender @ chunk-276SZO74.js?v=7a20245f:18805
+performConcurrentWorkOnRoot @ chunk-276SZO74.js?v=7a20245f:18718
+workLoop @ chunk-276SZO74.js?v=7a20245f:197
+flushWork @ chunk-276SZO74.js?v=7a20245f:176
+performWorkUntilDeadline @ chunk-276SZO74.js?v=7a20245f:384Understand this warning
+main.tsx:33 Warning: Invalid prop `data-replit-metadata` supplied to `React.Fragment`. React.Fragment can only have `key` and `children` props.
+    at LayupScheduler (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/src/components/LayupScheduler.tsx:565:35)
+    at div
+    at LayupSchedulerPage
+    at Route (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=7a20245f:280:16)
+    at Switch (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=7a20245f:336:17)
+    at main
+    at div
+    at Router (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=7a20245f:235:17)
+    at DeploymentAuthWrapper (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/src/components/DeploymentAuthWrapper.tsx:34:49)
+    at QueryClientProvider (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-65LAIXSP.js?v=7a20245f:2934:3)
+    at App (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/src/App.tsx?v=x9XeZQg4psaYsedP1lurc:138:35)
+    at Router (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=7a20245f:6332:13)
+    at BrowserRouter (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=7a20245f:9416:3)
+    at QueryClientProvider (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-65LAIXSP.js?v=7a20245f:2934:3)

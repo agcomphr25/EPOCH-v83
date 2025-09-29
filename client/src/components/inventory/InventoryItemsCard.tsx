@@ -5,21 +5,17 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Plus, Edit, Trash2, Download, Upload, Search } from 'lucide-react';
 import toast from 'react-hot-toast';
-import type { EnhancedInventoryItem } from '@shared/schema';
+import type { InventoryItem } from '@shared/schema';
 
 interface InventoryFormData {
   agPartNumber: string;
   name: string;
-  vendorDescription: string;
-  type: string;
   source: string;
   supplierPartNumber: string;
   costPer: string;
-  uom: string;
   orderDate: string;
   department: string;
   secondarySource: string;
@@ -31,7 +27,6 @@ const InventoryForm = ({
   formData, 
   onSubmit, 
   onChange, 
-  onSelectChange,
   editingItem, 
   isCreatePending, 
   isUpdatePending,
@@ -40,8 +35,7 @@ const InventoryForm = ({
   formData: InventoryFormData;
   onSubmit: (e: React.FormEvent) => void;
   onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
-  onSelectChange: (name: string, value: string) => void;
-  editingItem: EnhancedInventoryItem | null;
+  editingItem: InventoryItem | null;
   isCreatePending: boolean;
   isUpdatePending: boolean;
   onCancel: () => void;
@@ -74,31 +68,6 @@ const InventoryForm = ({
 
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       <div>
-        <Label htmlFor="vendorDescription">Vendor Description</Label>
-        <Input
-          id="vendorDescription"
-          name="vendorDescription"
-          value={formData.vendorDescription}
-          onChange={onChange}
-          placeholder="Enter vendor description"
-        />
-      </div>
-      <div>
-        <Label htmlFor="type">Type *</Label>
-        <Select value={formData.type} onValueChange={(value) => onSelectChange('type', value)}>
-          <SelectTrigger data-testid="select-type">
-            <SelectValue placeholder="Select type" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="Purchased">Purchased</SelectItem>
-            <SelectItem value="Manufactured">Manufactured</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-    </div>
-
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <div>
         <Label htmlFor="source">Source</Label>
         <Input
           id="source"
@@ -120,7 +89,7 @@ const InventoryForm = ({
       </div>
     </div>
 
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       <div>
         <Label htmlFor="costPer">Cost per</Label>
         <Input
@@ -132,27 +101,6 @@ const InventoryForm = ({
           onChange={onChange}
           placeholder="0.00"
         />
-      </div>
-      <div>
-        <Label htmlFor="uom">UOM</Label>
-        <Select value={formData.uom} onValueChange={(value) => onSelectChange('uom', value)}>
-          <SelectTrigger data-testid="select-uom">
-            <SelectValue placeholder="Select UOM" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="EA">EA</SelectItem>
-            <SelectItem value="LB">LB</SelectItem>
-            <SelectItem value="FT">FT</SelectItem>
-            <SelectItem value="SQ FT">SQ FT</SelectItem>
-            <SelectItem value="SQM">SQM</SelectItem>
-            <SelectItem value="GAL">GAL</SelectItem>
-            <SelectItem value="OZ">OZ</SelectItem>
-            <SelectItem value="PACK">PACK</SelectItem>
-            <SelectItem value="SET">SET</SelectItem>
-            <SelectItem value="ROLL">ROLL</SelectItem>
-            <SelectItem value="SHEET">SHEET</SelectItem>
-          </SelectContent>
-        </Select>
       </div>
       <div>
         <Label htmlFor="orderDate">Order Date</Label>
@@ -223,7 +171,7 @@ export default function InventoryItemsCard() {
   const queryClient = useQueryClient();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
-  const [editingItem, setEditingItem] = useState<EnhancedInventoryItem | null>(null);
+  const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -231,12 +179,9 @@ export default function InventoryItemsCard() {
   const [formData, setFormData] = useState<InventoryFormData>({
     agPartNumber: '',
     name: '',
-    vendorDescription: '',
-    type: 'Purchased',
     source: '',
     supplierPartNumber: '',
     costPer: '',
-    uom: 'EA',
     orderDate: '',
     department: '',
     secondarySource: '',
@@ -244,9 +189,9 @@ export default function InventoryItemsCard() {
   });
 
   // Load inventory items
-  const { data: allItems = [], isLoading } = useQuery<EnhancedInventoryItem[]>({
-    queryKey: ['/api/enhanced/inventory/items'],
-    queryFn: () => apiRequest('/api/enhanced/inventory/items'),
+  const { data: allItems = [], isLoading } = useQuery<InventoryItem[]>({
+    queryKey: ['/api/inventory'],
+    queryFn: () => apiRequest('/api/inventory'),
   });
 
   // Filter items based on search term
@@ -257,7 +202,6 @@ export default function InventoryItemsCard() {
     return (
       item.agPartNumber.toLowerCase().includes(searchLower) ||
       item.name.toLowerCase().includes(searchLower) ||
-      (item.vendorDescription && item.vendorDescription.toLowerCase().includes(searchLower)) ||
       (item.source && item.source.toLowerCase().includes(searchLower)) ||
       (item.supplierPartNumber && item.supplierPartNumber.toLowerCase().includes(searchLower)) ||
       (item.department && item.department.toLowerCase().includes(searchLower)) ||
@@ -268,7 +212,7 @@ export default function InventoryItemsCard() {
 
   // Create mutation
   const createMutation = useMutation({
-    mutationFn: (data: any) => apiRequest('/api/enhanced/inventory/items', {
+    mutationFn: (data: any) => apiRequest('/api/inventory', {
       method: 'POST',
       body: data
     }),
@@ -276,14 +220,14 @@ export default function InventoryItemsCard() {
       toast.success('Inventory item created successfully');
       setIsCreateOpen(false);
       resetForm();
-      queryClient.invalidateQueries({ queryKey: ['/api/enhanced/inventory/items'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/inventory'] });
     },
     onError: () => toast.error('Failed to create inventory item'),
   });
 
   // Update mutation
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: number; data: any }) => apiRequest(`/api/enhanced/inventory/items/${id}`, {
+    mutationFn: ({ id, data }: { id: number; data: any }) => apiRequest(`/api/inventory/${id}`, {
       method: 'PUT',
       body: data
     }),
@@ -292,19 +236,19 @@ export default function InventoryItemsCard() {
       setIsEditOpen(false);
       setEditingItem(null);
       resetForm();
-      queryClient.invalidateQueries({ queryKey: ['/api/enhanced/inventory/items'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/inventory'] });
     },
     onError: () => toast.error('Failed to update inventory item'),
   });
 
   // Delete mutation
   const deleteMutation = useMutation({
-    mutationFn: (id: number) => apiRequest(`/api/enhanced/inventory/items/${id}`, {
+    mutationFn: (id: number) => apiRequest(`/api/inventory/${id}`, {
       method: 'DELETE'
     }),
     onSuccess: () => {
       toast.success('Inventory item deleted successfully');
-      queryClient.invalidateQueries({ queryKey: ['/api/enhanced/inventory/items'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/inventory'] });
     },
     onError: () => toast.error('Failed to delete inventory item'),
   });
@@ -312,7 +256,7 @@ export default function InventoryItemsCard() {
   // Export CSV functionality
   const handleExportCSV = async () => {
     try {
-      const response = await fetch('/api/enhanced/inventory/export/csv');
+      const response = await fetch('/api/inventory/export/csv');
       if (!response.ok) {
         throw new Error('Failed to export CSV');
       }
@@ -351,7 +295,7 @@ export default function InventoryItemsCard() {
     try {
       const csvData = await importFile.text();
       
-      const response = await apiRequest('/api/enhanced/inventory/import/csv', {
+      const response = await apiRequest('/api/inventory/import/csv', {
         method: 'POST',
         body: { csvData }
       });
@@ -372,7 +316,7 @@ export default function InventoryItemsCard() {
         if (fileInput) {
           fileInput.value = '';
         }
-        queryClient.invalidateQueries({ queryKey: ['/api/enhanced/inventory/items'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/inventory'] });
       } else {
         toast.error('Import failed');
       }
@@ -386,12 +330,9 @@ export default function InventoryItemsCard() {
     setFormData({
       agPartNumber: '',
       name: '',
-      vendorDescription: '',
-      type: 'Purchased',
       source: '',
       supplierPartNumber: '',
       costPer: '',
-      uom: 'EA',
       orderDate: '',
       department: '',
       secondarySource: '',
@@ -401,10 +342,6 @@ export default function InventoryItemsCard() {
 
   const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
-  }, []);
-
-  const handleSelectChange = useCallback((name: string, value: string) => {
     setFormData(prev => ({ ...prev, [name]: value }));
   }, []);
 
@@ -419,12 +356,9 @@ export default function InventoryItemsCard() {
     const submitData = {
       agPartNumber: formData.agPartNumber,
       name: formData.name,
-      vendorDescription: formData.vendorDescription || null,
-      type: formData.type || 'Purchased',
       source: formData.source || null,
       supplierPartNumber: formData.supplierPartNumber || null,
       costPer: formData.costPer ? parseFloat(formData.costPer) : null,
-      uom: formData.uom || 'EA',
       orderDate: formData.orderDate || null,
       department: formData.department || null,
       secondarySource: formData.secondarySource || null,
@@ -438,17 +372,14 @@ export default function InventoryItemsCard() {
     }
   }, [formData, editingItem, updateMutation, createMutation]);
 
-  const handleEdit = (item: EnhancedInventoryItem) => {
+  const handleEdit = (item: InventoryItem) => {
     setEditingItem(item);
     setFormData({
       agPartNumber: item.agPartNumber,
       name: item.name,
-      vendorDescription: item.vendorDescription || '',
-      type: item.type || 'Purchased',
       source: item.source || '',
       supplierPartNumber: item.supplierPartNumber || '',
       costPer: item.costPer ? item.costPer.toString() : '',
-      uom: item.uom || 'EA',
       orderDate: item.orderDate ? new Date(item.orderDate).toISOString().split('T')[0] : '',
       department: item.department || '',
       secondarySource: item.secondarySource || '',
@@ -498,7 +429,6 @@ export default function InventoryItemsCard() {
                 formData={formData}
                 onSubmit={handleSubmit}
                 onChange={handleChange}
-                onSelectChange={handleSelectChange}
                 editingItem={editingItem}
                 isCreatePending={createMutation.isPending}
                 isUpdatePending={updateMutation.isPending}
@@ -580,11 +510,9 @@ export default function InventoryItemsCard() {
               <tr className="bg-gray-50 dark:bg-gray-800">
                 <th className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-left">AG Part#</th>
                 <th className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-left">Name</th>
-                <th className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-left">Vendor Description</th>
                 <th className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-left">Source</th>
                 <th className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-left">Supplier Part #</th>
                 <th className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-left">Cost per</th>
-                <th className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-left">UOM</th>
                 <th className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-left">Notes</th>
                 <th className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-left">Actions</th>
               </tr>
@@ -594,11 +522,9 @@ export default function InventoryItemsCard() {
                 <tr key={item.id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
                   <td className="border border-gray-200 dark:border-gray-700 px-4 py-2 font-medium">{item.agPartNumber}</td>
                   <td className="border border-gray-200 dark:border-gray-700 px-4 py-2">{item.name}</td>
-                  <td className="border border-gray-200 dark:border-gray-700 px-4 py-2">{item.vendorDescription || '-'}</td>
                   <td className="border border-gray-200 dark:border-gray-700 px-4 py-2">{item.source || '-'}</td>
                   <td className="border border-gray-200 dark:border-gray-700 px-4 py-2">{item.supplierPartNumber || '-'}</td>
                   <td className="border border-gray-200 dark:border-gray-700 px-4 py-2">{item.costPer ? `$${item.costPer.toFixed(2)}` : '-'}</td>
-                  <td className="border border-gray-200 dark:border-gray-700 px-4 py-2">{item.uom || 'EA'}</td>
                   <td className="border border-gray-200 dark:border-gray-700 px-4 py-2">
                     <div className="max-w-xs truncate" title={item.notes || 'No notes'}>
                       {item.notes || '-'}
@@ -648,7 +574,6 @@ export default function InventoryItemsCard() {
             formData={formData}
             onSubmit={handleSubmit}
             onChange={handleChange}
-            onSelectChange={handleSelectChange}
             editingItem={editingItem}
             isCreatePending={createMutation.isPending}
             isUpdatePending={updateMutation.isPending}

@@ -157,6 +157,56 @@ export const orders = pgTable("orders", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Dedicated cancelled orders table - stores archived cancelled orders
+export const cancelledOrders = pgTable("cancelled_orders", {
+  id: serial("id").primaryKey(),
+  orderId: text("order_id").notNull().unique(),
+  orderDate: timestamp("order_date").notNull(),
+  dueDate: timestamp("due_date").notNull(),
+  customerId: text("customer_id"),
+  customerPO: text("customer_po"),
+  fbOrderNumber: text("fb_order_number"),
+  agrOrderDetails: text("agr_order_details"),
+  isFlattop: boolean("is_flattop").default(false),
+  isCustomOrder: text("is_custom_order"), // "yes", "no", or null
+  modelId: text("model_id"),
+  handedness: text("handedness"),
+  shankLength: text("shank_length"),
+  features: jsonb("features"),
+  featureQuantities: jsonb("feature_quantities"),
+  discountCode: text("discount_code"),
+  notes: text("notes"), // Order notes/special instructions
+  customDiscountType: text("custom_discount_type").default("percent"),
+  customDiscountValue: real("custom_discount_value").default(0),
+  showCustomDiscount: boolean("show_custom_discount").default(false),
+  priceOverride: real("price_override"), // Manual price override for stock model
+  shipping: real("shipping").default(0),
+  tikkaOption: text("tikka_option"),
+  status: text("status").default("CANCELLED"),
+  barcode: text("barcode"), // Code 39 barcode for order identification
+  // Department Progression Fields at time of cancellation
+  currentDepartment: text("current_department"),
+  departmentHistory: jsonb("department_history").default('[]'),
+  scrappedQuantity: integer("scrapped_quantity").default(0),
+  totalProduced: integer("total_produced").default(0),
+  // Payment Information at time of cancellation
+  isPaid: boolean("is_paid").default(false),
+  paymentType: text("payment_type"),
+  paymentAmount: real("payment_amount"),
+  paymentDate: timestamp("payment_date"),
+  paymentTimestamp: timestamp("payment_timestamp"),
+  // Cancellation Information
+  cancelledAt: timestamp("cancelled_at").notNull(),
+  cancelReason: text("cancel_reason").notNull(),
+  cancelledBy: text("cancelled_by"), // User who cancelled the order
+  // Original Order Information
+  originalCreatedAt: timestamp("original_created_at"),
+  originalUpdatedAt: timestamp("original_updated_at"),
+  // Archive Information
+  archivedAt: timestamp("archived_at").defaultNow(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
 
 export const csvData = pgTable("csv_data", {
   id: serial("id").primaryKey(),
@@ -751,6 +801,18 @@ export const insertShortTermSaleSchema = z.object({
   isActive: z.number().default(1),
 });
 
+export const insertCancelledOrderSchema = createInsertSchema(cancelledOrders).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  archivedAt: true,
+}).extend({
+  orderId: z.string().min(1, "Order ID is required"),
+  orderDate: z.coerce.date(),
+  dueDate: z.coerce.date(),
+  cancelledAt: z.coerce.date(),
+  cancelReason: z.string().min(1, "Cancellation reason is required"),
+});
 
 export const insertFeatureCategorySchema = createInsertSchema(featureCategories).omit({
   createdAt: true,
@@ -1236,6 +1298,8 @@ export type InsertOrderDraft = z.infer<typeof insertOrderDraftSchema>;
 export type OrderDraft = typeof orderDrafts.$inferSelect;
 export type InsertAllOrder = z.infer<typeof insertAllOrderSchema>;
 export type AllOrder = typeof allOrders.$inferSelect;
+export type InsertCancelledOrder = z.infer<typeof insertCancelledOrderSchema>;
+export type CancelledOrder = typeof cancelledOrders.$inferSelect;
 export type InsertForm = z.infer<typeof insertFormSchema>;
 export type Form = typeof forms.$inferSelect;
 export type InsertFormSubmission = z.infer<typeof insertFormSubmissionSchema>;
@@ -2008,82 +2072,7 @@ export type P2PurchaseOrderItem = typeof p2PurchaseOrderItems.$inferSelect;
 export type InsertProductionOrder = z.infer<typeof insertProductionOrderSchema>;
 export type ProductionOrder = typeof productionOrders.$inferSelect;
 
-// Removed order_status enum to avoid conflicts - using specific enums per module instead
-
-// Vendor Purchase Orders - POs FROM your company TO vendors for procurement
-export const vendorPurchaseOrders = pgTable('vendor_purchase_orders', {
-  id: serial('id').primaryKey(),
-  poNumber: text('po_number').notNull().unique(), // VP-YY-### format
-  vendorId: integer('vendor_id').notNull(), // References vendors.id
-  vendorName: text('vendor_name').notNull(), // Denormalized for performance
-  buyerName: text('buyer_name').notNull(), // User who created the PO
-  poDate: date('po_date').notNull(),
-  expectedDelivery: date('expected_delivery').notNull(),
-  shipVia: text('ship_via').notNull().default('Delivery'), // Delivery, Pickup, UPS, Call to Confirm
-  status: text('status').notNull().default('DRAFT'), // DRAFT, SENT, PARTIALLY_RECEIVED, FULLY_RECEIVED, CANCELLED
-  notes: text('notes'),
-  barcode: text('barcode').unique(), // Auto-generated barcode for receiving
-  totalCost: real('total_cost').default(0), // Calculated total of all line items
-  createdAt: timestamp('created_at').defaultNow(),
-  updatedAt: timestamp('updated_at').defaultNow()
-});
-
-export const vendorPurchaseOrderItems = pgTable('vendor_purchase_order_items', {
-  id: serial('id').primaryKey(),
-  vendorPoId: integer('vendor_po_id').references(() => vendorPurchaseOrders.id).notNull(),
-  lineNumber: integer('line_number').notNull(), // Sequential line numbers (1, 2, 3...)
-  agPartNumber: text('ag_part_number'), // Your internal AG part number 
-  vendorPartNumber: text('vendor_part_number').notNull(), // Vendor's part number
-  description: text('description').notNull(), // Item description
-  quantity: integer('quantity').notNull(),
-  unitPrice: real('unit_price').default(0), // Price per unit
-  totalPrice: real('total_price').default(0), // quantity * unitPrice
-  uom: text('uom').notNull().default('EA'), // Unit of measure from inventory
-  quantityReceived: integer('quantity_received').default(0), // Track received quantities
-  notes: text('notes'),
-  createdAt: timestamp('created_at').defaultNow(),
-  updatedAt: timestamp('updated_at').defaultNow()
-});
-
-// Vendor Purchase Order schemas
-export const insertVendorPurchaseOrderSchema = createInsertSchema(vendorPurchaseOrders).omit({
-  id: true,
-  poNumber: true, // Auto-generated
-  barcode: true, // Auto-generated
-  totalCost: true, // Calculated
-  createdAt: true,
-  updatedAt: true
-}).extend({
-  vendorId: z.number().min(1, "Vendor is required"),
-  vendorName: z.string().min(1, "Vendor name is required"),
-  buyerName: z.string().min(1, "Buyer name is required"),
-  poDate: z.coerce.date(),
-  expectedDelivery: z.coerce.date(),
-  status: z.enum(['DRAFT', 'SENT', 'PARTIALLY_RECEIVED', 'FULLY_RECEIVED', 'CANCELLED']).default('DRAFT'),
-  shipVia: z.enum(['Delivery', 'Pickup', 'UPS', 'Call to Confirm']).default('Delivery')
-});
-
-export const insertVendorPurchaseOrderItemSchema = createInsertSchema(vendorPurchaseOrderItems).omit({
-  id: true,
-  totalPrice: true, // Calculated
-  quantityReceived: true, // Set during receiving
-  createdAt: true,
-  updatedAt: true
-}).extend({
-  vendorPoId: z.number().min(1, "Vendor PO ID is required"),
-  lineNumber: z.number().min(1, "Line number is required"),
-  vendorPartNumber: z.string().min(1, "Vendor part number is required"),
-  description: z.string().min(1, "Description is required"),
-  quantity: z.number().min(1, "Quantity must be at least 1"),
-  unitPrice: z.number().min(0, "Unit price must be non-negative"),
-  uom: z.string().min(1, "Unit of measure is required")
-});
-
-// Vendor Purchase Order types
-export type VendorPurchaseOrder = typeof vendorPurchaseOrders.$inferSelect;
-export type InsertVendorPurchaseOrder = z.infer<typeof insertVendorPurchaseOrderSchema>;
-export type VendorPurchaseOrderItem = typeof vendorPurchaseOrderItems.$inferSelect;
-export type InsertVendorPurchaseOrderItem = z.infer<typeof insertVendorPurchaseOrderItemSchema>;
+export const orderStatusEnum = pgEnum('order_status', ['DRAFT', 'CONFIRMED', 'FINALIZED', 'CANCELLED', 'RESERVED']);
 
 // BOM (Bill of Materials) Management Tables for P2
 export const bomDefinitions = pgTable('bom_definitions', {

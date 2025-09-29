@@ -430,64 +430,34 @@ router.post('/address-autocomplete-bypass', async (req: Request, res: Response) 
       }
     }
     
-    // Use UPS Address Validation for basic autocomplete suggestions
-    console.log('🔧 Trying UPS-based address autocomplete for:', search);
+    // Simple address autocomplete - try to find real addresses when user provides city/state
+    console.log('🔧 UPS address autocomplete for:', search);
     
     try {
       let upsSuggestions = [];
       
       // Parse the search query to extract potential location information
       const searchParts = search.split(',').map(s => s.trim());
-      let targetCityStates = [];
       
-      if (searchParts.length >= 2) {
-        // User provided city/state in their input - use that
-        const potentialCity = searchParts[1];
-        const potentialState = searchParts[2] || '';
+      // Check if user provided city and state information
+      if (searchParts.length >= 3) {
+        // Format: "123 Main St, Dallas, TX"
+        const street = searchParts[0];
+        const city = searchParts[1];
+        const state = searchParts[2];
         
-        if (potentialState && potentialState.length === 2) {
-          // Full format: "123 Main St, Dallas, TX"
-          targetCityStates.push(`${potentialCity}, ${potentialState}`);
-        } else if (potentialCity.includes(' ')) {
-          // Format: "123 Main St, Dallas TX"
-          const cityStateParts = potentialCity.split(' ');
-          const state = cityStateParts[cityStateParts.length - 1];
-          const city = cityStateParts.slice(0, -1).join(' ');
-          if (state.length === 2) {
-            targetCityStates.push(`${city}, ${state}`);
-          }
-        }
-      }
-      
-      // If no location provided in search, try a few strategic locations to find real addresses
-      if (targetCityStates.length === 0) {
-        console.log('🔧 No location info in search, trying strategic city validation');
-        
-        // Try a few major metropolitan areas that are likely to have many addresses
-        const strategicCities = [
-          'New York, NY',    // Major financial/commercial center
-          'Los Angeles, CA', // Major west coast city
-          'Chicago, IL',     // Major midwest city
-          'Houston, TX',     // Major south city
-          'Atlanta, GA'      // Major southeast city
-        ];
-        
-        // Try UPS validation with strategic cities to find real addresses
-        for (const cityState of strategicCities.slice(0, 2)) { // Limit to 2 for performance
+        if (state.length === 2) {
+          console.log('🔧 User provided full address, validating with UPS:', { street, city, state });
+          
           try {
-            console.log('🔧 Trying strategic UPS validation for:', `${search}, ${cityState}`);
-            
-            const [city, state] = cityState.split(', ');
             const validationResult = await validateAddressWithUPS({
-              street: search,
-              city: city,
-              state: state
+              street,
+              city,
+              state
             });
             
             if (validationResult.suggestions && validationResult.suggestions.length > 0) {
-              // Found real addresses! Add them to suggestions
-              const suggestionsToAdd = validationResult.suggestions.slice(0, 3);
-              for (const result of suggestionsToAdd) {
+              for (const result of validationResult.suggestions.slice(0, 5)) {
                 upsSuggestions.push({
                   text: `${result.street}, ${result.city}, ${result.state} ${result.postalCode}`,
                   streetLine: result.street,
@@ -497,117 +467,63 @@ router.post('/address-autocomplete-bypass', async (req: Request, res: Response) 
                   entries: 1
                 });
               }
-              
-              console.log('🔧 Strategic UPS found', validationResult.suggestions.length, 'real address suggestions');
-              break; // Found real addresses, stop searching
+              console.log('🔧 UPS found', validationResult.suggestions.length, 'validated addresses');
             }
-          } catch (strategicError) {
-            console.log('🔧 Strategic UPS validation failed for:', cityState, (strategicError as Error).message);
-            continue;
+          } catch (upsError) {
+            console.log('🔧 UPS validation failed:', (upsError as Error).message);
           }
         }
+      } else if (searchParts.length === 2) {
+        // Format: "123 Main St, Dallas TX" or "123 Main St, Dallas"
+        const street = searchParts[0];
+        const cityStatePart = searchParts[1];
         
-        // Always add the user's input as a fallback option for manual completion
-        upsSuggestions.push({
-          text: search,
-          streetLine: search,
-          city: '',
-          state: '',
-          zipCode: '',
-          entries: 1
-        });
-        
-        console.log('🔧 Returning', upsSuggestions.length, 'suggestions (including manual option)');
-        return res.json({ suggestions: upsSuggestions });
-      }
-      
-      // Try UPS validation with the identified city/state
-      for (const cityState of targetCityStates.slice(0, 2)) { // Limit to 2 attempts for performance
-        try {
-          console.log('🔧 Trying UPS validation for:', `${searchParts[0]}, ${cityState}`);
+        // Try to extract state from the second part
+        const cityStateMatch = cityStatePart.match(/^(.+?)\s+([A-Z]{2})$/);
+        if (cityStateMatch) {
+          const city = cityStateMatch[1];
+          const state = cityStateMatch[2];
           
-          const [city, state] = cityState.split(', ');
-          const validationResult = await validateAddressWithUPS({
-            street: searchParts[0], // Use just the street part
-            city: city,
-            state: state
-          });
+          console.log('🔧 User provided city and state, validating with UPS:', { street, city, state });
           
-          if (validationResult.suggestions && validationResult.suggestions.length > 0) {
-            // Take first few suggestions from UPS
-            const suggestionsToAdd = validationResult.suggestions.slice(0, 3);
-            for (const result of suggestionsToAdd) {
-              upsSuggestions.push({
-                text: `${result.street}, ${result.city}, ${result.state} ${result.postalCode}`,
-                streetLine: result.street,
-                city: result.city,
-                state: result.state,
-                zipCode: result.postalCode,
-                entries: 1
-              });
-            }
+          try {
+            const validationResult = await validateAddressWithUPS({
+              street,
+              city,
+              state
+            });
             
-            console.log('🔧 UPS found', validationResult.suggestions.length, 'address suggestions');
-            break; // Found addresses, stop searching
+            if (validationResult.suggestions && validationResult.suggestions.length > 0) {
+              for (const result of validationResult.suggestions.slice(0, 5)) {
+                upsSuggestions.push({
+                  text: `${result.street}, ${result.city}, ${result.state} ${result.postalCode}`,
+                  streetLine: result.street,
+                  city: result.city,
+                  state: result.state,
+                  zipCode: result.postalCode,
+                  entries: 1
+                });
+              }
+              console.log('🔧 UPS found', validationResult.suggestions.length, 'validated addresses');
+            }
+          } catch (upsError) {
+            console.log('🔧 UPS validation failed:', (upsError as Error).message);
           }
-        } catch (upsError) {
-          console.log('🔧 UPS validation failed for city/state:', cityState, (upsError as Error).message);
-          continue;
         }
       }
       
-      // If UPS found suggestions, return them
-      if (upsSuggestions.length > 0) {
-        console.log('🔧 Returning UPS-based suggestions:', upsSuggestions);
-        return res.json({
-          suggestions: upsSuggestions
-        });
-      }
-      
-      // If UPS didn't find anything, try Nominatim as fallback
-      console.log('🔧 UPS found no results, trying Nominatim fallback for:', search);
-      
-      const nominatimUrl = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(search)}&format=json&addressdetails=1&limit=5&countrycodes=us`;
-      
-      const response = await fetch(nominatimUrl, {
-        headers: {
-          'User-Agent': 'EPOCH-ERP-System/1.0 (your-email@example.com)' // Required by Nominatim
-        }
+      // Always add the user's input as a manual completion option
+      upsSuggestions.push({
+        text: search,
+        streetLine: searchParts[0] || search,
+        city: searchParts[1] || '',
+        state: searchParts[2] || '',
+        zipCode: '',
+        entries: 1
       });
       
-      console.log('🔧 Nominatim response status:', response.status);
-      
-      if (response.ok) {
-        const data = await response.json();
-        console.log('🔧 Nominatim raw response:', JSON.stringify(data, null, 2));
-        
-        // Transform Nominatim response to match expected format
-        const transformedSuggestions = data.map((result: any) => {
-          const address = result.address || {};
-          const houseNumber = address.house_number || '';
-          const street = address.road || '';
-          const streetLine = houseNumber && street ? `${houseNumber} ${street}` : (street || result.display_name.split(',')[0]);
-          
-          return {
-            text: result.display_name,
-            streetLine: streetLine,
-            city: address.city || address.town || address.village || '',
-            state: address.state || '',
-            zipCode: address.postcode || '',
-            entries: 1
-          };
-        });
-        
-        console.log('🔧 Transformed Nominatim suggestions:', transformedSuggestions);
-        
-        if (transformedSuggestions.length > 0) {
-          return res.json({
-            suggestions: transformedSuggestions
-          });
-        }
-      }
-      
-      throw new Error('Both UPS and Nominatim failed to provide suggestions');
+      console.log('🔧 Returning', upsSuggestions.length, 'address suggestions');
+      return res.json({ suggestions: upsSuggestions });
       
     } catch (autocompleteError) {
       console.error('🔧 Address Autocomplete error:', autocompleteError);

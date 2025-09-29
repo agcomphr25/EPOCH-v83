@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Package, Truck, Download, DollarSign, Weight, Ruler, MapPin } from 'lucide-react';
-import AddressInput from '@/components/AddressInput';
+import SimpleAddressInput from '@/components/SimpleAddressInput';
 import { type AddressData } from '@/utils/addressUtils';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
@@ -404,7 +404,7 @@ export default function UPSLabelCreator({ orderId, isOpen, onClose, onSuccess }:
               </div>
               
               {/* Use AddressInput with UPS autocomplete */}
-              <AddressInput
+              <SimpleAddressInput
                 label="Shipping Address"
                 value={shipToAddressData}
                 onChange={(addressData) => {

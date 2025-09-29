@@ -37,6 +37,7 @@ import layupScheduleRoutes from './layupSchedule';
 import customerSatisfactionRoutes from './customerSatisfaction';
 import poProductsRoutes from './poProducts';
 import refundRoutes from './refunds';
+import agMetalReportRoutes from './agMetalReport';
 
 import vendorRoutes from './vendors';
 
@@ -158,6 +159,9 @@ export function registerRoutes(app: Express): Server {
 
   // Refund management routes
   app.use('/api/refund-requests', refundRoutes);
+
+  // AG Metal Report routes
+  app.use('/api/reports', agMetalReportRoutes);
 
   // Vendor management routes
   app.use('/api/vendors', vendorRoutes);

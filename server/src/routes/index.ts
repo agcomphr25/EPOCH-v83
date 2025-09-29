@@ -12,6 +12,7 @@ import customersRoutes from './customers';
 import qualityRoutes from './quality';
 import documentsRoutes from './documents';
 import moldsRoutes from './molds';
+import moldSyncRoutes from './moldSync';
 import layupPdfRoute from './layupPdfRoute';
 import shippingPdfRoute from './shippingPdf';
 import shippingRoutes from './shipping';

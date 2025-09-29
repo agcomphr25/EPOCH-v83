@@ -145,14 +145,16 @@ router.post('/add-regular-orders', async (req, res) => {
       console.log(`🔍 PO QUERY RESULT: last_po_date = ${poRows[0].last_po_date}`);
     }
     
+    // FIXED: Always start regular orders from beginning of scheduling window (tomorrow)
+    // This allows regular orders to fill Monday/Tuesday alongside existing PO orders
+    startDate.setDate(startDate.getDate() + 1); 
+    console.log(`📅 SCHEDULING FIX: Starting regular orders from beginning of window: ${startDate.toDateString()} (day ${startDate.getDay()})`);
+    console.log(`📅 SCHEDULING FIX: This allows regular orders to fill Monday/Tuesday slots alongside existing PO orders`);
+    
     if (poRows.length > 0 && poRows[0].last_po_date) {
-      const lastPODate = new Date(poRows[0].last_po_date);
-      // CRITICAL FIX: Start regular orders from the same day as the last PO order to allow sharing capacity
-      startDate = lastPODate;
-      console.log(`📅 CONTINUITY FIX: Last PO order date found, starting regular orders from ${startDate.toDateString()} (day ${startDate.getDay()})`);
+      console.log(`📅 INFO: Found existing PO orders through ${poRows[0].last_po_date}, but regular orders will start from schedule beginning`);
     } else {
-      startDate.setDate(startDate.getDate() + 1); // Fallback to tomorrow if no PO orders found
-      console.log(`📅 CONTINUITY FIX: No PO orders found, starting regular orders from ${startDate.toDateString()}`);
+      console.log(`📅 INFO: No existing PO orders found, regular orders starting fresh from tomorrow`);
     }
     
     // CRITICAL FIX: Advance to next work day if calculated date is not a work day

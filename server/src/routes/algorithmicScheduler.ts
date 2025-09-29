@@ -135,8 +135,11 @@ router.post('/add-regular-orders', async (req, res) => {
       WHERE order_id LIKE 'PO-%'
     `);
     
-    // FIXED: Properly extract rows from PostgreSQL result
-    const poRows = (existingPOAssignments as any).rows ?? [];
+    // FIXED: Properly extract rows from PostgreSQL result with better debugging
+    console.log(`🔍 RAW PO QUERY RESULT:`, JSON.stringify(existingPOAssignments, null, 2));
+    const poRows = Array.isArray(existingPOAssignments) 
+      ? existingPOAssignments 
+      : (existingPOAssignments as any).rows ?? [];
     console.log(`🔍 PO QUERY RESULT: Found ${poRows.length} rows, PO count: ${poRows[0]?.po_count || 0}`);
     if (poRows.length > 0 && poRows[0]?.last_po_date) {
       console.log(`🔍 PO QUERY RESULT: last_po_date = ${poRows[0].last_po_date}`);

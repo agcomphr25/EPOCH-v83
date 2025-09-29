@@ -430,54 +430,61 @@ router.post('/address-autocomplete-bypass', async (req: Request, res: Response) 
       }
     }
     
-    // Use Nominatim (OpenStreetMap) for free address autocomplete
-    console.log('🔧 Making Nominatim Address Autocomplete API call for:', search);
+    // Use SmartyStreets Autocomplete API for USPS-verified addresses
+    const authId = process.env.SMARTYSTREETS_AUTH_ID;
+    const authToken = process.env.SMARTYSTREETS_AUTH_TOKEN;
+    
+    if (!authId || !authToken) {
+      console.error('❌ SmartyStreets credentials not found');
+      return res.status(500).json({ error: 'Address autocomplete service not configured' });
+    }
+    
+    console.log('🔧 SmartyStreets Autocomplete: Processing query:', search);
     
     try {
-      // Using Nominatim API (free, no API key required)
-      const nominatimUrl = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(search)}&format=json&addressdetails=1&limit=5&countrycodes=us`;
+      // SmartyStreets US Autocomplete Pro API
+      const smartyUrl = `https://us-autocomplete-pro.api.smartystreets.com/lookup?auth-id=${authId}&auth-token=${authToken}&search=${encodeURIComponent(search)}&max_suggestions=10`;
       
-      const response = await fetch(nominatimUrl, {
-        headers: {
-          'User-Agent': 'EPOCH-ERP-System/1.0 (your-email@example.com)' // Required by Nominatim
-        }
-      });
+      console.log('🔍 SmartyStreets API URL:', smartyUrl.replace(authToken, '[HIDDEN]'));
       
-      console.log('🔧 Nominatim response status:', response.status);
+      const response = await fetch(smartyUrl);
       
       if (!response.ok) {
-        throw new Error(`Nominatim API error: ${response.status}`);
+        throw new Error(`SmartyStreets API error: ${response.status}`);
       }
       
       const data = await response.json();
-      console.log('🔧 Nominatim raw response:', JSON.stringify(data, null, 2));
+      console.log('✅ SmartyStreets Autocomplete: Response received:', data);
       
-      // Transform Nominatim response to match expected format
-      const transformedSuggestions = data.map((result: any) => {
-        const address = result.address || {};
-        const houseNumber = address.house_number || '';
-        const street = address.road || '';
-        const streetLine = houseNumber && street ? `${houseNumber} ${street}` : (street || result.display_name.split(',')[0]);
-        
-        return {
-          text: result.display_name,
-          streetLine: streetLine,
-          city: address.city || address.town || address.village || '',
-          state: address.state || '',
-          zipCode: address.postcode || '',
-          entries: 1
-        };
+      // Transform SmartyStreets response to match expected format
+      const transformedSuggestions = data.suggestions?.map((result: any) => ({
+        text: search,
+        streetLine: result.street_line,
+        secondary: result.secondary || '',
+        city: result.city,
+        state: result.state,
+        zipCode: result.zipcode,
+        entries: result.entries || 1
+      })) || [];
+      
+      // Add manual input option
+      transformedSuggestions.push({
+        text: search,
+        streetLine: search,
+        city: '',
+        state: '',
+        zipCode: '',
+        entries: 1
       });
       
-      console.log('🔧 Transformed Nominatim suggestions:', transformedSuggestions);
-      console.log('🔧 Sending response with suggestions count:', transformedSuggestions.length);
+      console.log('🔍 SmartyStreets found', transformedSuggestions.length - 1, 'suggestions plus manual input');
       
       res.json({
         suggestions: transformedSuggestions
       });
       
-    } catch (nominatimError) {
-      console.error('🔧 Nominatim Autocomplete error:', nominatimError);
+    } catch (smartyError) {
+      console.error('🔧 SmartyStreets Autocomplete error:', smartyError);
       
       // Fallback: try a simple address parsing approach
       const fallbackSuggestions = [{

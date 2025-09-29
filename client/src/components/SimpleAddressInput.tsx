@@ -33,7 +33,7 @@ export default function SimpleAddressInput({ label, value, onChange, required = 
   const suggestionsRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
-  // Debounced fetch function using Nominatim API
+  // Debounced fetch function using SmartyStreets API
   const fetchSuggestions = debounce(async (q: string) => {
     if (!q.trim()) {
       setSuggestions([]);

@@ -39,12 +39,21 @@ export async function validateAddressWithUPS(
     
     const token = await getAccessToken();
     
-    // UPS Address Validation API payload (correct format)
+    // UPS Address Validation API payload
     const requestPayload = {
-      XAVRequest: {
+      AddressValidationRequest: {
+        Request: {
+          RequestOption: "1", // Return both valid and invalid addresses
+          TransactionReference: {
+            CustomerContext: "Address Validation",
+            TransactionIdentifier: `AV${Date.now()}`
+          }
+        },
+        MaximumListSize: "5",
         AddressKeyFormat: {
           ConsigneeName: "Customer",
-          AddressLine: [address.street],
+          BuildingName: "",
+          AddressLine: address.street,
           PoliticalDivision2: address.city,
           PoliticalDivision1: address.state,
           PostcodePrimaryLow: address.postalCode || "",
@@ -89,53 +98,36 @@ export async function validateAddressWithUPS(
     const data = await response.json() as any;
     console.log('✅ UPS Address Validation: Response received:', JSON.stringify(data, null, 2));
 
-    // Parse UPS response (XAVRequest format)
-    const validationResult = data.XAVResponse;
+    // Parse UPS response
+    const validationResult = data.AddressValidationResponse;
     
-    if (validationResult && validationResult.Candidate) {
-      // Handle both single candidate (object) and multiple candidates (array)
-      const candidates = Array.isArray(validationResult.Candidate) ? 
-        validationResult.Candidate : [validationResult.Candidate];
-      
-      const suggestions = candidates.map((candidate: any) => {
-        const addr = candidate.AddressKeyFormat || candidate;
-        const addressLine = Array.isArray(addr.AddressLine) ? addr.AddressLine[0] : addr.AddressLine;
-        const postalCode = addr.PostcodePrimaryLow || "";
-        const extendedCode = addr.PostcodeExtendedLow || "";
-        const fullZip = extendedCode ? `${postalCode}-${extendedCode}` : postalCode;
-        
+    if (validationResult && validationResult.AddressValidationResult) {
+      const results = Array.isArray(validationResult.AddressValidationResult) 
+        ? validationResult.AddressValidationResult 
+        : [validationResult.AddressValidationResult];
+
+      const suggestions = results.map((result: any) => {
+        const addr = result.AddressKeyFormat || result.Address;
         return {
-          street: addressLine || address.street,
+          street: addr.AddressLine || addr.AddressLine1 || address.street,
           city: addr.PoliticalDivision2 || address.city,
           state: addr.PoliticalDivision1 || address.state,
-          postalCode: fullZip,
+          postalCode: addr.PostcodePrimaryLow || addr.PostalCode || address.postalCode || "",
           country: addr.CountryCode || address.country || "US"
         };
       });
 
-      // Accept both single valid matches and multiple valid matches
-      // UPS uses empty strings to indicate presence of indicators
-      const isValid = ('ValidAddressIndicator' in validationResult) || ('AmbiguousAddressIndicator' in validationResult);
-      console.log(`✅ UPS Address Validation: Found ${suggestions.length} address suggestions, valid: ${isValid}`);
-      console.log('✅ UPS suggestions:', suggestions);
+      // Check if any results indicate a valid address
+      const isValid = results.some((result: any) => 
+        result.Quality?.Match || result.Rank === "1.0" || !result.Quality?.Match
+      );
+
+      console.log('✅ UPS Address Validation: Processed suggestions:', suggestions);
 
       return {
         isValid,
         suggestions: suggestions.filter(Boolean),
-        message: isValid ? "Address validated successfully" : "Multiple address matches found"
-      };
-    } else if (validationResult && validationResult.NoCandidatesIndicator) {
-      console.log('⚠️ UPS Address Validation: No valid address found');
-      return {
-        isValid: false,
-        suggestions: [{
-          street: address.street,
-          city: address.city,
-          state: address.state,
-          postalCode: address.postalCode || "",
-          country: address.country || "US"
-        }],
-        message: "No valid address found"
+        message: isValid ? "Address validated successfully" : "Address needs correction"
       };
     }
 

@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link, useLocation } from 'wouter';
-import { Factory, User, FileText, TrendingDown, Plus, Settings, Package, FilePenLine, ClipboardList, BarChart, ChevronDown, ChevronRight, FormInput, PieChart, Scan, Warehouse, Shield, Wrench, Users, TestTube, DollarSign, Receipt, TrendingUp, List, BookOpen, Calendar, CheckSquare, Truck, Mail, MessageSquare, CreditCard, XCircle, Cog, ArrowRight, LogOut, GraduationCap } from "lucide-react";
+
+import { Factory, User, FileText, TrendingDown, Plus, Settings, Package, FilePenLine, ClipboardList, BarChart, ChevronDown, ChevronRight, FormInput, PieChart, Scan, Warehouse, Shield, Wrench, Users, TestTube, DollarSign, Receipt, TrendingUp, List, BookOpen, Calendar, CheckSquare, Truck, Mail, MessageSquare, CreditCard, XCircle, Cog, ArrowRight, LogOut, Scissors, MapPin, Snowflake, ShoppingCart, GraduationCap } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import InstallPWAButton from "./InstallPWAButton";
@@ -68,12 +70,12 @@ export default function Navigation() {
 
   const [verifiedModulesExpanded, setVerifiedModulesExpanded] = useState(false);
   const [formsReportsExpanded, setFormsReportsExpanded] = useState(false);
+  const [trainingExpanded, setTrainingExpanded] = useState(false);
   const [inventoryExpanded, setInventoryExpanded] = useState(false);
   const [employeesExpanded, setEmployeesExpanded] = useState(false);
   const [qcMaintenanceExpanded, setQcMaintenanceExpanded] = useState(false);
   const [financeExpanded, setFinanceExpanded] = useState(false);
   const [userDashboardsExpanded, setUserDashboardsExpanded] = useState(false);
-  const [trainingExpanded, setTrainingExpanded] = useState(false);
   const [purchaseOrdersExpanded, setPurchaseOrdersExpanded] = useState(false);
   const [productionSchedulingExpanded, setProductionSchedulingExpanded] = useState(false);
   const [departmentQueueExpanded, setDepartmentQueueExpanded] = useState(false);
@@ -81,12 +83,12 @@ export default function Navigation() {
   // Helper function to close all dropdowns
   const closeAllDropdowns = useCallback(() => {
     setFormsReportsExpanded(false);
+    setTrainingExpanded(false);
     setInventoryExpanded(false);
     setQcMaintenanceExpanded(false);
     setEmployeesExpanded(false);
     setFinanceExpanded(false);
     setUserDashboardsExpanded(false);
-    setTrainingExpanded(false);
     setPurchaseOrdersExpanded(false);
     setProductionSchedulingExpanded(false);
     setDepartmentQueueExpanded(false);
@@ -100,12 +102,12 @@ export default function Navigation() {
     // Close other dropdowns when opening a new one
     if (!isExpanded) {
       if (dropdownName !== 'formsReports') setFormsReportsExpanded(false);
+      if (dropdownName !== 'training') setTrainingExpanded(false);
       if (dropdownName !== 'inventory') setInventoryExpanded(false);
       if (dropdownName !== 'qcMaintenance') setQcMaintenanceExpanded(false);
       if (dropdownName !== 'employees') setEmployeesExpanded(false);
       if (dropdownName !== 'finance') setFinanceExpanded(false);
       if (dropdownName !== 'userDashboards') setUserDashboardsExpanded(false);
-      if (dropdownName !== 'training') setTrainingExpanded(false);
       if (dropdownName !== 'purchaseOrders') setPurchaseOrdersExpanded(false);
       if (dropdownName !== 'productionScheduling') setProductionSchedulingExpanded(false);
       if (dropdownName !== 'departmentQueue') setDepartmentQueueExpanded(false);
@@ -154,8 +156,14 @@ export default function Navigation() {
       description: 'Manage Bill of Materials for P2 operations'
     },
     {
+      path: '/robust-bom-administration',
+      label: 'P2 Robust BOM',
+      icon: Factory,
+      description: 'Advanced BOM management with lifecycle tracking and cost analysis'
+    },
+    {
       path: '/barcode-scanner',
-      label: 'Barcode Scanner',
+      label: 'Barcde Scanner',
       icon: Scan,
       description: 'Scan order barcodes to view pricing summary and payment status'
     },
@@ -195,6 +203,27 @@ export default function Navigation() {
       label: 'Receiving',
       icon: Receipt,
       description: 'Receive incoming inventory'
+    },
+    {
+
+      path: '/inventory/enhanced-mrp',
+      label: 'Enhanced Inventory & MRP',
+      icon: Factory,
+      description: 'Advanced inventory management with material requirements planning'
+    },
+    {
+      path: '/vendors',
+      label: 'Vendor Management',
+      icon: Users,
+      description: 'Manage vendors and suppliers'
+
+    },
+    {
+      path: '/vendor-pos',
+      label: 'Vendor Purchase Orders',
+      icon: ShoppingCart,
+      description: 'Create and manage purchase orders to vendors'
+
     }
   ];
 
@@ -229,7 +258,6 @@ export default function Navigation() {
     //   icon: DollarSign,
     //   description: 'Comprehensive pricing analysis for AG bottom metal orders by price tiers'
     // },
-
     {
       path: '/p2-forms',
       label: 'P2 Forms',
@@ -259,6 +287,38 @@ export default function Navigation() {
       label: 'Document Management',
       icon: FileText,
       description: 'Unified document repository with advanced tagging and organization'
+
+    },
+    {
+      path: '/calendar',
+      label: 'Calendar',
+      icon: Calendar,
+      description: 'Multi-user calendar system'
+
+
+    },
+  ];
+
+  const trainingItems = [
+    {
+      path: '/shutdown-training',
+      label: 'Shutdown Training',
+      icon: GraduationCap,
+      description: 'Presentation-style shutdown procedures training with attendance signatures'
+    },
+    {
+      path: '/fire-safety-training',
+      label: 'Fire Safety Training',
+      icon: GraduationCap,
+      description: 'Presentation-style fire safety training with attendance signatures'
+    },
+    {
+      path: '/counterfeit-prevention-training',
+      label: 'Counterfeit Prevention Training',
+      icon: Shield,
+      description: 'Comprehensive counterfeit materials prevention training with multiple choice quiz'
+
+
     }
   ];
 
@@ -307,27 +367,6 @@ export default function Navigation() {
       label: 'Time Clock Admin',
       icon: Settings,
       description: 'Manage time clock entries and punches'
-    }
-  ];
-
-  const trainingItems = [
-    {
-      path: '/shutdown-procedures-training',
-      label: 'Shutdown Training',
-      icon: Shield,
-      description: 'Shutdown procedures training and certification'
-    },
-    {
-      path: '/fire-safety-training',
-      label: 'Fire Safety Training',
-      icon: Shield,
-      description: 'Fire safety procedures and emergency response'
-    },
-    {
-      path: '/counterfeit-prevention-training',
-      label: 'Counterfeit Prevention Training',
-      icon: Shield,
-      description: 'Counterfeit prevention and detection training'
     }
   ];
 
@@ -591,12 +630,12 @@ export default function Navigation() {
 
   const isVerifiedModulesActive = verifiedModulesItems.some(item => location === item.path);
   const isFormsReportsActive = formsReportsItems.some(item => location === item.path);
+  const isTrainingActive = trainingItems.some(item => location === item.path);
   const isInventoryActive = inventoryItems.some(item => location === item.path);
   const isQcMaintenanceActive = qcMaintenanceItems.some(item => location === item.path);
   const isEmployeesActive = employeesItems.some(item => location === item.path);
   const isFinanceActive = financeItems.some(item => location === item.path);
   const isUserDashboardsActive = userDashboardsItems.some(item => location === item.path);
-  const isTrainingActive = trainingItems.some(item => location === item.path);
   const isPurchaseOrdersActive = purchaseOrdersItems.some(item => location === item.path);
   const isProductionSchedulingActive = productionSchedulingItems.some(item => location === item.path);
   const isDepartmentQueueActive = departmentQueueItems.some(item => location === item.path);
@@ -614,6 +653,9 @@ export default function Navigation() {
       }
       if (isFormsReportsActive) {
         setFormsReportsExpanded(true);
+      }
+      if (isTrainingActive) {
+        setTrainingExpanded(true);
       }
       if (isInventoryActive) {
         setInventoryExpanded(true);
@@ -642,7 +684,7 @@ export default function Navigation() {
     }, 100); // Small delay to prevent conflicts with manual dropdown closing
 
     return () => clearTimeout(timer);
-  }, [isVerifiedModulesActive, isFormsReportsActive, isInventoryActive, isQcMaintenanceActive, isEmployeesActive, isFinanceActive, isUserDashboardsActive, isPurchaseOrdersActive, isProductionSchedulingActive, isDepartmentQueueActive]);
+  }, [isVerifiedModulesActive, isFormsReportsActive, isTrainingActive, isInventoryActive, isQcMaintenanceActive, isEmployeesActive, isFinanceActive, isUserDashboardsActive, isPurchaseOrdersActive, isProductionSchedulingActive, isDepartmentQueueActive]);
 
   return (
     <header className="bg-white shadow-sm border-b border-gray-200">
@@ -709,6 +751,50 @@ export default function Navigation() {
               {formsReportsExpanded && (
                 <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
                   {formsReportsItems.map((item) => {
+                    const Icon = item.icon;
+                    const isActive = location === item.path;
+
+                    return (
+                      <Link key={item.path} href={item.path}>
+                        <button
+                          className={cn(
+                            "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
+                            isActive && "bg-primary text-white hover:bg-primary"
+                          )}
+                          onClick={closeAllDropdowns}
+                        >
+                          <Icon className="h-4 w-4" />
+                          {item.label}
+                        </button>
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Training Dropdown */}
+            <div className="relative">
+              <Button
+                variant={isTrainingActive ? "default" : "ghost"}
+                className={cn(
+                  "flex items-center gap-2 text-sm",
+                  isTrainingActive && "bg-primary text-white"
+                )}
+                onClick={() => toggleDropdown('training', trainingExpanded, setTrainingExpanded)}
+              >
+                <GraduationCap className="h-4 w-4" />
+                Training
+                {trainingExpanded ? (
+                  <ChevronDown className="h-4 w-4" />
+                ) : (
+                  <ChevronRight className="h-4 w-4" />
+                )}
+              </Button>
+
+              {trainingExpanded && (
+                <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
+                  {trainingItems.map((item) => {
                     const Icon = item.icon;
                     const isActive = location === item.path;
 
@@ -841,50 +927,6 @@ export default function Navigation() {
               {employeesExpanded && (
                 <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
                   {employeesItems.map((item) => {
-                    const Icon = item.icon;
-                    const isActive = location === item.path;
-
-                    return (
-                      <Link key={item.path} href={item.path}>
-                        <button
-                          className={cn(
-                            "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
-                            isActive && "bg-primary text-white hover:bg-primary"
-                          )}
-                          onClick={closeAllDropdowns}
-                        >
-                          <Icon className="h-4 w-4" />
-                          {item.label}
-                        </button>
-                      </Link>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-            {/* Training Dropdown */}
-            <div className="relative">
-              <Button
-                variant={isTrainingActive ? "default" : "ghost"}
-                className={cn(
-                  "flex items-center gap-2 text-sm",
-                  isTrainingActive && "bg-primary text-white"
-                )}
-                onClick={() => toggleDropdown('training', trainingExpanded, setTrainingExpanded)}
-              >
-                <GraduationCap className="h-4 w-4" />
-                Training
-                {trainingExpanded ? (
-                  <ChevronDown className="h-4 w-4" />
-                ) : (
-                  <ChevronRight className="h-4 w-4" />
-                )}
-              </Button>
-
-              {trainingExpanded && (
-                <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
-                  {trainingItems.map((item) => {
                     const Icon = item.icon;
                     const isActive = location === item.path;
 
@@ -1050,7 +1092,7 @@ export default function Navigation() {
                 onClick={() => toggleDropdown('departmentQueue', departmentQueueExpanded, setDepartmentQueueExpanded)}
               >
                 <Factory className="h-4 w-4" />
-                Department Manager
+                P1 Department Manager
                 {departmentQueueExpanded ? (
                   <ChevronDown className="h-4 w-4" />
                 ) : (

@@ -1,0 +1,14 @@
+Cannot access 'generatedSchedule' before initialization
+
+Stack trace:
+ReferenceError: Cannot access 'generatedSchedule' before initialization
+    at LayupScheduler (https://d4c11836-77c8-434d-b22f-9ea9911f0af5-00-2hnumn9vv240f.picard.replit.dev/src/components/LayupScheduler.tsx?t=1757690317214:634:20)
+    at renderWithHooks (https://d4c11836-77c8-434d-b22f-9ea9911f0af5-00-2hnumn9vv240f.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-276SZO74.js?v=85170350:11548:26)
+    at mountIndeterminateComponent (https://d4c11836-77c8-434d-b22f-9ea9911f0af5-00-2hnumn9vv240f.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-276SZO74.js?v=85170350:14926:21)
+    at beginWork (https://d4c11836-77c8-434d-b22f-9ea9911f0af5-00-2hnumn9vv240f.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-276SZO74.js?v=85170350:15914:22)
+    at beginWork$1 (https://d4c11836-77c8-434d-b22f-9ea9911f0af5-00-2hnumn9vv240f.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-276SZO74.js?v=85170350:19753:22)
+    at performUnitOfWork (https://d4c11836-77c8-434d-b22f-9ea9911f0af5-00-2hnumn9vv240f.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-276SZO74.js?v=85170350:19198:20)
+    at workLoopSync (https://d4c11836-77c8-434d-b22f-9ea9911f0af5-00-2hnumn9vv240f.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-276SZO74.js?v=85170350:19137:13)
+    at renderRootSync (https://d4c11836-77c8-434d-b22f-9ea9911f0af5-00-2hnumn9vv240f.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-276SZO74.js?v=85170350:19116:15)
+    at performSyncWorkOnRoot (https://d4c11836-77c8-434d-b22f-9ea9911f0af5-00-2hnumn9vv240f.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-276SZO74.js?v=85170350:18874:28)
+    at flushSyncCallbacks (https://d4c11836-77c8-434d-b22f-9ea9911f0af5-00-2hnumn9vv240f.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-276SZO74.js?v=85170350:9119:30)

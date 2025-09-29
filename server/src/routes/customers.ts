@@ -459,10 +459,55 @@ router.post('/address-autocomplete-bypass', async (req: Request, res: Response) 
         }
       }
       
-      // If no location provided in search, try a few common states but focus on more likely matches
+      // If no location provided in search, try a few strategic locations to find real addresses
       if (targetCityStates.length === 0) {
-        console.log('🔧 No location info in search, using broad approach');
-        // Instead of hardcoding, return just the street address for manual completion
+        console.log('🔧 No location info in search, trying strategic city validation');
+        
+        // Try a few major metropolitan areas that are likely to have many addresses
+        const strategicCities = [
+          'New York, NY',    // Major financial/commercial center
+          'Los Angeles, CA', // Major west coast city
+          'Chicago, IL',     // Major midwest city
+          'Houston, TX',     // Major south city
+          'Atlanta, GA'      // Major southeast city
+        ];
+        
+        // Try UPS validation with strategic cities to find real addresses
+        for (const cityState of strategicCities.slice(0, 2)) { // Limit to 2 for performance
+          try {
+            console.log('🔧 Trying strategic UPS validation for:', `${search}, ${cityState}`);
+            
+            const [city, state] = cityState.split(', ');
+            const validationResult = await validateAddressWithUPS({
+              street: search,
+              city: city,
+              state: state
+            });
+            
+            if (validationResult.suggestions && validationResult.suggestions.length > 0) {
+              // Found real addresses! Add them to suggestions
+              const suggestionsToAdd = validationResult.suggestions.slice(0, 3);
+              for (const result of suggestionsToAdd) {
+                upsSuggestions.push({
+                  text: `${result.street}, ${result.city}, ${result.state} ${result.postalCode}`,
+                  streetLine: result.street,
+                  city: result.city,
+                  state: result.state,
+                  zipCode: result.postalCode,
+                  entries: 1
+                });
+              }
+              
+              console.log('🔧 Strategic UPS found', validationResult.suggestions.length, 'real address suggestions');
+              break; // Found real addresses, stop searching
+            }
+          } catch (strategicError) {
+            console.log('🔧 Strategic UPS validation failed for:', cityState, (strategicError as Error).message);
+            continue;
+          }
+        }
+        
+        // Always add the user's input as a fallback option for manual completion
         upsSuggestions.push({
           text: search,
           streetLine: search,
@@ -472,7 +517,7 @@ router.post('/address-autocomplete-bypass', async (req: Request, res: Response) 
           entries: 1
         });
         
-        console.log('🔧 Returning street-only suggestion for manual completion');
+        console.log('🔧 Returning', upsSuggestions.length, 'suggestions (including manual option)');
         return res.json({ suggestions: upsSuggestions });
       }
       

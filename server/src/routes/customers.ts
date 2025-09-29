@@ -457,15 +457,20 @@ router.post('/address-autocomplete-bypass', async (req: Request, res: Response) 
       console.log('✅ SmartyStreets Autocomplete: Response received:', data);
       
       // Transform SmartyStreets response to match expected format
-      const transformedSuggestions = data.suggestions?.map((result: any) => ({
-        text: search,
-        streetLine: result.street_line,
-        secondary: result.secondary || '',
-        city: result.city,
-        state: result.state,
-        zipCode: result.zipcode,
-        entries: result.entries || 1
-      })) || [];
+      const transformedSuggestions = data.suggestions?.map((result: any) => {
+        // Format the full address string for display
+        const fullAddress = `${result.street_line}${result.secondary ? ' ' + result.secondary : ''}, ${result.city}, ${result.state} ${result.zipcode}`;
+        
+        return {
+          text: fullAddress,
+          streetLine: result.street_line,
+          secondary: result.secondary || '',
+          city: result.city,
+          state: result.state,
+          zipCode: result.zipcode,
+          entries: result.entries || 1
+        };
+      }) || [];
       
       // Add manual input option
       transformedSuggestions.push({

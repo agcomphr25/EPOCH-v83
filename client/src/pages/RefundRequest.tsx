@@ -12,7 +12,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import CustomerSearchInput from '@/components/CustomerSearchInput';
 import { apiRequest } from '@/lib/queryClient';
 import type { Customer } from '@shared/schema';
-import { calculateOrderTotals, formatCurrency as calcFormatCurrency, type OrderCalculationData } from '@/utils/orderCalculations';
 
 interface Order {
   id: number;
@@ -31,10 +30,6 @@ interface Order {
   balanceDue?: number;
   isFullyPaid: boolean;
   customerPO?: string;
-  features?: Record<string, any>;
-  discountCode?: string;
-  priceOverride?: number | null;
-  featureQuantities?: Record<string, number>;
 }
 
 interface RefundRequestData {
@@ -67,59 +62,6 @@ export default function RefundRequest() {
     enabled: !!selectedCustomer?.id,
   });
 
-  // Fetch feature definitions for calculations
-  const { data: featureDefs = [] } = useQuery({
-    queryKey: ['/api/features'],
-    queryFn: async () => {
-      const response = await apiRequest('/api/features');
-      return response as any[];
-    },
-  });
-
-  // Fetch stock models for calculations
-  const { data: stockModels = [] } = useQuery({
-    queryKey: ['/api/stock-models'],
-    queryFn: async () => {
-      const response = await apiRequest('/api/stock-models');
-      return response as any[];
-    },
-  });
-
-  // Fetch short-term sales to manually find discount details
-  const { data: shortTermSales = [] } = useQuery({
-    queryKey: ['/api/short-term-sales'],
-    queryFn: async () => {
-      const response = await apiRequest('/api/short-term-sales');
-      return response as any[];
-    },
-  });
-
-  // Calculate discount details from short-term sales based on order discount code  
-  const discountDetails = React.useMemo(() => {
-    if (!selectedOrder?.discountCode || selectedOrder.discountCode === 'none') {
-      return null;
-    }
-    
-    // Debug removed - discount lookup is now working
-    
-    // Handle "short_term_1" format - extract ID and find matching discount
-    if (selectedOrder.discountCode.startsWith('short_term_')) {
-      const discountId = parseInt(selectedOrder.discountCode.replace('short_term_', ''));
-      const discount = shortTermSales.find(d => d.id === discountId && d.isActive);
-      
-      if (discount) {
-        console.log('🔍 Found matching short-term discount:', discount);
-        return {
-          ...discount,
-          appliesTo: discount.appliesTo || 'stock_model'
-        };
-      }
-    }
-    
-    console.log('🔍 No matching discount found');
-    return null;
-  }, [selectedOrder?.discountCode, shortTermSales]);
-
   // Create refund request mutation
   const createRefundRequestMutation = useMutation({
     mutationFn: async (requestData: RefundRequestData) => {
@@ -150,54 +92,9 @@ export default function RefundRequest() {
 
   const handleOrderSelect = (order: Order) => {
     setSelectedOrder(order);
-    // Set max refund amount to the actual payment amount (not order total)
-    setRefundAmount((order.paymentTotal || 0).toString());
+    // Set max refund amount to the order total (matches what's shown in Order Summary)
+    setRefundAmount((order.orderTotal || 0).toString());
   };
-
-  // Calculate live order totals using the same logic as Order Entry
-  const liveOrderTotals = React.useMemo(() => {
-    if (!selectedOrder || !featureDefs.length || !stockModels.length) {
-      console.log('🔍 RefundRequest calculation skipped - missing dependencies:', {
-        selectedOrder: !!selectedOrder,
-        featureDefs: featureDefs.length,
-        stockModels: stockModels.length
-      });
-      return null;
-    }
-
-    const stockModel = stockModels.find(model => model.id === selectedOrder.modelId);
-    if (!stockModel) {
-      console.log('🔍 RefundRequest calculation skipped - stock model not found:', selectedOrder.modelId);
-      return null;
-    }
-
-    console.log('🔍 RefundRequest calculation data:', {
-      orderId: selectedOrder.orderId,
-      discountCode: selectedOrder.discountCode,
-      discountDetails: discountDetails,
-      stockModelPrice: stockModel.price,
-      shipping: selectedOrder.shipping,
-      features: selectedOrder.features
-    });
-
-    const calculationData: OrderCalculationData = {
-      stockModel: {
-        id: stockModel.id,
-        price: stockModel.price || 0,
-      },
-      features: selectedOrder.features || {},
-      discountCode: selectedOrder.discountCode,
-      discountDetails: discountDetails || undefined,
-      priceOverride: selectedOrder.priceOverride,
-      shipping: selectedOrder.shipping || 0,
-      featureDefs: featureDefs,
-      otherOptionsQuantities: selectedOrder.featureQuantities || {},
-    };
-
-    const result = calculateOrderTotals(calculationData);
-    console.log('🔍 RefundRequest calculation result:', result);
-    return result;
-  }, [selectedOrder, featureDefs, stockModels, discountDetails]);
 
   const handleSubmitRefund = () => {
     if (!selectedCustomer || !selectedOrder) {
@@ -388,16 +285,7 @@ export default function RefundRequest() {
                   <div className="text-xs text-gray-600 space-y-1">
                     <div data-testid="summary-customer">Customer: {selectedCustomer?.name}</div>
                     <div data-testid="summary-date">Date: {formatDate(selectedOrder.orderDate)}</div>
-                    <div data-testid="summary-order-total">
-                      Order Total: {liveOrderTotals ? calcFormatCurrency(liveOrderTotals.finalTotal) : formatCurrency(selectedOrder.orderTotal || 0)}
-                      {/* REMOVED: Stored total notice - no longer showing stored vs calculated differences
-                      {liveOrderTotals && selectedOrder.orderTotal && Math.abs(liveOrderTotals.finalTotal - (selectedOrder.orderTotal + (selectedOrder.shipping || 0))) > 0.01 && (
-                        <span className="ml-2 text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded">
-                          (Stored: {formatCurrency(selectedOrder.orderTotal + (selectedOrder.shipping || 0))})
-                        </span>
-                      )}
-                      */}
-                    </div>
+                    <div data-testid="summary-order-total">Order Total: {formatCurrency(selectedOrder.orderTotal || 0)}</div>
                     <div data-testid="summary-total-paid">Total Paid: {formatCurrency(selectedOrder.paymentTotal)}</div>
                     <div data-testid="summary-balance-due" className="font-medium">Balance Due: {formatCurrency(selectedOrder.balanceDue || 0)}</div>
                   </div>
@@ -413,14 +301,14 @@ export default function RefundRequest() {
                     type="number"
                     step="0.01"
                     min="0.01"
-                    max={selectedOrder.paymentTotal || 0}
+                    max={selectedOrder.orderTotal || 0}
                     value={refundAmount}
                     onChange={(e) => setRefundAmount(e.target.value)}
                     placeholder="0.00"
                     data-testid="refund-amount-input"
                   />
                   <div className="text-xs text-gray-500" data-testid="max-refund-note">
-                    Maximum refund: {formatCurrency(selectedOrder.paymentTotal || 0)}
+                    Maximum refund: {formatCurrency(selectedOrder.orderTotal || 0)}
                   </div>
                 </div>
 

@@ -358,8 +358,7 @@ export function registerRoutes(app: Express): Server {
           created_at as "createdAt",
           'production_order' as source
         FROM production_orders 
-        WHERE current_department = 'P1 Production Queue' 
-          AND production_status = 'PENDING'
+        WHERE production_status = 'PENDING'
         ORDER BY due_date ASC
       `);
 

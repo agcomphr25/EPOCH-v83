@@ -135,9 +135,11 @@ router.post('/add-regular-orders', async (req, res) => {
     `);
     
     // FIXED: Properly extract rows from PostgreSQL result
-    const poRows = Array.isArray(existingPOAssignments) 
-      ? existingPOAssignments 
-      : (existingPOAssignments as any).rows ?? [];
+    const poRows = (existingPOAssignments as any).rows ?? [];
+    console.log(`🔍 PO QUERY RESULT: Found ${poRows.length} rows`);
+    if (poRows.length > 0) {
+      console.log(`🔍 PO QUERY RESULT: last_po_date = ${poRows[0].last_po_date}`);
+    }
     
     if (poRows.length > 0 && poRows[0].last_po_date) {
       const lastPODate = new Date(poRows[0].last_po_date);

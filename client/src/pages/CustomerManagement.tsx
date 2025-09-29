@@ -1394,6 +1394,25 @@ export default function CustomerManagement() {
         }),
       });
 
+      // If address fields are filled, create the initial shipping address
+      if (data.street && data.city && data.state && data.zipCode) {
+        await apiRequest('/api/addresses', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            customerId: customer.id.toString(),
+            street: data.street,
+            street2: data.street2 || '',
+            city: data.city,
+            state: data.state,
+            zipCode: data.zipCode,
+            country: data.country || 'United States',
+            type: 'shipping',
+            isDefault: true,
+          }),
+        });
+      }
+
       return customer;
     },
     onSuccess: () => {
@@ -1966,10 +1985,76 @@ export default function CustomerManagement() {
                 </TabsContent>
                 
                 <TabsContent value="addresses" className="mt-6">
-                  <AddressManagementTabs 
-                    selectedCustomer={null} 
-                    userRole="shipping" // Demo: shipping department users see only shipping addresses
-                  />
+                  <div className="space-y-4">
+                    <p className="text-sm text-gray-600">Enter the customer's primary shipping address below. You can add additional addresses after creating the customer.</p>
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="create-street">Street Address *</Label>
+                        <Input
+                          id="create-street"
+                          value={formData.street}
+                          onChange={(e) => setFormData({ ...formData, street: e.target.value })}
+                          placeholder="123 Main Street"
+                          data-testid="input-create-street"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="create-street2">Suite/Apt/Unit #</Label>
+                        <Input
+                          id="create-street2"
+                          value={formData.street2}
+                          onChange={(e) => setFormData({ ...formData, street2: e.target.value })}
+                          placeholder="Suite 100"
+                          data-testid="input-create-street2"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-4">
+                      <div>
+                        <Label htmlFor="create-city">City *</Label>
+                        <Input
+                          id="create-city"
+                          value={formData.city}
+                          onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                          placeholder="City"
+                          data-testid="input-create-city"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="create-state">State *</Label>
+                        <Input
+                          id="create-state"
+                          value={formData.state}
+                          onChange={(e) => setFormData({ ...formData, state: e.target.value })}
+                          placeholder="AL"
+                          data-testid="input-create-state"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="create-zipCode">ZIP Code *</Label>
+                        <Input
+                          id="create-zipCode"
+                          value={formData.zipCode}
+                          onChange={(e) => setFormData({ ...formData, zipCode: e.target.value })}
+                          placeholder="12345"
+                          data-testid="input-create-zipcode"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <Label htmlFor="create-country">Country</Label>
+                      <Input
+                        id="create-country"
+                        value={formData.country}
+                        onChange={(e) => setFormData({ ...formData, country: e.target.value })}
+                        placeholder="United States"
+                        data-testid="input-create-country"
+                      />
+                    </div>
+                  </div>
                 </TabsContent>
               </Tabs>
               <div className="flex justify-end gap-2 pt-6 border-t">

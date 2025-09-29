@@ -218,11 +218,12 @@ router.post('/add-regular-orders', async (req, res) => {
             const liveCollisionCheck = await pool.query(`
               SELECT COUNT(*) as count 
               FROM layup_schedule 
-              WHERE mold_id = $1 AND scheduled_date = $2
+              WHERE mold_id = $1 AND DATE(scheduled_date) = DATE($2)
             `, [mold.mold_id, scheduledDateStr]);
             
             // FIXED: Safer parsing of PostgreSQL result with proper null checks (same fix as OEM scheduler)
-            const rows = liveCollisionCheck?.rows || [];
+            const result = liveCollisionCheck as any;
+            const rows = result?.rows || [];
             const collisionCount = rows.length > 0 ? parseInt(rows[0]?.count) || 0 : 0;
             const hasDbCollision = collisionCount > 0;
             const hasMemoryCollision = currentAllocations.has(moldDateKey);
@@ -498,7 +499,8 @@ router.post('/oem-priority-only', async (req, res) => {
           `, [mold.mold_id, scheduledDateStr]);
           
           // FIXED: Safer parsing of PostgreSQL result with proper null checks
-          const rows = liveCollisionCheck?.rows || [];
+          const result = liveCollisionCheck as any;
+          const rows = result?.rows || [];
           const collisionCount = rows.length > 0 ? parseInt(rows[0]?.count) || 0 : 0;
           const hasDbCollision = collisionCount > 0;
           const hasMemoryCollision = currentOemAllocations.has(moldDateKey);
@@ -1063,7 +1065,7 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
 
         // Get employee assignments (all active employees for now)
         const allEmployees = employeeResult || [];
-        const employeeAssignments = allEmployees.map(emp => ({
+        const employeeAssignments = allEmployees.map((emp: any) => ({
           id: emp.id || null,
           name: emp.employee_id,
           rate: emp.rate,

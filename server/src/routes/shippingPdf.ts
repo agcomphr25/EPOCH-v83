@@ -819,9 +819,6 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Order not found' });
     }
 
-    // Debug: Log order notes
-    console.log(`📝 Sales Order PDF - Order ${orderId} notes:`, order.notes || '(empty)');
-
     // Get related data
     const model = stockModels.find(m => m.id === order.modelId);
     const customer = customers.find(c => c.id?.toString() === (order as any).customerId?.toString());
@@ -2202,13 +2199,6 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     // Order Notes/Special Instructions
     if (order.notes) {
       currentY -= 15;
-      console.log(`📍 Notes section - currentY before notes: ${currentY}, page height: ${height}, margin: ${margin}`);
-      
-      // Check if we have enough space (need at least 100 pixels for notes + some buffer)
-      if (currentY < margin + 100) {
-        console.log(`⚠️ Not enough space for notes on current page, currentY: ${currentY}`);
-      }
-      
       page.drawText('SPECIAL INSTRUCTIONS:', {
         x: margin,
         y: currentY,
@@ -2224,14 +2214,12 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
 
       noteWords.forEach(word => {
         if ((currentLine + ' ' + word).length > maxLineLength) {
-          if (currentY > margin) {
-            page.drawText(currentLine, {
-              x: margin + 5,
-              y: currentY,
-              size: 10,
-              font: font,
-            });
-          }
+          page.drawText(currentLine, {
+            x: margin + 5,
+            y: currentY,
+            size: 10,
+            font: font,
+          });
           currentY -= 15;
           currentLine = word;
         } else {
@@ -2239,7 +2227,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
         }
       });
 
-      if (currentLine && currentY > margin) {
+      if (currentLine) {
         page.drawText(currentLine, {
           x: margin + 5,
           y: currentY,
@@ -2248,8 +2236,6 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
         });
         currentY -= 15;
       }
-      
-      console.log(`📍 Notes section - currentY after notes: ${currentY}`);
     }
 
 

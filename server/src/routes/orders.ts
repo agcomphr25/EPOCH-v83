@@ -992,54 +992,67 @@ router.post('/:orderId/progress', async (req: Request, res: Response) => {
 
     console.log(`🎯 Target department: ${targetDepartment}`);
 
+    // Determine status update: When leaving P1 Production Queue, change status to IN_PROGRESS
+    const statusUpdate: any = {};
+    if (existingOrder.currentDepartment === 'P1 Production Queue' || existingOrder.currentDepartment === 'P2 Production Queue') {
+      statusUpdate.status = 'IN_PROGRESS';
+      console.log(`📊 STATUS CHANGE: Order ${orderId} leaving Production Queue → status changing to IN_PROGRESS`);
+    }
+
     // Update the appropriate table
     let updatedOrder;
     if (isFinalized && isP2Order) {
       console.log(`🔄 Updating P2 finalized order ${orderId} in P2 allOrders table`);
-      console.log(`🔄 Update data:`, { currentDepartment: targetDepartment, ...completionUpdates });
+      console.log(`🔄 Update data:`, { currentDepartment: targetDepartment, ...completionUpdates, ...statusUpdate });
       try {
         updatedOrder = await storage.updateFinalizedOrder(orderId, {
           currentDepartment: targetDepartment,
-          ...completionUpdates
+          ...completionUpdates,
+          ...statusUpdate
         });
         console.log(`✅ Updated P2 finalized order result:`, updatedOrder?.currentDepartment);
       } catch (error) {
         console.error(`❌ P2 update method not available, falling back to P1 update:`, error);
         updatedOrder = await storage.updateFinalizedOrder(orderId, {
           currentDepartment: targetDepartment,
-          ...completionUpdates
+          ...completionUpdates,
+          ...statusUpdate
         });
       }
     } else if (isFinalized) {
       console.log(`🔄 Updating P1 finalized order ${orderId} in allOrders table`);
-      console.log(`🔄 Update data:`, { currentDepartment: targetDepartment, ...completionUpdates });
+      console.log(`🔄 Update data:`, { currentDepartment: targetDepartment, ...completionUpdates, ...statusUpdate });
       updatedOrder = await storage.updateFinalizedOrder(orderId, {
         currentDepartment: targetDepartment,
-        ...completionUpdates
+        ...completionUpdates,
+        ...statusUpdate
       });
       console.log(`✅ Updated P1 finalized order result:`, updatedOrder?.currentDepartment);
     } else if (isP2Order) {
       console.log(`🔄 Updating P2 draft order ${orderId} in P2 orderDrafts table`);
-      console.log(`🔄 Update data:`, { currentDepartment: targetDepartment, ...completionUpdates });
+      console.log(`🔄 Update data:`, { currentDepartment: targetDepartment, ...completionUpdates, ...statusUpdate });
       try {
         updatedOrder = await storage.updateOrderDraft(orderId, {
           currentDepartment: targetDepartment,
-          ...completionUpdates
+          ...completionUpdates,
+          ...statusUpdate
         });
         console.log(`✅ Updated P2 draft order result:`, updatedOrder?.currentDepartment);
       } catch (error) {
         console.error(`❌ P2 update method not available, falling back to P1 update:`, error);
         updatedOrder = await storage.updateOrderDraft(orderId, {
           currentDepartment: targetDepartment,
-          ...completionUpdates
+          ...completionUpdates,
+          ...statusUpdate
         });
       }
     } else {
       console.log(`🔄 Updating P1 draft order ${orderId} in orderDrafts table`);
-      console.log(`🔄 Update data:`, { currentDepartment: targetDepartment, ...completionUpdates });
+      console.log(`🔄 Update data:`, { currentDepartment: targetDepartment, ...completionUpdates, ...statusUpdate });
       updatedOrder = await storage.updateOrderDraft(orderId, {
         currentDepartment: targetDepartment,
-        ...completionUpdates
+        ...completionUpdates,
+        ...statusUpdate
       });
       console.log(`✅ Updated P1 draft order result:`, updatedOrder?.currentDepartment);
     }

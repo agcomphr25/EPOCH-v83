@@ -804,6 +804,10 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     
     // Get payment data for payment status calculation
     const payments = await storage.getPaymentsByOrderId(orderId);
+    
+    // Get discount data for predefined discount codes
+    const persistentDiscounts = await storage.getAllPersistentDiscounts();
+    const shortTermSales = await storage.getAllShortTermSales();
 
     if (!order) {
       return res.status(404).json({ error: 'Order not found' });
@@ -964,12 +968,50 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     // Calculate discount for payment status (same logic as totals section)
     let discountForPayment = 0;
     if ((order as any).discountCode && (order as any).discountCode !== 'none') {
-      if ((order as any).discountCode === 'custom' || (order as any).showCustomDiscount) {
+      const discountCode = (order as any).discountCode;
+      
+      // Handle custom discount
+      if (discountCode === 'custom' || (order as any).showCustomDiscount) {
         const subtotalForDiscount = basePriceForPayment + featuresCostForPayment;
         if ((order as any).customDiscountType === 'percent') {
           discountForPayment = (subtotalForDiscount * ((order as any).customDiscountValue || 0)) / 100;
         } else {
           discountForPayment = (order as any).customDiscountValue || 0;
+        }
+      }
+      // Handle predefined discount codes
+      else {
+        let discount: any = null;
+        
+        // Check persistent discounts
+        if (discountCode.startsWith('persistent_')) {
+          const discountId = parseInt(discountCode.replace('persistent_', ''));
+          discount = persistentDiscounts.find((d: any) => d.id === discountId);
+        } else {
+          discount = persistentDiscounts.find((d: any) => d.name === discountCode);
+        }
+        
+        // If not found, check short-term sales
+        if (!discount) {
+          if (discountCode.startsWith('short_term_')) {
+            const discountId = parseInt(discountCode.replace('short_term_', ''));
+            discount = shortTermSales.find((d: any) => d.id === discountId && d.isActive);
+          } else {
+            discount = shortTermSales.find((d: any) => d.name === discountCode && d.isActive);
+          }
+        }
+        
+        // Calculate discount amount if found
+        if (discount) {
+          const appliesTo = discount.appliesTo || 'total_order';
+          const subtotalForDiscount = basePriceForPayment + featuresCostForPayment;
+          const baseAmount = appliesTo === 'stock_model' ? basePriceForPayment : subtotalForDiscount;
+          
+          if (discount.percent) {
+            discountForPayment = (baseAmount * discount.percent) / 100;
+          } else if (discount.amount) {
+            discountForPayment = discount.amount;
+          }
         }
       }
     }
@@ -2093,8 +2135,10 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     let discountLabel = '';
     
     if ((order as any).discountCode && (order as any).discountCode !== 'none') {
+      const discountCode = (order as any).discountCode;
+      
       // Handle custom discount
-      if ((order as any).discountCode === 'custom' || (order as any).showCustomDiscount) {
+      if (discountCode === 'custom' || (order as any).showCustomDiscount) {
         if ((order as any).customDiscountType === 'percent') {
           discountAmount = (calculatedSubtotal * ((order as any).customDiscountValue || 0)) / 100;
           discountLabel = `Custom (${(order as any).customDiscountValue}% off)`;
@@ -2103,13 +2147,47 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
           discountLabel = `Custom ($${discountAmount.toFixed(2)} off)`;
         }
       }
-      // If not a custom discount, show the discount code (predefined discounts would need lookup)
-      // For now, we'll just show the discount code as-is
-      else if ((order as any).discountCode) {
-        discountLabel = (order as any).discountCode;
-        // Note: For predefined discount codes, you may need to fetch from short-term-sales
-        // For now, we'll display a placeholder
-        discountAmount = 0; // Would need to calculate from discount definition
+      // Handle predefined discount codes (persistent_X or short_term_X)
+      else {
+        let discount: any = null;
+        
+        // Check persistent discounts
+        if (discountCode.startsWith('persistent_')) {
+          const discountId = parseInt(discountCode.replace('persistent_', ''));
+          discount = persistentDiscounts.find((d: any) => d.id === discountId);
+        } else {
+          // Check by name in persistent discounts
+          discount = persistentDiscounts.find((d: any) => d.name === discountCode);
+        }
+        
+        // If not found, check short-term sales
+        if (!discount) {
+          if (discountCode.startsWith('short_term_')) {
+            const discountId = parseInt(discountCode.replace('short_term_', ''));
+            discount = shortTermSales.find((d: any) => d.id === discountId && d.isActive);
+          } else {
+            // Check by name in short-term sales
+            discount = shortTermSales.find((d: any) => d.name === discountCode && d.isActive);
+          }
+        }
+        
+        // Calculate discount amount if found
+        if (discount) {
+          discountLabel = discount.name;
+          
+          // Check if discount applies to stock model only or total order
+          const appliesTo = discount.appliesTo || 'total_order';
+          const baseAmount = appliesTo === 'stock_model' ? basePrice : calculatedSubtotal;
+          
+          // Calculate based on percentage or fixed amount
+          if (discount.percent) {
+            discountAmount = (baseAmount * discount.percent) / 100;
+            discountLabel += ` (${discount.percent}% off)`;
+          } else if (discount.amount) {
+            discountAmount = discount.amount;
+            discountLabel += ` ($${discount.amount} off)`;
+          }
+        }
       }
     }
 

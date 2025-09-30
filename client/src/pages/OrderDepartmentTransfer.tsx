@@ -4,7 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowRight, Search, AlertCircle, CheckCircle } from 'lucide-react';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { ArrowRight, Search, AlertCircle, CheckCircle, AlertTriangle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
 
@@ -22,6 +23,15 @@ const DEPARTMENTS = [
   'Fulfilled'
 ];
 
+interface OrderDetails {
+  orderId: string;
+  currentDepartment: string;
+  status: string;
+  trackingNumber?: string;
+  customerNotified?: boolean;
+  shippedDate?: string;
+}
+
 export default function OrderDepartmentTransfer() {
   const [orderId, setOrderId] = useState('');
   const [currentDepartment, setCurrentDepartment] = useState('');
@@ -29,6 +39,8 @@ export default function OrderDepartmentTransfer() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [orderFound, setOrderFound] = useState(false);
+  const [orderDetails, setOrderDetails] = useState<OrderDetails | null>(null);
+  const [showFulfilledDialog, setShowFulfilledDialog] = useState(false);
   const { toast } = useToast();
 
   const searchOrder = async () => {
@@ -64,6 +76,17 @@ export default function OrderDepartmentTransfer() {
         const department = order.currentDepartment || order.department || 'Unknown';
         setCurrentDepartment(department);
         setOrderFound(true);
+        
+        // Store full order details for fulfillment checking
+        setOrderDetails({
+          orderId: order.orderId,
+          currentDepartment: department,
+          status: order.status || 'Unknown',
+          trackingNumber: order.trackingNumber,
+          customerNotified: order.customerNotified,
+          shippedDate: order.shippedDate
+        });
+        
         toast({
           title: 'Order Found',
           description: `Order ${orderId} is currently in ${department} department`,
@@ -115,7 +138,22 @@ export default function OrderDepartmentTransfer() {
       return;
     }
 
+    // Check if we're moving a FULFILLED order backwards from Shipping Management
+    if (orderDetails?.status === 'FULFILLED' && 
+        orderDetails?.currentDepartment === 'Shipping Management' &&
+        targetDepartment !== 'Shipping Management') {
+      // Show the dialog for user to choose action
+      setShowFulfilledDialog(true);
+      return;
+    }
+
+    // Proceed with normal transfer
+    await executeTransfer(false);
+  };
+
+  const executeTransfer = async (reopenOrder: boolean) => {
     setIsLoading(true);
+    setShowFulfilledDialog(false);
 
     try {
       const response = await fetch(`/api/orders/${orderId.trim()}/department`, {
@@ -124,7 +162,8 @@ export default function OrderDepartmentTransfer() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          department: targetDepartment
+          department: targetDepartment,
+          reopenOrder: reopenOrder
         })
       });
 
@@ -293,6 +332,70 @@ export default function OrderDepartmentTransfer() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Fulfilled Order Warning Dialog */}
+      <Dialog open={showFulfilledDialog} onOpenChange={setShowFulfilledDialog}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <div className="flex items-center space-x-2">
+              <AlertTriangle className="w-6 h-6 text-yellow-600" />
+              <DialogTitle>Fulfilled Order - Confirm Action</DialogTitle>
+            </div>
+            <DialogDescription className="pt-4 space-y-3">
+              <p className="font-medium text-base">
+                This order is marked as <span className="text-blue-600 font-bold">FULFILLED</span> and is currently in Shipping Management.
+              </p>
+              
+              <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-200 dark:border-blue-800">
+                <p className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-2">Order Details:</p>
+                <ul className="text-sm space-y-1 text-blue-800 dark:text-blue-200">
+                  <li>• Order ID: <strong>{orderDetails?.orderId}</strong></li>
+                  {orderDetails?.trackingNumber && (
+                    <li>• Tracking: <strong>{orderDetails.trackingNumber}</strong></li>
+                  )}
+                  {orderDetails?.shippedDate && (
+                    <li>• Shipped: <strong>{new Date(orderDetails.shippedDate).toLocaleDateString()}</strong></li>
+                  )}
+                  {orderDetails?.customerNotified && (
+                    <li>• Customer Notified: <strong>Yes</strong></li>
+                  )}
+                </ul>
+              </div>
+
+              <p className="text-sm">
+                Moving this order to <strong>{targetDepartment}</strong> suggests rework may be needed.
+              </p>
+
+              <p className="text-sm font-medium">
+                Would you like to reopen this order (change status to IN_PROGRESS)?
+              </p>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex-col sm:flex-row gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setShowFulfilledDialog(false)}
+              data-testid="button-cancel-transfer"
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => executeTransfer(false)}
+              data-testid="button-keep-fulfilled"
+            >
+              Keep as FULFILLED
+            </Button>
+            <Button
+              onClick={() => executeTransfer(true)}
+              data-testid="button-reopen-order"
+              className="bg-orange-600 hover:bg-orange-700"
+            >
+              Reopen Order (IN_PROGRESS)
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -1576,7 +1576,16 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
         font: font,
       });
 
-      const actionInletDisplay = actionInletOption?.label || 'Not selected';
+      // Try to get label from features, otherwise use the raw value with proper formatting
+      let actionInletDisplay = actionInletOption?.label;
+      if (!actionInletDisplay && (order as any).features?.action_inlet) {
+        // Format the raw value: replace underscores with spaces and capitalize
+        actionInletDisplay = (order as any).features.action_inlet
+          .split('_')
+          .map((word: string) => word.charAt(0).toUpperCase() + word.slice(1))
+          .join(' ');
+      }
+      actionInletDisplay = actionInletDisplay || 'Not selected';
       const wrappedActionInlet = wrapText(actionInletDisplay, 300, 9, font);
       wrappedActionInlet.forEach((line, index) => {
         if (summaryLineY - (index * 12) > currentY - featuresTableHeight + 8) {

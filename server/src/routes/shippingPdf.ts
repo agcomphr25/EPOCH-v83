@@ -2240,16 +2240,16 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
 
 
 
-    // Terms and Conditions Section
+    // Terms and Conditions Section (2-column layout with smaller font)
     currentY -= 30; // Reduced from 120 to give more space for notes
     page.drawText('TERMS AND CONDITIONS', {
       x: margin,
       y: currentY,
-      size: 12,
+      size: 11,
       font: boldFont,
     });
 
-    currentY -= 20;
+    currentY -= 18;
     const terms = [
       '• Payment: 50% deposit required to begin production, balance due upon completion',
       '• Lead Time: Custom manufacturing typically 4-6 weeks from deposit',
@@ -2258,15 +2258,52 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       '• Prices valid for 30 days from quote date'
     ];
 
-    terms.forEach(term => {
-      page.drawText(term, {
-        x: margin,
-        y: currentY,
-        size: 9,
-        font: font,
+    // Two-column layout for terms
+    const columnWidth = (printableWidth - 20) / 2;
+    const leftColumnX = margin;
+    const rightColumnX = margin + columnWidth + 20;
+    const termsStartY = currentY;
+    const smallFontSize = 7;
+    const lineHeight = 11;
+
+    // Split terms into two columns (first 3 in left, last 2 in right)
+    const leftColumnTerms = terms.slice(0, 3);
+    const rightColumnTerms = terms.slice(3);
+
+    // Draw left column
+    let leftY = termsStartY;
+    leftColumnTerms.forEach(term => {
+      // Word wrap for left column
+      const wrappedLines = wrapText(term, columnWidth - 10, smallFontSize, font);
+      wrappedLines.forEach(line => {
+        page.drawText(line, {
+          x: leftColumnX,
+          y: leftY,
+          size: smallFontSize,
+          font: font,
+        });
+        leftY -= lineHeight;
       });
-      currentY -= 15;
     });
+
+    // Draw right column
+    let rightY = termsStartY;
+    rightColumnTerms.forEach(term => {
+      // Word wrap for right column
+      const wrappedLines = wrapText(term, columnWidth - 10, smallFontSize, font);
+      wrappedLines.forEach(line => {
+        page.drawText(line, {
+          x: rightColumnX,
+          y: rightY,
+          size: smallFontSize,
+          font: font,
+        });
+        rightY -= lineHeight;
+      });
+    });
+
+    // Use the lower of the two columns for the next section
+    currentY = Math.min(leftY, rightY);
 
     // Acceptance signature area
     currentY -= 30;

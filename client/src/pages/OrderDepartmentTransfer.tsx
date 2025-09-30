@@ -138,10 +138,9 @@ export default function OrderDepartmentTransfer() {
       return;
     }
 
-    // Check if we're moving a FULFILLED order backwards from Shipping Management
-    if (orderDetails?.status === 'FULFILLED' && 
-        orderDetails?.currentDepartment === 'Shipping Management' &&
-        targetDepartment !== 'Shipping Management') {
+    // Check if we're moving a FULFILLED order to any different department
+    // FULFILLED orders should remain fulfilled only if staying in or returning to Shipping Management
+    if (orderDetails?.status === 'FULFILLED' && targetDepartment !== 'Shipping Management') {
       // Show the dialog for user to choose action
       setShowFulfilledDialog(true);
       return;
@@ -343,13 +342,14 @@ export default function OrderDepartmentTransfer() {
             </div>
             <DialogDescription className="pt-4 space-y-3">
               <p className="font-medium text-base">
-                This order is marked as <span className="text-blue-600 font-bold">FULFILLED</span> and is currently in Shipping Management.
+                This order is marked as <span className="text-blue-600 font-bold">FULFILLED</span>{orderDetails?.currentDepartment && ` and is currently in ${orderDetails.currentDepartment}`}.
               </p>
               
               <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-200 dark:border-blue-800">
                 <p className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-2">Order Details:</p>
                 <ul className="text-sm space-y-1 text-blue-800 dark:text-blue-200">
                   <li>• Order ID: <strong>{orderDetails?.orderId}</strong></li>
+                  <li>• Current Location: <strong>{orderDetails?.currentDepartment}</strong></li>
                   {orderDetails?.trackingNumber && (
                     <li>• Tracking: <strong>{orderDetails.trackingNumber}</strong></li>
                   )}
@@ -363,7 +363,7 @@ export default function OrderDepartmentTransfer() {
               </div>
 
               <p className="text-sm">
-                Moving this order to <strong>{targetDepartment}</strong> suggests rework may be needed.
+                Moving this FULFILLED order to <strong>{targetDepartment}</strong> suggests rework or correction may be needed.
               </p>
 
               <p className="text-sm font-medium">

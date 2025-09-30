@@ -2073,6 +2073,52 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
 
     summaryLineY -= 18; // Reduced from 25 to 18
 
+    // Calculate discount amount
+    let discountAmount = 0;
+    let discountLabel = '';
+    
+    if ((order as any).discountCode && (order as any).discountCode !== 'none') {
+      // Handle custom discount
+      if ((order as any).discountCode === 'custom' || (order as any).showCustomDiscount) {
+        if ((order as any).customDiscountType === 'percent') {
+          discountAmount = (calculatedSubtotal * ((order as any).customDiscountValue || 0)) / 100;
+          discountLabel = `Custom (${(order as any).customDiscountValue}% off)`;
+        } else {
+          discountAmount = (order as any).customDiscountValue || 0;
+          discountLabel = `Custom ($${discountAmount.toFixed(2)} off)`;
+        }
+      }
+      // If not a custom discount, show the discount code (predefined discounts would need lookup)
+      // For now, we'll just show the discount code as-is
+      else if ((order as any).discountCode) {
+        discountLabel = (order as any).discountCode;
+        // Note: For predefined discount codes, you may need to fetch from short-term-sales
+        // For now, we'll display a placeholder
+        discountAmount = 0; // Would need to calculate from discount definition
+      }
+    }
+
+    // Display discount if present
+    if (discountAmount > 0) {
+      page.drawText('Discount:', {
+        x: margin + 10,
+        y: summaryLineY,
+        size: 10,
+        font: boldFont,
+        color: rgb(0, 0.6, 0),
+      });
+
+      page.drawText(`-$${discountAmount.toFixed(2)}`, {
+        x: margin + printableWidth - 80,
+        y: summaryLineY,
+        size: 10,
+        font: boldFont,
+        color: rgb(0, 0.6, 0),
+      });
+
+      summaryLineY -= 18;
+    }
+
     // Shipping
     if (order.shipping && order.shipping > 0) {
       page.drawText('Shipping:', {
@@ -2102,8 +2148,8 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
 
     summaryLineY -= 18; // Reduced from 25 to 18
 
-    // Total
-    const finalTotal = calculatedSubtotal + (order.shipping || 0);
+    // Total (subtract discount from subtotal, then add shipping)
+    const finalTotal = calculatedSubtotal - discountAmount + (order.shipping || 0);
     page.drawText('TOTAL:', {
       x: margin + 10,
       y: summaryLineY,

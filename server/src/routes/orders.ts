@@ -1268,9 +1268,9 @@ router.patch('/:orderId', async (req: Request, res: Response) => {
 router.patch('/:orderId/department', async (req: Request, res: Response) => {
   try {
     const { orderId } = req.params;
-    const { department } = req.body;
+    const { department, reopenOrder } = req.body;
     
-    console.log(`🔄 Department Transfer Request: ${orderId} → ${department}`);
+    console.log(`🔄 Department Transfer Request: ${orderId} → ${department}${reopenOrder ? ' (Reopen Order)' : ''}`);
     
     if (!department) {
       return res.status(400).json({ error: 'Department is required' });
@@ -1287,21 +1287,28 @@ router.patch('/:orderId/department', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Invalid department name' });
     }
     
+    // Prepare update data
+    const updateData: any = { 
+      currentDepartment: department
+    };
+    
+    // If reopenOrder flag is true, change status from FULFILLED to IN_PROGRESS
+    if (reopenOrder === true) {
+      updateData.status = 'IN_PROGRESS';
+      console.log(`📊 STATUS CHANGE: Order ${orderId} being reopened → status changing to IN_PROGRESS`);
+    }
+    
     // Try to find and update the order
     let updatedOrder;
     let orderType = '';
     
     try {
-      updatedOrder = await storage.updateFinalizedOrder(orderId, { 
-        currentDepartment: department
-      });
+      updatedOrder = await storage.updateFinalizedOrder(orderId, updateData);
       orderType = 'finalized';
       console.log(`✅ Updated finalized order ${orderId} to ${department}`);
     } catch (finalizedError) {
       try {
-        updatedOrder = await storage.updateOrderDraft(orderId, { 
-          currentDepartment: department
-        });
+        updatedOrder = await storage.updateOrderDraft(orderId, updateData);
         orderType = 'draft';
         console.log(`✅ Updated draft order ${orderId} to ${department}`);
       } catch (draftError) {

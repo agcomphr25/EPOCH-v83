@@ -2033,7 +2033,7 @@ export function registerRoutes(app: Express): Server {
             customer: purchaseOrder.customerName,
             product: item.itemId,
             quantity: 1,
-            status: 'Active',
+            status: 'IN_PROGRESS',
             date: new Date(),
             currentDepartment: 'P1 Production Queue',
             isOnSchedule: true,
@@ -2060,7 +2060,7 @@ export function registerRoutes(app: Express): Server {
           orderId: order.orderId,
           partName: (order as any).partName || 'Unknown',
           dueDate: order.dueDate,
-          status: (order as any).status || 'Active'
+          status: (order as any).status || 'IN_PROGRESS'
         }))
       });
 

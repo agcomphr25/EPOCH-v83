@@ -592,10 +592,21 @@ router.post('/generate-id', async (req: Request, res: Response) => {
 });
 
 // Parameterized route - MUST be after specific routes
+// Searches by Order ID (AG135) or FB Order Number (AK046)
 router.get('/:id', async (req: Request, res: Response) => {
   try {
-    const orderId = req.params.id;
-    const order = await storage.getOrderById(orderId);
+    const searchTerm = req.params.id;
+    
+    // Try to find by Order ID first
+    let order = await storage.getOrderById(searchTerm);
+    
+    // If not found, try searching by FB Order Number
+    if (!order) {
+      const allOrdersList = await storage.getAllOrders();
+      order = allOrdersList.find(o => 
+        o.fbOrderNumber && o.fbOrderNumber.toLowerCase() === searchTerm.toLowerCase()
+      ) || null;
+    }
 
     if (!order) {
       return res.status(404).json({ error: "Order not found" });

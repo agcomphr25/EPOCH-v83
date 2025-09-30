@@ -960,7 +960,22 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     }
     
     const shippingForPayment = order.shipping || 0;
-    const orderTotal = basePriceForPayment + featuresCostForPayment + shippingForPayment;
+    
+    // Calculate discount for payment status (same logic as totals section)
+    let discountForPayment = 0;
+    if ((order as any).discountCode && (order as any).discountCode !== 'none') {
+      if ((order as any).discountCode === 'custom' || (order as any).showCustomDiscount) {
+        const subtotalForDiscount = basePriceForPayment + featuresCostForPayment;
+        if ((order as any).customDiscountType === 'percent') {
+          discountForPayment = (subtotalForDiscount * ((order as any).customDiscountValue || 0)) / 100;
+        } else {
+          discountForPayment = (order as any).customDiscountValue || 0;
+        }
+      }
+    }
+    
+    // Calculate order total with discount subtracted
+    const orderTotal = basePriceForPayment + featuresCostForPayment - discountForPayment + shippingForPayment;
     
     // Determine if fully paid (same logic as backend calculation)
     const isFullyPaid = order.paymentAmount !== null ? 

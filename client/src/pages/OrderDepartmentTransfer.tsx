@@ -120,7 +120,7 @@ export default function OrderDepartmentTransfer() {
   };
 
   const transferOrder = async () => {
-    if (!orderId.trim() || !targetDepartment) {
+    if (!orderDetails?.orderId || !targetDepartment) {
       toast({
         title: 'Error',
         description: 'Please select a target department',
@@ -155,7 +155,9 @@ export default function OrderDepartmentTransfer() {
     setShowFulfilledDialog(false);
 
     try {
-      const response = await fetch(`/api/orders/${orderId.trim()}/department`, {
+      // Use the actual order ID from orderDetails, not the search input
+      const actualOrderId = orderDetails?.orderId || orderId.trim();
+      const response = await fetch(`/api/orders/${actualOrderId}/department`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -177,7 +179,7 @@ export default function OrderDepartmentTransfer() {
         setTargetDepartment('');
         toast({
           title: 'Transfer Successful',
-          description: `Order ${orderId} has been moved to ${targetDepartment}`,
+          description: `Order ${actualOrderId} has been moved to ${targetDepartment}`,
         });
       } else {
         let errorMessage = 'Failed to transfer order';

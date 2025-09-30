@@ -139,9 +139,8 @@ export default function OrderDepartmentTransfer() {
     }
 
     // Check if we're moving a FULFILLED order to any different department
-    // FULFILLED orders should remain fulfilled only if staying in or returning to Shipping Management/Fulfilled
-    const shippingDepartments = ['Shipping Management', 'Fulfilled'];
-    if (orderDetails?.status === 'FULFILLED' && !shippingDepartments.includes(targetDepartment)) {
+    // FULFILLED orders should remain fulfilled only if staying in or returning to Fulfilled department
+    if (orderDetails?.status === 'FULFILLED' && targetDepartment !== 'Fulfilled') {
       // Show the dialog for user to choose action
       setShowFulfilledDialog(true);
       return;

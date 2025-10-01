@@ -1,5 +1,5 @@
 import {
-  users, csvData, customerTypes, persistentDiscounts, shortTermSales, featureCategories, featureSubCategories, features, stockModels, orders, orderDrafts, payments, forms, formSubmissions,
+  csvData, customerTypes, persistentDiscounts, shortTermSales, featureCategories, featureSubCategories, features, stockModels, orders, orderDrafts, payments, forms, formSubmissions,
   inventoryItems, inventoryScans, partsRequests, employees, qcDefinitions, qcSubmissions, maintenanceSchedules, maintenanceLogs,
   timeClockEntries, checklistItems, onboardingDocs, customers, customerAddresses, communicationLogs, pdfDocuments,
   enhancedFormCategories, enhancedForms, enhancedFormVersions, enhancedFormSubmissions,
@@ -13,7 +13,7 @@ import {
   // Document management tables
   documents, documentTags, documentTagRelations, documentCollections, documentCollectionRelations,
   // New employee management tables
-  certifications, employeeCertifications, evaluations, userSessions, employeeDocuments, employeeAuditLog,
+  certifications, employeeCertifications, evaluations, employeeDocuments, employeeAuditLog,
   // allOrders table as the finalized orders table
   allOrders,
   // Order attachments table
@@ -26,7 +26,7 @@ import {
   // OEM Priority Settings table
   oemPrioritySettings,
   // Types
-  type User, type InsertUser, type Order, type InsertOrder, type CSVData, type InsertCSVData,
+  type Order, type InsertOrder, type CSVData, type InsertCSVData,
   type CustomerType, type InsertCustomerType,
   type PersistentDiscount, type InsertPersistentDiscount,
   type ShortTermSale, type InsertShortTermSale,
@@ -46,7 +46,6 @@ import {
   type Certification, type InsertCertification,
   type EmployeeCertification, type InsertEmployeeCertification,
   type Evaluation, type InsertEvaluation,
-  type UserSession, type InsertUserSession,
   type EmployeeDocument, type InsertEmployeeDocument,
   type EmployeeAuditLog, type InsertEmployeeAuditLog,
   type QcDefinition, type InsertQcDefinition,
@@ -3523,7 +3522,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createCustomer(data: InsertCustomer): Promise<Customer> {
-    const [customer] = await db.insert(customers).values(data).returning();
+    // Explicitly omit id field to prevent null value insertion
+    const { id, ...cleanData } = data as any;
+    const [customer] = await db.insert(customers).values(cleanData).returning();
     return customer;
   }
 

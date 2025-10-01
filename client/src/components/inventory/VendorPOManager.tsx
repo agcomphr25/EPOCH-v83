@@ -456,14 +456,16 @@ export default function VendorPOManager() {
     }
   });
 
-  // Filter vendor POs
-  const filteredVendorPOs = (vendorPOs || []).filter(vendorPo => {
+
+  // Filter vendor POs (add safety check to ensure vendorPOs is an array)
+  const filteredVendorPOs = Array.isArray(vendorPOs) ? vendorPOs.filter(vendorPo => {
+
     const matchesSearch = vendorPo.poNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
       vendorPo.vendorName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       false;
     const matchesStatus = statusFilter === 'all' || vendorPo.status === statusFilter;
     return matchesSearch && matchesStatus;
-  });
+  }) : [];
 
   // Event handlers
   const handleCreate = () => {

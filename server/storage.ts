@@ -23,6 +23,8 @@ import {
   poProducts,
   // Refund requests table
   refundRequests,
+  // OEM Priority Settings table
+  oemPrioritySettings,
   // Types
   type Order, type InsertOrder, type CSVData, type InsertCSVData,
   type CustomerType, type InsertCustomerType,
@@ -93,6 +95,8 @@ import {
   type POProduct, type InsertPOProduct,
   // Refund request types
   type RefundRequest, type InsertRefundRequest,
+  // OEM Priority Settings types
+  type OemPrioritySettings, type InsertOemPrioritySettings,
 
 
 } from "./schema";
@@ -462,6 +466,17 @@ export interface IStorage {
   createEmployeeLayupSettings(data: InsertEmployeeLayupSettings): Promise<EmployeeLayupSettings>;
   updateEmployeeLayupSettings(employeeId: string, data: Partial<InsertEmployeeLayupSettings>): Promise<EmployeeLayupSettings>;
   deleteEmployeeLayupSettings(employeeId: string): Promise<void>;
+
+  // OEM Priority Settings CRUD
+  getAllOemPrioritySettings(): Promise<OemPrioritySettings[]>;
+  getOemPrioritySettings(id: number): Promise<OemPrioritySettings | undefined>;
+  getOemPrioritySettingsByVendor(vendorId: string): Promise<OemPrioritySettings[]>;
+  getOemPrioritySettingsByPO(poId: number): Promise<OemPrioritySettings[]>;
+  createOemPrioritySettings(data: InsertOemPrioritySettings): Promise<OemPrioritySettings>;
+  updateOemPrioritySettings(id: number, data: Partial<InsertOemPrioritySettings>): Promise<OemPrioritySettings>;
+  deleteOemPrioritySettings(id: number): Promise<void>;
+  deleteOemPrioritySettingsByPO(poId: number): Promise<void>;
+  getActivePrioritySettings(): Promise<OemPrioritySettings[]>;
 
   // Layup Scheduler: Orders CRUD
   getAllProductionQueue(filters?: { status?: string; department?: string }): Promise<any[]>;
@@ -4021,6 +4036,80 @@ export class DatabaseStorage implements IStorage {
 
   async deleteEmployeeLayupSettings(employeeId: string): Promise<void> {
     await db.delete(employeeLayupSettings).where(eq(employeeLayupSettings.employeeId, employeeId));
+  }
+
+  // OEM Priority Settings CRUD
+  async getAllOemPrioritySettings(): Promise<OemPrioritySettings[]> {
+    return await db
+      .select()
+      .from(oemPrioritySettings)
+      .orderBy(desc(oemPrioritySettings.createdAt));
+  }
+
+  async getOemPrioritySettings(id: number): Promise<OemPrioritySettings | undefined> {
+    const [result] = await db
+      .select()
+      .from(oemPrioritySettings)
+      .where(eq(oemPrioritySettings.id, id));
+    return result || undefined;
+  }
+
+  async getOemPrioritySettingsByVendor(vendorId: string): Promise<OemPrioritySettings[]> {
+    return await db
+      .select()
+      .from(oemPrioritySettings)
+      .where(and(
+        eq(oemPrioritySettings.vendorId, vendorId),
+        eq(oemPrioritySettings.isActive, true)
+      ))
+      .orderBy(asc(oemPrioritySettings.priorityLevel));
+  }
+
+  async getOemPrioritySettingsByPO(poId: number): Promise<OemPrioritySettings[]> {
+    return await db
+      .select()
+      .from(oemPrioritySettings)
+      .where(and(
+        eq(oemPrioritySettings.poId, poId),
+        eq(oemPrioritySettings.isActive, true)
+      ))
+      .orderBy(asc(oemPrioritySettings.priorityLevel));
+  }
+
+  async createOemPrioritySettings(data: InsertOemPrioritySettings): Promise<OemPrioritySettings> {
+    const [result] = await db
+      .insert(oemPrioritySettings)
+      .values(data)
+      .returning();
+    return result;
+  }
+
+  async updateOemPrioritySettings(id: number, data: Partial<InsertOemPrioritySettings>): Promise<OemPrioritySettings> {
+    const [result] = await db
+      .update(oemPrioritySettings)
+      .set({
+        ...data,
+        updatedAt: new Date()
+      })
+      .where(eq(oemPrioritySettings.id, id))
+      .returning();
+    return result;
+  }
+
+  async deleteOemPrioritySettings(id: number): Promise<void> {
+    await db.delete(oemPrioritySettings).where(eq(oemPrioritySettings.id, id));
+  }
+
+  async deleteOemPrioritySettingsByPO(poId: number): Promise<void> {
+    await db.delete(oemPrioritySettings).where(eq(oemPrioritySettings.poId, poId));
+  }
+
+  async getActivePrioritySettings(): Promise<OemPrioritySettings[]> {
+    return await db
+      .select()
+      .from(oemPrioritySettings)
+      .where(eq(oemPrioritySettings.isActive, true))
+      .orderBy(asc(oemPrioritySettings.priorityLevel), desc(oemPrioritySettings.createdAt));
   }
 
   // Layup Scheduler: Orders CRUD

@@ -2564,3 +2564,42 @@ export const insertRefundRequestSchema = createInsertSchema(refundRequests).omit
 // Types for Refund Requests
 export type InsertRefundRequest = z.infer<typeof insertRefundRequestSchema>;
 export type RefundRequest = typeof refundRequests.$inferSelect;
+
+// OEM Priority Settings table for storing priority configurations
+export const oemPrioritySettings = pgTable("oem_priority_settings", {
+  id: serial("id").primaryKey(),
+  vendorId: text("vendor_id").notNull(), // The vendor (customer) ID from purchase orders
+  vendorName: text("vendor_name").notNull(), // Vendor display name for reference
+  poId: integer("po_id").notNull(), // Purchase order ID
+  poNumber: text("po_number").notNull(), // PO number for reference
+  selectionMode: text("selection_mode").notNull(), // 'entire_po' or 'specific_items'
+  stockItemIds: json("stock_item_ids"), // Array of stock item IDs for specific_items mode
+  priorityLevel: integer("priority_level").default(1), // Priority level (1 = highest)
+  isActive: boolean("is_active").default(true),
+  createdBy: text("created_by"), // User who created this priority setting
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Insert schema for OEM Priority Settings
+export const insertOemPrioritySettingsSchema = createInsertSchema(oemPrioritySettings).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  vendorId: z.string().min(1, "Vendor ID is required"),
+  vendorName: z.string().min(1, "Vendor name is required"),
+  poId: z.number().min(1, "PO ID is required"),
+  poNumber: z.string().min(1, "PO number is required"),
+  selectionMode: z.enum(['entire_po', 'specific_items'], {
+    required_error: "Selection mode is required"
+  }),
+  stockItemIds: z.array(z.string()).optional().nullable(),
+  priorityLevel: z.number().min(1).max(10).default(1),
+  isActive: z.boolean().default(true),
+  createdBy: z.string().optional().nullable(),
+});
+
+// Types for OEM Priority Settings
+export type InsertOemPrioritySettings = z.infer<typeof insertOemPrioritySettingsSchema>;
+export type OemPrioritySettings = typeof oemPrioritySettings.$inferSelect;

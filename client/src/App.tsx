@@ -279,6 +279,7 @@ function App() {
 
                   {/* Queue Management Routes */}
                   <Route path="/purchase-order-items-queue" component={PurchaseOrderItemsQueuePage} />
+                  <Route path="/layup" component={LayupSchedulerPage} />
                   <Route path="/layup-scheduler" component={LayupSchedulerPage} />
                   <Route path="/enhanced-layup-scheduler" component={EnhancedLayupSchedulerPage} />
                   <Route path="/work-day-scheduler" component={() => <WorkDayAwareScheduler />} />

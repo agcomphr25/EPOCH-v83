@@ -1,4 +1,5 @@
 import {
+
   users, csvData, customerTypes, persistentDiscounts, shortTermSales, featureCategories, featureSubCategories, features, stockModels, orders, orderDrafts, payments, forms, formSubmissions, vendors, vendorPurchaseOrders, vendorPurchaseOrderItems,
   inventoryItems, inventoryScans, partsRequests, employees, qcDefinitions, qcSubmissions, maintenanceSchedules, maintenanceLogs,
   timeClockEntries, checklistItems, onboardingDocs, customers, customerAddresses, communicationLogs, pdfDocuments,
@@ -10,10 +11,12 @@ import {
   taskItems,
   // Kickback tracking table
   kickbacks,
+  // Calendar system tables
+  calendarEvents, calendarEventAttendees,
   // Document management tables
   documents, documentTags, documentTagRelations, documentCollections, documentCollectionRelations,
   // New employee management tables
-  certifications, employeeCertifications, evaluations, userSessions, employeeDocuments, employeeAuditLog,
+  certifications, employeeCertifications, evaluations, employeeDocuments, employeeAuditLog,
   // allOrders table as the finalized orders table
   allOrders,
   // Order attachments table
@@ -39,7 +42,7 @@ import {
   vendors, vendorContacts, vendorAddresses, vendorContactPhones, vendorContactEmails, vendorDocuments, vendorScoringCriteria, vendorScores,
 
   // Types
-  type User, type InsertUser, type Order, type InsertOrder, type CSVData, type InsertCSVData,
+  type Order, type InsertOrder, type CSVData, type InsertCSVData,
   type CustomerType, type InsertCustomerType,
   type PersistentDiscount, type InsertPersistentDiscount,
   type ShortTermSale, type InsertShortTermSale,
@@ -59,7 +62,6 @@ import {
   type Certification, type InsertCertification,
   type EmployeeCertification, type InsertEmployeeCertification,
   type Evaluation, type InsertEvaluation,
-  type UserSession, type InsertUserSession,
   type EmployeeDocument, type InsertEmployeeDocument,
   type EmployeeAuditLog, type InsertEmployeeAuditLog,
   type QcDefinition, type InsertQcDefinition,
@@ -96,6 +98,8 @@ import {
   type TaskItem, type InsertTaskItem,
   // Kickback tracking types
   type Kickback, type InsertKickback,
+  // Calendar system types
+  type CalendarEvent, type InsertCalendarEvent, type CalendarEventAttendee, type InsertCalendarEventAttendee,
   // Document management types
   type Document, type InsertDocument,
   type DocumentTag, type InsertDocumentTag,
@@ -613,6 +617,21 @@ export interface IStorage {
   createKickback(data: InsertKickback): Promise<Kickback>;
   updateKickback(id: number, data: Partial<InsertKickback>): Promise<Kickback>;
   deleteKickback(id: number): Promise<void>;
+
+  // Calendar Event CRUD
+  getAllCalendarEvents(): Promise<CalendarEvent[]>;
+  getCalendarEventsByDateRange(startDate: Date, endDate: Date): Promise<CalendarEvent[]>;
+  getCalendarEvent(id: number): Promise<CalendarEvent | undefined>;
+  createCalendarEvent(data: InsertCalendarEvent): Promise<CalendarEvent>;
+  updateCalendarEvent(id: number, data: Partial<InsertCalendarEvent>): Promise<CalendarEvent>;
+  deleteCalendarEvent(id: number): Promise<void>;
+  
+  // Calendar Event Attendees CRUD
+  getEventAttendees(eventId: number): Promise<CalendarEventAttendee[]>;
+  addEventAttendee(data: InsertCalendarEventAttendee): Promise<CalendarEventAttendee>;
+  updateAttendeeStatus(eventId: number, userId: string, status: 'invited' | 'accepted' | 'declined' | 'tentative'): Promise<CalendarEventAttendee>;
+  removeEventAttendee(eventId: number, userId: string): Promise<void>;
+  getUserCalendarEvents(userId: string): Promise<CalendarEvent[]>;
 
   // Kickback Analytics Methods
   getKickbackAnalytics(dateRange?: { start: Date; end: Date }): Promise<{
@@ -1842,7 +1861,7 @@ export class DatabaseStorage implements IStorage {
             let bottomMetalPrice = Number(option.price);
             
             // Special pricing: SepFG10 or SepCF25 seasonal sale + AG bottom metal = $100 instead of $149
-            if ((order.discountCode === 'short_term_3' || order.discountCode === 'short_term_1') && orderFeatures.bottom_metal.includes('ag_') && option.price === 149) {
+            if ((order.discountCode === 'short_term_3' || order.discountCode === 'short_term_1' || order.discountCode === 'SepCF25' || order.discountCode === 'SepFG10') && orderFeatures.bottom_metal.includes('ag_') && option.price === 149) {
               bottomMetalPrice = 100;
             }
             
@@ -1913,6 +1932,21 @@ export class DatabaseStorage implements IStorage {
   // Helper function to calculate order total from features and pricing 
   public async calculateOrderTotal(order: AllOrder): Promise<number> {
     let total = 0;
+    
+    // DEBUG: Log calculation details for EI038 and EI039
+    if (order.orderId === 'EI038' || order.orderId === 'EI039') {
+      console.log(`🔍 DEBUG ${order.orderId} - Starting calculation for order:`, {
+        orderId: order.orderId,
+        modelId: order.modelId,
+        discountCode: order.discountCode,
+        customDiscountType: order.customDiscountType,
+        customDiscountValue: order.customDiscountValue,
+        showCustomDiscount: order.showCustomDiscount,
+        priceOverride: order.priceOverride,
+        shipping: order.shipping,
+        features: order.features
+      });
+    }
 
     // Add base stock model price (use override if set, otherwise use standard price)
     if (order.modelId) {
@@ -2013,7 +2047,7 @@ export class DatabaseStorage implements IStorage {
             let bottomMetalPrice = Number(option.price);
             
             // Special pricing: SepFG10 or SepCF25 seasonal sale + AG bottom metal = $100 instead of $149
-            if ((order.discountCode === 'short_term_3' || order.discountCode === 'short_term_1') && orderFeatures.bottom_metal.includes('ag_') && option.price === 149) {
+            if ((order.discountCode === 'short_term_3' || order.discountCode === 'short_term_1' || order.discountCode === 'SepCF25' || order.discountCode === 'SepFG10') && orderFeatures.bottom_metal.includes('ag_') && option.price === 149) {
               bottomMetalPrice = 100;
             }
             
@@ -2059,17 +2093,37 @@ export class DatabaseStorage implements IStorage {
       }
     }
 
-    // Apply persistent discount if present
+    // Apply discount if present - check both persistent and short-term discounts
     if (order.discountCode && order.discountCode !== 'none') {
+      let discount = null;
+      
+      // First check persistent discounts
       const persistentDiscounts = await this.getAllPersistentDiscounts();
       
       // Handle both "persistent_2" format and direct name lookup
-      let discount = null;
       if (order.discountCode.startsWith('persistent_')) {
         const discountId = parseInt(order.discountCode.replace('persistent_', ''));
         discount = persistentDiscounts.find(d => d.id === discountId);
       } else {
         discount = persistentDiscounts.find(d => d.name === order.discountCode);
+      }
+      
+      // If not found in persistent discounts, check short-term sales
+      if (!discount) {
+        const shortTermSales = await this.getAllShortTermSales();
+        
+        // Handle both "short_term_1" format and direct name lookup
+        if (order.discountCode.startsWith('short_term_')) {
+          const discountId = parseInt(order.discountCode.replace('short_term_', ''));
+          discount = shortTermSales.find(d => d.id === discountId && d.isActive);
+        } else {
+          discount = shortTermSales.find(d => d.name === order.discountCode && d.isActive);
+        }
+        
+        // Short-term sales have a default appliesTo of 'stock_model'
+        if (discount) {
+          discount.appliesTo = discount.appliesTo || 'stock_model';
+        }
       }
       
       if (discount && discount.isActive) {
@@ -2080,17 +2134,29 @@ export class DatabaseStorage implements IStorage {
             const selectedModel = stockModels.find(model => model.id === order.modelId);
             if (selectedModel) {
               const basePrice = Number(order.priceOverride || selectedModel.price || 0);
-              const discountAmount = (discount.percent && discount.percent > 0) 
-                ? (basePrice * discount.percent / 100)
-                : Number(discount.fixedAmount || 0);
+              let discountAmount = 0;
+              
+              if (discount.percent && discount.percent > 0) {
+                discountAmount = basePrice * discount.percent / 100;
+              } else if ('fixedAmount' in discount && discount.fixedAmount) {
+                // Only persistent discounts have fixedAmount
+                discountAmount = Number(discount.fixedAmount);
+              }
+              
               total -= discountAmount;
             }
           }
         } else if (discount.appliesTo === 'total_order') {
           // Apply discount to entire order total
-          const discountAmount = (discount.percent && discount.percent > 0) 
-            ? (total * discount.percent / 100)
-            : Number(discount.fixedAmount || 0);
+          let discountAmount = 0;
+          
+          if (discount.percent && discount.percent > 0) {
+            discountAmount = total * discount.percent / 100;
+          } else if ('fixedAmount' in discount && discount.fixedAmount) {
+            // Only persistent discounts have fixedAmount
+            discountAmount = Number(discount.fixedAmount);
+          }
+          
           total -= discountAmount;
         }
       }
@@ -2131,6 +2197,163 @@ export class DatabaseStorage implements IStorage {
     // Final safeguard: If total is still NaN, return 0
     return isNaN(total) ? 0 : total;
   }
+
+  // COMMENTED OUT: Calculate and store order total for finalized orders - ensures stored totals are accurate
+  /*
+  public async calculateAndStoreOrderTotal(orderId: string): Promise<number> {
+    try {
+      // Get the full order data
+      const order = await this.getOrderById(orderId) as AllOrder;
+      if (!order) {
+        throw new Error(`Order ${orderId} not found`);
+      }
+
+      // Calculate the total using existing logic
+      const calculatedTotal = await this.calculateOrderTotal(order);
+      
+      // Round to 2 decimal places for currency precision
+      const roundedTotal = Math.round(calculatedTotal * 100) / 100;
+      
+      // Store the calculated total in the database
+      await db.update(allOrders)
+        .set({ calculatedTotal: roundedTotal.toString() })
+        .where(eq(allOrders.orderId, orderId));
+        
+      console.log(`✅ Stored calculated total for order ${orderId}: $${roundedTotal.toFixed(2)}`);
+      
+      return roundedTotal;
+    } catch (error) {
+      console.error(`❌ Error calculating and storing total for order ${orderId}:`, error);
+      throw error;
+    }
+  }
+  */
+
+  // COMMENTED OUT: Migration function to populate calculated totals for all existing finalized orders
+  /*
+  public async populateAllCalculatedTotals(): Promise<void> {
+    try {
+      console.log('🔄 Starting migration to populate calculated totals for all finalized orders...');
+      
+      // Get all finalized orders that don't have calculated totals yet
+      const ordersNeedingTotals = await db.select({
+        orderId: allOrders.orderId
+      })
+      .from(allOrders)
+      .where(isNull(allOrders.calculatedTotal));
+      
+      console.log(`📊 Found ${ordersNeedingTotals.length} orders that need calculated totals`);
+      
+      let processedCount = 0;
+      let errorCount = 0;
+      
+      // Process orders in batches to avoid overwhelming the database
+      const batchSize = 10;
+      for (let i = 0; i < ordersNeedingTotals.length; i += batchSize) {
+        const batch = ordersNeedingTotals.slice(i, i + batchSize);
+        
+        await Promise.all(batch.map(async (orderRef) => {
+          try {
+            await this.calculateAndStoreOrderTotal(orderRef.orderId);
+            processedCount++;
+            
+            if (processedCount % 20 === 0) {
+              console.log(`✅ Processed ${processedCount}/${ordersNeedingTotals.length} orders...`);
+            }
+          } catch (error) {
+            console.error(`❌ Error processing order ${orderRef.orderId}:`, error);
+            errorCount++;
+          }
+        }));
+      }
+      
+      console.log(`🎉 Migration complete! Processed ${processedCount} orders successfully, ${errorCount} errors`);
+      
+    } catch (error) {
+      console.error('❌ Error in populateAllCalculatedTotals migration:', error);
+      throw error;
+    }
+  }
+  */
+
+  // COMMENTED OUT: Validation function to compare stored vs calculated totals for accuracy
+  /*
+  public async validateStoredOrderTotal(orderId: string): Promise<{isValid: boolean, storedTotal: number | null, calculatedTotal: number, difference: number}> {
+    try {
+      // Get the order with stored total
+      const [order] = await db.select().from(allOrders).where(eq(allOrders.orderId, orderId));
+      if (!order) {
+        throw new Error(`Order ${orderId} not found`);
+      }
+
+      const storedTotal = order.calculatedTotal ? Number(order.calculatedTotal) : null;
+      const calculatedTotal = await this.calculateOrderTotal(order);
+      
+      // Calculate difference (allow for small floating point differences)
+      const difference = storedTotal !== null ? Math.abs(storedTotal - calculatedTotal) : calculatedTotal;
+      const isValid = storedTotal !== null && difference < 0.01; // Within 1 cent tolerance
+      
+      if (!isValid && storedTotal !== null) {
+        console.warn(`⚠️ VALIDATION WARNING: Order ${orderId} stored total ($${storedTotal.toFixed(2)}) doesn't match calculated total ($${calculatedTotal.toFixed(2)}), difference: $${difference.toFixed(2)}`);
+      }
+      
+      return {
+        isValid,
+        storedTotal,
+        calculatedTotal,
+        difference
+      };
+    } catch (error) {
+      console.error(`❌ Error validating stored total for order ${orderId}:`, error);
+      throw error;
+    }
+  }
+  */
+
+  // COMMENTED OUT: Bulk validation function to check multiple orders
+  /*
+  public async validateAllStoredTotals(limit: number = 50): Promise<{valid: number, invalid: number, errors: string[]}> {
+    try {
+      console.log(`🔍 Starting validation of stored totals (checking ${limit} orders)...`);
+      
+      // Get orders that have stored totals
+      const orders = await db.select({
+        orderId: allOrders.orderId,
+        calculatedTotal: allOrders.calculatedTotal
+      })
+      .from(allOrders)
+      .where(not(isNull(allOrders.calculatedTotal)))
+      .limit(limit);
+
+      let validCount = 0;
+      let invalidCount = 0;
+      const errors: string[] = [];
+
+      // Validate each order
+      for (const orderRef of orders) {
+        try {
+          const validation = await this.validateStoredOrderTotal(orderRef.orderId);
+          if (validation.isValid) {
+            validCount++;
+          } else {
+            invalidCount++;
+            errors.push(`${orderRef.orderId}: stored $${validation.storedTotal?.toFixed(2) || 'null'} vs calculated $${validation.calculatedTotal.toFixed(2)}`);
+          }
+        } catch (error) {
+          invalidCount++;
+          errors.push(`${orderRef.orderId}: validation error - ${(error as any).message}`);
+        }
+      }
+
+      console.log(`✅ Validation complete: ${validCount} valid, ${invalidCount} invalid`);
+      return { valid: validCount, invalid: invalidCount, errors };
+      
+    } catch (error) {
+      console.error('❌ Error in bulk validation:', error);
+      throw error;
+    }
+  }
+  */
 
   // Get stored order total using Order Summary calculation logic (for refund consistency)
   async getStoredOrderTotal(orderId: string): Promise<number> {
@@ -2507,24 +2730,20 @@ export class DatabaseStorage implements IStorage {
     limit: number, 
     totalPages: number 
   }> {
-    // First, get the total count for pagination
+    // First, get the total count for pagination (exclude purchase orders and purchase order customers by ID and name)
     const totalCountResult = await db
       .select({ count: sql<number>`COUNT(*)` })
       .from(allOrders)
-      .where(
-        and(
-          sql`${allOrders.orderId} NOT LIKE 'P1-%'`,
-          sql`${allOrders.orderId} NOT LIKE 'PO%'`,
-          sql`${allOrders.orderId} != 'AG1'`,
-          sql`${allOrders.orderId} NOT LIKE '%PO%'`
-        )
-      );
+      .leftJoin(customers, eq(allOrders.customerId, sql`${customers.id}::text`))
+      .where(sql`${allOrders.orderId} NOT LIKE 'PO%' 
+        AND ${allOrders.customerId} NOT IN (SELECT DISTINCT customer_id FROM purchase_orders WHERE customer_id IS NOT NULL)
+        AND ${customers.name} NOT IN (SELECT DISTINCT customer_name FROM purchase_orders WHERE customer_name IS NOT NULL)`);
     
     const total = totalCountResult[0]?.count || 0;
     const totalPages = Math.ceil(total / limit);
     const offset = (page - 1) * limit;
 
-    // Use the same field selection as the original method but with pagination
+    // Use the same field selection as the original method but with pagination (exclude purchase orders and purchase order customers)
     const ordersWithCustomers = await db
       .select({
         // Order fields - using the same selection as original method
@@ -2563,20 +2782,18 @@ export class DatabaseStorage implements IStorage {
         actionLength: sql<string>`${allOrders.features}->>'action_length'`,
         // Customer name
         customerName: customers.name,
+        // 🔄 STORED TOTALS: Include calculated total to prevent N+1 query fallback
+        // COMMENTED OUT: calculatedTotal: allOrders.calculatedTotal, // Field removed from schema
       })
       .from(allOrders)
       .leftJoin(customers, eq(allOrders.customerId, sql`${customers.id}::text`))
-      .where(
-        and(
-          sql`${allOrders.orderId} NOT LIKE 'P1-%'`,
-          sql`${allOrders.orderId} NOT LIKE 'PO%'`,
-          sql`${allOrders.orderId} != 'AG1'`,
-          sql`${allOrders.orderId} NOT LIKE '%PO%'`
-        )
-      )
+      .where(sql`${allOrders.orderId} NOT LIKE 'PO%' 
+        AND ${allOrders.customerId} NOT IN (SELECT DISTINCT customer_id FROM purchase_orders WHERE customer_id IS NOT NULL)
+        AND ${customers.name} NOT IN (SELECT DISTINCT customer_name FROM purchase_orders WHERE customer_name IS NOT NULL)`)
       .orderBy(desc(allOrders.updatedAt))
       .limit(limit)
       .offset(offset);
+    
 
     // Get all payments aggregated by order ID in parallel
     const paymentTotals = await db
@@ -2590,19 +2807,15 @@ export class DatabaseStorage implements IStorage {
     // Create payment map for fast lookup
     const paymentMap = new Map(paymentTotals.map(p => [p.orderId, p.totalPayments]));
 
-    // Process orders with payment info using CORRECTED payment logic
-    const ordersWithPaymentInfo = await Promise.all(ordersWithCustomers.map(async order => {
+    // 🔄 PERFORMANCE OPTIMIZED: Process orders with stored totals only (no expensive database calls)
+    const ordersWithPaymentInfo = ordersWithCustomers.map(order => {
       const paymentTotal = paymentMap.get(order.orderId) || 0;
       
-      // ULTRA SIMPLE FIX: Just compare payments to stored order total
-      // Use the same logic as Order Summary: if no stored total, assume payment covers it
-      const storedOrderTotal = Number(order.paymentAmount) || 0;
+      // FALLBACK: Use shipping amount since calculatedTotal was removed from schema
+      // This prevents expensive N+1 queries but provides basic total for payment status
+      const actualOrderTotal = Number(order.shipping) || 0;
       
-      // If there's a stored order total, compare against it
-      // If no stored total but there are payments, consider it paid (like Order Summary shows)
-      const isFullyPaid = storedOrderTotal > 0 
-        ? (paymentTotal >= storedOrderTotal) 
-        : (paymentTotal > 0);
+      const isFullyPaid = paymentTotal >= actualOrderTotal && actualOrderTotal > 0;
 
       return {
         ...order,
@@ -2610,7 +2823,7 @@ export class DatabaseStorage implements IStorage {
         paymentTotal,
         isFullyPaid
       } as any; // Type assertion to avoid complex type errors
-    }));
+    });
 
     return {
       orders: ordersWithPaymentInfo,
@@ -4052,7 +4265,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createCustomer(data: InsertCustomer): Promise<Customer> {
-    const [customer] = await db.insert(customers).values(data).returning();
+    // Explicitly omit id field to prevent null value insertion
+    const { id, ...cleanData } = data as any;
+    const [customer] = await db.insert(customers).values(cleanData).returning();
     return customer;
   }
 
@@ -5072,7 +5287,7 @@ export class DatabaseStorage implements IStorage {
     };
 
     // Define department sequence
-    const departmentSequence = ['P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 'Finish', 'Gunsmith', 'Paint', 'Shipping QC', 'Shipping'];
+    const departmentSequence = ['P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 'Gunsmith', 'Finish', 'Finish QC', 'Paint', 'Shipping QC', 'Shipping'];
 
     // Check if order is overdue in current department
     const currentDeptStandardTime = departmentTimes[order.currentDepartment] || 7;
@@ -5128,7 +5343,7 @@ export class DatabaseStorage implements IStorage {
 
       // Department progression logic
       const departmentFlow = [
-        'P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 'Finish', 'Gunsmith', 'Paint', 'Shipping QC', 'Shipping'
+        'P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 'Gunsmith', 'Finish', 'Finish QC', 'Paint', 'Shipping QC', 'Shipping'
       ];
 
       // Special handling for flat top orders - they bypass CNC and go directly to Finish
@@ -6214,6 +6429,95 @@ export class DatabaseStorage implements IStorage {
     await db.delete(kickbacks).where(eq(kickbacks.id, id));
   }
 
+  // Calendar Event CRUD Implementation
+  async getAllCalendarEvents(): Promise<CalendarEvent[]> {
+    return await db.select().from(calendarEvents).orderBy(asc(calendarEvents.startDate));
+  }
+
+  async getCalendarEventsByDateRange(startDate: Date, endDate: Date): Promise<CalendarEvent[]> {
+    return await db.select()
+      .from(calendarEvents)
+      .where(
+        and(
+          gte(calendarEvents.startDate, startDate),
+          lte(calendarEvents.endDate, endDate)
+        )
+      )
+      .orderBy(asc(calendarEvents.startDate));
+  }
+
+  async getCalendarEvent(id: number): Promise<CalendarEvent | undefined> {
+    const results = await db.select().from(calendarEvents).where(eq(calendarEvents.id, id));
+    return results[0];
+  }
+
+  async createCalendarEvent(data: InsertCalendarEvent): Promise<CalendarEvent> {
+    const [newEvent] = await db.insert(calendarEvents).values(data).returning();
+    return newEvent;
+  }
+
+  async updateCalendarEvent(id: number, data: Partial<InsertCalendarEvent>): Promise<CalendarEvent> {
+    const [updatedEvent] = await db.update(calendarEvents)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(calendarEvents.id, id))
+      .returning();
+    return updatedEvent;
+  }
+
+  async deleteCalendarEvent(id: number): Promise<void> {
+    await db.delete(calendarEvents).where(eq(calendarEvents.id, id));
+  }
+
+  // Calendar Event Attendees CRUD Implementation
+  async getEventAttendees(eventId: number): Promise<CalendarEventAttendee[]> {
+    return await db.select()
+      .from(calendarEventAttendees)
+      .where(eq(calendarEventAttendees.eventId, eventId))
+      .orderBy(asc(calendarEventAttendees.userId));
+  }
+
+  async addEventAttendee(data: InsertCalendarEventAttendee): Promise<CalendarEventAttendee> {
+    const [newAttendee] = await db.insert(calendarEventAttendees).values(data).returning();
+    return newAttendee;
+  }
+
+  async updateAttendeeStatus(eventId: number, userId: string, status: 'invited' | 'accepted' | 'declined' | 'tentative'): Promise<CalendarEventAttendee> {
+    const [updatedAttendee] = await db.update(calendarEventAttendees)
+      .set({ status })
+      .where(
+        and(
+          eq(calendarEventAttendees.eventId, eventId),
+          eq(calendarEventAttendees.userId, userId)
+        )
+      )
+      .returning();
+    return updatedAttendee;
+  }
+
+  async removeEventAttendee(eventId: number, userId: string): Promise<void> {
+    await db.delete(calendarEventAttendees)
+      .where(
+        and(
+          eq(calendarEventAttendees.eventId, eventId),
+          eq(calendarEventAttendees.userId, userId)
+        )
+      );
+  }
+
+  async getUserCalendarEvents(userId: string): Promise<CalendarEvent[]> {
+    return await db.select()
+      .from(calendarEvents)
+      .leftJoin(calendarEventAttendees, eq(calendarEvents.id, calendarEventAttendees.eventId))
+      .where(
+        or(
+          eq(calendarEvents.createdBy, userId),
+          eq(calendarEventAttendees.userId, userId),
+          eq(calendarEvents.isPublic, true)
+        )
+      )
+      .orderBy(asc(calendarEvents.startDate));
+  }
+
   // Kickback Analytics Methods
   async getKickbackAnalytics(dateRange?: { start: Date; end: Date }): Promise<{
     totalKickbacks: number;
@@ -6868,6 +7172,21 @@ export class DatabaseStorage implements IStorage {
 
     if (!order) {
       throw new Error(`Finalized order with ID ${orderId} not found`);
+    }
+
+    // AUTO-RECALCULATION: Check if any fields that affect total calculation were updated
+    const fieldsAffectingTotal = ['features', 'modelId', 'discountCode', 'customDiscountType', 'customDiscountValue', 'showCustomDiscount', 'priceOverride', 'shipping'];
+    const shouldRecalculate = fieldsAffectingTotal.some(field => data.hasOwnProperty(field));
+    
+    if (shouldRecalculate) {
+      try {
+        // Recalculate and store the new total
+        await this.calculateAndStoreOrderTotal(orderId);
+        console.log(`🔄 Auto-recalculated stored total for order ${orderId} after update`);
+      } catch (error) {
+        console.error(`❌ Failed to recalculate total for order ${orderId} after update:`, error);
+        // Don't throw - the order update itself succeeded
+      }
     }
 
     return order;

@@ -686,6 +686,15 @@ export default function LayupScheduler() {
   const [pendingMoldChanges, setPendingMoldChanges] = useState<{[key: string]: {enabled: boolean, multiplier: number}}>({});
   const [isApplyingChanges, setIsApplyingChanges] = useState(false);
 
+  // OEM Settings state management
+  interface PendingOemChanges {
+    mode: boolean;
+    orders: string[];
+  }
+  const [oemMode, setOemMode] = useState(false);
+  const [selectedPOOrders, setSelectedPOOrders] = useState<string[]>([]);
+  const [pendingOemChanges, setPendingOemChanges] = useState<PendingOemChanges>({ mode: false, orders: [] });
+
   // Track order assignments (orderId -> { moldId, date })
   const [orderAssignments, setOrderAssignments] = useState<{[orderId: string]: { moldId: string, date: string }}>({});
   const [recentlyRemovedOrders, setRecentlyRemovedOrders] = useState<Set<string>>(new Set());
@@ -977,6 +986,32 @@ export default function LayupScheduler() {
       toast({
         title: "Update Failed",
         description: "Failed to update mold settings",
+        variant: "destructive"
+      });
+    } finally {
+      setIsApplyingChanges(false);
+    }
+  };
+
+  const applyOemChanges = () => {
+    setIsApplyingChanges(true);
+    
+    try {
+      // Apply pending changes to main state
+      setOemMode(pendingOemChanges.mode);
+      setSelectedPOOrders(pendingOemChanges.orders);
+      
+      // Set pending changes to reflect the applied state (not defaults)
+      setPendingOemChanges({ mode: pendingOemChanges.mode, orders: pendingOemChanges.orders });
+      
+      toast({
+        title: "OEM Settings Updated",
+        description: `OEM mode ${pendingOemChanges.mode ? 'enabled' : 'disabled'}. ${pendingOemChanges.orders.length} purchase orders selected for priority.`,
+      });
+    } catch (error) {
+      toast({
+        title: "Update Failed",
+        description: "Failed to update OEM settings",
         variant: "destructive"
       });
     } finally {
@@ -1564,6 +1599,42 @@ export default function LayupScheduler() {
     enabled: true,
   }) as { data: any[]; isLoading: boolean };
 
+  // Use custom query with OEM settings instead of the default useUnifiedLayupOrders hook
+  const { data: allOrders = [], isLoading: ordersLoading, refetch: reloadOrders } = useQuery({
+    queryKey: ['/api/p1-layup-queue', oemMode, selectedPOOrders.join(',')],
+    queryFn: async () => {
+      console.log('🚀 Making API call to /api/p1-layup-queue with OEM settings:', { oemMode, selectedPOOrders });
+      const url = new URL('/api/p1-layup-queue', window.location.origin);
+      
+      // Add OEM settings as query parameters
+      if (oemMode) {
+        url.searchParams.set('oemMode', 'true');
+        if (selectedPOOrders.length > 0) {
+          url.searchParams.set('selectedPOOrders', selectedPOOrders.join(','));
+        }
+      }
+      
+      const response = await fetch(url.toString());
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      const data = await response.json();
+      console.log('🎯 API response with OEM settings:', {
+        status: response.status,
+        length: data?.length,
+        oemMode,
+        selectedPOCount: selectedPOOrders.length
+      });
+      return data;
+    },
+    retry: 3,
+    staleTime: 5000,
+    cacheTime: 60000,
+    refetchOnWindowFocus: false,
+    refetchOnMount: true,
+    refetchInterval: false
+  });
+
   // Single source selection for rendering - prevent merging database and generated schedules
   const dbCount = Object.keys(orderAssignments).length;
   const genCount = generatedSchedule ? generatedSchedule.length : 0;
@@ -1646,6 +1717,7 @@ export default function LayupScheduler() {
 
   const { orders: allOrders, reloadOrders, loading: ordersLoading } = useUnifiedLayupOrders();
 
+
   // Include all orders from the production queue (regular orders, Mesa production orders, P1 purchase orders)
   const orders = useMemo(() => {
     // CRITICAL MESA UNIVERSAL DEBUGGING
@@ -1683,7 +1755,18 @@ export default function LayupScheduler() {
     return allOrders || [];
   }, [allOrders, ordersLoading]);
 
+
+
+  // Extract P1 purchase orders from the unified orders data
+  const p1PurchaseOrders = useMemo(() => {
+    return orders.filter(order => order.source === 'p1_purchase_order');
+  }, [orders]);
+
   // Auto-run LOP scheduler when orders are loaded to ensure proper scheduling
+
+  // 🚫 DISABLED: LOP Scheduler auto-run for complete manual control
+
+
   const processedOrders = useMemo(() => {
     if (orders.length === 0) return [];
 
@@ -4312,6 +4395,7 @@ export default function LayupScheduler() {
                           </div>
                         ))}
                       </div>
+
                       <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
                         <p className="text-xs text-blue-700 dark:text-blue-300">
                           <strong>How to use:</strong> Set hours per day and molds per hour for each employee. 
@@ -4343,8 +4427,149 @@ export default function LayupScheduler() {
                     </div>
                   </DialogContent>
                 </Dialog>
+
+                <Dialog onOpenChange={(open) => {
+                  if (open) {
+                    // Sync pending state from current state when dialog opens
+                    setPendingOemChanges({ mode: oemMode, orders: selectedPOOrders });
+                  }
+                }}>
+                  <DialogTrigger asChild>
+                    <DropdownMenuItem onSelect={(e) => e.preventDefault()} data-testid="link-oem-settings">
+                      <Settings className="w-4 h-4 mr-2" />
+                      OEM Settings
+                    </DropdownMenuItem>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-md">
+                    <DialogHeader>
+                      <DialogTitle>OEM Settings</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                        Configure OEM priority mode for purchase order scheduling. When enabled, selected P1 purchase orders will be prioritized in the production schedule.
+                      </p>
+                      
+                      {/* OEM Mode Toggle */}
+                      <div className="flex items-center space-x-3 p-3 border border-gray-200 dark:border-gray-700 rounded-lg">
+                        <Checkbox
+                          id="oem-mode"
+                          data-testid="input-oem-mode"
+                          checked={pendingOemChanges.mode}
+                          onCheckedChange={(checked) => {
+                            setPendingOemChanges(prev => ({
+                              ...prev,
+                              mode: !!checked
+                            }));
+                          }}
+                        />
+                        <div className="flex-1">
+                          <label
+                            htmlFor="oem-mode"
+                            className="text-sm font-medium cursor-pointer"
+                          >
+                            Enable OEM Priority Mode
+                          </label>
+                          <p className="text-xs text-gray-500 mt-1">
+                            Prioritize selected P1 purchase orders in the production schedule
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* P1 Purchase Orders Selection */}
+                      {pendingOemChanges.mode && (
+                        <div className="space-y-3">
+                          <label className="text-sm font-medium">
+                            Select P1 Purchase Orders for Priority
+                          </label>
+                          <div className="max-h-48 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded-lg p-3">
+                            {p1PurchaseOrders.length > 0 ? (
+                              <div className="space-y-2">
+                                {p1PurchaseOrders.map((order) => (
+                                  <div key={order.orderId} className="flex items-center space-x-3 p-2 border border-gray-100 dark:border-gray-700 rounded">
+                                    <Checkbox
+                                      id={`po-${order.orderId}`}
+                                      data-testid={`input-po-${order.orderId}`}
+                                      checked={pendingOemChanges.orders.includes(order.orderId)}
+                                      onCheckedChange={(checked) => {
+                                        setPendingOemChanges(prev => ({
+                                          ...prev,
+                                          orders: checked 
+                                            ? [...prev.orders.filter(id => id !== order.orderId), order.orderId] // Prevent duplicates
+                                            : prev.orders.filter(id => id !== order.orderId)
+                                        }));
+                                      }}
+                                    />
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex items-center justify-between">
+                                        <label
+                                          htmlFor={`po-${order.orderId}`}
+                                          className="text-sm font-medium cursor-pointer truncate"
+                                          data-testid={`text-po-${order.orderId}`}
+                                        >
+                                          {order.orderId}
+                                        </label>
+                                        <div className="text-xs text-gray-500 ml-2">
+                                          {order.product || order.stockModelId}
+                                        </div>
+                                      </div>
+                                      {order.dueDate && (
+                                        <div className="text-xs text-gray-500 mt-1">
+                                          Due: {format(new Date(order.dueDate), 'MM/dd/yyyy')}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="text-center py-6" data-testid="text-oem-po-empty">
+                                <p className="text-xs text-gray-500 mb-2" data-testid="text-no-po-orders">
+                                  No P1 purchase orders available for prioritization.
+                                </p>
+                                <p className="text-xs text-gray-400">
+                                  P1 purchase orders will appear here when they are created from the P1 Purchase Order system.
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                        <p className="text-xs text-blue-700 dark:text-blue-300">
+                          <strong>How OEM Mode Works:</strong> When enabled, selected P1 purchase orders receive highest priority in the production schedule. Regular customer orders will fill remaining capacity after priority orders are scheduled.
+                        </p>
+                      </div>
+                      
+                      {/* Apply button */}
+                      {(pendingOemChanges.mode !== oemMode || JSON.stringify(pendingOemChanges.orders) !== JSON.stringify(selectedPOOrders)) && (
+                        <div className="flex justify-end space-x-2 pt-4 border-t border-gray-200 dark:border-gray-700">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            data-testid="button-cancel-oem-settings"
+                            onClick={() => setPendingOemChanges({ mode: oemMode, orders: selectedPOOrders })}
+                            disabled={isApplyingChanges}
+                          >
+                            Cancel
+                          </Button>
+                          <Button
+                            size="sm"
+                            data-testid="button-apply-oem-settings"
+                            onClick={applyOemChanges}
+                            disabled={isApplyingChanges}
+                          >
+                            {isApplyingChanges ? 'Applying...' : 'Apply Changes'}
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  </DialogContent>
+                </Dialog>
               </DropdownMenuContent>
             </DropdownMenu>
+
+
 
             <Button
               variant={viewType === 'day' ? 'default' : 'outline'}
@@ -4796,9 +5021,9 @@ export default function LayupScheduler() {
                                 // First try to find in processedOrders
                                 let order = processedOrders.find(o => o.orderId === orderId);
                                 
-                                // If not found, try in original orders array
+                                // If not found, try in original allOrders array
                                 if (!order) {
-                                  order = orders.find(o => o.orderId === orderId);
+                                  order = allOrders.find(o => o.orderId === orderId);
                                 }
                                 
                                 if (!order) {

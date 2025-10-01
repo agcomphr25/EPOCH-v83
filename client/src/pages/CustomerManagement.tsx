@@ -1418,6 +1418,33 @@ export default function CustomerManagement() {
 
 
 
+  // Handle customer form suggestion selection
+  const handleCustomerFormSuggestionSelect = (suggestion: any) => {
+    console.log('🔧 Customer form suggestion selected:', suggestion);
+    
+    // Use structured data directly from suggestion
+    const addressData = {
+      street: suggestion.streetLine || suggestion.text || '',
+      city: suggestion.city || '',
+      state: suggestion.state || '',
+      zipCode: suggestion.zipCode || '',
+    };
+    
+    console.log('🔧 Using structured address data for customer:', addressData);
+    
+    setFormData(prev => ({
+      ...prev,
+      street: addressData.street,
+      city: addressData.city,
+      state: addressData.state,
+      zipCode: addressData.zipCode,
+    }));
+    
+    setShowCustomerFormSuggestions(false);
+    setCustomerFormSuggestions([]);
+  };
+
+
   // Create customer mutation
   const createCustomerMutation = useMutation({
     mutationFn: async (data: CustomerFormData) => {

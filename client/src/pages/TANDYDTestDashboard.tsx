@@ -1,10 +1,19 @@
+import { useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { List, Package, LogOut, Calendar, ClipboardList } from "lucide-react";
+import { isProductionEnvironment, isAuthenticated } from "@/lib/env";
 
 export default function TANDYDTestDashboard() {
   const [, setLocation] = useLocation();
+
+  useEffect(() => {
+    if (isProductionEnvironment() && !isAuthenticated()) {
+      console.log('🔒 Not authenticated - redirecting to login');
+      setLocation('/login');
+    }
+  }, [setLocation]);
 
   const handleLogout = () => {
     localStorage.removeItem('sessionToken');

@@ -23,4 +23,9 @@ export class AuthService {
     console.warn('AuthService.validatePortalToken called - stub implementation');
     return { valid: false, employeeId: null };
   }
+
+  static async cleanupExpiredSessions() {
+    // Stub implementation - no cleanup needed in development
+    return;
+  }
 }

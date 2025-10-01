@@ -885,7 +885,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     const orderBoxX = width - margin - 200;
     const orderBoxY = currentY - 10;
     const orderBoxWidth = 200;
-    const orderBoxHeight = 55; // Reduced from 105 to 55
+    const orderBoxHeight = 45; // Reduced from 105 to 45 (10px bottom padding)
     
     page.drawRectangle({
       x: orderBoxX,

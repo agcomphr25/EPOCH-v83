@@ -354,7 +354,6 @@ export function registerRoutes(app: Express): Server {
       
       // Fetch P1 PO orders from all_orders table (orders created from P1 PO week selection)
       console.log('🔍 Fetching P1 PO orders from all_orders table...');
-      const { pool } = await import('../../db');
       const p1POOrdersResult = await pool.query(`
         SELECT 
           order_id as "orderId",

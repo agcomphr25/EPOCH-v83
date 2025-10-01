@@ -1715,9 +1715,6 @@ export default function LayupScheduler() {
     }
   }, [dbCount, genCount]);
 
-  const { orders: allOrders, reloadOrders, loading: ordersLoading } = useUnifiedLayupOrders();
-
-
   // Include all orders from the production queue (regular orders, Mesa production orders, P1 purchase orders)
   const orders = useMemo(() => {
     // CRITICAL MESA UNIVERSAL DEBUGGING

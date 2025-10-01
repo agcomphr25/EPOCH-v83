@@ -4,6 +4,7 @@ import { payments, allOrders } from '../../../shared/schema';
 import { eq, sql } from 'drizzle-orm';
 import { storage } from '../../storage';
 import { generateP1OrderId } from '../../utils/orderIdGenerator';
+import { authenticateToken } from '../../middleware/auth';
 import {
   insertOrderDraftSchema,
   insertOrderSchema,

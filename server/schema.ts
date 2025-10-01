@@ -3,23 +3,6 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { relations } from "drizzle-orm";
 
-export const users = pgTable("users", {
-  id: serial("id").primaryKey(),
-  username: text("username").notNull().unique(),
-  password: text("password").notNull(),
-  passwordHash: text("password_hash"),
-  role: text("role").notNull().default("EMPLOYEE"), // ADMIN, HR, MANAGER, EMPLOYEE
-  canOverridePrices: boolean("can_override_prices").default(false),
-  employeeId: integer("employee_id").references(() => employees.id),
-  isActive: boolean("is_active").default(true),
-  lastLoginAt: timestamp("last_login_at"),
-  passwordChangedAt: timestamp("password_changed_at").defaultNow(),
-  failedLoginAttempts: integer("failed_login_attempts").default(0),
-  accountLockedUntil: timestamp("account_locked_until"),
-  lockedUntil: timestamp("locked_until"),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-});
 
 // All finalized orders - production table
 export const allOrders = pgTable("all_orders", {
@@ -621,19 +604,6 @@ export const evaluations = pgTable("evaluations", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-// User Sessions for Authentication
-export const userSessions = pgTable("user_sessions", {
-  id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull(),
-  sessionToken: text("session_token").notNull().unique(),
-  employeeId: integer("employee_id"),
-  userType: text("user_type").notNull(), // ADMIN, EMPLOYEE, MANAGER
-  expiresAt: timestamp("expires_at").notNull(),
-  ipAddress: text("ip_address"),
-  userAgent: text("user_agent"),
-  isActive: boolean("is_active").default(true),
-  createdAt: timestamp("created_at").defaultNow(),
-});
 
 // Document Storage for Employee Files
 export const employeeDocuments = pgTable("employee_documents", {
@@ -645,7 +615,7 @@ export const employeeDocuments = pgTable("employee_documents", {
   fileSize: integer("file_size").notNull(),
   mimeType: text("mime_type").notNull(),
   filePath: text("file_path").notNull(),
-  uploadedBy: integer("uploaded_by").references(() => users.id),
+  uploadedBy: text("uploaded_by"), // Changed from user ID reference to text field
   isConfidential: boolean("is_confidential").default(false),
   tags: text("tags").array(), // Array of tags for organization
   description: text("description"),
@@ -752,33 +722,8 @@ export const onboardingDocs = pgTable("onboarding_docs", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-export const insertUserSchema = createInsertSchema(users).omit({
-  id: true,
-  passwordHash: true,
-  createdAt: true,
-  updatedAt: true,
-  lastLoginAt: true,
-  passwordChangedAt: true,
-  failedLoginAttempts: true,
-  accountLockedUntil: true,
-  lockedUntil: true,
-}).extend({
-  username: z.string().min(3, "Username must be at least 3 characters"),
-  password: z.string().min(4, "Password must be at least 4 characters"),
-  role: z.enum(['ADMIN', 'HR', 'MANAGER', 'EMPLOYEE']).default('EMPLOYEE'),
-  employeeId: z.number().optional().nullable(),
-  isActive: z.boolean().default(true),
-});
 
-export const loginSchema = z.object({
-  username: z.string().min(1, "Username is required"),
-  password: z.string().min(1, "Password is required"),
-});
 
-export const changePasswordSchema = z.object({
-  currentPassword: z.string().min(1, "Current password is required"),
-  newPassword: z.string().min(8, "New password must be at least 8 characters"),
-});
 
 export const insertOrderSchema = createInsertSchema(orders).omit({
   id: true,
@@ -1133,20 +1078,6 @@ export const insertEvaluationSchema = createInsertSchema(evaluations).omit({
   status: z.enum(['DRAFT', 'SUBMITTED', 'REVIEWED', 'COMPLETED']).default('DRAFT'),
 });
 
-// User session schema
-export const insertUserSessionSchema = createInsertSchema(userSessions).omit({
-  id: true,
-  createdAt: true,
-}).extend({
-  userId: z.number().min(1, "User ID is required"),
-  sessionToken: z.string().min(1, "Session token is required"),
-  employeeId: z.number().optional().nullable(),
-  userType: z.enum(['ADMIN', 'EMPLOYEE', 'MANAGER']),
-  expiresAt: z.coerce.date(),
-  ipAddress: z.string().optional().nullable(),
-  userAgent: z.string().optional().nullable(),
-  isActive: z.boolean().default(true),
-});
 
 // Employee documents schema
 export const insertEmployeeDocumentSchema = createInsertSchema(employeeDocuments).omit({
@@ -1161,7 +1092,7 @@ export const insertEmployeeDocumentSchema = createInsertSchema(employeeDocuments
   fileSize: z.number().min(0, "File size must be positive"),
   mimeType: z.string().min(1, "MIME type is required"),
   filePath: z.string().min(1, "File path is required"),
-  uploadedBy: z.number().optional().nullable(),
+  uploadedBy: z.string().optional().nullable(), // Changed from number to string
   isConfidential: z.boolean().default(false),
   tags: z.array(z.string()).optional().nullable(),
   description: z.string().optional().nullable(),
@@ -1299,8 +1230,6 @@ export const insertPartsRequestSchema = createInsertSchema(partsRequests).omit({
 
 
 
-export type InsertUser = z.infer<typeof insertUserSchema>;
-export type User = typeof users.$inferSelect;
 export type InsertOrder = z.infer<typeof insertOrderSchema>;
 export type Order = typeof orders.$inferSelect;
 export type InsertCSVData = z.infer<typeof insertCSVDataSchema>;
@@ -1344,8 +1273,7 @@ export type InsertEmployeeCertification = z.infer<typeof insertEmployeeCertifica
 export type EmployeeCertification = typeof employeeCertifications.$inferSelect;
 export type InsertEvaluation = z.infer<typeof insertEvaluationSchema>;
 export type Evaluation = typeof evaluations.$inferSelect;
-export type InsertUserSession = z.infer<typeof insertUserSessionSchema>;
-export type UserSession = typeof userSessions.$inferSelect;
+// User session types removed with authentication system
 export type InsertEmployeeDocument = z.infer<typeof insertEmployeeDocumentSchema>;
 export type EmployeeDocument = typeof employeeDocuments.$inferSelect;
 export type InsertEmployeeAuditLog = z.infer<typeof insertEmployeeAuditLogSchema>;
@@ -2341,7 +2269,7 @@ export const documents = pgTable("documents", {
   mimeType: text("mime_type").notNull(),
   documentType: text("document_type").notNull(), // 'RFQ', 'QUOTE', 'PO', 'PACKING_SLIP', 'RISK_ASSESSMENT', 'FORM_SUBMISSION'
   uploadDate: timestamp("upload_date").defaultNow(),
-  uploadedBy: integer("uploaded_by").references(() => users.id),
+  uploadedBy: text("uploaded_by"), // Changed from user ID reference to text field
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
@@ -2373,7 +2301,7 @@ export const documentCollections = pgTable("document_collections", {
   primaryIdentifier: text("primary_identifier"), // PO number, customer ID, quote number
   status: text("status").default("active"), // 'active', 'completed', 'archived', 'cancelled'
   metadata: jsonb("metadata"), // Additional flexible data
-  createdBy: integer("created_by").references(() => users.id),
+  createdBy: text("created_by"), // Changed from user ID reference to text field
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -2384,7 +2312,7 @@ export const documentCollectionRelations = pgTable("document_collection_relation
   relationshipType: text("relationship_type").default("primary"), // 'primary', 'supporting', 'revision', 'reference'
   displayOrder: integer("display_order").default(0),
   addedAt: timestamp("added_at").defaultNow(),
-  addedBy: integer("added_by").references(() => users.id),
+  addedBy: text("added_by"), // Changed from user ID reference to text field
 }, (table) => ({
   pk: { primaryKey: table.collectionId, documentId: table.documentId },
 }));
@@ -2403,7 +2331,7 @@ export const insertDocumentSchema = createInsertSchema(documents).omit({
   fileSize: z.number().positive("File size must be positive"),
   mimeType: z.string().min(1, "MIME type is required"),
   documentType: z.enum(['RFQ', 'QUOTE', 'PO', 'PACKING_SLIP', 'RISK_ASSESSMENT', 'FORM_SUBMISSION', 'SPECIFICATION', 'CONTRACT', 'INVOICE', 'OTHER']),
-  uploadedBy: z.number().optional().nullable(),
+  uploadedBy: z.string().optional().nullable(), // Changed from number to string
   description: z.string().optional().nullable(),
 });
 
@@ -2473,7 +2401,7 @@ export const customerSatisfactionSurveys = pgTable("customer_satisfaction_survey
   questions: jsonb("questions").notNull().default('[]'),
   // Survey configuration settings
   settings: jsonb("settings").default('{}'),
-  createdBy: integer("created_by").references(() => users.id),
+  createdBy: text("created_by"), // Changed from user ID reference to text field
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -2556,32 +2484,32 @@ export type CustomerSatisfactionSurvey = typeof customerSatisfactionSurveys.$inf
 export type InsertCustomerSatisfactionResponse = z.infer<typeof insertCustomerSatisfactionResponseSchema>;
 export type CustomerSatisfactionResponse = typeof customerSatisfactionResponses.$inferSelect;
 
-// PO Products table for Purchase Order product configurations
+// PO Products table for Purchase Order product configurations - Updated from EPOCH v8.3
 export const poProducts = pgTable("po_products", {
   id: serial("id").primaryKey(),
   customerName: text("customer_name").notNull(),
   productName: text("product_name").notNull(),
-  productType: text("product_type"), // stock, AG-M5-SA, AG-M5-LA, etc.
-  material: text("material"), // carbon_fiber, fiberglass
-  handedness: text("handedness"), // right, left
+  material: text("material"),
+  handedness: text("handedness"),
   stockModel: text("stock_model"),
   actionLength: text("action_length"),
   actionInlet: text("action_inlet"),
   bottomMetal: text("bottom_metal"),
   barrelInlet: text("barrel_inlet"),
-  qds: text("qds"), // none, 2_on_left, 2_on_right
-  swivelStuds: text("swivel_studs"), // none, 3_ah, 2_privateer
+  qds: text("qds"),
+  swivelStuds: text("swivel_studs"),
   paintOptions: text("paint_options"),
-  texture: text("texture"), // none, grip_forend
-  flatTop: boolean("flat_top").default(false),
-  price: real("price"),
-  notes: text("notes"), // Optional notes field
+  texture: text("texture"),
+  price: real("price").default(0),
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
+  flatTop: boolean("flat_top").default(false),
+  notes: text("notes"),
+  productType: text("product_type"),
 });
 
-// Insert schema for PO Products
+// Insert schema for PO Products - Updated from EPOCH v8.3
 export const insertPOProductSchema = createInsertSchema(poProducts).omit({
   id: true,
   createdAt: true,
@@ -2600,10 +2528,11 @@ export const insertPOProductSchema = createInsertSchema(poProducts).omit({
   swivelStuds: z.string().optional().nullable(),
   paintOptions: z.string().optional().nullable(),
   texture: z.string().optional().nullable(),
-  flatTop: z.boolean().default(false),
-  price: z.number().min(0, "Price must be positive").optional().nullable(),
-  notes: z.string().optional().nullable(),
+  price: z.number().min(0, "Price must be positive").default(0),
   isActive: z.boolean().default(true),
+  flatTop: z.boolean().default(false),
+  notes: z.string().optional().nullable(),
+  productType: z.string().optional().nullable(),
 });
 
 // Types for PO Products

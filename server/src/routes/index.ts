@@ -1,8 +1,6 @@
 import { Express } from 'express';
 import { createServer, type Server } from "http";
-import authRoutes from './auth';
 import employeesRoutes from './employees';
-import usersRoutes from './users';
 import ordersRoutes from './orders';
 import formsRoutes from './forms';
 import tasksRoutes from './tasks';
@@ -20,7 +18,6 @@ import orderAttachmentsRoutes from './orderAttachments';
 import discountsRoutes from './discounts';
 import bomsRoutes from './boms';
 import communicationsRoutes from './communications';
-import secureVerificationRoutes from './secureVerification';
 import nonconformanceRoutes from '../../routes/nonconformance';
 import paymentsRoutes from './payments';
 import algorithmicSchedulerRoutes from './algorithmicScheduler';
@@ -35,14 +32,8 @@ import moldSyncRoutes from './moldSync';
 import { getAccessToken } from '../utils/upsShipping';
 
 export function registerRoutes(app: Express): Server {
-  // Authentication routes
-  app.use('/api/auth', authRoutes);
-
   // Employee management routes
   app.use('/api/employees', employeesRoutes);
-
-  // User management routes
-  app.use('/api/users', usersRoutes);
 
   // Order management routes  
   app.use('/api/orders', ordersRoutes);
@@ -219,6 +210,12 @@ export function registerRoutes(app: Express): Server {
   // P1 Layup Queue endpoint - provides unified production queue for layup scheduler
   app.get('/api/p1-layup-queue', async (req, res) => {
     try {
+      // Extract OEM settings from query parameters
+      const oemMode = req.query.oemMode === 'true';
+      const selectedPOOrders = req.query.selectedPOOrders ? String(req.query.selectedPOOrders).split(',') : [];
+      
+      console.log('🔧 P1 layup queue with OEM settings:', { oemMode, selectedPOOrdersCount: selectedPOOrders.length });
+      
       const { storage } = await import('../../storage');
       const { inferStockModelFromFeatures } = await import('../utils/stockModelInference');
       
@@ -260,6 +257,7 @@ export function registerRoutes(app: Express): Server {
         return true;
       });
       
+
       // Also get active orders from the orders table (for P1 PO production orders)
       const { pool } = await import('../../db');
       
@@ -294,12 +292,14 @@ export function registerRoutes(app: Express): Server {
         poId: null,
         productionOrderId: null
       }));
+
       
       // Combine both sources  
       const combinedUnscheduledOrders = [...unscheduledOrders, ...formattedActiveOrders];
       
       // Fetch P1 PO orders from all_orders table (orders created from P1 PO week selection)
       console.log('🔍 Fetching P1 PO orders from all_orders table...');
+      const { pool } = await import('../../db');
       const p1POOrdersResult = await pool.query(`
         SELECT 
           order_id as "orderId",
@@ -321,21 +321,30 @@ export function registerRoutes(app: Express): Server {
       const p1POOrdersRows = Array.isArray(p1POOrdersResult) ? p1POOrdersResult : [];
       console.log(`🔍 Found ${p1POOrdersRows.length} P1 PO orders in all_orders table`);
       
-      const p1POOrders = p1POOrdersRows.map((po: any) => ({
-        id: po.orderId,
-        orderId: po.orderId,
-        orderDate: po.createdAt,
-        dueDate: po.dueDate,
-        currentDepartment: po.currentDepartment,
-        customerId: po.customerId,
-        features: po.features || {},
-        modelId: po.stockModelId,
-        stockModelId: po.stockModelId,
-        product: po.stockModelId,
-        status: po.status,
-        source: po.source,  // This will be 'p1_purchase_order'
-        priorityScore: po.priorityScore || 1500
-      }));
+      const p1POOrders = p1POOrdersRows.map((po: any) => {
+        // Apply OEM priority boost if this P1 PO is selected in OEM mode
+        let priorityScore = po.priorityScore || 1500;
+        if (oemMode && selectedPOOrders.includes(po.orderId)) {
+          priorityScore = 1; // Highest priority for selected P1 PO orders in OEM mode
+          console.log(`🚀 OEM PRIORITY BOOST: Order ${po.orderId} priority boosted to ${priorityScore}`);
+        }
+        
+        return {
+          id: po.orderId,
+          orderId: po.orderId,
+          orderDate: po.createdAt,
+          dueDate: po.dueDate,
+          currentDepartment: po.currentDepartment,
+          customerId: po.customerId,
+          features: po.features || {},
+          modelId: po.stockModelId,
+          stockModelId: po.stockModelId,
+          product: po.stockModelId,
+          status: po.status,
+          source: po.source,  // This will be 'p1_purchase_order'
+          priorityScore: priorityScore
+        };
+      });
 
       console.log(`🏭 Found ${p1POOrders.length} P1 PO orders from week selection`);
 
@@ -476,10 +485,22 @@ export function registerRoutes(app: Express): Server {
       // Sort by priority score (lower = higher priority)
       combinedQueue.sort((a, b) => a.priorityScore - b.priorityScore);
       
+
+      // Log OEM priority verification
+      if (oemMode && selectedPOOrders.length > 0) {
+        const topOrders = combinedQueue.slice(0, Math.min(5, combinedQueue.length));
+        console.log('🚀 OEM MODE VERIFICATION: Top 5 orders after sorting:', 
+          topOrders.map(o => ({ orderId: o.orderId, priorityScore: o.priorityScore, source: o.source }))
+        );
+        const boostedOrdersInTop = topOrders.filter(o => selectedPOOrders.includes(o.orderId));
+        console.log(`🚀 OEM MODE SUCCESS: ${boostedOrdersInTop.length}/${selectedPOOrders.length} selected P1 POs appear in top 5`);
+      }
+
       // Add cache-control headers to prevent browser caching
       res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
       res.setHeader('Pragma', 'no-cache');
       res.setHeader('Expires', '0');
+
       
       res.json(combinedQueue);
     } catch (error) {
@@ -3404,5 +3425,4 @@ export {
   orderAttachmentsRoutes as orderAttachmentsRouter,
   tasksRoutes as tasksRouter,
   communicationsRoutes as communicationsRouter,
-  secureVerificationRoutes as secureVerificationRouter
 };

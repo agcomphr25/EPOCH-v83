@@ -1252,15 +1252,13 @@ export function registerRoutes(app: Express): Server {
 
   app.put('/api/addresses/:id', async (req, res) => {
     try {
-      console.log('🔧 ADDRESS UPDATE ROUTE CALLED');
       const { storage } = await import('../../storage');
       const { id } = req.params;
       const addressData = req.body;
       const address = await storage.updateCustomerAddress(parseInt(id), addressData);
-      console.log('🔧 Updated address:', address.id);
       res.json(address);
     } catch (error) {
-      console.error('🔧 Address update error:', error);
+      console.error('Address update error:', error);
       res.status(500).json({ error: "Failed to update address" });
     }
   });

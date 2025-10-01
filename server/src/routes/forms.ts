@@ -8,6 +8,7 @@ import {
   insertEnhancedFormCategorySchema
 } from '@shared/schema';
 import { insertEnhancedFormSchema } from '../../schema';
+import { authenticateToken } from '../../middleware/auth';
 
 const router = Router();
 

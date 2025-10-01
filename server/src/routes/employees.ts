@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { storage } from '../../storage';
 import { uploadMiddleware, getFileInfo, getFileUrl, validateEmployeeDocumentAccess, getDocumentType } from '../../utils/fileUpload';
+import { authenticateToken } from '../../middleware/auth';
 import {
   insertEmployeeSchema,
   insertCertificationSchema,

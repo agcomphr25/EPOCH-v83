@@ -33,31 +33,48 @@ export default function Login() {
     setIsLoading(true);
 
     try {
-      // In production, this would make an API call to authenticate
-      // For now, we'll simulate a login and redirect to the user's dashboard
-      
-      if (!username) {
+      if (!username || !password) {
         toast({
           title: 'Error',
-          description: 'Please enter a username',
+          description: 'Please enter both username and password',
           variant: 'destructive',
         });
         setIsLoading(false);
         return;
       }
 
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // Call backend authentication API
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({ username, password }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        toast({
+          title: 'Login Failed',
+          description: data.error || 'Invalid username or password',
+          variant: 'destructive',
+        });
+        setIsLoading(false);
+        return;
+      }
+
+      // Store only user data (session is in HTTP-only cookie)
+      localStorage.setItem('currentUser', data.user.username);
+      localStorage.setItem('userData', JSON.stringify(data.user));
 
       // Get the user's dashboard route
-      const dashboardRoute = getDashboardRoute(username);
-
-      // Store username for future use
-      localStorage.setItem('currentUser', username);
+      const dashboardRoute = getDashboardRoute(data.user.username);
 
       toast({
         title: 'Login Successful',
-        description: `Welcome back, ${username}!`,
+        description: `Welcome back, ${data.user.username}!`,
       });
 
       // Redirect to personalized dashboard

@@ -169,7 +169,9 @@ export class AuthService {
 
   static async cleanupExpiredSessions() {
     try {
-      await db.delete(sessions).where(gt(new Date(), sessions.expiresAt));
+      const now = new Date();
+      const { lt } = await import('drizzle-orm');
+      await db.delete(sessions).where(lt(sessions.expiresAt, now));
       console.log('Expired sessions cleaned up');
     } catch (error) {
       console.error('Session cleanup error:', error);

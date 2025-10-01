@@ -1,6 +1,7 @@
+import { useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { 
   Plus, 
   List, 
@@ -13,8 +14,23 @@ import {
   BarChart3,
   CheckCircle
 } from "lucide-react";
+import { getDashboardRoute } from "@/config/dashboardMapping";
 
 export default function Dashboard() {
+  const [, setLocation] = useLocation();
+
+  useEffect(() => {
+    // Check if user has a stored username and redirect to their dashboard
+    const currentUser = localStorage.getItem('currentUser');
+    if (currentUser) {
+      const dashboardRoute = getDashboardRoute(currentUser);
+      // Only redirect if they have a personalized dashboard (not the default)
+      if (dashboardRoute !== '/') {
+        setLocation(dashboardRoute);
+      }
+    }
+  }, [setLocation]);
+
   return (
     <div className="container mx-auto p-6">
       <div className="mb-8">

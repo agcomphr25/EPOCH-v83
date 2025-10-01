@@ -4,10 +4,13 @@ import { Link } from "wouter";
 import { Plus, List, Package, Users, BarChart3, Settings, LogOut, Calendar, ClipboardList } from "lucide-react";
 
 export default function ANGIETTestDashboard() {
+  const [, setLocation] = useLocation();
+
   const handleLogout = () => {
     localStorage.removeItem('sessionToken');
     localStorage.removeItem('jwtToken');
-    window.location.href = '/login';
+    localStorage.removeItem('currentUser');
+    setLocation('/login');
   };
 
   return (

@@ -22,12 +22,13 @@ export default function AGTestDashboard() {
   };
 
   const handleLogout = () => {
-    // Clear authentication tokens
+    // Clear authentication tokens and current user
     localStorage.removeItem('sessionToken');
     localStorage.removeItem('jwtToken');
+    localStorage.removeItem('currentUser');
     
     // Redirect to login page
-    window.location.href = '/login';
+    setLocation('/login');
   };
 
   // Get all customer orders (excluding purchase orders)

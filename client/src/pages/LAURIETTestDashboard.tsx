@@ -4,10 +4,13 @@ import { Link } from "wouter";
 import { Plus, List, Users, BarChart3, LogOut, DollarSign } from "lucide-react";
 
 export default function LAURIETTestDashboard() {
+  const [, setLocation] = useLocation();
+
   const handleLogout = () => {
     localStorage.removeItem('sessionToken');
     localStorage.removeItem('jwtToken');
-    window.location.href = '/login';
+    localStorage.removeItem('currentUser');
+    setLocation('/login');
   };
 
   return (

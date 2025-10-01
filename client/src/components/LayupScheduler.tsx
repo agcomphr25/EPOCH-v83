@@ -690,10 +690,12 @@ export default function LayupScheduler() {
   interface PendingOemChanges {
     mode: boolean;
     orders: string[];
+    includeRegularOrders: boolean;
   }
   const [oemMode, setOemMode] = useState(false);
   const [selectedPOOrders, setSelectedPOOrders] = useState<string[]>([]);
-  const [pendingOemChanges, setPendingOemChanges] = useState<PendingOemChanges>({ mode: false, orders: [] });
+  const [includeRegularOrders, setIncludeRegularOrders] = useState(true);
+  const [pendingOemChanges, setPendingOemChanges] = useState<PendingOemChanges>({ mode: false, orders: [], includeRegularOrders: true });
 
   // Track order assignments (orderId -> { moldId, date })
   const [orderAssignments, setOrderAssignments] = useState<{[orderId: string]: { moldId: string, date: string }}>({});
@@ -1000,18 +1002,19 @@ export default function LayupScheduler() {
       // Apply pending changes to main state
       setOemMode(pendingOemChanges.mode);
       setSelectedPOOrders(pendingOemChanges.orders);
+      setIncludeRegularOrders(pendingOemChanges.includeRegularOrders);
       
       // Set pending changes to reflect the applied state (not defaults)
-      setPendingOemChanges({ mode: pendingOemChanges.mode, orders: pendingOemChanges.orders });
+      setPendingOemChanges({ mode: pendingOemChanges.mode, orders: pendingOemChanges.orders, includeRegularOrders: pendingOemChanges.includeRegularOrders });
       
       toast({
-        title: "OEM Settings Updated",
-        description: `OEM mode ${pendingOemChanges.mode ? 'enabled' : 'disabled'}. ${pendingOemChanges.orders.length} purchase orders selected for priority.`,
+        title: "OEM Priority Updated",
+        description: `OEM mode ${pendingOemChanges.mode ? 'enabled' : 'disabled'}. ${pendingOemChanges.orders.length} purchase orders selected for priority. ${pendingOemChanges.includeRegularOrders ? 'Regular orders included' : 'Regular orders excluded'}.`,
       });
     } catch (error) {
       toast({
         title: "Update Failed",
-        description: "Failed to update OEM settings",
+        description: "Failed to update OEM priority settings",
         variant: "destructive"
       });
     } finally {
@@ -4428,7 +4431,7 @@ export default function LayupScheduler() {
                 <Dialog onOpenChange={(open) => {
                   if (open) {
                     // Sync pending state from current state when dialog opens
-                    setPendingOemChanges({ mode: oemMode, orders: selectedPOOrders });
+                    setPendingOemChanges({ mode: oemMode, orders: selectedPOOrders, includeRegularOrders: includeRegularOrders });
                   }
                 }}>
                   <DialogTrigger asChild>
@@ -4471,6 +4474,34 @@ export default function LayupScheduler() {
                           </p>
                         </div>
                       </div>
+
+                      {/* Add Regular Orders Toggle */}
+                      {pendingOemChanges.mode && (
+                        <div className="flex items-center space-x-3 p-3 border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800">
+                          <Checkbox
+                            id="include-regular-orders"
+                            data-testid="input-include-regular-orders"
+                            checked={pendingOemChanges.includeRegularOrders}
+                            onCheckedChange={(checked) => {
+                              setPendingOemChanges(prev => ({
+                                ...prev,
+                                includeRegularOrders: !!checked
+                              }));
+                            }}
+                          />
+                          <div className="flex-1">
+                            <label
+                              htmlFor="include-regular-orders"
+                              className="text-sm font-medium cursor-pointer"
+                            >
+                              Add Regular Orders
+                            </label>
+                            <p className="text-xs text-gray-500 mt-1">
+                              Include regular customer orders in the schedule alongside priority purchase orders
+                            </p>
+                          </div>
+                        </div>
+                      )}
 
                       {/* P1 Purchase Orders Selection */}
                       {pendingOemChanges.mode && (
@@ -4539,13 +4570,13 @@ export default function LayupScheduler() {
                       </div>
                       
                       {/* Apply button */}
-                      {(pendingOemChanges.mode !== oemMode || JSON.stringify(pendingOemChanges.orders) !== JSON.stringify(selectedPOOrders)) && (
+                      {(pendingOemChanges.mode !== oemMode || JSON.stringify(pendingOemChanges.orders) !== JSON.stringify(selectedPOOrders) || pendingOemChanges.includeRegularOrders !== includeRegularOrders) && (
                         <div className="flex justify-end space-x-2 pt-4 border-t border-gray-200 dark:border-gray-700">
                           <Button
                             variant="outline"
                             size="sm"
                             data-testid="button-cancel-oem-settings"
-                            onClick={() => setPendingOemChanges({ mode: oemMode, orders: selectedPOOrders })}
+                            onClick={() => setPendingOemChanges({ mode: oemMode, orders: selectedPOOrders, includeRegularOrders: includeRegularOrders })}
                             disabled={isApplyingChanges}
                           >
                             Cancel

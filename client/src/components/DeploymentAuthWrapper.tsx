@@ -7,28 +7,20 @@ interface DeploymentAuthWrapperProps {
 }
 
 function isDeploymentEnvironment(): boolean {
-  // Prioritize NODE_ENV for development - always bypass auth in development
-  if (import.meta.env.VITE_NODE_ENV === 'development' || import.meta.env.DEV) {
+  // SECURITY UPDATE: Login requirements re-enabled for all sites
+  // Only skip authentication for development environments
+  const hostname = window.location.hostname;
+  const isLocalhost = hostname.includes('localhost') || hostname.includes('127.0.0.1');
+  const isReplitDev = hostname.includes('replit.dev');
+  
+  // Bypass authentication for development environments
+  if (isLocalhost || isReplitDev) {
+    console.log('🔧 FRONTEND AUTH BYPASS: Development environment detected:', hostname);
     return false;
   }
   
-  // Multiple methods to detect deployment environment
-  const hostname = window.location.hostname;
-  const viteDeployment = import.meta.env.VITE_REPLIT_DEPLOYMENT === '1';
-  const nodeEnv = import.meta.env.VITE_NODE_ENV === 'production';
-  
-  // Development overrides - only skip auth for actual development environments
-  const isLocalhost = hostname.includes('localhost') || hostname.includes('127.0.0.1');
-  const isReplitEditor = hostname.includes('replit.dev') && !hostname.includes('.replit.dev');
-  
-  // Debug logs removed - authentication working correctly
-  
-  // Skip auth ONLY for localhost and Replit editor (not deployed)
-  if (isLocalhost || isReplitEditor) {
-      return false;
-  }
-  
-  // For custom domains like agcompepoch.xyz, ALWAYS require auth
+  // Require authentication for production deployments (including custom domains)
+  console.log('🔧 FRONTEND PRODUCTION MODE: Authentication required for:', hostname);
   return true;
 }
 

@@ -1,46 +1,13 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { PlusCircle, FileText, FilePenLine, XCircle, Users, User, Factory, RefreshCw, LogOut } from 'lucide-react';
+import { PlusCircle, FileText, FilePenLine, XCircle, Users, User, Factory, RefreshCw } from 'lucide-react';
 import { Link } from 'wouter';
 import PipelineVisualization from '@/components/PipelineVisualization';
 
 export default function DARLENEBTestDashboard() {
-  const handleLogout = () => {
-    // Clear authentication tokens
-    localStorage.removeItem('sessionToken');
-    localStorage.removeItem('jwtToken');
-    
-    // Redirect to login page
-    window.location.href = '/login';
-  };
-
   return (
     <div className="p-6 space-y-6 max-w-full mx-auto">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">DARLENEB Dashboard</h1>
-          <p className="text-gray-600 dark:text-gray-400 mt-1">
-            Order Management & Customer Relations
-          </p>
-        </div>
-        <div className="flex items-center gap-4">
-          <div className="text-sm text-gray-500 dark:text-gray-400">
-            EPOCH v8 Manufacturing ERP
-          </div>
-          <Button
-            onClick={handleLogout}
-            variant="outline"
-            size="sm"
-            className="flex items-center gap-2 hover:bg-red-50 hover:border-red-200 hover:text-red-600"
-          >
-            <LogOut className="w-4 h-4" />
-            Logout
-          </Button>
-        </div>
-      </div>
-
       {/* Quick Navigation Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
         <Link href="/order-entry">

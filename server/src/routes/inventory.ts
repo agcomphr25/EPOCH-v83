@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { storage } from '../../storage';
+import { authenticateToken } from '../../middleware/auth';
 import {
   insertInventoryItemSchema,
   insertInventoryScanSchema,

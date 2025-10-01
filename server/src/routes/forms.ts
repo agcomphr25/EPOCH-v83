@@ -1,6 +1,5 @@
 import { Router, Request, Response } from 'express';
 import { storage } from '../../storage';
-import { authenticateToken } from '../../middleware/auth';
 import {
   insertFormSchema,
   insertFormSubmissionSchema,
@@ -84,7 +83,7 @@ router.get('/enhanced/:id', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/enhanced', authenticateToken, async (req: Request, res: Response) => {
+router.post('/enhanced', async (req: Request, res: Response) => {
   try {
     const formData = insertEnhancedFormSchema.parse(req.body);
     console.log('DEBUG - Parsed form data keys:', Object.keys(formData));
@@ -98,7 +97,7 @@ router.post('/enhanced', authenticateToken, async (req: Request, res: Response) 
   }
 });
 
-router.put('/enhanced/:id', authenticateToken, async (req: Request, res: Response) => {
+router.put('/enhanced/:id', async (req: Request, res: Response) => {
   try {
     const formId = parseInt(req.params.id);
     const updates = req.body;
@@ -110,7 +109,7 @@ router.put('/enhanced/:id', authenticateToken, async (req: Request, res: Respons
   }
 });
 
-router.delete('/enhanced/:id', authenticateToken, async (req: Request, res: Response) => {
+router.delete('/enhanced/:id', async (req: Request, res: Response) => {
   try {
     const formId = parseInt(req.params.id);
     await storage.deleteEnhancedForm(formId);

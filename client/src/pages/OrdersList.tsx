@@ -165,7 +165,7 @@ export default function OrdersList() {
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status/paginated'] });
       showToast({
         title: "Order Cancelled",
         description: "The order has been cancelled successfully.",
@@ -225,11 +225,17 @@ export default function OrdersList() {
   // Department progression functions
   const getNextDepartment = (currentDepartment: string) => {
     const departmentFlow = [
-      'P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 'Finish', 'Gunsmith', 'Paint', 'Shipping'
+      'P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 'Gunsmith', 'Finish', 'Finish QC', 'Paint', 'Shipping QC', 'Shipping'
     ];
 
     // Handle alternative department names
     const normalizedDepartment = currentDepartment === 'Layup' ? 'Layup/Plugging' : currentDepartment;
+    
+    // Special case: CNC splits to Gunsmith or Finish based on features  
+    if (normalizedDepartment === 'CNC') {
+      // For now, all CNC orders go to Gunsmith (can be enhanced later for rail_type logic)
+      return 'Gunsmith';
+    }
 
     const currentIndex = departmentFlow.indexOf(normalizedDepartment);
     if (currentIndex >= 0 && currentIndex < departmentFlow.length - 1) {
@@ -289,12 +295,18 @@ export default function OrdersList() {
         newSet.delete(variables.orderId);
         return newSet;
       });
-      queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status/paginated'] });
       toast.error('Failed to update department');
     }
   });
 
   const handleProgressOrder = React.useCallback((orderId: string, currentDepartment: string) => {
+    // Prevent multiple clicks on the same order
+    if (updatingOrders.has(orderId)) {
+      console.log(`⚠️ Order ${orderId} is already being updated, ignoring click`);
+      return;
+    }
+    
     const nextDepartment = getNextDepartment(currentDepartment);
     if (!nextDepartment) {
       toast.error('No next department available');
@@ -302,26 +314,51 @@ export default function OrdersList() {
     }
 
     console.log(`🔄 Progressing order ${orderId} from ${currentDepartment} to ${nextDepartment}`);
+    
+    // Mark order as updating
+    setUpdatingOrders(prev => new Set(prev).add(orderId));
 
-    // IMMEDIATELY update React Query cache - this prevents any reversion
-    queryClient.setQueryData(['/api/orders'], (old: any[]) => {
-      if (!old) return old;
-      const updated = old.map((order: any) => {
-        if (order.orderId === orderId) {
-          console.log(`✅ Cache updated: ${orderId} -> ${nextDepartment}`);
-          return { ...order, currentDepartment: nextDepartment };
-        }
-        return order;
-      });
-      return updated;
+    // IMMEDIATELY update local state for instant UI response
+    setLocalOrderUpdates(prev => {
+      const newState = { ...prev, [orderId]: nextDepartment };
+      console.log(`✅ LOCAL STATE updated: ${orderId} -> ${nextDepartment}`);
+      return newState;
     });
 
-    // Also update local state for redundancy
-    setLocalOrderUpdates(prev => ({ ...prev, [orderId]: nextDepartment }));
+    // IMMEDIATELY update React Query cache with CORRECT query key - this prevents any reversion
+    queryClient.setQueryData(['/api/orders/with-payment-status/paginated', 'ordersList'], (old: any) => {
+      if (!old?.orders) {
+        console.warn('❌ Cache update failed: no orders data');
+        return old;
+      }
+      
+      const updated = {
+        ...old,
+        orders: old.orders.map((order: any) => {
+          if (order.orderId === orderId) {
+            console.log(`✅ CACHE updated: ${orderId} -> ${nextDepartment} (was: ${order.currentDepartment})`);
+            return { ...order, currentDepartment: nextDepartment };
+          }
+          return order;
+        })
+      };
+      return updated;
+    });
+    
+    // Debug: Check cache after 2 seconds
+    setTimeout(() => {
+      const currentData = queryClient.getQueryData(['/api/orders/with-payment-status/paginated', 'ordersList']) as any;
+      const order = currentData?.orders?.find((o: any) => o.orderId === orderId);
+      if (order && order.currentDepartment !== nextDepartment) {
+        console.error(`🚨 CACHE OVERWRITTEN! Order ${orderId} was set to ${nextDepartment} but is now ${order.currentDepartment}`);
+      } else if (order) {
+        console.log(`✅ Cache still correct for ${orderId}: ${order.currentDepartment}`);
+      }
+    }, 2000);
 
     // Make the API call in the background
     progressOrderMutation.mutate({ orderId, nextDepartment });
-  }, [progressOrderMutation, queryClient]);
+  }, [progressOrderMutation, queryClient, updatingOrders]);
 
   const handleOpenCommunication = (order: Order, customersList: Customer[]) => {
     const customer = customersList?.find(c => c.id.toString() === order.customerId);
@@ -411,11 +448,14 @@ export default function OrdersList() {
   };
 
   try {
-  const { data: orders, isLoading, error } = useQuery<Order[]>({
-    queryKey: ['/api/orders'],
+  const { data: ordersResponse, isLoading, error } = useQuery({
+    queryKey: ['/api/orders/with-payment-status/paginated', 'ordersList'],
+    queryFn: () => apiRequest('/api/orders/with-payment-status/paginated?page=1&limit=1000'),
     staleTime: 30000, // 30 seconds
     gcTime: 60000, // 1 minute
   });
+  
+  const orders: Order[] = ordersResponse?.orders || [];
 
 
     const { data: customers } = useQuery<Customer[]>({

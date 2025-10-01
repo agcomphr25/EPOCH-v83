@@ -15,11 +15,19 @@ import {
   CheckCircle
 } from "lucide-react";
 import { getDashboardRoute } from "@/config/dashboardMapping";
+import { isProductionEnvironment, isAuthenticated } from "@/lib/env";
 
 export default function Dashboard() {
   const [, setLocation] = useLocation();
 
   useEffect(() => {
+    // In production, check authentication first
+    if (isProductionEnvironment() && !isAuthenticated()) {
+      console.log('🔒 Not authenticated - redirecting to login');
+      setLocation('/login');
+      return;
+    }
+
     // Check if user has a stored username and redirect to their dashboard
     const currentUser = localStorage.getItem('currentUser');
     if (currentUser) {

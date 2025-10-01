@@ -19,24 +19,40 @@ export default function AGTestDashboard() {
   const [, setLocation] = useLocation();
 
   useEffect(() => {
-    if (isProductionEnvironment() && !isAuthenticated()) {
-      console.log('🔒 Not authenticated - redirecting to login');
-      setLocation('/login');
-    }
+    const checkAuth = async () => {
+      if (isProductionEnvironment()) {
+        const { validateSessionAsync } = await import('@/lib/env');
+        const isValid = await validateSessionAsync();
+        if (!isValid) {
+          console.log('🔒 Session invalid - redirecting to login');
+          setLocation('/login');
+        }
+      }
+    };
+    checkAuth();
   }, [setLocation]);
 
   const toggleExpand = (section: string) => {
     setExpandedSection(expandedSection === section ? null : section);
   };
 
-  const handleLogout = () => {
-    // Clear authentication tokens and current user
-    localStorage.removeItem('sessionToken');
-    localStorage.removeItem('jwtToken');
-    localStorage.removeItem('currentUser');
-    
-    // Redirect to login page
-    setLocation('/login');
+  const handleLogout = async () => {
+    try {
+      // Call backend logout endpoint
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        credentials: 'include',
+      });
+    } catch (error) {
+      console.error('Logout error:', error);
+    } finally {
+      // Clear all local storage
+      localStorage.removeItem('currentUser');
+      localStorage.removeItem('userData');
+      
+      // Redirect to login page
+      setLocation('/login');
+    }
   };
 
   // Get all customer orders (excluding purchase orders)

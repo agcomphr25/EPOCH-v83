@@ -1,0 +1,62 @@
+he source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.Understand this error
+agcomphr-09-19-1:1 The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?Understand this error
+agcomphr-09-19-1:1 The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.Understand this error
+_app-207a000b2ad7ded8.js:28 [LaunchDarkly] LaunchDarkly client initialized
+agcomphr-09-19-1:1 Banner not shown: beforeinstallpromptevent.preventDefault() called. The page must call beforeinstallpromptevent.prompt() to show the banner.
+6Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.Understand this error
+framework-ccf7d8e11de6190a.js:1 Unrecognized feature: 'ambient-light-sensor'.
+_ @ framework-ccf7d8e11de6190a.js:1Understand this warning
+framework-ccf7d8e11de6190a.js:1 Unrecognized feature: 'battery'.
+_ @ framework-ccf7d8e11de6190a.js:1Understand this warning
+framework-ccf7d8e11de6190a.js:1 Unrecognized feature: 'execution-while-not-rendered'.
+_ @ framework-ccf7d8e11de6190a.js:1Understand this warning
+framework-ccf7d8e11de6190a.js:1 Unrecognized feature: 'execution-while-out-of-viewport'.
+_ @ framework-ccf7d8e11de6190a.js:1Understand this warning
+framework-ccf7d8e11de6190a.js:1 Unrecognized feature: 'layout-animations'.
+_ @ framework-ccf7d8e11de6190a.js:1Understand this warning
+framework-ccf7d8e11de6190a.js:1 Unrecognized feature: 'legacy-image-formats'.
+_ @ framework-ccf7d8e11de6190a.js:1Understand this warning
+framework-ccf7d8e11de6190a.js:1 Unrecognized feature: 'navigation-override'.
+_ @ framework-ccf7d8e11de6190a.js:1Understand this warning
+framework-ccf7d8e11de6190a.js:1 Unrecognized feature: 'oversized-images'.
+_ @ framework-ccf7d8e11de6190a.js:1Understand this warning
+framework-ccf7d8e11de6190a.js:1 Unrecognized feature: 'publickey-credentials'.
+_ @ framework-ccf7d8e11de6190a.js:1Understand this warning
+framework-ccf7d8e11de6190a.js:1 Unrecognized feature: 'speaker-selection'.
+_ @ framework-ccf7d8e11de6190a.js:1Understand this warning
+framework-ccf7d8e11de6190a.js:1 Unrecognized feature: 'unoptimized-images'.
+_ @ framework-ccf7d8e11de6190a.js:1Understand this warning
+framework-ccf7d8e11de6190a.js:1 Unrecognized feature: 'unsized-media'.
+_ @ framework-ccf7d8e11de6190a.js:1Understand this warning
+framework-ccf7d8e11de6190a.js:1 Unrecognized feature: 'pointer-lock'.
+_ @ framework-ccf7d8e11de6190a.js:1Understand this warning
+framework-ccf7d8e11de6190a.js:1 Allow attribute will take precedence over 'allowfullscreen'.
+_ @ framework-ccf7d8e11de6190a.js:1Understand this warning
+framework-ccf7d8e11de6190a.js:1 Allow attribute will take precedence over 'allowpaymentrequest'.
+_ @ framework-ccf7d8e11de6190a.js:1Understand this warning
+0806f034b483f38b8393eaedb9b70c5d:1  Failed to load resource: the server responded with a status of 404 ()Understand this error
+0806f034b483f38b8393eaedb9b70c5d:1  Failed to load resource: the server responded with a status of 404 ()Understand this error
+0806f034b483f38b8393eaedb9b70c5d:1  Failed to load resource: the server responded with a status of 404 ()Understand this error
+0806f034b483f38b8393eaedb9b70c5d:1  Failed to load resource: the server responded with a status of 404 ()Understand this error
+0806f034b483f38b8393eaedb9b70c5d:1  Failed to load resource: the server responded with a status of 404 ()Understand this error
+0806f034b483f38b8393eaedb9b70c5d:1  Failed to load resource: the server responded with a status of 404 ()Understand this error
+_app-207a000b2ad7ded8.js:28 WARN: A component changed from uncontrolled to controlled.
+(anonymous) @ _app-207a000b2ad7ded8.js:28Understand this warning
+_app-207a000b2ad7ded8.js:30 [Intervention] Slow network is detected. See https://www.chromestatus.com/feature/5636954674692096 for more details. Fallback font will be used while loading: https://replit.com/public/fonts/ibm-plex-sans-v8-latin-600.woff2
+0806f034b483f38b8393eaedb9b70c5d:1  Failed to load resource: the server responded with a status of 404 ()Understand this error
+0806f034b483f38b8393eaedb9b70c5d:1  Failed to load resource: the server responded with a status of 404 ()Understand this error
+0ce1429f-ab65-4d48-bef3-611aab96e0df-00-316wz2g2s5raf.janeway.replit.dev/__replco/workspace_iframe.html?initialPath=%2F&id=%3Ar1q9%3A:32 Unrecognized feature: 'ambient-light-sensor'.Understand this warning
+0ce1429f-ab65-4d48-bef3-611aab96e0df-00-316wz2g2s5raf.janeway.replit.dev/__replco/workspace_iframe.html?initialPath=%2F&id=%3Ar1q9%3A:32 Unrecognized feature: 'battery'.Understand this warning
+0ce1429f-ab65-4d48-bef3-611aab96e0df-00-316wz2g2s5raf.janeway.replit.dev/__replco/workspace_iframe.html?initialPath=%2F&id=%3Ar1q9%3A:32 Unrecognized feature: 'execution-while-not-rendered'.Understand this warning
+0ce1429f-ab65-4d48-bef3-611aab96e0df-00-316wz2g2s5raf.janeway.replit.dev/__replco/workspace_iframe.html?initialPath=%2F&id=%3Ar1q9%3A:32 Unrecognized feature: 'execution-while-out-of-viewport'.Understand this warning
+0ce1429f-ab65-4d48-bef3-611aab96e0df-00-316wz2g2s5raf.janeway.replit.dev/__replco/workspace_iframe.html?initialPath=%2F&id=%3Ar1q9%3A:32 Unrecognized feature: 'layout-animations'.Understand this warning
+0ce1429f-ab65-4d48-bef3-611aab96e0df-00-316wz2g2s5raf.janeway.replit.dev/__replco/workspace_iframe.html?initialPath=%2F&id=%3Ar1q9%3A:32 Unrecognized feature: 'legacy-image-formats'.Understand this warning
+0ce1429f-ab65-4d48-bef3-611aab96e0df-00-316wz2g2s5raf.janeway.replit.dev/__replco/workspace_iframe.html?initialPath=%2F&id=%3Ar1q9%3A:32 Unrecognized feature: 'navigation-override'.Understand this warning
+0ce1429f-ab65-4d48-bef3-611aab96e0df-00-316wz2g2s5raf.janeway.replit.dev/__replco/workspace_iframe.html?initialPath=%2F&id=%3Ar1q9%3A:32 Unrecognized feature: 'oversized-images'.Understand this warning
+0ce1429f-ab65-4d48-bef3-611aab96e0df-00-316wz2g2s5raf.janeway.replit.dev/__replco/workspace_iframe.html?initialPath=%2F&id=%3Ar1q9%3A:32 Unrecognized feature: 'publickey-credentials'.Understand this warning
+0ce1429f-ab65-4d48-bef3-611aab96e0df-00-316wz2g2s5raf.janeway.replit.dev/__replco/workspace_iframe.html?initialPath=%2F&id=%3Ar1q9%3A:32 Unrecognized feature: 'speaker-selection'.Understand this warning
+0ce1429f-ab65-4d48-bef3-611aab96e0df-00-316wz2g2s5raf.janeway.replit.dev/__replco/workspace_iframe.html?initialPath=%2F&id=%3Ar1q9%3A:32 Unrecognized feature: 'unoptimized-images'.Understand this warning
+0ce1429f-ab65-4d48-bef3-611aab96e0df-00-316wz2g2s5raf.janeway.replit.dev/__replco/workspace_iframe.html?initialPath=%2F&id=%3Ar1q9%3A:32 Unrecognized feature: 'unsized-media'.Understand this warning
+0ce1429f-ab65-4d48-bef3-611aab96e0df-00-316wz2g2s5raf.janeway.replit.dev/__replco/workspace_iframe.html?initialPath=%2F&id=%3Ar1q9%3A:32 Allow attribute will take precedence over 'allowfullscreen'.Understand this warning
+0ce1429f-ab65-4d48-bef3-611aab96e0df-00-316wz2g2s5raf.janeway.replit.dev/__replco/workspace_iframe.html?initialPath=%2F&id=%3Ar1q9%3A:32 Allow attribute will take precedence over 'allowpaymentrequest'.Understand this warning
+0806f034b483f38b8393eaedb9b70c5d:1  Failed to load resource: the server responded with a status of 404 ()

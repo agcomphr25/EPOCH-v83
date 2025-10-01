@@ -22,6 +22,27 @@ export interface Payment {
   updatedAt: string;
 }
 
+interface RefundRequest {
+  id: number;
+  orderId: string;
+  refundType: string;
+  amount?: number;
+  refundAmount?: number;
+  reason: string;
+  notes?: string;
+  status: string;
+  requestedBy: string;
+  requestedAt: string;
+  approvedBy?: string;
+  approvedAt?: string;
+  processedBy?: string;
+  processedAt?: string;
+  transactionId?: string;
+  createdAt: string;
+  updatedAt: string;
+  customerId: string;
+}
+
 interface PaymentManagerProps {
   orderId: string;
   totalAmount: number;
@@ -47,9 +68,19 @@ export default function PaymentManager({ orderId, totalAmount, onPaymentsChange,
     enabled: !!orderId && orderId !== 'undefined',
   });
 
+  // Fetch refunds for this order
+  const { data: refunds = [], isLoading: refundsLoading } = useQuery<RefundRequest[]>({
+    queryKey: ['/api/refund-requests/order', orderId],
+    queryFn: () => apiRequest(`/api/refund-requests/order/${orderId}`),
+    enabled: !!orderId && orderId !== 'undefined',
+  });
+
   // Calculate totals
   const totalPaid = payments.reduce((sum: number, payment: Payment) => sum + payment.paymentAmount, 0);
-  const balanceDue = totalAmount - totalPaid;
+  const totalRefunds = refunds
+    .filter((refund: RefundRequest) => refund.status === 'PROCESSED')
+    .reduce((sum: number, refund: RefundRequest) => sum + Number(refund.refundAmount || refund.amount || 0), 0);
+  const balanceDue = totalAmount - totalPaid - totalRefunds;
   const isCredit = balanceDue < 0;
 
   // Create payment mutation
@@ -198,8 +229,8 @@ export default function PaymentManager({ orderId, totalAmount, onPaymentsChange,
     }
   }, [payments, onPaymentsChange]);
 
-  if (isLoading) {
-    return <div>Loading payments...</div>;
+  if (isLoading || refundsLoading) {
+    return <div>Loading payment information...</div>;
   }
 
   // Inline content for Order Summary integration
@@ -217,9 +248,15 @@ export default function PaymentManager({ orderId, totalAmount, onPaymentsChange,
           <span className="font-bold">{formatCurrency(totalAmount)}</span>
         </div>
         <div className="flex justify-between items-center">
-          <span className="font-medium">Total Paid:</span>
+          <span className="font-medium">Payments:</span>
           <span className="font-bold text-green-600">{formatCurrency(totalPaid)}</span>
         </div>
+        {totalRefunds > 0 && (
+          <div className="flex justify-between items-center">
+            <span className="font-medium">Refunds:</span>
+            <span className="font-bold text-red-600">-{formatCurrency(totalRefunds)}</span>
+          </div>
+        )}
         <div className="flex justify-between items-center border-t pt-2">
           <span className="font-bold">
             {isCredit ? 'Credit Balance:' : 'Balance Due:'}

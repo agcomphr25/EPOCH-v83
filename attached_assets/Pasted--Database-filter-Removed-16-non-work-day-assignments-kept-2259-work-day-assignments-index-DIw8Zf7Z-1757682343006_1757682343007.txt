@@ -1,0 +1,63 @@
+ Database filter: Removed 16 non-work-day assignments, kept 2259 work-day assignments
+index-DIw8Zf7Z.js:1724 📋 Selected work days: Mon, Tue, Wed, Thu
+index-DIw8Zf7Z.js:1724 🔧 RAW API RESPONSE: {dataType: 'object', isArray: true, length: 369, hasData: true, firstItem: {…}, …}
+index-DIw8Zf7Z.js:1724 ✅ Successfully loaded 369 orders from API
+index-DIw8Zf7Z.js:1724 ✅ Sample order data: {id: 153, orderId: 'AG147', orderDate: '2025-06-13T00:00:00.000Z', dueDate: '2025-09-09T00:00:00.000Z', customerId: '116', …}
+index-DIw8Zf7Z.js:1724 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 369, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+index-DIw8Zf7Z.js:1724 🔧 Final hook return: {ordersReturned: 369, isLoading: false, hasError: false, firstOrderId: 'AG147'}
+index-DIw8Zf7Z.js:1724 🏔️ MESA UNIVERSAL DEBUG: {totalOrders: 369, mesaUniversalCount: 270, mesaOrders: Array(3)}
+index-DIw8Zf7Z.js:1724 🔍 LayupScheduler orders debug: {allOrdersCount: 369, loading: false, rawData: 'has data', dataType: 'object', isArray: true, …}
+index-DIw8Zf7Z.js:1724 🏔️ FINAL ORDERS: Returning 369 total orders, 270 are Mesa Universal
+index-DIw8Zf7Z.js:1724 🔧 Order AG399 needs LOP adjustment: {lopValue: 'lop_adj_14.5', hasLOPFeatures: true, needsLOPTest: true}
+index-DIw8Zf7Z.js:1724 🔧 Order AG092 needs LOP adjustment: {lopValue: 'lop_adj_12.5', hasLOPFeatures: true, needsLOPTest: true}
+index-DIw8Zf7Z.js:1724 🔧 Order EH093 needs LOP adjustment: {lopValue: 'lop_adj_12.5', hasLOPFeatures: true, needsLOPTest: true}
+index-DIw8Zf7Z.js:1724 🔧 Order EH178 needs LOP adjustment: {lopValue: 'lop_adj_12.5', hasLOPFeatures: true, needsLOPTest: true}
+index-DIw8Zf7Z.js:1724 🔧 Order AG062 needs LOP adjustment: {lopValue: 'lop_adj_14.5', hasLOPFeatures: true, needsLOPTest: true}
+index-DIw8Zf7Z.js:1724 🔧 Order EH227 needs LOP adjustment: {lopValue: 'lop_adj_12.5', hasLOPFeatures: true, needsLOPTest: true}
+index-DIw8Zf7Z.js:1724 🔧 LOP Scheduler Debug: {today: 'Fri Sep 12 2025', isMonday: false, dayOfWeek: 5, nextMondayWouldBe: 'Mon Sep 15 2025'}
+index-DIw8Zf7Z.js:1724 🔧 Order AG399: LOP scheduled for Mon Sep 15 2025 (Deferred for Monday)
+index-DIw8Zf7Z.js:1724 🔧 Order AG092: LOP scheduled for Mon Sep 15 2025 (Deferred for Monday)
+index-DIw8Zf7Z.js:1724 🔧 Order EH093: LOP scheduled for Mon Sep 15 2025 (Deferred for Monday)
+index-DIw8Zf7Z.js:1724 🔧 Order EH178: LOP scheduled for Mon Sep 15 2025 (Deferred for Monday)
+index-DIw8Zf7Z.js:1724 🔧 Order AG062: LOP scheduled for Mon Sep 15 2025 (Deferred for Monday)
+index-DIw8Zf7Z.js:1724 🔧 Order EH227: LOP scheduled for Mon Sep 15 2025 (Deferred for Monday)
+index-DIw8Zf7Z.js:1724 🔧 LOP Scheduler auto-run: {totalOrders: 369, lopOrdersNeedingAdjustment: 6, today: 'Fri Sep 12 2025', isMonday: false, sampleLOPOrders: Array(3)}
+index-DIw8Zf7Z.js:2211 🏭 LayupScheduler - Production/P1 orders: 25
+index-DIw8Zf7Z.js:2211 🏭 LayupScheduler - Sample production/P1 order: {id: 'PO0046-W1-016', orderId: 'PO0046-W1-016', orderDate: '2025-08-31 02:49:53.830195', dueDate: '2025-09-04 00:00:00', currentDepartment: 'Layup/Plugging', …}
+index-DIw8Zf7Z.js:2211 🏭 LayupScheduler - Production/P1 order stockModelId: 1
+index-DIw8Zf7Z.js:2211 🏭 LayupScheduler - Production/P1 order modelId: 1
+index-DIw8Zf7Z.js:2211 🏭 LayupScheduler - Assigned production/P1 orders: 0
+index-DIw8Zf7Z.js:2211 ❌ NO PRODUCTION/P1 ORDERS ASSIGNED! This is why they are not visible
+index-DIw8Zf7Z.js:2211 🏭 Triggering auto-schedule for production/P1 orders...
+index-DIw8Zf7Z.js:2211 🏔️ LayupScheduler - Mesa molds: (8) [{…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}]
+index-DIw8Zf7Z.js:2211 📋 LayupScheduler - Order Assignments: {}
+index-DIw8Zf7Z.js:2211 🏭 LayupScheduler - All Molds: (74) [{…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}]
+index-DIw8Zf7Z.js:2211 ⚙️ LayupScheduler - Employees: 2 employees loaded
+index-DIw8Zf7Z.js:2211 🔄 Unassigned orders: 369 (369) ['AG147', 'AG399', 'AG156', 'AG092', 'EH071', 'EH133', 'EH137', 'EH078', 'EH093', 'AG125', 'AG122', 'EH178', 'EH160', 'AG651', 'AG151', 'AG164', 'AG145', 'AG149', 'AG457', 'AG124', 'AG105', 'AG099', 'AG013', 'AG079', 'AG109', 'AG119', 'AG121', 'AG082', 'AG062', 'AG032', 'AG753', 'AG049', 'AG039', 'AG040', 'AG017', 'AG061', 'AG048', 'AG047', 'AG036', 'AG1361', 'AG1362', 'AG1363', 'AG1364', 'AG1365', 'AG1366', 'AG1367', 'AG1368', 'AG1369', 'AG1370', 'AG1371', 'AG1372', 'AG1373', 'AG1374', 'AG1375', 'AG1376', 'AG1377', 'AG1378', 'AG1379', 'AG1380', 'AG1381', 'AG1382', 'AG1383', 'AG1384', 'AG1385', 'AG571', 'EH114', 'AG643', 'EH116', 'AG509', 'EH227', 'AG641', 'AG642', 'AG644', 'AG645', 'AG647', 'EH217', 'EH213', 'EH212', 'EH211', 'EH209', 'EH207', 'EH215', 'AG649', 'AG654', 'AG656', 'AG756', 'AG790', 'AG796', 'AG803', 'AG815', 'EH118', 'EH135', 'EH112', 'EH134', 'AG007', 'EH113', 'EH067', 'AG543', 'AG521', 'AG1563', …]
+index-DIw8Zf7Z.js:2211 🏭 Unassigned PRODUCTION/P1 orders: 25 (25) ['PO0046-W1-016', 'PO0046-W1-018', 'PO0046-W1-020', 'PO0046-W1-017', 'PO0046-W1-019', 'PO0046-W1-021', 'PO0046-W1-023', 'PO0046-W1-025', 'PO0046-W1-022', 'PO0046-W1-024', 'PO0046-W1-010', 'PO0046-W1-012', 'PO0046-W1-014', 'PO0046-W1-011', 'PO0046-W1-013', 'PO0046-W1-015', 'PO0046-W1-001', 'PO0046-W1-002', 'PO0046-W1-003', 'PO0046-W1-004', 'PO0046-W1-005', 'PO0046-W1-006', 'PO0046-W1-007', 'PO0046-W1-008', 'PO0046-W1-009']
+index-DIw8Zf7Z.js:2211 📅 MONDAY DEBUG: Date 2025-09-08, 0 assignments found
+index-DIw8Zf7Z.js:1724 🏭 LayupScheduler: Total orders from API: 369
+index-DIw8Zf7Z.js:1724 🏭 LayupScheduler: Regular orders for scheduling: 344
+index-DIw8Zf7Z.js:1724 🏭 LayupScheduler: P1 PO orders for scheduling: 25
+index-DIw8Zf7Z.js:1724 🏭 LayupScheduler: Sample regular order for scheduling: {id: 153, orderId: 'AG147', orderDate: '2025-06-13T00:00:00.000Z', dueDate: '2025-09-09T00:00:00.000Z', customerId: '116', …}
+index-DIw8Zf7Z.js:1724 🏭 LayupScheduler: First 5 regular orders: (5) [{…}, {…}, {…}, {…}, {…}]
+index-DIw8Zf7Z.js:1724 🏭 LayupScheduler: Filtered orders by source: {main_orders: 344, p1_purchase_order: 25}
+index-DIw8Zf7Z.js:1724 🚀 LayupScheduler: All data loaded, checking if auto-schedule needed
+index-DIw8Zf7Z.js:1724 🎯 One-time auto-scheduling triggered for: 369 orders
+index-DIw8Zf7Z.js:1724 🎯 Production Flow Auto-schedule check: {orders: 369, molds: 74, employees: 2, isLoading: false, ordersLoading: false, …}
+index-DIw8Zf7Z.js:1724 📊 SCHEDULE ANALYSIS: {totalOrders: 369, scheduledOrders: 0, unscheduledOrders: 369, assignmentKeys: 0, hasTooManyAssignments: false, …}
+index-DIw8Zf7Z.js:1724 📊 SCHEDULE STATUS: Ready for manual scheduling (2-week limit) - 369 unscheduled orders
+index-DIw8Zf7Z.js:1724 🔍 RAW SCHEDULE DATA FROM DATABASE: 2275 total entries
+index-DIw8Zf7Z.js:1724   Entry 0: AG679 → 2025-08-25T00:52:14.639Z → Sun Aug 24 2025 (Sunday, day 0)
+index-DIw8Zf7Z.js:1724   Entry 1: AG389 → 2025-08-25T00:52:14.639Z → Sun Aug 24 2025 (Sunday, day 0)
+index-DIw8Zf7Z.js:1724   Entry 2: AG681 → 2025-08-25T00:52:14.639Z → Sun Aug 24 2025 (Sunday, day 0)
+index-DIw8Zf7Z.js:1724   Entry 3: AG680 → 2025-08-25T00:52:14.639Z → Sun Aug 24 2025 (Sunday, day 0)
+index-DIw8Zf7Z.js:1724   Entry 4: AG673 → 2025-08-25T00:52:14.639Z → Sun Aug 24 2025 (Sunday, day 0)
+index-DIw8Zf7Z.js:1724 🗑️ DATABASE FILTER: Removing Sunday assignment - AG679 on Sun Aug 24 2025
+index-DIw8Zf7Z.js:1724 🗑️ DATABASE FILTER: Removing Sunday assignment - AG389 on Sun Aug 24 2025
+index-DIw8Zf7Z.js:1724 🗑️ DATABASE FILTER: Removing Sunday assignment - AG681 on Sun Aug 24 2025
+index-DIw8Zf7Z.js:1724 🗑️ DATABASE FILTER: Removing Sunday assignment - AG680 on Sun Aug 24 2025
+index-DIw8Zf7Z.js:1724 🗑️ DATABASE FILTER: Removing Sunday assignment - AG673 on Sun Aug 24 2025
+index-DIw8Zf7Z.js:1724 🗑️ DATABASE FILTER: Removing Sunday assignment - AG677 on Sun Aug 24 2025
+index-DIw8Zf7Z.js:1724 🗑️ DATABASE FILTER: Removing Sunday assignment - AG674 on Sun Aug 24 2025
+index-DIw8Zf7Z.js:1724 🗑️ DATABASE FILTER: Removing Sunday assignment - AG358 on Sun Aug 24 2025

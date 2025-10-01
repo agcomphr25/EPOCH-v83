@@ -37,20 +37,20 @@ export function SubAssemblyDialog({ open, onOpenChange, parentBomId, onSuccess }
 
   // Fetch available sub-assemblies
   const { data: availableBOMs = [], isLoading } = useQuery<BOMDefinition[]>({
-    queryKey: [`/api/boms/${parentBomId}/available-sub-assemblies`],
+    queryKey: [`/api/p2-boms/${parentBomId}/available-sub-assemblies`],
     enabled: open,
   });
 
   const createSubAssemblyMutation = useMutation({
     mutationFn: async (data: any) => {
-      return apiRequest(`/api/boms/${parentBomId}/sub-assemblies`, {
+      return apiRequest(`/api/p2-boms/${parentBomId}/sub-assemblies`, {
         method: 'POST',
         body: data,
       });
     },
     onSuccess: () => {
       toast({ title: "Sub-assembly created successfully" });
-      queryClient.invalidateQueries({ queryKey: [`/api/boms/${parentBomId}/details`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/p2-boms/${parentBomId}/details`] });
       resetForm();
       onSuccess();
       onOpenChange(false);

@@ -451,31 +451,6 @@ export default function FinishQueuePage() {
                     </Button>
                   )}
 
-                  {selectedOrders.size > 0 && (
-                    <div className="flex items-center gap-2">
-                      {selectedTechnician && (
-                        <Button
-                          onClick={handleMoveToFinishQC}
-                          disabled={moveToFinishQCMutation.isPending}
-                          className="bg-blue-600 hover:bg-blue-700"
-                          size="sm"
-                        >
-                          <ArrowRight className="h-4 w-4 mr-1" />
-                          Move to Finish QC ({selectedOrders.size})
-                        </Button>
-                      )}
-                      
-                      <Button
-                        onClick={handleMoveToPaint}
-                        disabled={moveToPaintMutation.isPending}
-                        className="bg-purple-600 hover:bg-purple-700"
-                        size="sm"
-                      >
-                        <Paintbrush className="h-4 w-4 mr-1" />
-                        Skip to Paint ({selectedOrders.size})
-                      </Button>
-                    </div>
-                  )}
                 </div>
               )}
             </div>

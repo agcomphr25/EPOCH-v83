@@ -534,8 +534,8 @@ export default function DocumentManagement() {
                 </DialogHeader>
                 <form onSubmit={handleCreateTag} className="space-y-4">
                   <div>
-                    <Label htmlFor="name">Tag Name</Label>
-                    <Input name="name" placeholder="Tag name" required />
+                    <Label htmlFor="tag-name">Tag Name</Label>
+                    <Input id="tag-name" name="name" autoComplete="off" placeholder="Tag name" required />
                   </div>
                   <div>
                     <Label htmlFor="category">Category</Label>
@@ -551,8 +551,8 @@ export default function DocumentManagement() {
                     </Select>
                   </div>
                   <div>
-                    <Label htmlFor="color">Color</Label>
-                    <Input name="color" type="color" defaultValue="#3B82F6" />
+                    <Label htmlFor="tag-color">Color</Label>
+                    <Input id="tag-color" name="color" autoComplete="off" type="color" defaultValue="#3B82F6" />
                   </div>
                   <div>
                     <Label htmlFor="description">Description</Label>
@@ -612,8 +612,8 @@ export default function DocumentManagement() {
                 </DialogHeader>
                 <form onSubmit={handleCreateCollection} className="space-y-4">
                   <div>
-                    <Label htmlFor="name">Collection Name</Label>
-                    <Input name="name" placeholder="Collection name" required />
+                    <Label htmlFor="collection-name">Collection Name</Label>
+                    <Input id="collection-name" name="name" autoComplete="off" placeholder="Collection name" required />
                   </div>
                   <div>
                     <Label htmlFor="collectionType">Type</Label>
@@ -631,8 +631,8 @@ export default function DocumentManagement() {
                     </Select>
                   </div>
                   <div>
-                    <Label htmlFor="primaryIdentifier">Primary Identifier</Label>
-                    <Input name="primaryIdentifier" placeholder="PO number, project ID, etc." />
+                    <Label htmlFor="collection-primaryIdentifier">Primary Identifier</Label>
+                    <Input id="collection-primaryIdentifier" name="primaryIdentifier" autoComplete="off" placeholder="PO number, project ID, etc." />
                   </div>
                   <div>
                     <Label htmlFor="description">Description</Label>

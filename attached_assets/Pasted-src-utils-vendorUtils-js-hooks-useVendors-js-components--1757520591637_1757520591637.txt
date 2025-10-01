@@ -1,0 +1,244 @@
+src/
+├── utils/
+│   └── vendorUtils.js
+├── hooks/
+│   └── useVendors.js
+├── components/
+│   ├── VendorFormModal.jsx
+│   ├── VendorAdmin.jsx
+│   └── Pagination.jsx
+├── pages/
+│   └── VendorsPage.jsx
+├── App.jsx
+└── index.js
+1) src/utils/vendorUtils.js
+js
+Copy code
+import axios from 'axios';
+
+export function fetchVendors({ q, approved, evaluated, page, limit }) {
+  const params = new URLSearchParams({ q, approved, evaluated, page, limit }).toString();
+  return axios.get(`/api/vendors?${params}`);
+}
+
+export function fetchVendor(id) {
+  return axios.get(`/api/vendors/${id}`);
+}
+
+export function createVendor(payload) {
+  return axios.post('/api/vendors', payload);
+}
+
+export function updateVendor(id, payload) {
+  return axios.put(`/api/vendors/${id}`, payload);
+}
+
+export function deleteVendor(id) {
+  return axios.delete(`/api/vendors/${id}`);
+}
+
+/*
+  Backend contract for pagination:
+
+  GET /api/vendors?q=&approved=&evaluated=&page=1&limit=10
+
+  Response:
+  {
+    "data": [ /* vendor objects * / ],
+    "total": 123,
+    "page": 1,
+    "limit": 10
+  }
+*/
+2) src/hooks/useVendors.js
+js
+Copy code
+import { useState, useEffect } from 'react';
+import { fetchVendors } from '../utils/vendorUtils';
+
+export default function useVendors({ q, approved, evaluated, page, limit }) {
+  const [vendors, setVendors] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [total, setTotal] = useState(0);
+
+  const fetchList = async () => {
+    setLoading(true);
+    try {
+      const res = await fetchVendors({ q, approved, evaluated, page, limit });
+      setVendors(res.data.data);
+      setTotal(res.data.total);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchList();
+  }, [q, approved, evaluated, page, limit]);
+
+  return { vendors, loading, total, refresh: fetchList };
+}
+3) src/components/Pagination.jsx
+jsx
+Copy code
+import React from 'react';
+
+export default function Pagination({ page, total, limit, onPageChange }) {
+  const totalPages = Math.ceil(total / limit);
+  if (totalPages <= 1) return null;
+
+  const pages = Array.from({ length: totalPages }, (_, i) => i + 1);
+
+  return (
+    <nav className="flex space-x-1 mt-4">
+      <button
+        disabled={page === 1}
+        onClick={() => onPageChange(page - 1)}
+        className="px-3 py-1 bg-gray-200 rounded disabled:opacity-50"
+      >
+        Previous
+      </button>
+      {pages.map((p) => (
+        <button
+          key={p}
+          onClick={() => onPageChange(p)}
+          className={`px-3 py-1 rounded ${p === page ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}
+        >
+          {p}
+        </button>
+      ))}
+      <button
+        disabled={page === totalPages}
+        onClick={() => onPageChange(page + 1)}
+        className="px-3 py-1 bg-gray-200 rounded disabled:opacity-50"
+      >
+        Next
+      </button>
+    </nav>
+  );
+}
+4) src/components/VendorFormModal.jsx
+(Same as before—omitted for brevity. Validation and behavior remain the same.)
+
+5) src/components/VendorAdmin.jsx
+jsx
+Copy code
+import React, { useState } from 'react';
+import useVendors from '../hooks/useVendors';
+import VendorFormModal from './VendorFormModal';
+import Pagination from './Pagination';
+import { deleteVendor } from '../utils/vendorUtils';
+import { toast } from 'react-hot-toast';
+import { format } from 'date-fns';
+
+export default function VendorAdmin() {
+  const [filters, setFilters] = useState({ q: '', approved: '', evaluated: '' });
+  const [page, setPage] = useState(1);
+  const limit = 10;
+
+  const { vendors, loading, total, refresh } = useVendors({ ...filters, page, limit });
+
+  const [modalOpen, setModalOpen] = useState(false);
+  const [toEdit, setToEdit] = useState(null);
+
+  const handleDelete = async (vendor) => {
+    if (!window.confirm(`Delete ${vendor.name}?`)) return;
+    try {
+      await deleteVendor(vendor.id);
+      toast.success('Vendor deleted');
+      refresh();
+    } catch {
+      toast.error('Error deleting vendor');
+    }
+  };
+
+  return (
+    <div className="p-6">
+      <div className="flex flex-wrap gap-4 mb-4">
+        <input
+          placeholder="Search..."
+          value={filters.q}
+          onChange={(e) => { setPage(1); setFilters(prev => ({ ...prev, q: e.target.value })); }}
+          className="border rounded p-2"
+        />
+        <select
+          value={filters.approved}
+          onChange={(e) => { setPage(1); setFilters(prev => ({ ...prev, approved: e.target.value })); }}
+          className="border rounded p-2"
+        >
+          <option value="">Approved: All</option>
+          <option value="yes">Yes</option>
+          <option value="no">No</option>
+        </select>
+        <select
+          value={filters.evaluated}
+          onChange={(e) => { setPage(1); setFilters(prev => ({ ...prev, evaluated: e.target.value })); }}
+          className="border rounded p-2"
+        >
+          <option value="">Evaluated: All</option>
+          <option value="yes">Yes</option>
+          <option value="no">No</option>
+        </select>
+        <button
+          onClick={() => { setToEdit(null); setModalOpen(true); }}
+          className="ml-auto px-4 py-2 bg-green-600 text-white rounded"
+        >
+          New Vendor
+        </button>
+      </div>
+
+      {loading ? (
+        <p>Loading...</p>
+      ) : vendors.length === 0 ? (
+        <p>No vendors found. Try clearing filters.</p>
+      ) : (
+        <>
+          <table className="min-w-full border">
+            <thead> {/*... same as before ...*/} </thead>
+            <tbody>
+              {vendors.map((v) => (
+                <tr key={v.id}> {/* ... same as before ... */} </tr>
+              ))}
+            </tbody>
+          </table>
+          <Pagination page={page} total={total} limit={limit} onPageChange={setPage} />
+        </>
+      )}
+
+      <VendorFormModal open={modalOpen} onClose={() => setModalOpen(false)} onSaved={refresh} vendorToEdit={toEdit} />
+    </div>
+  );
+}
+6) src/pages/VendorsPage.jsx and App.jsx
+jsx
+Copy code
+// VendorsPage.jsx
+import React from 'react';
+import VendorAdmin from '../components/VendorAdmin';
+
+export default function VendorsPage() {
+  return <VendorAdmin />;
+}
+jsx
+Copy code
+// App.jsx
+import React from 'react';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import VendorsPage from './pages/VendorsPage';
+import { Toaster } from 'react-hot-toast';
+
+function App() {
+  return (
+    <Router>
+      <Routes>
+        <Route path="/vendors" element={<VendorsPage />} />
+        {/* other routes */}
+      </Routes>
+      <Toaster position="top-right" />
+    </Router>
+  );
+}
+
+export default App;

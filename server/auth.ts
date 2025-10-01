@@ -1,5 +1,5 @@
 import bcrypt from 'bcryptjs';
-import { db } from './storage';
+import { db } from './db';
 import { users, sessions } from './schema';
 import { eq, and, gt } from 'drizzle-orm';
 import crypto from 'crypto';

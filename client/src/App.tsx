@@ -61,6 +61,15 @@ import TIMSTestDashboard from "./pages/TIMSTestDashboard";
 import BRADWTestDashboard from "./pages/BRADWTestDashboard";
 import FALEESHAHTestDashboard from "./pages/FALEESHAHTestDashboard";
 import JOEYBTestDashboard from "./pages/JOEYBTestDashboard";
+import AGRACETestDashboard from "./pages/AGRACETestDashboard";
+import ANGIETTestDashboard from "./pages/ANGIETTestDashboard";
+import BLAKETTestDashboard from "./pages/BLAKETTestDashboard";
+import HALLSTestDashboard from "./pages/HALLSTestDashboard";
+import HUNTATestDashboard from "./pages/HUNTATestDashboard";
+import LAURIETTestDashboard from "./pages/LAURIETTestDashboard";
+import TANDYDTestDashboard from "./pages/TANDYDTestDashboard";
+import TANDYMTestDashboard from "./pages/TANDYMTestDashboard";
+import TASHAMTestDashboard from "./pages/TASHAMTestDashboard";
 import OrderDepartmentTransfer from "./pages/OrderDepartmentTransfer";
 import { BOMAdministration } from "./pages/BOMAdministration";
 import RobustBOMAdministration from "./pages/RobustBOMAdministration";
@@ -257,6 +266,15 @@ function App() {
                   <Route path="/bradw-dashboard" component={BRADWTestDashboard} />
                   <Route path="/faleeshah-dashboard" component={FALEESHAHTestDashboard} />
                   <Route path="/joeyb-dashboard" component={JOEYBTestDashboard} />
+                  <Route path="/agrace-dashboard" component={AGRACETestDashboard} />
+                  <Route path="/angiet-dashboard" component={ANGIETTestDashboard} />
+                  <Route path="/blaket-dashboard" component={BLAKETTestDashboard} />
+                  <Route path="/halls-dashboard" component={HALLSTestDashboard} />
+                  <Route path="/hunta-dashboard" component={HUNTATestDashboard} />
+                  <Route path="/lauriet-dashboard" component={LAURIETTestDashboard} />
+                  <Route path="/tandyd-dashboard" component={TANDYDTestDashboard} />
+                  <Route path="/tandym-dashboard" component={TANDYMTestDashboard} />
+                  <Route path="/tasham-dashboard" component={TASHAMTestDashboard} />
 
                   {/* Test Routes */}
                   <Route path="/module8-test" component={Module8TestPage} />

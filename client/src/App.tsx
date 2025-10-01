@@ -70,8 +70,6 @@ import EmployeeDashboard from "./pages/EmployeeDashboard";
 import EmployeeDetail from "./pages/EmployeeDetail";
 import EmployeePortal from "./pages/EmployeePortal";
 import UserManagement from "./pages/UserManagement";
-import LoginPage from "./pages/LoginPage";
-import ProtectedRoute from "./components/auth/ProtectedRoute";
 import P2Forms from '@/pages/P2Forms';
 import WasteManagementForm from '@/pages/WasteManagementForm';
 import TaskTracker from '@/pages/TaskTracker';
@@ -113,7 +111,6 @@ import VendorsPage from "./pages/VendorsPage";
 import VendorPOPage from "./pages/VendorPOPage";
 
 import { Toaster as HotToaster } from 'react-hot-toast';
-import DeploymentAuthWrapper from './components/DeploymentAuthWrapper';
 
 
 // Component to conditionally render Navigation
@@ -178,7 +175,6 @@ function App() {
   try {
     return (
       <QueryClientProvider client={queryClient}>
-        <DeploymentAuthWrapper>
           <Router>
             <div className="min-h-screen bg-gray-50">
               <ConditionalNavigation />
@@ -249,8 +245,6 @@ function App() {
                   <Route path="/employee-portal-new" component={EmployeePortal} />
                   <Route path="/time-clock-admin" component={TimeClockAdminPage} />
 
-                  {/* Auth Routes */}
-                  <Route path="/login" component={LoginPage} />
 
                   {/* User Dashboard Routes */}
                   <Route path="/ag-dashboard" component={AGTestDashboard} />
@@ -352,7 +346,6 @@ function App() {
           <Toaster />
           <HotToaster />
         </Router>
-        </DeploymentAuthWrapper>
       </QueryClientProvider>
     );
   } catch (error) {

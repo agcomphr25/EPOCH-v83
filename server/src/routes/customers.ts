@@ -1,6 +1,5 @@
 import { Router, Request, Response } from 'express';
 import { storage } from '../../storage';
-import { authenticateToken } from '../../middleware/auth';
 import {
   insertCustomerSchema,
   insertCustomerAddressSchema,
@@ -197,7 +196,7 @@ router.delete('/delete-bypass/:id', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/', authenticateToken, async (req: Request, res: Response) => {
+router.post('/', async (req: Request, res: Response) => {
   try {
     const customerData = insertCustomerSchema.parse(req.body);
     const newCustomer = await storage.createCustomer(customerData);
@@ -211,7 +210,7 @@ router.post('/', authenticateToken, async (req: Request, res: Response) => {
   }
 });
 
-router.put('/:id', authenticateToken, async (req: Request, res: Response) => {
+router.put('/:id', async (req: Request, res: Response) => {
   try {
     const customerId = parseInt(req.params.id);
     const updates = req.body;
@@ -223,7 +222,7 @@ router.put('/:id', authenticateToken, async (req: Request, res: Response) => {
   }
 });
 
-router.delete('/:id', authenticateToken, async (req: Request, res: Response) => {
+router.delete('/:id', async (req: Request, res: Response) => {
   try {
     const customerId = parseInt(req.params.id);
     await storage.deleteCustomer(customerId);
@@ -246,7 +245,7 @@ router.get('/:id/addresses', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/:id/addresses', authenticateToken, async (req: Request, res: Response) => {
+router.post('/:id/addresses', async (req: Request, res: Response) => {
   try {
     const customerId = parseInt(req.params.id);
     const addressData = insertCustomerAddressSchema.parse({
@@ -273,7 +272,7 @@ router.get('/:id/communications', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/:id/communications', authenticateToken, async (req: Request, res: Response) => {
+router.post('/:id/communications', async (req: Request, res: Response) => {
   try {
     const customerId = parseInt(req.params.id);
     const communicationData = insertCommunicationLogSchema.parse({

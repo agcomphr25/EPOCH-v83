@@ -39,18 +39,52 @@ export function isProductionEnvironment(): boolean {
 }
 
 /**
- * Check if user is authenticated
+ * Check if user is authenticated (relies on backend validation via cookie)
  */
 export function isAuthenticated(): boolean {
   const currentUser = localStorage.getItem('currentUser');
-  const sessionToken = localStorage.getItem('sessionToken');
-  const jwtToken = localStorage.getItem('jwtToken');
   
-  // In development, allow access without tokens
+  // In development, allow access without validation
   if (!isProductionEnvironment()) {
     return true;
   }
   
-  // In production, require at least a currentUser
-  return !!(currentUser || sessionToken || jwtToken);
+  // In production, check if user data exists (actual validation happens server-side)
+  return !!currentUser;
+}
+
+/**
+ * Validate session against backend (async) - This is the authoritative check
+ */
+export async function validateSessionAsync(): Promise<boolean> {
+  // In development, skip backend validation
+  if (!isProductionEnvironment()) {
+    return true;
+  }
+
+  try {
+    const response = await fetch('/api/auth/validate', {
+      credentials: 'include'
+    });
+
+    if (!response.ok) {
+      // Session is invalid, clean up localStorage
+      localStorage.removeItem('currentUser');
+      localStorage.removeItem('userData');
+      return false;
+    }
+
+    const data = await response.json();
+    if (data.valid && data.user) {
+      // Update localStorage with latest user data
+      localStorage.setItem('currentUser', data.user.username);
+      localStorage.setItem('userData', JSON.stringify(data.user));
+      return true;
+    }
+    
+    return false;
+  } catch (error) {
+    console.error('Session validation error:', error);
+    return false;
+  }
 }

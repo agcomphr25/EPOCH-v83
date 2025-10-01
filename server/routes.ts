@@ -113,8 +113,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json({
         success: true,
-        user: result.user,
-        sessionToken: result.sessionToken
+        user: result.user
       });
     } catch (error) {
       console.error('Login error:', error);

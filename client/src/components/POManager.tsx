@@ -20,6 +20,8 @@ import debounce from 'lodash.debounce';
 import { toast } from 'react-hot-toast';
 import POProductSelector from './POProductSelector';
 import POItemsManager from './POItemsManager';
+import AddressInput from './AddressInput';
+import { type AddressData } from '@/utils/addressUtils';
 
 // Component to display PO quantity
 function POQuantityDisplay({ poId }: { poId: number }) {
@@ -235,10 +237,13 @@ export default function POManager() {
     phone: '',
     company: '',
     customerType: 'Individual' as string,
-    address: '',
-    city: '',
-    state: '',
-    zipCode: ''
+    address: {
+      street: '',
+      city: '',
+      state: '',
+      zipCode: '',
+      country: 'USA'
+    } as AddressData
   });
 
 
@@ -311,9 +316,17 @@ export default function POManager() {
 
   const createCustomerMutation = useMutation({
     mutationFn: async (customerData: any) => {
+      // Flatten address for backend compatibility
+      const flattenedData = {
+        ...customerData,
+        address: customerData.address.street,
+        city: customerData.address.city,
+        state: customerData.address.state,
+        zipCode: customerData.address.zipCode
+      };
       return apiRequest('/api/customers/create-bypass', {
         method: 'POST',
-        body: JSON.stringify(customerData)
+        body: JSON.stringify(flattenedData)
       });
     },
     onSuccess: (newCustomer) => {
@@ -335,10 +348,13 @@ export default function POManager() {
         phone: '',
         company: '',
         customerType: 'Individual',
-        address: '',
-        city: '',
-        state: '',
-        zipCode: ''
+        address: {
+          street: '',
+          city: '',
+          state: '',
+          zipCode: '',
+          country: 'USA'
+        } as AddressData
       });
     },
     onError: (error: any) => {
@@ -498,10 +514,13 @@ export default function POManager() {
       phone: '',
       company: '',
       customerType: 'Individual',
-      address: '',
-      city: '',
-      state: '',
-      zipCode: ''
+      address: {
+        street: '',
+        city: '',
+        state: '',
+        zipCode: '',
+        country: 'USA'
+      } as AddressData
     });
   };
 
@@ -980,45 +999,12 @@ export default function POManager() {
               </Select>
             </div>
 
-            <div>
-              <Label htmlFor="customerAddress">Address</Label>
-              <Input
-                id="customerAddress"
-                value={newCustomerData.address}
-                onChange={(e) => setNewCustomerData({...newCustomerData, address: e.target.value})}
-                placeholder="Street address"
-              />
-            </div>
-
-            <div className="grid grid-cols-3 gap-4">
-              <div>
-                <Label htmlFor="customerCity">City</Label>
-                <Input
-                  id="customerCity"
-                  value={newCustomerData.city}
-                  onChange={(e) => setNewCustomerData({...newCustomerData, city: e.target.value})}
-                  placeholder="City"
-                />
-              </div>
-              <div>
-                <Label htmlFor="customerState">State</Label>
-                <Input
-                  id="customerState"
-                  value={newCustomerData.state}
-                  onChange={(e) => setNewCustomerData({...newCustomerData, state: e.target.value})}
-                  placeholder="State"
-                />
-              </div>
-              <div>
-                <Label htmlFor="customerZip">ZIP Code</Label>
-                <Input
-                  id="customerZip"
-                  value={newCustomerData.zipCode}
-                  onChange={(e) => setNewCustomerData({...newCustomerData, zipCode: e.target.value})}
-                  placeholder="ZIP code"
-                />
-              </div>
-            </div>
+            <AddressInput
+              label="Address"
+              value={newCustomerData.address}
+              onChange={(address) => setNewCustomerData({...newCustomerData, address})}
+              required={false}
+            />
 
             <div className="flex justify-end space-x-2">
               <Button type="button" variant="outline" onClick={handleCreateCustomerDialogClose}>

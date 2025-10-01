@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useLocation } from 'wouter';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { useToast } from '@/hooks/use-toast';
 import { getDashboardRoute } from '@/config/dashboardMapping';
 import { Lock, User } from 'lucide-react';
+import { isProductionEnvironment, isAuthenticated } from '@/lib/env';
 
 export default function Login() {
   const [username, setUsername] = useState('');
@@ -14,6 +15,18 @@ export default function Login() {
   const [isLoading, setIsLoading] = useState(false);
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+
+  useEffect(() => {
+    // If already authenticated, redirect to their dashboard
+    if (isAuthenticated()) {
+      const currentUser = localStorage.getItem('currentUser');
+      if (currentUser) {
+        const dashboardRoute = getDashboardRoute(currentUser);
+        console.log('🔒 Already authenticated - redirecting to dashboard:', dashboardRoute);
+        setLocation(dashboardRoute);
+      }
+    }
+  }, [setLocation]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();

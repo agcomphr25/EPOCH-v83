@@ -13,10 +13,12 @@ import { Truck, Package, Search, Filter, Send, CheckCircle, Clock, Download, Fil
 // Removed UPSLabelCreator import since we're now using Track Order instead of Create Label
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
+import CustomerDetailsTooltip from '@/components/CustomerDetailsTooltip';
 
 interface OrderWithTracking {
   orderId: string;
   customer: string;
+  customerId?: string;
   product: string;
   currentDepartment: string;
   status: string;
@@ -30,6 +32,7 @@ interface OrderWithTracking {
   shippingCost?: number;
   labelGenerated?: boolean;
   labelGeneratedAt?: string;
+  fbOrderNumber?: string;
 }
 
 export default function ShippingManagement() {
@@ -152,7 +155,8 @@ export default function ShippingManagement() {
   const filteredOrders = (orders as OrderWithTracking[] | undefined)?.filter((order: OrderWithTracking) => {
     const matchesSearch = order.orderId.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          order.customer.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         (order.trackingNumber && order.trackingNumber.toLowerCase().includes(searchTerm.toLowerCase()));
+                         (order.trackingNumber && order.trackingNumber.toLowerCase().includes(searchTerm.toLowerCase())) ||
+                         (order.fbOrderNumber && order.fbOrderNumber.toLowerCase().includes(searchTerm.toLowerCase()));
     
     if (filterStatus === 'all') return matchesSearch;
     if (filterStatus === 'shipped') return matchesSearch && order.trackingNumber;
@@ -338,7 +342,7 @@ export default function ShippingManagement() {
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                 <Input
                   id="search"
-                  placeholder="Search by order ID, customer, or tracking number..."
+                  placeholder="Search by order ID, customer, FB order #, or tracking number..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-10"
@@ -406,7 +410,20 @@ export default function ShippingManagement() {
                       </div>
                     </TableCell>
                     <TableCell className="font-mono">{order.orderId}</TableCell>
-                    <TableCell>{order.customer}</TableCell>
+                    <TableCell>
+                      {order.customerId ? (
+                        <CustomerDetailsTooltip 
+                          customerId={order.customerId} 
+                          customerName={order.customer}
+                        >
+                          <span className="cursor-pointer hover:text-blue-600 transition-colors">
+                            {order.customer}
+                          </span>
+                        </CustomerDetailsTooltip>
+                      ) : (
+                        order.customer
+                      )}
+                    </TableCell>
                     <TableCell>{order.product}</TableCell>
                     <TableCell>
                       {order.trackingNumber ? (

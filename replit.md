@@ -13,7 +13,7 @@ UI Performance: Department progression buttons use cache-first approach with dis
 Default shipping charge: Should be 36.95 for new orders.
 Critical requirement: All completed functionality must be hard-coded to prevent loss of features and data.
 Shipping Label System: Successfully converted from problematic modal to dedicated page approach with enhanced customer data loading and UPS API integration (August 21, 2025).
-Authentication: Enabled for deployed sites (.replit.app/.repl.co domains and production mode) with user-based login credentials. Development environment bypasses authentication for easier testing.
+Authentication: Properly configured with environment-based detection - localhost/replit.dev bypasses auth for development, while .repl.co/.replit.app domains require authentication and use production database. Fixed September 15, 2025: Resolved forced development mode issue that was causing deployed sites to use development database instead of production data.
 Navigation enhancement: STACITEST Dashboard includes 5 color-coded navigation cards for quick access to core functions.
 
 ## System Architecture
@@ -33,7 +33,6 @@ The application adopts a monorepo structure utilizing a full-stack TypeScript ap
 -   **Frontend**: React 18 with TypeScript, built using Vite, featuring ShadCN UI components with Tailwind CSS for styling and Framer Motion for animations. Wouter-based routing is used.
 -   **Backend**: Express.js with TypeScript, utilizing TanStack Query for server state management, Zod for runtime validation, and Axios for external API calls.
 -   **Database**: PostgreSQL managed via Neon serverless, with Drizzle ORM for type-safe database operations and Drizzle-kit for schema migrations.
--   **Critical Scheduling Fix (Sept 29, 2025)**: Resolved Monday scheduling difficulty by removing automatic +1 day offset in regular order scheduling, allowing PO orders and regular orders to share Monday capacity when available. This prevents empty Monday columns and ensures continuous production flow.
 -   **Core Features**:
     -   **Order Management**: Dynamic product configuration, feature consolidation, and robust order editing with a unified system for both draft and finalized orders. Includes streamlined order-to-production process with direct finalization and auto-population to P1 Production Queue. Enhanced validation prevents data inconsistency between draft and finalized order tables by requiring valid modelId for all orders. Due date persistence system prevents auto-generation from overwriting user-set dates, with smart detection of manual changes and visual indicators.
     -   **Layup Scheduler**: Comprehensive auto-scheduling system with production queue auto-population, priority scoring, Monday-Thursday default scheduling with Friday visibility for manual adjustments. Features drag-and-drop, mold matching, employee capacity management, and automatic department progression. Includes lock/unlock functionality for schedules and automated cleanup of orphaned schedule entries when orders progress to other departments. Enhanced lock and push functionality now handles full schedule scope instead of just the currently visible week (UPDATED: August 20, 2025 PM - now pushes ALL scheduled orders across entire schedule, not just visible week).

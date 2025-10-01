@@ -4272,8 +4272,24 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateCustomer(id: number, data: Partial<InsertCustomer>): Promise<Customer> {
+    // Filter data to only include valid customer fields
+    const validFields: any = {};
+    
+    if (data.name !== undefined) validFields.name = data.name;
+    if (data.email !== undefined) validFields.email = data.email;
+    if (data.phone !== undefined) validFields.phone = data.phone;
+    if (data.company !== undefined) validFields.company = data.company;
+    if (data.contact !== undefined) validFields.contact = data.contact;
+    if (data.customerType !== undefined) validFields.customerType = data.customerType;
+    if (data.preferredCommunicationMethod !== undefined) validFields.preferredCommunicationMethod = data.preferredCommunicationMethod;
+    if (data.notes !== undefined) validFields.notes = data.notes;
+    if (data.isActive !== undefined) validFields.isActive = data.isActive;
+    
+    // Always update timestamp
+    validFields.updatedAt = new Date();
+    
     const [customer] = await db.update(customers)
-      .set(data)
+      .set(validFields)
       .where(eq(customers.id, id))
       .returning();
     return customer;

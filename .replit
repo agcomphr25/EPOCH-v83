@@ -49,12 +49,14 @@ localPort = 5000
 externalPort = 80
 
 [[ports]]
+
 localPort = 33381
 externalPort = 3003
 
 [[ports]]
 localPort = 33635
 externalPort = 6800
+
 
 [[ports]]
 localPort = 35553
@@ -71,6 +73,7 @@ externalPort = 5000
 [[ports]]
 localPort = 36365
 externalPort = 3001
+
 
 [[ports]]
 localPort = 36441
@@ -99,6 +102,7 @@ externalPort = 5173
 [[ports]]
 localPort = 46637
 externalPort = 3000
+
 
 [agent]
 integrations = ["javascript_mem_db==1.0.0"]

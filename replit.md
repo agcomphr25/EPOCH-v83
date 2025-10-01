@@ -13,7 +13,8 @@ UI Performance: Department progression buttons use cache-first approach with dis
 Default shipping charge: Should be 36.95 for new orders.
 Critical requirement: All completed functionality must be hard-coded to prevent loss of features and data.
 Shipping Label System: Successfully converted from problematic modal to dedicated page approach with enhanced customer data loading and UPS API integration (August 21, 2025).
-Authentication: Properly configured with environment-based detection - localhost/replit.dev bypasses auth for development, while .repl.co/.replit.app domains require authentication and use production database. Fixed September 15, 2025: Resolved forced development mode issue that was causing deployed sites to use development database instead of production data.
+Authentication: Environment-based detection system distinguishes development (localhost/replit.dev) from production (.repl.co/.replit.app/custom domains). Production sites require login and redirect unauthenticated users to /login page. Fixed September 15, 2025: Resolved forced development mode issue. Fixed October 1, 2025: Added authentication guards to prevent production bypass - all routes now check authentication status and redirect to login. Current implementation uses localStorage-based session management (Note: For enhanced security, integrate with existing backend JWT/session authentication system).
+Personalized Dashboards: Implemented auto-redirect system where each user is automatically routed to their specific dashboard upon login based on username mapping. All 21 active users have personalized dashboard routes with consistent logout functionality.
 Navigation enhancement: STACITEST Dashboard includes 5 color-coded navigation cards for quick access to core functions.
 
 ## System Architecture

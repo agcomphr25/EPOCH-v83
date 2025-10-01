@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -11,11 +11,19 @@ import PipelineVisualization from '@/components/PipelineVisualization';
 import LayupScheduler from '@/components/LayupScheduler';
 import { getDisplayOrderId } from '@/lib/orderUtils';
 import { useLocation } from 'wouter';
+import { isProductionEnvironment, isAuthenticated } from '@/lib/env';
 
 export default function AGTestDashboard() {
   const [expandedSection, setExpandedSection] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [, setLocation] = useLocation();
+
+  useEffect(() => {
+    if (isProductionEnvironment() && !isAuthenticated()) {
+      console.log('🔒 Not authenticated - redirecting to login');
+      setLocation('/login');
+    }
+  }, [setLocation]);
 
   const toggleExpand = (section: string) => {
     setExpandedSection(expandedSection === section ? null : section);

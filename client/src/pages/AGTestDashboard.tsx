@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { BarChart3, Calendar, List, Maximize2, Minimize2, Search, ArrowRight, Edit, QrCode, Users, ExternalLink, LogOut } from 'lucide-react';
+import { BarChart3, Calendar, List, Maximize2, Minimize2, Search, ArrowRight, Edit, QrCode, Users, ExternalLink } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import PipelineVisualization from '@/components/PipelineVisualization';
@@ -34,25 +34,6 @@ export default function AGTestDashboard() {
 
   const toggleExpand = (section: string) => {
     setExpandedSection(expandedSection === section ? null : section);
-  };
-
-  const handleLogout = async () => {
-    try {
-      // Call backend logout endpoint
-      await fetch('/api/auth/logout', {
-        method: 'POST',
-        credentials: 'include',
-      });
-    } catch (error) {
-      console.error('Logout error:', error);
-    } finally {
-      // Clear all local storage
-      localStorage.removeItem('currentUser');
-      localStorage.removeItem('userData');
-      
-      // Redirect to login page
-      setLocation('/login');
-    }
   };
 
   // Get all customer orders (excluding purchase orders)
@@ -91,30 +72,6 @@ export default function AGTestDashboard() {
 
   return (
     <div className="p-6 space-y-6 max-w-full mx-auto">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">AGTEST Dashboard</h1>
-          <p className="text-gray-600 dark:text-gray-400 mt-1">
-            Production Pipeline Overview, Order Management & Layup Scheduling
-          </p>
-        </div>
-        <div className="flex items-center gap-4">
-          <div className="text-sm text-gray-500 dark:text-gray-400">
-            Real-time Manufacturing Control Center
-          </div>
-          <Button
-            onClick={handleLogout}
-            variant="outline"
-            size="sm"
-            className="flex items-center gap-2 hover:bg-red-50 hover:border-red-200 hover:text-red-600"
-          >
-            <LogOut className="w-4 h-4" />
-            Logout
-          </Button>
-        </div>
-      </div>
-
       {/* Navigation Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card 

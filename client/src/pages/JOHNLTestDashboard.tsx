@@ -7,19 +7,6 @@ import PipelineVisualization from '@/components/PipelineVisualization';
 export default function JOHNLTestDashboard() {
   return (
     <div className="p-6 space-y-6 max-w-full mx-auto">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">johnl dashboard</h1>
-          <p className="text-gray-600 dark:text-gray-400 mt-1">
-            CNC Operations & Production Management
-          </p>
-        </div>
-        <div className="text-sm text-gray-500 dark:text-gray-400">
-          EPOCH v8 Manufacturing ERP
-        </div>
-      </div>
-
       {/* Quick Navigation Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
         <Link href="/department-queue/cnc">

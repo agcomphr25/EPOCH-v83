@@ -27,6 +27,8 @@ import layupScheduleRoutes from './layupSchedule';
 import customerSatisfactionRoutes from './customerSatisfaction';
 import poProductsRoutes from './poProducts';
 import refundRoutes from './refunds';
+import oemSettingsRoutes from './oemSettings';
+import moldSyncRoutes from './moldSync';
 import { getAccessToken } from '../utils/upsShipping';
 
 export function registerRoutes(app: Express): Server {
@@ -62,6 +64,9 @@ export function registerRoutes(app: Express): Server {
 
   // Mold management routes
   app.use('/api/molds', moldsRoutes);
+  
+  // Mold synchronization routes
+  app.use('/api', moldSyncRoutes);
 
   // Layup PDF generation routes
   app.use('/api/pdf', layupPdfRoute);
@@ -108,6 +113,9 @@ export function registerRoutes(app: Express): Server {
 
   // Refund management routes
   app.use('/api/refund-requests', refundRoutes);
+
+  // OEM Priority Settings routes
+  app.use('/api/oem-settings', oemSettingsRoutes);
   
   // UPS Test endpoint
   app.post('/api/test-ups-auth', async (req, res) => {
@@ -249,9 +257,42 @@ export function registerRoutes(app: Express): Server {
         return true;
       });
       
-      // Skip the orders table query since it doesn't have the expected columns
-      // and appears to be empty anyway. Focus on all_orders table which has the data.
-      const formattedActiveOrders: any[] = [];
+
+      // Also get active orders from the orders table (for P1 PO production orders)
+      const { pool } = await import('../../db');
+      
+      // Use direct SQL query to avoid schema conflicts
+      const activeOrdersResult = await pool.query(`
+        SELECT 
+          id,
+          order_id as "orderId",
+          customer_id as "customer",
+          model_id as "product",
+          date,
+          due_date as "dueDate",
+          current_department as "currentDepartment",
+          status
+        FROM orders 
+        WHERE current_department = 'P1 Production Queue'
+      `);
+      
+      const activeOrders = activeOrdersResult || [];
+      
+      // Convert active orders to the expected format and combine
+      const formattedActiveOrders = activeOrders.map((order: any) => ({
+        id: order.id,
+        orderId: order.orderId,
+        orderDate: order.date, // Use date field directly
+        dueDate: order.dueDate,
+        currentDepartment: (order as any).currentDepartment,
+        customerId: order.customer,
+        features: {},
+        modelId: order.product,
+        status: (order as any).status,
+        poId: null,
+        productionOrderId: null
+      }));
+
       
       // Combine both sources  
       const combinedUnscheduledOrders = [...unscheduledOrders, ...formattedActiveOrders];
@@ -307,11 +348,106 @@ export function registerRoutes(app: Express): Server {
 
       console.log(`🏭 Found ${p1POOrders.length} P1 PO orders from week selection`);
 
-      // Combine both order types into unified production queue with enhanced stock model inference
-      console.log(`📦 Processing ${combinedUnscheduledOrders.length} total main orders + ${p1POOrders.length} P1 PO orders for P1 layup queue`);
+      // Fetch production orders from production_orders table (OEM orders)
+      console.log('🔍 Fetching production orders from production_orders table...');
+      const productionOrdersResult = await pool.query(`
+        SELECT 
+          order_id as "orderId",
+          customer_id as "customerId",
+          CASE 
+            WHEN item_id = '10' THEN 'cf_alpine_hunter'
+            WHEN item_id = '11' THEN 'cf_privateer' 
+            WHEN item_id = '12' THEN 'fg_privateer'
+            ELSE 'mesa_universal'
+          END as "stockModelId",
+          due_date as "dueDate",
+          current_department as "currentDepartment",
+          production_status as "status",
+          '{}' as features,
+          created_at as "createdAt",
+          'production_order' as source
+        FROM production_orders 
+        WHERE production_status = 'PENDING'
+        ORDER BY due_date ASC
+      `);
+
+      // Format the production orders
+      const productionOrdersRows = Array.isArray(productionOrdersResult) ? productionOrdersResult : [];
+      console.log(`🔍 Found ${productionOrdersRows.length} production orders in production_orders table`);
+      
+      const productionOrders = productionOrdersRows.map((po: any) => {
+        // FIXED: Infer features from stock model for OEM orders to display action length
+        const inferFeaturesFromStockModel = (stockModelId: string) => {
+          const features: any = {};
+          
+          // Map stock models to their typical action length
+          const stockModelActionMap: {[key: string]: string} = {
+            'cf_alpine_hunter': 'short',
+            'fg_alpine_hunter': 'short', 
+            'cf_privateer': 'short',
+            'fg_privateer': 'short',
+            'cf_sportsman': 'short',
+            'fg_sportsman': 'short',
+            'cf_armor': 'short',
+            'fg_armor': 'short',
+            'cf_chalk_branch': 'short',
+            'fg_chalk_branch': 'short',
+            'cf_adj_chalk_branch': 'short',
+            'cf_adj_alp_hunter': 'short',
+            'fg_adj_alp_hunter': 'short',
+            'cf_adj_armor': 'short',
+            'fg_adj_armor': 'short',
+            'cf_visigoth': 'long',
+            'fg_visigoth': 'long',
+            'cf_k2': 'long',
+            'fg_k2': 'long',
+            'cf_adj_k2': 'long',
+            'fg_adj_k2': 'long',
+            'cf_ferrata': 'short',
+            'fg_ferrata': 'short',
+            'cf_cat': 'short',
+            'fg_cat': 'short',
+            'cf_cat_lh': 'short',
+            'fg_cat_lh': 'short',
+            'apr_hunter': 'short',
+            'm1a_carbon': 'medium',
+            'mesa_universal': 'short'
+          };
+          
+          const actionLength = stockModelActionMap[stockModelId] || 'short';
+          features.action_length = actionLength;
+          
+          console.log(`🎯 OEM Order ${po.orderId}: Inferred action_length="${actionLength}" from stockModelId="${stockModelId}"`);
+          
+          return features;
+        };
+        
+        return {
+          id: po.orderId,
+          orderId: po.orderId,
+          orderDate: po.createdAt,
+          dueDate: po.dueDate,
+          currentDepartment: po.currentDepartment,
+          customerId: po.customerId,
+          features: inferFeaturesFromStockModel(po.stockModelId),
+          modelId: po.stockModelId,
+          stockModelId: po.stockModelId,
+          status: po.status,
+          source: po.source,
+          priorityScore: 2000, // High priority for OEM orders
+          product: po.stockModelId.replace('_', ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())
+        };
+      });
+
+      console.log(`🏭 Found ${productionOrders.length} production orders from production_orders table`);
+
+      // Combine all order types into unified production queue with enhanced stock model inference
+      console.log(`📦 Processing ${combinedUnscheduledOrders.length} total main orders + ${p1POOrders.length} P1 PO orders + ${productionOrders.length} production orders for P1 layup queue`);
       
       const combinedQueue = [
-        // Add the P1 PO orders first (highest priority)
+        // Add the production orders first (highest priority for OEM)
+        ...productionOrders,
+        // Add the P1 PO orders second (high priority)
         ...p1POOrders,
         ...combinedUnscheduledOrders.map(order => {
           // Determine correct source type based on order characteristics
@@ -349,6 +485,7 @@ export function registerRoutes(app: Express): Server {
       // Sort by priority score (lower = higher priority)
       combinedQueue.sort((a, b) => a.priorityScore - b.priorityScore);
       
+
       // Log OEM priority verification
       if (oemMode && selectedPOOrders.length > 0) {
         const topOrders = combinedQueue.slice(0, Math.min(5, combinedQueue.length));
@@ -358,6 +495,12 @@ export function registerRoutes(app: Express): Server {
         const boostedOrdersInTop = topOrders.filter(o => selectedPOOrders.includes(o.orderId));
         console.log(`🚀 OEM MODE SUCCESS: ${boostedOrdersInTop.length}/${selectedPOOrders.length} selected P1 POs appear in top 5`);
       }
+
+      // Add cache-control headers to prevent browser caching
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+
       
       res.json(combinedQueue);
     } catch (error) {
@@ -1480,7 +1623,7 @@ export function registerRoutes(app: Express): Server {
           quantity: (order as any).quantity || 1,
           priority: (order as any).priorityScore || 50,
           deadline: order.dueDate || order.orderDate,
-          stock_model_id: (order as any).stockModelId
+          stock_model_id: (order as any).stockModelId || (order as any).modelId
         })),
         molds: molds.map((mold: any) => ({
           mold_id: mold.moldId,
@@ -1685,6 +1828,336 @@ export function registerRoutes(app: Express): Server {
   });
 
   // Note: Order ID generation routes now handled by modular orders routes
+
+  // P1 Purchase Orders with enhanced customer and stock information
+  app.get('/api/p1-purchase-orders', async (req, res) => {
+    try {
+      console.log('🔧 P1 Purchase Orders endpoint called');
+      const { storage } = await import('../../storage');
+      const purchaseOrders = await storage.getAllPurchaseOrders();
+      
+      // Enhance each purchase order with customer details and stock counts
+      const enhancedPOs = await Promise.all(
+        purchaseOrders.map(async (po) => {
+          // Get purchase order items to count stocks
+          const items = await storage.getPurchaseOrderItems(po.id);
+          // Count all items that are stock items (custom_model items are the actual stocks for PO#P18261)
+          const stockItems = items.filter(item => 
+            item.itemType === 'stock_model' || 
+            item.itemType === 'custom_model' ||
+            (item.itemName && (item.itemName.includes('AG-') || item.itemName.includes('stock')))
+          );
+          const stockCount = stockItems.length; // Count number of stock items, not quantities
+          
+          return {
+            id: po.id,
+            poNumber: po.poNumber,
+            customerName: po.customerName, // Use customerName instead of vendorName
+            customerId: po.customerId,
+            dueDate: po.expectedDelivery, // Use expectedDelivery as due date
+            status: po.status,
+            stockCount: stockCount, // Number of stocks associated
+            itemCount: items.length, // Total number of items
+            poDate: po.poDate,
+            notes: po.notes
+          };
+        })
+      );
+      
+      console.log('🔧 Found P1 purchase orders:', enhancedPOs.length);
+      res.json(enhancedPOs);
+    } catch (error) {
+      console.error('🔧 P1 purchase orders fetch error:', error);
+      res.status(500).json({ error: "Failed to fetch P1 purchase orders" });
+    }
+  });
+
+  // Get list of PO vendors (customers)
+  app.get('/api/po-vendors', async (req, res) => {
+    try {
+      const { storage } = await import('../../storage');
+      const purchaseOrders = await storage.getAllPurchaseOrders();
+      
+      // Group by customer to get unique vendors with counts
+      const vendorMap = new Map();
+      
+      await Promise.all(
+        purchaseOrders.map(async (po) => {
+          const customerId = po.customerId;
+          const customerName = po.customerName;
+          
+          if (!vendorMap.has(customerId)) {
+            vendorMap.set(customerId, {
+              id: customerId,
+              name: customerName,
+              poCount: 0,
+              totalStockItems: 0
+            });
+          }
+          
+          const vendor = vendorMap.get(customerId);
+          vendor.poCount++;
+          
+          // Count stock items for this PO
+          const items = await storage.getPurchaseOrderItems(po.id);
+          const stockItems = items.filter(item => 
+            item.itemType === 'stock_model' || 
+            item.itemType === 'custom_model' ||
+            (item.itemName && (item.itemName.includes('AG-') || item.itemName.includes('stock')))
+          );
+          vendor.totalStockItems += stockItems.length;
+        })
+      );
+      
+      const vendors = Array.from(vendorMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+      res.json(vendors);
+    } catch (error) {
+      console.error('🔧 PO vendors fetch error:', error);
+      res.status(500).json({ error: "Failed to fetch PO vendors" });
+    }
+  });
+
+  // Get POs filtered by vendor
+  app.get('/api/po-by-vendor/:vendorId', async (req, res) => {
+    try {
+      const { vendorId } = req.params;
+      const { storage } = await import('../../storage');
+      const purchaseOrders = await storage.getAllPurchaseOrders();
+      
+      // Filter POs by vendor (customer)
+      const vendorPOs = purchaseOrders.filter(po => po.customerId === vendorId);
+      
+      // Enhance with stock counts
+      const enhancedPOs = await Promise.all(
+        vendorPOs.map(async (po) => {
+          const items = await storage.getPurchaseOrderItems(po.id);
+          const stockItems = items.filter(item => 
+            item.itemType === 'stock_model' || 
+            item.itemType === 'custom_model' ||
+            (item.itemName && (item.itemName.includes('AG-') || item.itemName.includes('stock')))
+          );
+          
+          return {
+            id: po.id,
+            poNumber: po.poNumber,
+            customerName: po.customerName,
+            customerId: po.customerId,
+            dueDate: po.expectedDelivery,
+            status: po.status,
+            stockCount: stockItems.length,
+            itemCount: items.length,
+            poDate: po.poDate,
+            notes: po.notes
+          };
+        })
+      );
+      
+      res.json(enhancedPOs);
+    } catch (error) {
+      console.error('🔧 PO by vendor fetch error:', error);
+      res.status(500).json({ error: "Failed to fetch POs by vendor" });
+    }
+  });
+
+  // Get stock items for a specific PO
+  app.get('/api/po-stock-items-list/:poId', async (req, res) => {
+    try {
+      const { poId } = req.params;
+      const { storage } = await import('../../storage');
+      
+      const items = await storage.getPurchaseOrderItems(parseInt(poId));
+      const stockItems = items.filter(item => 
+        item.itemType === 'stock_model' || 
+        item.itemType === 'custom_model' ||
+        (item.itemName && (item.itemName.includes('AG-') || item.itemName.includes('stock')))
+      );
+      
+      const enhancedStockItems = stockItems.map(item => {
+        // Parse specifications if available
+        let specs = {};
+        try {
+          specs = item.specifications ? JSON.parse(item.specifications as string) : {};
+        } catch (e) {
+          specs = {};
+        }
+        
+        return {
+          id: item.id,
+          itemId: item.itemId,
+          itemName: item.itemName,
+          itemType: item.itemType,
+          quantity: item.quantity,
+          specifications: specs,
+          unitPrice: item.unitPrice,
+          totalPrice: item.totalPrice,
+          orderCount: item.orderCount
+        };
+      });
+      
+      res.json(enhancedStockItems);
+    } catch (error) {
+      console.error('🔧 PO stock items fetch error:', error);
+      res.status(500).json({ error: "Failed to fetch PO stock items" });
+    }
+  });
+
+  // PO Stock Items to Production Connection endpoint
+  app.get('/api/po-stock-items/:poNumber', async (req, res) => {
+    try {
+      const { poNumber } = req.params;
+      console.log('🔧 Fetching stock items for PO:', poNumber);
+      
+      const { pool } = await import('../../db');
+      
+      // Get PO stock items with detailed specifications
+      const stockItemsResult = await pool.query(`
+        SELECT 
+          poi.id,
+          poi.item_name,
+          poi.item_type,
+          poi.quantity,
+          poi.stock_model_id,
+          poi.specifications,
+          poi.order_count,
+          po.po_number,
+          po.customer_id,
+          po.customer_name
+        FROM purchase_order_items poi 
+        JOIN purchase_orders po ON poi.po_id = po.id 
+        WHERE po.po_number = $1
+      `, [poNumber]);
+      
+      const stockItems = stockItemsResult.rows || [];
+      
+      // For each stock item, check if there are associated production orders
+      const enhancedItems = await Promise.all(
+        stockItems.map(async (item: any) => {
+          // Check for existing production orders that might be linked to this PO item
+          const productionOrdersResult = await pool.query(`
+            SELECT 
+              order_id,
+              current_department,
+              status,
+              due_date
+            FROM orders 
+            WHERE po_id IS NOT NULL OR customer_id = $1
+          `, [item.customer_id]);
+          
+          const productionOrders = productionOrdersResult.rows || [];
+          
+          // Parse specifications if available
+          let specs = {};
+          try {
+            specs = item.specifications ? JSON.parse(item.specifications) : {};
+          } catch (e) {
+            console.warn('⚠️ Failed to parse specifications for item:', item.id);
+          }
+          
+          return {
+            ...item,
+            specifications: specs,
+            productionOrders: productionOrders,
+            canCreateProductionOrder: productionOrders.length === 0,
+            productionStatus: productionOrders.length > 0 ? 'In Production' : 'Ready for Production'
+          };
+        })
+      );
+      
+      console.log(`🔧 Found ${enhancedItems.length} stock items for PO ${poNumber}`);
+      res.json(enhancedItems);
+    } catch (error) {
+      console.error('❌ PO stock items fetch error:', error);
+      res.status(500).json({ error: 'Failed to fetch PO stock items' });
+    }
+  });
+
+  // Create production orders from PO stock items
+  app.post('/api/po-stock-items/:poNumber/create-production-orders', async (req, res) => {
+    try {
+      const { poNumber } = req.params;
+      const { selectedItems } = req.body;
+      
+      console.log(`🔧 Creating production orders for PO ${poNumber}, items:`, selectedItems);
+      
+      const { storage } = await import('../../storage');
+      const { pool } = await import('../../db');
+      
+      // Get PO details and selected items
+      const poResult = await pool.query(`
+        SELECT * FROM purchase_orders WHERE po_number = $1
+      `, [poNumber]);
+      
+      if (poResult.rows.length === 0) {
+        return res.status(404).json({ error: 'Purchase order not found' });
+      }
+      
+      const po = poResult.rows[0];
+      const createdOrders = [];
+      
+      // Create production orders for each selected item
+      for (const itemId of selectedItems) {
+        const itemResult = await pool.query(`
+          SELECT * FROM purchase_order_items WHERE id = $1
+        `, [itemId]);
+        
+        if (itemResult.rows.length === 0) {
+          console.warn(`⚠️ PO item ${itemId} not found, skipping`);
+          continue;
+        }
+        
+        const item = itemResult.rows[0];
+        let specs = {};
+        
+        try {
+          specs = item.specifications ? JSON.parse(item.specifications) : {};
+        } catch (e) {
+          console.warn('⚠️ Failed to parse specifications for item:', item.id);
+        }
+        
+        // Generate order ID for new production order
+        const orderIdResult = await storage.generateOrderId();
+        const newOrderId = orderIdResult.orderId;
+        
+        // Create production order with PO connection
+        const productionOrderData = {
+          orderId: newOrderId,
+          customer: po.customer_name || po.customer_id,
+          product: item.item_name,
+          quantity: item.quantity,
+          status: 'ACTIVE',
+          date: new Date(),
+          currentDepartment: 'P1 Production Queue',
+          priorityScore: 40, // Higher priority for PO items
+          poId: po.id,
+          itemId: item.id.toString(),
+          stockModelId: specs.stockModel || null,
+          customerId: po.customer_id,
+          notes: `Created from PO ${poNumber} - ${item.item_name}`,
+          dueDate: po.expected_delivery || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days if no due date
+        };
+        
+        const createdOrder = await storage.createOrder(productionOrderData);
+        createdOrders.push({
+          orderId: newOrderId,
+          poItemId: item.id,
+          itemName: item.item_name,
+          specs: specs
+        });
+        
+        console.log(`✅ Created production order ${newOrderId} for PO item ${item.item_name}`);
+      }
+      
+      res.json({
+        success: true,
+        createdOrders: createdOrders,
+        message: `Successfully created ${createdOrders.length} production orders from PO ${poNumber}`
+      });
+      
+    } catch (error) {
+      console.error('❌ Create production orders error:', error);
+      res.status(500).json({ error: 'Failed to create production orders from PO items' });
+    }
+  });
 
   // Purchase Orders routes (POs)
   app.get('/api/pos', async (req, res) => {

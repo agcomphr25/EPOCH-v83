@@ -37,16 +37,18 @@ import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ChevronLeft, ChevronRight, Calendar, Grid3X3, Calendar1, Settings, Users, Plus, Zap, Printer, ArrowRight, Save } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar, Grid3X3, Calendar1, Settings, Users, Plus, Zap, Printer, ArrowRight, Save, CheckCircle, Trash2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Separator } from "@/components/ui/separator";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getDisplayOrderId, validateNoFridayAssignments } from '@/lib/orderUtils';
 import { useToast } from '@/hooks/use-toast';
 
 
+
 // Draggable Order Item Component with responsive sizing - memoized for performance
-const DraggableOrderItem = React.memo(({ order, priority, totalOrdersInCell, moldInfo, getModelDisplayName, features, processedOrders, isLocked }: { order: any, priority: number, totalOrdersInCell?: number, moldInfo?: { moldId: string, instanceNumber?: number }, getModelDisplayName?: (modelId: string) => string, features?: any[], processedOrders?: any[], isLocked?: boolean }) => {
+const DraggableOrderItem = React.memo(({ order, priority, totalOrdersInCell, moldInfo, getModelDisplayName, features, processedOrders, isLocked, onRemoveOrder }: { order: any, priority: number, totalOrdersInCell?: number, moldInfo?: { moldId: string, instanceNumber?: number }, getModelDisplayName?: (modelId: string) => string, features?: any[], processedOrders?: any[], isLocked?: boolean, onRemoveOrder?: (orderId: string) => void }) => {
   const {
     attributes,
     listeners,
@@ -136,7 +138,7 @@ const DraggableOrderItem = React.memo(({ order, priority, totalOrdersInCell, mol
       orderModelId: order.modelId,
       materialType: materialType,
       expectedColor:
-        order.source === 'production_order' ? 'PURPLE (Purchase Order)' :
+        order.source === 'production_order' ? 'GREEN (OEM Priority)' :
         materialType === 'CF' ? 'DEEP ORANGE (CF)' :
         materialType === 'FG' ? 'LIGHT ORANGE (FG)' : 'GRAY (Unknown)'
     });
@@ -145,12 +147,11 @@ const DraggableOrderItem = React.memo(({ order, priority, totalOrdersInCell, mol
   // Determine card styling based on source and material
   const getCardStyling = () => {
     // Check if this is a purchase order (has poId or productionOrderId)
-    // BUT exclude Mesa Universal orders - they should always be colored by material type
-    if ((order.poId || order.productionOrderId || order.source === 'production_order') && 
-        modelId !== 'mesa_universal') {
+    // ALL OEM Production orders get GREEN badges for priority indication - regardless of model ID
+    if (order.poId || order.productionOrderId || order.source === 'production_order') {
       return {
-        bg: 'bg-purple-100 dark:bg-purple-800/50 hover:bg-purple-200 dark:hover:bg-purple-800/70 border-2 border-purple-300 dark:border-purple-600',
-        text: 'text-purple-800 dark:text-purple-200'
+        bg: 'bg-green-100 dark:bg-green-800/50 hover:bg-green-200 dark:hover:bg-green-800/70 border-2 border-green-300 dark:border-green-600',
+        text: 'text-green-800 dark:text-green-200'
       };
     } else if (materialType === 'CF') {
       // CF cards: Orange-200 (light orange)
@@ -181,14 +182,14 @@ const DraggableOrderItem = React.memo(({ order, priority, totalOrdersInCell, mol
       style={style}
       {...attributes}
       {...(isLocked ? {} : listeners)}
-      className={`${sizing.padding} ${sizing.margin} ${sizing.height} ${cardStyling.bg} rounded-lg shadow-md transition-all duration-200 touch-manipulation select-none ${
+      className={`group relative ${sizing.padding} ${sizing.margin} ${sizing.height} ${cardStyling.bg} rounded-lg shadow-md transition-all duration-200 touch-manipulation select-none ${
         isLocked ? 'cursor-default opacity-75 border-dashed' : 'cursor-grab active:cursor-grabbing'
       }`}
     >
       <div className={`${cardStyling.text} ${sizing.textSize} text-center flex flex-col items-center justify-center h-full`}>
         <div className="flex items-center font-bold">
           {getDisplayOrderId(order) || 'No ID'}
-          {order.source === 'production_order' && <span className="text-xs ml-1 bg-orange-200 dark:bg-orange-700 px-1 rounded">PO</span>}
+          {order.source === 'production_order' && <span className="text-xs ml-1 bg-green-200 dark:bg-green-700 px-1 rounded font-semibold">OEM</span>}
         </div>
         {/* Show stock model display name with material type */}
         {(() => {
@@ -450,12 +451,6 @@ const DraggableOrderItem = React.memo(({ order, priority, totalOrdersInCell, mol
         {/* Show Heavy Fill if selected */}
         {(() => {
           const getHeavyFillDisplay = (orderFeatures: any) => {
-            console.log('Heavy Fill detection for order:', {
-              orderId: order.orderId,
-              orderFeatures,
-              otherOptions: orderFeatures?.other_options
-            });
-
             if (!orderFeatures) return null;
 
             // Check if heavy_fill is in the other_options array
@@ -500,6 +495,21 @@ const DraggableOrderItem = React.memo(({ order, priority, totalOrdersInCell, mol
           </div>
         )}
       </div>
+
+      {/* Trash button for scheduled orders - only show if scheduled and not locked */}
+      {moldInfo && !isLocked && onRemoveOrder && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onRemoveOrder(order.orderId);
+          }}
+          className="absolute top-1 right-1 w-5 h-5 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+          title="Remove from schedule"
+          data-testid={`button-remove-${order.orderId}`}
+        >
+          <Trash2 className="w-3 h-3" />
+        </button>
+      )}
     </div>
   );
 });
@@ -515,7 +525,8 @@ function DroppableCell({
   features,
   processedOrders,
   selectedWorkDays = [1, 2, 3, 4], // Default Mon-Thu
-  isWeekLocked
+  isWeekLocked,
+  onRemoveOrder
 }: {
   moldId: string;
   date: Date;
@@ -527,6 +538,7 @@ function DroppableCell({
   processedOrders?: any[];
   selectedWorkDays?: number[];
   isWeekLocked: (date: Date) => boolean;
+  onRemoveOrder?: (orderId: string) => void;
 }) {
   // Responsive cell height based on order count
   const getCellHeight = (orderCount: number) => {
@@ -596,6 +608,7 @@ function DroppableCell({
                 features={features}
                 processedOrders={processedOrders}
                 isLocked={weekIsLocked}
+                onRemoveOrder={onRemoveOrder}
               />
             );
           })}
@@ -634,7 +647,7 @@ export default function LayupScheduler() {
   
   // Apply button state management
   const [pendingWorkDays, setPendingWorkDays] = useState<number[]>([1, 2, 3, 4]);
-  const [pendingEmployeeChanges, setPendingEmployeeChanges] = useState<{[key: string]: {rate: number, dailyCapacity: number, hours: number}}>({});
+  const [pendingEmployeeChanges, setPendingEmployeeChanges] = useState<{[key: string]: {rate: number, dailyCapacity: number, hours: number, moldsPerHour?: number}}>({});
   const [pendingMoldChanges, setPendingMoldChanges] = useState<{[key: string]: {enabled: boolean, multiplier: number}}>({});
   const [isApplyingChanges, setIsApplyingChanges] = useState(false);
 
@@ -698,6 +711,57 @@ export default function LayupScheduler() {
 
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  
+  // Computed values for tabs
+  const weekStart = startOfWeek(currentDate, { weekStartsOn: 1 });
+
+  // OEM settings state
+  const [oemDialogOpen, setOemDialogOpen] = useState(false);
+  const [selectedOEMPurchaseOrders, setSelectedOEMPurchaseOrders] = useState<string[]>([]);
+  const [oemSettingsSaved, setOemSettingsSaved] = useState(false);
+
+  // Employee settings state
+  const [employeeDialogOpen, setEmployeeDialogOpen] = useState(false);
+  
+  // Work days settings state
+  const [workDaysDialogOpen, setWorkDaysDialogOpen] = useState(false);
+  
+  // Mold settings state
+  const [moldDialogOpen, setMoldDialogOpen] = useState(false);
+  
+  // New state for cascading vendor-PO-stock selection
+  const [selectedVendorId, setSelectedVendorId] = useState<string | null>(null);
+  const [selectedPOId, setSelectedPOId] = useState<string | null>(null);
+  const [selectedStockItemId, setSelectedStockItemId] = useState<string | null>(null);
+  
+  // New state for selection mode (entire PO vs specific items)
+  const [selectionMode, setSelectionMode] = useState<'entire_po' | 'specific_items'>('entire_po');
+  const [selectedStockItemIds, setSelectedStockItemIds] = useState<string[]>([]);
+
+  // Query for PO vendors
+  const { data: poVendors = [], isLoading: vendorsLoading } = useQuery<any[]>({
+    queryKey: ['/api/po-vendors'],
+    enabled: oemDialogOpen
+  });
+
+  // Query for POs by selected vendor
+  const { data: vendorPOs = [], isLoading: vendorPOsLoading } = useQuery<any[]>({
+    queryKey: [`/api/po-by-vendor/${selectedVendorId}`],
+    enabled: oemDialogOpen && !!selectedVendorId
+  });
+
+  // Query for stock items by selected PO
+  const { data: poStockItems = [], isLoading: stockItemsLoading } = useQuery<any[]>({
+    queryKey: [`/api/po-stock-items-list/${selectedPOId}`],
+    enabled: oemDialogOpen && !!selectedPOId
+  });
+
+  // Filter stock items to only show those that need layup scheduling (in P1 Production Queue)
+  const eligibleStockItems = useMemo(() => {
+    return poStockItems.filter((item: any) => 
+      item.current_department === 'P1 Production Queue'
+    );
+  }, [poStockItems]);
 
   // Apply functions for settings
   const applyWorkDayChanges = () => {
@@ -998,6 +1062,52 @@ export default function LayupScheduler() {
     }
   };
 
+  // Handle order removal from schedule (unschedule)
+  const handleRemoveOrder = async (orderId: string) => {
+    try {
+      console.log(`🗑️ UNSCHEDULE: Removing order ${orderId} from schedule`);
+
+      // Remove from local state immediately for UI responsiveness
+      setOrderAssignments(prev => {
+        const updated = { ...prev };
+        delete updated[orderId];
+        return updated;
+      });
+
+      // Delete from database
+      await apiRequest(`/api/layup-schedule/by-order/${orderId}`, {
+        method: 'DELETE'
+      });
+
+      console.log(`✅ UNSCHEDULE: Successfully removed ${orderId} from schedule`);
+      
+      // TARGETED cache update instead of broad invalidation to prevent UI data loss
+      queryClient.setQueryData(['/api/layup-schedule'], (prev: any) => {
+        if (!prev || !Array.isArray(prev)) return prev;
+        // Remove only the specific order that was unscheduled
+        return prev.filter((entry: any) => entry.orderId !== orderId);
+      });
+
+      // Also update the P1 queue to show the returned order
+      queryClient.invalidateQueries({ queryKey: ['/api/p1-layup-queue'] });
+
+      console.log(`🎯 TARGETED UPDATE: Removed ${orderId} from schedule cache without affecting other orders`);
+
+      toast({
+        title: "Order Unscheduled",
+        description: `Order ${orderId} removed from schedule and returned to P1 Production Queue`,
+      });
+
+    } catch (error) {
+      console.error('❌ UNSCHEDULE ERROR: Failed to remove order:', error);
+      toast({
+        title: "Unschedule Failed",
+        description: `Failed to remove ${orderId} from schedule. Please try again.`,
+        variant: "destructive"
+      });
+    }
+  };
+
   // Handle manual Friday assignment
   const handleManualFridayAssignment = (orderId: string, source: string) => {
     toast({
@@ -1024,7 +1134,9 @@ export default function LayupScheduler() {
       
       // Debug: Show first few entries with detailed date parsing
       data.slice(0, 5).forEach((assignment, index) => {
-        const date = new Date(assignment.scheduledDate);
+        // Parse date consistently without timezone issues  
+        const dateParts = assignment.scheduledDate.split('T')[0].split('-');
+        const date = new Date(parseInt(dateParts[0]), parseInt(dateParts[1]) - 1, parseInt(dateParts[2]));
         const dayOfWeek = date.getDay();
         const dayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dayOfWeek];
         console.log(`  Entry ${index}: ${assignment.orderId} → ${assignment.scheduledDate} → ${date.toDateString()} (${dayName}, day ${dayOfWeek})`);
@@ -1032,7 +1144,9 @@ export default function LayupScheduler() {
 
       // Filter out assignments for days not in selectedWorkDays
       const filteredData = data.filter(assignment => {
-        const date = new Date(assignment.scheduledDate);
+        // Parse date consistently without timezone issues
+        const dateParts = assignment.scheduledDate.split('T')[0].split('-');
+        const date = new Date(parseInt(dateParts[0]), parseInt(dateParts[1]) - 1, parseInt(dateParts[2]));
         const dayOfWeek = date.getDay();
         const isWorkDay = selectedWorkDays.includes(dayOfWeek);
         const dayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dayOfWeek];
@@ -1066,7 +1180,9 @@ export default function LayupScheduler() {
       let fridayCount = 0;
 
       (existingSchedule as any[]).forEach((entry: any) => {
-        const schedDate = new Date(entry.scheduledDate);
+        // Parse date consistently without timezone issues
+        const dateParts = entry.scheduledDate.split('T')[0].split('-');
+        const schedDate = new Date(parseInt(dateParts[0]), parseInt(dateParts[1]) - 1, parseInt(dateParts[2]));
         const dayOfWeek = schedDate.getDay();
         const dayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dayOfWeek];
 
@@ -1078,10 +1194,34 @@ export default function LayupScheduler() {
         else if (dayOfWeek === 5) fridayCount++;
 
         // ALWAYS load assignments regardless of selectedWorkDays to show existing schedule
-        assignments[entry.orderId] = {
-          moldId: entry.moldId,
-          date: entry.scheduledDate
-        };
+        // BUT prioritize Monday assignments when there are duplicates
+        const existingAssignment = assignments[entry.orderId];
+        if (!existingAssignment) {
+          // No existing assignment, add it
+          assignments[entry.orderId] = {
+            moldId: entry.moldId,
+            date: entry.scheduledDate
+          };
+        } else {
+          // There's already an assignment - prioritize Monday (day 1)
+          const existingDate = new Date(existingAssignment.date);
+          const existingDayOfWeek = existingDate.getDay();
+          
+          if (dayOfWeek === 1 && existingDayOfWeek !== 1) {
+            // New assignment is Monday, existing is not - prioritize Monday
+            console.log(`🔒 DUPLICATE PRIORITY: Keeping Monday assignment for ${entry.orderId} (overwriting ${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][existingDayOfWeek]})`);
+            assignments[entry.orderId] = {
+              moldId: entry.moldId,
+              date: entry.scheduledDate
+            };
+          } else if (dayOfWeek !== 1 && existingDayOfWeek === 1) {
+            // Existing is Monday, new is not - keep Monday
+            console.log(`🔒 DUPLICATE PRIORITY: Keeping existing Monday assignment for ${entry.orderId} (rejecting ${dayName})`);
+          } else {
+            // Both same priority level or neither Monday - keep existing
+            console.log(`🔒 DUPLICATE DETECTED: Keeping first assignment for ${entry.orderId} (${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][existingDayOfWeek]} over ${dayName})`);
+          }
+        }
 
         // Log Monday orders specifically
         if (dayOfWeek === 1) {
@@ -1445,7 +1585,6 @@ export default function LayupScheduler() {
     
     console.log('🔍 LayupScheduler orders debug:', {
       allOrdersCount: allOrders?.length || 0,
-      loading: ordersLoading,
       rawData: allOrders ? 'has data' : 'no data',
       dataType: typeof allOrders,
       isArray: Array.isArray(allOrders),
@@ -1468,7 +1607,8 @@ export default function LayupScheduler() {
 
     // Return ALL orders from the production queue - no filtering by source
     return allOrders || [];
-  }, [allOrders, ordersLoading]);
+  }, [allOrders]); // FIXED: Removed ordersLoading to prevent React Query instability
+
 
   // Extract P1 purchase orders from the unified orders data
   const p1PurchaseOrders = useMemo(() => {
@@ -1476,28 +1616,21 @@ export default function LayupScheduler() {
   }, [orders]);
 
   // Auto-run LOP scheduler when orders are loaded to ensure proper scheduling
+
+  // 🚫 DISABLED: LOP Scheduler auto-run for complete manual control
+
   const processedOrders = useMemo(() => {
     if (orders.length === 0) return [];
 
-    const lopOrders = identifyLOPOrders(orders as any[]);
-    const scheduledOrders = scheduleLOPAdjustments(lopOrders);
+    // 🚫 MANUAL CONTROL: LOP scheduling disabled for manual workflow
+    // const lopOrders = identifyLOPOrders(orders as any[]);
+    // const scheduledOrders = scheduleLOPAdjustments(lopOrders);
 
-    const lopOrdersNeedingAdjustment = lopOrders.filter(o => o.needsLOPAdjustment);
+    console.log('🚫 LOP Scheduler auto-run DISABLED for complete manual control');
 
-    console.log('🔧 LOP Scheduler auto-run:', {
-      totalOrders: orders.length,
-      lopOrdersNeedingAdjustment: lopOrdersNeedingAdjustment.length,
-      today: new Date().toDateString(),
-      isMonday: new Date().getDay() === 1,
-      sampleLOPOrders: lopOrdersNeedingAdjustment.slice(0, 3).map(o => ({
-        orderId: o.orderId,
-        needsLOP: o.needsLOPAdjustment,
-        scheduledDate: o.scheduledLOPAdjustmentDate?.toDateString()
-      }))
-    });
-
-    return scheduledOrders;
-  }, [orders, allOrders]);
+    // Return orders without LOP auto-scheduling
+    return orders;
+  }, [orders]); // FIXED: Removed allOrders duplicate dependency
 
   // Debug filtering results
   useEffect(() => {
@@ -1523,26 +1656,13 @@ export default function LayupScheduler() {
     }, {} as {[key: string]: number});
     console.log('🏭 LayupScheduler: Filtered orders by source:', sourceCounts);
 
-    // CONTROLLED AUTO-SCHEDULE: Only trigger once when data is loaded and no assignments exist
+    // MANUAL SCHEDULING ONLY: Auto-scheduling disabled - use "Generate Schedule" button
     if (orders.length > 0 && molds.length > 0 && employees.length > 0) {
-      console.log('🚀 LayupScheduler: All data loaded, checking if auto-schedule needed');
-
-      // Only auto-schedule if no assignments exist yet
+      console.log('🚀 LayupScheduler: All data loaded, ready for manual scheduling');
       const hasAssignments = Object.keys(orderAssignments).length > 0;
-      if (!hasAssignments && orders.length > 0) {
-        console.log('🎯 One-time auto-scheduling triggered for:', orders.length, 'orders');
-        // Use a ref to ensure this only runs once
-        if (!hasTriggeredAutoSchedule.current) {
-          hasTriggeredAutoSchedule.current = true;
-          setTimeout(() => {
-            handleAutoSchedule();
-          }, 1000);
-        }
-      } else {
-        console.log('📋 Assignments already exist, skipping auto-schedule');
-      }
+      console.log('📋 SCHEDULE STATUS: Ready for manual scheduling (Generate Schedule button) -', hasAssignments ? 'Has existing assignments' : 'No assignments yet');
     } else {
-      console.log('❌ LayupScheduler: Missing data for auto-schedule:', {
+      console.log('❌ LayupScheduler: Missing data for manual schedule generation:', {
         orders: orders.length,
         molds: molds.length,
         employees: employees.length
@@ -1635,7 +1755,33 @@ export default function LayupScheduler() {
 
     // Enhanced intelligent stock model detection (define before usage)
     const getOrderStockModelId = (order: any) => {
-      // If already has stockModelId, use it
+      // CRITICAL FIX: Preserve PO/OEM order model IDs to prevent Mesa fallback regression
+      if (order.source === 'production_order' || order.poId || order.productionOrderId || order.orderId?.startsWith('PO-')) {
+        // FRONTEND MAPPING FIX: Map numeric item IDs to proper stock models for PO orders
+        if (order.orderId?.startsWith('PO-')) {
+          // Extract item ID from orderId pattern: PO-P18261-1-1, PO-P18261-2-1, PO-P18261-3-1
+          const parts = order.orderId.split('-');
+          if (parts.length >= 4) {
+            const itemId = parts[2]; // Get the '1', '2', '3' part
+            // Map to proper stock model IDs
+            if (itemId === '1') return 'cf_alpine_hunter';
+            if (itemId === '2') return 'cf_privateer';
+            if (itemId === '3') return 'fg_privateer';
+          }
+        }
+        
+        // Also check if modelId/stockModelId contains numeric values that need mapping
+        const modelId = order.stockModelId || order.modelId;
+        if (modelId === '10') return 'cf_alpine_hunter';
+        if (modelId === '11') return 'cf_privateer';
+        if (modelId === '12') return 'fg_privateer';
+        
+        // PO orders should keep their original model identifiers (apr_hunter_tikka, etc.)
+        if (order.stockModelId) return order.stockModelId;
+        if (order.modelId) return order.modelId;
+      }
+      
+      // Regular order processing: If already has stockModelId, use it
       if (order.stockModelId) return order.stockModelId;
       if (order.modelId) return order.modelId;
 
@@ -1976,18 +2122,18 @@ export default function LayupScheduler() {
     }
   }, [ordersLoading, isLoadingSchedule]);
 
-  // Function to generate algorithmic schedule automatically
-  const generateAlgorithmicSchedule = useCallback(async () => {
+  // Function to add regular orders manually (replaces auto-scheduling)
+  const addRegularOrders = useCallback(async () => {
     if (!orders.length || !molds.length || !employees.length) {
-      console.log('❌ Cannot generate algorithmic schedule: missing data');
+      console.log('❌ Cannot add regular orders: missing data');
       return;
     }
 
-    console.log('🤖 Generating algorithmic schedule...');
+    console.log('📋 Adding regular orders manually...');
 
     try {
-      console.log('🏭 PRODUCTION FLOW: Processing production queue with algorithmic scheduler...');
-      const response = await apiRequest('/api/algorithmic-schedule', {
+      console.log('🏭 PRODUCTION FLOW: Adding regular orders to schedule after OEM priorities...');
+      const response = await apiRequest('/api/scheduler/add-regular-orders', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1995,34 +2141,50 @@ export default function LayupScheduler() {
         body: JSON.stringify({
           maxOrdersPerDay: Math.floor(employees.reduce((total, emp) => total + (emp.rate || 1.5) * (emp.hours || 8), 0)) || 21, // Use actual employee capacity settings
           scheduleDays: 10,    // Limit schedule to next 2 weeks (10 work days)
-          priorityWeighting: 'urgent', // Prioritize by due date and priority score
-          workDays: selectedWorkDays, // Pass current work day settings
+          workDays: selectedWorkDays, // Pass current work day settings  
           employees: employees, // Pass employee settings
-          molds: molds.filter(m => m.enabled) // Pass enabled molds only
+          molds: molds.filter(m => m.enabled), // Pass enabled molds only
+          excludeOEMOrders: true // Only add regular orders, skip OEM/priority orders
         }),
       });
 
-      console.log('🏭 PRODUCTION FLOW: Algorithmic schedule response:', response);
+      console.log('🏭 PRODUCTION FLOW: Add regular orders response:', response);
 
       if (response.success && response.allocations) {
-        console.log(`✅ PRODUCTION FLOW: Generated ${response.allocations.length} order allocations`);
+        console.log(`✅ PRODUCTION FLOW: Added ${response.allocations.length} regular order allocations`);
         console.log('✅ PRODUCTION FLOW: Sample allocations:', response.allocations.slice(0, 3));
 
-        // Convert to schedule assignments format for the calendar
-        const scheduleAssignments: {[orderId: string]: { moldId: string, date: string }} = {};
+        // Merge new regular order assignments with existing schedule (preserving OEM priorities)
+        const newRegularAssignments: {[orderId: string]: { moldId: string, date: string }} = {};
 
         response.allocations.forEach((allocation: any) => {
-          scheduleAssignments[allocation.orderId] = {
+          newRegularAssignments[allocation.orderId] = {
             moldId: allocation.moldId,
             date: allocation.scheduledDate
           };
         });
 
-        console.log(`📅 PRODUCTION FLOW: Assigning ${Object.keys(scheduleAssignments).length} orders to schedule`);
+        console.log(`📅 PRODUCTION FLOW: Adding ${Object.keys(newRegularAssignments).length} regular orders to existing schedule`);
 
-        // Apply Friday validation to algorithmic schedule based on work days setting
-        const validatedAssignments = selectedWorkDays.includes(5) ? scheduleAssignments : validateNoFridayAssignments(scheduleAssignments);
-        setOrderAssignments(validatedAssignments);
+        // Apply Friday validation to new regular orders based on work days setting
+        const validatedNewAssignments = selectedWorkDays.includes(5) ? newRegularAssignments : validateNoFridayAssignments(newRegularAssignments);
+        
+        // Merge with existing assignments (preserve existing database assignments - NO overwrites)
+        setOrderAssignments(prev => {
+          const merged = { ...prev };
+          
+          // Only add new assignments for orders that DON'T already have assignments
+          Object.entries(validatedNewAssignments).forEach(([orderId, assignment]) => {
+            if (!merged[orderId]) {
+              merged[orderId] = assignment;
+              console.log(`📅 PRESERVED: Adding new assignment ${orderId} → ${assignment.moldId} on ${assignment.date}`);
+            } else {
+              console.log(`🔒 PRESERVED: Keeping existing assignment ${orderId} → ${merged[orderId].moldId} on ${merged[orderId].date} (not overwriting)`);
+            }
+          });
+          
+          return merged;
+        });
 
         // Log mold assignments for verification
         const moldAssignments = response.allocations.reduce((acc: any, alloc: any) => {
@@ -2031,22 +2193,36 @@ export default function LayupScheduler() {
         }, {});
         console.log('🔧 PRODUCTION FLOW: Mold assignments:', moldAssignments);
 
-        console.log('📅 PRODUCTION FLOW: Schedule ready for review and adjustment');
+        console.log('📅 PRODUCTION FLOW: Regular orders added to schedule, ready for review');
+        
+        toast({
+          title: "Regular Orders Added!",
+          description: `Added ${response.allocations.length} regular orders to the schedule. OEM priority orders preserved.`,
+        });
       } else {
-        console.error('❌ PRODUCTION FLOW: Failed to generate schedule:', response);
+        console.error('❌ PRODUCTION FLOW: Failed to add regular orders:', response);
+        toast({
+          title: "Failed to Add Orders",
+          description: "Could not add regular orders to schedule. Please try again.",
+          variant: "destructive"
+        });
       }
     } catch (error) {
-      console.error('❌ PRODUCTION FLOW: Error generating schedule:', error);
+      console.error('❌ PRODUCTION FLOW: Error adding regular orders:', error);
       toast({
-        title: "Schedule Generation Failed",
-        description: "Failed to generate algorithmic schedule. Please try again.",
+        title: "Add Regular Orders Failed",
+        description: "Failed to add regular orders to schedule. Please try again.",
         variant: "destructive"
       });
     }
   }, [orders, molds, employees]);
 
-  // Load generated schedule into order assignments
+  // DISABLED: Auto-loading of generated schedule - Manual control only  
   useEffect(() => {
+    // DISABLED: Auto-schedule loading prevents manual control
+    console.log('🚫 AUTO-SCHEDULE DISABLED: Generated schedule will NOT be auto-loaded. Use manual buttons for complete control.');
+    return; // Exit early - no auto-loading
+    
     if (generatedSchedule && generatedSchedule.length > 0) {
       console.log('📋 Loading generated schedule with', generatedSchedule.length, 'entries');
       console.log('📋 Sample generated schedule entry:', generatedSchedule[0]);
@@ -2094,8 +2270,12 @@ export default function LayupScheduler() {
     }
   }, [viewType, currentDate]);
 
-  // Auto-trigger algorithmic scheduling when production queue has orders
+  // DISABLED: Auto-trigger algorithmic scheduling - Manual control only
   useEffect(() => {
+    // DISABLED: Auto-scheduling prevents manual control 
+    console.log('🚫 AUTO-TRIGGER DISABLED: Algorithmic scheduling will NOT auto-trigger. Use manual buttons for complete control.');
+    return; // Exit early - no auto-triggering
+    
     console.log('🎯 Production Flow Auto-schedule check:', {
       orders: orders.length,
       molds: molds.length,
@@ -2130,7 +2310,8 @@ export default function LayupScheduler() {
       });
 
       // Clear stale assignments if we have way too many (indicates old/stale data)
-      if (scheduledOrderCount > orders.length * 0.8 && orders.length > 100) {
+      // Made threshold much more conservative to prevent clearing valid schedules
+      if (scheduledOrderCount > orders.length * 2.0 && orders.length > 100) {
         console.log('🧹 DETECTED STALE ASSIGNMENTS: Clearing old schedule data');
         console.log(`   Had ${scheduledOrderCount} assignments for ${orders.length} orders - clearing stale data`);
         setOrderAssignments({});
@@ -2146,7 +2327,7 @@ export default function LayupScheduler() {
         employees: employees.length
       });
     }
-  }, [orders.length, molds.length, employees.length, isLoadingSchedule, ordersLoading, orderAssignments, generatedSchedule, generateAlgorithmicSchedule]);
+  }, [orders.length, molds.length, employees.length, isLoadingSchedule, ordersLoading, orderAssignments, generatedSchedule]);
 
   // Fetch stock models to get display names
   const { data: stockModels = [] } = useQuery({
@@ -2902,7 +3083,7 @@ export default function LayupScheduler() {
                               const modelName = getModelDisplayName(modelId || '');
                               const actionLength = getActionLengthDisplay(order);
                               const lopDisplay = getLOPDisplay(order);
-                              const hasHeavyFill = getHeavyFillDisplay(order);
+                              const hasHeavyFill = getHeavyFillDisplay(order.features);
                               const customer = order.customerName || order.customer || order.customerId || 'Unknown Customer';
 
                               return `
@@ -3070,9 +3251,9 @@ export default function LayupScheduler() {
     }
   }
 
-  // Force auto-schedule trigger when production/P1 orders are loaded
+  // Manual scheduling only - auto-schedule disabled
   if (productionOrders.length > 0 && molds?.length > 0 && employees?.length > 0) {
-    console.log('🏭 Triggering auto-schedule for production/P1 orders...');
+    console.log('🏭 Production/P1 orders loaded and ready for manual scheduling via Generate Schedule button');
   }
 
   // Debug Mesa Universal molds
@@ -3492,100 +3673,657 @@ export default function LayupScheduler() {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start">
-                  <Dialog>
-                    <DialogTrigger asChild>
-                      <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-                        <Calendar className="w-4 h-4 mr-2" />
-                        Work Days
-                      </DropdownMenuItem>
-                    </DialogTrigger>
-                  <DialogContent className="max-w-md">
-                    <DialogHeader>
-                      <DialogTitle>Work Day Settings</DialogTitle>
-                    </DialogHeader>
-                    <div className="space-y-4">
-                      <p className="text-sm text-gray-600 dark:text-gray-400">
-                        Select which days should be included when generating layup schedules.
-                        All days Monday-Friday will remain visible in the calendar.
-                      </p>
-                      <div className="space-y-3">
-                        {[
-                          { day: 1, label: 'Monday' },
-                          { day: 2, label: 'Tuesday' },
-                          { day: 3, label: 'Wednesday' },
-                          { day: 4, label: 'Thursday' },
-                          { day: 5, label: 'Friday' }
-                        ].map(({ day, label }) => (
-                          <div key={day} className="flex items-center space-x-2">
-                            <Checkbox
-                              id={`day-${day}`}
-                              checked={pendingWorkDays.includes(day)}
-                              onCheckedChange={(checked) => {
-                                if (checked) {
-                                  setPendingWorkDays(prev => [...prev, day].sort());
-                                } else {
-                                  setPendingWorkDays(prev => prev.filter(d => d !== day));
-                                }
-                              }}
-                            />
-                            <label
-                              htmlFor={`day-${day}`}
-                              className={`text-sm cursor-pointer font-medium ${
-                                day === 5 ? 'text-amber-700 dark:text-amber-300' : ''
-                              }`}
-                            >
-                              {label}
-                              {day === 5 && ' (Backup Day)'}
-                            </label>
+                  <DropdownMenuItem onClick={() => setWorkDaysDialogOpen(true)}>
+                    <Calendar className="w-4 h-4 mr-2" />
+                    Work Days
+                  </DropdownMenuItem>
+
+                {/* OEM Priority Settings */}
+                <DropdownMenuItem onClick={() => setOemDialogOpen(true)}>
+                  <CheckCircle className="w-4 h-4 mr-2" />
+                  OEM Priority
+                </DropdownMenuItem>
+
+                {/* Employee Settings */}
+                <DropdownMenuItem onClick={() => setEmployeeDialogOpen(true)}>
+                  <Users className="w-4 h-4 mr-2" />
+                  Employee Settings
+                </DropdownMenuItem>
+                
+                {/* Mold Settings */}
+                <DropdownMenuItem onClick={() => setMoldDialogOpen(true)}>
+                  <Settings className="w-4 h-4 mr-2" />
+                  Mold Settings
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            {/* OEM Priority Settings Dialog - Redesigned with 3 Components */}
+            <Dialog open={oemDialogOpen} onOpenChange={(open) => {
+              setOemDialogOpen(open);
+              if (!open) {
+                // Reset selections when modal closes
+                setSelectedVendorId(null);
+                setSelectedPOId(null);
+                setSelectedStockItemId(null);
+                setSelectedStockItemIds([]);
+                setSelectionMode('entire_po');
+              }
+            }}>
+              <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>OEM Priority Settings</DialogTitle>
+                </DialogHeader>
+                <div className="flex gap-6 pr-2">
+                  {/* Left Panel: PO Vendors List */}
+                  <div className="w-1/3 border-r pr-4">
+                    <h4 className="font-medium text-gray-900 dark:text-white mb-3">
+                      📋 PO Vendors
+                    </h4>
+                    {vendorsLoading ? (
+                      <p className="text-sm text-gray-500">Loading vendors...</p>
+                    ) : poVendors.length === 0 ? (
+                      <p className="text-sm text-gray-500 italic">No vendors available</p>
+                    ) : (
+                      <div className="space-y-2 max-h-[500px] overflow-y-auto">
+                        {poVendors.map((vendor: any) => (
+                          <div
+                            key={vendor.id}
+                            onClick={() => {
+                              setSelectedVendorId(vendor.id);
+                              setSelectedPOId(null); // Reset PO selection
+                              setSelectedStockItemId(null); // Reset stock selection
+                            }}
+                            className={`p-3 rounded border cursor-pointer transition-colors ${
+                              selectedVendorId === vendor.id
+                                ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-700'
+                                : 'bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700'
+                            }`}
+                            data-testid={`vendor-${vendor.id}`}
+                          >
+                            <div className="font-medium text-sm text-gray-900 dark:text-white">
+                              {vendor.name}
+                            </div>
+                            <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                              {vendor.poCount} PO{vendor.poCount !== 1 ? 's' : ''} • {vendor.totalStockItems} stock items
+                            </div>
                           </div>
                         ))}
                       </div>
-                      <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                        <p className="text-xs text-blue-700 dark:text-blue-300">
-                          <strong>Current days:</strong> {selectedWorkDays.length === 0 ? 'None selected' :
-                            selectedWorkDays.map(d => ['', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri'][d]).join(', ')}
-                        </p>
-                        {JSON.stringify(pendingWorkDays) !== JSON.stringify(selectedWorkDays) && (
-                          <p className="text-xs text-amber-700 dark:text-amber-300">
-                            <strong>Pending changes:</strong> {pendingWorkDays.length === 0 ? 'None selected' :
-                              pendingWorkDays.map(d => ['', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri'][d]).join(', ')}
-                          </p>
+                    )}
+                  </div>
+
+                  {/* Right Panel: Dropdowns and Details */}
+                  <div className="flex-1 space-y-4">
+                    <div className="text-sm text-gray-600 dark:text-gray-400">
+                      Select a vendor, then choose a purchase order and stock item for priority scheduling
+                    </div>
+
+                    {/* PO Dropdown */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">
+                        🔗 Purchase Orders
+                      </label>
+                      <Select
+                        value={selectedPOId || ""}
+                        onValueChange={(value) => {
+                          setSelectedPOId(value);
+                          setSelectedStockItemId(null); // Reset stock selection
+                        }}
+                        disabled={!selectedVendorId || vendorPOsLoading}
+                      >
+                        <SelectTrigger className="w-full" data-testid="select-po">
+                          <SelectValue
+                            placeholder={
+                              !selectedVendorId
+                                ? "Select a vendor first"
+                                : vendorPOsLoading
+                                ? "Loading POs..."
+                                : "Select a purchase order"
+                            }
+                          />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {vendorPOs.map((po: any) => (
+                            <SelectItem key={po.id} value={po.id.toString()}>
+                              PO #{po.poNumber} • {po.stockCount} stock{po.stockCount !== 1 ? 's' : ''} • Due: {po.dueDate ? new Date(po.dueDate).toLocaleDateString() : 'Not set'}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Selection Mode Toggle */}
+                    {selectedPOId && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">
+                          🎯 Selection Mode
+                        </label>
+                        <div className="flex gap-4">
+                          <div className="flex items-center space-x-2">
+                            <input
+                              type="radio"
+                              id="mode-entire-po"
+                              name="selection-mode"
+                              value="entire_po"
+                              checked={selectionMode === 'entire_po'}
+                              onChange={(e) => {
+                                setSelectionMode(e.target.value as 'entire_po' | 'specific_items');
+                                setSelectedStockItemId(null);
+                                setSelectedStockItemIds([]);
+                              }}
+                              className="w-4 h-4 text-blue-600"
+                              data-testid="radio-entire-po"
+                            />
+                            <label htmlFor="mode-entire-po" className="text-sm text-gray-900 dark:text-white">
+                              Entire Purchase Order ({eligibleStockItems.length} stock items needing layup)
+                            </label>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <input
+                              type="radio"
+                              id="mode-specific-items"
+                              name="selection-mode"
+                              value="specific_items"
+                              checked={selectionMode === 'specific_items'}
+                              onChange={(e) => {
+                                setSelectionMode(e.target.value as 'entire_po' | 'specific_items');
+                                setSelectedStockItemId(null);
+                                setSelectedStockItemIds([]);
+                              }}
+                              className="w-4 h-4 text-blue-600"
+                              data-testid="radio-specific-items"
+                            />
+                            <label htmlFor="mode-specific-items" className="text-sm text-gray-900 dark:text-white">
+                              Specific Stock Items
+                            </label>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Stock Items Section - Entire PO Mode */}
+                    {selectedPOId && selectionMode === 'entire_po' && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">
+                          📦 All Stock Items from PO
+                        </label>
+                        <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                          <div className="flex items-center space-x-2 mb-2">
+                            <div className="text-blue-700 dark:text-blue-300 text-sm font-medium">
+                              ✅ All {eligibleStockItems.length} stock items will be prioritized
+                            </div>
+                          </div>
+                          <div className="text-xs text-blue-600 dark:text-blue-400">
+                            When you save, all stock items from this purchase order will receive priority scheduling.
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Stock Items Section - Specific Items Mode */}
+                    {selectedPOId && selectionMode === 'specific_items' && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">
+                          📦 Select Specific Stock Items
+                        </label>
+                        {stockItemsLoading ? (
+                          <p className="text-sm text-gray-500">Loading stock items...</p>
+                        ) : eligibleStockItems.length === 0 ? (
+                          <p className="text-sm text-gray-500 italic">No stock items need layup scheduling (all have progressed beyond P1 Production Queue)</p>
+                        ) : (
+                          <div className="space-y-2 max-h-60 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded-lg p-3">
+                            {eligibleStockItems.map((item: any) => (
+                              <div key={item.id} className="flex items-center space-x-3">
+                                <Checkbox
+                                  id={`stock-item-${item.id}`}
+                                  checked={selectedStockItemIds.includes(item.id.toString())}
+                                  onCheckedChange={(checked) => {
+                                    if (checked) {
+                                      setSelectedStockItemIds([...selectedStockItemIds, item.id.toString()]);
+                                    } else {
+                                      setSelectedStockItemIds(selectedStockItemIds.filter(id => id !== item.id.toString()));
+                                    }
+                                  }}
+                                  data-testid={`checkbox-stock-${item.id}`}
+                                />
+                                <label htmlFor={`stock-item-${item.id}`} className="flex-1 text-sm cursor-pointer">
+                                  <div className="font-medium text-gray-900 dark:text-white">
+                                    {item.itemName}
+                                  </div>
+                                  <div className="text-xs text-gray-600 dark:text-gray-400">
+                                    Qty: {item.quantity} • Type: {item.itemType}
+                                  </div>
+                                </label>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {selectedStockItemIds.length > 0 && (
+                          <div className="mt-2 text-sm text-blue-600 dark:text-blue-400">
+                            {selectedStockItemIds.length} item{selectedStockItemIds.length !== 1 ? 's' : ''} selected for priority
+                          </div>
                         )}
                       </div>
+                    )}
+
+                    {/* Priority Selection Summary */}
+                    {selectedPOId && (selectionMode === 'entire_po' || selectedStockItemIds.length > 0) && (() => {
+                      const selectedPO = vendorPOs.find((po: any) => po.id.toString() === selectedPOId);
+                      const selectedVendor = poVendors.find((vendor: any) => vendor.id === selectedVendorId);
                       
-                      {/* Apply button */}
-                      {JSON.stringify(pendingWorkDays) !== JSON.stringify(selectedWorkDays) && (
-                        <div className="flex justify-end space-x-2 pt-4 border-t border-gray-200 dark:border-gray-700">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setPendingWorkDays(selectedWorkDays)}
-                            disabled={isApplyingChanges}
-                          >
-                            Cancel
-                          </Button>
-                          <Button
-                            size="sm"
-                            onClick={applyWorkDayChanges}
-                            disabled={isApplyingChanges}
-                          >
-                            {isApplyingChanges ? 'Applying...' : 'Apply Changes'}
-                          </Button>
+                      if (!selectedPO || !selectedVendor) return null;
+                      
+                      return (
+                        <div className="border-t pt-4">
+                          <h4 className="font-medium text-gray-900 dark:text-white mb-3">
+                            📋 Priority Selection Summary
+                          </h4>
+                          <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border">
+                            <div className="grid grid-cols-2 gap-4 text-sm">
+                              <div>
+                                <div className="font-medium text-gray-900 dark:text-white">Vendor:</div>
+                                <div className="text-gray-600 dark:text-gray-400">{selectedVendor.name}</div>
+                              </div>
+                              <div>
+                                <div className="font-medium text-gray-900 dark:text-white">Purchase Order:</div>
+                                <div className="text-gray-600 dark:text-gray-400">#{selectedPO.poNumber}</div>
+                              </div>
+                              <div>
+                                <div className="font-medium text-gray-900 dark:text-white">Selection Mode:</div>
+                                <div className="text-gray-600 dark:text-gray-400">
+                                  {selectionMode === 'entire_po' ? 'Entire Purchase Order' : 'Specific Items'}
+                                </div>
+                              </div>
+                              <div>
+                                <div className="font-medium text-gray-900 dark:text-white">Items to Prioritize:</div>
+                                <div className="text-gray-600 dark:text-gray-400">
+                                  {selectionMode === 'entire_po' 
+                                    ? `All ${eligibleStockItems.length} stock items`
+                                    : `${selectedStockItemIds.length} selected items`
+                                  }
+                                </div>
+                              </div>
+                              <div>
+                                <div className="font-medium text-gray-900 dark:text-white">Due Date:</div>
+                                <div className="text-gray-600 dark:text-gray-400">{selectedPO.dueDate ? new Date(selectedPO.dueDate).toLocaleDateString() : 'Not set'}</div>
+                              </div>
+                            </div>
+                          </div>
                         </div>
-                      )}
+                      );
+                    })()}
+
+                    {/* Action Buttons */}
+                    <div className="flex justify-between items-center pt-4 border-t">
+                      <div className="text-sm text-gray-600 dark:text-gray-400">
+                        {(() => {
+                          if (!selectedVendorId) return 'Select a vendor to continue';
+                          if (!selectedPOId) return 'Select a purchase order to continue';
+                          if (selectionMode === 'entire_po') return 'Ready to save priority for entire PO';
+                          if (selectedStockItemIds.length === 0) return 'Select specific stock items to continue';
+                          return 'Ready to save priority settings';
+                        })()}
+                      </div>
+                      <div className="space-x-2">
+                        <Button
+                          onClick={() => {
+                            setSelectedVendorId(null);
+                            setSelectedPOId(null);
+                            setSelectedStockItemId(null);
+                            setSelectedStockItemIds([]);
+                            setSelectionMode('entire_po');
+                          }}
+                          variant="outline"
+                          size="sm"
+                          disabled={!selectedVendorId && !selectedPOId && selectedStockItemIds.length === 0}
+                          data-testid="button-clear-selections"
+                        >
+                          Clear All
+                        </Button>
+                        <Button
+                          onClick={async () => {
+                            try {
+                              // Enhanced save functionality for both modes
+                              const priorityData = {
+                                vendorId: selectedVendorId,
+                                vendorName: poVendors.find(v => v.id === selectedVendorId)?.name,
+                                poId: parseInt(selectedPOId!),
+                                poNumber: vendorPOs.find(po => po.id.toString() === selectedPOId)?.poNumber,
+                                selectionMode: selectionMode,
+                                stockItemIds: selectionMode === 'entire_po' 
+                                  ? eligibleStockItems.map((item: any) => item.id.toString())
+                                  : selectedStockItemIds,
+                                priorityLevel: 1 // Default high priority
+                              };
+                              
+                              console.log('Saving OEM priority settings:', priorityData);
+                              
+                              // Call the new backend API endpoint
+                              const response = await fetch('/api/oem-settings/priority-settings/save', {
+                                method: 'POST',
+                                headers: {
+                                  'Content-Type': 'application/json',
+                                },
+                                body: JSON.stringify(priorityData)
+                              });
+                              
+                              if (!response.ok) {
+                                throw new Error(`Failed to save priority settings: ${response.statusText}`);
+                              }
+                              
+                              const result = await response.json();
+                              console.log('✅ Priority settings saved successfully:', result);
+                              setOemSettingsSaved(true);
+                              
+                              // 🟢 STEP 1: Immediately schedule the selected OEM stock orders
+                              try {
+                                console.log('🟢 Scheduling selected OEM stock orders onto the layup schedule...');
+                                const scheduleResponse = await fetch('/api/scheduler/oem-priority-only', {
+                                  method: 'POST',
+                                  headers: {
+                                    'Content-Type': 'application/json',
+                                  },
+                                  body: JSON.stringify(priorityData)
+                                });
+                                
+                                if (scheduleResponse.ok) {
+                                  const scheduleResult = await scheduleResponse.json();
+                                  console.log('✅ OEM stock orders scheduled:', scheduleResult);
+                                  toast({
+                                    title: "OEM Orders Scheduled!",
+                                    description: `${priorityData.stockItemIds.length} green OEM cards now on schedule. Use "Generate Schedule" to fill remaining capacity.`,
+                                  });
+                                  
+                                  // FIXED: Refresh the correct queries to show new scheduled items
+                                  queryClient.invalidateQueries({ queryKey: ['/api/layup-schedule'] });
+                                  queryClient.invalidateQueries({ queryKey: ['/api/p1-layup-queue'] });
+                                  
+                                } else {
+                                  throw new Error('Failed to schedule OEM orders');
+                                }
+                              } catch (scheduleError) {
+                                console.error('❌ Failed to schedule OEM orders:', scheduleError);
+                                toast({
+                                  title: "Settings Saved",
+                                  description: "Priority settings saved, but scheduling failed. Use 'Generate Schedule' button.",
+                                  variant: "destructive"
+                                });
+                              }
+                              
+                            } catch (error) {
+                              console.error('❌ Error saving priority settings:', error);
+                              toast({
+                                title: "Error",
+                                description: "Failed to save priority settings. Please try again.",
+                                variant: "destructive"
+                              });
+                            }
+                          }}
+                          disabled={!selectedPOId || (selectionMode === 'specific_items' && selectedStockItemIds.length === 0)}
+                          data-testid="button-save-priority"
+                        >
+                          Save Priority
+                        </Button>
+                      </div>
                     </div>
-                  </DialogContent>
-                </Dialog>
 
+                    {oemSettingsSaved && selectedPOId && (selectionMode === 'entire_po' || selectedStockItemIds.length > 0) && (
+                      <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded p-3">
+                        <div className="flex items-center space-x-2">
+                          <CheckCircle className="w-4 h-4 text-green-600" />
+                          <span className="text-sm text-green-700 dark:text-green-300">
+                            Priority settings saved. {selectionMode === 'entire_po' 
+                              ? `All ${eligibleStockItems.length} stock items from this PO` 
+                              : `${selectedStockItemIds.length} selected items`
+                            } will be prioritized during scheduling.
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
 
-                <Dialog>
-                  <DialogTrigger asChild>
-                    <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-                      <Settings className="w-4 h-4 mr-2" />
-                      Mold Settings
-                    </DropdownMenuItem>
-                  </DialogTrigger>
-                  <DialogContent className="max-w-2xl">
+            {/* Work Days Settings Dialog - Outside the dropdown */}
+            <Dialog open={workDaysDialogOpen} onOpenChange={setWorkDaysDialogOpen}>
+              <DialogContent className="max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Work Day Settings</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    Select which days should be included when generating layup schedules.
+                    All days Monday-Friday will remain visible in the calendar.
+                  </p>
+                  <div className="space-y-3">
+                    {[
+                      { day: 1, label: 'Monday' },
+                      { day: 2, label: 'Tuesday' },
+                      { day: 3, label: 'Wednesday' },
+                      { day: 4, label: 'Thursday' },
+                      { day: 5, label: 'Friday' }
+                    ].map(({ day, label }) => (
+                      <div key={day} className="flex items-center space-x-2">
+                        <Checkbox
+                          id={`day-${day}`}
+                          checked={pendingWorkDays.includes(day)}
+                          onCheckedChange={(checked) => {
+                            if (checked) {
+                              setPendingWorkDays(prev => [...prev, day].sort());
+                            } else {
+                              setPendingWorkDays(prev => prev.filter(d => d !== day));
+                            }
+                          }}
+                        />
+                        <label
+                          htmlFor={`day-${day}`}
+                          className={`text-sm cursor-pointer font-medium ${
+                            day === 5 ? 'text-amber-700 dark:text-amber-300' : ''
+                          }`}
+                        >
+                          {label}
+                          {day === 5 && ' (Backup Day)'}
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                    <p className="text-xs text-blue-700 dark:text-blue-300">
+                      <strong>Current days:</strong> {selectedWorkDays.length === 0 ? 'None selected' :
+                        selectedWorkDays.map(d => ['', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri'][d]).join(', ')}
+                    </p>
+                    {JSON.stringify(pendingWorkDays) !== JSON.stringify(selectedWorkDays) && (
+                      <p className="text-xs text-amber-700 dark:text-amber-300">
+                        <strong>Pending changes:</strong> {pendingWorkDays.length === 0 ? 'None selected' :
+                          pendingWorkDays.map(d => ['', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri'][d]).join(', ')}
+                      </p>
+                    )}
+                  </div>
+                  
+                  {/* Apply button */}
+                  {JSON.stringify(pendingWorkDays) !== JSON.stringify(selectedWorkDays) && (
+                    <div className="flex justify-end space-x-2 pt-4 border-t border-gray-200 dark:border-gray-700">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setPendingWorkDays(selectedWorkDays)}
+                        disabled={isApplyingChanges}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={applyWorkDayChanges}
+                        disabled={isApplyingChanges}
+                      >
+                        {isApplyingChanges ? 'Applying...' : 'Apply Changes'}
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </DialogContent>
+            </Dialog>
+
+            {/* Employee Settings Dialog - Outside the dropdown */}
+            <Dialog open={employeeDialogOpen} onOpenChange={setEmployeeDialogOpen}>
+              <DialogContent className="max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Employee Settings</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    Configure employee assignments and capacity settings for production scheduling.
+                  </p>
+                  <div className="space-y-4">
+                    {employees.map((employee: any) => (
+                      <div key={employee.id} className="p-4 border border-gray-200 dark:border-gray-700 rounded-lg">
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <div className="font-medium text-sm">{employee.name}</div>
+                              <div className="text-xs text-gray-500">{employee.department || 'Layup Department'}</div>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <div className="text-xs text-gray-500">
+                                ID: {employee.employeeId}
+                              </div>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  if (confirm(`Remove ${employee.name} from P1 Layup scheduling?`)) {
+                                    deleteEmployee(employee.employeeId);
+                                  }
+                                }}
+                                className="h-6 w-6 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
+                                data-testid={`button-remove-employee-${employee.employeeId.replace(/\s+/g, '-').toLowerCase()}`}
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </div>
+                          
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="text-xs font-medium text-gray-700 dark:text-gray-300 block mb-1">
+                                Hours per Day
+                              </label>
+                              <div className="flex items-center space-x-2">
+                                <Input
+                                  type="number"
+                                  value={pendingEmployeeChanges[employee.id]?.hours ?? (employee.hours || 8)}
+                                  min={1}
+                                  max={12}
+                                  step="0.5"
+                                  onChange={(e) => {
+                                    const newHours = parseFloat(e.target.value) || 8;
+                                    const currentChanges = pendingEmployeeChanges[employee.id] || {};
+                                    const moldsPerHour = currentChanges.moldsPerHour ?? (employee.moldsPerHour || 1.25);
+                                    setPendingEmployeeChanges(prev => ({
+                                      ...prev,
+                                      [employee.id]: {
+                                        ...currentChanges,
+                                        hours: newHours,
+                                        moldsPerHour,
+                                        dailyCapacity: Math.floor(newHours * moldsPerHour)
+                                      }
+                                    }));
+                                  }}
+                                  className="w-20 text-sm"
+                                />
+                                <span className="text-xs text-gray-500">hours/day</span>
+                              </div>
+                            </div>
+                            
+                            <div>
+                              <label className="text-xs font-medium text-gray-700 dark:text-gray-300 block mb-1">
+                                Molds per Hour
+                              </label>
+                              <div className="flex items-center space-x-2">
+                                <Input
+                                  type="number"
+                                  step="0.25"
+                                  value={pendingEmployeeChanges[employee.id]?.moldsPerHour ?? (employee.moldsPerHour || 1.25)}
+                                  min={0.25}
+                                  max={5}
+                                  onChange={(e) => {
+                                    const newMoldsPerHour = parseFloat(e.target.value) || 1.25;
+                                    const currentChanges = pendingEmployeeChanges[employee.id] || {};
+                                    const hours = currentChanges.hours ?? (employee.hours || 8);
+                                    setPendingEmployeeChanges(prev => ({
+                                      ...prev,
+                                      [employee.id]: {
+                                        ...currentChanges,
+                                        hours,
+                                        moldsPerHour: newMoldsPerHour,
+                                        dailyCapacity: Math.floor(hours * newMoldsPerHour)
+                                      }
+                                    }));
+                                  }}
+                                  className="w-20 text-sm"
+                                />
+                                <span className="text-xs text-gray-500">molds/hr</span>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <div className="flex items-center justify-between pt-2 border-t border-gray-100 dark:border-gray-700">
+                            <div className="text-xs text-gray-500">
+                              Calculated Daily Capacity:
+                            </div>
+                            <div className="text-xs font-medium text-blue-600 dark:text-blue-400">
+                              {(() => {
+                                const changes = pendingEmployeeChanges[employee.id];
+                                const hours = changes?.hours ?? (employee.hours || 8);
+                                const moldsPerHour = changes?.moldsPerHour ?? (employee.moldsPerHour || 1.25);
+                                return Math.floor(hours * moldsPerHour);
+                              })()} molds/day
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                    <p className="text-xs text-blue-700 dark:text-blue-300">
+                      <strong>How to use:</strong> Set hours per day and molds per hour for each employee. 
+                      Daily capacity is calculated automatically (hours × molds/hour).
+                      Click Apply to save changes to the scheduling system.
+                    </p>
+                  </div>
+                  
+                  {/* Save button - always visible */}
+                  <div className="flex justify-end space-x-2 pt-4 border-t border-gray-200 dark:border-gray-700">
+                    {Object.keys(pendingEmployeeChanges).length > 0 && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setPendingEmployeeChanges({})}
+                        disabled={isApplyingChanges}
+                        data-testid="button-cancel-employee-changes"
+                      >
+                        Cancel Changes
+                      </Button>
+                    )}
+                    <Button
+                      size="sm"
+                      onClick={applyEmployeeChanges}
+                      disabled={isApplyingChanges || Object.keys(pendingEmployeeChanges).length === 0}
+                      className="bg-blue-600 hover:bg-blue-700 text-white"
+                      data-testid="button-save-employee-settings"
+                    >
+                      {isApplyingChanges ? 'Saving...' : 'Save Employee Settings'}
+                    </Button>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
+
+            {/* Mold Settings Dialog - Outside the dropdown */}
+            <Dialog open={moldDialogOpen} onOpenChange={setMoldDialogOpen}>
+              <DialogContent className="max-w-2xl">
                 <DialogHeader>
                   <DialogTitle>Mold Configuration</DialogTitle>
                 </DialogHeader>
@@ -3940,117 +4678,37 @@ export default function LayupScheduler() {
                 </div>
                   </DialogContent>
                 </Dialog>
-
-                <Dialog>
-                  <DialogTrigger asChild>
-                    <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-                      <Users className="w-4 h-4 mr-2" />
-                      Employee Settings
-                    </DropdownMenuItem>
-                  </DialogTrigger>
-                  <DialogContent className="max-w-md">
-                    <DialogHeader>
-                      <DialogTitle>Employee Settings</DialogTitle>
-                    </DialogHeader>
-                    <div className="space-y-4">
-                      <p className="text-sm text-gray-600 dark:text-gray-400">
-                        Configure employee assignments and capacity settings for production scheduling.
-                      </p>
-                      <div className="space-y-4">
-                        {employees.map((employee: any) => (
-                          <div key={employee.id} className="p-4 border border-gray-200 dark:border-gray-700 rounded-lg">
-                            <div className="space-y-3">
-                              <div className="flex items-center justify-between">
-                                <div>
-                                  <div className="font-medium text-sm">{employee.name}</div>
-                                  <div className="text-xs text-gray-500">{employee.department || 'Layup Department'}</div>
-                                </div>
-                                <div className="text-xs text-gray-500">
-                                  ID: {employee.employeeId}
-                                </div>
-                              </div>
-                              
-                              <div className="grid grid-cols-2 gap-3">
-                                <div>
-                                  <label className="text-xs font-medium text-gray-700 dark:text-gray-300 block mb-1">
-                                    Hours per Day
-                                  </label>
-                                  <div className="flex items-center space-x-2">
-                                    <Input
-                                      type="number"
-                                      value={pendingEmployeeChanges[employee.id]?.hours ?? (employee.hours || 8)}
-                                      min={1}
-                                      max={12}
-                                      step="0.5"
-                                      onChange={(e) => {
-                                        const newHours = parseFloat(e.target.value) || 8;
-                                        const currentChanges = pendingEmployeeChanges[employee.id] || {};
-                                        const moldsPerHour = currentChanges.moldsPerHour ?? (employee.moldsPerHour || 1.25);
-                                        setPendingEmployeeChanges(prev => ({
-                                          ...prev,
-                                          [employee.id]: {
-                                            ...currentChanges,
-                                            hours: newHours,
-                                            moldsPerHour,
-                                            dailyCapacity: Math.floor(newHours * moldsPerHour)
-                                          }
-                                        }));
-                                      }}
-                                      className="w-20 text-sm"
-                                    />
-                                    <span className="text-xs text-gray-500">hours/day</span>
-                                  </div>
-                                </div>
-                                
-                                <div>
-                                  <label className="text-xs font-medium text-gray-700 dark:text-gray-300 block mb-1">
-                                    Molds per Hour
-                                  </label>
-                                  <div className="flex items-center space-x-2">
-                                    <Input
-                                      type="number"
-                                      step="0.25"
-                                      value={pendingEmployeeChanges[employee.id]?.moldsPerHour ?? (employee.moldsPerHour || 1.25)}
-                                      min={0.25}
-                                      max={5}
-                                      onChange={(e) => {
-                                        const newMoldsPerHour = parseFloat(e.target.value) || 1.25;
-                                        const currentChanges = pendingEmployeeChanges[employee.id] || {};
-                                        const hours = currentChanges.hours ?? (employee.hours || 8);
-                                        setPendingEmployeeChanges(prev => ({
-                                          ...prev,
-                                          [employee.id]: {
-                                            ...currentChanges,
-                                            hours,
-                                            moldsPerHour: newMoldsPerHour,
-                                            dailyCapacity: Math.floor(hours * newMoldsPerHour)
-                                          }
-                                        }));
-                                      }}
-                                      className="w-20 text-sm"
-                                    />
-                                    <span className="text-xs text-gray-500">molds/hour</span>
-                                  </div>
-                                </div>
-                              </div>
-                              
-                              <div className="flex items-center justify-between pt-2 border-t border-gray-100 dark:border-gray-700">
-                                <div className="text-xs text-gray-500">
-                                  Calculated Daily Capacity:
-                                </div>
-                                <div className="text-xs font-medium text-blue-600 dark:text-blue-400">
-                                  {(() => {
-                                    const changes = pendingEmployeeChanges[employee.id];
-                                    const hours = changes?.hours ?? (employee.hours || 8);
-                                    const moldsPerHour = changes?.moldsPerHour ?? (employee.moldsPerHour || 1.25);
-                                    return Math.floor(hours * moldsPerHour);
-                                  })()} molds/day
-                                </div>
-                              </div>
+                    {vendorsLoading ? (
+                      <p className="text-sm text-gray-500">Loading vendors...</p>
+                    ) : poVendors.length === 0 ? (
+                      <p className="text-sm text-gray-500 italic">No vendors available</p>
+                    ) : (
+                      <div className="space-y-2 max-h-[500px] overflow-y-auto">
+                        {poVendors.map((vendor: any) => (
+                          <div
+                            key={vendor.id}
+                            onClick={() => {
+                              setSelectedVendorId(vendor.id);
+                              setSelectedPOId(null); // Reset PO selection
+                              setSelectedStockItemId(null); // Reset stock selection
+                            }}
+                            className={`p-3 rounded border cursor-pointer transition-colors ${
+                              selectedVendorId === vendor.id
+                                ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-700'
+                                : 'bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700'
+                            }`}
+                            data-testid={`vendor-${vendor.id}`}
+                          >
+                            <div className="font-medium text-sm text-gray-900 dark:text-white">
+                              {vendor.name}
+                            </div>
+                            <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                              {vendor.poCount} PO{vendor.poCount !== 1 ? 's' : ''} • {vendor.totalStockItems} stock items
                             </div>
                           </div>
                         ))}
                       </div>
+
                       <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
                         <p className="text-xs text-blue-700 dark:text-blue-300">
                           <strong>How to use:</strong> Set hours per day and molds per hour for each employee. 
@@ -4224,6 +4882,7 @@ export default function LayupScheduler() {
               </DropdownMenuContent>
             </DropdownMenu>
 
+
             <Button
               variant={viewType === 'day' ? 'default' : 'outline'}
               size="sm"
@@ -4324,6 +4983,8 @@ export default function LayupScheduler() {
         </div>
       </div>
 
+      {/* Main Content Area */}
+      <div className="flex-1 overflow-hidden">
         {/* Sticky Date Headers */}
         {(viewType === 'week' || viewType === 'day') && (
           <div className="sticky top-[calc(theme(spacing.20)+theme(spacing.32))] z-[9] bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 px-6 py-2">
@@ -4412,13 +5073,13 @@ export default function LayupScheduler() {
                     </div>
                     <div className="space-x-2">
                       <Button
-                        onClick={generateAlgorithmicSchedule}
+                        onClick={addRegularOrders}
                         disabled={processedOrders.filter(o => !orderAssignments[o.orderId]).length === 0}
-                        className="bg-blue-600 hover:bg-blue-700"
+                        className="bg-green-600 hover:bg-green-700"
                         size="sm"
                       >
-                        <Zap className="w-4 h-4 mr-1" />
-                        Auto Schedule ({processedOrders.filter(o => !orderAssignments[o.orderId]).length} orders)
+                        <Plus className="w-4 h-4 mr-1" />
+                        Add Regular Orders ({processedOrders.filter(o => !orderAssignments[o.orderId]).length} orders)
                       </Button>
                       <Button
                         onClick={clearSchedule}
@@ -4763,6 +5424,7 @@ export default function LayupScheduler() {
                                 processedOrders={processedOrders}
                                 selectedWorkDays={selectedWorkDays}
                                 isWeekLocked={isWeekLocked}
+                                onRemoveOrder={handleRemoveOrder}
                               />
                             );
                           });
@@ -4796,6 +5458,7 @@ export default function LayupScheduler() {
           </DragOverlay>
         </DndContext>
       </div>
+    </div>
     </div>
   );
 }

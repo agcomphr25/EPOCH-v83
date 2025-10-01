@@ -7,19 +7,6 @@ import PipelineVisualization from '@/components/PipelineVisualization';
 export default function JOEYBTestDashboard() {
   return (
     <div className="p-6 space-y-6 max-w-full mx-auto">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">JOEYB Dashboard</h1>
-          <p className="text-gray-600 dark:text-gray-400 mt-1">
-            Cutting Table, CNC & Gunsmith Operations
-          </p>
-        </div>
-        <div className="text-sm text-gray-500 dark:text-gray-400">
-          EPOCH v8 Manufacturing ERP
-        </div>
-      </div>
-
       {/* Quick Navigation Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 mb-6">
         <Card className="opacity-50 cursor-not-allowed border-2 border-gray-200">

@@ -91,44 +91,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Authentication routes
   app.post("/api/auth/login", async (req, res) => {
     try {
-      const { username, password } = loginSchema.parse(req.body);
-      const ipAddress = req.ip || req.connection.remoteAddress || null;
-      const userAgent = req.get('User-Agent') || null;
-
-      const result = await AuthService.authenticate(username, password, ipAddress, userAgent);
+      const { username, password } = req.body;
       
-      if (!result) {
-        return res.status(401).json({ error: "Invalid username or password" });
+      if (!username || !password) {
+        return res.status(400).json({ error: "Username and password are required" });
+      }
+
+      const result = await AuthService.login(username, password);
+      
+      if (!result.success) {
+        return res.status(401).json({ error: result.error });
       }
 
       // Set secure cookie
       res.cookie('sessionToken', result.sessionToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
-        sameSite: 'strict',
-        maxAge: 8 * 60 * 60 * 1000, // 8 hours
+        sameSite: 'lax',
+        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
       });
 
       res.json({
         success: true,
         user: result.user,
-        token: result.token
+        sessionToken: result.sessionToken
       });
     } catch (error) {
       console.error('Login error:', error);
-      if (error instanceof Error) {
-        return res.status(400).json({ error: error.message });
-      }
       res.status(500).json({ error: "Login failed" });
     }
   });
 
-  app.post("/api/auth/logout", authenticateToken, async (req, res) => {
+  app.post("/api/auth/logout", async (req, res) => {
     try {
       const sessionToken = req.cookies?.sessionToken || req.headers.authorization?.replace('Bearer ', '');
       
       if (sessionToken) {
-        await AuthService.invalidateSession(sessionToken);
+        await AuthService.logout(sessionToken);
       }
 
       res.clearCookie('sessionToken');
@@ -136,6 +135,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Logout error:', error);
       res.status(500).json({ error: "Logout failed" });
+    }
+  });
+
+  app.get("/api/auth/validate", async (req, res) => {
+    try {
+      const sessionToken = req.cookies?.sessionToken || req.headers.authorization?.replace('Bearer ', '');
+      
+      if (!sessionToken) {
+        return res.status(401).json({ valid: false });
+      }
+
+      const user = await AuthService.validateSession(sessionToken);
+      
+      if (!user) {
+        return res.status(401).json({ valid: false });
+      }
+
+      res.json({ valid: true, user });
+    } catch (error) {
+      console.error('Session validation error:', error);
+      res.status(500).json({ valid: false });
     }
   });
 

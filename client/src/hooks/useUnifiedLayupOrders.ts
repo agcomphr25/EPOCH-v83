@@ -41,23 +41,43 @@ export function useUnifiedLayupOrders() {
         length: data?.length,
         firstItem: data?.[0]?.orderId
       });
-      return Array.isArray(data) ? data : [];
+      return data;
     },
-    select: (data: any[]) => {
-      // Simplified, stable select transform
-      if (!Array.isArray(data)) {
-        console.warn('⚠️ Non-array data received:', typeof data);
+    select: (data: any) => {
+      console.log('🔧 RAW API RESPONSE:', {
+        dataType: typeof data,
+        isArray: Array.isArray(data),
+        length: data?.length || 0,
+        hasData: !!data,
+        firstItem: data?.[0],
+        keys: data ? Object.keys(data) : 'no data',
+        fullResponse: data
+      });
+      
+
+      
+      if (!data) {
+        console.error('❌ No data received from API - data is falsy');
         return [];
       }
-      console.log(`✅ Processing ${data.length} orders in select transform`);
+      
+      if (!Array.isArray(data)) {
+        console.error('❌ Data is not an array:', typeof data, data);
+        return [];
+      }
+      
+      console.log(`✅ Successfully loaded ${data.length} orders from API`);
+      if (data.length > 0) {
+        console.log('✅ Sample order data:', data[0]);
+      }
       return data;
     },
     retry: 3,
-    staleTime: 1000 * 60 * 5, // Consider data fresh for 5 minutes
+    staleTime: 5000,
+    cacheTime: 60000,
     refetchOnWindowFocus: false, // DISABLED: Prevent auto-refresh when window focus changes  
     refetchOnMount: true,
-    refetchInterval: false, // DISABLED: Stop 30-second auto-refresh to prevent continuous reloading
-    gcTime: 1000 * 60 * 10 // Keep data in cache for 10 minutes
+    refetchInterval: false // DISABLED: Stop 30-second auto-refresh to prevent continuous reloading
   });
 
   console.log('🔧 useUnifiedLayupOrders hook state:', {

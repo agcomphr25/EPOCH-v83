@@ -3,23 +3,42 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Link, useLocation } from "wouter";
 import { List, Package, LogOut, Calendar, ClipboardList } from "lucide-react";
-import { isProductionEnvironment, isAuthenticated } from "@/lib/env";
+import { isProductionEnvironment } from "@/lib/env";
 
 export default function TANDYMTestDashboard() {
   const [, setLocation] = useLocation();
 
   useEffect(() => {
-    if (isProductionEnvironment() && !isAuthenticated()) {
-      console.log('🔒 Not authenticated - redirecting to login');
-      setLocation('/login');
-    }
+    const checkAuth = async () => {
+      if (isProductionEnvironment()) {
+        const { validateSessionAsync } = await import('@/lib/env');
+        const isValid = await validateSessionAsync();
+        if (!isValid) {
+          console.log('🔒 Session invalid - redirecting to login');
+          setLocation('/login');
+        }
+      }
+    };
+    checkAuth();
   }, [setLocation]);
 
-  const handleLogout = () => {
-    localStorage.removeItem('sessionToken');
-    localStorage.removeItem('jwtToken');
-    localStorage.removeItem('currentUser');
-    setLocation('/login');
+  const handleLogout = async () => {
+    try {
+      // Call backend logout endpoint
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        credentials: 'include',
+      });
+    } catch (error) {
+      console.error('Logout error:', error);
+    } finally {
+      // Clear all local storage
+      localStorage.removeItem('currentUser');
+      localStorage.removeItem('userData');
+      
+      // Redirect to login page
+      setLocation('/login');
+    }
   };
 
   return (

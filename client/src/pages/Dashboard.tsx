@@ -15,28 +15,34 @@ import {
   CheckCircle
 } from "lucide-react";
 import { getDashboardRoute } from "@/config/dashboardMapping";
-import { isProductionEnvironment, isAuthenticated } from "@/lib/env";
+import { isProductionEnvironment } from "@/lib/env";
 
 export default function Dashboard() {
   const [, setLocation] = useLocation();
 
   useEffect(() => {
-    // In production, check authentication first
-    if (isProductionEnvironment() && !isAuthenticated()) {
-      console.log('🔒 Not authenticated - redirecting to login');
-      setLocation('/login');
-      return;
-    }
-
-    // Check if user has a stored username and redirect to their dashboard
-    const currentUser = localStorage.getItem('currentUser');
-    if (currentUser) {
-      const dashboardRoute = getDashboardRoute(currentUser);
-      // Only redirect if they have a personalized dashboard (not the default)
-      if (dashboardRoute !== '/') {
-        setLocation(dashboardRoute);
+    const checkAuth = async () => {
+      if (isProductionEnvironment()) {
+        const { validateSessionAsync } = await import('@/lib/env');
+        const isValid = await validateSessionAsync();
+        if (!isValid) {
+          console.log('🔒 Session invalid - redirecting to login');
+          setLocation('/login');
+          return;
+        }
       }
-    }
+
+      // Check if user has a stored username and redirect to their dashboard
+      const currentUser = localStorage.getItem('currentUser');
+      if (currentUser) {
+        const dashboardRoute = getDashboardRoute(currentUser);
+        // Only redirect if they have a personalized dashboard (not the default)
+        if (dashboardRoute !== '/') {
+          setLocation(dashboardRoute);
+        }
+      }
+    };
+    checkAuth();
   }, [setLocation]);
 
   return (

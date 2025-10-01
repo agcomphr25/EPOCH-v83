@@ -4308,8 +4308,24 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateCustomerAddress(id: number, data: Partial<InsertCustomerAddress>): Promise<CustomerAddress> {
+    // Filter data to only include valid customerAddresses fields and exclude problematic timestamp fields
+    const validFields = {
+      ...(data.customerId !== undefined && { customerId: data.customerId }),
+      ...(data.street !== undefined && { street: data.street }),
+      ...(data.street2 !== undefined && { street2: data.street2 }),
+      ...(data.city !== undefined && { city: data.city }),
+      ...(data.state !== undefined && { state: data.state }),
+      ...(data.zipCode !== undefined && { zipCode: data.zipCode }),
+      ...(data.country !== undefined && { country: data.country }),
+      ...(data.type !== undefined && { type: data.type }),
+      ...(data.isDefault !== undefined && { isDefault: data.isDefault }),
+      ...(data.isValidated !== undefined && { isValidated: data.isValidated }),
+      // Always set updatedAt to current timestamp on updates
+      updatedAt: new Date()
+    };
+
     const [address] = await db.update(customerAddresses)
-      .set(data)
+      .set(validFields)
       .where(eq(customerAddresses.id, id))
       .returning();
     return address;

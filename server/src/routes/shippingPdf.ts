@@ -881,11 +881,11 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       color: rgb(0, 0, 0),
     });
 
-    // Order number and date box - Fixed positioning
+    // Order number and date box - 4 column layout (2 rows x 2 columns)
     const orderBoxX = width - margin - 200;
     const orderBoxY = currentY - 10;
     const orderBoxWidth = 200;
-    const orderBoxHeight = 105;
+    const orderBoxHeight = 55; // Reduced from 105 to 55
     
     page.drawRectangle({
       x: orderBoxX,
@@ -896,65 +896,97 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       borderWidth: 1,
     });
 
-    // Position text INSIDE the box with proper alignment
-    let boxTextY = orderBoxY + orderBoxHeight - 18; // Start from top of box
+    // 4-column layout with smaller font (8pt instead of 10pt)
+    const smallBoxFontSize = 8;
+    const boxPadding = 6;
+    const col1X = orderBoxX + boxPadding;
+    const col2X = orderBoxX + orderBoxWidth / 2 + 2;
+    const columnWidth = (orderBoxWidth / 2) - boxPadding - 4;
+    let boxTextY = orderBoxY + orderBoxHeight - 14;
+
+    // Helper function to truncate text to fit column width
+    const truncateToFit = (text: string, maxWidth: number, fontSize: number, fontObj: any): string => {
+      const textWidth = getTextWidth(text, fontSize);
+      if (textWidth <= maxWidth) return text;
+      
+      // Truncate with ellipsis
+      let truncated = text;
+      while (truncated.length > 0 && getTextWidth(truncated + '..', fontSize) > maxWidth) {
+        truncated = truncated.slice(0, -1);
+      }
+      return truncated + '..';
+    };
     
-    page.drawText('Order Number:', {
-      x: orderBoxX + 8,
+    // Row 1, Column 1: Order Number
+    const orderLabel = 'Order #:';
+    page.drawText(orderLabel, {
+      x: col1X,
       y: boxTextY,
-      size: 10,
+      size: smallBoxFontSize,
       font: boldFont,
     });
-
-    page.drawText(orderId, {
-      x: orderBoxX + 100,
+    const orderLabelWidth = getTextWidth(orderLabel, smallBoxFontSize);
+    const orderValueMaxWidth = columnWidth - orderLabelWidth - 3;
+    const truncatedOrderId = truncateToFit(orderId, orderValueMaxWidth, smallBoxFontSize, font);
+    page.drawText(truncatedOrderId, {
+      x: col1X + orderLabelWidth + 2,
       y: boxTextY,
-      size: 10,
+      size: smallBoxFontSize,
       font: font,
     });
 
-    boxTextY -= 20;
-    page.drawText('Date:', {
-      x: orderBoxX + 8,
+    // Row 1, Column 2: Date
+    const dateLabel = 'Date:';
+    page.drawText(dateLabel, {
+      x: col2X,
       y: boxTextY,
-      size: 10,
+      size: smallBoxFontSize,
       font: boldFont,
     });
-
-    page.drawText(new Date().toLocaleDateString(), {
-      x: orderBoxX + 100,
+    const dateLabelWidth = getTextWidth(dateLabel, smallBoxFontSize);
+    const dateValue = new Date().toLocaleDateString();
+    page.drawText(dateValue, {
+      x: col2X + dateLabelWidth + 2,
       y: boxTextY,
-      size: 10,
+      size: smallBoxFontSize,
       font: font,
     });
 
-    boxTextY -= 20;
-    page.drawText('Due Date:', {
-      x: orderBoxX + 8,
+    boxTextY -= 18; // Move to row 2
+
+    // Row 2, Column 1: Due Date
+    const dueLabel = 'Due Date:';
+    page.drawText(dueLabel, {
+      x: col1X,
       y: boxTextY,
-      size: 10,
+      size: smallBoxFontSize,
       font: boldFont,
     });
-
-    page.drawText(order.dueDate ? new Date(order.dueDate).toLocaleDateString() : 'TBD', {
-      x: orderBoxX + 100,
+    const dueLabelWidth = getTextWidth(dueLabel, smallBoxFontSize);
+    const dueValue = order.dueDate ? new Date(order.dueDate).toLocaleDateString() : 'TBD';
+    page.drawText(dueValue, {
+      x: col1X + dueLabelWidth + 2,
       y: boxTextY,
-      size: 10,
+      size: smallBoxFontSize,
       font: font,
     });
 
-    boxTextY -= 20;
-    page.drawText('Customer PO:', {
-      x: orderBoxX + 8,
+    // Row 2, Column 2: Customer PO
+    const poLabel = 'Cust PO:';
+    page.drawText(poLabel, {
+      x: col2X,
       y: boxTextY,
-      size: 10,
+      size: smallBoxFontSize,
       font: boldFont,
     });
-
-    page.drawText((order as any).customerPO || 'N/A', {
-      x: orderBoxX + 100,
+    const poLabelWidth = getTextWidth(poLabel, smallBoxFontSize);
+    const custPO = (order as any).customerPO || 'N/A';
+    const poValueMaxWidth = columnWidth - poLabelWidth - 3;
+    const truncatedPO = truncateToFit(custPO, poValueMaxWidth, smallBoxFontSize, font);
+    page.drawText(truncatedPO, {
+      x: col2X + poLabelWidth + 2,
       y: boxTextY,
-      size: 10,
+      size: smallBoxFontSize,
       font: font,
     });
 
@@ -2259,9 +2291,9 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     ];
 
     // Two-column layout for terms
-    const columnWidth = (printableWidth - 20) / 2;
+    const termsColumnWidth = (printableWidth - 20) / 2;
     const leftColumnX = margin;
-    const rightColumnX = margin + columnWidth + 20;
+    const rightColumnX = margin + termsColumnWidth + 20;
     const termsStartY = currentY;
     const smallFontSize = 7;
     const lineHeight = 11;
@@ -2274,7 +2306,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     let leftY = termsStartY;
     leftColumnTerms.forEach(term => {
       // Word wrap for left column
-      const wrappedLines = wrapText(term, columnWidth - 10, smallFontSize, font);
+      const wrappedLines = wrapText(term, termsColumnWidth - 10, smallFontSize, font);
       wrappedLines.forEach(line => {
         page.drawText(line, {
           x: leftColumnX,
@@ -2290,7 +2322,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     let rightY = termsStartY;
     rightColumnTerms.forEach(term => {
       // Word wrap for right column
-      const wrappedLines = wrapText(term, columnWidth - 10, smallFontSize, font);
+      const wrappedLines = wrapText(term, termsColumnWidth - 10, smallFontSize, font);
       wrappedLines.forEach(line => {
         page.drawText(line, {
           x: rightColumnX,

@@ -30,9 +30,18 @@ const assetsPath = process.env.NODE_ENV === 'production'
   ? path.join(import.meta.dirname, 'attached_assets')
   : path.join(process.cwd(), 'attached_assets');
 
+console.log('📁 Assets path configuration:', {
+  NODE_ENV: process.env.NODE_ENV,
+  assetsPath,
+  dirname: import.meta.dirname,
+  cwd: process.cwd()
+});
+
 app.get('/attached_assets/*', (req, res, next) => {
   const fileName = req.path.replace('/attached_assets/', '');
   const filePath = path.join(assetsPath, fileName);
+  
+  console.log('📄 Asset request:', { fileName, filePath, exists: fs.existsSync(filePath) });
   
   if (fs.existsSync(filePath)) {
     // Set correct content type for PDFs
@@ -46,6 +55,7 @@ app.get('/attached_assets/*', (req, res, next) => {
       }
     });
   }
+  console.error('❌ Asset not found:', filePath);
   next();
 });
 

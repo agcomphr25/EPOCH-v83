@@ -72,37 +72,24 @@ export default function AdminTrainingSync() {
     setIsExporting(true);
     
     try {
-      const response = await fetch('/api/admin/export-training-csv', {
-        method: 'GET',
-        credentials: 'include',
-      });
-
-      if (!response.ok) {
-        throw new Error('Export failed');
-      }
-
-      const data = await response.json();
-
-      // Download each CSV file
-      const downloadFile = (content: string, filename: string) => {
-        const blob = new Blob([content], { type: 'text/csv' });
-        const url = window.URL.createObjectURL(blob);
+      // Trigger direct downloads for each CSV file
+      const downloadURL = (url: string) => {
         const a = document.createElement('a');
         a.href = url;
-        a.download = filename;
+        a.style.display = 'none';
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
-        window.URL.revokeObjectURL(url);
       };
 
-      downloadFile(data.modulesCSV, 'training-modules.csv');
-      setTimeout(() => downloadFile(data.questionsCSV, 'training-questions.csv'), 100);
-      setTimeout(() => downloadFile(data.answersCSV, 'training-answers.csv'), 200);
+      // Download each file with a small delay
+      downloadURL('/api/admin/export-training-modules-csv');
+      setTimeout(() => downloadURL('/api/admin/export-training-questions-csv'), 200);
+      setTimeout(() => downloadURL('/api/admin/export-training-answers-csv'), 400);
 
       toast({
-        title: "Export Successful!",
-        description: "3 CSV files downloaded successfully",
+        title: "Export Started!",
+        description: "3 CSV files are downloading...",
       });
     } catch (error: any) {
       toast({
@@ -111,7 +98,7 @@ export default function AdminTrainingSync() {
         variant: "destructive",
       });
     } finally {
-      setIsExporting(false);
+      setTimeout(() => setIsExporting(false), 600);
     }
   };
 

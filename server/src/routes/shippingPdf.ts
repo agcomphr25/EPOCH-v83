@@ -1103,7 +1103,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     // Payment Status - will be positioned below TOTAL later
 
     // Customer Information Section - Fixed positioning
-    currentY -= 30; // Reduced white space between order details and customer info
+    currentY -= 50; // Moderate spacing between contact info and customer box
     
     // Define customer box dimensions and position
     const customerBoxY = currentY;

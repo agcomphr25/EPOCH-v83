@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import { authenticateToken, requireRole } from "../middleware/auth";
 import multer from "multer";
 import Papa from "papaparse";
+import { questionsData, answersData } from "../data/training-sync-data";
 
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -110,12 +111,38 @@ export function registerTrainingSyncRoutes(app: Express) {
 
       console.log(`✅ Inserted ${modulesInserted} training modules`);
 
+      // Insert questions
+      let questionsInserted = 0;
+      for (const question of questionsData) {
+        try {
+          await db.insert(trainingQuizQuestions).values(question).onConflictDoNothing();
+          questionsInserted++;
+        } catch (error) {
+          console.error(`Error inserting question ${question.id}:`, error);
+        }
+      }
+
+      console.log(`✅ Inserted ${questionsInserted} quiz questions`);
+
+      // Insert answers
+      let answersInserted = 0;
+      for (const answer of answersData) {
+        try {
+          await db.insert(trainingQuizAnswers).values(answer).onConflictDoNothing();
+          answersInserted++;
+        } catch (error) {
+          console.error(`Error inserting answer ${answer.id}:`, error);
+        }
+      }
+
+      console.log(`✅ Inserted ${answersInserted} quiz answers`);
+
       res.json({
         success: true,
         message: 'Training data sync completed',
-        stats: {
-          modulesInserted
-        }
+        modulesInserted,
+        questionsInserted,
+        answersInserted
       });
 
     } catch (error: any) {

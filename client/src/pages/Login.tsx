@@ -69,8 +69,8 @@ export default function Login() {
       localStorage.setItem('currentUser', data.user.username);
       localStorage.setItem('userData', JSON.stringify(data.user));
       
-      // Set flag to skip initial validation (cookie race condition fix)
-      localStorage.setItem('skipInitialValidation', 'true');
+      // Skip validation for 2 seconds to allow cookie to settle (handles React StrictMode double-render)
+      localStorage.setItem('skipValidationUntil', (Date.now() + 2000).toString());
 
       // Get the user's dashboard route
       const dashboardRoute = getDashboardRoute(data.user.username);

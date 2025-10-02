@@ -23,6 +23,7 @@ router.post("/login", async (req, res) => {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
+      path: '/',
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     });
 
@@ -53,7 +54,7 @@ router.get("/validate", async (req, res) => {
 
     res.json({
       valid: true,
-      user: session.user
+      user: session
     });
   } catch (error) {
     console.error('Session validation error:', error);

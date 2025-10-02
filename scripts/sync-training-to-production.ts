@@ -6,13 +6,18 @@ import { trainingModules, trainingQuizQuestions, trainingQuizAnswers } from '../
 neonConfig.webSocketConstructor = ws;
 
 async function syncTrainingData() {
-  const devDatabaseUrl = process.env.DEV_DATABASE_URL;
-  const prodDatabaseUrl = process.env.PROD_DATABASE_URL;
+  // Use current DATABASE_URL as source (development)
+  // User will provide PROD_DATABASE_URL when they run this after publishing
+  const devDatabaseUrl = process.env.DATABASE_URL;
+  const prodDatabaseUrl = process.env.PROD_DATABASE_URL || process.env.DATABASE_URL;
 
-  if (!devDatabaseUrl || !prodDatabaseUrl) {
-    console.error('❌ Missing database URLs!');
-    console.error('Set DEV_DATABASE_URL and PROD_DATABASE_URL environment variables');
+  if (!devDatabaseUrl) {
+    console.error('❌ Missing DATABASE_URL!');
     process.exit(1);
+  }
+
+  if (devDatabaseUrl === prodDatabaseUrl) {
+    console.log('⚠️  Same database URL for dev and prod - this will just refresh the same database');
   }
 
   console.log('🔄 Starting training data sync...\n');

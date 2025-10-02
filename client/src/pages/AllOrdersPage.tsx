@@ -110,7 +110,7 @@ export default function AllOrdersPage() {
       
       // Clear all caches and force immediate refetch
       queryClient.clear();
-      await queryClient.refetchQueries({ queryKey: ['/api/orders/with-payment-status/paginated'] });
+      await queryClient.refetchQueries({ queryKey: ['/api/orders'] });
     },
     onError: (error: any, variables) => {
       console.error(`❌ Failed to progress order ${variables.orderId}:`, error);
@@ -122,14 +122,11 @@ export default function AllOrdersPage() {
     }
   });
 
-  const { data: ordersResponse, isLoading } = useQuery({
-    queryKey: ['/api/orders/with-payment-status/paginated', 'allOrdersPage'],
-    queryFn: () => apiRequest('/api/orders/with-payment-status/paginated?page=1&limit=1000'),
+  const { data: allOrders, isLoading } = useQuery<Order[]>({
+    queryKey: ['/api/orders'],
     staleTime: 30000, // Cache for 30 seconds to improve performance  
     gcTime: 60000 // Keep in cache for 1 minute
   });
-  
-  const allOrders: Order[] = ordersResponse?.orders || [];
 
   // Manual pagination for now
   const totalOrders = allOrders?.length || 0;
@@ -155,7 +152,7 @@ export default function AllOrdersPage() {
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status/paginated'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
       queryClient.invalidateQueries({ queryKey: ['/api/orders/pipeline-counts'] });
       queryClient.invalidateQueries({ queryKey: ['/api/production-queue/prioritized'] });
       queryClient.invalidateQueries({ queryKey: ['/api/layup-schedule'] });

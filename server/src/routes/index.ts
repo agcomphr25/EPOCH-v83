@@ -1,15 +1,15 @@
 import { Express } from 'express';
 import { createServer, type Server } from "http";
+import authRoutes from './auth';
 import employeesRoutes from './employees';
+import usersRoutes from './users';
 import ordersRoutes from './orders';
 import formsRoutes from './forms';
 import tasksRoutes from './tasks';
 import kickbackRoutes from './kickbacks';
-import calendarRoutes from './calendar';
 import inventoryRoutes from './inventory';
 import customersRoutes from './customers';
 import vendorsRoutes, { contactRouter, vendorDocumentRouter } from './vendors';
-import vendorPOsRoutes from './vendorPOs';
 import qualityRoutes from './quality';
 import documentsRoutes from './documents';
 import moldsRoutes from './molds';
@@ -23,6 +23,7 @@ import bomsRoutes from './boms';
 import robustBomRoutes from './robustBom';
 import p2BomsRoutes from './p2boms';
 import communicationsRoutes from './communications';
+import secureVerificationRoutes from './secureVerification';
 import nonconformanceRoutes from '../../routes/nonconformance';
 import paymentsRoutes from './payments';
 import acceptBluePaymentsRoutes from './acceptBluePayments';
@@ -34,7 +35,6 @@ import layupScheduleRoutes from './layupSchedule';
 import customerSatisfactionRoutes from './customerSatisfaction';
 import poProductsRoutes from './poProducts';
 import refundRoutes from './refunds';
-import agMetalReportRoutes from './agMetalReport';
 
 import vendorRoutes from './vendors';
 
@@ -45,12 +45,19 @@ import vendorRoutes from './vendors';
 
 import mrpRoutes from './mrp';
 import enhancedRoutes from './enhanced';
+import trainingRoutes from './training';
 
 import { getAccessToken } from '../utils/upsShipping';
 
 export function registerRoutes(app: Express): Server {
+  // Authentication routes
+  app.use('/api/auth', authRoutes);
+
   // Employee management routes
   app.use('/api/employees', employeesRoutes);
+
+  // User management routes
+  app.use('/api/users', usersRoutes);
 
   // Order management routes  
   app.use('/api/orders', ordersRoutes);
@@ -64,9 +71,6 @@ export function registerRoutes(app: Express): Server {
   // Kickback tracking routes
   app.use('/api/kickbacks', kickbackRoutes);
 
-  // Calendar system routes
-  app.use('/api/calendar', calendarRoutes);
-
   // Inventory management routes
   app.use('/api/inventory', inventoryRoutes);
 
@@ -75,9 +79,6 @@ export function registerRoutes(app: Express): Server {
 
   // Vendor management routes
   app.use('/api/vendors', vendorsRoutes);
-  
-  // Vendor purchase orders routes
-  app.use('/api/vendor-pos', vendorPOsRoutes);
   
   // Vendor contacts routes (generic)
   app.use('/api/vendor-contacts', contactRouter);
@@ -151,9 +152,6 @@ export function registerRoutes(app: Express): Server {
   // Refund management routes
   app.use('/api/refund-requests', refundRoutes);
 
-  // AG Metal Report routes
-  app.use('/api/reports', agMetalReportRoutes);
-
   // Vendor management routes
   app.use('/api/vendors', vendorRoutes);
   
@@ -171,6 +169,8 @@ export function registerRoutes(app: Express): Server {
   // Enhanced system routes (completely separate from legacy)
   app.use('/api/enhanced', enhancedRoutes);
   
+  // Training module routes
+  app.use('/api/training', trainingRoutes);
 
   // UPS Test endpoint
   app.post('/api/test-ups-auth', async (req, res) => {
@@ -265,12 +265,6 @@ export function registerRoutes(app: Express): Server {
   // P1 Layup Queue endpoint - provides unified production queue for layup scheduler
   app.get('/api/p1-layup-queue', async (req, res) => {
     try {
-      // Extract OEM settings from query parameters
-      const oemMode = req.query.oemMode === 'true';
-      const selectedPOOrders = req.query.selectedPOOrders ? String(req.query.selectedPOOrders).split(',') : [];
-      
-      console.log('🔧 P1 layup queue with OEM settings:', { oemMode, selectedPOOrdersCount: selectedPOOrders.length });
-      
       const { storage } = await import('../../storage');
       const { inferStockModelFromFeatures } = await import('../utils/stockModelInference');
       
@@ -312,7 +306,6 @@ export function registerRoutes(app: Express): Server {
         return true;
       });
       
-
       // Also get active orders from the orders table (for P1 PO production orders)
       const { pool } = await import('../../db');
       
@@ -321,7 +314,7 @@ export function registerRoutes(app: Express): Server {
         SELECT 
           id,
           order_id as "orderId",
-          customer as "customer",
+          customer_id as "customer",
           product,
           date,
           due_date as "dueDate",
@@ -347,7 +340,6 @@ export function registerRoutes(app: Express): Server {
         poId: null,
         productionOrderId: null
       }));
-
       
       // Combine both sources  
       const combinedUnscheduledOrders = [...unscheduledOrders, ...formattedActiveOrders];
@@ -375,30 +367,21 @@ export function registerRoutes(app: Express): Server {
       const p1POOrdersRows = Array.isArray(p1POOrdersResult) ? p1POOrdersResult : [];
       console.log(`🔍 Found ${p1POOrdersRows.length} P1 PO orders in all_orders table`);
       
-      const p1POOrders = p1POOrdersRows.map((po: any) => {
-        // Apply OEM priority boost if this P1 PO is selected in OEM mode
-        let priorityScore = po.priorityScore || 1500;
-        if (oemMode && selectedPOOrders.includes(po.orderId)) {
-          priorityScore = 1; // Highest priority for selected P1 PO orders in OEM mode
-          console.log(`🚀 OEM PRIORITY BOOST: Order ${po.orderId} priority boosted to ${priorityScore}`);
-        }
-        
-        return {
-          id: po.orderId,
-          orderId: po.orderId,
-          orderDate: po.createdAt,
-          dueDate: po.dueDate,
-          currentDepartment: po.currentDepartment,
-          customerId: po.customerId,
-          features: po.features || {},
-          modelId: po.stockModelId,
-          stockModelId: po.stockModelId,
-          product: po.stockModelId,
-          status: po.status,
-          source: po.source,  // This will be 'p1_purchase_order'
-          priorityScore: priorityScore
-        };
-      });
+      const p1POOrders = p1POOrdersRows.map((po: any) => ({
+        id: po.orderId,
+        orderId: po.orderId,
+        orderDate: po.createdAt,
+        dueDate: po.dueDate,
+        currentDepartment: po.currentDepartment,
+        customerId: po.customerId,
+        features: po.features || {},
+        modelId: po.stockModelId,
+        stockModelId: po.stockModelId,
+        product: po.stockModelId,
+        status: po.status,
+        source: po.source,  // This will be 'p1_purchase_order'
+        priorityScore: po.priorityScore || 1500
+      }));
 
       console.log(`🏭 Found ${p1POOrders.length} P1 PO orders from week selection`);
 
@@ -444,24 +427,6 @@ export function registerRoutes(app: Express): Server {
       // Sort by priority score (lower = higher priority)
       combinedQueue.sort((a, b) => a.priorityScore - b.priorityScore);
       
-
-      // Log OEM priority verification
-      if (oemMode && selectedPOOrders.length > 0) {
-        const topOrders = combinedQueue.slice(0, Math.min(5, combinedQueue.length));
-        console.log('🚀 OEM MODE VERIFICATION: Top 5 orders after sorting:', 
-          topOrders.map(o => ({ orderId: o.orderId, priorityScore: o.priorityScore, source: o.source }))
-        );
-        const boostedOrdersInTop = topOrders.filter(o => selectedPOOrders.includes(o.orderId));
-        console.log(`🚀 OEM MODE SUCCESS: ${boostedOrdersInTop.length}/${selectedPOOrders.length} selected P1 POs appear in top 5`);
-      }
-
-      // Add cache-control headers to prevent browser caching
-      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-      res.setHeader('Pragma', 'no-cache');
-      res.setHeader('Expires', '0');
-
-      
-
       res.json(combinedQueue);
     } catch (error) {
       console.error('❌ P1 layup queue fetch error:', error);
@@ -1251,13 +1216,15 @@ export function registerRoutes(app: Express): Server {
 
   app.put('/api/addresses/:id', async (req, res) => {
     try {
+      console.log('🔧 ADDRESS UPDATE ROUTE CALLED');
       const { storage } = await import('../../storage');
       const { id } = req.params;
       const addressData = req.body;
       const address = await storage.updateCustomerAddress(parseInt(id), addressData);
+      console.log('🔧 Updated address:', address.id);
       res.json(address);
     } catch (error) {
-      console.error('Address update error:', error);
+      console.error('🔧 Address update error:', error);
       res.status(500).json({ error: "Failed to update address" });
     }
   });
@@ -2057,7 +2024,7 @@ export function registerRoutes(app: Express): Server {
             customer: purchaseOrder.customerName,
             product: item.itemId,
             quantity: 1,
-            status: 'IN_PROGRESS',
+            status: 'Active',
             date: new Date(),
             currentDepartment: 'P1 Production Queue',
             isOnSchedule: true,
@@ -2084,7 +2051,7 @@ export function registerRoutes(app: Express): Server {
           orderId: order.orderId,
           partName: (order as any).partName || 'Unknown',
           dueDate: order.dueDate,
-          status: (order as any).status || 'IN_PROGRESS'
+          status: (order as any).status || 'Active'
         }))
       });
 
@@ -3108,4 +3075,5 @@ export {
   orderAttachmentsRoutes as orderAttachmentsRouter,
   tasksRoutes as tasksRouter,
   communicationsRoutes as communicationsRouter,
+  secureVerificationRoutes as secureVerificationRouter
 };

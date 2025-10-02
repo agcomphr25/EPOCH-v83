@@ -36,24 +36,6 @@ export default function AGTestDashboard() {
     setExpandedSection(expandedSection === section ? null : section);
   };
 
-  const handleLogout = async () => {
-    try {
-      // Call backend logout endpoint
-      await fetch('/api/auth/logout', {
-        method: 'POST',
-        credentials: 'include',
-      });
-    } catch (error) {
-      console.error('Logout error:', error);
-    } finally {
-      // Clear all local storage
-      localStorage.removeItem('currentUser');
-      localStorage.removeItem('userData');
-      
-      // Redirect to login page
-      setLocation('/login');
-    }
-  };
 
   // Get all customer orders (excluding purchase orders)
   const { data: allOrders = [] } = useQuery({
@@ -99,19 +81,8 @@ export default function AGTestDashboard() {
             Production Pipeline Overview, Order Management & Layup Scheduling
           </p>
         </div>
-        <div className="flex items-center gap-4">
-          <div className="text-sm text-gray-500 dark:text-gray-400">
-            Real-time Manufacturing Control Center
-          </div>
-          <Button
-            onClick={handleLogout}
-            variant="outline"
-            size="sm"
-            className="flex items-center gap-2 hover:bg-red-50 hover:border-red-200 hover:text-red-600"
-          >
-            <LogOut className="w-4 h-4" />
-            Logout
-          </Button>
+        <div className="text-sm text-gray-500 dark:text-gray-400">
+          Real-time Manufacturing Control Center
         </div>
       </div>
 

@@ -46,9 +46,18 @@ export default function TrainingAdmin() {
   const [selectedModuleForQuestion, setSelectedModuleForQuestion] = useState<number | null>(null);
   const [selectedQuestionForAnswer, setSelectedQuestionForAnswer] = useState<number | null>(null);
   const [editingModule, setEditingModule] = useState<any>(null);
+  const [editingQuestion, setEditingQuestion] = useState<any>(null);
+  const [editingAnswer, setEditingAnswer] = useState<any>(null);
 
   const { data: modules = [], isLoading } = useQuery<any[]>({
-    queryKey: ["/api/training/modules"],
+    queryKey: ["/api/training/modules", "admin"],
+    queryFn: async () => {
+      const response = await fetch("/api/training/modules?admin=true", {
+        credentials: "include",
+      });
+      if (!response.ok) throw new Error("Failed to fetch modules");
+      return response.json();
+    },
   });
 
   const createModuleMutation = useMutation({
@@ -101,6 +110,102 @@ export default function TrainingAdmin() {
     },
   });
 
+  const updateModuleMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: z.infer<typeof moduleFormSchema> }) => {
+      return apiRequest(`/api/training/modules/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(data),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/training/modules"] });
+      toast({ title: "Module updated successfully" });
+      setEditingModule(null);
+    },
+    onError: () => {
+      toast({ title: "Failed to update module", variant: "destructive" });
+    },
+  });
+
+  const updateQuestionMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: z.infer<typeof questionFormSchema> }) => {
+      return apiRequest(`/api/training/questions/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(data),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/training/modules"] });
+      toast({ title: "Question updated successfully" });
+      setEditingQuestion(null);
+    },
+    onError: () => {
+      toast({ title: "Failed to update question", variant: "destructive" });
+    },
+  });
+
+  const updateAnswerMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: z.infer<typeof answerFormSchema> }) => {
+      return apiRequest(`/api/training/answers/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(data),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/training/modules"] });
+      toast({ title: "Answer updated successfully" });
+      setEditingAnswer(null);
+    },
+    onError: () => {
+      toast({ title: "Failed to update answer", variant: "destructive" });
+    },
+  });
+
+  const deleteModuleMutation = useMutation({
+    mutationFn: async (id: number) => {
+      return apiRequest(`/api/training/modules/${id}`, {
+        method: "DELETE",
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/training/modules"] });
+      toast({ title: "Module deleted successfully" });
+    },
+    onError: () => {
+      toast({ title: "Failed to delete module", variant: "destructive" });
+    },
+  });
+
+  const deleteQuestionMutation = useMutation({
+    mutationFn: async (id: number) => {
+      return apiRequest(`/api/training/questions/${id}`, {
+        method: "DELETE",
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/training/modules"] });
+      toast({ title: "Question deleted successfully" });
+    },
+    onError: () => {
+      toast({ title: "Failed to delete question", variant: "destructive" });
+    },
+  });
+
+  const deleteAnswerMutation = useMutation({
+    mutationFn: async (id: number) => {
+      return apiRequest(`/api/training/answers/${id}`, {
+        method: "DELETE",
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/training/modules"] });
+      toast({ title: "Answer deleted successfully" });
+    },
+    onError: () => {
+      toast({ title: "Failed to delete answer", variant: "destructive" });
+    },
+  });
+
   const toggleModule = (moduleId: number) => {
     const newExpanded = new Set(expandedModules);
     if (newExpanded.has(moduleId)) {
@@ -128,7 +233,9 @@ export default function TrainingAdmin() {
           <h1 className="text-3xl font-bold" data-testid="text-admin-title">Training Module Admin</h1>
           <p className="text-gray-600">Create and manage training modules, quizzes, and certifications</p>
         </div>
-        <ModuleDialog onSubmit={(data) => createModuleMutation.mutate(data)} />
+        <ModuleDialog
+          onSubmit={(data) => createModuleMutation.mutate(data)}
+        />
       </div>
 
       {isLoading ? (
@@ -142,7 +249,7 @@ export default function TrainingAdmin() {
       ) : (
         <div className="space-y-4">
           {modules.map((module: any) => (
-            <Card key={module.id}>
+            <Card key={module.id} className={!module.isActive ? 'opacity-60 bg-gray-50' : ''}>
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 flex-1">
@@ -159,7 +266,10 @@ export default function TrainingAdmin() {
                       )}
                     </Button>
                     <div>
-                      <CardTitle data-testid={`text-module-title-${module.id}`}>{module.title}</CardTitle>
+                      <CardTitle data-testid={`text-module-title-${module.id}`}>
+                        {module.title}
+                        {!module.isActive && <span className="ml-2 text-sm text-gray-500">(Inactive)</span>}
+                      </CardTitle>
                       <CardDescription>{module.description}</CardDescription>
                     </div>
                   </div>
@@ -173,10 +283,30 @@ export default function TrainingAdmin() {
                     <Button
                       variant="outline"
                       size="sm"
+                      onClick={() => setEditingModule(module)}
+                      data-testid={`button-edit-module-${module.id}`}
+                    >
+                      <Edit className="h-4 w-4 mr-1" /> Edit
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
                       onClick={() => setSelectedModuleForQuestion(module.id)}
                       data-testid={`button-add-question-${module.id}`}
                     >
                       <Plus className="h-4 w-4 mr-1" /> Add Question
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => {
+                        if (confirm("Are you sure you want to delete this module and all its questions/answers?")) {
+                          deleteModuleMutation.mutate(module.id);
+                        }
+                      }}
+                      data-testid={`button-delete-module-${module.id}`}
+                    >
+                      <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
                 </div>
@@ -187,6 +317,18 @@ export default function TrainingAdmin() {
                   <ModuleQuestions
                     moduleId={module.id}
                     onAddAnswer={setSelectedQuestionForAnswer}
+                    onEditQuestion={setEditingQuestion}
+                    onDeleteQuestion={(id) => {
+                      if (confirm("Are you sure you want to delete this question and all its answers?")) {
+                        deleteQuestionMutation.mutate(id);
+                      }
+                    }}
+                    onEditAnswer={setEditingAnswer}
+                    onDeleteAnswer={(id) => {
+                      if (confirm("Are you sure you want to delete this answer?")) {
+                        deleteAnswerMutation.mutate(id);
+                      }
+                    }}
                     expandedQuestions={expandedQuestions}
                     toggleQuestion={toggleQuestion}
                   />
@@ -205,6 +347,23 @@ export default function TrainingAdmin() {
         />
       )}
 
+      {editingModule && (
+        <ModuleDialog
+          module={editingModule}
+          onSubmit={(data) => updateModuleMutation.mutate({ id: editingModule.id, data })}
+          onClose={() => setEditingModule(null)}
+        />
+      )}
+
+      {editingQuestion && (
+        <QuestionDialog
+          moduleId={editingQuestion.moduleId}
+          question={editingQuestion}
+          onSubmit={(data) => updateQuestionMutation.mutate({ id: editingQuestion.id, data })}
+          onClose={() => setEditingQuestion(null)}
+        />
+      )}
+
       {selectedQuestionForAnswer && (
         <AnswerDialog
           questionId={selectedQuestionForAnswer}
@@ -212,12 +371,21 @@ export default function TrainingAdmin() {
           onClose={() => setSelectedQuestionForAnswer(null)}
         />
       )}
+
+      {editingAnswer && (
+        <AnswerDialog
+          questionId={editingAnswer.questionId}
+          answer={editingAnswer}
+          onSubmit={(data) => updateAnswerMutation.mutate({ id: editingAnswer.id, data })}
+          onClose={() => setEditingAnswer(null)}
+        />
+      )}
     </div>
   );
 }
 
-function ModuleDialog({ module, onSubmit }: { module?: any; onSubmit: (data: any) => void }) {
-  const [open, setOpen] = useState(false);
+function ModuleDialog({ module, onSubmit, onClose }: { module?: any; onSubmit: (data: any) => void; onClose?: () => void }) {
+  const [open, setOpen] = useState(module ? true : false);
 
   const form = useForm<z.infer<typeof moduleFormSchema>>({
     resolver: zodResolver(moduleFormSchema),
@@ -232,17 +400,29 @@ function ModuleDialog({ module, onSubmit }: { module?: any; onSubmit: (data: any
 
   const handleSubmit = (data: z.infer<typeof moduleFormSchema>) => {
     onSubmit(data);
-    setOpen(false);
-    form.reset();
+    if (!module) {
+      setOpen(false);
+      form.reset();
+    }
+  };
+
+  const handleClose = () => {
+    if (module && onClose) {
+      onClose();
+    } else {
+      setOpen(false);
+    }
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button data-testid="button-create-module">
-          <Plus className="h-4 w-4 mr-2" /> Create Module
-        </Button>
-      </DialogTrigger>
+    <Dialog open={open} onOpenChange={module ? handleClose : setOpen}>
+      {!module && (
+        <DialogTrigger asChild>
+          <Button data-testid="button-create-module">
+            <Plus className="h-4 w-4 mr-2" /> Create Module
+          </Button>
+        </DialogTrigger>
+      )}
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>{module ? "Edit Module" : "Create Training Module"}</DialogTitle>
@@ -326,7 +506,7 @@ function ModuleDialog({ module, onSubmit }: { module?: any; onSubmit: (data: any
             />
 
             <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+              <Button type="button" variant="outline" onClick={handleClose}>
                 Cancel
               </Button>
               <Button type="submit" data-testid="button-submit-module">
@@ -586,16 +766,24 @@ function AnswerDialog({
 function ModuleQuestions({
   moduleId,
   onAddAnswer,
+  onEditQuestion,
+  onDeleteQuestion,
+  onEditAnswer,
+  onDeleteAnswer,
   expandedQuestions,
   toggleQuestion,
 }: {
   moduleId: number;
   onAddAnswer: (questionId: number) => void;
+  onEditQuestion: (question: any) => void;
+  onDeleteQuestion: (questionId: number) => void;
+  onEditAnswer: (answer: any) => void;
+  onDeleteAnswer: (answerId: number) => void;
   expandedQuestions: Set<number>;
   toggleQuestion: (questionId: number) => void;
 }) {
   const { data: moduleData } = useQuery<any>({
-    queryKey: ["/api/training/modules", moduleId],
+    queryKey: ["/api/training/modules", "detail", moduleId],
   });
 
   if (!moduleData?.questions || moduleData.questions.length === 0) {
@@ -635,14 +823,32 @@ function ModuleQuestions({
                   </div>
                 </div>
               </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => onAddAnswer(question.id)}
-                data-testid={`button-add-answer-${question.id}`}
-              >
-                <Plus className="h-4 w-4 mr-1" /> Add Answer
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onEditQuestion(question)}
+                  data-testid={`button-edit-question-${question.id}`}
+                >
+                  <Edit className="h-4 w-4 mr-1" /> Edit
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onAddAnswer(question.id)}
+                  data-testid={`button-add-answer-${question.id}`}
+                >
+                  <Plus className="h-4 w-4 mr-1" /> Add Answer
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => onDeleteQuestion(question.id)}
+                  data-testid={`button-delete-question-${question.id}`}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
           </CardHeader>
 
@@ -660,9 +866,27 @@ function ModuleQuestions({
                       <span>
                         {String.fromCharCode(65 + ansIndex)}. {answer.answerText}
                       </span>
-                      {answer.answerText === question.correctAnswer && (
-                        <span className="text-xs text-green-700 font-semibold">✓ CORRECT</span>
-                      )}
+                      <div className="flex items-center gap-2">
+                        {answer.answerText === question.correctAnswer && (
+                          <span className="text-xs text-green-700 font-semibold">✓ CORRECT</span>
+                        )}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => onEditAnswer(answer)}
+                          data-testid={`button-edit-answer-${answer.id}`}
+                        >
+                          <Edit className="h-3 w-3" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => onDeleteAnswer(answer.id)}
+                          data-testid={`button-delete-answer-${answer.id}`}
+                        >
+                          <Trash2 className="h-3 w-3 text-red-600" />
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 ))}

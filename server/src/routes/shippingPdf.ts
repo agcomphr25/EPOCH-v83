@@ -1086,29 +1086,14 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     const paymentStatus = isFullyPaid ? 'PAID' : 'PENDING';
     const paymentColor = isFullyPaid ? rgb(0, 0.6, 0) : rgb(0.8, 0.4, 0);
     
-    // Payment Status - positioned outside the order box (below it)
-    const paymentStatusY = orderBoxY - 29; // Position 29 pixels below the order box (moved down 4 points)
-    page.drawText('Payment:', {
-      x: orderBoxX + 5,
-      y: paymentStatusY,
-      size: 10,
-      font: boldFont,
-    });
-    
-    page.drawText(paymentStatus, {
-      x: orderBoxX + 90,
-      y: paymentStatusY,
-      size: 10,
-      font: boldFont,
-      color: paymentColor,
-    });
+    // Payment Status - will be positioned below TOTAL later
 
     // Customer Information Section - Fixed positioning
     currentY -= 140; // Move down to provide space for proper box placement
     
     // Define customer box dimensions and position
     const customerBoxY = currentY;
-    const customerBoxHeight = 120;
+    const customerBoxHeight = 85; // Reduced to better fit content
     
     // Create customer info box
     page.drawRectangle({
@@ -2229,6 +2214,25 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     });
 
     summaryLineY -= 10; // Reduced from 15 to 10
+    
+    // Payment Status - positioned below TOTAL
+    summaryLineY -= 20;
+    page.drawText('Payment:', {
+      x: featureColX,
+      y: summaryLineY,
+      size: 10,
+      font: boldFont,
+    });
+    
+    page.drawText(paymentStatus, {
+      x: margin + printableWidth - 80,
+      y: summaryLineY,
+      size: 10,
+      font: boldFont,
+      color: paymentColor,
+    });
+    
+    summaryLineY -= 10;
 
     // Calculate dynamic box height and draw the box
     const actualBoxHeight = boxStartY - summaryLineY + 10;

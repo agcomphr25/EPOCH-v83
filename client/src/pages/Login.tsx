@@ -70,7 +70,13 @@ export default function Login() {
         return;
       }
 
-      // Store only user data (session is in HTTP-only cookie)
+      // Store session token and user data
+      if (data.sessionToken) {
+        localStorage.setItem('sessionToken', data.sessionToken);
+      }
+      if (data.token) {
+        localStorage.setItem('jwtToken', data.token);
+      }
       localStorage.setItem('currentUser', data.user.username);
       localStorage.setItem('userData', JSON.stringify(data.user));
 

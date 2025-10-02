@@ -343,6 +343,7 @@ const AddressManagementTabs = ({
   // New shipping-first state management
   const [billingSameAsShipping, setBillingSameAsShipping] = useState(true);
   const [showAddressForm, setShowAddressForm] = useState(false);
+  const [editingAddressId, setEditingAddressId] = useState<number | null>(null);
   const [newAddressData, setNewAddressData] = useState<AddressFormData>({
     ...initialAddressFormData,
     type: 'shipping'
@@ -398,6 +399,7 @@ const AddressManagementTabs = ({
       setNewAddressData({ ...initialAddressFormData, customerId: selectedCustomer?.id.toString() || '' });
       setAddressErrors({});
       setShowAddressForm(false);
+      setEditingAddressId(null);
       toast({
         title: "Success",
         description: "Address added successfully",
@@ -423,6 +425,21 @@ const AddressManagementTabs = ({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/addresses', selectedCustomer?.id] });
       queryClient.invalidateQueries({ queryKey: ['/api/addresses/all'] });
+      setNewAddressData({ ...initialAddressFormData, customerId: selectedCustomer?.id.toString() || '' });
+      setAddressErrors({});
+      setShowAddressForm(false);
+      setEditingAddressId(null);
+      toast({
+        title: "Success",
+        description: "Address updated successfully",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update address",
+        variant: "destructive",
+      });
     },
   });
 
@@ -606,6 +623,27 @@ const AddressManagementTabs = ({
     }
   };
 
+  // Handle edit address
+  const handleEditAddress = (address: CustomerAddress) => {
+    // Populate the form with existing address data
+    setNewAddressData({
+      customerId: address.customerId,
+      street: address.street,
+      street2: address.street2 || '',
+      city: address.city,
+      state: address.state,
+      zipCode: address.zipCode,
+      country: address.country,
+      type: address.type as 'shipping' | 'billing' | 'both',
+      isDefault: address.isDefault,
+      isValidated: address.isValidated,
+    });
+    
+    // Set editing mode
+    setEditingAddressId(address.id);
+    setShowAddressForm(true);
+  };
+
   // Handle delete address with default reassignment logic
   const handleDeleteAddress = async (addressId: number) => {
     const addressToDelete = addresses.find(addr => addr.id === addressId);
@@ -780,12 +818,21 @@ const AddressManagementTabs = ({
     if (Object.keys(errors).length > 0) return;
 
     try {
-      await createAddressMutation.mutateAsync({
-        ...newAddressData,
-        isDefault: shippingAddresses.length === 0, // Make first address default
-      });
+      if (editingAddressId) {
+        // Update existing address
+        await updateAddressMutation.mutateAsync({
+          id: editingAddressId,
+          ...newAddressData,
+        } as CustomerAddress);
+      } else {
+        // Create new address
+        await createAddressMutation.mutateAsync({
+          ...newAddressData,
+          isDefault: shippingAddresses.length === 0, // Make first address default
+        });
+      }
     } catch (error) {
-      console.error('Failed to create address:', error);
+      console.error('Failed to save address:', error);
     }
   };
 
@@ -983,6 +1030,13 @@ const AddressManagementTabs = ({
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
+                        <DropdownMenuItem 
+                          onClick={() => handleEditAddress(address)}
+                          data-testid={`button-edit-address-${address.id}`}
+                        >
+                          <Edit className="h-4 w-4 mr-2" />
+                          Edit Address
+                        </DropdownMenuItem>
                         {!address.isDefault && (
                           <DropdownMenuItem onClick={() => handleShippingAddressSelect(address)}>
                             <MapPin className="h-4 w-4 mr-2" />
@@ -1134,16 +1188,20 @@ const AddressManagementTabs = ({
 
               <Button 
                 onClick={handleAddNewAddress}
-                disabled={!newAddressData.street || !newAddressData.city || !newAddressData.state || !newAddressData.zipCode || createAddressMutation.isPending}
+                disabled={!newAddressData.street || !newAddressData.city || !newAddressData.state || !newAddressData.zipCode || createAddressMutation.isPending || updateAddressMutation.isPending}
                 className="w-full bg-blue-600 hover:bg-blue-700"
-                data-testid="button-add-shipping-address"
+                data-testid={editingAddressId ? "button-update-shipping-address" : "button-add-shipping-address"}
               >
-                {createAddressMutation.isPending ? (
+                {(createAddressMutation.isPending || updateAddressMutation.isPending) ? (
                   <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                ) : editingAddressId ? (
+                  <Edit className="h-4 w-4 mr-2" />
                 ) : (
                   <Plus className="h-4 w-4 mr-2" />
                 )}
-                {createAddressMutation.isPending ? 'Adding...' : 'Add Shipping Address'}
+                {(createAddressMutation.isPending || updateAddressMutation.isPending) 
+                  ? (editingAddressId ? 'Updating...' : 'Adding...') 
+                  : (editingAddressId ? 'Update Address' : 'Add Shipping Address')}
               </Button>
             </div>
         </div>
@@ -1212,6 +1270,13 @@ const AddressManagementTabs = ({
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
+                          <DropdownMenuItem 
+                            onClick={() => handleEditAddress(address)}
+                            data-testid={`button-edit-billing-${address.id}`}
+                          >
+                            <Edit className="h-4 w-4 mr-2" />
+                            Edit Address
+                          </DropdownMenuItem>
                           {!address.isDefault && (
                             <DropdownMenuItem onClick={() => handleShippingAddressSelect(address)}>
                               <MapPin className="h-4 w-4 mr-2" />

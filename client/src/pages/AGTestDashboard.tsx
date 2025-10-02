@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { BarChart3, Calendar, List, Maximize2, Minimize2, Search, ArrowRight, Edit, QrCode, Users, ExternalLink } from 'lucide-react';
+import { BarChart3, Calendar, List, Maximize2, Minimize2, Search, ArrowRight, Edit, QrCode, Users, ExternalLink, LogOut } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import PipelineVisualization from '@/components/PipelineVisualization';
@@ -31,6 +31,21 @@ export default function AGTestDashboard() {
     };
     checkAuth();
   }, [setLocation]);
+
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        credentials: 'include',
+      });
+    } catch (error) {
+      console.error('Logout error:', error);
+    } finally {
+      localStorage.removeItem('currentUser');
+      localStorage.removeItem('userData');
+      setLocation('/login');
+    }
+  };
 
   const toggleExpand = (section: string) => {
     setExpandedSection(expandedSection === section ? null : section);
@@ -72,6 +87,17 @@ export default function AGTestDashboard() {
 
   return (
     <div className="p-6 space-y-6 max-w-full mx-auto">
+      <div className="flex items-center justify-between mb-8">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Welcome, AG</h1>
+          <p className="text-gray-600 mt-1">Your Personalized Manufacturing Dashboard</p>
+        </div>
+        <Button onClick={handleLogout} variant="outline" size="sm" className="flex items-center gap-2" data-testid="button-logout">
+          <LogOut className="w-4 h-4" />
+          Logout
+        </Button>
+      </div>
+
       {/* Navigation Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card 

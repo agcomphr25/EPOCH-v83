@@ -1,12 +1,56 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Settings, FileText, Users, Wrench, Factory } from 'lucide-react';
-import { Link } from 'wouter';
+import { Button } from '@/components/ui/button';
+import { Settings, FileText, Users, Wrench, Factory, LogOut } from 'lucide-react';
+import { Link, useLocation } from 'wouter';
 import PipelineVisualization from '@/components/PipelineVisualization';
+import { isProductionEnvironment } from '@/lib/env';
 
 export default function JOHNLTestDashboard() {
+  const [, setLocation] = useLocation();
+
+  useEffect(() => {
+    const checkAuth = async () => {
+      if (isProductionEnvironment()) {
+        const { validateSessionAsync } = await import('@/lib/env');
+        const isValid = await validateSessionAsync();
+        if (!isValid) {
+          console.log('🔒 Session invalid - redirecting to login');
+          setLocation('/login');
+        }
+      }
+    };
+    checkAuth();
+  }, [setLocation]);
+
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        credentials: 'include',
+      });
+    } catch (error) {
+      console.error('Logout error:', error);
+    } finally {
+      localStorage.removeItem('currentUser');
+      localStorage.removeItem('userData');
+      setLocation('/login');
+    }
+  };
+
   return (
     <div className="p-6 space-y-6 max-w-full mx-auto">
+      <div className="flex items-center justify-between mb-8">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Welcome, JOHNL</h1>
+          <p className="text-gray-600 mt-1">Your Personalized Manufacturing Dashboard</p>
+        </div>
+        <Button onClick={handleLogout} variant="outline" size="sm" className="flex items-center gap-2" data-testid="button-logout">
+          <LogOut className="w-4 h-4" />
+          Logout
+        </Button>
+      </div>
+
       {/* Quick Navigation Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
         <Link href="/department-queue/cnc">

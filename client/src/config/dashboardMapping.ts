@@ -26,7 +26,7 @@ export const DASHBOARD_ROUTES: Record<string, string> = {
   staciw: '/staciw-dashboard',
   tandyd: '/tandyd-dashboard',
   tandym: '/tandym-dashboard',
-  tasham: '/tasham-dashboard',
+  tasham: '/admin-dashboard',
   tims: '/tims-dashboard',
 };
 

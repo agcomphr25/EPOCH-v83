@@ -22,9 +22,16 @@ export default function AdminTrainingSync() {
   const [syncResult, setSyncResult] = useState<SyncResult | null>(null);
   const { toast } = useToast();
 
-  const { data: syncStatus, isLoading: statusLoading, refetch } = useQuery<SyncStatus>({
+  const { data: syncStatus, isLoading: statusLoading, error, refetch } = useQuery<SyncStatus>({
     queryKey: ['/api/admin/training-sync-status'],
+    retry: 1,
+    staleTime: 0,
   });
+
+  // Log errors for debugging
+  if (error) {
+    console.error('Training sync status error:', error);
+  }
 
   const handleSync = async () => {
     setIsSyncing(true);
@@ -79,6 +86,14 @@ export default function AdminTrainingSync() {
               <div className="flex items-center gap-2 text-muted-foreground">
                 <Loader2 className="h-4 w-4 animate-spin" />
                 Loading status...
+              </div>
+            ) : error ? (
+              <div className="flex items-center gap-2 text-red-600 bg-red-50 p-3 rounded-lg">
+                <AlertCircle className="h-5 w-5" />
+                <div>
+                  <div className="font-medium">Error loading training data status</div>
+                  <div className="text-sm">{error instanceof Error ? error.message : 'Unknown error'}</div>
+                </div>
               </div>
             ) : syncStatus ? (
               <div className="space-y-4">

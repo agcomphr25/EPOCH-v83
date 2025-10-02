@@ -68,18 +68,40 @@ export default function AdminTrainingSync() {
     }
   };
 
+  const downloadCsv = async (path: string, filename: string) => {
+    const response = await fetch(path, {
+      method: 'GET',
+      credentials: 'include',
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to download ${filename}`);
+    }
+
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+  };
+
   const handleExportCSV = async () => {
     setIsExporting(true);
     
     try {
-      // Use window.open to bypass React Router and trigger real downloads
-      window.open('/api/admin/export-training-modules-csv', '_blank');
-      setTimeout(() => window.open('/api/admin/export-training-questions-csv', '_blank'), 200);
-      setTimeout(() => window.open('/api/admin/export-training-answers-csv', '_blank'), 400);
+      // Download each CSV file with authenticated fetch
+      await downloadCsv('/api/admin/export-training-modules-csv', 'training-modules.csv');
+      await downloadCsv('/api/admin/export-training-questions-csv', 'training-questions.csv');
+      await downloadCsv('/api/admin/export-training-answers-csv', 'training-answers.csv');
 
       toast({
-        title: "Export Started!",
-        description: "3 CSV files are downloading...",
+        title: "Export Successful!",
+        description: "3 CSV files downloaded successfully",
       });
     } catch (error: any) {
       toast({
@@ -88,7 +110,7 @@ export default function AdminTrainingSync() {
         variant: "destructive",
       });
     } finally {
-      setTimeout(() => setIsExporting(false), 600);
+      setIsExporting(false);
     }
   };
 

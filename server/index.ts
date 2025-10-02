@@ -24,8 +24,15 @@ console.log('Environment check:', {
 const app = express();
 
 // Serve attached assets (PDFs, documents, etc.) - Must be before other routes
+// In production, assets are copied to dist/attached_assets
+// In development, assets are in the root attached_assets folder
+const assetsPath = process.env.NODE_ENV === 'production' 
+  ? path.join(import.meta.dirname, 'attached_assets')
+  : path.join(process.cwd(), 'attached_assets');
+
 app.get('/attached_assets/*', (req, res, next) => {
-  const filePath = path.join(process.cwd(), req.path);
+  const fileName = req.path.replace('/attached_assets/', '');
+  const filePath = path.join(assetsPath, fileName);
   
   if (fs.existsSync(filePath)) {
     // Set correct content type for PDFs
@@ -46,7 +53,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
 // Also add express.static as fallback
-app.use('/attached_assets', express.static(path.join(process.cwd(), 'attached_assets')));
+app.use('/attached_assets', express.static(assetsPath));
 
 app.use((req, res, next) => {
   const start = Date.now();

@@ -2299,11 +2299,10 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     
     // Define terms for all other departments (CSR, Production, etc.)
     const standardTerms = [
-      '• Payment: 50% deposit required to begin production, balance due upon completion',
-      '• Lead Time: Custom manufacturing typically 4-6 weeks from deposit',
-      '• Custom items are non-returnable unless defective',
-      '• Shipping costs additional - calculated at time of shipment',
-      '• Prices valid for 30 days from quote date'
+      '• Please sign and return a copy of this form, or reply to the email that you are in agreement with the terms and conditions. No stock order will be placed into production without this confirmation',
+      '• Review the specs outlined above and confirm they are correct',
+      '• Any changes to specs requested after 30 days may result in additional charges',
+      '• The Estimated Completion Date is an estimation based on our current capacity and the specs of your order. We make every effort to ship stocks by the Estimated Completion Date'
     ];
     
     // Select appropriate terms based on department

@@ -888,20 +888,23 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     });
     currentY -= 20;
 
-    // Sales Order title
-    page.drawText('SALES ORDER', {
-      x: margin,
-      y: currentY,
-      size: 16,
-      font: boldFont,
-      color: rgb(0, 0, 0),
-    });
-
     // Order number and date box - 4 column layout (2 rows x 2 columns)
     const orderBoxX = width - margin - 200;
     const orderBoxY = currentY - 10;
     const orderBoxWidth = 200;
     const orderBoxHeight = 45; // Reduced from 105 to 45 (10px bottom padding)
+    
+    // Sales Order title - centered above order box
+    const salesOrderText = 'SALES ORDER';
+    const salesOrderWidth = getTextWidth(salesOrderText, 16);
+    const salesOrderX = orderBoxX + (orderBoxWidth - salesOrderWidth) / 2;
+    page.drawText(salesOrderText, {
+      x: salesOrderX,
+      y: orderBoxY + orderBoxHeight + 5,
+      size: 16,
+      font: boldFont,
+      color: rgb(0, 0, 0),
+    });
     
     page.drawRectangle({
       x: orderBoxX,
@@ -2364,16 +2367,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     if (isShippingDepartment && maxColumnHeight > availableSpace) {
       // Add a new page for shipping terms
       page = pdfDoc.addPage([width, height]);
-      currentY = height - margin;
-      
-      // Add header on second page
-      page.drawText('SALES ORDER (continued)', {
-        x: margin,
-        y: currentY,
-        size: 16,
-        font: boldFont,
-      });
-      currentY -= 30;
+      currentY = height - margin - 20;
     }
 
     // Draw left column (leftColumnTerms and rightColumnTerms already split above)
@@ -2410,71 +2404,6 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
 
     // Use the lower of the two columns for the next section
     currentY = Math.min(leftY, rightY);
-
-    // Acceptance signature area
-    currentY -= 30;
-    page.drawText('CUSTOMER APPROVAL', {
-      x: margin,
-      y: currentY,
-      size: 12,
-      font: boldFont,
-    });
-
-    currentY -= 25;
-    page.drawText('Customer Signature:', {
-      x: margin,
-      y: currentY,
-      size: 10,
-      font: boldFont,
-    });
-
-    page.drawLine({
-      start: { x: margin + 120, y: currentY - 5 },
-      end: { x: margin + 300, y: currentY - 5 },
-      thickness: 1,
-      color: rgb(0, 0, 0),
-    });
-
-    page.drawText('Date:', {
-      x: margin + 320,
-      y: currentY,
-      size: 10,
-      font: boldFont,
-    });
-
-    page.drawLine({
-      start: { x: margin + 350, y: currentY - 5 },
-      end: { x: margin + 450, y: currentY - 5 },
-      thickness: 1,
-      color: rgb(0, 0, 0),
-    });
-
-
-
-    // Company footer with better contact info
-    currentY -= 50;
-    page.drawText('Thank you for your business!', {
-      x: margin,
-      y: currentY,
-      size: 11,
-      font: boldFont,
-    });
-
-    currentY -= 20;
-    page.drawText('AG Composites | 230 Hamer Rd, Owens Crossroads, AL 35763', {
-      x: margin,
-      y: currentY,
-      size: 9,
-      font: font,
-    });
-
-    currentY -= 12;
-    page.drawText('Phone: (256) 723-8381 | Email: sales@agatcomposite.com', {
-      x: margin,
-      y: currentY,
-      size: 9,
-      font: font,
-    });
 
     // Generate PDF bytes
     const pdfBytes = await pdfDoc.save();

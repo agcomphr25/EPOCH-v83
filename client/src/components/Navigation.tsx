@@ -1,12 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link, useLocation } from 'wouter';
 
-
 import { Factory, User, FileText, TrendingDown, Plus, Settings, Package, FilePenLine, ClipboardList, BarChart, ChevronDown, ChevronRight, FormInput, PieChart, Scan, Warehouse, Shield, Wrench, Users, TestTube, DollarSign, Receipt, TrendingUp, List, BookOpen, Calendar, CheckSquare, Truck, Mail, MessageSquare, CreditCard, XCircle, Cog, ArrowRight, LogOut, Scissors, MapPin, Snowflake, ShoppingCart, GraduationCap } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import InstallPWAButton from "./InstallPWAButton";
+import { useQuery } from '@tanstack/react-query';
 import {
   NavigationMenu,
   NavigationMenuItem,
@@ -26,12 +26,47 @@ export default function Navigation() {
   const [hasFullNav, setHasFullNav] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   
+  // Check if we're in deployment environment to show logout button
+  const isDeploymentEnvironment = () => {
+    const hostname = window.location.hostname;
+    const isLocalhost = hostname.includes('localhost') || hostname.includes('127.0.0.1');
+    const isReplitEditor = hostname.includes('replit.dev') && !hostname.includes('.replit.dev');
+    return !isLocalhost && !isReplitEditor;
+  };
   
-  
+  // Fetch current user data
+  const { data: userData } = useQuery({
+    queryKey: ['currentUser'],
+    queryFn: async () => {
+      const token = localStorage.getItem('sessionToken') || localStorage.getItem('jwtToken');
+      if (!token || !isDeploymentEnvironment()) {
+        return null;
+      }
+      
+      try {
+        const response = await fetch('/api/auth/session', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        
+        if (response.ok) {
+          const userDataResponse = await response.json();
+          return userDataResponse;
+        }
+        return null;
+      } catch (error) {
+        console.error('Failed to fetch user data:', error);
+        return null;
+      }
+    },
+    enabled: isDeploymentEnvironment(),
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    retry: false
+  });
 
   const [verifiedModulesExpanded, setVerifiedModulesExpanded] = useState(false);
   const [formsReportsExpanded, setFormsReportsExpanded] = useState(false);
-  const [trainingExpanded, setTrainingExpanded] = useState(false);
   const [inventoryExpanded, setInventoryExpanded] = useState(false);
   const [employeesExpanded, setEmployeesExpanded] = useState(false);
   const [qcMaintenanceExpanded, setQcMaintenanceExpanded] = useState(false);
@@ -88,7 +123,6 @@ export default function Navigation() {
   // Helper function to close all dropdowns
   const closeAllDropdowns = useCallback(() => {
     setFormsReportsExpanded(false);
-    setTrainingExpanded(false);
     setInventoryExpanded(false);
     setQcMaintenanceExpanded(false);
     setEmployeesExpanded(false);
@@ -107,7 +141,6 @@ export default function Navigation() {
     // Close other dropdowns when opening a new one
     if (!isExpanded) {
       if (dropdownName !== 'formsReports') setFormsReportsExpanded(false);
-      if (dropdownName !== 'training') setTrainingExpanded(false);
       if (dropdownName !== 'inventory') setInventoryExpanded(false);
       if (dropdownName !== 'qcMaintenance') setQcMaintenanceExpanded(false);
       if (dropdownName !== 'employees') setEmployeesExpanded(false);
@@ -159,7 +192,12 @@ export default function Navigation() {
       icon: Users,
       description: 'Manage customer database'
     },
-
+    {
+      path: '/training',
+      label: 'Training',
+      icon: GraduationCap,
+      description: 'Employee training modules and certifications'
+    },
 
     {
       path: '/bom-administration',
@@ -175,7 +213,7 @@ export default function Navigation() {
     },
     {
       path: '/barcode-scanner',
-      label: 'Barcode Scanner',
+      label: 'Barcde Scanner',
       icon: Scan,
       description: 'Scan order barcodes to view pricing summary and payment status'
     },
@@ -259,10 +297,10 @@ export default function Navigation() {
       description: 'Advanced reporting with PDF/CSV export'
     },
     {
-      path: '/ag-metal-unfulfilled-report',
-      label: 'AG Metal Products Report',
-      icon: Wrench,
-      description: 'Comprehensive AG metal products and rails on unfulfilled orders'
+      path: '/ag-bottom-metal-report',
+      label: 'AG Bottom Metal Report',
+      icon: DollarSign,
+      description: 'Comprehensive pricing analysis for AG bottom metal orders by price tiers'
     },
     {
       path: '/p2-forms',
@@ -293,19 +331,7 @@ export default function Navigation() {
       label: 'Document Management',
       icon: FileText,
       description: 'Unified document repository with advanced tagging and organization'
-
     },
-    {
-      path: '/calendar',
-      label: 'Calendar',
-      icon: Calendar,
-      description: 'Multi-user calendar system'
-
-
-    },
-  ];
-
-  const trainingItems = [
     {
       path: '/shutdown-training',
       label: 'Shutdown Training',
@@ -317,14 +343,6 @@ export default function Navigation() {
       label: 'Fire Safety Training',
       icon: GraduationCap,
       description: 'Presentation-style fire safety training with attendance signatures'
-    },
-    {
-      path: '/counterfeit-prevention-training',
-      label: 'Counterfeit Prevention Training',
-      icon: Shield,
-      description: 'Comprehensive counterfeit materials prevention training with multiple choice quiz'
-
-
     }
   ];
 
@@ -634,6 +652,7 @@ export default function Navigation() {
     }
   ];
 
+
   // Filter items based on user permissions - only if user is loaded
   const filteredNavItems = (isLoading || !currentUser) ? [] : (hasFullNav ? navItems : navItems.filter(item => canAccessRoute(item.path)));
   const filteredInventoryItems = (isLoading || !currentUser) ? [] : (hasFullNav ? inventoryItems : inventoryItems.filter(item => canAccessRoute(item.path)));
@@ -660,6 +679,7 @@ export default function Navigation() {
   const isProductionSchedulingActive = filteredProductionSchedulingItems.some(item => location === item.path);
   const isDepartmentQueueActive = filteredDepartmentQueueItems.some(item => location === item.path);
 
+
   // Close all dropdowns when navigating to a new page
   useEffect(() => {
     closeAllDropdowns();
@@ -673,9 +693,6 @@ export default function Navigation() {
       }
       if (isFormsReportsActive) {
         setFormsReportsExpanded(true);
-      }
-      if (isTrainingActive) {
-        setTrainingExpanded(true);
       }
       if (isInventoryActive) {
         setInventoryExpanded(true);
@@ -704,7 +721,7 @@ export default function Navigation() {
     }, 100); // Small delay to prevent conflicts with manual dropdown closing
 
     return () => clearTimeout(timer);
-  }, [isVerifiedModulesActive, isFormsReportsActive, isTrainingActive, isInventoryActive, isQcMaintenanceActive, isEmployeesActive, isFinanceActive, isUserDashboardsActive, isPurchaseOrdersActive, isProductionSchedulingActive, isDepartmentQueueActive]);
+  }, [isVerifiedModulesActive, isFormsReportsActive, isInventoryActive, isQcMaintenanceActive, isEmployeesActive, isFinanceActive, isUserDashboardsActive, isPurchaseOrdersActive, isProductionSchedulingActive, isDepartmentQueueActive]);
 
   return (
     <header className="bg-white shadow-sm border-b border-gray-200">
@@ -821,6 +838,7 @@ export default function Navigation() {
               </div>
             )}
 
+
             {/* Training Dropdown */}
             {filteredTrainingItems.length > 0 && (
               <div className="relative">
@@ -866,6 +884,7 @@ export default function Navigation() {
                 )}
               </div>
             )}
+
 
             {/* Inventory Dropdown */}
             {filteredInventoryItems.length > 0 && (
@@ -1240,19 +1259,29 @@ export default function Navigation() {
 
           <div className="flex flex-wrap items-center gap-2 lg:gap-4">
             <InstallPWAButton />
-            {currentUser && (
-              <span className="text-sm text-gray-600">Welcome, {currentUser.toUpperCase()}</span>
+
+            <span className="text-sm text-gray-600">Manufacturing ERP System</span>
+            {isDeploymentEnvironment() && currentUser?.username && (
+              <span className="text-sm font-medium text-gray-700" data-testid="text-username">
+                {currentUser.username}
+              </span>
             )}
-            <Button
-              onClick={handleLogout}
-              variant="outline"
-              size="sm"
-              className="flex items-center gap-2 hover:bg-red-50 hover:border-red-200 hover:text-red-600"
-              data-testid="button-logout"
-            >
-              <LogOut className="w-4 h-4" />
-              Logout
-            </Button>
+            {isDeploymentEnvironment() && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleLogout}
+                className="gap-2"
+                data-testid="button-logout"
+              >
+                <LogOut className="h-4 w-4" />
+                Logout
+              </Button>
+            )}
+            <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center">
+              <User className="h-4 w-4 text-white" />
+            </div>
+
           </div>
         </div>
       </div>

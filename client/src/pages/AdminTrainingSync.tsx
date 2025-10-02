@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Database, CheckCircle, AlertCircle, Upload } from "lucide-react";
+import { Loader2, Database, CheckCircle, AlertCircle, Upload, Download } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useQuery } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
@@ -23,6 +23,7 @@ export default function AdminTrainingSync() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<SyncResult | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const [modulesFile, setModulesFile] = useState<File | null>(null);
   const [questionsFile, setQuestionsFile] = useState<File | null>(null);
   const [answersFile, setAnswersFile] = useState<File | null>(null);
@@ -64,6 +65,53 @@ export default function AdminTrainingSync() {
       });
     } finally {
       setIsSyncing(false);
+    }
+  };
+
+  const handleExportCSV = async () => {
+    setIsExporting(true);
+    
+    try {
+      const response = await fetch('/api/admin/export-training-csv', {
+        method: 'GET',
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        throw new Error('Export failed');
+      }
+
+      const data = await response.json();
+
+      // Download each CSV file
+      const downloadFile = (content: string, filename: string) => {
+        const blob = new Blob([content], { type: 'text/csv' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+      };
+
+      downloadFile(data.modulesCSV, 'training-modules.csv');
+      setTimeout(() => downloadFile(data.questionsCSV, 'training-questions.csv'), 100);
+      setTimeout(() => downloadFile(data.answersCSV, 'training-answers.csv'), 200);
+
+      toast({
+        title: "Export Successful!",
+        description: "3 CSV files downloaded successfully",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Export Failed",
+        description: error.message || "Failed to export CSV data",
+        variant: "destructive",
+      });
+    } finally {
+      setIsExporting(false);
     }
   };
 
@@ -231,6 +279,40 @@ export default function AdminTrainingSync() {
                 </div>
               </div>
             )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Download className="h-5 w-5" />
+              Export Training Data to CSV
+            </CardTitle>
+            <CardDescription>
+              Download current training data as CSV files (for backup or migration)
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button
+              onClick={handleExportCSV}
+              disabled={isExporting}
+              size="lg"
+              className="w-full"
+              variant="outline"
+              data-testid="button-export-csv"
+            >
+              {isExporting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Exporting CSV Files...
+                </>
+              ) : (
+                <>
+                  <Download className="mr-2 h-4 w-4" />
+                  Export to CSV Files
+                </>
+              )}
+            </Button>
           </CardContent>
         </Card>
 

@@ -631,19 +631,19 @@ export default function Navigation() {
     }
   ];
 
-  // Filter items based on user permissions
-  const filteredNavItems = hasFullNav ? navItems : navItems.filter(item => canAccessRoute(item.path));
-  const filteredInventoryItems = hasFullNav ? inventoryItems : inventoryItems.filter(item => canAccessRoute(item.path));
-  const filteredFormsReportsItems = hasFullNav ? formsReportsItems : formsReportsItems.filter(item => canAccessRoute(item.path));
-  const filteredTrainingItems = hasFullNav ? trainingItems : trainingItems.filter(item => canAccessRoute(item.path));
-  const filteredQcMaintenanceItems = hasFullNav ? qcMaintenanceItems : qcMaintenanceItems.filter(item => canAccessRoute(item.path));
-  const filteredEmployeesItems = hasFullNav ? employeesItems : employeesItems.filter(item => canAccessRoute(item.path));
-  const filteredFinanceItems = hasFullNav ? financeItems : financeItems.filter(item => canAccessRoute(item.path));
-  const filteredUserDashboardsItems = hasFullNav ? userDashboardsItems : userDashboardsItems.filter(item => canAccessRoute(item.path));
-  const filteredPurchaseOrdersItems = hasFullNav ? purchaseOrdersItems : purchaseOrdersItems.filter(item => canAccessRoute(item.path));
-  const filteredVerifiedModulesItems = hasFullNav ? verifiedModulesItems : verifiedModulesItems.filter(item => canAccessRoute(item.path));
-  const filteredProductionSchedulingItems = hasFullNav ? productionSchedulingItems : productionSchedulingItems.filter(item => canAccessRoute(item.path));
-  const filteredDepartmentQueueItems = hasFullNav ? departmentQueueItems : departmentQueueItems.filter(item => canAccessRoute(item.path));
+  // Filter items based on user permissions - only if user is loaded
+  const filteredNavItems = (isLoading || !currentUser) ? [] : (hasFullNav ? navItems : navItems.filter(item => canAccessRoute(item.path)));
+  const filteredInventoryItems = (isLoading || !currentUser) ? [] : (hasFullNav ? inventoryItems : inventoryItems.filter(item => canAccessRoute(item.path)));
+  const filteredFormsReportsItems = (isLoading || !currentUser) ? [] : (hasFullNav ? formsReportsItems : formsReportsItems.filter(item => canAccessRoute(item.path)));
+  const filteredTrainingItems = (isLoading || !currentUser) ? [] : (hasFullNav ? trainingItems : trainingItems.filter(item => canAccessRoute(item.path)));
+  const filteredQcMaintenanceItems = (isLoading || !currentUser) ? [] : (hasFullNav ? qcMaintenanceItems : qcMaintenanceItems.filter(item => canAccessRoute(item.path)));
+  const filteredEmployeesItems = (isLoading || !currentUser) ? [] : (hasFullNav ? employeesItems : employeesItems.filter(item => canAccessRoute(item.path)));
+  const filteredFinanceItems = (isLoading || !currentUser) ? [] : (hasFullNav ? financeItems : financeItems.filter(item => canAccessRoute(item.path)));
+  const filteredUserDashboardsItems = (isLoading || !currentUser) ? [] : (hasFullNav ? userDashboardsItems : userDashboardsItems.filter(item => canAccessRoute(item.path)));
+  const filteredPurchaseOrdersItems = (isLoading || !currentUser) ? [] : (hasFullNav ? purchaseOrdersItems : purchaseOrdersItems.filter(item => canAccessRoute(item.path)));
+  const filteredVerifiedModulesItems = (isLoading || !currentUser) ? [] : (hasFullNav ? verifiedModulesItems : verifiedModulesItems.filter(item => canAccessRoute(item.path)));
+  const filteredProductionSchedulingItems = (isLoading || !currentUser) ? [] : (hasFullNav ? productionSchedulingItems : productionSchedulingItems.filter(item => canAccessRoute(item.path)));
+  const filteredDepartmentQueueItems = (isLoading || !currentUser) ? [] : (hasFullNav ? departmentQueueItems : departmentQueueItems.filter(item => canAccessRoute(item.path)));
 
   const isVerifiedModulesActive = filteredVerifiedModulesItems.some(item => location === item.path);
   const isFormsReportsActive = filteredFormsReportsItems.some(item => location === item.path);
@@ -714,7 +714,17 @@ export default function Navigation() {
 
           {/* Navigation Links */}
           <nav className="flex flex-wrap items-center gap-2 lg:gap-4">
-            {filteredNavItems.map((item) => {
+            {isLoading && (
+              <span className="text-sm text-gray-500">Loading navigation...</span>
+            )}
+            {!isLoading && !currentUser && (
+              <Link href="/">
+                <span className="text-sm text-red-600 hover:text-red-700 cursor-pointer underline">
+                  Please log in to access navigation
+                </span>
+              </Link>
+            )}
+            {!isLoading && currentUser && filteredNavItems.map((item) => {
               const Icon = item.icon;
               const isActive = location === item.path;
 

@@ -288,6 +288,7 @@ function App() {
                   <Route path="/module8-test" component={Module8TestPage} />
                   <Route path="/order-department-transfer" component={OrderDepartmentTransfer} />
                   <Route path="/communications/inbox" component={CommunicationInboxPage} />
+                  <Route path="/communication" component={CommunicationInboxPage} />
                   <Route path="/enhanced-forms" component={EnhancedFormsPage} />
                   <Route path="/enhanced-reports" component={EnhancedReportsPage} />
 

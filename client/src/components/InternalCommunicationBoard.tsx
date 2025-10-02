@@ -383,7 +383,7 @@ export default function InternalCommunicationBoard() {
                         data-testid={`checkbox-user-${user.id}`}
                       />
                       <Label htmlFor={`user-${user.id}`} className="cursor-pointer flex-1 text-foreground">
-                        {user.name} {!user.isActive && <span className="text-muted-foreground">(Inactive)</span>}
+                        {user.username} {!user.isActive && <span className="text-muted-foreground">(Inactive)</span>}
                       </Label>
                     </div>
                   ))}

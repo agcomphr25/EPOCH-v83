@@ -127,10 +127,18 @@ export default function AdminTrainingSync() {
     setIsUploading(true);
     
     try {
+      console.log('Creating FormData with files:', {
+        modules: modulesFile.name,
+        questions: questionsFile.name,
+        answers: answersFile.name
+      });
+
       const formData = new FormData();
       formData.append('modules', modulesFile);
       formData.append('questions', questionsFile);
       formData.append('answers', answersFile);
+
+      console.log('Sending POST request to /api/admin/import-training-csv');
 
       const response = await fetch('/api/admin/import-training-csv', {
         method: 'POST',
@@ -138,11 +146,16 @@ export default function AdminTrainingSync() {
         credentials: 'include',
       });
 
+      console.log('Response status:', response.status);
+
       if (!response.ok) {
-        throw new Error('Upload failed');
+        const errorText = await response.text();
+        console.error('Upload failed:', errorText);
+        throw new Error(`Upload failed: ${response.status}`);
       }
 
       const result = await response.json();
+      console.log('Import result:', result);
 
       toast({
         title: "Import Successful!",
@@ -155,6 +168,7 @@ export default function AdminTrainingSync() {
       setAnswersFile(null);
       refetch();
     } catch (error: any) {
+      console.error('Import error:', error);
       toast({
         title: "Import Failed",
         description: error.message || "Failed to import CSV data",

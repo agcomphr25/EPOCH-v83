@@ -1005,14 +1005,14 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     }
 
     // Contact info below logo
-    page.drawText('230 Hamer Rd, Owens Crossroads, AL 35763', {
+    page.drawText('230 Hamer Rd, Owens Cross Roads, AL 35763', {
       x: margin,
       y: currentY,
       size: 8,
       font: font,
     });
     currentY -= 12;
-    page.drawText('Phone: (256) 723-8381 | Email: sales@agatcomposite.com', {
+    page.drawText('Phone: (256) 723-8381 | Email: sales@agcomposites.com', {
       x: margin,
       y: currentY,
       size: 8,

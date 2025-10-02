@@ -3,6 +3,10 @@ import { db } from "../db";
 import { trainingModules, trainingQuizQuestions, trainingQuizAnswers, users } from "../schema";
 import { eq } from "drizzle-orm";
 import { authenticateToken, requireRole } from "../middleware/auth";
+import multer from "multer";
+import Papa from "papaparse";
+
+const upload = multer({ storage: multer.memoryStorage() });
 
 export function registerTrainingSyncRoutes(app: Express) {
   
@@ -160,6 +164,120 @@ export function registerTrainingSyncRoutes(app: Express) {
         message: 'tasham role updated to ADMIN'
       });
     } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // CSV Import endpoint
+  app.post("/api/admin/import-training-csv", authenticateToken, upload.fields([
+    { name: 'modules', maxCount: 1 },
+    { name: 'questions', maxCount: 1 },
+    { name: 'answers', maxCount: 1 }
+  ]), async (req, res) => {
+    // Allow ADMIN role or specific users (glennj, tasham)
+    if (req.user?.role !== 'ADMIN' && 
+        req.user?.username !== 'glennj' && 
+        req.user?.username !== 'tasham') {
+      return res.status(403).json({ error: 'Insufficient permissions' });
+    }
+
+    try {
+      const files = req.files as { [fieldname: string]: Express.Multer.File[] };
+      
+      if (!files.modules || !files.questions || !files.answers) {
+        return res.status(400).json({ error: 'Missing CSV files' });
+      }
+
+      let modulesInserted = 0;
+      let questionsInserted = 0;
+      let answersInserted = 0;
+
+      // Parse and import modules
+      const modulesCSV = files.modules[0].buffer.toString('utf-8');
+      const modulesParsed = Papa.parse(modulesCSV, { header: true, skipEmptyLines: true });
+      
+      for (const row of modulesParsed.data as any[]) {
+        await db.insert(trainingModules).values({
+          id: parseInt(row.id),
+          title: row.title,
+          description: row.description,
+          pdfUrl: row.pdfUrl || null,
+          passingScore: parseInt(row.passingScore) || 80,
+          isActive: row.isActive === 'true',
+        }).onConflictDoUpdate({
+          target: trainingModules.id,
+          set: {
+            title: row.title,
+            description: row.description,
+            pdfUrl: row.pdfUrl || null,
+            passingScore: parseInt(row.passingScore) || 80,
+            isActive: row.isActive === 'true',
+          }
+        });
+        modulesInserted++;
+      }
+
+      // Parse and import questions
+      const questionsCSV = files.questions[0].buffer.toString('utf-8');
+      const questionsParsed = Papa.parse(questionsCSV, { header: true, skipEmptyLines: true });
+      
+      for (const row of questionsParsed.data as any[]) {
+        await db.insert(trainingQuizQuestions).values({
+          id: parseInt(row.id),
+          moduleId: parseInt(row.moduleId),
+          question: row.question,
+          questionType: row.questionType || 'multiple_choice',
+          correctAnswer: row.correctAnswer,
+          explanation: row.explanation || null,
+          sortOrder: parseInt(row.sortOrder) || 0,
+          isActive: row.isActive === 'true',
+        }).onConflictDoUpdate({
+          target: trainingQuizQuestions.id,
+          set: {
+            moduleId: parseInt(row.moduleId),
+            question: row.question,
+            questionType: row.questionType || 'multiple_choice',
+            correctAnswer: row.correctAnswer,
+            explanation: row.explanation || null,
+            sortOrder: parseInt(row.sortOrder) || 0,
+            isActive: row.isActive === 'true',
+          }
+        });
+        questionsInserted++;
+      }
+
+      // Parse and import answers
+      const answersCSV = files.answers[0].buffer.toString('utf-8');
+      const answersParsed = Papa.parse(answersCSV, { header: true, skipEmptyLines: true });
+      
+      for (const row of answersParsed.data as any[]) {
+        await db.insert(trainingQuizAnswers).values({
+          id: parseInt(row.id),
+          questionId: parseInt(row.questionId),
+          answerText: row.answerText,
+          isCorrect: row.isCorrect === 'true',
+          sortOrder: parseInt(row.sortOrder) || 0,
+        }).onConflictDoUpdate({
+          target: trainingQuizAnswers.id,
+          set: {
+            questionId: parseInt(row.questionId),
+            answerText: row.answerText,
+            isCorrect: row.isCorrect === 'true',
+            sortOrder: parseInt(row.sortOrder) || 0,
+          }
+        });
+        answersInserted++;
+      }
+
+      res.json({
+        success: true,
+        modulesInserted,
+        questionsInserted,
+        answersInserted
+      });
+
+    } catch (error: any) {
+      console.error('CSV import error:', error);
       res.status(500).json({ error: error.message });
     }
   });

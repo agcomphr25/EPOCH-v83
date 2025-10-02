@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link, useLocation } from 'wouter';
 
-import { Factory, User, FileText, TrendingDown, Plus, Settings, Package, FilePenLine, ClipboardList, BarChart, ChevronDown, ChevronRight, FormInput, PieChart, Scan, Warehouse, Shield, Wrench, Users, TestTube, DollarSign, Receipt, TrendingUp, List, BookOpen, Calendar, CheckSquare, Truck, Mail, MessageSquare, CreditCard, XCircle, Cog, ArrowRight, LogOut, Scissors, MapPin, Snowflake, ShoppingCart, GraduationCap } from "lucide-react";
+import { Factory, User, FileText, TrendingDown, Plus, Settings, Package, FilePenLine, ClipboardList, BarChart, ChevronDown, ChevronRight, FormInput, PieChart, Scan, Warehouse, Shield, Wrench, Users, TestTube, DollarSign, Receipt, TrendingUp, List, BookOpen, Calendar, CheckSquare, Truck, Mail, MessageSquare, CreditCard, XCircle, Cog, ArrowRight, LogOut, Scissors, MapPin, Snowflake, ShoppingCart, GraduationCap, Flame, AlertTriangle, ShieldAlert, Award, PackageX, Scale, ClipboardCheck, Power } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -653,6 +653,68 @@ export default function Navigation() {
     }
   ];
 
+  const trainingItems = [
+    {
+      path: '/training',
+      label: 'Training Home',
+      icon: GraduationCap,
+      description: 'View all training modules'
+    },
+    {
+      path: '/training/module/2',
+      label: 'Preservation & FOD Training',
+      icon: Shield,
+      description: 'Foreign Object Debris prevention'
+    },
+    {
+      path: '/training/module/3',
+      label: 'Chemical Handling & Storage',
+      icon: AlertTriangle,
+      description: 'Safe chemical handling procedures'
+    },
+    {
+      path: '/training/module/4',
+      label: 'Fire Safety Training',
+      icon: Flame,
+      description: 'Fire prevention and safety'
+    },
+    {
+      path: '/training/module/5',
+      label: 'ITAR Compliance',
+      icon: ShieldAlert,
+      description: 'Export control regulations'
+    },
+    {
+      path: '/training/module/6',
+      label: 'AS9100 Orientation',
+      icon: Award,
+      description: 'Quality management system training'
+    },
+    {
+      path: '/training/module/7',
+      label: 'Counterfeit Prevention',
+      icon: PackageX,
+      description: 'Prevent counterfeit materials'
+    },
+    {
+      path: '/training/module/8',
+      label: 'Ethics in Quality Systems',
+      icon: Scale,
+      description: 'Aerospace quality ethics'
+    },
+    {
+      path: '/training/module/9',
+      label: 'Nonconforming Items (Leader)',
+      icon: ClipboardCheck,
+      description: 'Leader training for nonconforming items'
+    },
+    {
+      path: '/training/module/10',
+      label: 'Shut Down Procedures (Leader)',
+      icon: Power,
+      description: 'Leader training for shutdown procedures'
+    }
+  ];
 
   // Filter items based on user permissions - only if user is loaded
   const filteredNavItems = (isLoading || !currentUser) ? [] : (hasFullNav ? navItems : navItems.filter(item => canAccessRoute(item.path)));

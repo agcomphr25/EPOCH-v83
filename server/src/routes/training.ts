@@ -14,14 +14,18 @@ import { eq, desc, and } from 'drizzle-orm';
 
 const router = Router();
 
-// Get all training modules
+// Get all training modules (admin gets all, regular users get active only)
 router.get('/modules', async (req: Request, res: Response) => {
   try {
-    const modules = await db
-      .select()
-      .from(trainingModules)
-      .where(eq(trainingModules.isActive, true))
-      .orderBy(desc(trainingModules.createdAt));
+    const isAdmin = req.query.admin === 'true';
+    
+    let query = db.select().from(trainingModules);
+    
+    if (!isAdmin) {
+      query = query.where(eq(trainingModules.isActive, true)) as any;
+    }
+    
+    const modules = await query.orderBy(desc(trainingModules.createdAt));
     res.json(modules);
   } catch (error) {
     console.error('Get training modules error:', error);
@@ -226,6 +230,144 @@ router.post('/answers', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Create quiz answer error:', error);
     res.status(500).json({ error: 'Failed to create quiz answer' });
+  }
+});
+
+// Update training module (admin)
+router.patch('/modules/:id', async (req: Request, res: Response) => {
+  try {
+    const moduleId = parseInt(req.params.id);
+    const moduleData = insertTrainingModuleSchema.parse(req.body);
+    
+    const [updatedModule] = await db
+      .update(trainingModules)
+      .set({ ...moduleData, updatedAt: new Date() })
+      .where(eq(trainingModules.id, moduleId))
+      .returning();
+    
+    if (!updatedModule) {
+      return res.status(404).json({ error: 'Module not found' });
+    }
+    
+    res.json(updatedModule);
+  } catch (error) {
+    console.error('Update training module error:', error);
+    res.status(500).json({ error: 'Failed to update training module' });
+  }
+});
+
+// Update quiz question (admin)
+router.patch('/questions/:id', async (req: Request, res: Response) => {
+  try {
+    const questionId = parseInt(req.params.id);
+    const questionData = insertTrainingQuizQuestionSchema.parse(req.body);
+    
+    const [updatedQuestion] = await db
+      .update(trainingQuizQuestions)
+      .set(questionData)
+      .where(eq(trainingQuizQuestions.id, questionId))
+      .returning();
+    
+    if (!updatedQuestion) {
+      return res.status(404).json({ error: 'Question not found' });
+    }
+    
+    res.json(updatedQuestion);
+  } catch (error) {
+    console.error('Update quiz question error:', error);
+    res.status(500).json({ error: 'Failed to update quiz question' });
+  }
+});
+
+// Update quiz answer (admin)
+router.patch('/answers/:id', async (req: Request, res: Response) => {
+  try {
+    const answerId = parseInt(req.params.id);
+    const answerData = insertTrainingQuizAnswerSchema.parse(req.body);
+    
+    const [updatedAnswer] = await db
+      .update(trainingQuizAnswers)
+      .set(answerData)
+      .where(eq(trainingQuizAnswers.id, answerId))
+      .returning();
+    
+    if (!updatedAnswer) {
+      return res.status(404).json({ error: 'Answer not found' });
+    }
+    
+    res.json(updatedAnswer);
+  } catch (error) {
+    console.error('Update quiz answer error:', error);
+    res.status(500).json({ error: 'Failed to update quiz answer' });
+  }
+});
+
+// Delete training module (admin)
+router.delete('/modules/:id', async (req: Request, res: Response) => {
+  try {
+    const moduleId = parseInt(req.params.id);
+    
+    // Delete related questions and answers first
+    const questions = await db
+      .select()
+      .from(trainingQuizQuestions)
+      .where(eq(trainingQuizQuestions.moduleId, moduleId));
+    
+    for (const question of questions) {
+      await db
+        .delete(trainingQuizAnswers)
+        .where(eq(trainingQuizAnswers.questionId, question.id));
+    }
+    
+    await db
+      .delete(trainingQuizQuestions)
+      .where(eq(trainingQuizQuestions.moduleId, moduleId));
+    
+    await db
+      .delete(trainingModules)
+      .where(eq(trainingModules.id, moduleId));
+    
+    res.json({ success: true, message: 'Module and related data deleted' });
+  } catch (error) {
+    console.error('Delete training module error:', error);
+    res.status(500).json({ error: 'Failed to delete training module' });
+  }
+});
+
+// Delete quiz question (admin)
+router.delete('/questions/:id', async (req: Request, res: Response) => {
+  try {
+    const questionId = parseInt(req.params.id);
+    
+    // Delete related answers first
+    await db
+      .delete(trainingQuizAnswers)
+      .where(eq(trainingQuizAnswers.questionId, questionId));
+    
+    await db
+      .delete(trainingQuizQuestions)
+      .where(eq(trainingQuizQuestions.id, questionId));
+    
+    res.json({ success: true, message: 'Question and related answers deleted' });
+  } catch (error) {
+    console.error('Delete quiz question error:', error);
+    res.status(500).json({ error: 'Failed to delete quiz question' });
+  }
+});
+
+// Delete quiz answer (admin)
+router.delete('/answers/:id', async (req: Request, res: Response) => {
+  try {
+    const answerId = parseInt(req.params.id);
+    
+    await db
+      .delete(trainingQuizAnswers)
+      .where(eq(trainingQuizAnswers.id, answerId));
+    
+    res.json({ success: true, message: 'Answer deleted' });
+  } catch (error) {
+    console.error('Delete quiz answer error:', error);
+    res.status(500).json({ error: 'Failed to delete quiz answer' });
   }
 });
 

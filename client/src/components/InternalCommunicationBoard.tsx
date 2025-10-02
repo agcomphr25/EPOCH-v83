@@ -44,6 +44,12 @@ interface User {
   isActive: boolean;
 }
 
+interface CurrentUser {
+  id: number;
+  username: string;
+  role: string;
+}
+
 export default function InternalCommunicationBoard() {
   const { toast } = useToast();
   const [recipientType, setRecipientType] = useState<'department' | 'person'>('department');
@@ -56,7 +62,11 @@ export default function InternalCommunicationBoard() {
   const [showCompose, setShowCompose] = useState(false);
   const [filterType, setFilterType] = useState<'all' | 'sent' | 'received'>('all');
   
-  const currentUserId = 1;
+  const { data: currentUser } = useQuery<CurrentUser>({
+    queryKey: ['/api/auth/session'],
+  });
+  
+  const currentUserId = currentUser?.id || 0;
 
   const { data: departments = [] } = useQuery<Department[]>({
     queryKey: ['/api/departments'],

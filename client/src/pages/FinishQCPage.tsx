@@ -100,7 +100,7 @@ export default function FinishQCPage() {
     const orderExists = filteredOrders.some((order: any) => order.orderId === orderId);
     if (orderExists) {
       // Select the found order
-      setSelectedOrders(prev => new Set([...prev, orderId]));
+      setSelectedOrders(prev => new Set([...Array.from(prev), orderId]));
       toast.success(`Order ${orderId} found and selected in Finish QC department`);
     } else {
       // Find the order in all orders to show current department
@@ -110,6 +110,18 @@ export default function FinishQCPage() {
       } else {
         toast.error(`Order ${orderId} not found in Finish QC department`);
       }
+    }
+  };
+
+  // Auto-select order when scanned via barcode scanner
+  const handleOrderScanned = (orderId: string) => {
+    // Check if the order exists in the current queue
+    const orderExists = orders.some((order: any) => order.orderId === orderId);
+    if (orderExists) {
+      setSelectedOrders(prev => new Set([...Array.from(prev), orderId]));
+      toast.success(`Order ${orderId} selected automatically`);
+    } else {
+      toast.error(`Order ${orderId} not found in Finish QC department`);
     }
   };
 
@@ -353,7 +365,7 @@ export default function FinishQCPage() {
       </div>
 
       {/* Barcode Scanner */}
-      <BarcodeScanner />
+      <BarcodeScanner onOrderScanned={handleOrderScanned} />
 
       {/* Search Box */}
       <Card>

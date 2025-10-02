@@ -7,20 +7,28 @@ interface DeploymentAuthWrapperProps {
 }
 
 function isDeploymentEnvironment(): boolean {
-  // SECURITY UPDATE: Login requirements re-enabled for all sites
-  // Only skip authentication for development environments
+  // Multiple methods to detect deployment environment
   const hostname = window.location.hostname;
+  const viteDeployment = import.meta.env.VITE_REPLIT_DEPLOYMENT === '1';
+  const nodeEnv = import.meta.env.VITE_NODE_ENV;
+  // Development overrides - skip auth for development environments
   const isLocalhost = hostname.includes('localhost') || hostname.includes('127.0.0.1');
-  const isReplitDev = hostname.includes('replit.dev');
+
+  const isReplitEditor = hostname.includes('replit.dev') && !hostname.includes('.replit.dev');
+
+  const isReplitDev = hostname.includes('replit.dev'); // All replit.dev domains (including workspaces)
+  const isDevelopment = import.meta.env.NODE_ENV === 'development' || 
+                       nodeEnv === 'development' || 
+                       import.meta.env.MODE === 'development' || 
+                       import.meta.env.VITE_NODE_ENV === 'development';
   
-  // Bypass authentication for development environments
-  if (isLocalhost || isReplitDev) {
-    console.log('🔧 FRONTEND AUTH BYPASS: Development environment detected:', hostname);
-    return false;
+  // Skip auth for ANY development environment
+  if (isLocalhost || isReplitEditor || isReplitDev || isDevelopment || !viteDeployment) {
+      return false;
   }
   
-  // Require authentication for production deployments (including custom domains)
-  console.log('🔧 FRONTEND PRODUCTION MODE: Authentication required for:', hostname);
+  // Only require auth for explicitly deployed production environments
+
   return true;
 }
 

@@ -64,13 +64,11 @@ export default function OrdersManagementPage() {
   const { toast } = useToast();
 
   // Fetch orders data
-  const { data: ordersResponse, isLoading, error, refetch } = useQuery({
-    queryKey: ['/api/orders/with-payment-status/paginated', 'ordersManagement'],
-    queryFn: () => apiRequest('/api/orders/with-payment-status/paginated?page=1&limit=1000'),
+  const { data: orders = [], isLoading, error, refetch } = useQuery<Order[]>({
+    queryKey: ['/api/orders'],
+    queryFn: () => apiRequest('/api/orders'),
     refetchOnWindowFocus: false,
   });
-  
-  const orders: Order[] = ordersResponse?.orders || [];
 
   // Fetch customers for name lookup
   const { data: customers = [] } = useQuery<Customer[]>({

@@ -32,8 +32,13 @@ export default function AGTestDashboard() {
     checkAuth();
   }, [setLocation]);
 
+  const toggleExpand = (section: string) => {
+    setExpandedSection(expandedSection === section ? null : section);
+  };
+
   const handleLogout = async () => {
     try {
+      // Call backend logout endpoint
       await fetch('/api/auth/logout', {
         method: 'POST',
         credentials: 'include',
@@ -41,14 +46,13 @@ export default function AGTestDashboard() {
     } catch (error) {
       console.error('Logout error:', error);
     } finally {
+      // Clear all local storage
       localStorage.removeItem('currentUser');
       localStorage.removeItem('userData');
+      
+      // Redirect to login page
       setLocation('/login');
     }
-  };
-
-  const toggleExpand = (section: string) => {
-    setExpandedSection(expandedSection === section ? null : section);
   };
 
   // Get all customer orders (excluding purchase orders)
@@ -87,15 +91,28 @@ export default function AGTestDashboard() {
 
   return (
     <div className="p-6 space-y-6 max-w-full mx-auto">
-      <div className="flex items-center justify-between mb-8">
+      {/* Header */}
+      <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Welcome, AG</h1>
-          <p className="text-gray-600 mt-1">Your Personalized Manufacturing Dashboard</p>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">AGTEST Dashboard</h1>
+          <p className="text-gray-600 dark:text-gray-400 mt-1">
+            Production Pipeline Overview, Order Management & Layup Scheduling
+          </p>
         </div>
-        <Button onClick={handleLogout} variant="outline" size="sm" className="flex items-center gap-2" data-testid="button-logout">
-          <LogOut className="w-4 h-4" />
-          Logout
-        </Button>
+        <div className="flex items-center gap-4">
+          <div className="text-sm text-gray-500 dark:text-gray-400">
+            Real-time Manufacturing Control Center
+          </div>
+          <Button
+            onClick={handleLogout}
+            variant="outline"
+            size="sm"
+            className="flex items-center gap-2 hover:bg-red-50 hover:border-red-200 hover:text-red-600"
+          >
+            <LogOut className="w-4 h-4" />
+            Logout
+          </Button>
+        </div>
       </div>
 
       {/* Navigation Cards */}

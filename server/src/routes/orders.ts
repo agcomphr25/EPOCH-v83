@@ -28,14 +28,62 @@ router.get('/', async (req: Request, res: Response) => {
     const sampleOrderIds = orders.slice(0, 10).map(o => o.orderId);
     console.log(`📊 ALL ORDERS API: Total=${orders.length}, AG orders=${agCount}, PO orders=${poCount}`);
     console.log(`📊 Sample Order IDs: ${sampleOrderIds.join(', ')}`);
-    console.log(`📊 ACTUAL RESPONSE BEING SENT TO FRONTEND: ${JSON.stringify(orders.slice(0, 3).map(o => ({id: o.id, orderId: o.orderId})))}`);
     
-    // Log any orders that might look like PO orders
-    const suspiciousOrders = orders.filter(o => o.orderId.includes('PO'));
-    if (suspiciousOrders.length > 0) {
-      console.log(`⚠️  SUSPICIOUS: Found ${suspiciousOrders.length} orders with 'PO' in orderId:`, suspiciousOrders.map(o => o.orderId));
-    }
-    res.json(orders);
+    // Calculate payment status for each order
+    const ordersWithPaymentStatus = await Promise.all(
+      orders.map(async (order) => {
+        try {
+          // Get total payments for this order
+          const paymentResults = await db.select({
+            total: sql`SUM(${payments.paymentAmount})`.as('total')
+          })
+          .from(payments)
+          .where(eq(payments.orderId, order.orderId));
+
+          const paymentTotal = Number(paymentResults[0]?.total || 0);
+          
+          // Calculate actual order total
+          let actualOrderTotal;
+          try {
+            const fullOrder = await storage.getOrderById(order.orderId);
+            if (fullOrder) {
+              actualOrderTotal = await storage.calculateOrderTotal(fullOrder as any);
+            } else {
+              actualOrderTotal = Number(order.shipping) || 0;
+            }
+            
+            // Fallback to shipping cost if calculation fails
+            if (actualOrderTotal === null || actualOrderTotal === undefined || isNaN(actualOrderTotal)) {
+              actualOrderTotal = Number(order.shipping) || 0;
+            }
+          } catch (error) {
+            actualOrderTotal = Number(order.shipping) || 0;
+          }
+          
+          const balanceDue = Math.max(0, actualOrderTotal - paymentTotal);
+          
+          return {
+            ...order,
+            paymentTotal,
+            orderTotal: actualOrderTotal,
+            balanceDue,
+            isFullyPaid: paymentTotal >= actualOrderTotal && actualOrderTotal > 0,
+          };
+        } catch (error) {
+          console.error(`Error calculating payment status for order ${order.orderId}:`, error);
+          return {
+            ...order,
+            paymentTotal: 0,
+            orderTotal: 0,
+            balanceDue: 0,
+            isFullyPaid: false,
+          };
+        }
+      })
+    );
+    
+    console.log(`✅ Calculated payment status for ${ordersWithPaymentStatus.length} orders`);
+    res.json(ordersWithPaymentStatus);
   } catch (error) {
     console.error('Error retrieving orders:', error);
     res.status(500).json({ error: "Failed to fetch order", details: (error as any).message });

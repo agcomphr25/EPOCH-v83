@@ -23,6 +23,7 @@ export default function Navigation() {
   const [location, setLocation] = useLocation();
   const [currentUser, setCurrentUser] = useState<string>('');
   const [hasFullNav, setHasFullNav] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
   
   
   
@@ -39,14 +40,30 @@ export default function Navigation() {
   const [productionSchedulingExpanded, setProductionSchedulingExpanded] = useState(false);
   const [departmentQueueExpanded, setDepartmentQueueExpanded] = useState(false);
 
-  // Get current user on component mount
+  // Get current user from backend session validation
   useEffect(() => {
-    const userData = localStorage.getItem('currentUser');
-    if (userData) {
-      const username = userData.toLowerCase();
-      setCurrentUser(username);
-      setHasFullNav(hasFullAccess(username));
-    }
+    const validateAndSetUser = async () => {
+      try {
+        const response = await fetch('/api/auth/validate', {
+          credentials: 'include',
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          if (data.valid && data.user) {
+            const username = data.user.username.toLowerCase();
+            setCurrentUser(username);
+            setHasFullNav(hasFullAccess(username));
+          }
+        }
+      } catch (error) {
+        console.error('Failed to validate session:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    validateAndSetUser();
   }, []);
 
   // Handle logout

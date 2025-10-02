@@ -126,7 +126,8 @@ import { Toaster as HotToaster } from 'react-hot-toast';
 // Component to conditionally render Navigation
 function ConditionalNavigation() {
   const [location] = useLocation();
-  const hideNavigation = location === '/darleneb-dashboard' || location === '/ag-dashboard' || location === '/staciw-dashboard' || location === '/login';
+  // Hide navigation only on login page - all other pages show role-based navbar
+  const hideNavigation = location === '/login';
   
   return hideNavigation ? null : <Navigation />;
 }

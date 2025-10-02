@@ -1197,7 +1197,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
 
     // Ship to address section (right side) - positioned INSIDE the box
     const shipToX = margin + 280;
-    let shipCurrentY = customerBoxY + customerBoxHeight - 35; // Position relative to box top (reduced gap)
+    let shipCurrentY = customerBoxY + customerBoxHeight - 20; // Aligned with CUSTOMER INFORMATION heading
     
     page.drawText('SHIP TO:', {
       x: shipToX,

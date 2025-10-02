@@ -198,6 +198,12 @@ export default function Navigation() {
       icon: GraduationCap,
       description: 'Employee training modules and certifications'
     },
+    {
+      path: '/admin/training-sync',
+      label: 'Training Sync',
+      icon: Settings,
+      description: 'Export/Import training data between databases'
+    },
 
     {
       path: '/bom-administration',

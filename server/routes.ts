@@ -81,7 +81,12 @@ import {
   insertVendorContactEmailSchema,
   insertVendorDocumentSchema,
   insertVendorScoringCriteriaSchema,
-  insertVendorScoreSchema
+  insertVendorScoreSchema,
+  // Internal communications schemas
+  insertDepartmentSchema,
+  insertInternalMessageSchema,
+  insertMessageAttachmentSchema,
+  insertMessageRecipientSchema
 } from "@shared/schema";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -5815,6 +5820,173 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Calculate vendor total score error:", error);
       res.status(500).json({ error: "Failed to calculate vendor total score" });
+    }
+  });
+
+  // ===== INTERNAL COMMUNICATIONS ROUTES =====
+  
+  // Departments
+  app.get("/api/departments", async (req, res) => {
+    try {
+      const departments = await storage.getAllDepartments();
+      res.json(departments);
+    } catch (error) {
+      console.error("Get departments error:", error);
+      res.status(500).json({ error: "Failed to retrieve departments" });
+    }
+  });
+
+  app.post("/api/departments", async (req, res) => {
+    try {
+      const data = insertDepartmentSchema.parse(req.body);
+      const department = await storage.createDepartment(data);
+      res.status(201).json(department);
+    } catch (error) {
+      console.error("Create department error:", error);
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: "Invalid department data", details: error.errors });
+      } else {
+        res.status(500).json({ error: "Failed to create department" });
+      }
+    }
+  });
+  
+  // Internal Messages
+  app.get("/api/internal-messages", async (req, res) => {
+    try {
+      const userId = req.query.userId ? parseInt(req.query.userId as string) : undefined;
+      const messages = await storage.getAllInternalMessages(userId);
+      res.json(messages);
+    } catch (error) {
+      console.error("Get internal messages error:", error);
+      res.status(500).json({ error: "Failed to retrieve messages" });
+    }
+  });
+
+  app.get("/api/internal-messages/user/:userId", async (req, res) => {
+    try {
+      const userId = parseInt(req.params.userId);
+      const messages = await storage.getMessagesForUser(userId);
+      res.json(messages);
+    } catch (error) {
+      console.error("Get user messages error:", error);
+      res.status(500).json({ error: "Failed to retrieve user messages" });
+    }
+  });
+
+  app.get("/api/internal-messages/department/:departmentId", async (req, res) => {
+    try {
+      const departmentId = parseInt(req.params.departmentId);
+      const messages = await storage.getMessagesForDepartment(departmentId);
+      res.json(messages);
+    } catch (error) {
+      console.error("Get department messages error:", error);
+      res.status(500).json({ error: "Failed to retrieve department messages" });
+    }
+  });
+
+  app.get("/api/internal-messages/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const message = await storage.getInternalMessage(id);
+      if (!message) {
+        res.status(404).json({ error: "Message not found" });
+        return;
+      }
+      res.json(message);
+    } catch (error) {
+      console.error("Get internal message error:", error);
+      res.status(500).json({ error: "Failed to retrieve message" });
+    }
+  });
+
+  app.post("/api/internal-messages", async (req, res) => {
+    try {
+      const messageData = insertInternalMessageSchema.parse(req.body);
+      const message = await storage.createInternalMessage(messageData);
+      
+      if (messageData.recipientType === 'department' && messageData.recipientDepartmentId) {
+        const allUsers = await storage.getAllUsers();
+        const departmentUsers = allUsers.filter(user => user.isActive);
+        
+        for (const user of departmentUsers) {
+          await storage.createMessageRecipient({
+            messageId: message.id,
+            userId: user.id,
+            isRead: false,
+            isAccomplished: false,
+          });
+        }
+      } else if (messageData.recipientType === 'person' && messageData.recipientUserId) {
+        await storage.createMessageRecipient({
+          messageId: message.id,
+          userId: messageData.recipientUserId,
+          isRead: false,
+          isAccomplished: false,
+        });
+      }
+      
+      const fullMessage = await storage.getInternalMessage(message.id);
+      res.status(201).json(fullMessage);
+    } catch (error) {
+      console.error("Create internal message error:", error);
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: "Invalid message data", details: error.errors });
+      } else {
+        res.status(500).json({ error: "Failed to create message" });
+      }
+    }
+  });
+
+  app.patch("/api/internal-messages/:id/read", async (req, res) => {
+    try {
+      const messageId = parseInt(req.params.id);
+      const { userId } = req.body;
+      
+      if (!userId) {
+        res.status(400).json({ error: "userId is required" });
+        return;
+      }
+      
+      await storage.markMessageAsRead(messageId, userId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Mark message as read error:", error);
+      res.status(500).json({ error: "Failed to mark message as read" });
+    }
+  });
+
+  app.patch("/api/internal-messages/:id/accomplished", async (req, res) => {
+    try {
+      const messageId = parseInt(req.params.id);
+      const { userId } = req.body;
+      
+      if (!userId) {
+        res.status(400).json({ error: "userId is required" });
+        return;
+      }
+      
+      await storage.markMessageAsAccomplished(messageId, userId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Mark message as accomplished error:", error);
+      res.status(500).json({ error: "Failed to mark message as accomplished" });
+    }
+  });
+
+  // Message Attachments
+  app.post("/api/message-attachments", async (req, res) => {
+    try {
+      const data = insertMessageAttachmentSchema.parse(req.body);
+      const attachment = await storage.createMessageAttachment(data);
+      res.status(201).json(attachment);
+    } catch (error) {
+      console.error("Create message attachment error:", error);
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: "Invalid attachment data", details: error.errors });
+      } else {
+        res.status(500).json({ error: "Failed to create attachment" });
+      }
     }
   });
 

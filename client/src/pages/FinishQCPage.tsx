@@ -13,7 +13,7 @@ import { BarcodeScanner } from '@/components/BarcodeScanner';
 import { toast } from 'react-hot-toast';
 import { format, isAfter } from 'date-fns';
 import { OrderTooltip } from '@/components/OrderTooltip';
-import { AlertTriangle, FileText, Eye, TrendingDown, Search } from 'lucide-react';
+import { AlertTriangle, FileText, Eye, TrendingDown, Search, ArrowRight, RefreshCw, X } from 'lucide-react';
 import { apiRequest } from '@/lib/queryClient';
 import { SalesOrderModal } from '@/components/SalesOrderModal';
 import { getDisplayOrderId } from '@/lib/orderUtils';
@@ -558,6 +558,52 @@ export default function FinishQCPage() {
         onClose={() => setSalesOrderModalOpen(false)}
         orderId={selectedOrderId}
       />
+
+      {/* Floating Sticky Progression Button */}
+      {selectedOrders.size > 0 && (
+        <div className="fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 shadow-lg">
+          <div className="container mx-auto p-4">
+            <div className="flex items-center justify-between flex-wrap gap-4">
+              <div className="flex items-center gap-2">
+                <Badge variant="default" className="bg-blue-600 text-white px-4 py-2 text-base">
+                  {selectedOrders.size} Order{selectedOrders.size > 1 ? 's' : ''} Selected
+                </Badge>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setSelectedOrders(new Set());
+                    setSelectAllByTechnician({});
+                  }}
+                  data-testid="button-clear-selection"
+                >
+                  <X className="h-4 w-4 mr-2" />
+                  Clear Selection
+                </Button>
+              </div>
+              
+              <div className="flex gap-2">
+                <Button
+                  onClick={handleMoveToPaint}
+                  disabled={moveToPaintMutation.isPending}
+                  className="bg-green-600 hover:bg-green-700 text-white"
+                  size="lg"
+                  data-testid="button-progress-to-paint"
+                >
+                  {moveToPaintMutation.isPending ? (
+                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <ArrowRight className="h-4 w-4 mr-2" />
+                  )}
+                  {moveToPaintMutation.isPending 
+                    ? 'Progressing...' 
+                    : `Move to Paint (${selectedOrders.size})`}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

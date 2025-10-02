@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Link, useLocation } from "wouter";
-import { List, Package, Calendar, ClipboardList, LogOut } from "lucide-react";
+import { List, Package, LogOut, Calendar, ClipboardList } from "lucide-react";
 import { isProductionEnvironment } from "@/lib/env";
 
 export default function TANDYDTestDashboard() {
@@ -24,6 +24,7 @@ export default function TANDYDTestDashboard() {
 
   const handleLogout = async () => {
     try {
+      // Call backend logout endpoint
       await fetch('/api/auth/logout', {
         method: 'POST',
         credentials: 'include',
@@ -31,8 +32,11 @@ export default function TANDYDTestDashboard() {
     } catch (error) {
       console.error('Logout error:', error);
     } finally {
+      // Clear all local storage
       localStorage.removeItem('currentUser');
       localStorage.removeItem('userData');
+      
+      // Redirect to login page
       setLocation('/login');
     }
   };

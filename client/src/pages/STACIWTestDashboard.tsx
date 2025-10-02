@@ -1,54 +1,44 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { PlusCircle, FileText, FilePenLine, XCircle, Users, Wrench, Shield, User, Factory, RefreshCw, LogOut } from 'lucide-react';
-import { Link, useLocation } from 'wouter';
+import { Link } from 'wouter';
 import PipelineVisualization from '@/components/PipelineVisualization';
-import { isProductionEnvironment } from '@/lib/env';
 
 export default function STACIWTestDashboard() {
-  const [, setLocation] = useLocation();
-
-  useEffect(() => {
-    const checkAuth = async () => {
-      if (isProductionEnvironment()) {
-        const { validateSessionAsync } = await import('@/lib/env');
-        const isValid = await validateSessionAsync();
-        if (!isValid) {
-          console.log('🔒 Session invalid - redirecting to login');
-          setLocation('/login');
-        }
-      }
-    };
-    checkAuth();
-  }, [setLocation]);
-
-  const handleLogout = async () => {
-    try {
-      await fetch('/api/auth/logout', {
-        method: 'POST',
-        credentials: 'include',
-      });
-    } catch (error) {
-      console.error('Logout error:', error);
-    } finally {
-      localStorage.removeItem('currentUser');
-      localStorage.removeItem('userData');
-      setLocation('/login');
-    }
+  const handleLogout = () => {
+    // Clear authentication tokens
+    localStorage.removeItem('sessionToken');
+    localStorage.removeItem('jwtToken');
+    
+    // Redirect to login page
+    window.location.href = '/login';
   };
 
   return (
     <div className="p-6 space-y-6 max-w-full mx-auto">
-      <div className="flex items-center justify-between mb-8">
+      {/* Header */}
+      <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Welcome, STACIW</h1>
-          <p className="text-gray-600 mt-1">Your Personalized Manufacturing Dashboard</p>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">STACIW Dashboard</h1>
+          <p className="text-gray-600 dark:text-gray-400 mt-1">
+            Comprehensive Order & Production Management
+          </p>
         </div>
-        <Button onClick={handleLogout} variant="outline" size="sm" className="flex items-center gap-2" data-testid="button-logout">
-          <LogOut className="w-4 h-4" />
-          Logout
-        </Button>
+        <div className="flex items-center gap-4">
+          <div className="text-sm text-gray-500 dark:text-gray-400">
+            EPOCH v8 Manufacturing ERP
+          </div>
+          <Button
+            onClick={handleLogout}
+            variant="outline"
+            size="sm"
+            className="flex items-center gap-2 hover:bg-red-50 hover:border-red-200 hover:text-red-600"
+          >
+            <LogOut className="w-4 h-4" />
+            Logout
+          </Button>
+        </div>
       </div>
 
       {/* Quick Navigation Cards */}

@@ -17,9 +17,12 @@ import {
   NavigationMenuIndicator,
   NavigationMenuViewport,
 } from "@/components/ui/navigation-menu"
+import { hasFullAccess, hasRouteAccess } from "@/config/userPermissions";
 
 export default function Navigation() {
-  const [location] = useLocation();
+  const [location, setLocation] = useLocation();
+  const [currentUser, setCurrentUser] = useState<string>('');
+  const [hasFullNav, setHasFullNav] = useState<boolean>(false);
   
   
   
@@ -35,6 +38,32 @@ export default function Navigation() {
   const [purchaseOrdersExpanded, setPurchaseOrdersExpanded] = useState(false);
   const [productionSchedulingExpanded, setProductionSchedulingExpanded] = useState(false);
   const [departmentQueueExpanded, setDepartmentQueueExpanded] = useState(false);
+
+  // Get current user on component mount
+  useEffect(() => {
+    const userData = localStorage.getItem('currentUser');
+    if (userData) {
+      const username = userData.toLowerCase();
+      setCurrentUser(username);
+      setHasFullNav(hasFullAccess(username));
+    }
+  }, []);
+
+  // Handle logout
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        credentials: 'include',
+      });
+    } catch (error) {
+      console.error('Logout error:', error);
+    } finally {
+      localStorage.removeItem('currentUser');
+      localStorage.removeItem('userData');
+      setLocation('/login');
+    }
+  };
 
   // Helper function to close all dropdowns
   const closeAllDropdowns = useCallback(() => {
@@ -70,6 +99,13 @@ export default function Navigation() {
       if (dropdownName !== 'verifiedModules') setVerifiedModulesExpanded(false);
     }
   }, []);
+
+  // Helper function to check if user has access to a route
+  const canAccessRoute = (route: string): boolean => {
+    if (!currentUser) return false;
+    if (hasFullNav) return true;
+    return hasRouteAccess(currentUser, route);
+  };
 
   const navItems = [
     {
@@ -208,12 +244,6 @@ export default function Navigation() {
       icon: Wrench,
       description: 'Comprehensive AG metal products and rails on unfulfilled orders'
     },
-    // {
-    //   path: '/ag-bottom-metal-report',
-    //   label: 'AG Bottom Metal Report',
-    //   icon: DollarSign,
-    //   description: 'Comprehensive pricing analysis for AG bottom metal orders by price tiers'
-    // },
     {
       path: '/p2-forms',
       label: 'P2 Forms',
@@ -584,17 +614,31 @@ export default function Navigation() {
     }
   ];
 
-  const isVerifiedModulesActive = verifiedModulesItems.some(item => location === item.path);
-  const isFormsReportsActive = formsReportsItems.some(item => location === item.path);
-  const isTrainingActive = trainingItems.some(item => location === item.path);
-  const isInventoryActive = inventoryItems.some(item => location === item.path);
-  const isQcMaintenanceActive = qcMaintenanceItems.some(item => location === item.path);
-  const isEmployeesActive = employeesItems.some(item => location === item.path);
-  const isFinanceActive = financeItems.some(item => location === item.path);
-  const isUserDashboardsActive = userDashboardsItems.some(item => location === item.path);
-  const isPurchaseOrdersActive = purchaseOrdersItems.some(item => location === item.path);
-  const isProductionSchedulingActive = productionSchedulingItems.some(item => location === item.path);
-  const isDepartmentQueueActive = departmentQueueItems.some(item => location === item.path);
+  // Filter items based on user permissions
+  const filteredNavItems = hasFullNav ? navItems : navItems.filter(item => canAccessRoute(item.path));
+  const filteredInventoryItems = hasFullNav ? inventoryItems : inventoryItems.filter(item => canAccessRoute(item.path));
+  const filteredFormsReportsItems = hasFullNav ? formsReportsItems : formsReportsItems.filter(item => canAccessRoute(item.path));
+  const filteredTrainingItems = hasFullNav ? trainingItems : trainingItems.filter(item => canAccessRoute(item.path));
+  const filteredQcMaintenanceItems = hasFullNav ? qcMaintenanceItems : qcMaintenanceItems.filter(item => canAccessRoute(item.path));
+  const filteredEmployeesItems = hasFullNav ? employeesItems : employeesItems.filter(item => canAccessRoute(item.path));
+  const filteredFinanceItems = hasFullNav ? financeItems : financeItems.filter(item => canAccessRoute(item.path));
+  const filteredUserDashboardsItems = hasFullNav ? userDashboardsItems : userDashboardsItems.filter(item => canAccessRoute(item.path));
+  const filteredPurchaseOrdersItems = hasFullNav ? purchaseOrdersItems : purchaseOrdersItems.filter(item => canAccessRoute(item.path));
+  const filteredVerifiedModulesItems = hasFullNav ? verifiedModulesItems : verifiedModulesItems.filter(item => canAccessRoute(item.path));
+  const filteredProductionSchedulingItems = hasFullNav ? productionSchedulingItems : productionSchedulingItems.filter(item => canAccessRoute(item.path));
+  const filteredDepartmentQueueItems = hasFullNav ? departmentQueueItems : departmentQueueItems.filter(item => canAccessRoute(item.path));
+
+  const isVerifiedModulesActive = filteredVerifiedModulesItems.some(item => location === item.path);
+  const isFormsReportsActive = filteredFormsReportsItems.some(item => location === item.path);
+  const isTrainingActive = filteredTrainingItems.some(item => location === item.path);
+  const isInventoryActive = filteredInventoryItems.some(item => location === item.path);
+  const isQcMaintenanceActive = filteredQcMaintenanceItems.some(item => location === item.path);
+  const isEmployeesActive = filteredEmployeesItems.some(item => location === item.path);
+  const isFinanceActive = filteredFinanceItems.some(item => location === item.path);
+  const isUserDashboardsActive = filteredUserDashboardsItems.some(item => location === item.path);
+  const isPurchaseOrdersActive = filteredPurchaseOrdersItems.some(item => location === item.path);
+  const isProductionSchedulingActive = filteredProductionSchedulingItems.some(item => location === item.path);
+  const isDepartmentQueueActive = filteredDepartmentQueueItems.some(item => location === item.path);
 
   // Close all dropdowns when navigating to a new page
   useEffect(() => {
@@ -653,7 +697,7 @@ export default function Navigation() {
 
           {/* Navigation Links */}
           <nav className="flex flex-wrap items-center gap-2 lg:gap-4">
-            {navItems.map((item) => {
+            {filteredNavItems.map((item) => {
               const Icon = item.icon;
               const isActive = location === item.path;
 
@@ -673,467 +717,498 @@ export default function Navigation() {
               );
             })}
 
-            {/* Communications Dropdown */}
-            <div className="relative">
-              <Button
-                variant="ghost"
-                className="flex items-center gap-2 text-sm"
-                onClick={() => window.location.href = '/communications/inbox'}
-              >
-                <Mail className="h-4 w-4" />
-                Communications
-              </Button>
-            </div>
+            {/* Communications Dropdown - Only show if user has full access */}
+            {hasFullNav && (
+              <div className="relative">
+                <Button
+                  variant="ghost"
+                  className="flex items-center gap-2 text-sm"
+                  onClick={() => window.location.href = '/communications/inbox'}
+                >
+                  <Mail className="h-4 w-4" />
+                  Communications
+                </Button>
+              </div>
+            )}
 
             {/* Forms & Reports Dropdown */}
-            <div className="relative">
-              <Button
-                variant={isFormsReportsActive ? "default" : "ghost"}
-                className={cn(
-                  "flex items-center gap-2 text-sm",
-                  isFormsReportsActive && "bg-primary text-white"
-                )}
-                onClick={() => toggleDropdown('formsReports', formsReportsExpanded, setFormsReportsExpanded)}
-              >
-                <FormInput className="h-4 w-4" />
-                Forms & Reports
-                {formsReportsExpanded ? (
-                  <ChevronDown className="h-4 w-4" />
-                ) : (
-                  <ChevronRight className="h-4 w-4" />
-                )}
-              </Button>
+            {filteredFormsReportsItems.length > 0 && (
+              <div className="relative">
+                <Button
+                  variant={isFormsReportsActive ? "default" : "ghost"}
+                  className={cn(
+                    "flex items-center gap-2 text-sm",
+                    isFormsReportsActive && "bg-primary text-white"
+                  )}
+                  onClick={() => toggleDropdown('formsReports', formsReportsExpanded, setFormsReportsExpanded)}
+                >
+                  <FormInput className="h-4 w-4" />
+                  Forms & Reports
+                  {formsReportsExpanded ? (
+                    <ChevronDown className="h-4 w-4" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4" />
+                  )}
+                </Button>
 
-              {formsReportsExpanded && (
-                <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
-                  {formsReportsItems.map((item) => {
-                    const Icon = item.icon;
-                    const isActive = location === item.path;
+                {formsReportsExpanded && (
+                  <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
+                    {filteredFormsReportsItems.map((item) => {
+                      const Icon = item.icon;
+                      const isActive = location === item.path;
 
-                    return (
-                      <Link key={item.path} href={item.path}>
-                        <button
-                          className={cn(
-                            "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
-                            isActive && "bg-primary text-white hover:bg-primary"
-                          )}
-                          onClick={closeAllDropdowns}
-                        >
-                          <Icon className="h-4 w-4" />
-                          {item.label}
-                        </button>
-                      </Link>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+                      return (
+                        <Link key={item.path} href={item.path}>
+                          <button
+                            className={cn(
+                              "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
+                              isActive && "bg-primary text-white hover:bg-primary"
+                            )}
+                            onClick={closeAllDropdowns}
+                          >
+                            <Icon className="h-4 w-4" />
+                            {item.label}
+                          </button>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Training Dropdown */}
-            <div className="relative">
-              <Button
-                variant={isTrainingActive ? "default" : "ghost"}
-                className={cn(
-                  "flex items-center gap-2 text-sm",
-                  isTrainingActive && "bg-primary text-white"
-                )}
-                onClick={() => toggleDropdown('training', trainingExpanded, setTrainingExpanded)}
-              >
-                <GraduationCap className="h-4 w-4" />
-                Training
-                {trainingExpanded ? (
-                  <ChevronDown className="h-4 w-4" />
-                ) : (
-                  <ChevronRight className="h-4 w-4" />
-                )}
-              </Button>
+            {filteredTrainingItems.length > 0 && (
+              <div className="relative">
+                <Button
+                  variant={isTrainingActive ? "default" : "ghost"}
+                  className={cn(
+                    "flex items-center gap-2 text-sm",
+                    isTrainingActive && "bg-primary text-white"
+                  )}
+                  onClick={() => toggleDropdown('training', trainingExpanded, setTrainingExpanded)}
+                >
+                  <GraduationCap className="h-4 w-4" />
+                  Training
+                  {trainingExpanded ? (
+                    <ChevronDown className="h-4 w-4" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4" />
+                  )}
+                </Button>
 
-              {trainingExpanded && (
-                <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
-                  {trainingItems.map((item) => {
-                    const Icon = item.icon;
-                    const isActive = location === item.path;
+                {trainingExpanded && (
+                  <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
+                    {filteredTrainingItems.map((item) => {
+                      const Icon = item.icon;
+                      const isActive = location === item.path;
 
-                    return (
-                      <Link key={item.path} href={item.path}>
-                        <button
-                          className={cn(
-                            "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
-                            isActive && "bg-primary text-white hover:bg-primary"
-                          )}
-                          onClick={closeAllDropdowns}
-                        >
-                          <Icon className="h-4 w-4" />
-                          {item.label}
-                        </button>
-                      </Link>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+                      return (
+                        <Link key={item.path} href={item.path}>
+                          <button
+                            className={cn(
+                              "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
+                              isActive && "bg-primary text-white hover:bg-primary"
+                            )}
+                            onClick={closeAllDropdowns}
+                          >
+                            <Icon className="h-4 w-4" />
+                            {item.label}
+                          </button>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Inventory Dropdown */}
-            <div className="relative">
-              <Button
-                variant={isInventoryActive ? "default" : "ghost"}
-                className={cn(
-                  "flex items-center gap-2 text-sm",
-                  isInventoryActive && "bg-primary text-white"
-                )}
-                onClick={() => toggleDropdown('inventory', inventoryExpanded, setInventoryExpanded)}
-              >
-                <Warehouse className="h-4 w-4" />
-                Inventory
-                {inventoryExpanded ? (
-                  <ChevronDown className="h-4 w-4" />
-                ) : (
-                  <ChevronRight className="h-4 w-4" />
-                )}
-              </Button>
+            {filteredInventoryItems.length > 0 && (
+              <div className="relative">
+                <Button
+                  variant={isInventoryActive ? "default" : "ghost"}
+                  className={cn(
+                    "flex items-center gap-2 text-sm",
+                    isInventoryActive && "bg-primary text-white"
+                  )}
+                  onClick={() => toggleDropdown('inventory', inventoryExpanded, setInventoryExpanded)}
+                >
+                  <Warehouse className="h-4 w-4" />
+                  Inventory
+                  {inventoryExpanded ? (
+                    <ChevronDown className="h-4 w-4" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4" />
+                  )}
+                </Button>
 
-              {inventoryExpanded && (
-                <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
-                  {inventoryItems.map((item) => {
-                    const Icon = item.icon;
-                    const isActive = location === item.path;
+                {inventoryExpanded && (
+                  <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
+                    {filteredInventoryItems.map((item) => {
+                      const Icon = item.icon;
+                      const isActive = location === item.path;
 
-                    return (
-                      <Link key={item.path} href={item.path}>
-                        <button
-                          className={cn(
-                            "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
-                            isActive && "bg-primary text-white hover:bg-primary"
-                          )}
-                          onClick={closeAllDropdowns}
-                        >
-                          <Icon className="h-4 w-4" />
-                          {item.label}
-                        </button>
-                      </Link>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+                      return (
+                        <Link key={item.path} href={item.path}>
+                          <button
+                            className={cn(
+                              "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
+                              isActive && "bg-primary text-white hover:bg-primary"
+                            )}
+                            onClick={closeAllDropdowns}
+                          >
+                            <Icon className="h-4 w-4" />
+                            {item.label}
+                          </button>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* QC & Maintenance Dropdown */}
-            <div className="relative">
-              <Button
-                variant={isQcMaintenanceActive ? "default" : "ghost"}
-                className={cn(
-                  "flex items-center gap-2 text-sm",
-                  isQcMaintenanceActive && "bg-primary text-white"
-                )}
-                onClick={() => toggleDropdown('qcMaintenance', qcMaintenanceExpanded, setQcMaintenanceExpanded)}
-              >
-                <Shield className="h-4 w-4" />
-                QC & Maintenance
-                {qcMaintenanceExpanded ? (
-                  <ChevronDown className="h-4 w-4" />
-                ) : (
-                  <ChevronRight className="h-4 w-4" />
-                )}
-              </Button>
+            {filteredQcMaintenanceItems.length > 0 && (
+              <div className="relative">
+                <Button
+                  variant={isQcMaintenanceActive ? "default" : "ghost"}
+                  className={cn(
+                    "flex items-center gap-2 text-sm",
+                    isQcMaintenanceActive && "bg-primary text-white"
+                  )}
+                  onClick={() => toggleDropdown('qcMaintenance', qcMaintenanceExpanded, setQcMaintenanceExpanded)}
+                >
+                  <Shield className="h-4 w-4" />
+                  QC & Maintenance
+                  {qcMaintenanceExpanded ? (
+                    <ChevronDown className="h-4 w-4" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4" />
+                  )}
+                </Button>
 
-              {qcMaintenanceExpanded && (
-                <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
-                  {qcMaintenanceItems.map((item) => {
-                    const Icon = item.icon;
-                    const isActive = location === item.path;
+                {qcMaintenanceExpanded && (
+                  <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
+                    {filteredQcMaintenanceItems.map((item) => {
+                      const Icon = item.icon;
+                      const isActive = location === item.path;
 
-                    return (
-                      <Link key={item.path} href={item.path}>
-                        <button
-                          className={cn(
-                            "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
-                            isActive && "bg-primary text-white hover:bg-primary"
-                          )}
-                          onClick={closeAllDropdowns}
-                        >
-                          <Icon className="h-4 w-4" />
-                          {item.label}
-                        </button>
-                      </Link>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+                      return (
+                        <Link key={item.path} href={item.path}>
+                          <button
+                            className={cn(
+                              "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
+                              isActive && "bg-primary text-white hover:bg-primary"
+                            )}
+                            onClick={closeAllDropdowns}
+                          >
+                            <Icon className="h-4 w-4" />
+                            {item.label}
+                          </button>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Employees Dropdown */}
-            <div className="relative">
-              <Button
-                variant={isEmployeesActive ? "default" : "ghost"}
-                className={cn(
-                  "flex items-center gap-2 text-sm",
-                  isEmployeesActive && "bg-primary text-white"
-                )}
-                onClick={() => toggleDropdown('employees', employeesExpanded, setEmployeesExpanded)}
-              >
-                <Users className="h-4 w-4" />
-                Employees
-                {employeesExpanded ? (
-                  <ChevronDown className="h-4 w-4" />
-                ) : (
-                  <ChevronRight className="h-4 w-4" />
-                )}
-              </Button>
+            {filteredEmployeesItems.length > 0 && (
+              <div className="relative">
+                <Button
+                  variant={isEmployeesActive ? "default" : "ghost"}
+                  className={cn(
+                    "flex items-center gap-2 text-sm",
+                    isEmployeesActive && "bg-primary text-white"
+                  )}
+                  onClick={() => toggleDropdown('employees', employeesExpanded, setEmployeesExpanded)}
+                >
+                  <Users className="h-4 w-4" />
+                  Employees
+                  {employeesExpanded ? (
+                    <ChevronDown className="h-4 w-4" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4" />
+                  )}
+                </Button>
 
-              {employeesExpanded && (
-                <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
-                  {employeesItems.map((item) => {
-                    const Icon = item.icon;
-                    const isActive = location === item.path;
+                {employeesExpanded && (
+                  <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
+                    {filteredEmployeesItems.map((item) => {
+                      const Icon = item.icon;
+                      const isActive = location === item.path;
 
-                    return (
-                      <Link key={item.path} href={item.path}>
-                        <button
-                          className={cn(
-                            "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
-                            isActive && "bg-primary text-white hover:bg-primary"
-                          )}
-                          onClick={closeAllDropdowns}
-                        >
-                          <Icon className="h-4 w-4" />
-                          {item.label}
-                        </button>
-                      </Link>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+                      return (
+                        <Link key={item.path} href={item.path}>
+                          <button
+                            className={cn(
+                              "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
+                              isActive && "bg-primary text-white hover:bg-primary"
+                            )}
+                            onClick={closeAllDropdowns}
+                          >
+                            <Icon className="h-4 w-4" />
+                            {item.label}
+                          </button>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Finance Dropdown */}
-            <div className="relative">
-              <Button
-                variant={isFinanceActive ? "default" : "ghost"}
-                className={cn(
-                  "flex items-center gap-2 text-sm",
-                  isFinanceActive && "bg-primary text-white"
-                )}
-                onClick={() => toggleDropdown('finance', financeExpanded, setFinanceExpanded)}
-              >
-                <DollarSign className="h-4 w-4" />
-                Finance
-                {financeExpanded ? (
-                  <ChevronDown className="h-4 w-4" />
-                ) : (
-                  <ChevronRight className="h-4 w-4" />
-                )}
-              </Button>
+            {filteredFinanceItems.length > 0 && (
+              <div className="relative">
+                <Button
+                  variant={isFinanceActive ? "default" : "ghost"}
+                  className={cn(
+                    "flex items-center gap-2 text-sm",
+                    isFinanceActive && "bg-primary text-white"
+                  )}
+                  onClick={() => toggleDropdown('finance', financeExpanded, setFinanceExpanded)}
+                >
+                  <DollarSign className="h-4 w-4" />
+                  Finance
+                  {financeExpanded ? (
+                    <ChevronDown className="h-4 w-4" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4" />
+                  )}
+                </Button>
 
-              {financeExpanded && (
-                <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
-                  {financeItems.map((item) => {
-                    const Icon = item.icon;
-                    const isActive = location === item.path;
+                {financeExpanded && (
+                  <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
+                    {filteredFinanceItems.map((item) => {
+                      const Icon = item.icon;
+                      const isActive = location === item.path;
 
-                    return (
-                      <Link key={item.path} href={item.path}>
-                        <button
-                          className={cn(
-                            "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
-                            isActive && "bg-primary text-white hover:bg-primary"
-                          )}
-                          onClick={closeAllDropdowns}
-                        >
-                          <Icon className="h-4 w-4" />
-                          {item.label}
-                        </button>
-                      </Link>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+                      return (
+                        <Link key={item.path} href={item.path}>
+                          <button
+                            className={cn(
+                              "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
+                              isActive && "bg-primary text-white hover:bg-primary"
+                            )}
+                            onClick={closeAllDropdowns}
+                          >
+                            <Icon className="h-4 w-4" />
+                            {item.label}
+                          </button>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Purchase Orders Dropdown */}
-            <div className="relative">
-              <Button
-                variant={isPurchaseOrdersActive ? "default" : "ghost"}
-                className={cn(
-                  "flex items-center gap-2 text-sm",
-                  isPurchaseOrdersActive && "bg-primary text-white"
-                )}
-                onClick={() => toggleDropdown('purchaseOrders', purchaseOrdersExpanded, setPurchaseOrdersExpanded)}
-              >
-                <ClipboardList className="h-4 w-4" />
-                Purchase Orders
-                {purchaseOrdersExpanded ? (
-                  <ChevronDown className="h-4 w-4" />
-                ) : (
-                  <ChevronRight className="h-4 w-4" />
-                )}
-              </Button>
+            {filteredPurchaseOrdersItems.length > 0 && (
+              <div className="relative">
+                <Button
+                  variant={isPurchaseOrdersActive ? "default" : "ghost"}
+                  className={cn(
+                    "flex items-center gap-2 text-sm",
+                    isPurchaseOrdersActive && "bg-primary text-white"
+                  )}
+                  onClick={() => toggleDropdown('purchaseOrders', purchaseOrdersExpanded, setPurchaseOrdersExpanded)}
+                >
+                  <Receipt className="h-4 w-4" />
+                  Purchase Orders
+                  {purchaseOrdersExpanded ? (
+                    <ChevronDown className="h-4 w-4" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4" />
+                  )}
+                </Button>
 
-              {purchaseOrdersExpanded && (
-                <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
-                  {purchaseOrdersItems.map((item) => {
-                    const Icon = item.icon;
-                    const isActive = location === item.path;
+                {purchaseOrdersExpanded && (
+                  <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
+                    {filteredPurchaseOrdersItems.map((item) => {
+                      const Icon = item.icon;
+                      const isActive = location === item.path;
 
-                    return (
-                      <Link key={item.path} href={item.path}>
-                        <button
-                          className={cn(
-                            "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
-                            isActive && "bg-primary text-white hover:bg-primary"
-                          )}
-                          onClick={closeAllDropdowns}
-                        >
-                          <Icon className="h-4 w-4" />
-                          {item.label}
-                        </button>
-                      </Link>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+                      return (
+                        <Link key={item.path} href={item.path}>
+                          <button
+                            className={cn(
+                              "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
+                              isActive && "bg-primary text-white hover:bg-primary"
+                            )}
+                            onClick={closeAllDropdowns}
+                          >
+                            <Icon className="h-4 w-4" />
+                            {item.label}
+                          </button>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Production Scheduling Dropdown */}
-            <div className="relative">
-              <Button
-                variant={isProductionSchedulingActive ? "default" : "ghost"}
-                className={cn(
-                  "flex items-center gap-2 text-sm",
-                  isProductionSchedulingActive && "bg-primary text-white"
-                )}
-                onClick={() => toggleDropdown('productionScheduling', productionSchedulingExpanded, setProductionSchedulingExpanded)}
-              >
-                <Calendar className="h-4 w-4" />
-                Production Scheduling
-                {productionSchedulingExpanded ? (
-                  <ChevronDown className="h-4 w-4" />
-                ) : (
-                  <ChevronRight className="h-4 w-4" />
-                )}
-              </Button>
+            {filteredProductionSchedulingItems.length > 0 && (
+              <div className="relative">
+                <Button
+                  variant={isProductionSchedulingActive ? "default" : "ghost"}
+                  className={cn(
+                    "flex items-center gap-2 text-sm",
+                    isProductionSchedulingActive && "bg-primary text-white"
+                  )}
+                  onClick={() => toggleDropdown('productionScheduling', productionSchedulingExpanded, setProductionSchedulingExpanded)}
+                >
+                  <Calendar className="h-4 w-4" />
+                  Production Scheduling
+                  {productionSchedulingExpanded ? (
+                    <ChevronDown className="h-4 w-4" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4" />
+                  )}
+                </Button>
 
-              {productionSchedulingExpanded && (
-                <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
-                  {productionSchedulingItems.map((item) => {
-                    const Icon = item.icon;
-                    const isActive = location === item.path;
+                {productionSchedulingExpanded && (
+                  <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
+                    {filteredProductionSchedulingItems.map((item) => {
+                      const Icon = item.icon;
+                      const isActive = location === item.path;
 
-                    return (
-                      <Link key={item.path} href={item.path}>
-                        <button
-                          className={cn(
-                            "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
-                            isActive && "bg-primary text-white hover:bg-primary"
-                          )}
-                          onClick={closeAllDropdowns}
-                        >
-                          <Icon className="h-4 w-4" />
-                          {item.label}
-                        </button>
-                      </Link>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+                      return (
+                        <Link key={item.path} href={item.path}>
+                          <button
+                            className={cn(
+                              "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
+                              isActive && "bg-primary text-white hover:bg-primary"
+                            )}
+                            onClick={closeAllDropdowns}
+                          >
+                            <Icon className="h-4 w-4" />
+                            {item.label}
+                          </button>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Department Manager Dropdown */}
-            <div className="relative">
-              <Button
-                variant={isDepartmentQueueActive ? "default" : "ghost"}
-                className={cn(
-                  "flex items-center gap-2 text-sm",
-                  isDepartmentQueueActive && "bg-primary text-white"
-                )}
-                onClick={() => toggleDropdown('departmentQueue', departmentQueueExpanded, setDepartmentQueueExpanded)}
-              >
-                <Factory className="h-4 w-4" />
-                P1 Department Manager
-                {departmentQueueExpanded ? (
-                  <ChevronDown className="h-4 w-4" />
-                ) : (
-                  <ChevronRight className="h-4 w-4" />
-                )}
-              </Button>
+            {filteredDepartmentQueueItems.length > 0 && (
+              <div className="relative">
+                <Button
+                  variant={isDepartmentQueueActive ? "default" : "ghost"}
+                  className={cn(
+                    "flex items-center gap-2 text-sm",
+                    isDepartmentQueueActive && "bg-primary text-white"
+                  )}
+                  onClick={() => toggleDropdown('departmentQueue', departmentQueueExpanded, setDepartmentQueueExpanded)}
+                >
+                  <Factory className="h-4 w-4" />
+                  P1 Department Manager
+                  {departmentQueueExpanded ? (
+                    <ChevronDown className="h-4 w-4" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4" />
+                  )}
+                </Button>
 
-              {departmentQueueExpanded && (
-                <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[250px]">
-                  {departmentQueueItems.map((item) => {
-                    const Icon = item.icon;
-                    const isActive = location === item.path;
+                {departmentQueueExpanded && (
+                  <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[250px]">
+                    {filteredDepartmentQueueItems.map((item) => {
+                      const Icon = item.icon;
+                      const isActive = location === item.path;
 
-                    return (
-                      <Link key={item.path} href={item.path}>
-                        <button
-                          className={cn(
-                            "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
-                            isActive && "bg-primary text-white hover:bg-primary"
-                          )}
-                          onClick={closeAllDropdowns}
-                        >
-                          <Icon className="h-4 w-4" />
-                          {item.label}
-                        </button>
-                      </Link>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+                      return (
+                        <Link key={item.path} href={item.path}>
+                          <button
+                            className={cn(
+                              "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
+                              isActive && "bg-primary text-white hover:bg-primary"
+                            )}
+                            onClick={closeAllDropdowns}
+                          >
+                            <Icon className="h-4 w-4" />
+                            {item.label}
+                          </button>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Verified Modules Dropdown */}
-            <div className="relative">
-              <Button
-                variant={isVerifiedModulesActive ? "default" : "ghost"}
-                className={cn(
-                  "flex items-center gap-2 text-sm",
-                  isVerifiedModulesActive && "bg-primary text-white"
-                )}
-                onClick={() => toggleDropdown('verifiedModules', verifiedModulesExpanded, setVerifiedModulesExpanded)}
-              >
-                <Settings className="h-4 w-4" />
-                Verified Modules
-                {verifiedModulesExpanded ? (
-                  <ChevronDown className="h-4 w-4" />
-                ) : (
-                  <ChevronRight className="h-4 w-4" />
-                )}
-              </Button>
+            {filteredVerifiedModulesItems.length > 0 && (
+              <div className="relative">
+                <Button
+                  variant={isVerifiedModulesActive ? "default" : "ghost"}
+                  className={cn(
+                    "flex items-center gap-2 text-sm",
+                    isVerifiedModulesActive && "bg-primary text-white"
+                  )}
+                  onClick={() => toggleDropdown('verifiedModules', verifiedModulesExpanded, setVerifiedModulesExpanded)}
+                >
+                  <Settings className="h-4 w-4" />
+                  Verified Modules
+                  {verifiedModulesExpanded ? (
+                    <ChevronDown className="h-4 w-4" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4" />
+                  )}
+                </Button>
 
-              {verifiedModulesExpanded && (
-                <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
-                  {verifiedModulesItems.map((item) => {
-                    const Icon = item.icon;
-                    const isActive = location === item.path;
+                {verifiedModulesExpanded && (
+                  <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
+                    {filteredVerifiedModulesItems.map((item) => {
+                      const Icon = item.icon;
+                      const isActive = location === item.path;
 
-                    return (
-                      <Link key={item.path} href={item.path}>
-                        <button
-                          className={cn(
-                            "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
-                            isActive && "bg-primary text-white hover:bg-primary"
-                          )}
-                          onClick={closeAllDropdowns}
-                        >
-                          <Icon className="h-4 w-4" />
-                          {item.label}
-                        </button>
-                      </Link>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+                      return (
+                        <Link key={item.path} href={item.path}>
+                          <button
+                            className={cn(
+                              "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
+                              isActive && "bg-primary text-white hover:bg-primary"
+                            )}
+                            onClick={closeAllDropdowns}
+                          >
+                            <Icon className="h-4 w-4" />
+                            {item.label}
+                          </button>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
 
 
           </nav>
 
           <div className="flex flex-wrap items-center gap-2 lg:gap-4">
             <InstallPWAButton />
-            <span className="text-sm text-gray-600">Manufacturing ERP System</span>
-            <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center">
-              <User className="h-4 w-4 text-white" />
-            </div>
+            {currentUser && (
+              <span className="text-sm text-gray-600">Welcome, {currentUser.toUpperCase()}</span>
+            )}
+            <Button
+              onClick={handleLogout}
+              variant="outline"
+              size="sm"
+              className="flex items-center gap-2 hover:bg-red-50 hover:border-red-200 hover:text-red-600"
+              data-testid="button-logout"
+            >
+              <LogOut className="w-4 h-4" />
+              Logout
+            </Button>
           </div>
         </div>
       </div>

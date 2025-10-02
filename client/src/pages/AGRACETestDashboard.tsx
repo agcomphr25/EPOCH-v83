@@ -9,9 +9,9 @@ import {
   Users,
   BarChart3,
   Settings,
+  LogOut,
   Calendar,
-  ClipboardList,
-  LogOut
+  ClipboardList
 } from "lucide-react";
 import { isProductionEnvironment } from "@/lib/env";
 
@@ -34,6 +34,7 @@ export default function AGRACETestDashboard() {
 
   const handleLogout = async () => {
     try {
+      // Call backend logout endpoint
       await fetch('/api/auth/logout', {
         method: 'POST',
         credentials: 'include',
@@ -41,8 +42,11 @@ export default function AGRACETestDashboard() {
     } catch (error) {
       console.error('Logout error:', error);
     } finally {
+      // Clear all local storage
       localStorage.removeItem('currentUser');
       localStorage.removeItem('userData');
+      
+      // Redirect to login page
       setLocation('/login');
     }
   };
@@ -54,7 +58,13 @@ export default function AGRACETestDashboard() {
           <h1 className="text-3xl font-bold text-gray-900">Welcome, AGRACE</h1>
           <p className="text-gray-600 mt-1">Your Personalized Manufacturing Dashboard</p>
         </div>
-        <Button onClick={handleLogout} variant="outline" size="sm" className="flex items-center gap-2" data-testid="button-logout">
+        <Button
+          onClick={handleLogout}
+          variant="outline"
+          size="sm"
+          className="flex items-center gap-2"
+          data-testid="button-logout"
+        >
           <LogOut className="w-4 h-4" />
           Logout
         </Button>

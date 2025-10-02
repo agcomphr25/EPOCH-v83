@@ -21,7 +21,7 @@ router.post("/login", async (req, res) => {
     // Set HTTP-only session cookie
     res.cookie('sessionToken', result.sessionToken, {
       httpOnly: true,
-      secure: true, // Always use secure for Replit (HTTPS in all environments)
+      secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     });

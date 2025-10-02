@@ -126,32 +126,7 @@ import { Toaster as HotToaster } from 'react-hot-toast';
 // Component to conditionally render Navigation
 function ConditionalNavigation() {
   const [location] = useLocation();
-  
-  // Hide navigation for all personalized dashboards and login page
-  const personalizedDashboards = [
-    '/login',
-    '/ag-dashboard',
-    '/staciw-dashboard',
-    '/jens-dashboard',
-    '/tims-dashboard',
-    '/bradw-dashboard',
-    '/joeyb-dashboard',
-    '/darleneb-dashboard',
-    '/johnl-dashboard',
-    '/glenn-dashboard',
-    '/faleeshah-dashboard',
-    '/agrace-dashboard',
-    '/angiet-dashboard',
-    '/blaket-dashboard',
-    '/halls-dashboard',
-    '/hunta-dashboard',
-    '/lauriet-dashboard',
-    '/tandyd-dashboard',
-    '/tandym-dashboard',
-    '/tasham-dashboard'
-  ];
-  
-  const hideNavigation = personalizedDashboards.includes(location);
+  const hideNavigation = location === '/darleneb-dashboard' || location === '/ag-dashboard' || location === '/staciw-dashboard' || location === '/login';
   
   return hideNavigation ? null : <Navigation />;
 }

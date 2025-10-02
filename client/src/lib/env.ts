@@ -69,11 +69,15 @@ export async function validateSessionAsync(): Promise<boolean> {
   }
 
   // Skip initial validation if just logged in (cookie race condition fix)
-  const skipValidation = localStorage.getItem('skipInitialValidation');
-  if (skipValidation === 'true') {
-    localStorage.removeItem('skipInitialValidation');
-    console.log('🔒 Skipping initial validation (just logged in)');
-    return true;
+  const skipUntilStr = localStorage.getItem('skipValidationUntil');
+  if (skipUntilStr) {
+    const skipUntil = parseInt(skipUntilStr);
+    if (Date.now() < skipUntil) {
+      console.log('🔒 Skipping validation (just logged in, waiting for cookie)');
+      return true;
+    } else {
+      localStorage.removeItem('skipValidationUntil');
+    }
   }
 
   try {

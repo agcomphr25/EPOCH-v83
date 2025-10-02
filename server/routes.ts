@@ -13,7 +13,6 @@ import { uploadMiddleware, getFileInfo, getFileUrl, validateEmployeeDocumentAcce
 import { authenticateToken, requireRole, requireEmployeeAccess, authenticatePortalToken } from "./middleware/auth";
 import { AuthService } from "./auth";
 import cookieParser from 'cookie-parser';
-import { registerTrainingSyncRoutes } from "./routes/training-sync";
 
 
 // SmartyStreets direct API calls
@@ -5818,9 +5817,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: "Failed to calculate vendor total score" });
     }
   });
-
-  // Register training sync routes
-  registerTrainingSyncRoutes(app);
 
   const httpServer = createServer(app);
 

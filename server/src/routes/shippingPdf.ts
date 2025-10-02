@@ -843,7 +843,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
     // Header section with company logo - Fixed positioning
-    let currentY = height - margin - 20; // Move header down from very top edge
+    let currentY = height - margin - 5; // Reduced white space at top
     
     // Load and embed company logo
     const logo = await embedCompanyLogo(pdfDoc);
@@ -859,7 +859,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
         height: logoHeight,
       });
       
-      currentY -= logoHeight + 15;
+      currentY -= logoHeight + 8;
     } else {
       // Fallback to text if logo fails to load
       page.drawText('AG COMPOSITES', {
@@ -869,8 +869,24 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
         font: boldFont,
         color: rgb(0, 0, 0),
       });
-      currentY -= 35;
+      currentY -= 25;
     }
+
+    // Contact info below logo
+    page.drawText('230 Hamer Rd, Owens Crossroads, AL 35763', {
+      x: margin,
+      y: currentY,
+      size: 8,
+      font: font,
+    });
+    currentY -= 12;
+    page.drawText('Phone: (256) 723-8381 | Email: sales@agatcomposite.com', {
+      x: margin,
+      y: currentY,
+      size: 8,
+      font: font,
+    });
+    currentY -= 20;
 
     // Sales Order title
     page.drawText('SALES ORDER', {
@@ -1387,11 +1403,11 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     page.drawText('FEATURES & CUSTOMIZATIONS', {
       x: margin,
       y: currentY,
-      size: 14,
+      size: 12,
       font: boldFont,
     });
 
-    currentY -= 25;
+    currentY -= 20;
     
     // Create bordered container for features table
     const featuresTableHeight = 240; // Increased height to accommodate all features
@@ -1408,9 +1424,9 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     // Header row for features table
     page.drawRectangle({
       x: margin,
-      y: currentY - 20,
+      y: currentY - 18,
       width: printableWidth,
-      height: 20,
+      height: 18,
       color: rgb(0.9, 0.9, 0.9),
       borderColor: rgb(0, 0, 0),
       borderWidth: 1,
@@ -1418,25 +1434,25 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     
     page.drawText('Feature', {
       x: featureColX,
-      y: currentY - 12,
-      size: 9,
+      y: currentY - 11,
+      size: 8,
       font: boldFont,
     });
 
     page.drawText('Selection', {
       x: selectionColX,
-      y: currentY - 12,
-      size: 9,
+      y: currentY - 11,
+      size: 8,
       font: boldFont,
     });
 
     // Right-align the "Price" header
     const priceHeaderText = 'Price';
-    const priceHeaderWidth = getTextWidth(priceHeaderText, 9);
+    const priceHeaderWidth = getTextWidth(priceHeaderText, 8);
     page.drawText(priceHeaderText, {
       x: priceColRightX - priceHeaderWidth,
-      y: currentY - 12,
-      size: 9,
+      y: currentY - 11,
+      size: 8,
       font: boldFont,
     });
     
@@ -1460,18 +1476,18 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     page.drawText('Stock Model:', {
       x: featureColX,
       y: summaryLineY,
-      size: 9,
+      size: 8,
       font: font,
     });
 
     const modelDisplayName = model?.displayName || model?.name || 'Custom';
-    const wrappedModel = wrapText(modelDisplayName, 300, 9, font);
+    const wrappedModel = wrapText(modelDisplayName, 300, 8, font);
     wrappedModel.forEach((line, index) => {
       if (summaryLineY - (index * 12) > currentY - featuresTableHeight + 8) { // Keep within table bounds
         page.drawText(line, {
           x: selectionColX,
           y: summaryLineY - (index * 12),
-          size: 9,
+          size: 8,
           font: font,
         });
       }
@@ -1479,9 +1495,9 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
 
     const basePriceText = `$${basePrice.toFixed(2)}`;
     page.drawText(basePriceText, {
-      x: priceColRightX - getTextWidth(basePriceText, 9),
+      x: priceColRightX - getTextWidth(basePriceText, 8),
       y: summaryLineY,
-      size: 9,
+      size: 8,
       font: boldFont,
       color: rgb(0, 0.4, 0.8),
     });
@@ -1493,19 +1509,19 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       page.drawText('Handedness:', {
         x: featureColX,
         y: summaryLineY,
-        size: 9,
+        size: 8,
         font: font,
       });
 
       const handednessDisplay = order.features?.handedness ? 
         ((order.features as any)?.handedness === 'right' ? 'Right' : 'Left') : 'Not selected';
-      const wrappedHandedness = wrapText(handednessDisplay, 300, 9, font);
+      const wrappedHandedness = wrapText(handednessDisplay, 300, 8, font);
       wrappedHandedness.forEach((line, index) => {
         if (summaryLineY - (index * 12) > currentY - featuresTableHeight + 8) {
           page.drawText(line, {
             x: selectionColX,
             y: summaryLineY - (index * 12),
-            size: 9,
+            size: 8,
             font: font,
           });
         }
@@ -1513,9 +1529,9 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
 
       const handednessText = '$0.00';
       page.drawText(handednessText, {
-        x: priceColRightX - getTextWidth(handednessText, 9),
+        x: priceColRightX - getTextWidth(handednessText, 8),
         y: summaryLineY,
-        size: 9,
+        size: 8,
         font: boldFont,
         color: rgb(0, 0.4, 0.8),
       });
@@ -1532,20 +1548,20 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       page.drawText('Action Length:', {
         x: featureColX,
         y: summaryLineY,
-        size: 9,
+        size: 8,
         font: font,
       });
 
       const actionLengthDisplay = actionLengthOption?.label || 
         (order.features?.action_length ? (order.features as any)?.action_length.charAt(0).toUpperCase() + (order.features as any)?.action_length.slice(1) : 'Not selected');
       
-      const wrappedActionLength = wrapText(actionLengthDisplay, 300, 9, font);
+      const wrappedActionLength = wrapText(actionLengthDisplay, 300, 8, font);
       wrappedActionLength.forEach((line, index) => {
         if (summaryLineY - (index * 12) > currentY - featuresTableHeight + 8) {
           page.drawText(line, {
             x: selectionColX,
             y: summaryLineY - (index * 12),
-            size: 9,
+            size: 8,
             font: font,
           });
         }
@@ -1553,9 +1569,9 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
 
       const actionLengthText = `$${actionLengthPrice.toFixed(2)}`;
       page.drawText(actionLengthText, {
-        x: priceColRightX - getTextWidth(actionLengthText, 9),
+        x: priceColRightX - getTextWidth(actionLengthText, 8),
         y: summaryLineY,
-        size: 9,
+        size: 8,
         font: boldFont,
         color: rgb(0, 0.4, 0.8),
       });
@@ -1572,7 +1588,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       page.drawText('Action Inlet:', {
         x: featureColX,
         y: summaryLineY,
-        size: 9,
+        size: 8,
         font: font,
       });
 
@@ -1586,13 +1602,13 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
           .join(' ');
       }
       actionInletDisplay = actionInletDisplay || 'Not selected';
-      const wrappedActionInlet = wrapText(actionInletDisplay, 300, 9, font);
+      const wrappedActionInlet = wrapText(actionInletDisplay, 300, 8, font);
       wrappedActionInlet.forEach((line, index) => {
         if (summaryLineY - (index * 12) > currentY - featuresTableHeight + 8) {
           page.drawText(line, {
             x: selectionColX,
             y: summaryLineY - (index * 12),
-            size: 9,
+            size: 8,
             font: font,
           });
         }
@@ -1600,9 +1616,9 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
 
       const actionInletText = `$${actionInletPrice.toFixed(2)}`;
       page.drawText(actionInletText, {
-        x: priceColRightX - getTextWidth(actionInletText, 9),
+        x: priceColRightX - getTextWidth(actionInletText, 8),
         y: summaryLineY,
-        size: 9,
+        size: 8,
         font: boldFont,
         color: rgb(0, 0.4, 0.8),
       });
@@ -1619,18 +1635,18 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       page.drawText('Bottom Metal:', {
         x: featureColX,
         y: summaryLineY,
-        size: 9,
+        size: 8,
         font: font,
       });
 
       const bottomMetalDisplay = bottomMetalOption?.label || 'Not selected';
-      const wrappedBottomMetal = wrapText(bottomMetalDisplay, 300, 9, font);
+      const wrappedBottomMetal = wrapText(bottomMetalDisplay, 300, 8, font);
       wrappedBottomMetal.forEach((line, index) => {
         if (summaryLineY - (index * 12) > currentY - featuresTableHeight + 8) {
           page.drawText(line, {
             x: selectionColX,
             y: summaryLineY - (index * 12),
-            size: 9,
+            size: 8,
             font: font,
           });
         }
@@ -1638,9 +1654,9 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
 
       const bottomMetalText = `$${bottomMetalPrice.toFixed(2)}`;
       page.drawText(bottomMetalText, {
-        x: priceColRightX - getTextWidth(bottomMetalText, 9),
+        x: priceColRightX - getTextWidth(bottomMetalText, 8),
         y: summaryLineY,
-        size: 9,
+        size: 8,
         font: boldFont,
         color: rgb(0, 0.4, 0.8),
       });
@@ -1656,7 +1672,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     page.drawText('Barrel Inlet:', {
       x: featureColX,
       y: summaryLineY,
-      size: 9,
+      size: 8,
       font: font,
     });
 
@@ -1666,7 +1682,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       page.drawText(line, {
         x: selectionColX,
         y: summaryLineY - (index * 12),
-        size: 9,
+        size: 8,
         font: font,
       });
     });
@@ -1676,9 +1692,9 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
 
     const barrelInletText = `$${barrelInletPrice.toFixed(2)}`;
     page.drawText(barrelInletText, {
-      x: priceColRightX - getTextWidth(barrelInletText, 9),
+      x: priceColRightX - getTextWidth(barrelInletText, 8),
       y: summaryLineY,
-      size: 9,
+      size: 8,
       font: boldFont,
       color: rgb(0, 0.4, 0.8),
     });
@@ -1693,7 +1709,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     page.drawText('QDs (Quick Detach Cups):', {
       x: featureColX,
       y: summaryLineY,
-      size: 9,
+      size: 8,
       font: font,
     });
 
@@ -1703,7 +1719,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       page.drawText(line, {
         x: selectionColX,
         y: summaryLineY - (index * 12),
-        size: 9,
+        size: 8,
         font: font,
       });
     });
@@ -1713,9 +1729,9 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
 
     const qdText = `$${qdPrice.toFixed(2)}`;
     page.drawText(qdText, {
-      x: priceColRightX - getTextWidth(qdText, 9),
+      x: priceColRightX - getTextWidth(qdText, 8),
       y: summaryLineY,
-      size: 9,
+      size: 8,
       font: boldFont,
       color: rgb(0, 0.4, 0.8),
     });
@@ -1730,7 +1746,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     page.drawText('LOP (Length of Pull):', {
       x: featureColX,
       y: summaryLineY,
-      size: 9,
+      size: 8,
       font: font,
     });
 
@@ -1743,7 +1759,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       page.drawText(line, {
         x: selectionColX,
         y: summaryLineY - (index * 12),
-        size: 9,
+        size: 8,
         font: font,
       });
     });
@@ -1753,9 +1769,9 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
 
     const lopText = `$${lopPrice.toFixed(2)}`;
     page.drawText(lopText, {
-      x: priceColRightX - getTextWidth(lopText, 9),
+      x: priceColRightX - getTextWidth(lopText, 8),
       y: summaryLineY,
-      size: 9,
+      size: 8,
       font: boldFont,
       color: rgb(0, 0.4, 0.8),
     });
@@ -1782,7 +1798,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     page.drawText('Rails:', {
       x: featureColX,
       y: summaryLineY,
-      size: 9,
+      size: 8,
       font: font,
     });
 
@@ -1791,7 +1807,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       page.drawText(line, {
         x: selectionColX,
         y: summaryLineY - (index * 12),
-        size: 9,
+        size: 8,
         font: font,
       });
     });
@@ -1801,9 +1817,9 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
 
     const railsText = `$${railsPrice.toFixed(2)}`;
     page.drawText(railsText, {
-      x: priceColRightX - getTextWidth(railsText, 9),
+      x: priceColRightX - getTextWidth(railsText, 8),
       y: summaryLineY,
-      size: 9,
+      size: 8,
       font: boldFont,
       color: rgb(0, 0.4, 0.8),
     });
@@ -1818,7 +1834,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     page.drawText('Texture:', {
       x: featureColX,
       y: summaryLineY,
-      size: 9,
+      size: 8,
       font: font,
     });
 
@@ -1830,7 +1846,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       page.drawText(line, {
         x: selectionColX,
         y: summaryLineY - (index * 12),
-        size: 9,
+        size: 8,
         font: font,
       });
     });
@@ -1840,9 +1856,9 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
 
     const textureText = `$${texturePrice.toFixed(2)}`;
     page.drawText(textureText, {
-      x: priceColRightX - getTextWidth(textureText, 9),
+      x: priceColRightX - getTextWidth(textureText, 8),
       y: summaryLineY,
-      size: 9,
+      size: 8,
       font: boldFont,
       color: rgb(0, 0.4, 0.8),
     });
@@ -1857,7 +1873,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     page.drawText('Swivel Studs:', {
       x: featureColX,
       y: summaryLineY,
-      size: 9,
+      size: 8,
       font: font,
     });
 
@@ -1867,7 +1883,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       page.drawText(line, {
         x: selectionColX,
         y: summaryLineY - (index * 12),
-        size: 9,
+        size: 8,
         font: font,
       });
     });
@@ -1877,9 +1893,9 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
 
     const swivelText = `$${swivelPrice.toFixed(2)}`;
     page.drawText(swivelText, {
-      x: priceColRightX - getTextWidth(swivelText, 9),
+      x: priceColRightX - getTextWidth(swivelText, 8),
       y: summaryLineY,
-      size: 9,
+      size: 8,
       font: boldFont,
       color: rgb(0, 0.4, 0.8),
     });
@@ -1907,7 +1923,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     page.drawText('Other Options:', {
       x: featureColX,
       y: summaryLineY,
-      size: 9,
+      size: 8,
       font: font,
     });
 
@@ -1917,7 +1933,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       page.drawText(line, {
         x: selectionColX,
         y: summaryLineY - (index * 12),
-        size: 9,
+        size: 8,
         font: font,
       });
     });
@@ -1928,9 +1944,9 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
 
     const otherOptionsText = `$${otherOptionsPrice.toFixed(2)}`;
     page.drawText(otherOptionsText, {
-      x: priceColRightX - getTextWidth(otherOptionsText, 9),
+      x: priceColRightX - getTextWidth(otherOptionsText, 8),
       y: summaryLineY,
-      size: 9,
+      size: 8,
       font: boldFont,
       color: rgb(0, 0.4, 0.8),
     });
@@ -1952,7 +1968,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     page.drawText('Miscellaneous Items:', {
       x: featureColX,
       y: summaryLineY,
-      size: 9,
+      size: 8,
       font: font,
     });
 
@@ -1962,7 +1978,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       page.drawText(line, {
         x: selectionColX,
         y: summaryLineY - (index * 12),
-        size: 9,
+        size: 8,
         font: font,
         color: rgb(0.2, 0.2, 0.2),
       });
@@ -1975,9 +1991,9 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
 
     const miscText = `$${miscPrice.toFixed(2)}`;
     page.drawText(miscText, {
-      x: priceColRightX - getTextWidth(miscText, 9),
+      x: priceColRightX - getTextWidth(miscText, 8),
       y: summaryLineY,
-      size: 9,
+      size: 8,
       font: boldFont,
       color: rgb(0, 0.4, 0.8),
     });
@@ -2026,7 +2042,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     page.drawText('Paint Options:', {
       x: featureColX,
       y: summaryLineY,
-      size: 9,
+      size: 8,
       font: font,
     });
 
@@ -2036,7 +2052,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       page.drawText(line, {
         x: selectionColX,
         y: summaryLineY - (index * 12),
-        size: 9,
+        size: 8,
         font: font,
       });
     });
@@ -2047,9 +2063,9 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
 
     const paintText = `$${paintPrice.toFixed(2)}`;
     page.drawText(paintText, {
-      x: priceColRightX - getTextWidth(paintText, 9),
+      x: priceColRightX - getTextWidth(paintText, 8),
       y: summaryLineY,
-      size: 9,
+      size: 8,
       font: boldFont,
       color: rgb(0, 0.4, 0.8),
     });

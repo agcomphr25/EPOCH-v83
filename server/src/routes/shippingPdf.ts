@@ -13,7 +13,7 @@ async function embedCompanyLogo(pdfDoc: PDFDocument) {
     // Fix for ES modules - use fileURLToPath for cross-platform compatibility
     const __filename = fileURLToPath(import.meta.url);
     const __dirname = path.dirname(__filename);
-    const logoPath = path.join(__dirname, '../assets/logo_updated.png');
+    const logoPath = path.join(__dirname, '../../../attached_assets/logo_updated.png');
     const logoImageBytes = fs.readFileSync(logoPath);
     return await pdfDoc.embedPng(logoImageBytes);
   } catch (error) {
@@ -1103,7 +1103,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     // Payment Status - will be positioned below TOTAL later
 
     // Customer Information Section - Fixed positioning
-    currentY -= 140; // Move down to provide space for proper box placement
+    currentY -= 30; // Reduced white space between order details and customer info
     
     // Define customer box dimensions and position
     const customerBoxY = currentY;

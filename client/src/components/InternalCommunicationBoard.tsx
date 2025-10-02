@@ -54,13 +54,19 @@ export default function InternalCommunicationBoard() {
   const { toast } = useToast();
   const [recipientType, setRecipientType] = useState<'department' | 'person'>('department');
   const [selectedDepartment, setSelectedDepartment] = useState<string>('');
-  const [selectedPerson, setSelectedPerson] = useState<string>('');
+  const [selectedPersons, setSelectedPersons] = useState<number[]>([]);
   const [subject, setSubject] = useState('');
   const [message, setMessage] = useState('');
   const [isUrgent, setIsUrgent] = useState(false);
-  const [attachmentNote, setAttachmentNote] = useState('');
   const [showCompose, setShowCompose] = useState(false);
   const [filterType, setFilterType] = useState<'all' | 'sent' | 'received'>('all');
+  
+  // Attachment state
+  const [attachmentType, setAttachmentType] = useState<'none' | 'sales_order' | 'email' | 'download'>('none');
+  const [selectedOrderId, setSelectedOrderId] = useState<string>('');
+  const [isPullup, setIsPullup] = useState(false);
+  const [emailSubject, setEmailSubject] = useState('');
+  const [downloadUrl, setDownloadUrl] = useState('');
   
   const { data: currentUser } = useQuery<CurrentUser>({
     queryKey: ['/api/auth/session'],
@@ -78,6 +84,10 @@ export default function InternalCommunicationBoard() {
 
   const { data: messages = [], isLoading } = useQuery<MessageWithDetails[]>({
     queryKey: ['/api/internal-messages'],
+  });
+
+  const { data: orders = [] } = useQuery<any[]>({
+    queryKey: ['/api/orders'],
   });
 
   const sendMessageMutation = useMutation({
@@ -135,15 +145,35 @@ export default function InternalCommunicationBoard() {
   const resetForm = () => {
     setRecipientType('department');
     setSelectedDepartment('');
-    setSelectedPerson('');
+    setSelectedPersons([]);
     setSubject('');
     setMessage('');
     setIsUrgent(false);
-    setAttachmentNote('');
     setShowCompose(false);
+    setAttachmentType('none');
+    setSelectedOrderId('');
+    setIsPullup(false);
+    setEmailSubject('');
+    setDownloadUrl('');
   };
 
-  const handleSendMessage = () => {
+  const handleToggleUser = (userId: number) => {
+    setSelectedPersons(prev => 
+      prev.includes(userId) 
+        ? prev.filter(id => id !== userId)
+        : [...prev, userId]
+    );
+  };
+
+  const handleSelectAll = () => {
+    if (selectedPersons.length === users.length) {
+      setSelectedPersons([]);
+    } else {
+      setSelectedPersons(users.map(u => u.id));
+    }
+  };
+
+  const handleSendMessage = async () => {
     if (!subject.trim() || !message.trim()) {
       toast({
         title: "Validation Error",
@@ -162,10 +192,10 @@ export default function InternalCommunicationBoard() {
       return;
     }
 
-    if (recipientType === 'person' && !selectedPerson) {
+    if (recipientType === 'person' && selectedPersons.length === 0) {
       toast({
         title: "Validation Error",
-        description: "Please select a recipient.",
+        description: "Please select at least one recipient.",
         variant: "destructive",
       });
       return;
@@ -174,32 +204,52 @@ export default function InternalCommunicationBoard() {
     const senderUser = users.find(u => u.id === currentUserId);
     const senderName = senderUser ? senderUser.name : 'Unknown';
     
-    let recipientName = '';
     if (recipientType === 'department') {
       const dept = departments.find(d => d.id === parseInt(selectedDepartment));
-      recipientName = dept ? dept.name : '';
+      const recipientName = dept ? dept.name : '';
+
+      const messageData: any = {
+        senderId: currentUserId,
+        senderName,
+        recipientType,
+        recipientName,
+        subject,
+        message,
+        isUrgent,
+        recipientDepartmentId: parseInt(selectedDepartment),
+      };
+
+      sendMessageMutation.mutate(messageData);
     } else {
-      const user = users.find(u => u.id === parseInt(selectedPerson));
-      recipientName = user ? user.name : '';
+      // Send individual message to each selected person
+      for (const userId of selectedPersons) {
+        const user = users.find(u => u.id === userId);
+        const recipientName = user ? user.name : '';
+
+        const messageData: any = {
+          senderId: currentUserId,
+          senderName,
+          recipientType,
+          recipientName,
+          subject,
+          message,
+          isUrgent,
+          recipientUserId: userId,
+        };
+
+        await apiRequest('/api/internal-messages', {
+          method: 'POST',
+          body: JSON.stringify(messageData),
+        });
+      }
+
+      queryClient.invalidateQueries({ queryKey: ['/api/internal-messages'] });
+      toast({
+        title: "Messages sent",
+        description: `Your message has been sent to ${selectedPersons.length} recipient(s).`,
+      });
+      resetForm();
     }
-
-    const messageData: any = {
-      senderId: currentUserId,
-      senderName,
-      recipientType,
-      recipientName,
-      subject,
-      message,
-      isUrgent,
-    };
-
-    if (recipientType === 'department') {
-      messageData.recipientDepartmentId = parseInt(selectedDepartment);
-    } else {
-      messageData.recipientUserId = parseInt(selectedPerson);
-    }
-
-    sendMessageMutation.mutate(messageData);
   };
 
   const handleMarkAsRead = (messageId: number) => {
@@ -310,19 +360,34 @@ export default function InternalCommunicationBoard() {
               </div>
             ) : (
               <div className="space-y-2">
-                <Label>Select Recipient</Label>
-                <Select value={selectedPerson} onValueChange={setSelectedPerson}>
-                  <SelectTrigger data-testid="select-person">
-                    <SelectValue placeholder="Choose a person" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {users.filter(u => u.isActive).map((user) => (
-                      <SelectItem key={user.id} value={user.id.toString()} data-testid={`user-${user.id}`}>
-                        {user.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label>Select Recipients ({selectedPersons.length} selected)</Label>
+                <div className="border rounded-md p-3 max-h-60 overflow-y-auto space-y-2 bg-background">
+                  <div className="flex items-center space-x-2 p-2 bg-muted rounded-md">
+                    <Checkbox
+                      id="select-all"
+                      checked={selectedPersons.length === users.length && users.length > 0}
+                      onCheckedChange={handleSelectAll}
+                      data-testid="checkbox-select-all"
+                    />
+                    <Label htmlFor="select-all" className="font-bold cursor-pointer flex-1 text-foreground">
+                      Select All ({users.length} users)
+                    </Label>
+                  </div>
+                  
+                  {users.map((user) => (
+                    <div key={user.id} className="flex items-center space-x-2 p-2 hover:bg-muted rounded-md">
+                      <Checkbox
+                        id={`user-${user.id}`}
+                        checked={selectedPersons.includes(user.id)}
+                        onCheckedChange={() => handleToggleUser(user.id)}
+                        data-testid={`checkbox-user-${user.id}`}
+                      />
+                      <Label htmlFor={`user-${user.id}`} className="cursor-pointer flex-1 text-foreground">
+                        {user.name} {!user.isActive && <span className="text-muted-foreground">(Inactive)</span>}
+                      </Label>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 
@@ -349,18 +414,74 @@ export default function InternalCommunicationBoard() {
               />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="attachment">Attachment Note/URL</Label>
-              <div className="flex items-center gap-2">
-                <Paperclip className="h-4 w-4 text-muted-foreground" />
-                <Input
-                  id="attachment"
-                  value={attachmentNote}
-                  onChange={(e) => setAttachmentNote(e.target.value)}
-                  placeholder="Enter attachment URL or note"
-                  data-testid="input-attachment"
-                />
-              </div>
+            <div className="space-y-3">
+              <Label className="flex items-center gap-2">
+                <Paperclip className="h-4 w-4" />
+                Attachments
+              </Label>
+              
+              <Select value={attachmentType} onValueChange={(value: any) => setAttachmentType(value)}>
+                <SelectTrigger data-testid="select-attachment-type">
+                  <SelectValue placeholder="No attachment" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No Attachment</SelectItem>
+                  <SelectItem value="sales_order">Sales Order</SelectItem>
+                  <SelectItem value="email">Email</SelectItem>
+                  <SelectItem value="download">Download/File</SelectItem>
+                </SelectContent>
+              </Select>
+
+              {attachmentType === 'sales_order' && (
+                <div className="space-y-2 pl-4 border-l-2">
+                  <Select value={selectedOrderId} onValueChange={setSelectedOrderId}>
+                    <SelectTrigger data-testid="select-order">
+                      <SelectValue placeholder="Select an order" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {orders.slice(0, 50).map((order: any) => (
+                        <SelectItem key={order.id} value={order.id}>
+                          {order.id} - {order.customer_name || 'Unknown Customer'}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="pullup"
+                      checked={isPullup}
+                      onCheckedChange={(checked) => setIsPullup(checked as boolean)}
+                      data-testid="checkbox-pullup"
+                    />
+                    <Label htmlFor="pullup" className="cursor-pointer">
+                      Pullup Order
+                    </Label>
+                  </div>
+                </div>
+              )}
+
+              {attachmentType === 'email' && (
+                <div className="pl-4 border-l-2">
+                  <Input
+                    value={emailSubject}
+                    onChange={(e) => setEmailSubject(e.target.value)}
+                    placeholder="Email subject or reference"
+                    data-testid="input-email-subject"
+                  />
+                </div>
+              )}
+
+              {attachmentType === 'download' && (
+                <div className="pl-4 border-l-2">
+                  <Input
+                    value={downloadUrl}
+                    onChange={(e) => setDownloadUrl(e.target.value)}
+                    placeholder="File URL or path"
+                    data-testid="input-download-url"
+                  />
+                </div>
+              )}
             </div>
 
             <div className="flex items-center space-x-2">

@@ -121,6 +121,7 @@ import CustomerSatisfaction from "./pages/CustomerSatisfaction";
 import VendorsPage from "./pages/VendorsPage";
 import VendorPOPage from "./pages/VendorPOPage";
 import AdminTrainingSync from "./pages/AdminTrainingSync";
+import TrainingAdmin from "./pages/TrainingAdmin";
 
 import { Toaster as HotToaster } from 'react-hot-toast';
 import DeploymentAuthWrapper from './components/DeploymentAuthWrapper';
@@ -268,6 +269,7 @@ function App() {
                   <Route path="/ag-dashboard" component={AGTestDashboard} />
                   <Route path="/admin-dashboard" component={ADMINTestDashboard} />
                   <Route path="/admin/training-sync" component={AdminTrainingSync} />
+                  <Route path="/admin/training" component={TrainingAdmin} />
                   <Route path="/johnl-dashboard" component={JOHNLTestDashboard} />
                   <Route path="/jens-dashboard" component={JENSTestDashboard} />
                   <Route path="/staciw-dashboard" component={STACIWTestDashboard} />

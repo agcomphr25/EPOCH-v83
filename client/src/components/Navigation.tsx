@@ -204,6 +204,12 @@ export default function Navigation() {
       icon: Settings,
       description: 'Export/Import training data between databases'
     },
+    {
+      path: '/admin/training',
+      label: 'Training Admin',
+      icon: GraduationCap,
+      description: 'Create and manage training modules, quizzes, and certifications'
+    },
 
     {
       path: '/bom-administration',

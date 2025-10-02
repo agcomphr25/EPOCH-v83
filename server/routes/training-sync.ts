@@ -98,49 +98,36 @@ export function registerTrainingSyncRoutes(app: Express) {
         }
       ];
 
-      // Insert modules
-      let modulesInserted = 0;
-      for (const module of modulesData) {
-        try {
-          await db.insert(trainingModules).values(module).onConflictDoNothing();
-          modulesInserted++;
-        } catch (error) {
-          console.error(`Error inserting module ${module.id}:`, error);
-        }
-      }
+      // Bulk insert modules (much faster than individual inserts)
+      await db.insert(trainingModules).values(modulesData).onConflictDoNothing();
+      console.log(`✅ Bulk inserted ${modulesData.length} training modules`);
 
-      console.log(`✅ Inserted ${modulesInserted} training modules`);
-
-      // Insert questions
+      // Bulk insert questions in batches of 50 (to avoid payload size limits)
+      const questionBatchSize = 50;
       let questionsInserted = 0;
-      for (const question of questionsData) {
-        try {
-          await db.insert(trainingQuizQuestions).values(question).onConflictDoNothing();
-          questionsInserted++;
-        } catch (error) {
-          console.error(`Error inserting question ${question.id}:`, error);
-        }
+      for (let i = 0; i < questionsData.length; i += questionBatchSize) {
+        const batch = questionsData.slice(i, i + questionBatchSize);
+        await db.insert(trainingQuizQuestions).values(batch).onConflictDoNothing();
+        questionsInserted += batch.length;
+        console.log(`✅ Inserted questions batch ${Math.floor(i / questionBatchSize) + 1} (${batch.length} items)`);
       }
+      console.log(`✅ Total ${questionsInserted} quiz questions inserted`);
 
-      console.log(`✅ Inserted ${questionsInserted} quiz questions`);
-
-      // Insert answers
+      // Bulk insert answers in batches of 100
+      const answerBatchSize = 100;
       let answersInserted = 0;
-      for (const answer of answersData) {
-        try {
-          await db.insert(trainingQuizAnswers).values(answer).onConflictDoNothing();
-          answersInserted++;
-        } catch (error) {
-          console.error(`Error inserting answer ${answer.id}:`, error);
-        }
+      for (let i = 0; i < answersData.length; i += answerBatchSize) {
+        const batch = answersData.slice(i, i + answerBatchSize);
+        await db.insert(trainingQuizAnswers).values(batch).onConflictDoNothing();
+        answersInserted += batch.length;
+        console.log(`✅ Inserted answers batch ${Math.floor(i / answerBatchSize) + 1} (${batch.length} items)`);
       }
-
-      console.log(`✅ Inserted ${answersInserted} quiz answers`);
+      console.log(`✅ Total ${answersInserted} quiz answers inserted`);
 
       res.json({
         success: true,
         message: 'Training data sync completed',
-        modulesInserted,
+        modulesInserted: modulesData.length,
         questionsInserted,
         answersInserted
       });

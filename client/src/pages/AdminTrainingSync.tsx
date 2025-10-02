@@ -45,14 +45,28 @@ export default function AdminTrainingSync() {
     setSyncResult(null);
 
     try {
-      const result = await apiRequest('/api/admin/sync-training-data', {
+      // Use longer timeout for sync operation (30 seconds instead of 6)
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+      const response = await fetch('/api/admin/sync-training-data', {
         method: 'POST',
+        credentials: 'include',
+        signal: controller.signal,
       });
 
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || `Sync failed with status ${response.status}`);
+      }
+
+      const result = await response.json();
       setSyncResult(result);
       toast({
         title: "Sync Successful!",
-        description: `Synced ${result.modulesInserted} modules with all quiz data`,
+        description: `Synced ${result.modulesInserted} modules, ${result.questionsInserted} questions, ${result.answersInserted} answers`,
       });
 
       refetch();

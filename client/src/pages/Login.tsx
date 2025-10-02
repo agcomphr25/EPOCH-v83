@@ -68,6 +68,9 @@ export default function Login() {
       // Store only user data (session is in HTTP-only cookie)
       localStorage.setItem('currentUser', data.user.username);
       localStorage.setItem('userData', JSON.stringify(data.user));
+      
+      // Set flag to skip initial validation (cookie race condition fix)
+      localStorage.setItem('skipInitialValidation', 'true');
 
       // Get the user's dashboard route
       const dashboardRoute = getDashboardRoute(data.user.username);

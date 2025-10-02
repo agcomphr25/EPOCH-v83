@@ -68,6 +68,14 @@ export async function validateSessionAsync(): Promise<boolean> {
     return true;
   }
 
+  // Skip initial validation if just logged in (cookie race condition fix)
+  const skipValidation = localStorage.getItem('skipInitialValidation');
+  if (skipValidation === 'true') {
+    localStorage.removeItem('skipInitialValidation');
+    console.log('🔒 Skipping initial validation (just logged in)');
+    return true;
+  }
+
   try {
     const response = await fetch('/api/auth/validate', {
       credentials: 'include'

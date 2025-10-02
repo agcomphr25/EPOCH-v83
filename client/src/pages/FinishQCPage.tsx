@@ -88,9 +88,15 @@ export default function FinishQCPage() {
       const fbNumber = order.fbOrderNumber?.toLowerCase() || '';
       const displayOrderId = getDisplayOrderId(order.orderId)?.toLowerCase() || '';
       
-      return orderId.includes(query) || 
-             fbNumber.includes(query) || 
-             displayOrderId.includes(query);
+      // Check for exact match first (higher priority)
+      if (orderId === query || fbNumber === query || displayOrderId === query) {
+        return true;
+      }
+      
+      // Then check if query starts with the search (e.g., "ag342" matches "ag342" but not "ag344")
+      return orderId.startsWith(query) || 
+             fbNumber.startsWith(query) || 
+             displayOrderId.startsWith(query);
     });
   }, [orders, searchQuery]);
 
@@ -125,19 +131,17 @@ export default function FinishQCPage() {
     }
   };
 
-  // Handle search with auto-selection
-  const handleSearchWithSelection = (query: string) => {
+  // Handle search input - just filter, don't auto-select
+  const handleSearchInput = (query: string) => {
     setSearchQuery(query);
-    
-    if (query.trim()) {
-      // Auto-select matching orders after a short delay
-      setTimeout(() => {
-        const matchingOrderIds = filteredOrders.map((order: any) => order.orderId);
-        if (matchingOrderIds.length > 0) {
-          setSelectedOrders(new Set(matchingOrderIds));
-          toast.success(`${matchingOrderIds.length} matching order(s) selected`);
-        }
-      }, 300);
+  };
+
+  // Handle manual selection of all filtered orders
+  const handleSelectFilteredOrders = () => {
+    if (searchQuery.trim()) {
+      const matchingOrderIds = filteredOrders.map((order: any) => order.orderId);
+      setSelectedOrders(new Set(matchingOrderIds));
+      toast.success(`${matchingOrderIds.length} matching order(s) selected`);
     }
   };
 
@@ -384,19 +388,15 @@ export default function FinishQCPage() {
                 type="text"
                 placeholder="Enter Order ID (e.g., AG123) or FB Number (e.g., AK072)..."
                 value={searchQuery}
-                onChange={(e) => handleSearchWithSelection(e.target.value)}
+                onChange={(e) => handleSearchInput(e.target.value)}
                 className="flex-1"
+                data-testid="input-search-orders"
               />
               <Button
                 variant="outline"
-                onClick={() => {
-                  if (searchQuery.trim()) {
-                    const matchingOrderIds = filteredOrders.map((order: any) => order.orderId);
-                    setSelectedOrders(new Set(matchingOrderIds));
-                    toast.success(`${matchingOrderIds.length} matching order(s) selected`);
-                  }
-                }}
+                onClick={handleSelectFilteredOrders}
                 disabled={!searchQuery.trim() || filteredOrders.length === 0}
+                data-testid="button-select-matches"
               >
                 Select Matches
               </Button>

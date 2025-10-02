@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { storage } from '../../storage';
+import { authenticateToken, requireRole, requireEmployeeAccess } from '../../middleware/auth';
 import { uploadMiddleware, getFileInfo, getFileUrl, validateEmployeeDocumentAccess, getDocumentType } from '../../utils/fileUpload';
-import { authenticateToken } from '../../middleware/auth';
 import {
   insertEmployeeSchema,
   insertCertificationSchema,
@@ -29,7 +29,7 @@ router.get('/', async (req: Request, res: Response) => {
   }
 });
 
-router.get('/:id', async (req: Request, res: Response) => {
+router.get('/:id', authenticateToken, requireEmployeeAccess, async (req: Request, res: Response) => {
   try {
     const employee = await storage.getEmployee(parseInt(req.params.id));
     if (!employee) {
@@ -42,7 +42,7 @@ router.get('/:id', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/', async (req: Request, res: Response) => {
+router.post('/', authenticateToken, requireRole('ADMIN'), async (req: Request, res: Response) => {
   try {
     const employeeData = insertEmployeeSchema.parse(req.body);
     const newEmployee = await storage.createEmployee(employeeData);
@@ -56,7 +56,7 @@ router.post('/', async (req: Request, res: Response) => {
   }
 });
 
-router.put('/:id', async (req: Request, res: Response) => {
+router.put('/:id', authenticateToken, requireEmployeeAccess, async (req: Request, res: Response) => {
   try {
     const employeeId = parseInt(req.params.id);
     const updates = req.body;
@@ -68,7 +68,7 @@ router.put('/:id', async (req: Request, res: Response) => {
   }
 });
 
-router.delete('/:id', async (req: Request, res: Response) => {
+router.delete('/:id', authenticateToken, requireRole('ADMIN'), async (req: Request, res: Response) => {
   try {
     const employeeId = parseInt(req.params.id);
     await storage.deleteEmployee(employeeId);
@@ -80,7 +80,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
 });
 
 // Certification Management
-router.get('/:id/certifications', async (req: Request, res: Response) => {
+router.get('/:id/certifications', authenticateToken, requireEmployeeAccess, async (req: Request, res: Response) => {
   try {
     const employeeId = parseInt(req.params.id);
     const certifications = await storage.getEmployeeCertifications(employeeId);
@@ -116,7 +116,7 @@ router.get('/:id/certifications', async (req: Request, res: Response) => {
 //   }
 // });
 
-router.post('/:id/evaluations', async (req: Request, res: Response) => {
+router.post('/:id/evaluations', authenticateToken, requireRole('ADMIN'), async (req: Request, res: Response) => {
   try {
     const employeeId = parseInt(req.params.id);
     const evaluationData = insertEvaluationSchema.parse({ ...req.body, employeeId });
@@ -166,7 +166,7 @@ router.post('/:id/evaluations', async (req: Request, res: Response) => {
 // });
 
 // Document Management
-router.post('/:id/documents', uploadMiddleware.single('document'), async (req: Request, res: Response) => {
+router.post('/:id/documents', authenticateToken, requireRole('ADMIN'), uploadMiddleware.single('document'), async (req: Request, res: Response) => {
   try {
     const employeeId = parseInt(req.params.id);
     const file = req.file;

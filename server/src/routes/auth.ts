@@ -6,19 +6,26 @@ const router = Router();
 // Login endpoint
 router.post("/login", async (req, res) => {
   try {
+    console.log('🔐 Login attempt received:', { username: req.body?.username, hasPassword: !!req.body?.password });
+    
     const { username, password } = req.body;
 
     if (!username || !password) {
+      console.log('❌ Login failed: Missing credentials');
       return res.status(400).json({ error: "Username and password are required" });
     }
 
+    console.log('🔐 Calling AuthService.login...');
     const result = await AuthService.login(username, password);
+    console.log('🔐 AuthService.login result:', { success: result.success, hasUser: !!result.user, hasToken: !!result.sessionToken });
 
     if (!result.success) {
+      console.log('❌ Login failed:', result.error);
       return res.status(401).json({ error: result.error });
     }
 
     // Set HTTP-only session cookie
+    console.log('🍪 Setting session cookie...');
     res.cookie('sessionToken', result.sessionToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
@@ -27,12 +34,13 @@ router.post("/login", async (req, res) => {
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     });
 
+    console.log('✅ Login successful, sending response');
     res.json({
       success: true,
       user: result.user
     });
   } catch (error) {
-    console.error('Login error:', error);
+    console.error('❌ Login error (uncaught):', error);
     res.status(500).json({ error: "Login failed" });
   }
 });

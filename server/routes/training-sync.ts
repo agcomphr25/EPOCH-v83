@@ -168,6 +168,58 @@ export function registerTrainingSyncRoutes(app: Express) {
     }
   });
 
+  // CSV Export endpoint
+  app.get("/api/admin/export-training-csv", authenticateToken, async (req, res) => {
+    // Allow ADMIN role or specific users (glennj, tasham)
+    if (req.user?.role !== 'ADMIN' && 
+        req.user?.username !== 'glennj' && 
+        req.user?.username !== 'tasham') {
+      return res.status(403).json({ error: 'Insufficient permissions' });
+    }
+
+    try {
+      const modules = await db.select().from(trainingModules);
+      const questions = await db.select().from(trainingQuizQuestions);
+      const answers = await db.select().from(trainingQuizAnswers);
+
+      // Generate Modules CSV
+      let modulesCSV = 'id,title,description,pdfUrl,passingScore,isActive\n';
+      for (const module of modules) {
+        const title = (module.title || '').replace(/"/g, '""');
+        const description = (module.description || '').replace(/"/g, '""');
+        const pdfUrl = (module.pdfUrl || '').replace(/"/g, '""');
+        modulesCSV += `${module.id},"${title}","${description}","${pdfUrl}",${module.passingScore || 80},${module.isActive !== false}\n`;
+      }
+
+      // Generate Questions CSV
+      let questionsCSV = 'id,moduleId,question,questionType,correctAnswer,explanation,sortOrder,isActive\n';
+      for (const question of questions) {
+        const questionText = (question.question || '').replace(/"/g, '""');
+        const questionType = (question.questionType || 'multiple_choice').replace(/"/g, '""');
+        const correctAnswer = (question.correctAnswer || '').replace(/"/g, '""');
+        const explanation = (question.explanation || '').replace(/"/g, '""');
+        questionsCSV += `${question.id},${question.moduleId},"${questionText}","${questionType}","${correctAnswer}","${explanation}",${question.sortOrder || 0},${question.isActive !== false}\n`;
+      }
+
+      // Generate Answers CSV
+      let answersCSV = 'id,questionId,answerText,isCorrect,sortOrder\n';
+      for (const answer of answers) {
+        const answerText = (answer.answerText || '').replace(/"/g, '""');
+        answersCSV += `${answer.id},${answer.questionId},"${answerText}",${answer.isCorrect !== false},${answer.sortOrder || 0}\n`;
+      }
+
+      res.json({
+        modulesCSV,
+        questionsCSV,
+        answersCSV
+      });
+
+    } catch (error: any) {
+      console.error('CSV export error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // CSV Import endpoint
   app.post("/api/admin/import-training-csv", authenticateToken, upload.fields([
     { name: 'modules', maxCount: 1 },

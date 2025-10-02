@@ -2282,13 +2282,32 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     });
 
     currentY -= 18;
-    const terms = [
+    
+    // Determine which terms to use based on order department
+    const isShippingDepartment = order.currentDepartment && 
+      (order.currentDepartment.toLowerCase().includes('shipping') || 
+       order.currentDepartment.toLowerCase().includes('qc'));
+    
+    // Define terms for Shipping Department
+    const shippingTerms = [
+      '• All items have been inspected and meet quality standards',
+      '• Package contents verified against order specifications',
+      '• Customer responsible for reporting shipping damage within 48 hours of delivery',
+      '• Tracking information will be provided via email',
+      '• Signature may be required upon delivery'
+    ];
+    
+    // Define terms for all other departments (CSR, Production, etc.)
+    const standardTerms = [
       '• Payment: 50% deposit required to begin production, balance due upon completion',
       '• Lead Time: Custom manufacturing typically 4-6 weeks from deposit',
       '• Custom items are non-returnable unless defective',
       '• Shipping costs additional - calculated at time of shipment',
       '• Prices valid for 30 days from quote date'
     ];
+    
+    // Select appropriate terms based on department
+    const terms = isShippingDepartment ? shippingTerms : standardTerms;
 
     // Two-column layout for terms
     const termsColumnWidth = (printableWidth - 20) / 2;

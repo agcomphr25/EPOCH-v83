@@ -2340,8 +2340,8 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     
     if (isShippingDepartment && maxColumnHeight > availableSpace) {
       // Add a new page for shipping terms
-      page = pdfDoc.addPage([pageWidth, pageHeight]);
-      currentY = pageHeight - margin;
+      page = pdfDoc.addPage([width, height]);
+      currentY = height - margin;
       
       // Add header on second page
       page.drawText('SALES ORDER (continued)', {

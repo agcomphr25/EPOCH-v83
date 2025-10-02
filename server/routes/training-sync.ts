@@ -1,12 +1,19 @@
 import type { Express } from "express";
 import { db } from "../db";
-import { trainingModules, trainingQuizQuestions, trainingQuizAnswers } from "../schema";
+import { trainingModules, trainingQuizQuestions, trainingQuizAnswers, users } from "../schema";
+import { eq } from "drizzle-orm";
 import { authenticateToken, requireRole } from "../middleware/auth";
 
 export function registerTrainingSyncRoutes(app: Express) {
   
-  // Admin-only endpoint to sync training data to production
-  app.post("/api/admin/sync-training-data", authenticateToken, requireRole('ADMIN'), async (req, res) => {
+  // Admin-only endpoint to sync training data to production (allows ADMIN or specific employees)
+  app.post("/api/admin/sync-training-data", authenticateToken, async (req, res) => {
+    // Allow ADMIN role or specific users (glennj, tasham)
+    if (req.user?.role !== 'ADMIN' && 
+        req.user?.username !== 'glennj' && 
+        req.user?.username !== 'tasham') {
+      return res.status(403).json({ error: 'Insufficient permissions' });
+    }
     try {
       console.log('🔄 Starting training data sync...');
       
@@ -116,14 +123,41 @@ export function registerTrainingSyncRoutes(app: Express) {
     }
   });
 
-  // Check sync status
-  app.get("/api/admin/training-sync-status", authenticateToken, requireRole('ADMIN'), async (req, res) => {
+  // Check sync status (allows ADMIN or specific users)
+  app.get("/api/admin/training-sync-status", authenticateToken, async (req, res) => {
+    // Allow ADMIN role or specific users (glennj, tasham)
+    if (req.user?.role !== 'ADMIN' && 
+        req.user?.username !== 'glennj' && 
+        req.user?.username !== 'tasham') {
+      return res.status(403).json({ error: 'Insufficient permissions' });
+    }
     try {
       const modules = await db.select().from(trainingModules);
+      const questions = await db.select().from(trainingQuizQuestions);
       
       res.json({
-        modulesCount: modules.length,
+        moduleCount: modules.length,
+        questionCount: questions.length,
         modules: modules.map(m => ({ id: m.id, title: m.title }))
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Quick fix endpoint to update tasham to ADMIN role (run once in production)
+  app.post("/api/admin/fix-admin-role", authenticateToken, async (req, res) => {
+    try {
+      // Only allow glennj to run this (who should already be ADMIN)
+      if (req.user?.username !== 'glennj' && req.user?.role !== 'ADMIN') {
+        return res.status(403).json({ error: 'Only glennj can run this fix' });
+      }
+
+      await db.update(users).set({ role: 'ADMIN' }).where(eq(users.username, 'tasham'));
+      
+      res.json({
+        success: true,
+        message: 'tasham role updated to ADMIN'
       });
     } catch (error: any) {
       res.status(500).json({ error: error.message });

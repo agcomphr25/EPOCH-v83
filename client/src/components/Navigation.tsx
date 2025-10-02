@@ -18,6 +18,7 @@ import {
   NavigationMenuViewport,
 } from "@/components/ui/navigation-menu"
 import { hasFullAccess, hasRouteAccess } from "@/config/userPermissions";
+import { getDashboardRoute } from "@/config/dashboardMapping";
 
 export default function Navigation() {
   const [location, setLocation] = useLocation();
@@ -709,9 +710,23 @@ export default function Navigation() {
     <header className="bg-white shadow-sm border-b border-gray-200">
       <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center py-4 gap-4">
-          <div className="flex items-center">
-            <Factory className="h-6 w-6 text-primary mr-3" />
-            <h1 className="text-xl font-semibold text-gray-900">EPOCH v8</h1>
+          <div className="flex items-center gap-4">
+            <div className="flex items-center">
+              <Factory className="h-6 w-6 text-primary mr-3" />
+              <h1 className="text-xl font-semibold text-gray-900">EPOCH v8</h1>
+            </div>
+            {currentUser && (
+              <Link href={getDashboardRoute(currentUser)}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex items-center gap-2"
+                  data-testid="button-home"
+                >
+                  Home
+                </Button>
+              </Link>
+            )}
           </div>
 
           {/* Navigation Links */}

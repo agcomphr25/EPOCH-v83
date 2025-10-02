@@ -1,0 +1,361 @@
+id,question_id,answer_text,sort_order,is_correct,created_at
+111,19,The collection area supervisor,3,f,2025-10-01 20:10:29.038402
+113,22,In the designated SDS books and written program location,1,t,2025-10-01 20:52:14.617675
+114,22,In the manager's office only,2,f,2025-10-01 20:52:14.617675
+115,22,Online at the company website,3,f,2025-10-01 20:52:14.617675
+116,22,Posted on the break room wall,4,f,2025-10-01 20:52:14.617675
+117,23,Danger and Warning,1,t,2025-10-01 20:52:14.617675
+118,23,Caution and Danger,2,f,2025-10-01 20:52:14.617675
+119,23,Warning and Caution,3,f,2025-10-01 20:52:14.617675
+120,23,Hazard and Danger,4,f,2025-10-01 20:52:14.617675
+121,24,In a fire safe cabinet,1,t,2025-10-01 20:52:14.617675
+122,24,On regular shelves,2,f,2025-10-01 20:52:14.617675
+123,24,In the refrigerator,3,f,2025-10-01 20:52:14.617675
+124,24,Next to the workstation,4,f,2025-10-01 20:52:14.617675
+125,25,65°F - 75°F,1,t,2025-10-01 20:52:14.617675
+126,25,32°F - 50°F,2,f,2025-10-01 20:52:14.617675
+127,25,75°F - 85°F,3,f,2025-10-01 20:52:14.617675
+128,25,Room temperature,4,f,2025-10-01 20:52:14.617675
+130,26,Pour it down the drain,2,f,2025-10-01 20:52:14.617675
+131,26,Fill out a disposal form and give to Production Manager,3,f,2025-10-01 20:52:14.617675
+132,26,Store it for future use,4,f,2025-10-01 20:52:14.617675
+134,27,Just throw it in the dumpster,2,f,2025-10-01 20:52:14.617675
+135,27,Allow it to evaporate first,3,f,2025-10-01 20:52:14.617675
+136,27,Store it in the fire safe cabinet,4,f,2025-10-01 20:52:14.617675
+137,28,"First In, First Out - use oldest items before they expire",1,t,2025-10-01 20:52:14.617675
+138,28,"Fast In, Fast Out - work quickly",2,f,2025-10-01 20:52:14.617675
+139,28,"Find It, Fix It, Organize - workplace organization",3,f,2025-10-01 20:52:14.617675
+140,28,"Final Inspection, First Operation - production flow",4,f,2025-10-01 20:52:14.617675
+141,29,Acute illnesses develop suddenly and last a short time; chronic illnesses develop slowly over months to years,1,t,2025-10-01 20:52:14.617675
+142,29,Acute illnesses are always fatal; chronic illnesses are not,2,f,2025-10-01 20:52:14.617675
+143,29,Acute illnesses are from chemicals; chronic illnesses are from physical injuries,3,f,2025-10-01 20:52:14.617675
+144,29,Acute illnesses last months; chronic illnesses last days,4,f,2025-10-01 20:52:14.617675
+145,30,Correct the employee or immediately notify the department leader or Safety Team,1,t,2025-10-01 20:52:14.617675
+146,30,Ignore it to avoid conflict,2,f,2025-10-01 20:52:14.617675
+147,30,Wait until the end of the shift to report it,3,f,2025-10-01 20:52:14.617675
+148,30,Only report it if someone gets injured,4,f,2025-10-01 20:52:14.617675
+149,31,In the freezer at -1°F to 23°F,1,t,2025-10-01 20:52:14.617675
+150,31,In the refrigerator at 65°F - 75°F,2,f,2025-10-01 20:52:14.617675
+151,31,In a fire safe cabinet,3,f,2025-10-01 20:52:14.617675
+152,31,At room temperature,4,f,2025-10-01 20:52:14.617675
+153,32,"Epoxy resins, hardeners, and solvents like acetone",1,t,2025-10-01 20:53:03.935851
+154,32,Steel and aluminum,2,f,2025-10-01 20:53:03.935851
+155,32,Water and soap,3,f,2025-10-01 20:53:03.935851
+156,32,Sand and gravel,4,f,2025-10-01 20:53:03.935851
+157,33,In flammable safety cabinets with proper labels,1,t,2025-10-01 20:53:03.935851
+158,33,Under the workbench,2,f,2025-10-01 20:53:03.935851
+159,33,In the break room,3,f,2025-10-01 20:53:03.935851
+58,16,Clean the entire facility,2,f,2025-10-01 20:05:13.538703
+59,16,Package all parts immediately,3,f,2025-10-01 20:05:13.598924
+60,16,Remove all hardware from the area,4,f,2025-10-01 20:05:13.658829
+61,17,Placed in collection area and leaders submit waste management form,1,f,2025-10-01 20:05:13.782074
+62,17,They can be used if they look okay,2,f,2025-10-01 20:05:13.842244
+63,17,Employees dispose of them directly,3,f,2025-10-01 20:05:13.908199
+64,17,They are stored separately for future use,4,f,2025-10-01 20:05:13.968589
+65,18,"Package or segregate parts to prevent damage, contamination, or loss of traceability",1,f,2025-10-01 20:05:14.094106
+66,18,Leave parts on the work surface for inspection,2,f,2025-10-01 20:05:14.154029
+67,18,Only clean visible debris,3,f,2025-10-01 20:05:14.214173
+68,18,Move parts to any available location,4,f,2025-10-01 20:05:14.274586
+81,15,An expiration date,1,f,2025-10-01 20:08:04.484109
+82,15,Only the purchase date,2,f,2025-10-01 20:08:04.546757
+83,15,The manufacturer name only,3,f,2025-10-01 20:08:04.612829
+84,15,No marking is required,4,f,2025-10-01 20:08:04.673323
+85,20,To prevent damage from dirt or chemicals,1,f,2025-10-01 20:08:04.925938
+86,20,To make the area look presentable,2,f,2025-10-01 20:08:04.987973
+87,20,Only to remove large debris,3,f,2025-10-01 20:08:05.048742
+88,20,Cleaning is optional if careful,4,f,2025-10-01 20:08:05.109781
+93,12,Ensure components are not expired or out-of-date,1,f,2025-10-01 20:10:01.533795
+94,12,Check the color and appearance,2,f,2025-10-01 20:10:01.606094
+95,12,Verify the supplier name only,3,f,2025-10-01 20:10:01.666785
+96,12,Check the weight only,4,f,2025-10-01 20:10:01.728701
+98,13,Only check if it looks damaged,2,f,2025-10-01 20:10:02.057255
+99,13,Materials never need shelf life checks,3,f,2025-10-01 20:10:02.123672
+100,13,Only check once per year,4,f,2025-10-01 20:10:02.183402
+101,14,Clear the work area of any extra material and hardware that could be accidentally used,1,f,2025-10-01 20:10:02.428618
+102,14,Add extra materials for convenience,2,f,2025-10-01 20:10:02.498414
+103,14,Only remove broken items,3,f,2025-10-01 20:10:02.558314
+104,14,Leave materials if they might be needed,4,f,2025-10-01 20:10:02.618003
+105,21,"Check for any unnecessary debris such as poly, shavings, bolts, nuts, etc. and remove any debris",1,f,2025-10-01 20:10:02.855869
+106,21,Only check for large visible defects,2,f,2025-10-01 20:10:02.916959
+107,21,Visual inspection is sufficient,3,f,2025-10-01 20:10:02.975781
+108,21,No inspection needed if work area was clean,4,f,2025-10-01 20:10:03.034405
+160,33,Outside in the sun,4,f,2025-10-01 20:53:03.935851
+110,19,The employee who found them,2,f,2025-10-01 20:10:28.391777
+163,34,Throw them in the regular trash,3,f,2025-10-01 20:53:03.935851
+164,34,Store them in a plastic bag,4,f,2025-10-01 20:53:03.935851
+165,35,Pull the pin,1,t,2025-10-01 20:53:03.935851
+166,35,Point at the fire,2,f,2025-10-01 20:53:03.935851
+167,35,Push the button,3,f,2025-10-01 20:53:03.935851
+168,35,Pump the handle,4,f,2025-10-01 20:53:03.935851
+169,36,Activate the nearest fire alarm and notify supervisor/dial 911,1,t,2025-10-01 20:53:03.935851
+170,36,"Try to put it out first, then call for help",2,f,2025-10-01 20:53:03.935851
+171,36,Run to the parking lot,3,f,2025-10-01 20:53:03.935851
+172,36,"Finish your current task, then evacuate",4,f,2025-10-01 20:53:03.935851
+173,37,Class B,1,t,2025-10-01 20:53:03.935851
+174,37,Class A,2,f,2025-10-01 20:53:03.935851
+175,37,Class C,3,f,2025-10-01 20:53:03.935851
+176,37,Class D,4,f,2025-10-01 20:53:03.935851
+178,38,Always fight fires to protect equipment,2,f,2025-10-01 20:53:03.935851
+179,38,Any fire as long as you have an extinguisher,3,f,2025-10-01 20:53:03.935851
+180,38,Never - always wait for the fire department,4,f,2025-10-01 20:53:03.935851
+181,39,"Keep exits, walkways, and fire extinguishers clear at all times",1,t,2025-10-01 20:53:03.935851
+182,39,Stack materials near exits for easy access,2,f,2025-10-01 20:53:03.935851
+183,39,Store equipment in front of fire extinguishers,3,f,2025-10-01 20:53:03.935851
+184,39,Block walkways with work-in-progress items,4,f,2025-10-01 20:53:03.935851
+185,40,Highly combustible and must be regularly cleaned with explosion-proof vacuums,1,t,2025-10-01 20:53:03.935851
+186,40,Safe and non-flammable,2,f,2025-10-01 20:53:03.935851
+187,40,Can be cleaned with any regular vacuum,3,f,2025-10-01 20:53:03.935851
+188,40,Should be left to settle naturally,4,f,2025-10-01 20:53:03.935851
+189,41,Only after cleared by Fire Department or Safety Officer,1,t,2025-10-01 20:53:03.935851
+190,41,As soon as the fire is out,2,f,2025-10-01 20:53:03.935851
+191,41,When you stop seeing smoke,3,f,2025-10-01 20:53:03.935851
+192,41,After 10 minutes,4,f,2025-10-01 20:53:03.935851
+194,42,An international trade agreement between NATO countries,2,f,2025-10-01 21:01:35.558357
+195,42,A shipping and logistics company,3,f,2025-10-01 21:01:35.558357
+196,42,A workplace safety regulation,4,f,2025-10-01 21:01:35.558357
+197,43,"All of the above: Shipping items overseas, sharing technical data with a foreign person in the U.S., providing defense services to a foreign person",1,t,2025-10-01 21:01:35.558357
+198,43,Only shipping items to other countries,2,f,2025-10-01 21:01:35.558357
+199,43,Only selling products internationally,3,f,2025-10-01 21:01:35.558357
+200,43,Only providing training overseas,4,f,2025-10-01 21:01:35.558357
+201,44,"U.S. citizens, permanent residents, asylees, and refugees",1,t,2025-10-01 21:01:35.558357
+202,44,Only U.S. citizens born in the United States,2,f,2025-10-01 21:01:35.558357
+203,44,Anyone with a work visa,3,f,2025-10-01 21:01:35.558357
+204,44,Anyone currently living in the United States,4,f,2025-10-01 21:01:35.558357
+205,45,ITAR Controlled – Export Controlled,1,t,2025-10-01 21:01:35.558357
+206,45,Confidential – Do Not Distribute,2,f,2025-10-01 21:01:35.558357
+207,45,Proprietary Information,3,f,2025-10-01 21:01:35.558357
+208,45,Internal Use Only,4,f,2025-10-01 21:01:35.558357
+209,46,"$1,272,251 per violation",1,t,2025-10-01 21:01:35.558357
+210,46,"$100,000 per violation",2,f,2025-10-01 21:01:35.558357
+211,46,"$500,000 per violation",3,f,2025-10-01 21:01:35.558357
+212,46,"$50,000 per violation",4,f,2025-10-01 21:01:35.558357
+213,47,In locked cabinets or restricted-access digital systems,1,t,2025-10-01 21:01:35.558357
+214,47,On any company computer,2,f,2025-10-01 21:01:35.558357
+215,47,In personal cloud storage like Dropbox,3,f,2025-10-01 21:01:35.558357
+216,47,On your desk for easy access,4,f,2025-10-01 21:01:35.558357
+217,48,Immediately report it to the Business Manager or VP of Operations,1,t,2025-10-01 21:01:35.558357
+218,48,Ignore it if they seem trustworthy,2,f,2025-10-01 21:01:35.558357
+219,48,Wait to see if anyone else notices,3,f,2025-10-01 21:01:35.558357
+220,48,Report it at the end of the month,4,f,2025-10-01 21:01:35.558357
+221,49,VP of Operations and Business Manager,1,t,2025-10-01 21:01:35.558357
+222,49,Any manager in the company,2,f,2025-10-01 21:01:35.558357
+223,49,Any employee with a security clearance,3,f,2025-10-01 21:01:35.558357
+224,49,The production supervisor,4,f,2025-10-01 21:01:35.558357
+225,50,5 years,1,t,2025-10-01 21:01:35.558357
+226,50,1 year,2,f,2025-10-01 21:01:35.558357
+227,50,3 years,3,f,2025-10-01 21:01:35.558357
+228,50,10 years,4,f,2025-10-01 21:01:35.558357
+229,51,"Blueprints, drawings, process specifications, test data, and software related to defense articles",1,t,2025-10-01 21:01:35.558357
+230,51,Only physical blueprints and drawings,2,f,2025-10-01 21:01:35.558357
+231,51,Only computer software programs,3,f,2025-10-01 21:01:35.558357
+232,51,Marketing materials and sales brochures,4,f,2025-10-01 21:01:35.558357
+234,52,A safety certification for chemical handling,2,f,2025-10-01 21:09:26.887538
+235,52,A general business management standard,3,f,2025-10-01 21:09:26.887538
+236,52,A manufacturing equipment standard,4,f,2025-10-01 21:09:26.887538
+237,53,Continuously improve while producing quality products in a timely manner to meet customer requirements,1,t,2025-10-01 21:09:26.887538
+238,53,Maximize profits and reduce costs,2,f,2025-10-01 21:09:26.887538
+239,53,Produce products as fast as possible,3,f,2025-10-01 21:09:26.887538
+240,53,Meet minimum quality standards,4,f,2025-10-01 21:09:26.887538
+241,54,3% or less based on manufacturer defect or error,1,t,2025-10-01 21:09:26.887538
+242,54,5% or less,2,f,2025-10-01 21:09:26.887538
+243,54,10% or less,3,f,2025-10-01 21:09:26.887538
+244,54,1% or less,4,f,2025-10-01 21:09:26.887538
+245,55,1% or less for nonconforming items,1,t,2025-10-01 21:09:26.887538
+246,55,3% or less,2,f,2025-10-01 21:09:26.887538
+247,55,5% or less,3,f,2025-10-01 21:09:26.887538
+248,55,No specific goal,4,f,2025-10-01 21:09:26.887538
+162,34,Leave them on the workbench to dry,2,f,2025-10-01 20:53:03.935851
+251,56,95% on-time shipping,3,f,2025-10-01 21:09:26.887538
+252,56,100% on-time shipping,4,f,2025-10-01 21:09:26.887538
+254,57,Only the quality department,2,f,2025-10-01 21:09:26.887538
+255,57,Only managers and supervisors,3,f,2025-10-01 21:09:26.887538
+256,57,Only production employees,4,f,2025-10-01 21:09:26.887538
+257,58,Notify a manager immediately,1,t,2025-10-01 21:09:26.887538
+258,58,Use them anyway if they look okay,2,f,2025-10-01 21:09:26.887538
+259,58,Throw them away yourself,3,f,2025-10-01 21:09:26.887538
+260,58,Move them to a different location,4,f,2025-10-01 21:09:26.887538
+261,59,Foreign Object Debris,1,t,2025-10-01 21:09:26.887538
+262,59,Factory Operation Documentation,2,f,2025-10-01 21:09:26.887538
+263,59,Final Output Data,3,f,2025-10-01 21:09:26.887538
+264,59,Field Operations Directive,4,f,2025-10-01 21:09:26.887538
+265,60,Notify a manager immediately,1,t,2025-10-01 21:09:26.887538
+266,60,Fix it yourself without telling anyone,2,f,2025-10-01 21:09:26.887538
+267,60,Ignore it if no one else notices,3,f,2025-10-01 21:09:26.887538
+268,60,Wait until the end of the day to report it,4,f,2025-10-01 21:09:26.887538
+269,61,Key Performance Indicators (KPIs),1,t,2025-10-01 21:09:26.887538
+270,61,Knowledge Process Improvements,2,f,2025-10-01 21:09:26.887538
+271,61,Key Production Instructions,3,f,2025-10-01 21:09:26.887538
+272,61,Kinetic Performance Indexes,4,f,2025-10-01 21:09:26.887538
+274,62,Buy from the cheapest supplier available,2,f,2025-10-01 21:19:24.204956
+275,62,Purchase from online marketplaces,3,f,2025-10-01 21:19:24.204956
+276,62,Use unknown distributors,4,f,2025-10-01 21:19:24.204956
+277,63,"All of these: personal injury, mission failure, reduced reliability, and loss of contracts",1,t,2025-10-01 21:19:24.204956
+278,63,Only minor cost increases,2,f,2025-10-01 21:19:24.204956
+279,63,No significant impacts,3,f,2025-10-01 21:19:24.204956
+280,63,Only affects product appearance,4,f,2025-10-01 21:19:24.204956
+281,64,"Yes, suppliers must ensure prevention through processes or a formal program",1,t,2025-10-01 21:19:24.204956
+282,64,"No, suppliers can handle materials however they want",2,f,2025-10-01 21:19:24.204956
+283,64,"Only if the order is over $10,000",3,f,2025-10-01 21:19:24.204956
+284,64,Only for military contracts,4,f,2025-10-01 21:19:24.204956
+285,65,No certificate of conformance,1,t,2025-10-01 21:19:24.204956
+286,65,Product arrives on time,2,f,2025-10-01 21:19:24.204956
+287,65,Proper manufacturer packaging,3,f,2025-10-01 21:19:24.204956
+288,65,Authorized distributor documentation,4,f,2025-10-01 21:19:24.204956
+289,66,Isolate and quarantine the suspect parts immediately,1,t,2025-10-01 21:19:24.204956
+290,66,Continue using them in production,2,f,2025-10-01 21:19:24.204956
+291,66,Throw them away immediately,3,f,2025-10-01 21:19:24.204956
+292,66,Mix them with other inventory,4,f,2025-10-01 21:19:24.204956
+293,67,"No, do not return them as they could re-enter the supply chain",1,t,2025-10-01 21:19:24.204956
+294,67,"Yes, always return them to get a refund",2,f,2025-10-01 21:19:24.204956
+295,67,"Yes, return them without documentation",3,f,2025-10-01 21:19:24.204956
+296,67,It does not matter either way,4,f,2025-10-01 21:19:24.204956
+297,68,Section 8.1.4,1,t,2025-10-01 21:19:24.204956
+298,68,Section 4.2.1,2,f,2025-10-01 21:19:24.204956
+299,68,Section 10.3.5,3,f,2025-10-01 21:19:24.204956
+300,68,Section 6.1.2,4,f,2025-10-01 21:19:24.204956
+302,69,Use the parts anyway,2,f,2025-10-01 21:19:24.204956
+303,69,Return them to the supplier immediately,3,f,2025-10-01 21:19:24.204956
+304,69,Ignore the issue,4,f,2025-10-01 21:19:24.204956
+305,70,OCM Authorized Distributors,1,t,2025-10-01 21:19:24.204956
+306,70,Unknown online sellers,2,f,2025-10-01 21:19:24.204956
+307,70,Overseas discount suppliers,3,f,2025-10-01 21:19:24.204956
+308,70,Liquidation warehouses,4,f,2025-10-01 21:19:24.204956
+309,71,The Quality Manager,1,t,2025-10-01 21:19:24.204956
+310,71,"No one, handle it yourself",2,f,2025-10-01 21:19:24.204956
+311,71,Only your immediate supervisor,3,f,2025-10-01 21:19:24.204956
+312,71,The supplier first,4,f,2025-10-01 21:19:24.204956
+313,82,Clause 7.3,1,t,2025-10-01 21:21:59.574324
+314,82,Clause 4.2,2,f,2025-10-01 21:21:59.574324
+315,82,Clause 10.1,3,f,2025-10-01 21:21:59.574324
+316,82,Clause 8.5,4,f,2025-10-01 21:21:59.574324
+317,83,Signing off on inspection reports without performing the required checks,1,t,2025-10-01 21:21:59.574324
+318,83,Filing reports on time with accurate data,2,f,2025-10-01 21:21:59.574324
+319,83,Requesting additional time to complete inspections properly,3,f,2025-10-01 21:21:59.574324
+320,83,Reporting defects to your supervisor,4,f,2025-10-01 21:21:59.574324
+321,84,Boeing had to halt production temporarily and perform extensive inspections,1,t,2025-10-01 21:21:59.574324
+322,84,No consequences occurred,2,f,2025-10-01 21:21:59.574324
+323,84,Only a small fine was issued,3,f,2025-10-01 21:21:59.574324
+324,84,The issue was covered up,4,f,2025-10-01 21:21:59.574324
+325,85,Immediate identification and tagging of defective parts,1,t,2025-10-01 21:21:59.574324
+326,85,Use the parts anyway if they look okay,2,f,2025-10-01 21:21:59.574324
+327,85,Wait for management approval,3,f,2025-10-01 21:21:59.574324
+328,85,Mix them with conforming parts,4,f,2025-10-01 21:21:59.574324
+329,86,Quarantine to prevent accidental use,1,t,2025-10-01 21:21:59.574324
+330,86,Continue using in production,2,f,2025-10-01 21:21:59.574324
+331,86,Throw away immediately without documentation,3,f,2025-10-01 21:21:59.574324
+332,86,Leave in regular inventory,4,f,2025-10-01 21:21:59.574324
+334,87,Only parts from overseas suppliers,2,f,2025-10-01 21:21:59.574324
+335,87,Parts that are slightly cheaper than normal,3,f,2025-10-01 21:21:59.574324
+336,87,Refurbished original parts,4,f,2025-10-01 21:21:59.574324
+337,88,Report issues or concerns immediately,1,t,2025-10-01 21:21:59.574324
+338,88,Ignore minor problems to save time,2,f,2025-10-01 21:21:59.574324
+339,88,Wait until the end of the shift to report issues,3,f,2025-10-01 21:21:59.574324
+250,56,80% on-time shipping,2,f,2025-10-01 21:09:26.887538
+342,89,Punish employees who make mistakes,2,f,2025-10-01 21:21:59.574324
+343,89,Monitor employee communications,3,f,2025-10-01 21:21:59.574324
+344,89,Reduce the number of reports filed,4,f,2025-10-01 21:21:59.574324
+345,90,"All of these: falsification of records, safety hazards, theft/fraud, and retaliation",1,t,2025-10-01 21:21:59.574324
+346,90,Only financial fraud,2,f,2025-10-01 21:21:59.574324
+347,90,Only safety hazards,3,f,2025-10-01 21:21:59.574324
+348,90,Only falsification of records,4,f,2025-10-01 21:21:59.574324
+349,91,"No retaliation policy, confidential handling, and legal protections",1,t,2025-10-01 21:21:59.574324
+350,91,No protections are provided,2,f,2025-10-01 21:21:59.574324
+351,91,Only confidential handling,3,f,2025-10-01 21:21:59.574324
+352,91,Protections only if the report is proven true,4,f,2025-10-01 21:21:59.574324
+353,92,"Scrap, Returns, and Counterfeit",1,t,2025-10-01 21:25:52.799122
+354,92,"Defects, Damages, and Repairs",2,f,2025-10-01 21:25:52.799122
+355,92,"Quality, Compliance, and Safety",3,f,2025-10-01 21:25:52.799122
+356,92,"Production, Shipping, and Storage",4,f,2025-10-01 21:25:52.799122
+357,93,Scrap items must be rendered unusable and disposed of,1,t,2025-10-01 21:25:52.799122
+358,93,Scrap items can be repaired and reused,2,f,2025-10-01 21:25:52.799122
+359,93,Scrap items can be sold at discount,3,f,2025-10-01 21:25:52.799122
+360,93,Scrap items are stored for future use,4,f,2025-10-01 21:25:52.799122
+362,94,Continue using it until confirmed counterfeit,2,f,2025-10-01 21:25:52.799122
+363,94,Throw it away immediately,3,f,2025-10-01 21:25:52.799122
+364,94,Return it to the supplier without documentation,4,f,2025-10-01 21:25:52.799122
+365,95,"Business Manager, Production Manager, or Upper Management",1,t,2025-10-01 21:25:52.799122
+366,95,Only the Quality Manager,2,f,2025-10-01 21:25:52.799122
+367,95,Any line supervisor,3,f,2025-10-01 21:25:52.799122
+368,95,The sales team,4,f,2025-10-01 21:25:52.799122
+370,96,Only during production,2,f,2025-10-01 21:25:52.799122
+371,96,Only during final inspection,3,f,2025-10-01 21:25:52.799122
+372,96,Only during packaging and shipping,4,f,2025-10-01 21:25:52.799122
+373,97,In red barrels at the line manager's work area,1,t,2025-10-01 21:25:52.799122
+374,97,In blue bins in the warehouse,2,f,2025-10-01 21:25:52.799122
+375,97,At the main office,3,f,2025-10-01 21:25:52.799122
+376,97,In the quality department,4,f,2025-10-01 21:25:52.799122
+377,98,The sales team,1,t,2025-10-01 21:25:52.799122
+378,98,The production line manager,2,f,2025-10-01 21:25:52.799122
+379,98,The quality manager,3,f,2025-10-01 21:25:52.799122
+380,98,The business manager,4,f,2025-10-01 21:25:52.799122
+382,99,Items that are perfect and meet all requirements,2,f,2025-10-01 21:25:52.799122
+383,99,Items that need to be scrapped,3,f,2025-10-01 21:25:52.799122
+384,99,Items that require repair before use,4,f,2025-10-01 21:25:52.799122
+385,100,Trained personnel assigned by management,1,t,2025-10-01 21:25:52.799122
+386,100,Any employee who finds it,2,f,2025-10-01 21:25:52.799122
+387,100,Only the sales team,3,f,2025-10-01 21:25:52.799122
+388,100,The supplier,4,f,2025-10-01 21:25:52.799122
+389,101,"Neglect, environmental changes, or supply changes",1,t,2025-10-01 21:25:52.799122
+390,101,Only customer complaints,2,f,2025-10-01 21:25:52.799122
+391,101,Only equipment failure,3,f,2025-10-01 21:25:52.799122
+392,101,Only design flaws,4,f,2025-10-01 21:25:52.799122
+393,102,Remove all tools from the machine spindles,1,t,2025-10-01 21:29:56.027135
+394,102,Leave tools in the spindles for next day,2,f,2025-10-01 21:29:56.027135
+395,102,Place tools on the workbench,3,f,2025-10-01 21:29:56.027135
+396,102,Store tools in the grinding room,4,f,2025-10-01 21:29:56.027135
+397,103,OFF home position,1,t,2025-10-01 21:29:56.027135
+398,103,Any position is fine,2,f,2025-10-01 21:29:56.027135
+399,103,Mid-cycle position,3,f,2025-10-01 21:29:56.027135
+400,103,Emergency stop position,4,f,2025-10-01 21:29:56.027135
+401,104,In the correct toolbox,1,t,2025-10-01 21:29:56.027135
+402,104,On the workbench,2,f,2025-10-01 21:29:56.027135
+403,104,In the grinding room,3,f,2025-10-01 21:29:56.027135
+404,104,Near the mill machines,4,f,2025-10-01 21:29:56.027135
+405,105,Ensure the oven timers are set to turn OFF,1,t,2025-10-01 21:29:56.027135
+406,105,Leave timers running overnight,2,f,2025-10-01 21:29:56.027135
+407,105,Set timers for next morning,3,f,2025-10-01 21:29:56.027135
+408,105,Timers do not need to be checked,4,f,2025-10-01 21:29:56.027135
+409,106,Clean and break down paint guns,1,t,2025-10-01 21:29:56.027135
+410,106,Turn off air compressor,2,f,2025-10-01 21:29:56.027135
+411,106,Close cabinets,3,f,2025-10-01 21:29:56.027135
+412,106,Turn off lights,4,f,2025-10-01 21:29:56.027135
+413,107,Turn OFF bathroom lights,1,t,2025-10-01 21:29:56.027135
+414,107,Leave bathroom lights ON,2,f,2025-10-01 21:29:56.027135
+415,107,Only turn off if no one is working late,3,f,2025-10-01 21:29:56.027135
+416,107,Bathroom lights are automatic,4,f,2025-10-01 21:29:56.027135
+417,108,Hall and porch lights,1,t,2025-10-01 21:29:56.027135
+418,108,All office lights,2,f,2025-10-01 21:29:56.027135
+419,108,Only bathroom lights,3,f,2025-10-01 21:29:56.027135
+420,108,No lights should remain on,4,f,2025-10-01 21:29:56.027135
+421,109,3 pedestrian exit doors,1,t,2025-10-01 21:29:56.027135
+422,109,2 pedestrian exit doors,2,f,2025-10-01 21:29:56.027135
+423,109,4 pedestrian exit doors,3,f,2025-10-01 21:29:56.027135
+424,109,1 pedestrian exit door,4,f,2025-10-01 21:29:56.027135
+425,110,Set the alarm and lock the front door,1,t,2025-10-01 21:29:56.027135
+426,110,Just turn off the lights,2,f,2025-10-01 21:29:56.027135
+427,110,Only lock the door,3,f,2025-10-01 21:29:56.027135
+428,110,Leave it for security,4,f,2025-10-01 21:29:56.027135
+430,111,Leave the gate open,2,f,2025-10-01 21:29:56.027135
+431,111,Lock the gate with a padlock,3,f,2025-10-01 21:29:56.027135
+341,89,Protect individuals who report issues in good faith and encourage early problem identification,1,t,2025-10-01 21:21:59.574324
+133,27,"Fill out chemical disposal form and give to Production Manager, then place container in disposal area",1,t,2025-10-01 20:52:14.617675
+369,96,"At any stage: design, pre-production, production, post-production, packaging, storage, shipping, and delivery",1,t,2025-10-01 21:25:52.799122
+109,19,Management,1,f,2025-10-01 20:10:27.762665
+112,19,External waste management,4,f,2025-10-01 20:10:29.650841
+129,26,Allow it to evaporate and place the empty container in the dumpster,1,t,2025-10-01 20:52:14.617675
+57,16,Check for any special cleanliness requirements,1,f,2025-10-01 20:05:13.477943
+97,13,Any material with a shelf life should be checked,1,f,2025-10-01 20:10:01.995406
+161,34,Dispose of them in approved fire-safe containers,1,t,2025-10-01 20:53:03.935851
+177,38,Only small incipient fires if you are trained and it is safe to do so,1,t,2025-10-01 20:53:03.935851
+193,42,"A set of U.S. government regulations controlling the export of defense articles, technical data, and defense services",1,t,2025-10-01 21:01:35.558357
+233,52,"A quality management system for companies that design, develop, or provide products for aviation, space, and defense industries",1,t,2025-10-01 21:09:26.887538
+249,56,90% on-time shipping,1,t,2025-10-01 21:09:26.887538
+253,57,Everybody - all employees,1,t,2025-10-01 21:09:26.887538
+273,62,Procure directly from Original Component or Equipment Manufacturers (OCM/OEM),1,t,2025-10-01 21:19:24.204956
+301,69,"Document thoroughly with photos, part numbers, and supplier information",1,t,2025-10-01 21:19:24.204956
+333,87,"Any unauthorized copy, imitation, or substitute misrepresented in origin or certification",1,t,2025-10-01 21:21:59.574324
+340,88,Only report problems if directly asked,4,f,2025-10-01 21:21:59.574324
+361,94,Immediately isolate the item in the business office,1,t,2025-10-01 21:25:52.799122
+381,99,Items that do not meet initial requirements but the variation is approved by the customer,1,t,2025-10-01 21:25:52.799122
+429,111,Ensure the security gate closes,1,t,2025-10-01 21:29:56.027135
+432,111,"Gate closes automatically, no need to check",4,f,2025-10-01 21:29:56.027135

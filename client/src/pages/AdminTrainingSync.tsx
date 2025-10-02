@@ -72,20 +72,10 @@ export default function AdminTrainingSync() {
     setIsExporting(true);
     
     try {
-      // Trigger direct downloads for each CSV file
-      const downloadURL = (url: string) => {
-        const a = document.createElement('a');
-        a.href = url;
-        a.style.display = 'none';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-      };
-
-      // Download each file with a small delay
-      downloadURL('/api/admin/export-training-modules-csv');
-      setTimeout(() => downloadURL('/api/admin/export-training-questions-csv'), 200);
-      setTimeout(() => downloadURL('/api/admin/export-training-answers-csv'), 400);
+      // Use window.open to bypass React Router and trigger real downloads
+      window.open('/api/admin/export-training-modules-csv', '_blank');
+      setTimeout(() => window.open('/api/admin/export-training-questions-csv', '_blank'), 200);
+      setTimeout(() => window.open('/api/admin/export-training-answers-csv', '_blank'), 400);
 
       toast({
         title: "Export Started!",

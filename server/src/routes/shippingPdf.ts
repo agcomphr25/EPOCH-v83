@@ -2316,12 +2316,45 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     const smallFontSize = 7;
     const lineHeight = 11;
 
-    // Split terms into two columns (first 3 in left, last 2 in right)
+    // Calculate space needed for each column separately
     const leftColumnTerms = terms.slice(0, 3);
     const rightColumnTerms = terms.slice(3);
+    
+    let leftColumnHeight = 0;
+    leftColumnTerms.forEach(term => {
+      const wrappedLines = wrapText(term, termsColumnWidth - 10, smallFontSize, font);
+      leftColumnHeight += wrappedLines.length * lineHeight;
+    });
+    
+    let rightColumnHeight = 0;
+    rightColumnTerms.forEach(term => {
+      const wrappedLines = wrapText(term, termsColumnWidth - 10, smallFontSize, font);
+      rightColumnHeight += wrappedLines.length * lineHeight;
+    });
+    
+    // For shipping terms, check if we need a second page
+    // We need space for signature section (~105px) and footer (~70px)
+    const spaceNeededForSignatureAndFooter = 175;
+    const availableSpace = currentY - margin - spaceNeededForSignatureAndFooter;
+    const maxColumnHeight = Math.max(leftColumnHeight, rightColumnHeight);
+    
+    if (isShippingDepartment && maxColumnHeight > availableSpace) {
+      // Add a new page for shipping terms
+      page = pdfDoc.addPage([pageWidth, pageHeight]);
+      currentY = pageHeight - margin;
+      
+      // Add header on second page
+      page.drawText('SALES ORDER (continued)', {
+        x: margin,
+        y: currentY,
+        size: 16,
+        font: boldFont,
+      });
+      currentY -= 30;
+    }
 
-    // Draw left column
-    let leftY = termsStartY;
+    // Draw left column (leftColumnTerms and rightColumnTerms already split above)
+    let leftY = currentY;
     leftColumnTerms.forEach(term => {
       // Word wrap for left column
       const wrappedLines = wrapText(term, termsColumnWidth - 10, smallFontSize, font);
@@ -2337,7 +2370,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     });
 
     // Draw right column
-    let rightY = termsStartY;
+    let rightY = currentY;
     rightColumnTerms.forEach(term => {
       // Word wrap for right column
       const wrappedLines = wrapText(term, termsColumnWidth - 10, smallFontSize, font);

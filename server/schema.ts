@@ -1657,7 +1657,6 @@ export const customers = pgTable('customers', {
   customerType: text('customer_type').default('standard'),
   preferredCommunicationMethod: json('preferred_communication_method'), // Array of strings: ["email", "sms"]
   notes: text('notes'),
-  billingSameAsShipping: boolean('billing_same_as_shipping').default(true), // Default to unified address management
   isActive: boolean('is_active').default(true),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),

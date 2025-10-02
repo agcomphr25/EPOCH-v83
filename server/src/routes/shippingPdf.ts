@@ -826,7 +826,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
 
     // Create a new PDF document optimized for sales orders
     const pdfDoc = await PDFDocument.create();
-    const page = pdfDoc.addPage([612, 792]); // Standard US Letter size
+    let page = pdfDoc.addPage([612, 792]); // Standard US Letter size - let allows reassignment for pagination
     const { width, height } = page.getSize();
 
     // Define margins and layout

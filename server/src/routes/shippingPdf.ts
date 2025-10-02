@@ -1129,7 +1129,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     });
 
     // Customer details section - positioned INSIDE the box
-    let customerTextY = customerBoxY + customerBoxHeight - 45; // Start text properly inside box
+    let customerTextY = customerBoxY + customerBoxHeight - 35; // Start text properly inside box (reduced gap)
     if (customer) {
       // Customer name and company - positioned INSIDE the box
       const customerLine = customer.company ? 
@@ -1198,7 +1198,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
 
     // Ship to address section (right side) - positioned INSIDE the box
     const shipToX = margin + 280;
-    let shipCurrentY = customerBoxY + customerBoxHeight - 45; // Position relative to box top
+    let shipCurrentY = customerBoxY + customerBoxHeight - 35; // Position relative to box top (reduced gap)
     
     page.drawText('SHIP TO:', {
       x: shipToX,
@@ -1207,7 +1207,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       font: boldFont,
     });
 
-    shipCurrentY -= 15;
+    shipCurrentY -= 12; // Reduced gap after SHIP TO label
 
     // Check if order has alternate shipping address with actual data
     if ((order as any).hasAltShipTo && (order as any).altShipToAddress && 
@@ -1398,7 +1398,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     }
 
     // Features and Customizations Section - Position properly after customer box
-    currentY = customerBoxY - 10; // Continue below the customer box (reduced spacing for shipping dept)
+    currentY = customerBoxY - 30; // Continue below the customer box
     const basePrice = model?.price || 0;
     page.drawText('FEATURES & CUSTOMIZATIONS', {
       x: margin,

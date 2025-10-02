@@ -75,20 +75,21 @@ import OrderDepartmentTransfer from "./pages/OrderDepartmentTransfer";
 import { BOMAdministration } from "./pages/BOMAdministration";
 import RobustBOMAdministration from "./pages/RobustBOMAdministration";
 import AGBottomMetalReport from "./pages/AGBottomMetalReport";
-import AGMetalUnfulfilledReport from "./pages/AGMetalUnfulfilledReport";
 import EmployeeDashboard from "./pages/EmployeeDashboard";
 import EmployeeDetail from "./pages/EmployeeDetail";
 import EmployeePortal from "./pages/EmployeePortal";
 import UserManagement from "./pages/UserManagement";
+import LoginPage from "./pages/LoginPage";
+import ProtectedRoute from "./components/auth/ProtectedRoute";
 import P2Forms from '@/pages/P2Forms';
 import WasteManagementForm from '@/pages/WasteManagementForm';
 import TaskTracker from '@/pages/TaskTracker';
 import KickbackTracking from '@/components/KickbackTracking';
 import DocumentManagement from "./pages/DocumentManagement";
 import ShutdownProceduresTraining from "@/pages/ShutdownProceduresTraining";
-
-import CounterfeitPreventionTraining from "@/pages/CounterfeitPreventionTraining";
-import Calendar from "./pages/Calendar";
+import FireSafetyTraining from "@/pages/FireSafetyTraining";
+import Training from "./pages/Training";
+import TrainingModule from "./pages/TrainingModule";
 import PurchaseOrderItemsQueuePage from "./pages/PurchaseOrderItemsQueuePage";
 import LayupPluggingQueuePage from "./pages/LayupPluggingQueuePage";
 import BarcodeQueuePage from "./pages/BarcodeQueuePage";
@@ -121,6 +122,7 @@ import VendorsPage from "./pages/VendorsPage";
 import VendorPOPage from "./pages/VendorPOPage";
 
 import { Toaster as HotToaster } from 'react-hot-toast';
+import DeploymentAuthWrapper from './components/DeploymentAuthWrapper';
 
 
 // Component to conditionally render Navigation
@@ -186,6 +188,7 @@ function App() {
   try {
     return (
       <QueryClientProvider client={queryClient}>
+        <DeploymentAuthWrapper>
           <Router>
             <div className="min-h-screen bg-gray-50">
               <ConditionalNavigation />
@@ -257,6 +260,8 @@ function App() {
                   <Route path="/employee-portal-new" component={EmployeePortal} />
                   <Route path="/time-clock-admin" component={TimeClockAdminPage} />
 
+                  {/* Auth Routes */}
+                  <Route path="/login" component={LoginPage} />
 
                   {/* User Dashboard Routes */}
                   <Route path="/ag-dashboard" component={AGTestDashboard} />
@@ -319,9 +324,11 @@ function App() {
                   <Route path="/kickback-tracking" component={KickbackTracking} />
                   <Route path="/document-management" component={DocumentManagement} />
                   <Route path="/shutdown-training" component={ShutdownProceduresTraining} />
+                  <Route path="/fire-safety-training" component={FireSafetyTraining} />
 
-                  <Route path="/counterfeit-prevention-training" component={CounterfeitPreventionTraining} />
-                  <Route path="/calendar" component={Calendar} />
+                  {/* Training Routes */}
+                  <Route path="/training" component={Training} />
+                  <Route path="/training/module/:id" component={TrainingModule} />
 
                   {/* Queue Management Routes */}
                   <Route path="/purchase-order-items-queue" component={PurchaseOrderItemsQueuePage} />
@@ -338,7 +345,6 @@ function App() {
 
                   {/* Reports */}
                   <Route path="/ag-bottom-metal-report" component={AGBottomMetalReport} />
-                  <Route path="/ag-metal-unfulfilled-report" component={AGMetalUnfulfilledReport} />
 
                   {/* Department Queue Management Routes */}
                   <Route path="/department-queue/production-queue" component={ProductionQueuePage} />
@@ -367,6 +373,7 @@ function App() {
           <Toaster />
           <HotToaster />
         </Router>
+        </DeploymentAuthWrapper>
       </QueryClientProvider>
     );
   } catch (error) {

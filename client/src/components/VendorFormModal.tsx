@@ -4,12 +4,10 @@ import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
-import { useToast } from '@/hooks/use-toast';
 import { z } from 'zod';
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
@@ -153,7 +151,6 @@ export default function VendorFormModal({
   vendor,
   mode = 'create'
 }: VendorFormModalProps) {
-  const isEditing = mode === 'edit';
   const [activeTab, setActiveTab] = useState('basic');
   const [documents, setDocuments] = useState<VendorDocument[]>([]);
   const [isUploadingDocument, setIsUploadingDocument] = useState(false);
@@ -516,6 +513,7 @@ export default function VendorFormModal({
       });
 
       queryClient.invalidateQueries({ queryKey: ["/api/vendors"] });
+      onSaved();
       onClose();
 
     },
@@ -732,7 +730,7 @@ export default function VendorFormModal({
       });
 
       queryClient.invalidateQueries({ queryKey: ["/api/vendors"] });
-      onClose();
+      onSaved();
 
     },
     onError: (error: any) => {
@@ -748,7 +746,7 @@ export default function VendorFormModal({
   const isPending = createVendorMutation.isPending || updateVendorMutation.isPending;
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
+    <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto" data-testid="dialog-vendor-form">
         <DialogHeader>
           <DialogTitle data-testid="text-vendor-form-title">

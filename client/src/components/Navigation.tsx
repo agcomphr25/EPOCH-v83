@@ -67,7 +67,6 @@ export default function Navigation() {
 
   const [verifiedModulesExpanded, setVerifiedModulesExpanded] = useState(false);
   const [formsReportsExpanded, setFormsReportsExpanded] = useState(false);
-  const [trainingExpanded, setTrainingExpanded] = useState(false);
   const [inventoryExpanded, setInventoryExpanded] = useState(false);
   const [employeesExpanded, setEmployeesExpanded] = useState(false);
   const [qcMaintenanceExpanded, setQcMaintenanceExpanded] = useState(false);
@@ -653,74 +652,10 @@ export default function Navigation() {
     }
   ];
 
-  const trainingItems = [
-    {
-      path: '/training',
-      label: 'Training Home',
-      icon: GraduationCap,
-      description: 'View all training modules'
-    },
-    {
-      path: '/training/module/2',
-      label: 'Preservation & FOD Training',
-      icon: Shield,
-      description: 'Foreign Object Debris prevention'
-    },
-    {
-      path: '/training/module/3',
-      label: 'Chemical Handling & Storage',
-      icon: AlertTriangle,
-      description: 'Safe chemical handling procedures'
-    },
-    {
-      path: '/training/module/4',
-      label: 'Fire Safety Training',
-      icon: Flame,
-      description: 'Fire prevention and safety'
-    },
-    {
-      path: '/training/module/5',
-      label: 'ITAR Compliance',
-      icon: ShieldAlert,
-      description: 'Export control regulations'
-    },
-    {
-      path: '/training/module/6',
-      label: 'AS9100 Orientation',
-      icon: Award,
-      description: 'Quality management system training'
-    },
-    {
-      path: '/training/module/7',
-      label: 'Counterfeit Prevention',
-      icon: PackageX,
-      description: 'Prevent counterfeit materials'
-    },
-    {
-      path: '/training/module/8',
-      label: 'Ethics in Quality Systems',
-      icon: Scale,
-      description: 'Aerospace quality ethics'
-    },
-    {
-      path: '/training/module/9',
-      label: 'Nonconforming Items (Leader)',
-      icon: ClipboardCheck,
-      description: 'Leader training for nonconforming items'
-    },
-    {
-      path: '/training/module/10',
-      label: 'Shut Down Procedures (Leader)',
-      icon: Power,
-      description: 'Leader training for shutdown procedures'
-    }
-  ];
-
   // Filter items based on user permissions - only if user is loaded
   const filteredNavItems = (isLoading || !currentUser) ? [] : (hasFullNav ? navItems : navItems.filter(item => canAccessRoute(item.path)));
   const filteredInventoryItems = (isLoading || !currentUser) ? [] : (hasFullNav ? inventoryItems : inventoryItems.filter(item => canAccessRoute(item.path)));
   const filteredFormsReportsItems = (isLoading || !currentUser) ? [] : (hasFullNav ? formsReportsItems : formsReportsItems.filter(item => canAccessRoute(item.path)));
-  const filteredTrainingItems = (isLoading || !currentUser) ? [] : (hasFullNav ? trainingItems : trainingItems.filter(item => canAccessRoute(item.path)));
   const filteredQcMaintenanceItems = (isLoading || !currentUser) ? [] : (hasFullNav ? qcMaintenanceItems : qcMaintenanceItems.filter(item => canAccessRoute(item.path)));
   const filteredEmployeesItems = (isLoading || !currentUser) ? [] : (hasFullNav ? employeesItems : employeesItems.filter(item => canAccessRoute(item.path)));
   const filteredFinanceItems = (isLoading || !currentUser) ? [] : (hasFullNav ? financeItems : financeItems.filter(item => canAccessRoute(item.path)));
@@ -732,7 +667,6 @@ export default function Navigation() {
 
   const isVerifiedModulesActive = filteredVerifiedModulesItems.some(item => location === item.path);
   const isFormsReportsActive = filteredFormsReportsItems.some(item => location === item.path);
-  const isTrainingActive = filteredTrainingItems.some(item => location === item.path);
   const isInventoryActive = filteredInventoryItems.some(item => location === item.path);
   const isQcMaintenanceActive = filteredQcMaintenanceItems.some(item => location === item.path);
   const isEmployeesActive = filteredEmployeesItems.some(item => location === item.path);
@@ -878,53 +812,6 @@ export default function Navigation() {
                 {formsReportsExpanded && (
                   <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
                     {filteredFormsReportsItems.map((item) => {
-                      const Icon = item.icon;
-                      const isActive = location === item.path;
-
-                      return (
-                        <Link key={item.path} href={item.path}>
-                          <button
-                            className={cn(
-                              "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
-                              isActive && "bg-primary text-white hover:bg-primary"
-                            )}
-                            onClick={closeAllDropdowns}
-                          >
-                            <Icon className="h-4 w-4" />
-                            {item.label}
-                          </button>
-                        </Link>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
-
-
-            {/* Training Dropdown */}
-            {filteredTrainingItems.length > 0 && (
-              <div className="relative">
-                <Button
-                  variant={isTrainingActive ? "default" : "ghost"}
-                  className={cn(
-                    "flex items-center gap-2 text-sm",
-                    isTrainingActive && "bg-primary text-white"
-                  )}
-                  onClick={() => toggleDropdown('training', trainingExpanded, setTrainingExpanded)}
-                >
-                  <GraduationCap className="h-4 w-4" />
-                  Training
-                  {trainingExpanded ? (
-                    <ChevronDown className="h-4 w-4" />
-                  ) : (
-                    <ChevronRight className="h-4 w-4" />
-                  )}
-                </Button>
-
-                {trainingExpanded && (
-                  <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
-                    {filteredTrainingItems.map((item) => {
                       const Icon = item.icon;
                       const isActive = location === item.path;
 

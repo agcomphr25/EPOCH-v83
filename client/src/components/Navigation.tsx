@@ -1217,9 +1217,9 @@ export default function Navigation() {
             <InstallPWAButton />
 
             <span className="text-sm text-gray-600">Manufacturing ERP System</span>
-            {isDeploymentEnvironment() && currentUser?.username && (
+            {isDeploymentEnvironment() && currentUser && (
               <span className="text-sm font-medium text-gray-700" data-testid="text-username">
-                {currentUser.username}
+                {currentUser}
               </span>
             )}
             {isDeploymentEnvironment() && (

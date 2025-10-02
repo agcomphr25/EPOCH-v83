@@ -53,9 +53,14 @@ export default function Login() {
         body: JSON.stringify({ username, password }),
       });
 
+      console.log('Login response status:', response.status);
+      console.log('Login response ok:', response.ok);
+      
       const data = await response.json();
+      console.log('Login response data:', data);
 
       if (!response.ok || !data.success) {
+        console.error('Login failed - response not ok or data.success is false');
         toast({
           title: 'Login Failed',
           description: data.error || 'Invalid username or password',
@@ -78,8 +83,10 @@ export default function Login() {
       });
 
       // Redirect to personalized dashboard
+      console.log('Redirecting to dashboard:', dashboardRoute);
       setLocation(dashboardRoute);
     } catch (error) {
+      console.error('Login error caught:', error);
       toast({
         title: 'Login Failed',
         description: 'An error occurred during login',

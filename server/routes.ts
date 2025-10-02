@@ -212,10 +212,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/users", authenticateToken, requireRole('ADMIN', 'HR'), async (req, res) => {
+  app.get("/api/users", authenticateToken, async (req, res) => {
     try {
-      // This would need to be implemented in storage
-      res.json([]);
+      const allUsers = await storage.getAllUsers();
+      const usersWithoutPasswords = allUsers.map(({ passwordHash, ...user }) => user);
+      res.json(usersWithoutPasswords);
     } catch (error) {
       console.error('Get users error:', error);
       res.status(500).json({ error: "Failed to retrieve users" });

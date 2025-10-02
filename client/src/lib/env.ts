@@ -69,14 +69,29 @@ export async function validateSessionAsync(): Promise<boolean> {
   }
 
   try {
+    // Get token from localStorage
+    const token = localStorage.getItem('sessionToken') || localStorage.getItem('jwtToken');
+    
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json'
+    };
+    
+    // Add Authorization header if token exists
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    
     const response = await fetch('/api/auth/validate', {
-      credentials: 'include'
+      credentials: 'include',
+      headers
     });
 
     if (!response.ok) {
       // Session is invalid, clean up localStorage
       localStorage.removeItem('currentUser');
       localStorage.removeItem('userData');
+      localStorage.removeItem('sessionToken');
+      localStorage.removeItem('jwtToken');
       return false;
     }
 

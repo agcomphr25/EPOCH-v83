@@ -2,9 +2,11 @@ import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Database, CheckCircle, AlertCircle } from "lucide-react";
+import { Loader2, Database, CheckCircle, AlertCircle, Upload } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useQuery } from "@tanstack/react-query";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 interface SyncStatus {
   moduleCount: number;
@@ -20,6 +22,10 @@ interface SyncResult {
 export default function AdminTrainingSync() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<SyncResult | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [modulesFile, setModulesFile] = useState<File | null>(null);
+  const [questionsFile, setQuestionsFile] = useState<File | null>(null);
+  const [answersFile, setAnswersFile] = useState<File | null>(null);
   const { toast } = useToast();
 
   const { data: syncStatus, isLoading: statusLoading, error, refetch } = useQuery<SyncStatus>({
@@ -58,6 +64,57 @@ export default function AdminTrainingSync() {
       });
     } finally {
       setIsSyncing(false);
+    }
+  };
+
+  const handleCSVUpload = async () => {
+    if (!modulesFile || !questionsFile || !answersFile) {
+      toast({
+        title: "Missing Files",
+        description: "Please select all 3 CSV files before uploading",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsUploading(true);
+    
+    try {
+      const formData = new FormData();
+      formData.append('modules', modulesFile);
+      formData.append('questions', questionsFile);
+      formData.append('answers', answersFile);
+
+      const response = await fetch('/api/admin/import-training-csv', {
+        method: 'POST',
+        body: formData,
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        throw new Error('Upload failed');
+      }
+
+      const result = await response.json();
+
+      toast({
+        title: "Import Successful!",
+        description: `Imported ${result.modulesInserted} modules, ${result.questionsInserted} questions, ${result.answersInserted} answers`,
+      });
+
+      // Clear file selections
+      setModulesFile(null);
+      setQuestionsFile(null);
+      setAnswersFile(null);
+      refetch();
+    } catch (error: any) {
+      toast({
+        title: "Import Failed",
+        description: error.message || "Failed to import CSV data",
+        variant: "destructive",
+      });
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -174,6 +231,77 @@ export default function AdminTrainingSync() {
                 </div>
               </div>
             )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Upload className="h-5 w-5" />
+              Import Training Data from CSV
+            </CardTitle>
+            <CardDescription>
+              Upload CSV files exported from development to import training data into production
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-3">
+              <div>
+                <Label htmlFor="modules-csv">Training Modules CSV</Label>
+                <Input
+                  id="modules-csv"
+                  type="file"
+                  accept=".csv"
+                  onChange={(e) => setModulesFile(e.target.files?.[0] || null)}
+                  data-testid="input-modules-csv"
+                />
+                {modulesFile && <p className="text-sm text-green-600 mt-1">✓ {modulesFile.name}</p>}
+              </div>
+
+              <div>
+                <Label htmlFor="questions-csv">Quiz Questions CSV</Label>
+                <Input
+                  id="questions-csv"
+                  type="file"
+                  accept=".csv"
+                  onChange={(e) => setQuestionsFile(e.target.files?.[0] || null)}
+                  data-testid="input-questions-csv"
+                />
+                {questionsFile && <p className="text-sm text-green-600 mt-1">✓ {questionsFile.name}</p>}
+              </div>
+
+              <div>
+                <Label htmlFor="answers-csv">Quiz Answers CSV</Label>
+                <Input
+                  id="answers-csv"
+                  type="file"
+                  accept=".csv"
+                  onChange={(e) => setAnswersFile(e.target.files?.[0] || null)}
+                  data-testid="input-answers-csv"
+                />
+                {answersFile && <p className="text-sm text-green-600 mt-1">✓ {answersFile.name}</p>}
+              </div>
+            </div>
+
+            <Button
+              onClick={handleCSVUpload}
+              disabled={isUploading || !modulesFile || !questionsFile || !answersFile}
+              size="lg"
+              className="w-full"
+              data-testid="button-import-csv"
+            >
+              {isUploading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Importing CSV Data...
+                </>
+              ) : (
+                <>
+                  <Upload className="mr-2 h-4 w-4" />
+                  Import CSV Files
+                </>
+              )}
+            </Button>
           </CardContent>
         </Card>
 

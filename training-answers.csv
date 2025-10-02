@@ -1,0 +1,361 @@
+id,questionId,answerText,isCorrect,sortOrder
+111,19,"The collection area supervisor",false,3
+113,22,"In the designated SDS books and written program location",true,1
+114,22,"In the manager's office only",false,2
+115,22,"Online at the company website",false,3
+116,22,"Posted on the break room wall",false,4
+117,23,"Danger and Warning",true,1
+118,23,"Caution and Danger",false,2
+119,23,"Warning and Caution",false,3
+120,23,"Hazard and Danger",false,4
+121,24,"In a fire safe cabinet",true,1
+122,24,"On regular shelves",false,2
+123,24,"In the refrigerator",false,3
+124,24,"Next to the workstation",false,4
+125,25,"65°F - 75°F",true,1
+126,25,"32°F - 50°F",false,2
+127,25,"75°F - 85°F",false,3
+128,25,"Room temperature",false,4
+130,26,"Pour it down the drain",false,2
+131,26,"Fill out a disposal form and give to Production Manager",false,3
+132,26,"Store it for future use",false,4
+134,27,"Just throw it in the dumpster",false,2
+135,27,"Allow it to evaporate first",false,3
+136,27,"Store it in the fire safe cabinet",false,4
+137,28,"First In, First Out - use oldest items before they expire",true,1
+138,28,"Fast In, Fast Out - work quickly",false,2
+139,28,"Find It, Fix It, Organize - workplace organization",false,3
+140,28,"Final Inspection, First Operation - production flow",false,4
+141,29,"Acute illnesses develop suddenly and last a short time; chronic illnesses develop slowly over months to years",true,1
+142,29,"Acute illnesses are always fatal; chronic illnesses are not",false,2
+143,29,"Acute illnesses are from chemicals; chronic illnesses are from physical injuries",false,3
+144,29,"Acute illnesses last months; chronic illnesses last days",false,4
+145,30,"Correct the employee or immediately notify the department leader or Safety Team",true,1
+146,30,"Ignore it to avoid conflict",false,2
+147,30,"Wait until the end of the shift to report it",false,3
+148,30,"Only report it if someone gets injured",false,4
+149,31,"In the freezer at -1°F to 23°F",true,1
+150,31,"In the refrigerator at 65°F - 75°F",false,2
+151,31,"In a fire safe cabinet",false,3
+152,31,"At room temperature",false,4
+153,32,"Epoxy resins, hardeners, and solvents like acetone",true,1
+154,32,"Steel and aluminum",false,2
+155,32,"Water and soap",false,3
+156,32,"Sand and gravel",false,4
+157,33,"In flammable safety cabinets with proper labels",true,1
+158,33,"Under the workbench",false,2
+159,33,"In the break room",false,3
+58,16,"Clean the entire facility",false,2
+59,16,"Package all parts immediately",false,3
+60,16,"Remove all hardware from the area",false,4
+61,17,"Placed in collection area and leaders submit waste management form",false,1
+62,17,"They can be used if they look okay",false,2
+63,17,"Employees dispose of them directly",false,3
+64,17,"They are stored separately for future use",false,4
+65,18,"Package or segregate parts to prevent damage, contamination, or loss of traceability",false,1
+66,18,"Leave parts on the work surface for inspection",false,2
+67,18,"Only clean visible debris",false,3
+68,18,"Move parts to any available location",false,4
+81,15,"An expiration date",false,1
+82,15,"Only the purchase date",false,2
+83,15,"The manufacturer name only",false,3
+84,15,"No marking is required",false,4
+85,20,"To prevent damage from dirt or chemicals",false,1
+86,20,"To make the area look presentable",false,2
+87,20,"Only to remove large debris",false,3
+88,20,"Cleaning is optional if careful",false,4
+93,12,"Ensure components are not expired or out-of-date",false,1
+94,12,"Check the color and appearance",false,2
+95,12,"Verify the supplier name only",false,3
+96,12,"Check the weight only",false,4
+98,13,"Only check if it looks damaged",false,2
+99,13,"Materials never need shelf life checks",false,3
+100,13,"Only check once per year",false,4
+101,14,"Clear the work area of any extra material and hardware that could be accidentally used",false,1
+102,14,"Add extra materials for convenience",false,2
+103,14,"Only remove broken items",false,3
+104,14,"Leave materials if they might be needed",false,4
+105,21,"Check for any unnecessary debris such as poly, shavings, bolts, nuts, etc. and remove any debris",false,1
+106,21,"Only check for large visible defects",false,2
+107,21,"Visual inspection is sufficient",false,3
+108,21,"No inspection needed if work area was clean",false,4
+160,33,"Outside in the sun",false,4
+110,19,"The employee who found them",false,2
+163,34,"Throw them in the regular trash",false,3
+164,34,"Store them in a plastic bag",false,4
+165,35,"Pull the pin",true,1
+166,35,"Point at the fire",false,2
+167,35,"Push the button",false,3
+168,35,"Pump the handle",false,4
+169,36,"Activate the nearest fire alarm and notify supervisor/dial 911",true,1
+170,36,"Try to put it out first, then call for help",false,2
+171,36,"Run to the parking lot",false,3
+172,36,"Finish your current task, then evacuate",false,4
+173,37,"Class B",true,1
+174,37,"Class A",false,2
+175,37,"Class C",false,3
+176,37,"Class D",false,4
+178,38,"Always fight fires to protect equipment",false,2
+179,38,"Any fire as long as you have an extinguisher",false,3
+180,38,"Never - always wait for the fire department",false,4
+181,39,"Keep exits, walkways, and fire extinguishers clear at all times",true,1
+182,39,"Stack materials near exits for easy access",false,2
+183,39,"Store equipment in front of fire extinguishers",false,3
+184,39,"Block walkways with work-in-progress items",false,4
+185,40,"Highly combustible and must be regularly cleaned with explosion-proof vacuums",true,1
+186,40,"Safe and non-flammable",false,2
+187,40,"Can be cleaned with any regular vacuum",false,3
+188,40,"Should be left to settle naturally",false,4
+189,41,"Only after cleared by Fire Department or Safety Officer",true,1
+190,41,"As soon as the fire is out",false,2
+191,41,"When you stop seeing smoke",false,3
+192,41,"After 10 minutes",false,4
+194,42,"An international trade agreement between NATO countries",false,2
+195,42,"A shipping and logistics company",false,3
+196,42,"A workplace safety regulation",false,4
+197,43,"All of the above: Shipping items overseas, sharing technical data with a foreign person in the U.S., providing defense services to a foreign person",true,1
+198,43,"Only shipping items to other countries",false,2
+199,43,"Only selling products internationally",false,3
+200,43,"Only providing training overseas",false,4
+201,44,"U.S. citizens, permanent residents, asylees, and refugees",true,1
+202,44,"Only U.S. citizens born in the United States",false,2
+203,44,"Anyone with a work visa",false,3
+204,44,"Anyone currently living in the United States",false,4
+205,45,"ITAR Controlled – Export Controlled",true,1
+206,45,"Confidential – Do Not Distribute",false,2
+207,45,"Proprietary Information",false,3
+208,45,"Internal Use Only",false,4
+209,46,"$1,272,251 per violation",true,1
+210,46,"$100,000 per violation",false,2
+211,46,"$500,000 per violation",false,3
+212,46,"$50,000 per violation",false,4
+213,47,"In locked cabinets or restricted-access digital systems",true,1
+214,47,"On any company computer",false,2
+215,47,"In personal cloud storage like Dropbox",false,3
+216,47,"On your desk for easy access",false,4
+217,48,"Immediately report it to the Business Manager or VP of Operations",true,1
+218,48,"Ignore it if they seem trustworthy",false,2
+219,48,"Wait to see if anyone else notices",false,3
+220,48,"Report it at the end of the month",false,4
+221,49,"VP of Operations and Business Manager",true,1
+222,49,"Any manager in the company",false,2
+223,49,"Any employee with a security clearance",false,3
+224,49,"The production supervisor",false,4
+225,50,"5 years",true,1
+226,50,"1 year",false,2
+227,50,"3 years",false,3
+228,50,"10 years",false,4
+229,51,"Blueprints, drawings, process specifications, test data, and software related to defense articles",true,1
+230,51,"Only physical blueprints and drawings",false,2
+231,51,"Only computer software programs",false,3
+232,51,"Marketing materials and sales brochures",false,4
+234,52,"A safety certification for chemical handling",false,2
+235,52,"A general business management standard",false,3
+236,52,"A manufacturing equipment standard",false,4
+237,53,"Continuously improve while producing quality products in a timely manner to meet customer requirements",true,1
+238,53,"Maximize profits and reduce costs",false,2
+239,53,"Produce products as fast as possible",false,3
+240,53,"Meet minimum quality standards",false,4
+241,54,"3% or less based on manufacturer defect or error",true,1
+242,54,"5% or less",false,2
+243,54,"10% or less",false,3
+244,54,"1% or less",false,4
+245,55,"1% or less for nonconforming items",true,1
+246,55,"3% or less",false,2
+247,55,"5% or less",false,3
+248,55,"No specific goal",false,4
+162,34,"Leave them on the workbench to dry",false,2
+251,56,"95% on-time shipping",false,3
+252,56,"100% on-time shipping",false,4
+254,57,"Only the quality department",false,2
+255,57,"Only managers and supervisors",false,3
+256,57,"Only production employees",false,4
+257,58,"Notify a manager immediately",true,1
+258,58,"Use them anyway if they look okay",false,2
+259,58,"Throw them away yourself",false,3
+260,58,"Move them to a different location",false,4
+261,59,"Foreign Object Debris",true,1
+262,59,"Factory Operation Documentation",false,2
+263,59,"Final Output Data",false,3
+264,59,"Field Operations Directive",false,4
+265,60,"Notify a manager immediately",true,1
+266,60,"Fix it yourself without telling anyone",false,2
+267,60,"Ignore it if no one else notices",false,3
+268,60,"Wait until the end of the day to report it",false,4
+269,61,"Key Performance Indicators (KPIs)",true,1
+270,61,"Knowledge Process Improvements",false,2
+271,61,"Key Production Instructions",false,3
+272,61,"Kinetic Performance Indexes",false,4
+274,62,"Buy from the cheapest supplier available",false,2
+275,62,"Purchase from online marketplaces",false,3
+276,62,"Use unknown distributors",false,4
+277,63,"All of these: personal injury, mission failure, reduced reliability, and loss of contracts",true,1
+278,63,"Only minor cost increases",false,2
+279,63,"No significant impacts",false,3
+280,63,"Only affects product appearance",false,4
+281,64,"Yes, suppliers must ensure prevention through processes or a formal program",true,1
+282,64,"No, suppliers can handle materials however they want",false,2
+283,64,"Only if the order is over $10,000",false,3
+284,64,"Only for military contracts",false,4
+285,65,"No certificate of conformance",true,1
+286,65,"Product arrives on time",false,2
+287,65,"Proper manufacturer packaging",false,3
+288,65,"Authorized distributor documentation",false,4
+289,66,"Isolate and quarantine the suspect parts immediately",true,1
+290,66,"Continue using them in production",false,2
+291,66,"Throw them away immediately",false,3
+292,66,"Mix them with other inventory",false,4
+293,67,"No, do not return them as they could re-enter the supply chain",true,1
+294,67,"Yes, always return them to get a refund",false,2
+295,67,"Yes, return them without documentation",false,3
+296,67,"It does not matter either way",false,4
+297,68,"Section 8.1.4",true,1
+298,68,"Section 4.2.1",false,2
+299,68,"Section 10.3.5",false,3
+300,68,"Section 6.1.2",false,4
+302,69,"Use the parts anyway",false,2
+303,69,"Return them to the supplier immediately",false,3
+304,69,"Ignore the issue",false,4
+305,70,"OCM Authorized Distributors",true,1
+306,70,"Unknown online sellers",false,2
+307,70,"Overseas discount suppliers",false,3
+308,70,"Liquidation warehouses",false,4
+309,71,"The Quality Manager",true,1
+310,71,"No one, handle it yourself",false,2
+311,71,"Only your immediate supervisor",false,3
+312,71,"The supplier first",false,4
+313,82,"Clause 7.3",true,1
+314,82,"Clause 4.2",false,2
+315,82,"Clause 10.1",false,3
+316,82,"Clause 8.5",false,4
+317,83,"Signing off on inspection reports without performing the required checks",true,1
+318,83,"Filing reports on time with accurate data",false,2
+319,83,"Requesting additional time to complete inspections properly",false,3
+320,83,"Reporting defects to your supervisor",false,4
+321,84,"Boeing had to halt production temporarily and perform extensive inspections",true,1
+322,84,"No consequences occurred",false,2
+323,84,"Only a small fine was issued",false,3
+324,84,"The issue was covered up",false,4
+325,85,"Immediate identification and tagging of defective parts",true,1
+326,85,"Use the parts anyway if they look okay",false,2
+327,85,"Wait for management approval",false,3
+328,85,"Mix them with conforming parts",false,4
+329,86,"Quarantine to prevent accidental use",true,1
+330,86,"Continue using in production",false,2
+331,86,"Throw away immediately without documentation",false,3
+332,86,"Leave in regular inventory",false,4
+334,87,"Only parts from overseas suppliers",false,2
+335,87,"Parts that are slightly cheaper than normal",false,3
+336,87,"Refurbished original parts",false,4
+337,88,"Report issues or concerns immediately",true,1
+338,88,"Ignore minor problems to save time",false,2
+339,88,"Wait until the end of the shift to report issues",false,3
+250,56,"80% on-time shipping",false,2
+342,89,"Punish employees who make mistakes",false,2
+343,89,"Monitor employee communications",false,3
+344,89,"Reduce the number of reports filed",false,4
+345,90,"All of these: falsification of records, safety hazards, theft/fraud, and retaliation",true,1
+346,90,"Only financial fraud",false,2
+347,90,"Only safety hazards",false,3
+348,90,"Only falsification of records",false,4
+349,91,"No retaliation policy, confidential handling, and legal protections",true,1
+350,91,"No protections are provided",false,2
+351,91,"Only confidential handling",false,3
+352,91,"Protections only if the report is proven true",false,4
+353,92,"Scrap, Returns, and Counterfeit",true,1
+354,92,"Defects, Damages, and Repairs",false,2
+355,92,"Quality, Compliance, and Safety",false,3
+356,92,"Production, Shipping, and Storage",false,4
+357,93,"Scrap items must be rendered unusable and disposed of",true,1
+358,93,"Scrap items can be repaired and reused",false,2
+359,93,"Scrap items can be sold at discount",false,3
+360,93,"Scrap items are stored for future use",false,4
+362,94,"Continue using it until confirmed counterfeit",false,2
+363,94,"Throw it away immediately",false,3
+364,94,"Return it to the supplier without documentation",false,4
+365,95,"Business Manager, Production Manager, or Upper Management",true,1
+366,95,"Only the Quality Manager",false,2
+367,95,"Any line supervisor",false,3
+368,95,"The sales team",false,4
+370,96,"Only during production",false,2
+371,96,"Only during final inspection",false,3
+372,96,"Only during packaging and shipping",false,4
+373,97,"In red barrels at the line manager's work area",true,1
+374,97,"In blue bins in the warehouse",false,2
+375,97,"At the main office",false,3
+376,97,"In the quality department",false,4
+377,98,"The sales team",true,1
+378,98,"The production line manager",false,2
+379,98,"The quality manager",false,3
+380,98,"The business manager",false,4
+382,99,"Items that are perfect and meet all requirements",false,2
+383,99,"Items that need to be scrapped",false,3
+384,99,"Items that require repair before use",false,4
+385,100,"Trained personnel assigned by management",true,1
+386,100,"Any employee who finds it",false,2
+387,100,"Only the sales team",false,3
+388,100,"The supplier",false,4
+389,101,"Neglect, environmental changes, or supply changes",true,1
+390,101,"Only customer complaints",false,2
+391,101,"Only equipment failure",false,3
+392,101,"Only design flaws",false,4
+393,102,"Remove all tools from the machine spindles",true,1
+394,102,"Leave tools in the spindles for next day",false,2
+395,102,"Place tools on the workbench",false,3
+396,102,"Store tools in the grinding room",false,4
+397,103,"OFF home position",true,1
+398,103,"Any position is fine",false,2
+399,103,"Mid-cycle position",false,3
+400,103,"Emergency stop position",false,4
+401,104,"In the correct toolbox",true,1
+402,104,"On the workbench",false,2
+403,104,"In the grinding room",false,3
+404,104,"Near the mill machines",false,4
+405,105,"Ensure the oven timers are set to turn OFF",true,1
+406,105,"Leave timers running overnight",false,2
+407,105,"Set timers for next morning",false,3
+408,105,"Timers do not need to be checked",false,4
+409,106,"Clean and break down paint guns",true,1
+410,106,"Turn off air compressor",false,2
+411,106,"Close cabinets",false,3
+412,106,"Turn off lights",false,4
+413,107,"Turn OFF bathroom lights",true,1
+414,107,"Leave bathroom lights ON",false,2
+415,107,"Only turn off if no one is working late",false,3
+416,107,"Bathroom lights are automatic",false,4
+417,108,"Hall and porch lights",true,1
+418,108,"All office lights",false,2
+419,108,"Only bathroom lights",false,3
+420,108,"No lights should remain on",false,4
+421,109,"3 pedestrian exit doors",true,1
+422,109,"2 pedestrian exit doors",false,2
+423,109,"4 pedestrian exit doors",false,3
+424,109,"1 pedestrian exit door",false,4
+425,110,"Set the alarm and lock the front door",true,1
+426,110,"Just turn off the lights",false,2
+427,110,"Only lock the door",false,3
+428,110,"Leave it for security",false,4
+430,111,"Leave the gate open",false,2
+431,111,"Lock the gate with a padlock",false,3
+341,89,"Protect individuals who report issues in good faith and encourage early problem identification",true,1
+133,27,"Fill out chemical disposal form and give to Production Manager, then place container in disposal area",true,1
+369,96,"At any stage: design, pre-production, production, post-production, packaging, storage, shipping, and delivery",true,1
+109,19,"Management",false,1
+112,19,"External waste management",false,4
+129,26,"Allow it to evaporate and place the empty container in the dumpster",true,1
+57,16,"Check for any special cleanliness requirements",false,1
+97,13,"Any material with a shelf life should be checked",false,1
+161,34,"Dispose of them in approved fire-safe containers",true,1
+177,38,"Only small incipient fires if you are trained and it is safe to do so",true,1
+193,42,"A set of U.S. government regulations controlling the export of defense articles, technical data, and defense services",true,1
+233,52,"A quality management system for companies that design, develop, or provide products for aviation, space, and defense industries",true,1
+249,56,"90% on-time shipping",true,1
+253,57,"Everybody - all employees",true,1
+273,62,"Procure directly from Original Component or Equipment Manufacturers (OCM/OEM)",true,1
+301,69,"Document thoroughly with photos, part numbers, and supplier information",true,1
+333,87,"Any unauthorized copy, imitation, or substitute misrepresented in origin or certification",true,1
+340,88,"Only report problems if directly asked",false,4
+361,94,"Immediately isolate the item in the business office",true,1
+381,99,"Items that do not meet initial requirements but the variation is approved by the customer",true,1
+429,111,"Ensure the security gate closes",true,1
+432,111,"Gate closes automatically, no need to check",false,4

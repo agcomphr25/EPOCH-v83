@@ -22,25 +22,6 @@ export default function HALLSTestDashboard() {
     checkAuth();
   }, [setLocation]);
 
-  const handleLogout = async () => {
-    try {
-      // Call backend logout endpoint
-      await fetch('/api/auth/logout', {
-        method: 'POST',
-        credentials: 'include',
-      });
-    } catch (error) {
-      console.error('Logout error:', error);
-    } finally {
-      // Clear all local storage
-      localStorage.removeItem('currentUser');
-      localStorage.removeItem('userData');
-      
-      // Redirect to login page
-      setLocation('/login');
-    }
-  };
-
   return (
     <div className="container mx-auto p-6">
       <div className="flex items-center justify-between mb-8">
@@ -48,10 +29,6 @@ export default function HALLSTestDashboard() {
           <h1 className="text-3xl font-bold text-gray-900">Welcome, HALLS</h1>
           <p className="text-gray-600 mt-1">Your Personalized Manufacturing Dashboard</p>
         </div>
-        <Button onClick={handleLogout} variant="outline" size="sm" className="flex items-center gap-2" data-testid="button-logout">
-          <LogOut className="w-4 h-4" />
-          Logout
-        </Button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

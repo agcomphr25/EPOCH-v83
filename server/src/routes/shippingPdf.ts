@@ -1398,7 +1398,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     }
 
     // Features and Customizations Section - Position properly after customer box
-    currentY = customerBoxY - 30; // Continue below the customer box
+    currentY = customerBoxY - 10; // Continue below the customer box (reduced spacing for shipping dept)
     const basePrice = model?.price || 0;
     page.drawText('FEATURES & CUSTOMIZATIONS', {
       x: margin,
@@ -2290,19 +2290,22 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
 
     // Terms and Conditions Section (2-column layout with smaller font)
     currentY -= 30; // Reduced from 120 to give more space for notes
-    page.drawText('TERMS AND CONDITIONS', {
-      x: margin,
-      y: currentY,
-      size: 11,
-      font: boldFont,
-    });
-
-    currentY -= 18;
     
     // Determine which terms to use based on order department
     const isShippingDepartment = order.currentDepartment && 
       (order.currentDepartment.toLowerCase().includes('shipping') || 
        order.currentDepartment.toLowerCase().includes('qc'));
+    
+    // Only show "TERMS AND CONDITIONS" heading for non-shipping departments
+    if (!isShippingDepartment) {
+      page.drawText('TERMS AND CONDITIONS', {
+        x: margin,
+        y: currentY,
+        size: 11,
+        font: boldFont,
+      });
+      currentY -= 18;
+    }
     
     // Define terms for Shipping Department
     const shippingTerms = [

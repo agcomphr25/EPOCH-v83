@@ -40,31 +40,33 @@ export default function Navigation() {
   const [productionSchedulingExpanded, setProductionSchedulingExpanded] = useState(false);
   const [departmentQueueExpanded, setDepartmentQueueExpanded] = useState(false);
 
-  // Get current user from backend session validation
+  // Get current user from localStorage or URL-based dashboard
   useEffect(() => {
-    const validateAndSetUser = async () => {
-      try {
-        const response = await fetch('/api/auth/validate', {
-          credentials: 'include',
-        });
-        
-        if (response.ok) {
-          const data = await response.json();
-          if (data.valid && data.user) {
-            const username = data.user.username.toLowerCase();
-            setCurrentUser(username);
-            setHasFullNav(hasFullAccess(username));
-          }
-        }
-      } catch (error) {
-        console.error('Failed to validate session:', error);
-      } finally {
+    const getUserFromContext = () => {
+      // First check localStorage (for users who logged in via Login page)
+      const storedUser = localStorage.getItem('currentUser');
+      if (storedUser) {
+        const username = storedUser.toLowerCase();
+        setCurrentUser(username);
+        setHasFullNav(hasFullAccess(username));
         setIsLoading(false);
+        return;
       }
+      
+      // If no localStorage, extract username from dashboard URL pattern
+      // e.g., /tims-dashboard -> tims, /staciw-dashboard -> staciw
+      const dashboardMatch = location.match(/^\/([a-z]+)-dashboard$/);
+      if (dashboardMatch) {
+        const username = dashboardMatch[1].toLowerCase();
+        setCurrentUser(username);
+        setHasFullNav(hasFullAccess(username));
+      }
+      
+      setIsLoading(false);
     };
     
-    validateAndSetUser();
-  }, []);
+    getUserFromContext();
+  }, [location]);
 
   // Handle logout
   const handleLogout = async () => {

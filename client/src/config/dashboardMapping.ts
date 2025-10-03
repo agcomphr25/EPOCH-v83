@@ -11,7 +11,7 @@ export const DASHBOARD_ROUTES: Record<string, string> = {
   deploy: '/', // Default dashboard for deploy user
   
   // Production users
-  agrace: '/agrace-dashboard',
+  agrace: '/ag-dashboard',
   angiet: '/angiet-dashboard',
   blaket: '/blaket-dashboard',
   bradw: '/bradw-dashboard',

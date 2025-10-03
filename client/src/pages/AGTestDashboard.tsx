@@ -1,34 +1,41 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { BarChart3, Calendar, List, Maximize2, Minimize2, Search, ArrowRight, Edit, QrCode, Users, ExternalLink, LogOut } from 'lucide-react';
+import { BarChart3, Calendar, List, Maximize2, Minimize2, Search, ArrowRight, Edit, QrCode, Users, ExternalLink, LogOut, ListOrdered, Repeat } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import PipelineVisualization from '@/components/PipelineVisualization';
 import LayupScheduler from '@/components/LayupScheduler';
 import { getDisplayOrderId } from '@/lib/orderUtils';
 import { useLocation } from 'wouter';
+import { isProductionEnvironment, isAuthenticated } from '@/lib/env';
 
 export default function AGTestDashboard() {
   const [expandedSection, setExpandedSection] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [, setLocation] = useLocation();
 
+  useEffect(() => {
+    const checkAuth = async () => {
+      if (isProductionEnvironment()) {
+        const { validateSessionAsync } = await import('@/lib/env');
+        const isValid = await validateSessionAsync();
+        if (!isValid) {
+          console.log('🔒 Session invalid - redirecting to login');
+          setLocation('/login');
+        }
+      }
+    };
+    checkAuth();
+  }, [setLocation]);
+
   const toggleExpand = (section: string) => {
     setExpandedSection(expandedSection === section ? null : section);
   };
 
-  const handleLogout = () => {
-    // Clear authentication tokens
-    localStorage.removeItem('sessionToken');
-    localStorage.removeItem('jwtToken');
-    
-    // Redirect to login page
-    window.location.href = '/login';
-  };
 
   // Get all customer orders (excluding purchase orders)
   const { data: allOrders = [] } = useQuery({
@@ -74,19 +81,8 @@ export default function AGTestDashboard() {
             Production Pipeline Overview, Order Management & Layup Scheduling
           </p>
         </div>
-        <div className="flex items-center gap-4">
-          <div className="text-sm text-gray-500 dark:text-gray-400">
-            Real-time Manufacturing Control Center
-          </div>
-          <Button
-            onClick={handleLogout}
-            variant="outline"
-            size="sm"
-            className="flex items-center gap-2 hover:bg-red-50 hover:border-red-200 hover:text-red-600"
-          >
-            <LogOut className="w-4 h-4" />
-            Logout
-          </Button>
+        <div className="text-sm text-gray-500 dark:text-gray-400">
+          Real-time Manufacturing Control Center
         </div>
       </div>
 
@@ -160,6 +156,42 @@ export default function AGTestDashboard() {
             </div>
             <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
               Finish department queue and technician assignment
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card 
+          className="hover:shadow-md transition-all duration-200 cursor-pointer hover:bg-red-50 dark:hover:bg-red-900/20"
+          onClick={() => navigateTo('/department-queue/production-queue')}
+        >
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <ListOrdered className="w-5 h-5 text-red-600" />
+                <span className="text-sm font-medium">P1 Production Queue</span>
+              </div>
+              <ExternalLink className="w-4 h-4 text-gray-400" />
+            </div>
+            <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+              Priority-based production order management
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card 
+          className="hover:shadow-md transition-all duration-200 cursor-pointer hover:bg-teal-50 dark:hover:bg-teal-900/20"
+          onClick={() => navigateTo('/order-department-transfer')}
+        >
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <Repeat className="w-5 h-5 text-teal-600" />
+                <span className="text-sm font-medium">Order Department Transfer</span>
+              </div>
+              <ExternalLink className="w-4 h-4 text-gray-400" />
+            </div>
+            <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+              Transfer orders between production departments
             </p>
           </CardContent>
         </Card>

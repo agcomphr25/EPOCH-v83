@@ -7,17 +7,19 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { OrderTooltip } from '@/components/OrderTooltip';
-import { Shield, ArrowLeft, ArrowRight, Search, CheckSquare, Square } from 'lucide-react';
-import { useQuery } from '@tanstack/react-query';
+import { Shield, ArrowLeft, ArrowRight, Search, CheckSquare, Square, RefreshCw, X } from 'lucide-react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { getDisplayOrderId } from '@/lib/orderUtils';
 import FBNumberSearch from '@/components/FBNumberSearch';
 import { toast } from 'react-hot-toast';
+import { apiRequest } from '@/lib/queryClient';
 
 export default function FinishQCQueuePage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
   const [selectAll, setSelectAll] = useState(false);
+  const queryClient = useQueryClient();
 
   // Get all orders from production pipeline
   const { data: allOrders = [] } = useQuery({
@@ -70,13 +72,32 @@ export default function FinishQCQueuePage() {
     queryKey: ['/api/stock-models'],
   });
 
+  // Progress to Paint mutation
+  const progressToPaint = useMutation({
+    mutationFn: async (orderIds: string[]) => {
+      return await apiRequest('/api/orders/progress-department', {
+        method: 'POST',
+        body: { orderIds, currentDepartment: 'FinishQC', nextDepartment: 'Paint' }
+      });
+    },
+    onSuccess: () => {
+      toast.success(`Progressed ${selectedOrders.size} orders to Paint`);
+      setSelectedOrders(new Set());
+      setSelectAll(false);
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
+    },
+    onError: (error) => {
+      toast.error(`Failed to progress orders: ${error.message}`);
+    }
+  });
+
   // Handle order found via Facebook number search
   const handleOrderFound = (orderId: string) => {
     // Check if the order exists in the current Finish QC queue
     const orderExists = finishQCOrders.some((order: any) => order.orderId === orderId);
     if (orderExists) {
       // Select the found order
-      setSelectedOrders(prev => new Set([...prev, orderId]));
+      setSelectedOrders(prev => new Set([...Array.from(prev), orderId]));
       toast.success(`Order ${orderId} found and selected in Finish QC department`);
     } else {
       // Find the order in all orders to show current department
@@ -278,7 +299,7 @@ export default function FinishQCQueuePage() {
                     >
                       <OrderTooltip 
                         order={order} 
-                        stockModels={stockModels} 
+                        stockModels={stockModels as any[]} 
                         className={`border-l-purple-500 cursor-pointer ${
                           isSelected ? 'bg-blue-50 dark:bg-blue-900/20' : ''
                         }`}
@@ -299,6 +320,52 @@ export default function FinishQCQueuePage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Floating Sticky Progression Button */}
+      {selectedOrders.size > 0 && (
+        <div className="fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 shadow-lg">
+          <div className="container mx-auto p-4">
+            <div className="flex items-center justify-between flex-wrap gap-4">
+              <div className="flex items-center gap-2">
+                <Badge variant="default" className="bg-blue-600 text-white px-4 py-2 text-base">
+                  {selectedOrders.size} Order{selectedOrders.size > 1 ? 's' : ''} Selected
+                </Badge>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setSelectedOrders(new Set());
+                    setSelectAll(false);
+                  }}
+                  data-testid="button-clear-selection"
+                >
+                  <X className="h-4 w-4 mr-2" />
+                  Clear Selection
+                </Button>
+              </div>
+              
+              <div className="flex gap-2">
+                <Button
+                  onClick={() => progressToPaint.mutate(Array.from(selectedOrders))}
+                  disabled={progressToPaint.isPending}
+                  className="bg-green-600 hover:bg-green-700 text-white"
+                  size="lg"
+                  data-testid="button-progress-to-paint"
+                >
+                  {progressToPaint.isPending ? (
+                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <ArrowRight className="h-4 w-4 mr-2" />
+                  )}
+                  {progressToPaint.isPending 
+                    ? 'Progressing...' 
+                    : `Progress to Paint (${selectedOrders.size})`}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

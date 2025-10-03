@@ -1,5 +1,6 @@
 import express, { type Request, Response, NextFunction } from "express";
 import path from "path";
+import fs from "fs";
 import { registerRoutes } from "./src/routes/index";
 import { setupVite, serveStatic, log } from "./vite";
 
@@ -21,8 +22,48 @@ console.log('Environment check:', {
 });
 
 const app = express();
+
+// Serve attached assets (PDFs, documents, etc.) - Must be before other routes
+// In production, assets are copied to dist/attached_assets
+// In development, assets are in the root attached_assets folder
+const assetsPath = process.env.NODE_ENV === 'production' 
+  ? path.join(import.meta.dirname, 'attached_assets')
+  : path.join(process.cwd(), 'attached_assets');
+
+console.log('📁 Assets path configuration:', {
+  NODE_ENV: process.env.NODE_ENV,
+  assetsPath,
+  dirname: import.meta.dirname,
+  cwd: process.cwd()
+});
+
+app.get('/attached_assets/*', (req, res, next) => {
+  const fileName = req.path.replace('/attached_assets/', '');
+  const filePath = path.join(assetsPath, fileName);
+  
+  console.log('📄 Asset request:', { fileName, filePath, exists: fs.existsSync(filePath) });
+  
+  if (fs.existsSync(filePath)) {
+    // Set correct content type for PDFs
+    if (filePath.endsWith('.pdf')) {
+      res.set('Content-Type', 'application/pdf');
+    }
+    return res.sendFile(filePath, (err) => {
+      if (err) {
+        console.error('Error serving attached asset:', err);
+        next(err);
+      }
+    });
+  }
+  console.error('❌ Asset not found:', filePath);
+  next();
+});
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
+
+// Also add express.static as fallback
+app.use('/attached_assets', express.static(assetsPath));
 
 app.use((req, res, next) => {
   const start = Date.now();

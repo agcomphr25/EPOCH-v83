@@ -10,6 +10,7 @@ import kickbackRoutes from './kickbacks';
 import inventoryRoutes from './inventory';
 import customersRoutes from './customers';
 import vendorsRoutes, { contactRouter, vendorDocumentRouter } from './vendors';
+import vendorPOsRoutes from './vendorPOs';
 import qualityRoutes from './quality';
 import documentsRoutes from './documents';
 import moldsRoutes from './molds';
@@ -45,7 +46,6 @@ import vendorRoutes from './vendors';
 
 import mrpRoutes from './mrp';
 import enhancedRoutes from './enhanced';
-import trainingRoutes from './training';
 
 import { getAccessToken } from '../utils/upsShipping';
 
@@ -79,6 +79,9 @@ export function registerRoutes(app: Express): Server {
 
   // Vendor management routes
   app.use('/api/vendors', vendorsRoutes);
+  
+  // Vendor purchase orders routes
+  app.use('/api/vendor-pos', vendorPOsRoutes);
   
   // Vendor contacts routes (generic)
   app.use('/api/vendor-contacts', contactRouter);
@@ -169,8 +172,6 @@ export function registerRoutes(app: Express): Server {
   // Enhanced system routes (completely separate from legacy)
   app.use('/api/enhanced', enhancedRoutes);
   
-  // Training module routes
-  app.use('/api/training', trainingRoutes);
 
   // UPS Test endpoint
   app.post('/api/test-ups-auth', async (req, res) => {
@@ -1216,15 +1217,13 @@ export function registerRoutes(app: Express): Server {
 
   app.put('/api/addresses/:id', async (req, res) => {
     try {
-      console.log('🔧 ADDRESS UPDATE ROUTE CALLED');
       const { storage } = await import('../../storage');
       const { id } = req.params;
       const addressData = req.body;
       const address = await storage.updateCustomerAddress(parseInt(id), addressData);
-      console.log('🔧 Updated address:', address.id);
       res.json(address);
     } catch (error) {
-      console.error('🔧 Address update error:', error);
+      console.error('Address update error:', error);
       res.status(500).json({ error: "Failed to update address" });
     }
   });

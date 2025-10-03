@@ -1,6 +1,5 @@
 import express, { type Request, Response, NextFunction } from "express";
 import path from "path";
-import fs from "fs";
 import { registerRoutes } from "./src/routes/index";
 import { setupVite, serveStatic, log } from "./vite";
 
@@ -22,31 +21,8 @@ console.log('Environment check:', {
 });
 
 const app = express();
-
-// Serve attached assets (PDFs, documents, etc.) - Must be before other routes
-app.get('/attached_assets/*', (req, res, next) => {
-  const filePath = path.join(process.cwd(), req.path);
-  
-  if (fs.existsSync(filePath)) {
-    // Set correct content type for PDFs
-    if (filePath.endsWith('.pdf')) {
-      res.set('Content-Type', 'application/pdf');
-    }
-    return res.sendFile(filePath, (err) => {
-      if (err) {
-        console.error('Error serving attached asset:', err);
-        next(err);
-      }
-    });
-  }
-  next();
-});
-
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
-
-// Also add express.static as fallback
-app.use('/attached_assets', express.static(path.join(process.cwd(), 'attached_assets')));
 
 app.use((req, res, next) => {
   const start = Date.now();

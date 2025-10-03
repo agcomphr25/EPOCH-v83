@@ -9093,6 +9093,33 @@ AG Composites Team`;
     return results;
   }
 
+  // Non-Conforming Items CRUD Implementation
+  async getAllNonConformingItems(): Promise<NonConformingItem[]> {
+    return await db.select().from(nonConformingItems).orderBy(desc(nonConformingItems.date));
+  }
+
+  async getNonConformingItem(id: number): Promise<NonConformingItem | undefined> {
+    const [item] = await db.select().from(nonConformingItems).where(eq(nonConformingItems.id, id));
+    return item || undefined;
+  }
+
+  async createNonConformingItem(data: InsertNonConformingItem): Promise<NonConformingItem> {
+    const [item] = await db.insert(nonConformingItems).values(data).returning();
+    return item;
+  }
+
+  async updateNonConformingItem(id: number, data: Partial<InsertNonConformingItem>): Promise<NonConformingItem> {
+    const [item] = await db.update(nonConformingItems)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(nonConformingItems.id, id))
+      .returning();
+    return item;
+  }
+
+  async deleteNonConformingItem(id: number): Promise<void> {
+    await db.delete(nonConformingItems).where(eq(nonConformingItems.id, id));
+  }
+
 }
 
 // Enhanced MRP Types for Storage Interface

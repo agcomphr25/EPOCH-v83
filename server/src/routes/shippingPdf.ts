@@ -2314,16 +2314,17 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       (order.currentDepartment.toLowerCase().includes('shipping') || 
        order.currentDepartment.toLowerCase().includes('qc'));
     
+    // TEMPORARILY COMMENTED OUT - Standard T&C heading
     // Only show "TERMS AND CONDITIONS" heading for non-shipping departments
-    if (!isShippingDepartment) {
-      page.drawText('TERMS AND CONDITIONS', {
-        x: margin,
-        y: currentY,
-        size: 11,
-        font: boldFont,
-      });
-      currentY -= 18;
-    }
+    // if (!isShippingDepartment) {
+    //   page.drawText('TERMS AND CONDITIONS', {
+    //     x: margin,
+    //     y: currentY,
+    //     size: 11,
+    //     font: boldFont,
+    //   });
+    //   currentY -= 18;
+    // }
     
     // Define terms for Shipping Department
     const shippingTerms = [
@@ -2334,16 +2335,18 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       '• We only guarantee the fitment for the actions, barrel channels and bottom metals we offer. If you order a stock with one of our options and try to put a different brand hardware in the stock, we DO NOT GUARANTEE that it will fit. Even though manufacturers say their hardware is a "Rem Clone" there is a high probability that there will be subtle differences resulting in fitment issues. In this case you can return the stock in good condition with no modifications. We will assess a $75 re-stocking fee.'
     ];
     
+    // TEMPORARILY COMMENTED OUT - Standard terms definition
     // Define terms for all other departments (CSR, Production, etc.)
-    const standardTerms = [
-      '• Please sign and return a copy of this form, or reply to the email that you are in agreement with the terms and conditions. No stock order will be placed into production without this confirmation',
-      '• Review the specs outlined above and confirm they are correct',
-      '• Any changes to specs requested after 30 days may result in additional charges',
-      '• The Estimated Completion Date is an estimation based on our current capacity and the specs of your order. We make every effort to ship stocks by the Estimated Completion Date'
-    ];
+    // const standardTerms = [
+    //   '• Please sign and return a copy of this form, or reply to the email that you are in agreement with the terms and conditions. No stock order will be placed into production without this confirmation',
+    //   '• Review the specs outlined above and confirm they are correct',
+    //   '• Any changes to specs requested after 30 days may result in additional charges',
+    //   '• The Estimated Completion Date is an estimation based on our current capacity and the specs of your order. We make every effort to ship stocks by the Estimated Completion Date'
+    // ];
     
     // Select appropriate terms based on department
-    const terms = isShippingDepartment ? shippingTerms : standardTerms;
+    // TEMPORARILY MODIFIED - Only use shipping terms, standard terms commented out
+    const terms = isShippingDepartment ? shippingTerms : [];
 
     // Two-column layout for terms
     const termsColumnWidth = (printableWidth - 20) / 2;

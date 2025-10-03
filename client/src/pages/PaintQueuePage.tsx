@@ -403,7 +403,7 @@ export default function PaintQueuePage() {
                   size="sm"
                 >
                   <ArrowRight className="h-4 w-4 mr-1" />
-                  Move to Shipping ({selectedOrders.size})
+                  Move to Shipping QC ({selectedOrders.size})
                 </Button>
                 {selectedOrders.size > 0 && (
                   <Button
@@ -456,10 +456,10 @@ export default function PaintQueuePage() {
                         
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-1.5 mb-1">
-                            <span className="font-medium text-sm truncate">{getDisplayOrderId(order)}</span>
+                            <span className="font-medium text-sm truncate">{order.orderId}</span>
                             {order.fbOrderNumber && (
-                              <Badge variant="outline" className="text-xs px-1 py-0">
-                                {order.fbOrderNumber}
+                              <Badge variant="outline" className="text-xs px-1 py-0 bg-blue-50 dark:bg-blue-900/20 border-blue-300">
+                                FB: {order.fbOrderNumber}
                               </Badge>
                             )}
                             {order.isPaid && (
@@ -592,7 +592,7 @@ export default function PaintQueuePage() {
                   <ArrowRight className="h-4 w-4 mr-2" />
                   {progressToShippingMutation.isPending 
                     ? 'Progressing...' 
-                    : `Progress to Shipping (${selectedOrders.size})`}
+                    : `Progress to Shipping QC (${selectedOrders.size})`}
                 </Button>
               </div>
             </div>

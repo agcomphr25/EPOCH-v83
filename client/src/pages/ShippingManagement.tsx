@@ -109,7 +109,7 @@ export default function ShippingManagement() {
     mutationFn: ({ orderId, trackingNumber, carrier }: { orderId: string, trackingNumber: string, carrier: string }) => 
       apiRequest(`/api/shipping-pdf/update-tracking/${orderId}`, {
         method: 'POST',
-        body: JSON.stringify({ trackingNumber, carrier }),
+        body: JSON.stringify({ trackingNumber, shippingCarrier: carrier }),
         headers: { 'Content-Type': 'application/json' },
       }),
     onSuccess: () => {
@@ -612,13 +612,10 @@ export default function ShippingManagement() {
               <Label htmlFor="edit-tracking-number">Tracking Number</Label>
               <Input
                 id="edit-tracking-number"
-                key={selectedOrderForEdit?.orderId}
                 value={editTrackingNumber}
                 onChange={(e) => setEditTrackingNumber(e.target.value)}
                 placeholder="Enter tracking number..."
                 className="font-mono"
-                autoFocus
-                data-testid="input-edit-tracking-number"
               />
             </div>
             <div className="flex gap-2 justify-end pt-4">

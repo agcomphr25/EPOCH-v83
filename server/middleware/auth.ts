@@ -24,26 +24,17 @@ declare global {
 function isDeploymentEnvironment(req: Request): boolean {
   const host = req.get('host') || '';
   
-  // SECURITY UPDATE: Bypass authentication for development environments
-  const isLocalhost = host.includes('localhost') || host.includes('127.0.0.1');
-  const isReplitDev = host.includes('replit.dev');
-  const isNodeEnvDev = process.env.NODE_ENV === 'development';
+  // Check for production deployment domains
+  const isProduction = host.includes('.replit.app') || 
+                      host.includes('.repl.co') || 
+                      process.env.NODE_ENV === 'production';
   
-  // Custom domain handling: For custom domains like agcompepoch.xyz, treat as production
-  // but ensure they have proper authentication setup
-  const isCustomDomain = host.includes('agcompepoch.xyz');
-  
-  const isDevelopment = isLocalhost || isReplitDev || isNodeEnvDev;
-  
-  if (isDevelopment) {
-    console.log('🔧 BACKEND AUTH BYPASS: Development environment - authentication disabled');
-    return false;
-  } else if (isCustomDomain) {
-    console.log('🔧 BACKEND CUSTOM DOMAIN MODE: Authentication enabled for custom domain:', host);
+  if (isProduction) {
+    console.log('🔧 BACKEND PRODUCTION MODE: Authentication enabled for deployed site');
     return true;
   } else {
-    console.log('🔧 BACKEND PRODUCTION MODE: Authentication enabled for production sites');
-    return true;
+    console.log('🔧 BACKEND AUTH BYPASS: Local development - authentication disabled');
+    return false;
   }
 }
 

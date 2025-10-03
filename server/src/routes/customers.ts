@@ -327,10 +327,10 @@ router.delete('/customers/:id', async (req: Request, res: Response) => {
   }
 });
 
-// Address autocomplete route using UPS Address Validation
+// Address autocomplete bypass route (to avoid monolithic route conflicts)
 router.post('/address-autocomplete-bypass', async (req: Request, res: Response) => {
   try {
-    console.log('🔧 UPS ADDRESS AUTOCOMPLETE CALLED');
+    console.log('🔧 BYPASS ADDRESS AUTOCOMPLETE CALLED');
     console.log('🔧 Request body:', req.body);
     
     const { search, getZipCode } = req.body;
@@ -340,32 +340,27 @@ router.post('/address-autocomplete-bypass', async (req: Request, res: Response) 
       return res.status(400).json({ error: "Search parameter is required" });
     }
     
-    // Check if we have UPS credentials
-    const upsClientId = process.env.UPS_CLIENT_ID;
-    const upsClientSecret = process.env.UPS_CLIENT_SECRET;
-    const upsAccountNumber = process.env.UPS_ACCOUNT_NUMBER;
+    // Check if we have SmartyStreets credentials
+    const authId = process.env.SMARTYSTREETS_AUTH_ID;
+    const authToken = process.env.SMARTYSTREETS_AUTH_TOKEN;
     
-    console.log('🔧 UPS credentials check:', { 
-      hasClientId: !!upsClientId, 
-      hasClientSecret: !!upsClientSecret,
-      hasAccountNumber: !!upsAccountNumber
+    console.log('🔧 SmartyStreets credentials check:', { 
+      hasAuthId: !!authId, 
+      hasAuthToken: !!authToken 
     });
     
-    if (!upsClientId || !upsClientSecret || !upsAccountNumber) {
-      console.log('🔧 Missing UPS credentials');
+    if (!authId || !authToken) {
+      console.log('🔧 Missing SmartyStreets credentials');
       return res.status(500).json({ 
-        error: "UPS credentials not configured" 
+        error: "SmartyStreets credentials not configured" 
       });
     }
     
-    // Import UPS address validation utility
-    const { validateAddressWithUPS, getUPSAddressAutocomplete } = await import('../utils/upsAddressValidation');
-    
-    // If getZipCode is true and we have a complete address, use UPS validation
+    // If getZipCode is true and we have a complete address, use Street API
     if (getZipCode && search.includes(',')) {
-      console.log('🔧 Using UPS Address Validation for ZIP code lookup');
+      console.log('🔧 Using Street API for ZIP code lookup');
       
-      // Parse the complete address for UPS validation
+      // Parse the complete address for Street API
       const addressParts = search.split(', ');
       if (addressParts.length >= 2) {
         const street = addressParts[0];
@@ -377,41 +372,50 @@ router.post('/address-autocomplete-bypass', async (req: Request, res: Response) 
         } else {
           // Handle "City State" format
           const cityStateParts = addressParts[1].split(' ');
-          state = cityStateParts.pop() || ''; // Last part is state
+          state = cityStateParts.pop(); // Last part is state
           city = cityStateParts.join(' '); // Rest is city
         }
         
-        console.log('🔧 UPS Address Validation params:', { street, city, state });
+        console.log('🔧 Street API params:', { street, city, state });
         
-        try {
-          const validationResult = await validateAddressWithUPS({
-            street,
-            city,
-            state
-          });
+        const streetUrl = `https://us-street.api.smartystreets.com/street-address?auth-id=${authId}&auth-token=${authToken}&street=${encodeURIComponent(street)}&city=${encodeURIComponent(city)}&state=${encodeURIComponent(state)}`;
+        
+        console.log('🔧 Street API URL:', streetUrl);
+        
+        const streetResponse = await fetch(streetUrl, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          }
+        });
+        
+        console.log('🔧 Street API response status:', streetResponse.status);
+        
+        if (streetResponse.ok) {
+          const streetData = await streetResponse.json();
+          console.log('🔧 Street API response:', streetData);
           
-          console.log('🔧 UPS Address Validation response:', validationResult);
-          
-          if (validationResult.isValid && validationResult.suggestions.length > 0) {
-            const result = validationResult.suggestions[0];
+          if (streetData && streetData.length > 0) {
+            const result = streetData[0];
             const fullAddress = {
-              delivery_line_1: result.street,
+              delivery_line_1: result.delivery_line_1,
               components: {
-                city_name: result.city,
-                state_abbreviation: result.state,
-                zipcode: result.postalCode
+                city_name: result.components.city_name,
+                state_abbreviation: result.components.state_abbreviation,
+                zipcode: result.components.zipcode + (result.components.plus4_code ? '-' + result.components.plus4_code : '')
               }
             };
             
             console.log('🔧 Returning full address with ZIP:', fullAddress);
             return res.json({ fullAddress: fullAddress });
           } else {
-            console.log('🔧 UPS validation returned no valid results, falling back to autocomplete');
+            console.log('🔧 Street API returned empty results, falling back to autocomplete');
           }
-        } catch (validationError) {
-          console.log('🔧 UPS validation error:', validationError);
+        } else {
+          const errorText = await streetResponse.text();
+          console.log('🔧 Street API error:', streetResponse.status, errorText);
           
-          // If UPS validation fails, try to extract ZIP from the search text
+          // If Street API fails (like 402 subscription error), try to extract ZIP from the search text
           const zipMatch = search.match(/\b(\d{5}(?:-\d{4})?)\b/);
           if (zipMatch) {
             console.log('🔧 Extracted ZIP code from search text:', zipMatch[1]);
@@ -430,106 +434,56 @@ router.post('/address-autocomplete-bypass', async (req: Request, res: Response) 
       }
     }
     
-    // Use SmartyStreets Autocomplete API for USPS-verified addresses
-    const authId = process.env.SMARTYSTREETS_AUTH_ID;
-    const authToken = process.env.SMARTYSTREETS_AUTH_TOKEN;
+    // Use SmartyStreets US Autocomplete API for partial searches
+    const smartyStreetsUrl = `https://us-autocomplete.api.smartystreets.com/suggest?auth-id=${authId}&auth-token=${authToken}&prefix=${encodeURIComponent(search)}&max_suggestions=10`;
     
-    if (!authId || !authToken) {
-      console.error('❌ SmartyStreets credentials not found');
-      return res.status(500).json({ error: 'Address autocomplete service not configured' });
+    console.log('🔧 Making SmartyStreets Autocomplete API call');
+    
+    const response = await fetch(smartyStreetsUrl, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      }
+    });
+    
+    console.log('🔧 SmartyStreets response status:', response.status);
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.log('🔧 SmartyStreets error response:', errorText);
+      throw new Error(`SmartyStreets Autocomplete API error: ${response.status} - ${errorText}`);
     }
     
-    console.log('🔧 SmartyStreets Autocomplete: Processing query:', search);
+    const data = await response.json();
+    console.log('🔧 SmartyStreets raw response:', data);
     
-    try {
-      // SmartyStreets US Autocomplete Pro API
-      const smartyUrl = `https://us-autocomplete-pro.api.smartystreets.com/lookup?auth-id=${authId}&auth-token=${authToken}&search=${encodeURIComponent(search)}&max_suggestions=10`;
-      
-      console.log('🔍 SmartyStreets API URL:', smartyUrl.replace(authToken, '[HIDDEN]'));
-      
-      const response = await fetch(smartyUrl);
-      
-      if (!response.ok) {
-        throw new Error(`SmartyStreets API error: ${response.status}`);
+    // Transform SmartyStreets autocomplete response
+    const suggestions = data.suggestions?.map((item: any) => {
+      // Extract ZIP code from text if zipcode field is empty but text contains it
+      let zipCode = item.zipcode;
+      if (!zipCode && item.text) {
+        const zipMatch = item.text.match(/\b(\d{5}(?:-\d{4})?)\b/);
+        if (zipMatch) {
+          zipCode = zipMatch[1];
+        }
       }
       
-      const data = await response.json();
-      console.log('✅ SmartyStreets Autocomplete: Response received:', data);
-      
-      // Transform SmartyStreets response to match expected format
-      const transformedSuggestions = data.suggestions?.map((result: any) => {
-        // Format the full address string for display
-        const fullAddress = `${result.street_line}${result.secondary ? ' ' + result.secondary : ''}, ${result.city}, ${result.state} ${result.zipcode}`;
-        
-        return {
-          text: fullAddress,
-          streetLine: result.street_line,
-          secondary: result.secondary || '',
-          city: result.city,
-          state: result.state,
-          zipCode: result.zipcode,
-          entries: result.entries || 1
-        };
-      }) || [];
-      
-      // Add manual input option
-      transformedSuggestions.push({
-        text: search,
-        streetLine: search,
-        city: '',
-        state: '',
-        zipCode: '',
-        entries: 1
-      });
-      
-      console.log('🔍 SmartyStreets found', transformedSuggestions.length - 1, 'suggestions plus manual input');
-      
-      res.json({
-        suggestions: transformedSuggestions
-      });
-      
-    } catch (smartyError) {
-      console.error('🔧 SmartyStreets Autocomplete error:', smartyError);
-      
-      // Fallback: try a simple address parsing approach
-      const fallbackSuggestions = [{
-        text: search,
-        streetLine: search,
-        city: '',
-        state: '',
-        zipCode: '',
-        entries: 1
-      }];
-      
-      // If search looks like a street number + name, provide some basic suggestions
-      if (/^\d+\s+\w+/.test(search)) {
-        const parts = search.split(' ');
-        const streetNum = parts[0];
-        const streetName = parts.slice(1).join(' ');
-        
-        fallbackSuggestions.push({
-          text: `${streetNum} ${streetName} St`,
-          streetLine: `${streetNum} ${streetName} St`,
-          city: '',
-          state: '',
-          zipCode: '',
-          entries: 1
-        });
-        
-        fallbackSuggestions.push({
-          text: `${streetNum} ${streetName} Ave`,
-          streetLine: `${streetNum} ${streetName} Ave`,
-          city: '',
-          state: '',
-          zipCode: '',
-          entries: 1
-        });
-      }
-      
-      res.json({
-        suggestions: fallbackSuggestions
-      });
-    }
+      return {
+        text: item.text,
+        streetLine: item.street_line,
+        city: item.city,
+        state: item.state,
+        zipCode: zipCode,
+        entries: item.entries
+      };
+    }) || [];
+    
+    console.log('🔧 Transformed suggestions:', suggestions);
+    console.log('🔧 Sending response with suggestions count:', suggestions.length);
+    
+    res.json({
+      suggestions: suggestions
+    });
     
   } catch (error) {
     console.error('🔧 Address autocomplete error:', error);

@@ -1,6 +1,9 @@
 import { Router, Request, Response } from 'express';
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 import fetch from 'node-fetch';
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
 
 const router = Router();
 
@@ -769,6 +772,12 @@ function truncateText(text: string, maxWidth: number, fontSize: number): string 
   return text.substring(0, maxChars - 3) + '...';
 }
 
+// Helper function to calculate text width (approximate)
+function getTextWidth(text: string, fontSize: number): number {
+  const charWidth = fontSize * 0.6; // Approximate width per character
+  return text.length * charWidth;
+}
+
 // Generate Sales Order PDF
 router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
   try {
@@ -1427,6 +1436,11 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     });
 
     currentY -= 20;
+    
+    // Define column positions for features table
+    const featureColX = margin + 8;
+    const selectionColX = margin + 200;
+    const priceColRightX = margin + printableWidth - 10;
     
     // Create bordered container for features table
     const featuresTableHeight = 240; // Increased height to accommodate all features

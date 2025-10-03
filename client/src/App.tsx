@@ -78,8 +78,6 @@ import KickbackTracking from '@/components/KickbackTracking';
 import DocumentManagement from "./pages/DocumentManagement";
 import ShutdownProceduresTraining from "@/pages/ShutdownProceduresTraining";
 import FireSafetyTraining from "@/pages/FireSafetyTraining";
-import Training from "./pages/Training";
-import TrainingModule from "./pages/TrainingModule";
 import PurchaseOrderItemsQueuePage from "./pages/PurchaseOrderItemsQueuePage";
 import LayupPluggingQueuePage from "./pages/LayupPluggingQueuePage";
 import BarcodeQueuePage from "./pages/BarcodeQueuePage";
@@ -304,10 +302,6 @@ function App() {
                   <Route path="/document-management" component={DocumentManagement} />
                   <Route path="/shutdown-training" component={ShutdownProceduresTraining} />
                   <Route path="/fire-safety-training" component={FireSafetyTraining} />
-
-                  {/* Training Routes */}
-                  <Route path="/training" component={Training} />
-                  <Route path="/training/module/:id" component={TrainingModule} />
 
                   {/* Queue Management Routes */}
                   <Route path="/purchase-order-items-queue" component={PurchaseOrderItemsQueuePage} />

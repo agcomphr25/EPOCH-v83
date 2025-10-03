@@ -7,11 +7,9 @@ import ordersRoutes from './orders';
 import formsRoutes from './forms';
 import tasksRoutes from './tasks';
 import kickbackRoutes from './kickbacks';
-import calendarRoutes from './calendar';
 import inventoryRoutes from './inventory';
 import customersRoutes from './customers';
 import vendorsRoutes, { contactRouter, vendorDocumentRouter } from './vendors';
-import vendorPOsRoutes from './vendorPOs';
 import qualityRoutes from './quality';
 import documentsRoutes from './documents';
 import moldsRoutes from './molds';
@@ -37,7 +35,6 @@ import layupScheduleRoutes from './layupSchedule';
 import customerSatisfactionRoutes from './customerSatisfaction';
 import poProductsRoutes from './poProducts';
 import refundRoutes from './refunds';
-import agMetalReportRoutes from './agMetalReport';
 
 import vendorRoutes from './vendors';
 
@@ -48,11 +45,12 @@ import vendorRoutes from './vendors';
 
 import mrpRoutes from './mrp';
 import enhancedRoutes from './enhanced';
+import trainingRoutes from './training';
 
 import { getAccessToken } from '../utils/upsShipping';
 
 export function registerRoutes(app: Express): Server {
-  // Authentication routes
+  // Authentication routes (must be first)
   app.use('/api/auth', authRoutes);
 
   // Employee management routes
@@ -73,9 +71,6 @@ export function registerRoutes(app: Express): Server {
   // Kickback tracking routes
   app.use('/api/kickbacks', kickbackRoutes);
 
-  // Calendar system routes
-  app.use('/api/calendar', calendarRoutes);
-
   // Inventory management routes
   app.use('/api/inventory', inventoryRoutes);
 
@@ -84,9 +79,6 @@ export function registerRoutes(app: Express): Server {
 
   // Vendor management routes
   app.use('/api/vendors', vendorsRoutes);
-  
-  // Vendor purchase orders routes
-  app.use('/api/vendor-pos', vendorPOsRoutes);
   
   // Vendor contacts routes (generic)
   app.use('/api/vendor-contacts', contactRouter);
@@ -160,9 +152,6 @@ export function registerRoutes(app: Express): Server {
   // Refund management routes
   app.use('/api/refund-requests', refundRoutes);
 
-  // AG Metal Report routes
-  app.use('/api/reports', agMetalReportRoutes);
-
   // Vendor management routes
   app.use('/api/vendors', vendorRoutes);
   
@@ -180,6 +169,8 @@ export function registerRoutes(app: Express): Server {
   // Enhanced system routes (completely separate from legacy)
   app.use('/api/enhanced', enhancedRoutes);
   
+  // Training module routes
+  app.use('/api/training', trainingRoutes);
 
   // UPS Test endpoint
   app.post('/api/test-ups-auth', async (req, res) => {
@@ -323,7 +314,7 @@ export function registerRoutes(app: Express): Server {
         SELECT 
           id,
           order_id as "orderId",
-          customer_id as "customer",
+          customer as "customer",
           product,
           date,
           due_date as "dueDate",
@@ -354,27 +345,32 @@ export function registerRoutes(app: Express): Server {
       const combinedUnscheduledOrders = [...unscheduledOrders, ...formattedActiveOrders];
       
       // Fetch P1 PO orders from all_orders table (orders created from P1 PO week selection)
-      console.log('🔍 Fetching P1 PO orders from all_orders table...');
+      // IMPORTANT: Only fetch STOCK ITEMS - vendor parts and non-stock items should stay on P1 PO page
+      // Stock items have valid stock model IDs (not null, not empty, not 'none')
+      console.log('🔍 Fetching P1 PO STOCK orders from all_orders table...');
       const p1POOrdersResult = await pool.query(`
         SELECT 
-          order_id as "orderId",
-          customer_id as "customerId",
-          model_id as "stockModelId",
-          due_date as "dueDate",
-          current_department as "currentDepartment",
-          status,
-          features,
-          created_at as "createdAt",
+          ao.order_id as "orderId",
+          ao.customer_id as "customerId",
+          ao.model_id as "stockModelId",
+          ao.due_date as "dueDate",
+          ao.current_department as "currentDepartment",
+          ao.status,
+          ao.features,
+          ao.created_at as "createdAt",
           'p1_purchase_order' as source
-        FROM all_orders 
-        WHERE order_id LIKE 'PO%'
-          AND (current_department = 'P1 Production Queue' OR current_department = 'Layup/Plugging')
-        ORDER BY due_date ASC
+        FROM all_orders ao
+        WHERE ao.order_id LIKE 'PO%'
+          AND (ao.current_department = 'P1 Production Queue' OR ao.current_department = 'Layup/Plugging')
+          AND ao.model_id IS NOT NULL 
+          AND ao.model_id != '' 
+          AND LOWER(ao.model_id) NOT IN ('none', 'no_stock', 'vendor_part', 'custom_part')
+        ORDER BY ao.due_date ASC
       `);
 
       // Format the P1 PO orders
       const p1POOrdersRows = Array.isArray(p1POOrdersResult) ? p1POOrdersResult : [];
-      console.log(`🔍 Found ${p1POOrdersRows.length} P1 PO orders in all_orders table`);
+      console.log(`📦 Found ${p1POOrdersRows.length} P1 PO STOCK items (vendor/non-stock items excluded)`);
       
       const p1POOrders = p1POOrdersRows.map((po: any) => ({
         id: po.orderId,
@@ -2033,7 +2029,7 @@ export function registerRoutes(app: Express): Server {
             customer: purchaseOrder.customerName,
             product: item.itemId,
             quantity: 1,
-            status: 'IN_PROGRESS',
+            status: 'Active',
             date: new Date(),
             currentDepartment: 'P1 Production Queue',
             isOnSchedule: true,
@@ -2060,7 +2056,7 @@ export function registerRoutes(app: Express): Server {
           orderId: order.orderId,
           partName: (order as any).partName || 'Unknown',
           dueDate: order.dueDate,
-          status: (order as any).status || 'IN_PROGRESS'
+          status: (order as any).status || 'Active'
         }))
       });
 

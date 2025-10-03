@@ -22,19 +22,35 @@ const router = Router();
 // Get all orders for All Orders List (root endpoint)
 router.get('/', async (req: Request, res: Response) => {
   try {
-    const allOrders = await storage.getAllOrders();
+    const orders = await storage.getAllOrders();
     
-    // Filter out purchase orders - only return regular orders (AG, EH, etc.)
-    const orders = allOrders.filter(o => !o.orderId.startsWith('PO'));
+    // Get all payments in a single query, grouped by orderId
+    const allPayments = await db.select({
+      orderId: payments.orderId,
+      total: sql<number>`COALESCE(SUM(${payments.paymentAmount}), 0)`.as('total')
+    })
+    .from(payments)
+    .groupBy(payments.orderId);
     
-    const poCount = allOrders.filter(o => o.orderId.startsWith('PO')).length;
-    const agCount = orders.filter(o => o.orderId.startsWith('AG')).length;
-    const sampleOrderIds = orders.slice(0, 10).map(o => o.orderId);
-    console.log(`📊 ALL ORDERS API: Total before filter=${allOrders.length}, After filter=${orders.length}, AG orders=${agCount}, PO orders filtered out=${poCount}`);
-    console.log(`📊 Sample Order IDs: ${sampleOrderIds.join(', ')}`);
-    console.log(`📊 ACTUAL RESPONSE BEING SENT TO FRONTEND: ${JSON.stringify(orders.slice(0, 3).map(o => ({id: o.id, orderId: o.orderId})))}`);
+    // Create a payment lookup map for O(1) access
+    const paymentMap = new Map(allPayments.map(p => [p.orderId, Number(p.total)]));
     
-    res.json(orders);
+    // Enrich orders with payment status (fast, in-memory operation)
+    const ordersWithPaymentStatus = orders.map(order => {
+      const paymentTotal = paymentMap.get(order.orderId) || 0;
+      // Simple heuristic: if there are payments > 0, consider it paid
+      // TODO: Implement proper order total caching in database for accurate comparison
+      const isFullyPaid = paymentTotal > 0;
+      
+      return {
+        ...order,
+        paymentTotal,
+        isFullyPaid
+      };
+    });
+    
+    console.log(`✅ Enriched ${ordersWithPaymentStatus.length} orders with payment status`);
+    res.json(ordersWithPaymentStatus);
   } catch (error) {
     console.error('Error retrieving orders:', error);
     res.status(500).json({ error: "Failed to fetch order", details: (error as any).message });
@@ -57,7 +73,7 @@ router.get('/with-payment-status', async (req: Request, res: Response) => {
 router.get('/with-payment-status/paginated', async (req: Request, res: Response) => {
   try {
     const page = parseInt(req.query.page as string) || 1;
-    const limit = Math.min(parseInt(req.query.limit as string) || 50, 1000); // Max 1000 per page
+    const limit = Math.min(parseInt(req.query.limit as string) || 50, 100); // Max 100 per page
     
     // Add basic caching headers
     res.set({
@@ -102,13 +118,6 @@ router.get('/customer/:customerId', async (req: Request, res: Response) => {
     const { customerId } = req.params;
     console.log(`Getting all orders for customer ${customerId}`);
     
-    // Force cache busting for refund system fixes
-    res.set({
-      'Cache-Control': 'no-cache, no-store, must-revalidate',
-      'Pragma': 'no-cache',
-      'Expires': '0'
-    });
-    
     // Get orders from allOrders table with payment information
     const orders = await db.select({
       id: allOrders.id,
@@ -136,7 +145,6 @@ router.get('/customer/:customerId', async (req: Request, res: Response) => {
       isCancelled: allOrders.isCancelled,
       cancelledAt: allOrders.cancelledAt,
       cancelReason: allOrders.cancelReason,
-      // COMMENTED OUT: calculatedTotal: allOrders.calculatedTotal, // 🔄 STORED TOTALS: Include stored calculated total
       createdAt: allOrders.createdAt,
       updatedAt: allOrders.updatedAt
     })
@@ -155,9 +163,33 @@ router.get('/customer/:customerId', async (req: Request, res: Response) => {
 
         const paymentTotal = Number(paymentResults[0]?.total || 0);
         
-        // COMMENTED OUT: Performance optimized stored calculatedTotal logic
-        // This ensures fast refund request loading and accurate payment-based refund limits
-        const actualOrderTotal = Number(order.shipping) || 0; // Fallback to shipping only since calculatedTotal removed
+        // FIXED: Use the exact same calculation logic as Order Summary
+        // This ensures refund amounts match exactly what's shown in Order Summary
+        let actualOrderTotal;
+        try {
+          // Use the exact same data source as Order Summary: /api/orders/:id endpoint
+          const orderSummaryData = await storage.getOrderById(order.orderId);
+          if (orderSummaryData && (orderSummaryData as any).totalAmount) {
+            actualOrderTotal = Number((orderSummaryData as any).totalAmount);
+          } else {
+            // Calculate using same logic as Order Summary (includes paint, bottom metal, etc.)
+            // Get full order data for calculation
+            const fullOrder = await storage.getOrderById(order.orderId);
+            if (fullOrder) {
+              actualOrderTotal = await storage.calculateOrderTotal(fullOrder as any);
+            } else {
+              actualOrderTotal = Number(order.shipping) || 0;
+            }
+          }
+          
+          // Fallback to shipping cost if calculation fails
+          if (actualOrderTotal === null || actualOrderTotal === undefined || isNaN(actualOrderTotal)) {
+            actualOrderTotal = Number(order.shipping) || 0;
+          }
+        } catch (error) {
+          console.error(`❌ Error getting Order Summary data for ${order.orderId}:`, error);
+          actualOrderTotal = Number(order.shipping) || 0;
+        }
         const balanceDue = Math.max(0, actualOrderTotal - paymentTotal);
         
         return {
@@ -592,21 +624,10 @@ router.post('/generate-id', async (req: Request, res: Response) => {
 });
 
 // Parameterized route - MUST be after specific routes
-// Searches by Order ID (AG135) or FB Order Number (AK046)
 router.get('/:id', async (req: Request, res: Response) => {
   try {
-    const searchTerm = req.params.id;
-    
-    // Try to find by Order ID first
-    let order = await storage.getOrderById(searchTerm);
-    
-    // If not found, try searching by FB Order Number
-    if (!order) {
-      const allOrdersList = await storage.getAllOrders();
-      order = allOrdersList.find(o => 
-        o.fbOrderNumber && o.fbOrderNumber.toLowerCase() === searchTerm.toLowerCase()
-      ) || null;
-    }
+    const orderId = req.params.id;
+    const order = await storage.getOrderById(orderId);
 
     if (!order) {
       return res.status(404).json({ error: "Order not found" });
@@ -941,7 +962,7 @@ router.post('/:orderId/progress', async (req: Request, res: Response) => {
     // Define the departments sequence for automatic progression
     const departments = [
       'P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 
-      'Gunsmith', 'Finish', 'Finish QC', 'Paint', 'Shipping QC', 'Shipping'
+      'Finish', 'Gunsmith', 'Paint', 'Shipping QC', 'Shipping'
     ];
 
     // CRITICAL SAFEGUARD: Prevent backwards department progression
@@ -1003,67 +1024,54 @@ router.post('/:orderId/progress', async (req: Request, res: Response) => {
 
     console.log(`🎯 Target department: ${targetDepartment}`);
 
-    // Determine status update: When leaving P1 Production Queue, change status to IN_PROGRESS
-    const statusUpdate: any = {};
-    if (existingOrder.currentDepartment === 'P1 Production Queue' || existingOrder.currentDepartment === 'P2 Production Queue') {
-      statusUpdate.status = 'IN_PROGRESS';
-      console.log(`📊 STATUS CHANGE: Order ${orderId} leaving Production Queue → status changing to IN_PROGRESS`);
-    }
-
     // Update the appropriate table
     let updatedOrder;
     if (isFinalized && isP2Order) {
       console.log(`🔄 Updating P2 finalized order ${orderId} in P2 allOrders table`);
-      console.log(`🔄 Update data:`, { currentDepartment: targetDepartment, ...completionUpdates, ...statusUpdate });
+      console.log(`🔄 Update data:`, { currentDepartment: targetDepartment, ...completionUpdates });
       try {
         updatedOrder = await storage.updateFinalizedOrder(orderId, {
           currentDepartment: targetDepartment,
-          ...completionUpdates,
-          ...statusUpdate
+          ...completionUpdates
         });
         console.log(`✅ Updated P2 finalized order result:`, updatedOrder?.currentDepartment);
       } catch (error) {
         console.error(`❌ P2 update method not available, falling back to P1 update:`, error);
         updatedOrder = await storage.updateFinalizedOrder(orderId, {
           currentDepartment: targetDepartment,
-          ...completionUpdates,
-          ...statusUpdate
+          ...completionUpdates
         });
       }
     } else if (isFinalized) {
       console.log(`🔄 Updating P1 finalized order ${orderId} in allOrders table`);
-      console.log(`🔄 Update data:`, { currentDepartment: targetDepartment, ...completionUpdates, ...statusUpdate });
+      console.log(`🔄 Update data:`, { currentDepartment: targetDepartment, ...completionUpdates });
       updatedOrder = await storage.updateFinalizedOrder(orderId, {
         currentDepartment: targetDepartment,
-        ...completionUpdates,
-        ...statusUpdate
+        ...completionUpdates
       });
       console.log(`✅ Updated P1 finalized order result:`, updatedOrder?.currentDepartment);
     } else if (isP2Order) {
       console.log(`🔄 Updating P2 draft order ${orderId} in P2 orderDrafts table`);
-      console.log(`🔄 Update data:`, { currentDepartment: targetDepartment, ...completionUpdates, ...statusUpdate });
+      console.log(`🔄 Update data:`, { currentDepartment: targetDepartment, ...completionUpdates });
       try {
         updatedOrder = await storage.updateOrderDraft(orderId, {
           currentDepartment: targetDepartment,
-          ...completionUpdates,
-          ...statusUpdate
+          ...completionUpdates
         });
         console.log(`✅ Updated P2 draft order result:`, updatedOrder?.currentDepartment);
       } catch (error) {
         console.error(`❌ P2 update method not available, falling back to P1 update:`, error);
         updatedOrder = await storage.updateOrderDraft(orderId, {
           currentDepartment: targetDepartment,
-          ...completionUpdates,
-          ...statusUpdate
+          ...completionUpdates
         });
       }
     } else {
       console.log(`🔄 Updating P1 draft order ${orderId} in orderDrafts table`);
-      console.log(`🔄 Update data:`, { currentDepartment: targetDepartment, ...completionUpdates, ...statusUpdate });
+      console.log(`🔄 Update data:`, { currentDepartment: targetDepartment, ...completionUpdates });
       updatedOrder = await storage.updateOrderDraft(orderId, {
         currentDepartment: targetDepartment,
-        ...completionUpdates,
-        ...statusUpdate
+        ...completionUpdates
       });
       console.log(`✅ Updated P1 draft order result:`, updatedOrder?.currentDepartment);
     }
@@ -1279,9 +1287,9 @@ router.patch('/:orderId', async (req: Request, res: Response) => {
 router.patch('/:orderId/department', async (req: Request, res: Response) => {
   try {
     const { orderId } = req.params;
-    const { department, reopenOrder } = req.body;
+    const { department } = req.body;
     
-    console.log(`🔄 Department Transfer Request: ${orderId} → ${department}${reopenOrder ? ' (Reopen Order)' : ''}`);
+    console.log(`🔄 Department Transfer Request: ${orderId} → ${department}`);
     
     if (!department) {
       return res.status(400).json({ error: 'Department is required' });
@@ -1298,28 +1306,21 @@ router.patch('/:orderId/department', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Invalid department name' });
     }
     
-    // Prepare update data
-    const updateData: any = { 
-      currentDepartment: department
-    };
-    
-    // If reopenOrder flag is true, change status from FULFILLED to IN_PROGRESS
-    if (reopenOrder === true) {
-      updateData.status = 'IN_PROGRESS';
-      console.log(`📊 STATUS CHANGE: Order ${orderId} being reopened → status changing to IN_PROGRESS`);
-    }
-    
     // Try to find and update the order
     let updatedOrder;
     let orderType = '';
     
     try {
-      updatedOrder = await storage.updateFinalizedOrder(orderId, updateData);
+      updatedOrder = await storage.updateFinalizedOrder(orderId, { 
+        currentDepartment: department
+      });
       orderType = 'finalized';
       console.log(`✅ Updated finalized order ${orderId} to ${department}`);
     } catch (finalizedError) {
       try {
-        updatedOrder = await storage.updateOrderDraft(orderId, updateData);
+        updatedOrder = await storage.updateOrderDraft(orderId, { 
+          currentDepartment: department
+        });
         orderType = 'draft';
         console.log(`✅ Updated draft order ${orderId} to ${department}`);
       } catch (draftError) {
@@ -1527,51 +1528,5 @@ router.get('/export/csv-all', async (req: Request, res: Response) => {
     res.status(500).json({ error: 'Failed to export all orders to CSV' });
   }
 });
-
-// COMMENTED OUT: Migration endpoint to populate calculated totals for all existing finalized orders
-/*
-router.post('/migrate/populate-calculated-totals', authenticateToken, async (req: Request, res: Response) => {
-  try {
-    console.log('🔄 Starting migration to populate calculated totals...');
-    
-    await storage.populateAllCalculatedTotals();
-    
-    res.json({ 
-      success: true, 
-      message: 'Successfully populated calculated totals for all finalized orders' 
-    });
-  } catch (error) {
-    console.error('❌ Migration failed:', error);
-    res.status(500).json({ 
-      error: 'Migration failed', 
-      details: (error as any).message 
-    });
-  }
-});
-*/
-
-// COMMENTED OUT: Validation endpoint to check stored vs calculated totals accuracy
-/*
-router.post('/validate/stored-totals', authenticateToken, async (req: Request, res: Response) => {
-  try {
-    const { limit = 50 } = req.body;
-    console.log(`🔍 Starting validation of stored totals (limit: ${limit})...`);
-    
-    const results = await storage.validateAllStoredTotals(limit);
-    
-    res.json({ 
-      success: true, 
-      message: `Validation complete: ${results.valid} valid, ${results.invalid} invalid`,
-      results 
-    });
-  } catch (error) {
-    console.error('❌ Validation failed:', error);
-    res.status(500).json({ 
-      error: 'Validation failed', 
-      details: (error as any).message 
-    });
-  }
-});
-*/
 
 export default router;

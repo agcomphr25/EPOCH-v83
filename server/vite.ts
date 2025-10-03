@@ -44,11 +44,6 @@ export async function setupVite(app: Express, server: Server) {
   app.use("*", async (req, res, next) => {
     const url = req.originalUrl;
 
-    // Skip Vite handling for static assets like PDFs
-    if (url.startsWith('/attached_assets')) {
-      return next();
-    }
-
     try {
       const clientTemplate = path.resolve(
         import.meta.dirname,

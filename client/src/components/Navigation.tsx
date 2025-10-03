@@ -144,12 +144,7 @@ export default function Navigation() {
       icon: Users,
       description: 'Manage customer database'
     },
-    {
-      path: '/training',
-      label: 'Training',
-      icon: GraduationCap,
-      description: 'Employee training modules and certifications'
-    },
+
 
     {
       path: '/bom-administration',

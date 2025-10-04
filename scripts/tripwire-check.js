@@ -6,7 +6,7 @@
  * To allow changes to a protected file, remove its pattern from the list below.
  */
 
-const { execSync } = require('node:child_process');
+import { execSync } from 'node:child_process';
 
 function sh(cmd) {
   try {

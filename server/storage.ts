@@ -38,6 +38,9 @@ import {
   // Vendor management tables
   vendors, vendorContacts, vendorAddresses, vendorContactPhones, vendorContactEmails, vendorDocuments, vendorScoringCriteria, vendorScores,
 
+  // Non-Conforming Items table
+  nonConformingItems,
+
   // Types
   type User, type InsertUser, type Order, type InsertOrder, type CSVData, type InsertCSVData,
   type CustomerType, type InsertCustomerType,
@@ -145,7 +148,8 @@ import {
   type VendorScoringCriteria, type InsertVendorScoringCriteria,
   type VendorScore, type InsertVendorScore,
 
-
+  // Non-Conforming Items types
+  type NonConformingItem, type InsertNonConformingItem,
 
 } from "./schema";
 import { db } from "./db";
@@ -910,6 +914,13 @@ export interface IStorage {
   updateVendorScore(id: number, data: Partial<InsertVendorScore>): Promise<VendorScore>;
   deleteVendorScore(id: number): Promise<void>;
   calculateVendorTotalScore(vendorId: number): Promise<number>;
+
+  // Non-Conforming Items CRUD
+  getAllNonConformingItems(): Promise<NonConformingItem[]>;
+  getNonConformingItem(id: number): Promise<NonConformingItem | undefined>;
+  createNonConformingItem(data: InsertNonConformingItem): Promise<NonConformingItem>;
+  updateNonConformingItem(id: number, data: Partial<InsertNonConformingItem>): Promise<NonConformingItem>;
+  deleteNonConformingItem(id: number): Promise<void>;
 
 }
 
@@ -9080,6 +9091,33 @@ AG Composites Team`;
     }
 
     return results;
+  }
+
+  // Non-Conforming Items CRUD Implementation
+  async getAllNonConformingItems(): Promise<NonConformingItem[]> {
+    return await db.select().from(nonConformingItems).orderBy(desc(nonConformingItems.date));
+  }
+
+  async getNonConformingItem(id: number): Promise<NonConformingItem | undefined> {
+    const [item] = await db.select().from(nonConformingItems).where(eq(nonConformingItems.id, id));
+    return item || undefined;
+  }
+
+  async createNonConformingItem(data: InsertNonConformingItem): Promise<NonConformingItem> {
+    const [item] = await db.insert(nonConformingItems).values(data).returning();
+    return item;
+  }
+
+  async updateNonConformingItem(id: number, data: Partial<InsertNonConformingItem>): Promise<NonConformingItem> {
+    const [item] = await db.update(nonConformingItems)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(nonConformingItems.id, id))
+      .returning();
+    return item;
+  }
+
+  async deleteNonConformingItem(id: number): Promise<void> {
+    await db.delete(nonConformingItems).where(eq(nonConformingItems.id, id));
   }
 
 }

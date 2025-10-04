@@ -314,8 +314,8 @@ function App() {
                   <Route path="/production-queue" component={ProductionQueueManager} />
 
                   {/* Nonconformance Tracking Routes */}
-                  <Route path="/nonconformance" component={NonconformanceDashboard} />
-                  <Route path="/nonconformance-report" component={NonconformanceReport} />
+                  {/* <Route path="/nonconformance" component={NonconformanceDashboard} /> */}
+                  {/* <Route path="/nonconformance-report" component={NonconformanceReport} /> */}
                   <Route path="/non-conforming-items" component={NonConformingItemsPage} />
 
                   {/* Reports */}

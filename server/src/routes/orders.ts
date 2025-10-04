@@ -19,16 +19,29 @@ import {
 
 const router = Router();
 
-// Get all orders for All Orders List (root endpoint)
+// Get all orders for All Orders List (root endpoint) WITH PAYMENT STATUS
 router.get('/', async (req: Request, res: Response) => {
   try {
-    const orders = await storage.getAllOrders();
+    // Force no caching for debugging
+    res.set({
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0'
+    });
+
+    console.log('🔍 CORRECT ENDPOINT: Executing getAllOrdersWithPaymentStatusPaginated for All Orders page...');
+    
+    // Use payment-aware method instead of getAllOrders
+    const result = await storage.getAllOrdersWithPaymentStatusPaginated(1, 1000); // Get first 1000 orders
+    const orders = result.orders;
+    
     const poCount = orders.filter(o => o.orderId.startsWith('PO')).length;
     const agCount = orders.filter(o => o.orderId.startsWith('AG')).length;
     const sampleOrderIds = orders.slice(0, 10).map(o => o.orderId);
-    console.log(`📊 ALL ORDERS API: Total=${orders.length}, AG orders=${agCount}, PO orders=${poCount}`);
+    console.log(`📊 ALL ORDERS API WITH PAYMENT: Total=${orders.length}, AG orders=${agCount}, PO orders=${poCount}`);
     console.log(`📊 Sample Order IDs: ${sampleOrderIds.join(', ')}`);
-    console.log(`📊 ACTUAL RESPONSE BEING SENT TO FRONTEND: ${JSON.stringify(orders.slice(0, 3).map(o => ({id: o.id, orderId: o.orderId})))}`);
+    console.log(`✅ Processed ${orders.length} orders with payment info - first few:`, 
+               JSON.stringify(orders.slice(0, 3).map(o => ({id: o.id, orderId: o.orderId, paymentTotal: o.paymentTotal, isFullyPaid: o.isFullyPaid})), null, 2));
     
     // Log any orders that might look like PO orders
     const suspiciousOrders = orders.filter(o => o.orderId.includes('PO'));

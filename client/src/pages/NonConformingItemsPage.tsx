@@ -160,6 +160,16 @@ export default function NonConformingItemsPage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (!formData.p1OrP2) {
+      toast({ 
+        title: 'Validation Error', 
+        description: 'Please select P1 or P2', 
+        variant: 'destructive' 
+      });
+      return;
+    }
+    
     if (editingItem) {
       updateMutation.mutate({ id: editingItem.id, data: formData });
     } else {
@@ -238,10 +248,9 @@ export default function NonConformingItemsPage() {
                     <Select
                       value={formData.p1OrP2}
                       onValueChange={(value) => setFormData(prev => ({ ...prev, p1OrP2: value }))}
-                      required
                     >
                       <SelectTrigger id="p1OrP2" data-testid="select-p1-or-p2">
-                        <SelectValue placeholder="Select P1 or P2" />
+                        <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="P1">P1</SelectItem>

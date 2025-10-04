@@ -198,6 +198,20 @@ const CustomerFormFields = ({
           )}
         </div>
         
+        <div className="space-y-2">
+          <Label htmlFor="contact" className="text-sm font-medium">Contact</Label>
+          <Input
+            id="contact"
+            data-testid="input-contact"
+            value={formData.contact}
+            onChange={(e) => setFormData(prev => ({ ...prev, contact: e.target.value }))}
+            className={formErrors.contact ? "border-red-500" : ""}
+            placeholder="Contact person name"
+          />
+          {formErrors.contact && (
+            <p className="text-sm text-red-500">{formErrors.contact}</p>
+          )}
+        </div>
         
         <div className="space-y-2">
           <Label htmlFor="customerType" className="text-sm font-medium">Type</Label>

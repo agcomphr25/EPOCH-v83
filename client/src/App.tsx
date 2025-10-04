@@ -108,6 +108,7 @@ import SimplifiedLayupScheduler from "./components/SimplifiedLayupScheduler";
 import CustomerSatisfaction from "./pages/CustomerSatisfaction";
 import VendorsPage from "./pages/VendorsPage";
 import VendorPOPage from "./pages/VendorPOPage";
+import NonConformingItemsPage from "./pages/NonConformingItemsPage";
 
 import { Toaster as HotToaster } from 'react-hot-toast';
 import DeploymentAuthWrapper from './components/DeploymentAuthWrapper';
@@ -315,6 +316,7 @@ function App() {
                   {/* Nonconformance Tracking Routes */}
                   <Route path="/nonconformance" component={NonconformanceDashboard} />
                   <Route path="/nonconformance-report" component={NonconformanceReport} />
+                  <Route path="/non-conforming-items" component={NonConformingItemsPage} />
 
                   {/* Reports */}
                   <Route path="/ag-bottom-metal-report" component={AGBottomMetalReport} />

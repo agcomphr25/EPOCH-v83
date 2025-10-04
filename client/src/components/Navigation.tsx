@@ -300,12 +300,12 @@ export default function Navigation() {
       icon: Shield,
       description: 'QC inspections and definitions'
     },
-    {
-      path: '/nonconformance',
-      label: 'Nonconformance Tracking',
-      icon: ClipboardList,
-      description: 'Track and manage quality issues and dispositions'
-    },
+    // {
+    //   path: '/nonconformance',
+    //   label: 'Nonconformance Tracking',
+    //   icon: ClipboardList,
+    //   description: 'Track and manage quality issues and dispositions'
+    // },
     {
       path: '/non-conforming-items',
       label: 'Non-Conforming Items',

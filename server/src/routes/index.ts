@@ -25,7 +25,7 @@ import robustBomRoutes from './robustBom';
 import p2BomsRoutes from './p2boms';
 import communicationsRoutes from './communications';
 import secureVerificationRoutes from './secureVerification';
-import nonconformanceRoutes from '../../routes/nonconformance';
+// import nonconformanceRoutes from '../../routes/nonconformance';
 import paymentsRoutes from './payments';
 import acceptBluePaymentsRoutes from './acceptBluePayments';
 import unifiedPaymentsRoutes from './unifiedPayments';
@@ -127,7 +127,7 @@ export function registerRoutes(app: Express): Server {
   app.use('/api/communications', communicationsRoutes);
 
   // Nonconformance tracking routes
-  app.use('/api/nonconformance', nonconformanceRoutes);
+  // app.use('/api/nonconformance', nonconformanceRoutes);
 
   // Payment processing routes
   app.use('/api/payments', paymentsRoutes);

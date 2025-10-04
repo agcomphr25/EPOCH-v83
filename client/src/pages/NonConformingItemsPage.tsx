@@ -17,6 +17,7 @@ import { format } from 'date-fns';
 type NonConformingItem = {
   id: number;
   date: string;
+  p1OrP2: string;
   customer: string;
   sku: string;
   qty: number;
@@ -33,6 +34,7 @@ type NonConformingItem = {
 
 type FormData = {
   date: string;
+  p1OrP2: string;
   customer: string;
   sku: string;
   qty: number;
@@ -47,6 +49,7 @@ type FormData = {
 
 const initialFormData: FormData = {
   date: new Date().toISOString().split('T')[0],
+  p1OrP2: 'P1',
   customer: '',
   sku: '',
   qty: 1,
@@ -168,6 +171,7 @@ export default function NonConformingItemsPage() {
     setEditingItem(item);
     setFormData({
       date: item.date,
+      p1OrP2: item.p1OrP2,
       customer: item.customer,
       sku: item.sku,
       qty: item.qty,
@@ -227,6 +231,23 @@ export default function NonConformingItemsPage() {
                       required
                       data-testid="input-date"
                     />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="p1OrP2">P1 or P2 *</Label>
+                    <Select
+                      value={formData.p1OrP2}
+                      onValueChange={(value) => setFormData(prev => ({ ...prev, p1OrP2: value }))}
+                      required
+                    >
+                      <SelectTrigger id="p1OrP2" data-testid="select-p1-or-p2">
+                        <SelectValue placeholder="Select P1 or P2" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="P1">P1</SelectItem>
+                        <SelectItem value="P2">P2</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
 
                   <div className="space-y-2">
@@ -416,6 +437,7 @@ export default function NonConformingItemsPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Date</TableHead>
+                    <TableHead>P1/P2</TableHead>
                     <TableHead>Customer</TableHead>
                     <TableHead>SKU</TableHead>
                     <TableHead>Qty</TableHead>
@@ -434,6 +456,7 @@ export default function NonConformingItemsPage() {
                       <TableCell data-testid={`text-date-${item.id}`}>
                         {format(new Date(item.date), 'MM/dd/yyyy')}
                       </TableCell>
+                      <TableCell data-testid={`text-p1-or-p2-${item.id}`}>{item.p1OrP2}</TableCell>
                       <TableCell data-testid={`text-customer-${item.id}`}>{item.customer}</TableCell>
                       <TableCell data-testid={`text-sku-${item.id}`}>{item.sku}</TableCell>
                       <TableCell data-testid={`text-qty-${item.id}`}>{item.qty}</TableCell>

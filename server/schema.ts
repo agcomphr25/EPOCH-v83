@@ -4491,6 +4491,7 @@ export type VendorScore = typeof vendorScores.$inferSelect;
 export const nonConformingItems = pgTable("non_conforming_items", {
   id: serial("id").primaryKey(),
   date: date("date").notNull(),
+  p1OrP2: text("p1_or_p2").notNull(),
   customer: text("customer").notNull(),
   sku: text("sku").notNull(),
   qty: integer("qty").notNull().default(1),
@@ -4511,6 +4512,7 @@ export const insertNonConformingItemSchema = createInsertSchema(nonConformingIte
   updatedAt: true,
 }).extend({
   date: z.coerce.date(),
+  p1OrP2: z.enum(["P1", "P2"], { required_error: "P1 or P2 selection is required" }),
   customer: z.string().min(1, "Customer is required"),
   sku: z.string().min(1, "SKU is required"),
   qty: z.number().min(1, "Quantity must be at least 1"),

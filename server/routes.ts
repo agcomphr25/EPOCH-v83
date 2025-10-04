@@ -81,7 +81,9 @@ import {
   insertVendorContactEmailSchema,
   insertVendorDocumentSchema,
   insertVendorScoringCriteriaSchema,
-  insertVendorScoreSchema
+  insertVendorScoreSchema,
+  // Non-Conforming Items schema
+  insertNonConformingItemSchema
 } from "@shared/schema";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -4771,11 +4773,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Department Progression API Routes
   
-  // Get all orders with department information
+  // Get all orders with department information and payment status
   app.get("/api/orders", async (req, res) => {
     try {
       const { view, includeDept, includeScheduleFlag } = req.query;
-      const orders = await storage.getAllOrders();
+      
+      // Force no caching for debugging
+      res.set({
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+      });
+      
+      // Use the payment-aware method instead of basic getAllOrders
+      console.log('🔍 Executing getAllOrdersWithPaymentStatusPaginated for All Orders page...');
+      const result = await storage.getAllOrdersWithPaymentStatusPaginated(1, 1000); // Get first 1000 orders
+      const orders = result.orders;
+      console.log(`✅ Processed ${orders.length} orders with payment info`);
+      
       res.json(orders);
     } catch (error) {
       console.error("Orders fetch error:", error);
@@ -5890,6 +5905,76 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Calculate vendor total score error:", error);
       res.status(500).json({ error: "Failed to calculate vendor total score" });
+    }
+  });
+
+  // ============================================================================
+  // NON-CONFORMING ITEMS ROUTES
+  // ============================================================================
+
+  app.get("/api/non-conforming-items", async (req, res) => {
+    try {
+      const items = await storage.getAllNonConformingItems();
+      res.json(items);
+    } catch (error) {
+      console.error("Get non-conforming items error:", error);
+      res.status(500).json({ error: "Failed to retrieve non-conforming items" });
+    }
+  });
+
+  app.get("/api/non-conforming-items/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const item = await storage.getNonConformingItem(id);
+      if (!item) {
+        return res.status(404).json({ error: "Non-conforming item not found" });
+      }
+      res.json(item);
+    } catch (error) {
+      console.error("Get non-conforming item error:", error);
+      res.status(500).json({ error: "Failed to retrieve non-conforming item" });
+    }
+  });
+
+  app.post("/api/non-conforming-items", async (req, res) => {
+    try {
+      const data = insertNonConformingItemSchema.parse(req.body);
+      const item = await storage.createNonConformingItem(data);
+      res.status(201).json(item);
+    } catch (error) {
+      console.error("Create non-conforming item error:", error);
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: "Invalid data", details: error.errors });
+      } else {
+        res.status(500).json({ error: "Failed to create non-conforming item" });
+      }
+    }
+  });
+
+  app.put("/api/non-conforming-items/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const data = insertNonConformingItemSchema.partial().parse(req.body);
+      const item = await storage.updateNonConformingItem(id, data);
+      res.json(item);
+    } catch (error) {
+      console.error("Update non-conforming item error:", error);
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: "Invalid data", details: error.errors });
+      } else {
+        res.status(500).json({ error: "Failed to update non-conforming item" });
+      }
+    }
+  });
+
+  app.delete("/api/non-conforming-items/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      await storage.deleteNonConformingItem(id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Delete non-conforming item error:", error);
+      res.status(500).json({ error: "Failed to delete non-conforming item" });
     }
   });
 

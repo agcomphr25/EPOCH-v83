@@ -38,6 +38,9 @@ import {
   // Vendor management tables
   vendors, vendorContacts, vendorAddresses, vendorContactPhones, vendorContactEmails, vendorDocuments, vendorScoringCriteria, vendorScores,
 
+  // Non-Conforming Items table
+  nonConformingItems,
+
   // Types
   type User, type InsertUser, type Order, type InsertOrder, type CSVData, type InsertCSVData,
   type CustomerType, type InsertCustomerType,
@@ -145,7 +148,8 @@ import {
   type VendorScoringCriteria, type InsertVendorScoringCriteria,
   type VendorScore, type InsertVendorScore,
 
-
+  // Non-Conforming Items types
+  type NonConformingItem, type InsertNonConformingItem,
 
 } from "./schema";
 import { db } from "./db";
@@ -910,6 +914,13 @@ export interface IStorage {
   updateVendorScore(id: number, data: Partial<InsertVendorScore>): Promise<VendorScore>;
   deleteVendorScore(id: number): Promise<void>;
   calculateVendorTotalScore(vendorId: number): Promise<number>;
+
+  // Non-Conforming Items CRUD
+  getAllNonConformingItems(): Promise<NonConformingItem[]>;
+  getNonConformingItem(id: number): Promise<NonConformingItem | undefined>;
+  createNonConformingItem(data: InsertNonConformingItem): Promise<NonConformingItem>;
+  updateNonConformingItem(id: number, data: Partial<InsertNonConformingItem>): Promise<NonConformingItem>;
+  deleteNonConformingItem(id: number): Promise<void>;
 
 }
 
@@ -2590,19 +2601,27 @@ export class DatabaseStorage implements IStorage {
     // Create payment map for fast lookup
     const paymentMap = new Map(paymentTotals.map(p => [p.orderId, p.totalPayments]));
 
-    // Process orders with payment info using CORRECTED payment logic
+    // Process orders with payment info using REAL-TIME calculated order totals
     const ordersWithPaymentInfo = await Promise.all(ordersWithCustomers.map(async order => {
       const paymentTotal = paymentMap.get(order.orderId) || 0;
       
-      // ULTRA SIMPLE FIX: Just compare payments to stored order total
-      // Use the same logic as Order Summary: if no stored total, assume payment covers it
-      const storedOrderTotal = Number(order.paymentAmount) || 0;
+      // CRITICAL FIX: Use actual calculated order total instead of stale paymentAmount field
+      let actualOrderTotal: number;
       
-      // If there's a stored order total, compare against it
-      // If no stored total but there are payments, consider it paid (like Order Summary shows)
-      const isFullyPaid = storedOrderTotal > 0 
-        ? (paymentTotal >= storedOrderTotal) 
-        : (paymentTotal > 0);
+      try {
+        // Calculate real-time order total using the existing method
+        actualOrderTotal = await this.calculateOrderTotal(order);
+        console.log(`💰 Payment calc for ${order.orderId}: paymentTotal=${paymentTotal}, orderTotal=${actualOrderTotal}`);
+      } catch (error) {
+        // Fallback to stored paymentAmount if calculation fails
+        console.warn(`Failed to calculate order total for ${order.orderId}, using stored amount:`, error);
+        actualOrderTotal = Number(order.paymentAmount) || 0;
+      }
+      
+      // Fixed payment status logic using real current order total
+      const isFullyPaid = actualOrderTotal > 0 
+        ? (paymentTotal >= actualOrderTotal)
+        : (paymentTotal > 0); // If no total calculated, any payment means paid
 
       return {
         ...order,
@@ -9072,6 +9091,33 @@ AG Composites Team`;
     }
 
     return results;
+  }
+
+  // Non-Conforming Items CRUD Implementation
+  async getAllNonConformingItems(): Promise<NonConformingItem[]> {
+    return await db.select().from(nonConformingItems).orderBy(desc(nonConformingItems.date));
+  }
+
+  async getNonConformingItem(id: number): Promise<NonConformingItem | undefined> {
+    const [item] = await db.select().from(nonConformingItems).where(eq(nonConformingItems.id, id));
+    return item || undefined;
+  }
+
+  async createNonConformingItem(data: InsertNonConformingItem): Promise<NonConformingItem> {
+    const [item] = await db.insert(nonConformingItems).values(data).returning();
+    return item;
+  }
+
+  async updateNonConformingItem(id: number, data: Partial<InsertNonConformingItem>): Promise<NonConformingItem> {
+    const [item] = await db.update(nonConformingItems)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(nonConformingItems.id, id))
+      .returning();
+    return item;
+  }
+
+  async deleteNonConformingItem(id: number): Promise<void> {
+    await db.delete(nonConformingItems).where(eq(nonConformingItems.id, id));
   }
 
 }

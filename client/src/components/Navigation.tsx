@@ -307,6 +307,12 @@ export default function Navigation() {
       description: 'Track and manage quality issues and dispositions'
     },
     {
+      path: '/non-conforming-items',
+      label: 'Non-Conforming Items',
+      icon: ClipboardList,
+      description: 'Track non-conforming items with detailed dispositions'
+    },
+    {
       path: '/maintenance',
       label: 'Maintenance',
       icon: Wrench,

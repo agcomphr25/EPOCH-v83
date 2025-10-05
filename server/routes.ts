@@ -5903,8 +5903,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/internal-messages", async (req, res) => {
     try {
+      console.log("📨 Received message data:", JSON.stringify(req.body, null, 2));
       const messageData = insertInternalMessageSchema.parse(req.body);
+      console.log("✅ Message data validated:", JSON.stringify(messageData, null, 2));
       const message = await storage.createInternalMessage(messageData);
+      console.log("💾 Message created with ID:", message.id);
       
       if (messageData.recipientType === 'department' && messageData.recipientDepartmentId) {
         const allUsers = await storage.getAllUsers();

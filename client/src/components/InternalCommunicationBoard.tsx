@@ -202,7 +202,7 @@ export default function InternalCommunicationBoard() {
     }
 
     const senderUser = users.find(u => u.id === currentUserId);
-    const senderName = senderUser ? senderUser.name : 'Unknown';
+    const senderName = senderUser ? senderUser.username : 'Unknown';
     
     if (recipientType === 'department') {
       const dept = departments.find(d => d.id === parseInt(selectedDepartment));
@@ -224,7 +224,7 @@ export default function InternalCommunicationBoard() {
       // Send individual message to each selected person
       for (const userId of selectedPersons) {
         const user = users.find(u => u.id === userId);
-        const recipientName = user ? user.name : '';
+        const recipientName = user ? user.username : '';
 
         const messageData: any = {
           senderId: currentUserId,

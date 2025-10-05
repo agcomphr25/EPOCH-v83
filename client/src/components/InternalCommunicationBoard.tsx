@@ -266,14 +266,14 @@ export default function InternalCommunicationBoard() {
       return dept ? dept.name : 'Unknown Department';
     } else if (msg.recipientType === 'person' && msg.recipientUserId) {
       const user = users.find(u => u.id === msg.recipientUserId);
-      return user ? user.name : 'Unknown User';
+      return user ? user.username : 'Unknown User';
     }
     return 'Unknown';
   };
 
   const getSenderName = (senderId: number) => {
     const user = users.find(u => u.id === senderId);
-    return user ? user.name : 'Unknown';
+    return user ? user.username : 'Unknown';
   };
 
   const getUserRecipientStatus = (msg: MessageWithDetails) => {

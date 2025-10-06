@@ -10,6 +10,7 @@ import kickbackRoutes from './kickbacks';
 import inventoryRoutes from './inventory';
 import customersRoutes from './customers';
 import vendorsRoutes, { contactRouter, vendorDocumentRouter } from './vendors';
+import vendorPOsRoutes from './vendorPOs';
 import qualityRoutes from './quality';
 import documentsRoutes from './documents';
 import moldsRoutes from './molds';
@@ -24,7 +25,7 @@ import robustBomRoutes from './robustBom';
 import p2BomsRoutes from './p2boms';
 import communicationsRoutes from './communications';
 import secureVerificationRoutes from './secureVerification';
-import nonconformanceRoutes from '../../routes/nonconformance';
+// import nonconformanceRoutes from '../../routes/nonconformance';
 import paymentsRoutes from './payments';
 import acceptBluePaymentsRoutes from './acceptBluePayments';
 import unifiedPaymentsRoutes from './unifiedPayments';
@@ -46,11 +47,20 @@ import vendorRoutes from './vendors';
 
 import mrpRoutes from './mrp';
 import enhancedRoutes from './enhanced';
+<<<<<<< HEAD
+import trainingRoutes from './training';
+import internalMessagesRoutes from './internalMessages';
+=======
+>>>>>>> origin/main
 
 import { getAccessToken } from '../utils/upsShipping';
+import { nonConformingItems, insertNonConformingItemSchema } from '@shared/schema';
+import { db } from '../../db';
+import { z } from 'zod';
+import { eq, desc } from 'drizzle-orm';
 
 export function registerRoutes(app: Express): Server {
-  // Authentication routes
+  // Authentication routes (must be first)
   app.use('/api/auth', authRoutes);
 
   // Employee management routes
@@ -79,6 +89,9 @@ export function registerRoutes(app: Express): Server {
 
   // Vendor management routes
   app.use('/api/vendors', vendorsRoutes);
+  
+  // Vendor purchase orders routes
+  app.use('/api/vendor-pos', vendorPOsRoutes);
   
   // Vendor contacts routes (generic)
   app.use('/api/vendor-contacts', contactRouter);
@@ -123,8 +136,11 @@ export function registerRoutes(app: Express): Server {
   // Communications management routes
   app.use('/api/communications', communicationsRoutes);
 
+  // Internal messages routes
+  app.use('/api/internal-messages', internalMessagesRoutes);
+
   // Nonconformance tracking routes
-  app.use('/api/nonconformance', nonconformanceRoutes);
+  // app.use('/api/nonconformance', nonconformanceRoutes);
 
   // Payment processing routes
   app.use('/api/payments', paymentsRoutes);
@@ -1216,15 +1232,13 @@ export function registerRoutes(app: Express): Server {
 
   app.put('/api/addresses/:id', async (req, res) => {
     try {
-      console.log('🔧 ADDRESS UPDATE ROUTE CALLED');
       const { storage } = await import('../../storage');
       const { id } = req.params;
       const addressData = req.body;
       const address = await storage.updateCustomerAddress(parseInt(id), addressData);
-      console.log('🔧 Updated address:', address.id);
       res.json(address);
     } catch (error) {
-      console.error('🔧 Address update error:', error);
+      console.error('Address update error:', error);
       res.status(500).json({ error: "Failed to update address" });
     }
   });
@@ -3053,6 +3067,82 @@ export function registerRoutes(app: Express): Server {
     } catch (error) {
       console.error('🔄 Progress orders error:', error);
       res.status(500).json({ error: 'Failed to progress orders' });
+    }
+  });
+
+  // ============================================================================
+  // NON-CONFORMING ITEMS ROUTES
+  // ============================================================================
+
+  app.get("/api/non-conforming-items", async (req, res) => {
+    try {
+      const items = await db.select().from(nonConformingItems).orderBy(desc(nonConformingItems.date));
+      res.json(items);
+    } catch (error) {
+      console.error("Get non-conforming items error:", error);
+      res.status(500).json({ error: "Failed to retrieve non-conforming items" });
+    }
+  });
+
+  app.get("/api/non-conforming-items/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const [item] = await db.select().from(nonConformingItems).where(eq(nonConformingItems.id, id));
+      if (!item) {
+        return res.status(404).json({ error: "Non-conforming item not found" });
+      }
+      res.json(item);
+    } catch (error) {
+      console.error("Get non-conforming item error:", error);
+      res.status(500).json({ error: "Failed to retrieve non-conforming item" });
+    }
+  });
+
+  app.post("/api/non-conforming-items", async (req, res) => {
+    try {
+      console.log("📝 POST /api/non-conforming-items - Request body:", req.body);
+      const data = insertNonConformingItemSchema.parse(req.body);
+      console.log("✅ Validation passed, data:", data);
+      const [item] = await db.insert(nonConformingItems).values(data).returning();
+      console.log("✅ Item created:", item);
+      res.status(201).json(item);
+    } catch (error) {
+      console.error("❌ Create non-conforming item error:", error);
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: "Invalid data", details: error.errors });
+      } else {
+        res.status(500).json({ error: "Failed to create non-conforming item" });
+      }
+    }
+  });
+
+  app.put("/api/non-conforming-items/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const data = insertNonConformingItemSchema.partial().parse(req.body);
+      const [item] = await db.update(nonConformingItems)
+        .set({ ...data, updatedAt: new Date() })
+        .where(eq(nonConformingItems.id, id))
+        .returning();
+      res.json(item);
+    } catch (error) {
+      console.error("Update non-conforming item error:", error);
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: "Invalid data", details: error.errors });
+      } else {
+        res.status(500).json({ error: "Failed to update non-conforming item" });
+      }
+    }
+  });
+
+  app.delete("/api/non-conforming-items/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      await db.delete(nonConformingItems).where(eq(nonConformingItems.id, id));
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Delete non-conforming item error:", error);
+      res.status(500).json({ error: "Failed to delete non-conforming item" });
     }
   });
 

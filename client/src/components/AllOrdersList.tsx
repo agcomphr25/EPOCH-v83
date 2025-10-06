@@ -41,7 +41,7 @@ import { getDisplayOrderId } from '@/lib/orderUtils';
 import CustomerDetailsTooltip from './CustomerDetailsTooltip';
 import CommunicationCompose from './CommunicationCompose';
 
-const departments = ['P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 'Finish', 'Gunsmith', 'Finish QC', 'Paint', 'Shipping'];
+const departments = ['P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 'Finish', 'Gunsmith', 'Finish QC', 'Paint', 'Shipping QC', 'Shipping'];
 
 export default function AllOrdersList() {
   const [selectedDepartment, setSelectedDepartment] = useState('all');
@@ -63,7 +63,7 @@ export default function AllOrdersList() {
   }, []);
 
   const { data: orders, isLoading, refetch } = useQuery<Order[]>({
-    queryKey: ['/api/orders'],
+    queryKey: ['/api/orders/with-payment-status'],
     refetchInterval: false, // Completely disable automatic refetching
     refetchOnWindowFocus: false, // Disable refetch on window focus
     refetchOnReconnect: false, // Disable refetch on network reconnect
@@ -71,7 +71,7 @@ export default function AllOrdersList() {
   
   // Add a manual refresh button for debugging
   const handleRefresh = () => {
-    queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
     refetch();
   };
 
@@ -174,7 +174,7 @@ export default function AllOrdersList() {
         newSet.delete(variables.orderId);
         return newSet;
       });
-      queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
       toast.error('Failed to update department');
     }
   });
@@ -188,7 +188,7 @@ export default function AllOrdersList() {
     },
     onSuccess: () => {
       toast.success('Order scrapped successfully');
-      queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
       queryClient.invalidateQueries({ queryKey: ['/api/orders/pipeline-counts'] });
       setScrapModalOrder(null);
     },
@@ -205,7 +205,7 @@ export default function AllOrdersList() {
     },
     onSuccess: () => {
       toast.success('Replacement order created successfully');
-      queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
     },
     onError: (error) => {
       toast.error(`Failed to create replacement: ${error.message}`);
@@ -221,7 +221,7 @@ export default function AllOrdersList() {
     },
     onSuccess: () => {
       toast.success('Order cancelled successfully');
-      queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
       queryClient.invalidateQueries({ queryKey: ['/api/orders/pipeline-counts'] });
       queryClient.invalidateQueries({ queryKey: ['/api/production-queue/prioritized'] });
       queryClient.invalidateQueries({ queryKey: ['/api/p1-layup-queue'] });
@@ -294,7 +294,7 @@ export default function AllOrdersList() {
   });
 
   const departments = [
-    'P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 'Finish', 'Gunsmith', 'Finish QC', 'Paint', 'Shipping'
+    'P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 'Finish', 'Gunsmith', 'Finish QC', 'Paint', 'Shipping QC', 'Shipping'
   ];
 
   const getNextDepartment = (currentDepartment: string) => {

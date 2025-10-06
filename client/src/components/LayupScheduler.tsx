@@ -4686,10 +4686,10 @@ export default function LayupScheduler() {
                   }
                 }}>
                   <DialogTrigger asChild>
-                    <DropdownMenuItem onSelect={(e) => e.preventDefault()} data-testid="link-oem-settings">
+                    <Button variant="outline" size="sm" data-testid="link-oem-settings">
                       <Settings className="w-4 h-4 mr-2" />
                       OEM Settings
-                    </DropdownMenuItem>
+                    </Button>
                   </DialogTrigger>
                   <DialogContent className="max-w-md">
                     <DialogHeader>

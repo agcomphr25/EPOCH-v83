@@ -38,13 +38,11 @@ import {
   // Vendor management tables
   vendors, vendorContacts, vendorAddresses, vendorContactPhones, vendorContactEmails, vendorDocuments, vendorScoringCriteria, vendorScores,
 
-<<<<<<< HEAD
-  // Internal communications tables
-  departments, internalMessages, messageAttachments, messageRecipients,
-=======
   // Non-Conforming Items table
   nonConformingItems,
->>>>>>> origin/main
+  
+  // Internal communications tables
+  departments, internalMessages, messageAttachments, messageRecipients,
 
   // Types
   type User, type InsertUser, type Order, type InsertOrder, type CSVData, type InsertCSVData,
@@ -153,16 +151,14 @@ import {
   type VendorScoringCriteria, type InsertVendorScoringCriteria,
   type VendorScore, type InsertVendorScore,
 
-<<<<<<< HEAD
+  // Non-Conforming Items types
+  type NonConformingItem, type InsertNonConformingItem,
+  
   // Internal communications types
   type Department, type InsertDepartment,
   type InternalMessage, type InsertInternalMessage,
   type MessageAttachment, type InsertMessageAttachment,
   type MessageRecipient, type InsertMessageRecipient,
-=======
-  // Non-Conforming Items types
-  type NonConformingItem, type InsertNonConformingItem,
->>>>>>> origin/main
 
 } from "./schema";
 import { db } from "./db";

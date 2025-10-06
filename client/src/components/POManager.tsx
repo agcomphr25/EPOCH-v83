@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { fetchPOs, createPO, updatePO, deletePO, fetchPOItems, type PurchaseOrder, type CreatePurchaseOrderData, type PurchaseOrderItem } from '@/lib/poUtils';
 import { generateProductionOrdersFromPO } from '@/lib/productionUtils';
@@ -14,12 +14,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Pencil, Trash2, Plus, Eye, Package, Search, TrendingUp, ShoppingCart, ChevronsUpDown, Check, UserPlus, ChevronDown, ChevronRight, Grid, List } from 'lucide-react';
+import { Pencil, Trash2, Plus, Eye, Package, Search, TrendingUp, ShoppingCart, ChevronsUpDown, Check, UserPlus } from 'lucide-react';
 // @ts-ignore
 import debounce from 'lodash.debounce';
 import { toast } from 'react-hot-toast';
 import POProductSelector from './POProductSelector';
 import POItemsManager from './POItemsManager';
+import AddressInput from './AddressInput';
+import { type AddressData } from '@/utils/addressUtils';
 
 // Component to display PO quantity
 function POQuantityDisplay({ poId }: { poId: number }) {
@@ -229,19 +231,19 @@ export default function POManager() {
   const [scheduleData, setScheduleData] = useState<any>(null);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [showCreateCustomer, setShowCreateCustomer] = useState(false);
-  const [viewMode, setViewMode] = useState<'list' | 'grouped'>('grouped'); // Default to grouped view
-  const [expandedCustomers, setExpandedCustomers] = useState<Set<string>>(new Set());
-  const hasInitialized = useRef(false);
   const [newCustomerData, setNewCustomerData] = useState({
     name: '',
     email: '',
     phone: '',
     company: '',
     customerType: 'Individual' as string,
-    address: '',
-    city: '',
-    state: '',
-    zipCode: ''
+    address: {
+      street: '',
+      city: '',
+      state: '',
+      zipCode: '',
+      country: 'USA'
+    } as AddressData
   });
 
 
@@ -314,9 +316,17 @@ export default function POManager() {
 
   const createCustomerMutation = useMutation({
     mutationFn: async (customerData: any) => {
+      // Flatten address for backend compatibility
+      const flattenedData = {
+        ...customerData,
+        address: customerData.address.street,
+        city: customerData.address.city,
+        state: customerData.address.state,
+        zipCode: customerData.address.zipCode
+      };
       return apiRequest('/api/customers/create-bypass', {
         method: 'POST',
-        body: JSON.stringify(customerData)
+        body: JSON.stringify(flattenedData)
       });
     },
     onSuccess: (newCustomer) => {
@@ -338,10 +348,13 @@ export default function POManager() {
         phone: '',
         company: '',
         customerType: 'Individual',
-        address: '',
-        city: '',
-        state: '',
-        zipCode: ''
+        address: {
+          street: '',
+          city: '',
+          state: '',
+          zipCode: '',
+          country: 'USA'
+        } as AddressData
       });
     },
     onError: (error: any) => {
@@ -377,6 +390,19 @@ export default function POManager() {
 
       // Refresh PO list
       refetch();
+
+      // 🟢 AUTO-SCHEDULE: Automatically schedule the new OEM production orders
+      try {
+        console.log('🟢 Auto-scheduling new OEM production orders...');
+        const scheduleResult = await apiRequest('/api/algorithmic-schedule', {
+          method: 'POST'
+        });
+        console.log('✅ OEM orders automatically scheduled:', scheduleResult);
+        toast.success(`OEM orders scheduled! ${result.createdOrders} green cards now visible on schedule.`);
+      } catch (scheduleError) {
+        console.error('❌ Auto-schedule failed:', scheduleError);
+        toast.error("Production orders created but auto-scheduling failed. Use Generate Schedule button.");
+      }
     } catch (error) {
       console.error('Generate production orders error:', error);
       toast.error("Failed to generate production orders");
@@ -488,10 +514,13 @@ export default function POManager() {
       phone: '',
       company: '',
       customerType: 'Individual',
-      address: '',
-      city: '',
-      state: '',
-      zipCode: ''
+      address: {
+        street: '',
+        city: '',
+        state: '',
+        zipCode: '',
+        country: 'USA'
+      } as AddressData
     });
   };
 
@@ -512,43 +541,6 @@ export default function POManager() {
     const matchesStatus = statusFilter === 'ALL' || po.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
-
-  // Group POs by customer for categorized view
-  const groupedPOs = React.useMemo(() => {
-    const groups = filteredPOs.reduce((acc, po) => {
-      const customerKey = `${po.customerName} (${po.customerId})`;
-      if (!acc[customerKey]) {
-        acc[customerKey] = {
-          customerName: po.customerName,
-          customerId: po.customerId,
-          pos: []
-        };
-      }
-      acc[customerKey].pos.push(po);
-      return acc;
-    }, {} as Record<string, { customerName: string; customerId: string; pos: PurchaseOrder[] }>);
-    
-    return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b));
-  }, [filteredPOs]);
-
-  const toggleCustomerExpansion = (customerKey: string) => {
-    const newExpanded = new Set(expandedCustomers);
-    if (newExpanded.has(customerKey)) {
-      newExpanded.delete(customerKey);
-    } else {
-      newExpanded.add(customerKey);
-    }
-    setExpandedCustomers(newExpanded);
-  };
-
-  // Expand all customers by default on initial load only
-  React.useEffect(() => {
-    if (groupedPOs.length > 0 && !hasInitialized.current) {
-      const allCustomerKeys = groupedPOs.map(([key]) => key);
-      setExpandedCustomers(new Set(allCustomerKeys));
-      hasInitialized.current = true;
-    }
-  }, [groupedPOs]);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -596,29 +588,7 @@ export default function POManager() {
       ) : (
         <div className="space-y-6">
           <div className="flex justify-between items-center">
-            <div className="flex items-center gap-4">
-              <h2 className="text-2xl font-bold">Purchase Order Management</h2>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant={viewMode === 'list' ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setViewMode('list')}
-                  data-testid="button-list-view"
-                >
-                  <List className="w-4 h-4 mr-1" />
-                  List
-                </Button>
-                <Button
-                  variant={viewMode === 'grouped' ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setViewMode('grouped')}
-                  data-testid="button-grouped-view"
-                >
-                  <Grid className="w-4 h-4 mr-1" />
-                  By Customer
-                </Button>
-              </div>
-            </div>
+            <h2 className="text-2xl font-bold">Purchase Order Management</h2>
             <Dialog open={isDialogOpen} onOpenChange={(open) => {
               if (open) {
                 setEditingPO(null);
@@ -836,16 +806,16 @@ export default function POManager() {
             </Select>
           </div>
 
-          {/* Purchase Orders Display */}
-          {isLoading ? (
-            <div className="text-center py-8">Loading purchase orders...</div>
-          ) : filteredPOs.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
-              {searchTerm || statusFilter !== 'ALL' ? 'No purchase orders match your search.' : 'No purchase orders yet. Click "Add Purchase Order" to create your first one.'}
-            </div>
-          ) : viewMode === 'list' ? (
-            <div className="grid gap-4" data-testid="list-view">
-              {filteredPOs.map((po) => (
+          {/* Purchase Orders List */}
+          <div className="grid gap-4">
+            {isLoading ? (
+              <div className="text-center py-8">Loading purchase orders...</div>
+            ) : filteredPOs.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">
+                {searchTerm || statusFilter !== 'ALL' ? 'No purchase orders match your search.' : 'No purchase orders yet. Click "Add Purchase Order" to create your first one.'}
+              </div>
+            ) : (
+              filteredPOs.map((po) => (
                 <POCard 
                   key={po.id}
                   po={po}
@@ -856,86 +826,9 @@ export default function POManager() {
                   onGenerateProductionOrders={handleGenerateProductionOrders}
                   isGeneratingOrders={isGeneratingOrders}
                 />
-              ))}
-            </div>
-          ) : (
-            <div className="space-y-6" data-testid="grouped-view">
-              {groupedPOs.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">
-                  No purchase orders found for grouping.
-                </div>
-              ) : (
-                groupedPOs.map(([customerKey, customerData]) => {
-                  const isExpanded = expandedCustomers.has(customerKey);
-                  const poCount = customerData.pos.length;
-                  const totalQuantity = customerData.pos.reduce((sum, po) => sum + 1, 0);
-                  
-                  return (
-                    <Card key={customerKey} className="overflow-hidden" data-testid={`customer-group-${customerData.customerId}`}>
-                      <CardHeader 
-                        className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-                        onClick={() => toggleCustomerExpansion(customerKey)}
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            {isExpanded ? (
-                              <ChevronDown className="w-5 h-5 text-gray-500" />
-                            ) : (
-                              <ChevronRight className="w-5 h-5 text-gray-500" />
-                            )}
-                            <div>
-                              <CardTitle className="text-lg">
-                                {customerData.customerName}
-                              </CardTitle>
-                              <CardDescription>
-                                ID: {customerData.customerId}
-                              </CardDescription>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-3">
-                            <Badge variant="secondary" data-testid={`customer-po-count-${customerData.customerId}`}>
-                              {poCount} PO{poCount !== 1 ? 's' : ''}
-                            </Badge>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                // Show/hide all POs for this customer
-                                toggleCustomerExpansion(customerKey);
-                              }}
-                              data-testid={`toggle-customer-${customerData.customerId}`}
-                            >
-                              {isExpanded ? 'Collapse' : 'Expand'}
-                            </Button>
-                          </div>
-                        </div>
-                      </CardHeader>
-                      
-                      {isExpanded && (
-                        <CardContent className="pt-0">
-                          <div className="grid gap-4" data-testid={`customer-pos-${customerData.customerId}`}>
-                            {customerData.pos.map((po) => (
-                              <POCard 
-                                key={po.id}
-                                po={po}
-                                onEdit={handleEdit}
-                                onDelete={handleDelete}
-                                onViewItems={handleViewItems}
-                                onCalculateSchedule={handleCalculateSchedule}
-                                onGenerateProductionOrders={handleGenerateProductionOrders}
-                                isGeneratingOrders={isGeneratingOrders}
-                              />
-                            ))}
-                          </div>
-                        </CardContent>
-                      )}
-                    </Card>
-                  );
-                })
-              )}
-            </div>
-          )}
+              ))
+            )}
+          </div>
         </div>
       )}
 
@@ -1106,45 +999,12 @@ export default function POManager() {
               </Select>
             </div>
 
-            <div>
-              <Label htmlFor="customerAddress">Address</Label>
-              <Input
-                id="customerAddress"
-                value={newCustomerData.address}
-                onChange={(e) => setNewCustomerData({...newCustomerData, address: e.target.value})}
-                placeholder="Street address"
-              />
-            </div>
-
-            <div className="grid grid-cols-3 gap-4">
-              <div>
-                <Label htmlFor="customerCity">City</Label>
-                <Input
-                  id="customerCity"
-                  value={newCustomerData.city}
-                  onChange={(e) => setNewCustomerData({...newCustomerData, city: e.target.value})}
-                  placeholder="City"
-                />
-              </div>
-              <div>
-                <Label htmlFor="customerState">State</Label>
-                <Input
-                  id="customerState"
-                  value={newCustomerData.state}
-                  onChange={(e) => setNewCustomerData({...newCustomerData, state: e.target.value})}
-                  placeholder="State"
-                />
-              </div>
-              <div>
-                <Label htmlFor="customerZip">ZIP Code</Label>
-                <Input
-                  id="customerZip"
-                  value={newCustomerData.zipCode}
-                  onChange={(e) => setNewCustomerData({...newCustomerData, zipCode: e.target.value})}
-                  placeholder="ZIP code"
-                />
-              </div>
-            </div>
+            <AddressInput
+              label="Address"
+              value={newCustomerData.address}
+              onChange={(address) => setNewCustomerData({...newCustomerData, address})}
+              required={false}
+            />
 
             <div className="flex justify-end space-x-2">
               <Button type="button" variant="outline" onClick={handleCreateCustomerDialogClose}>

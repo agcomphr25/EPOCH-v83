@@ -1,125 +1,145 @@
 import { Router } from 'express';
-import { pool } from '../../db.js';
+import { storage } from '../../storage';
+import { insertOemPrioritySettingsSchema } from '@shared/schema';
+import { z } from 'zod';
 
 const router = Router();
 
-// Save OEM settings for a specific week
-router.post('/save', async (req, res) => {
+// Get all OEM priority settings
+router.get('/priority-settings', async (req, res) => {
   try {
-    const { selectedPurchaseOrders = [], weekStart, weekEnd } = req.body;
+    const settings = await storage.getAllOemPrioritySettings();
+    res.json(settings);
+  } catch (error) {
+    console.error('Error fetching OEM priority settings:', error);
+    res.status(500).json({ error: 'Failed to fetch OEM priority settings' });
+  }
+});
+
+// Get OEM priority settings by vendor
+router.get('/priority-settings/vendor/:vendorId', async (req, res) => {
+  try {
+    const { vendorId } = req.params;
+    const settings = await storage.getOemPrioritySettingsByVendor(vendorId);
+    res.json(settings);
+  } catch (error) {
+    console.error('Error fetching OEM priority settings by vendor:', error);
+    res.status(500).json({ error: 'Failed to fetch OEM priority settings by vendor' });
+  }
+});
+
+// Get active priority settings
+router.get('/priority-settings/active', async (req, res) => {
+  try {
+    const settings = await storage.getActivePrioritySettings();
+    res.json(settings);
+  } catch (error) {
+    console.error('Error fetching active priority settings:', error);
+    res.status(500).json({ error: 'Failed to fetch active priority settings' });
+  }
+});
+
+// Save OEM priority settings (new dual-mode endpoint)
+router.post('/priority-settings/save', async (req, res) => {
+  try {
+    console.log('🎯 OEM Priority Settings Save Request:', req.body);
     
-    console.log(`🔧 Saving OEM settings for week ${weekStart} to ${weekEnd}:`, selectedPurchaseOrders);
+    // Validation schema for the request with dual-mode enforcement
+    const saveSchema = z.object({
+      vendorId: z.string().min(1, "Vendor ID is required"),
+      vendorName: z.string().min(1, "Vendor name is required"),
+      poId: z.number().min(1, "PO ID is required"),
+      poNumber: z.string().min(1, "PO number is required"),
+      selectionMode: z.enum(['entire_po', 'specific_items']),
+      stockItemIds: z.array(z.string()).optional(),
+      priorityLevel: z.number().min(1).max(10).optional().default(1),
+      createdBy: z.string().optional()
+    }).refine((data) => {
+      // Enforce non-empty stockItemIds when selectionMode is 'specific_items'
+      if (data.selectionMode === 'specific_items') {
+        return data.stockItemIds && data.stockItemIds.length > 0;
+      }
+      return true;
+    }, {
+      message: "Stock item IDs are required when selection mode is 'specific_items'",
+      path: ['stockItemIds']
+    });
+
+    const validatedData = saveSchema.parse(req.body);
     
-    // First, delete any existing OEM settings for this week
-    await pool.query(`
-      DELETE FROM oem_layup_settings 
-      WHERE week_start = $1
-    `, [weekStart]);
+    // Remove any existing priority settings for this PO to avoid duplicates
+    await storage.deleteOemPrioritySettingsByPO(validatedData.poId);
     
-    // If there are selected purchase orders, save them
-    if (selectedPurchaseOrders.length > 0) {
-      const insertPromises = selectedPurchaseOrders.map((poId: string) => {
-        return pool.query(`
-          INSERT INTO oem_layup_settings (
-            purchase_order_id, 
-            week_start, 
-            week_end, 
-            priority_level,
-            created_at
-          ) VALUES ($1, $2, $3, $4, NOW())
-        `, [poId, weekStart, weekEnd || weekStart, 2000]); // High priority level
+    // Create the new priority setting
+    const newSetting = await storage.createOemPrioritySettings({
+      vendorId: validatedData.vendorId,
+      vendorName: validatedData.vendorName,
+      poId: validatedData.poId,
+      poNumber: validatedData.poNumber,
+      selectionMode: validatedData.selectionMode,
+      stockItemIds: validatedData.stockItemIds || null,
+      priorityLevel: validatedData.priorityLevel || 1,
+      isActive: true,
+      createdBy: validatedData.createdBy || null
+    });
+
+    console.log('✅ OEM Priority Settings saved:', newSetting);
+    
+    res.json({
+      success: true,
+      message: `Priority settings saved for ${validatedData.selectionMode === 'entire_po' ? 'entire PO' : 'specific items'}`,
+      setting: newSetting
+    });
+    
+  } catch (error) {
+    console.error('❌ Error saving OEM priority settings:', error);
+    
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ 
+        error: 'Invalid request data',
+        details: error.errors 
       });
-      
-      await Promise.all(insertPromises);
     }
     
-    console.log(`✅ Saved ${selectedPurchaseOrders.length} OEM purchase order priorities for week ${weekStart}`);
-    
-    res.json({
-      success: true,
-      savedCount: selectedPurchaseOrders.length,
-      weekStart,
-      weekEnd: weekEnd || weekStart
-    });
-    
-  } catch (error) {
-    console.error('❌ Failed to save OEM settings:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to save OEM settings',
-      details: error instanceof Error ? error.message : 'Unknown error'
-    });
+    res.status(500).json({ error: 'Failed to save OEM priority settings' });
   }
 });
 
-// Get OEM settings for a specific week
-router.get('/week/:weekStart', async (req, res) => {
+// Delete OEM priority settings
+router.delete('/priority-settings/:id', async (req, res) => {
   try {
-    const { weekStart } = req.params;
-    
-    console.log(`🔍 Fetching OEM settings for week ${weekStart}`);
-    
-    const result = await pool.query(`
-      SELECT 
-        purchase_order_id,
-        priority_level,
-        week_start,
-        week_end,
-        created_at
-      FROM oem_layup_settings 
-      WHERE week_start = $1
-      ORDER BY created_at DESC
-    `, [weekStart]);
-    
-    const oemSettings = result?.rows || [];
-    const selectedPurchaseOrders = oemSettings.map((setting: any) => setting.purchase_order_id);
-    
-    console.log(`✅ Found ${oemSettings.length} OEM settings for week ${weekStart}`);
-    
-    res.json({
-      success: true,
-      weekStart,
-      selectedPurchaseOrders,
-      settings: oemSettings
-    });
-    
+    const { id } = req.params;
+    await storage.deleteOemPrioritySettings(parseInt(id));
+    res.json({ success: true, message: 'Priority settings deleted successfully' });
   } catch (error) {
-    console.error('❌ Failed to get OEM settings:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to retrieve OEM settings',
-      details: error instanceof Error ? error.message : 'Unknown error'
-    });
+    console.error('Error deleting OEM priority settings:', error);
+    res.status(500).json({ error: 'Failed to delete OEM priority settings' });
   }
 });
 
-// Clear OEM settings for a specific week
-router.delete('/week/:weekStart', async (req, res) => {
+// Update OEM priority settings
+router.put('/priority-settings/:id', async (req, res) => {
   try {
-    const { weekStart } = req.params;
+    const { id } = req.params;
+    const updateData = insertOemPrioritySettingsSchema.partial().parse(req.body);
     
-    console.log(`🗑️ Clearing OEM settings for week ${weekStart}`);
-    
-    const result = await pool.query(`
-      DELETE FROM oem_layup_settings 
-      WHERE week_start = $1
-    `, [weekStart]);
-    
-    console.log(`✅ Cleared OEM settings for week ${weekStart}`);
-    
+    const updatedSetting = await storage.updateOemPrioritySettings(parseInt(id), updateData);
     res.json({
       success: true,
-      weekStart,
-      deletedCount: 1 // Assume successful if no error thrown
+      message: 'Priority settings updated successfully',
+      setting: updatedSetting
     });
-    
   } catch (error) {
-    console.error('❌ Failed to clear OEM settings:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to clear OEM settings',
-      details: error instanceof Error ? error.message : 'Unknown error'
-    });
+    console.error('Error updating OEM priority settings:', error);
+    
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ 
+        error: 'Invalid request data',
+        details: error.errors 
+      });
+    }
+    
+    res.status(500).json({ error: 'Failed to update OEM priority settings' });
   }
 });
 

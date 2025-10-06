@@ -2960,7 +2960,7 @@ export default function OrderEntry() {
                     <span className="font-medium">{features.action_inlet ? (() => {
                       const feature = featureDefs.find(f => f.id === 'action_inlet' || f.name === 'action_inlet');
                       const option = feature?.options?.find(opt => opt.value === features.action_inlet);
-                      return option?.label || features.action_inlet.charAt(0).toUpperCase() + features.action_inlet.slice(1);
+                      return option?.label || 'Not selected';
                     })() : 'Not selected'}</span>
                     <span className="text-blue-600 font-bold">${features.action_inlet ? (() => {
                       const feature = featureDefs.find(f => f.id === 'action_inlet');

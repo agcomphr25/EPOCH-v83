@@ -1,0 +1,113 @@
+~/workspace$ rm -f .git/index.lock
+~/workspace$ git status | tail -50
+On branch Layup
+nothing to commit, working tree clean
+~/workspace$ git add .
+~/workspace$ git commit
+On branch Layup
+nothing to commit, working tree clean
+~/workspace$ git push
+fatal: The current branch Layup has no upstream branch.
+To push the current branch and set the remote as upstream, use
+
+    git push --set-upstream origin Layup
+
+To have this happen automatically for branches without a tracking
+upstream, see 'push.autoSetupRemote' in 'git help config'.
+
+~/workspace$ git push --set-upstream origin Layup
+To https://github.com/agcomphr25/EPOCH-v83.git
+ ! [rejected]          Layup -> Layup (non-fast-forward)
+error: failed to push some refs to 'https://github.com/agcomphr25/EPOCH-v83.git'
+hint: Updates were rejected because the tip of your current branch is behind
+hint: its remote counterpart. If you want to integrate the remote changes,
+hint: use 'git pull' before pushing again.
+hint: See the 'Note about fast-forwards' in 'git push --help' for details.
+~/workspace$ git pull --rebase origin Layup
+From https://github.com/agcomphr25/EPOCH-v83
+ * branch              Layup      -> FETCH_HEAD
+Auto-merging server/schema.ts
+CONFLICT (content): Merge conflict in server/schema.ts
+error: could not apply 80618aae... Remove user authentication and session management features
+hint: Resolve all conflicts manually, mark them as resolved with
+hint: "git add/rm <conflicted_files>", then run "git rebase --continue".
+hint: You can instead skip this commit: run "git rebase --skip".
+hint: To abort and get back to the state before "git rebase", run "git rebase --abort".
+hint: Disable this message with "git config set advice.mergeConflict false"
+Could not apply 80618aae... Remove user authentication and session management features
+~/workspace$ git status
+On branch Layup
+nothing to commit, working tree clean
+~/workspace$ git rebase --continue
+fatal: no rebase in progress
+~/workspace$ git push origin Layup
+To https://github.com/agcomphr25/EPOCH-v83.git
+ ! [rejected]          Layup -> Layup (non-fast-forward)
+error: failed to push some refs to 'https://github.com/agcomphr25/EPOCH-v83.git'
+hint: Updates were rejected because the tip of your current branch is behind
+hint: its remote counterpart. If you want to integrate the remote changes,
+hint: use 'git pull' before pushing again.
+hint: See the 'Note about fast-forwards' in 'git push --help' for details.
+~/workspace$ git pull
+There is no tracking information for the current branch.
+Please specify which branch you want to merge with.
+See git-pull(1) for details.
+
+    git pull <remote> <branch>
+
+If you wish to set tracking information for this branch you can do so with:
+
+    git branch --set-upstream-to=<remote>/<branch> Layup
+
+~/workspace$ git branch --set-upstream-to=<remote>/<branch> Layup
+bash: remote: No such file or directory
+~/workspace$ git pull <remote> <branch>
+bash: syntax error near unexpected token `<'
+~/workspace$ git pull main Layup
+fatal: 'main' does not appear to be a git repository
+fatal: Could not read from remote repository.
+
+Please make sure you have the correct access rights
+and the repository exists.
+~/workspace$ git branch --set-upstream-to=EPOCH-v83/Layup
+fatal: the requested upstream branch 'EPOCH-v83/Layup' does not exist
+hint:
+hint: If you are planning on basing your work on an upstream
+hint: branch that already exists at the remote, you may need to
+hint: run "git fetch" to retrieve it.
+hint:
+hint: If you are planning to push out a new local branch that
+hint: will track its remote counterpart, you may want to use
+hint: "git push -u" to set the upstream config as you push.
+hint: Disable this message with "git config set advice.setUpstreamFailure false"
+~/workspace$ git fetch
+~/workspace$ git status
+On branch Layup
+nothing to commit, working tree clean
+~/workspace$ git push
+fatal: The current branch Layup has no upstream branch.
+To push the current branch and set the remote as upstream, use
+
+    git push --set-upstream origin Layup
+
+To have this happen automatically for branches without a tracking
+upstream, see 'push.autoSetupRemote' in 'git help config'.
+
+~/workspace$ git push --set-upstream origin Layup
+To https://github.com/agcomphr25/EPOCH-v83.git
+ ! [rejected]          Layup -> Layup (non-fast-forward)
+error: failed to push some refs to 'https://github.com/agcomphr25/EPOCH-v83.git'
+hint: Updates were rejected because the tip of your current branch is behind
+hint: its remote counterpart. If you want to integrate the remote changes,
+hint: use 'git pull' before pushing again.
+hint: See the 'Note about fast-forwards' in 'git push --help' for details.
+~/workspace$ git pull
+There is no tracking information for the current branch.
+Please specify which branch you want to merge with.
+See git-pull(1) for details.
+
+    git pull <remote> <branch>
+
+If you wish to set tracking information for this branch you can do so with:
+
+    git branch --set-upstream-to=<remote>/<branch> Layup

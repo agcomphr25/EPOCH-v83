@@ -4,7 +4,6 @@ import { payments, allOrders } from '../../../shared/schema';
 import { eq, sql } from 'drizzle-orm';
 import { storage } from '../../storage';
 import { generateP1OrderId } from '../../utils/orderIdGenerator';
-import { authenticateToken } from '../../middleware/auth';
 import {
   insertOrderDraftSchema,
   insertOrderSchema,
@@ -19,35 +18,10 @@ import {
 
 const router = Router();
 
-// Get all orders for All Orders List (root endpoint) WITH PAYMENT STATUS
+// Get all orders for All Orders List (root endpoint)
 router.get('/', async (req: Request, res: Response) => {
   try {
-    // Force no caching for debugging
-    res.set({
-      'Cache-Control': 'no-cache, no-store, must-revalidate',
-      'Pragma': 'no-cache',
-      'Expires': '0'
-    });
-
-    console.log('🔍 CORRECT ENDPOINT: Executing getAllOrdersWithPaymentStatusPaginated for All Orders page...');
-    
-    // Use payment-aware method instead of getAllOrders
-    const result = await storage.getAllOrdersWithPaymentStatusPaginated(1, 1000); // Get first 1000 orders
-    const orders = result.orders;
-    
-    const poCount = orders.filter(o => o.orderId.startsWith('PO')).length;
-    const agCount = orders.filter(o => o.orderId.startsWith('AG')).length;
-    const sampleOrderIds = orders.slice(0, 10).map(o => o.orderId);
-    console.log(`📊 ALL ORDERS API WITH PAYMENT: Total=${orders.length}, AG orders=${agCount}, PO orders=${poCount}`);
-    console.log(`📊 Sample Order IDs: ${sampleOrderIds.join(', ')}`);
-    console.log(`✅ Processed ${orders.length} orders with payment info - first few:`, 
-               JSON.stringify(orders.slice(0, 3).map(o => ({id: o.id, orderId: o.orderId, paymentTotal: o.paymentTotal, isFullyPaid: o.isFullyPaid})), null, 2));
-    
-    // Log any orders that might look like PO orders
-    const suspiciousOrders = orders.filter(o => o.orderId.includes('PO'));
-    if (suspiciousOrders.length > 0) {
-      console.log(`⚠️  SUSPICIOUS: Found ${suspiciousOrders.length} orders with 'PO' in orderId:`, suspiciousOrders.map(o => o.orderId));
-    }
+    const orders = await storage.getAllOrders();
     res.json(orders);
   } catch (error) {
     console.error('Error retrieving orders:', error);
@@ -55,12 +29,17 @@ router.get('/', async (req: Request, res: Response) => {
   }
 });
 
-// Get all orders with payment status for All Orders List with payment column (TEMP DISABLED)
+// Get all orders with payment status for All Orders List with payment column
 router.get('/with-payment-status', async (req: Request, res: Response) => {
   try {
-    // TEMPORARY FIX: Return empty array to prevent DB connection overload
-    console.log('⚠️  TEMPORARY: /with-payment-status disabled to prevent DB overload');
-    res.json([]);
+    // Add basic caching headers to reduce server load
+    res.set({
+      'Cache-Control': 'public, max-age=30, stale-while-revalidate=60',
+      'ETag': `"orders-${Date.now()}"`
+    });
+    
+    const orders = await storage.getAllOrdersWithPaymentStatus();
+    res.json(orders);
   } catch (error) {
     console.error('Error retrieving orders with payment status:', error);
     res.status(500).json({ error: "Failed to fetch orders with payment status", details: (error as any).message });
@@ -136,15 +115,6 @@ router.get('/customer/:customerId', async (req: Request, res: Response) => {
       showCustomDiscount: allOrders.showCustomDiscount,
       customDiscountValue: allOrders.customDiscountValue,
       customDiscountType: allOrders.customDiscountType,
-      customerId: allOrders.customerId,
-      handedness: allOrders.handedness,
-      notes: allOrders.notes,
-      isFlattop: allOrders.isFlattop,
-      isCancelled: allOrders.isCancelled,
-      cancelledAt: allOrders.cancelledAt,
-      cancelReason: allOrders.cancelReason,
-      createdAt: allOrders.createdAt,
-      updatedAt: allOrders.updatedAt
     })
     .from(allOrders)
     .where(eq(allOrders.customerId, customerId));
@@ -167,17 +137,11 @@ router.get('/customer/:customerId', async (req: Request, res: Response) => {
         try {
           // Use the exact same data source as Order Summary: /api/orders/:id endpoint
           const orderSummaryData = await storage.getOrderById(order.orderId);
-          if (orderSummaryData && (orderSummaryData as any).totalAmount) {
-            actualOrderTotal = Number((orderSummaryData as any).totalAmount);
+          if (orderSummaryData && orderSummaryData.totalAmount) {
+            actualOrderTotal = Number(orderSummaryData.totalAmount);
           } else {
             // Calculate using same logic as Order Summary (includes paint, bottom metal, etc.)
-            // Get full order data for calculation
-            const fullOrder = await storage.getOrderById(order.orderId);
-            if (fullOrder) {
-              actualOrderTotal = await storage.calculateOrderTotal(fullOrder as any);
-            } else {
-              actualOrderTotal = Number(order.shipping) || 0;
-            }
+            actualOrderTotal = await storage.calculateOrderTotal(order);
           }
           
           // Fallback to shipping cost if calculation fails
@@ -539,27 +503,22 @@ router.put('/finalized/:id', async (req: Request, res: Response) => {
 // Fulfill an order (move to shipping management with fulfilled badge)
 router.post('/fulfill', async (req: Request, res: Response) => {
   try {
-    console.log(`🎯 FULFILL ENDPOINT CALLED: Request received`);
     const { orderId } = req.body;
 
     if (!orderId) {
-      console.log(`❌ FULFILL ERROR: No order ID provided in request`);
       return res.status(400).json({ error: "Order ID is required" });
     }
-
-    console.log(`🎯 FULFILL REQUEST: Processing fulfillment for order ${orderId}`);
 
     // Update the order to be fulfilled and move to shipping management
     const updatedOrder = await storage.fulfillOrder(orderId);
     
-    console.log(`✅ FULFILL SUCCESS: Order ${orderId} fulfilled successfully`);
     res.json({ 
       success: true, 
       message: "Order fulfilled successfully",
       order: updatedOrder 
     });
   } catch (error) {
-    console.error('❌ FULFILL ENDPOINT ERROR:', error);
+    console.error('Fulfill order error:', error);
     if (error instanceof Error) {
       return res.status(400).json({ error: error.message });
     }
@@ -872,13 +831,13 @@ router.delete('/payments/:paymentId', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Delete payment error:', error);
     console.error('Error details:', {
-      message: (error as Error).message,
-      stack: (error as Error).stack,
+      message: error.message,
+      stack: error.stack,
       paymentId: req.params.paymentId
     });
     res.status(500).json({ 
       error: "Failed to delete payment", 
-      details: (error as Error).message 
+      details: error.message 
     });
   }
 });
@@ -912,7 +871,7 @@ router.post('/:orderId/progress', async (req: Request, res: Response) => {
       // Try P1 draft orders
       const draftOrder = await storage.getOrderDraft(orderId);
       if (draftOrder) {
-        existingOrder = draftOrder as any;
+        existingOrder = draftOrder;
         isFinalized = false;
         console.log(`📋 Found P1 draft order: ${orderId}`);
       }
@@ -923,7 +882,7 @@ router.post('/:orderId/progress', async (req: Request, res: Response) => {
       try {
         const p2DraftOrder = await storage.getOrderDraft(orderId);
         if (p2DraftOrder) {
-          existingOrder = p2DraftOrder as any;
+          existingOrder = p2DraftOrder;
           isFinalized = false;
           isP2Order = true;
           console.log(`📋 Found P2 draft order: ${orderId}`);
@@ -965,17 +924,17 @@ router.post('/:orderId/progress', async (req: Request, res: Response) => {
 
     // CRITICAL SAFEGUARD: Prevent backwards department progression
     if (nextDepartment) {
-      const currentIndex = departments.indexOf(existingOrder.currentDepartment || '');
+      const currentIndex = departments.indexOf(existingOrder.currentDepartment);
       const targetIndex = departments.indexOf(nextDepartment);
       
       // Allow backwards movement only for specific administrative cases
       if (targetIndex < currentIndex && targetIndex >= 0 && currentIndex >= 0) {
-        console.log(`⚠️  WARNING: Attempting to move order ${orderId} backwards from ${existingOrder.currentDepartment || 'unknown'} to ${nextDepartment}`);
+        console.log(`⚠️  WARNING: Attempting to move order ${orderId} backwards from ${existingOrder.currentDepartment} to ${nextDepartment}`);
         
         // Log this as a potential issue for investigation
         const backwardsMovement = {
           orderId,
-          fromDepartment: existingOrder.currentDepartment || 'unknown',
+          fromDepartment: existingOrder.currentDepartment,
           toDepartment: nextDepartment,
           timestamp: new Date().toISOString(),
           reason: 'Manual backwards progression detected'
@@ -1010,12 +969,12 @@ router.post('/:orderId/progress', async (req: Request, res: Response) => {
       }
       // Regular progression for all other cases
       else {
-        const currentIndex = departments.indexOf(existingOrder.currentDepartment || '');
+        const currentIndex = departments.indexOf(existingOrder.currentDepartment);
         if (currentIndex >= 0 && currentIndex < departments.length - 1) {
           targetDepartment = departments[currentIndex + 1];
         } else {
-          console.error(`❌ Cannot determine next department for ${existingOrder.currentDepartment || 'unknown'}`);
-          return res.status(400).json({ error: `Invalid current department: ${existingOrder.currentDepartment || 'unknown'}` });
+          console.error(`❌ Cannot determine next department for ${existingOrder.currentDepartment}`);
+          return res.status(400).json({ error: `Invalid current department: ${existingOrder.currentDepartment}` });
         }
       }
     }
@@ -1140,7 +1099,7 @@ router.post('/undo-cancel/:orderId', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Order not found' });
     }
 
-    if (!(order as any).isCancelled) {
+    if (!order.isCancelled) {
       console.log('🔄 Order is not cancelled:', orderId);
       return res.status(400).json({ error: 'Order is not cancelled' });
     }

@@ -1,11 +1,12 @@
 import { Express } from 'express';
 import { createServer, type Server } from "http";
+import authRoutes from './auth';
 import employeesRoutes from './employees';
+import usersRoutes from './users';
 import ordersRoutes from './orders';
 import formsRoutes from './forms';
 import tasksRoutes from './tasks';
 import kickbackRoutes from './kickbacks';
-import calendarRoutes from './calendar';
 import inventoryRoutes from './inventory';
 import customersRoutes from './customers';
 import vendorsRoutes, { contactRouter, vendorDocumentRouter } from './vendors';
@@ -23,7 +24,8 @@ import bomsRoutes from './boms';
 import robustBomRoutes from './robustBom';
 import p2BomsRoutes from './p2boms';
 import communicationsRoutes from './communications';
-import nonconformanceRoutes from '../../routes/nonconformance';
+import secureVerificationRoutes from './secureVerification';
+// import nonconformanceRoutes from '../../routes/nonconformance';
 import paymentsRoutes from './payments';
 import acceptBluePaymentsRoutes from './acceptBluePayments';
 import unifiedPaymentsRoutes from './unifiedPayments';
@@ -34,7 +36,6 @@ import layupScheduleRoutes from './layupSchedule';
 import customerSatisfactionRoutes from './customerSatisfaction';
 import poProductsRoutes from './poProducts';
 import refundRoutes from './refunds';
-import agMetalReportRoutes from './agMetalReport';
 
 import vendorRoutes from './vendors';
 
@@ -45,12 +46,27 @@ import vendorRoutes from './vendors';
 
 import mrpRoutes from './mrp';
 import enhancedRoutes from './enhanced';
+<<<<<<< HEAD
+import trainingRoutes from './training';
+import internalMessagesRoutes from './internalMessages';
+=======
+>>>>>>> origin/main
 
 import { getAccessToken } from '../utils/upsShipping';
+import { nonConformingItems, insertNonConformingItemSchema } from '@shared/schema';
+import { db } from '../../db';
+import { z } from 'zod';
+import { eq, desc } from 'drizzle-orm';
 
 export function registerRoutes(app: Express): Server {
+  // Authentication routes (must be first)
+  app.use('/api/auth', authRoutes);
+
   // Employee management routes
   app.use('/api/employees', employeesRoutes);
+
+  // User management routes
+  app.use('/api/users', usersRoutes);
 
   // Order management routes  
   app.use('/api/orders', ordersRoutes);
@@ -63,9 +79,6 @@ export function registerRoutes(app: Express): Server {
 
   // Kickback tracking routes
   app.use('/api/kickbacks', kickbackRoutes);
-
-  // Calendar system routes
-  app.use('/api/calendar', calendarRoutes);
 
   // Inventory management routes
   app.use('/api/inventory', inventoryRoutes);
@@ -122,8 +135,11 @@ export function registerRoutes(app: Express): Server {
   // Communications management routes
   app.use('/api/communications', communicationsRoutes);
 
+  // Internal messages routes
+  app.use('/api/internal-messages', internalMessagesRoutes);
+
   // Nonconformance tracking routes
-  app.use('/api/nonconformance', nonconformanceRoutes);
+  // app.use('/api/nonconformance', nonconformanceRoutes);
 
   // Payment processing routes
   app.use('/api/payments', paymentsRoutes);
@@ -150,9 +166,6 @@ export function registerRoutes(app: Express): Server {
 
   // Refund management routes
   app.use('/api/refund-requests', refundRoutes);
-
-  // AG Metal Report routes
-  app.use('/api/reports', agMetalReportRoutes);
 
   // Vendor management routes
   app.use('/api/vendors', vendorRoutes);
@@ -265,12 +278,6 @@ export function registerRoutes(app: Express): Server {
   // P1 Layup Queue endpoint - provides unified production queue for layup scheduler
   app.get('/api/p1-layup-queue', async (req, res) => {
     try {
-      // Extract OEM settings from query parameters
-      const oemMode = req.query.oemMode === 'true';
-      const selectedPOOrders = req.query.selectedPOOrders ? String(req.query.selectedPOOrders).split(',') : [];
-      
-      console.log('🔧 P1 layup queue with OEM settings:', { oemMode, selectedPOOrdersCount: selectedPOOrders.length });
-      
       const { storage } = await import('../../storage');
       const { inferStockModelFromFeatures } = await import('../utils/stockModelInference');
       
@@ -312,7 +319,6 @@ export function registerRoutes(app: Express): Server {
         return true;
       });
       
-
       // Also get active orders from the orders table (for P1 PO production orders)
       const { pool } = await import('../../db');
       
@@ -321,7 +327,7 @@ export function registerRoutes(app: Express): Server {
         SELECT 
           id,
           order_id as "orderId",
-          customer as "customer",
+          customer_id as "customer",
           product,
           date,
           due_date as "dueDate",
@@ -347,7 +353,6 @@ export function registerRoutes(app: Express): Server {
         poId: null,
         productionOrderId: null
       }));
-
       
       // Combine both sources  
       const combinedUnscheduledOrders = [...unscheduledOrders, ...formattedActiveOrders];
@@ -375,30 +380,21 @@ export function registerRoutes(app: Express): Server {
       const p1POOrdersRows = Array.isArray(p1POOrdersResult) ? p1POOrdersResult : [];
       console.log(`🔍 Found ${p1POOrdersRows.length} P1 PO orders in all_orders table`);
       
-      const p1POOrders = p1POOrdersRows.map((po: any) => {
-        // Apply OEM priority boost if this P1 PO is selected in OEM mode
-        let priorityScore = po.priorityScore || 1500;
-        if (oemMode && selectedPOOrders.includes(po.orderId)) {
-          priorityScore = 1; // Highest priority for selected P1 PO orders in OEM mode
-          console.log(`🚀 OEM PRIORITY BOOST: Order ${po.orderId} priority boosted to ${priorityScore}`);
-        }
-        
-        return {
-          id: po.orderId,
-          orderId: po.orderId,
-          orderDate: po.createdAt,
-          dueDate: po.dueDate,
-          currentDepartment: po.currentDepartment,
-          customerId: po.customerId,
-          features: po.features || {},
-          modelId: po.stockModelId,
-          stockModelId: po.stockModelId,
-          product: po.stockModelId,
-          status: po.status,
-          source: po.source,  // This will be 'p1_purchase_order'
-          priorityScore: priorityScore
-        };
-      });
+      const p1POOrders = p1POOrdersRows.map((po: any) => ({
+        id: po.orderId,
+        orderId: po.orderId,
+        orderDate: po.createdAt,
+        dueDate: po.dueDate,
+        currentDepartment: po.currentDepartment,
+        customerId: po.customerId,
+        features: po.features || {},
+        modelId: po.stockModelId,
+        stockModelId: po.stockModelId,
+        product: po.stockModelId,
+        status: po.status,
+        source: po.source,  // This will be 'p1_purchase_order'
+        priorityScore: po.priorityScore || 1500
+      }));
 
       console.log(`🏭 Found ${p1POOrders.length} P1 PO orders from week selection`);
 
@@ -444,24 +440,6 @@ export function registerRoutes(app: Express): Server {
       // Sort by priority score (lower = higher priority)
       combinedQueue.sort((a, b) => a.priorityScore - b.priorityScore);
       
-
-      // Log OEM priority verification
-      if (oemMode && selectedPOOrders.length > 0) {
-        const topOrders = combinedQueue.slice(0, Math.min(5, combinedQueue.length));
-        console.log('🚀 OEM MODE VERIFICATION: Top 5 orders after sorting:', 
-          topOrders.map(o => ({ orderId: o.orderId, priorityScore: o.priorityScore, source: o.source }))
-        );
-        const boostedOrdersInTop = topOrders.filter(o => selectedPOOrders.includes(o.orderId));
-        console.log(`🚀 OEM MODE SUCCESS: ${boostedOrdersInTop.length}/${selectedPOOrders.length} selected P1 POs appear in top 5`);
-      }
-
-      // Add cache-control headers to prevent browser caching
-      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-      res.setHeader('Pragma', 'no-cache');
-      res.setHeader('Expires', '0');
-
-      
-
       res.json(combinedQueue);
     } catch (error) {
       console.error('❌ P1 layup queue fetch error:', error);
@@ -2057,7 +2035,7 @@ export function registerRoutes(app: Express): Server {
             customer: purchaseOrder.customerName,
             product: item.itemId,
             quantity: 1,
-            status: 'IN_PROGRESS',
+            status: 'Active',
             date: new Date(),
             currentDepartment: 'P1 Production Queue',
             isOnSchedule: true,
@@ -2084,7 +2062,7 @@ export function registerRoutes(app: Express): Server {
           orderId: order.orderId,
           partName: (order as any).partName || 'Unknown',
           dueDate: order.dueDate,
-          status: (order as any).status || 'IN_PROGRESS'
+          status: (order as any).status || 'Active'
         }))
       });
 
@@ -3089,6 +3067,82 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // ============================================================================
+  // NON-CONFORMING ITEMS ROUTES
+  // ============================================================================
+
+  app.get("/api/non-conforming-items", async (req, res) => {
+    try {
+      const items = await db.select().from(nonConformingItems).orderBy(desc(nonConformingItems.date));
+      res.json(items);
+    } catch (error) {
+      console.error("Get non-conforming items error:", error);
+      res.status(500).json({ error: "Failed to retrieve non-conforming items" });
+    }
+  });
+
+  app.get("/api/non-conforming-items/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const [item] = await db.select().from(nonConformingItems).where(eq(nonConformingItems.id, id));
+      if (!item) {
+        return res.status(404).json({ error: "Non-conforming item not found" });
+      }
+      res.json(item);
+    } catch (error) {
+      console.error("Get non-conforming item error:", error);
+      res.status(500).json({ error: "Failed to retrieve non-conforming item" });
+    }
+  });
+
+  app.post("/api/non-conforming-items", async (req, res) => {
+    try {
+      console.log("📝 POST /api/non-conforming-items - Request body:", req.body);
+      const data = insertNonConformingItemSchema.parse(req.body);
+      console.log("✅ Validation passed, data:", data);
+      const [item] = await db.insert(nonConformingItems).values(data).returning();
+      console.log("✅ Item created:", item);
+      res.status(201).json(item);
+    } catch (error) {
+      console.error("❌ Create non-conforming item error:", error);
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: "Invalid data", details: error.errors });
+      } else {
+        res.status(500).json({ error: "Failed to create non-conforming item" });
+      }
+    }
+  });
+
+  app.put("/api/non-conforming-items/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const data = insertNonConformingItemSchema.partial().parse(req.body);
+      const [item] = await db.update(nonConformingItems)
+        .set({ ...data, updatedAt: new Date() })
+        .where(eq(nonConformingItems.id, id))
+        .returning();
+      res.json(item);
+    } catch (error) {
+      console.error("Update non-conforming item error:", error);
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: "Invalid data", details: error.errors });
+      } else {
+        res.status(500).json({ error: "Failed to update non-conforming item" });
+      }
+    }
+  });
+
+  app.delete("/api/non-conforming-items/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      await db.delete(nonConformingItems).where(eq(nonConformingItems.id, id));
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Delete non-conforming item error:", error);
+      res.status(500).json({ error: "Failed to delete non-conforming item" });
+    }
+  });
+
   // Create and return HTTP server
   return createServer(app);
 }
@@ -3108,4 +3162,5 @@ export {
   orderAttachmentsRoutes as orderAttachmentsRouter,
   tasksRoutes as tasksRouter,
   communicationsRoutes as communicationsRouter,
+  secureVerificationRoutes as secureVerificationRouter
 };

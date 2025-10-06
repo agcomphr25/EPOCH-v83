@@ -14,22 +14,11 @@ async function embedCompanyLogo(pdfDoc: PDFDocument) {
     // Fix for ES modules - use fileURLToPath for cross-platform compatibility
     const __filename = fileURLToPath(import.meta.url);
     const __dirname = path.dirname(__filename);
-    const logoPath = path.join(__dirname, '../../../attached_assets/logo_updated.png');
-    console.log('📷 Attempting to load logo from:', logoPath);
-    
-    if (!fs.existsSync(logoPath)) {
-      console.error('❌ Logo file does not exist at:', logoPath);
-      return null;
-    }
-    
+    const logoPath = path.join(__dirname, '../../assets/logo_updated.png');
     const logoImageBytes = fs.readFileSync(logoPath);
-    console.log('📷 Logo file loaded, size:', logoImageBytes.length, 'bytes');
-    
-    const embeddedLogo = await pdfDoc.embedPng(logoImageBytes);
-    console.log('✅ Logo successfully embedded in PDF');
-    return embeddedLogo;
+    return await pdfDoc.embedPng(logoImageBytes);
   } catch (error) {
-    console.error('❌ Could not load company logo:', error);
+    console.warn('Could not load company logo:', error);
     return null;
   }
 }

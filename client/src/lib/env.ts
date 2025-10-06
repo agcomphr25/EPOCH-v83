@@ -5,14 +5,14 @@
 /**
  * Check if we're running in a production/deployment environment
  * Production environments require authentication
- * CURRENTLY SET TO REQUIRE LOGIN FOR ALL ENVIRONMENTS FOR TESTING
+ * AUTHENTICATION DISABLED - ALWAYS RETURNS FALSE
  */
 export function isProductionEnvironment(): boolean {
   const host = window.location.host;
   
-  // FORCE AUTHENTICATION ON ALL ENVIRONMENTS FOR TESTING
-  console.log('🔒 AUTHENTICATION REQUIRED FOR ALL ENVIRONMENTS:', host);
-  return true;
+  // AUTHENTICATION DISABLED - BYPASS FOR ALL ENVIRONMENTS
+  console.log('🔓 AUTHENTICATION DISABLED FOR ALL ENVIRONMENTS:', host);
+  return false;
   
   // ORIGINAL CODE (COMMENTED OUT FOR TESTING):
   // Development environments (bypass authentication)

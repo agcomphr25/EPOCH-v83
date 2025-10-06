@@ -7,28 +7,23 @@ interface DeploymentAuthWrapperProps {
 }
 
 function isDeploymentEnvironment(): boolean {
-  // Multiple methods to detect deployment environment
   const hostname = window.location.hostname;
-  const viteDeployment = import.meta.env.VITE_REPLIT_DEPLOYMENT === '1';
-  const nodeEnv = import.meta.env.VITE_NODE_ENV;
-  // Development overrides - skip auth for development environments
+  
+  // Development overrides - skip auth for known development environments
   const isLocalhost = hostname.includes('localhost') || hostname.includes('127.0.0.1');
-
-  const isReplitEditor = hostname.includes('replit.dev') && !hostname.includes('.replit.dev');
-
   const isReplitDev = hostname.includes('replit.dev'); // All replit.dev domains (including workspaces)
   const isDevelopment = import.meta.env.NODE_ENV === 'development' || 
-                       nodeEnv === 'development' || 
-                       import.meta.env.MODE === 'development' || 
-                       import.meta.env.VITE_NODE_ENV === 'development';
+                       import.meta.env.VITE_NODE_ENV === 'development' || 
+                       import.meta.env.MODE === 'development';
   
-  // Skip auth for ANY development environment
-  if (isLocalhost || isReplitEditor || isReplitDev || isDevelopment || !viteDeployment) {
-      return false;
+  // Skip auth for development environments only
+  if (isLocalhost || isReplitDev || isDevelopment) {
+    console.log('🔧 FRONTEND AUTH BYPASS: Development environment detected, skipping authentication');
+    return false;
   }
   
-  // Only require auth for explicitly deployed production environments
-
+  // All other domains (including custom domains like apcompepoch.xyz) require authentication
+  console.log('🔐 FRONTEND PRODUCTION MODE: Authentication required for deployed site:', hostname);
   return true;
 }
 

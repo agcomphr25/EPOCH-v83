@@ -8,6 +8,7 @@ import Navigation from "./components/Navigation";
 import OfflineIndicator from "./components/OfflineIndicator";
 import NotFound from "./pages/not-found";
 import Dashboard from "./pages/Dashboard";
+import Login from "./pages/Login";
 import OrderManagement from "./pages/OrderManagement";
 import OrdersManagementPage from "./pages/OrdersManagementPage";
 import DiscountManagement from "./pages/DiscountManagement";
@@ -61,6 +62,15 @@ import TIMSTestDashboard from "./pages/TIMSTestDashboard";
 import BRADWTestDashboard from "./pages/BRADWTestDashboard";
 import FALEESHAHTestDashboard from "./pages/FALEESHAHTestDashboard";
 import JOEYBTestDashboard from "./pages/JOEYBTestDashboard";
+import AGRACETestDashboard from "./pages/AGRACETestDashboard";
+import ANGIETTestDashboard from "./pages/ANGIETTestDashboard";
+import BLAKETTestDashboard from "./pages/BLAKETTestDashboard";
+import HALLSTestDashboard from "./pages/HALLSTestDashboard";
+import HUNTATestDashboard from "./pages/HUNTATestDashboard";
+import LAURIETTestDashboard from "./pages/LAURIETTestDashboard";
+import TANDYDTestDashboard from "./pages/TANDYDTestDashboard";
+import TANDYMTestDashboard from "./pages/TANDYMTestDashboard";
+import TASHAMTestDashboard from "./pages/TASHAMTestDashboard";
 import OrderDepartmentTransfer from "./pages/OrderDepartmentTransfer";
 import { BOMAdministration } from "./pages/BOMAdministration";
 import RobustBOMAdministration from "./pages/RobustBOMAdministration";
@@ -117,7 +127,8 @@ import DeploymentAuthWrapper from './components/DeploymentAuthWrapper';
 // Component to conditionally render Navigation
 function ConditionalNavigation() {
   const [location] = useLocation();
-  const hideNavigation = location === '/darleneb-dashboard' || location === '/ag-dashboard' || location === '/staciw-dashboard';
+  // Hide navigation only on login page - all other pages show role-based navbar
+  const hideNavigation = location === '/login';
   
   return hideNavigation ? null : <Navigation />;
 }
@@ -183,6 +194,7 @@ function App() {
               <OfflineIndicator />
               <main className="container mx-auto px-4 py-8">
                   <Switch>
+                  <Route path="/login" component={Login} />
                   <Route path="/" component={Dashboard} />
                   <Route path="/order-management" component={OrderManagement} />
                   <Route path="/orders-management" component={OrdersManagementPage} />
@@ -261,11 +273,21 @@ function App() {
                   <Route path="/bradw-dashboard" component={BRADWTestDashboard} />
                   <Route path="/faleeshah-dashboard" component={FALEESHAHTestDashboard} />
                   <Route path="/joeyb-dashboard" component={JOEYBTestDashboard} />
+                  <Route path="/agrace-dashboard" component={AGRACETestDashboard} />
+                  <Route path="/angiet-dashboard" component={ANGIETTestDashboard} />
+                  <Route path="/blaket-dashboard" component={BLAKETTestDashboard} />
+                  <Route path="/halls-dashboard" component={HALLSTestDashboard} />
+                  <Route path="/hunta-dashboard" component={HUNTATestDashboard} />
+                  <Route path="/lauriet-dashboard" component={LAURIETTestDashboard} />
+                  <Route path="/tandyd-dashboard" component={TANDYDTestDashboard} />
+                  <Route path="/tandym-dashboard" component={TANDYMTestDashboard} />
+                  <Route path="/tasham-dashboard" component={TASHAMTestDashboard} />
 
                   {/* Test Routes */}
                   <Route path="/module8-test" component={Module8TestPage} />
                   <Route path="/order-department-transfer" component={OrderDepartmentTransfer} />
                   <Route path="/communications/inbox" component={CommunicationInboxPage} />
+                  <Route path="/communication" component={CommunicationInboxPage} />
                   <Route path="/enhanced-forms" component={EnhancedFormsPage} />
                   <Route path="/enhanced-reports" component={EnhancedReportsPage} />
 

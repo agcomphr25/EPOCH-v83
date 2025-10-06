@@ -93,6 +93,8 @@ export default function LoginPage() {
       
       if (data.user?.role === 'ADMIN' || data.user?.role === 'HR Manager') {
         redirectUrl = '/employee';
+      } else if (data.user?.username?.toLowerCase() === 'tims') {
+        redirectUrl = '/tims-dashboard';
       } else {
         // All other users go to root dashboard
         redirectUrl = '/';

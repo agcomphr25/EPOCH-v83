@@ -8,6 +8,7 @@ import Navigation from "./components/Navigation";
 import OfflineIndicator from "./components/OfflineIndicator";
 import NotFound from "./pages/not-found";
 import Dashboard from "./pages/Dashboard";
+import Login from "./pages/Login";
 import OrderManagement from "./pages/OrderManagement";
 import OrdersManagementPage from "./pages/OrdersManagementPage";
 import DiscountManagement from "./pages/DiscountManagement";
@@ -61,24 +62,32 @@ import TIMSTestDashboard from "./pages/TIMSTestDashboard";
 import BRADWTestDashboard from "./pages/BRADWTestDashboard";
 import FALEESHAHTestDashboard from "./pages/FALEESHAHTestDashboard";
 import JOEYBTestDashboard from "./pages/JOEYBTestDashboard";
+import AGRACETestDashboard from "./pages/AGRACETestDashboard";
+import ANGIETTestDashboard from "./pages/ANGIETTestDashboard";
+import BLAKETTestDashboard from "./pages/BLAKETTestDashboard";
+import HALLSTestDashboard from "./pages/HALLSTestDashboard";
+import HUNTATestDashboard from "./pages/HUNTATestDashboard";
+import LAURIETTestDashboard from "./pages/LAURIETTestDashboard";
+import TANDYDTestDashboard from "./pages/TANDYDTestDashboard";
+import TANDYMTestDashboard from "./pages/TANDYMTestDashboard";
+import TASHAMTestDashboard from "./pages/TASHAMTestDashboard";
 import OrderDepartmentTransfer from "./pages/OrderDepartmentTransfer";
 import { BOMAdministration } from "./pages/BOMAdministration";
 import RobustBOMAdministration from "./pages/RobustBOMAdministration";
 import AGBottomMetalReport from "./pages/AGBottomMetalReport";
-import AGMetalUnfulfilledReport from "./pages/AGMetalUnfulfilledReport";
 import EmployeeDashboard from "./pages/EmployeeDashboard";
 import EmployeeDetail from "./pages/EmployeeDetail";
 import EmployeePortal from "./pages/EmployeePortal";
 import UserManagement from "./pages/UserManagement";
+import LoginPage from "./pages/LoginPage";
+import ProtectedRoute from "./components/auth/ProtectedRoute";
 import P2Forms from '@/pages/P2Forms';
 import WasteManagementForm from '@/pages/WasteManagementForm';
 import TaskTracker from '@/pages/TaskTracker';
 import KickbackTracking from '@/components/KickbackTracking';
 import DocumentManagement from "./pages/DocumentManagement";
 import ShutdownProceduresTraining from "@/pages/ShutdownProceduresTraining";
-
-import CounterfeitPreventionTraining from "@/pages/CounterfeitPreventionTraining";
-import Calendar from "./pages/Calendar";
+import FireSafetyTraining from "@/pages/FireSafetyTraining";
 import PurchaseOrderItemsQueuePage from "./pages/PurchaseOrderItemsQueuePage";
 import LayupPluggingQueuePage from "./pages/LayupPluggingQueuePage";
 import BarcodeQueuePage from "./pages/BarcodeQueuePage";
@@ -109,14 +118,17 @@ import SimplifiedLayupScheduler from "./components/SimplifiedLayupScheduler";
 import CustomerSatisfaction from "./pages/CustomerSatisfaction";
 import VendorsPage from "./pages/VendorsPage";
 import VendorPOPage from "./pages/VendorPOPage";
+import NonConformingItemsPage from "./pages/NonConformingItemsPage";
 
 import { Toaster as HotToaster } from 'react-hot-toast';
+import DeploymentAuthWrapper from './components/DeploymentAuthWrapper';
 
 
 // Component to conditionally render Navigation
 function ConditionalNavigation() {
   const [location] = useLocation();
-  const hideNavigation = location === '/darleneb-dashboard' || location === '/ag-dashboard' || location === '/staciw-dashboard';
+  // Hide navigation only on login page - all other pages show role-based navbar
+  const hideNavigation = location === '/login';
   
   return hideNavigation ? null : <Navigation />;
 }
@@ -175,12 +187,14 @@ function App() {
   try {
     return (
       <QueryClientProvider client={queryClient}>
+        <DeploymentAuthWrapper>
           <Router>
             <div className="min-h-screen bg-gray-50">
               <ConditionalNavigation />
               <OfflineIndicator />
               <main className="container mx-auto px-4 py-8">
                   <Switch>
+                  <Route path="/login" component={Login} />
                   <Route path="/" component={Dashboard} />
                   <Route path="/order-management" component={OrderManagement} />
                   <Route path="/orders-management" component={OrdersManagementPage} />
@@ -245,6 +259,8 @@ function App() {
                   <Route path="/employee-portal-new" component={EmployeePortal} />
                   <Route path="/time-clock-admin" component={TimeClockAdminPage} />
 
+                  {/* Auth Routes */}
+                  <Route path="/login" component={LoginPage} />
 
                   {/* User Dashboard Routes */}
                   <Route path="/ag-dashboard" component={AGTestDashboard} />
@@ -257,11 +273,21 @@ function App() {
                   <Route path="/bradw-dashboard" component={BRADWTestDashboard} />
                   <Route path="/faleeshah-dashboard" component={FALEESHAHTestDashboard} />
                   <Route path="/joeyb-dashboard" component={JOEYBTestDashboard} />
+                  <Route path="/agrace-dashboard" component={AGRACETestDashboard} />
+                  <Route path="/angiet-dashboard" component={ANGIETTestDashboard} />
+                  <Route path="/blaket-dashboard" component={BLAKETTestDashboard} />
+                  <Route path="/halls-dashboard" component={HALLSTestDashboard} />
+                  <Route path="/hunta-dashboard" component={HUNTATestDashboard} />
+                  <Route path="/lauriet-dashboard" component={LAURIETTestDashboard} />
+                  <Route path="/tandyd-dashboard" component={TANDYDTestDashboard} />
+                  <Route path="/tandym-dashboard" component={TANDYMTestDashboard} />
+                  <Route path="/tasham-dashboard" component={TASHAMTestDashboard} />
 
                   {/* Test Routes */}
                   <Route path="/module8-test" component={Module8TestPage} />
                   <Route path="/order-department-transfer" component={OrderDepartmentTransfer} />
                   <Route path="/communications/inbox" component={CommunicationInboxPage} />
+                  <Route path="/communication" component={CommunicationInboxPage} />
                   <Route path="/enhanced-forms" component={EnhancedFormsPage} />
                   <Route path="/enhanced-reports" component={EnhancedReportsPage} />
 
@@ -298,9 +324,7 @@ function App() {
                   <Route path="/kickback-tracking" component={KickbackTracking} />
                   <Route path="/document-management" component={DocumentManagement} />
                   <Route path="/shutdown-training" component={ShutdownProceduresTraining} />
-
-                  <Route path="/counterfeit-prevention-training" component={CounterfeitPreventionTraining} />
-                  <Route path="/calendar" component={Calendar} />
+                  <Route path="/fire-safety-training" component={FireSafetyTraining} />
 
                   {/* Queue Management Routes */}
                   <Route path="/purchase-order-items-queue" component={PurchaseOrderItemsQueuePage} />
@@ -312,12 +336,12 @@ function App() {
                   <Route path="/production-queue" component={ProductionQueueManager} />
 
                   {/* Nonconformance Tracking Routes */}
-                  <Route path="/nonconformance" component={NonconformanceDashboard} />
-                  <Route path="/nonconformance-report" component={NonconformanceReport} />
+                  {/* <Route path="/nonconformance" component={NonconformanceDashboard} /> */}
+                  {/* <Route path="/nonconformance-report" component={NonconformanceReport} /> */}
+                  <Route path="/non-conforming-items" component={NonConformingItemsPage} />
 
                   {/* Reports */}
                   <Route path="/ag-bottom-metal-report" component={AGBottomMetalReport} />
-                  <Route path="/ag-metal-unfulfilled-report" component={AGMetalUnfulfilledReport} />
 
                   {/* Department Queue Management Routes */}
                   <Route path="/department-queue/production-queue" component={ProductionQueuePage} />
@@ -346,6 +370,7 @@ function App() {
           <Toaster />
           <HotToaster />
         </Router>
+        </DeploymentAuthWrapper>
       </QueryClientProvider>
     );
   } catch (error) {

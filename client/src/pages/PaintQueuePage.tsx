@@ -403,7 +403,7 @@ export default function PaintQueuePage() {
                   size="sm"
                 >
                   <ArrowRight className="h-4 w-4 mr-1" />
-                  Move to Shipping QC ({selectedOrders.size})
+                  Move to Shipping ({selectedOrders.size})
                 </Button>
                 {selectedOrders.size > 0 && (
                   <Button
@@ -592,7 +592,7 @@ export default function PaintQueuePage() {
                   <ArrowRight className="h-4 w-4 mr-2" />
                   {progressToShippingMutation.isPending 
                     ? 'Progressing...' 
-                    : `Progress to Shipping QC (${selectedOrders.size})`}
+                    : `Progress to Shipping (${selectedOrders.size})`}
                 </Button>
               </div>
             </div>

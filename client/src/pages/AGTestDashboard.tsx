@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -11,31 +11,24 @@ import PipelineVisualization from '@/components/PipelineVisualization';
 import LayupScheduler from '@/components/LayupScheduler';
 import { getDisplayOrderId } from '@/lib/orderUtils';
 import { useLocation } from 'wouter';
-import { isProductionEnvironment, isAuthenticated } from '@/lib/env';
 
 export default function AGTestDashboard() {
   const [expandedSection, setExpandedSection] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [, setLocation] = useLocation();
 
-  useEffect(() => {
-    const checkAuth = async () => {
-      if (isProductionEnvironment()) {
-        const { validateSessionAsync } = await import('@/lib/env');
-        const isValid = await validateSessionAsync();
-        if (!isValid) {
-          console.log('🔒 Session invalid - redirecting to login');
-          setLocation('/login');
-        }
-      }
-    };
-    checkAuth();
-  }, [setLocation]);
-
   const toggleExpand = (section: string) => {
     setExpandedSection(expandedSection === section ? null : section);
   };
 
+  const handleLogout = () => {
+    // Clear authentication tokens
+    localStorage.removeItem('sessionToken');
+    localStorage.removeItem('jwtToken');
+    
+    // Redirect to login page
+    window.location.href = '/login';
+  };
 
   // Get all customer orders (excluding purchase orders)
   const { data: allOrders = [] } = useQuery({
@@ -81,8 +74,19 @@ export default function AGTestDashboard() {
             Production Pipeline Overview, Order Management & Layup Scheduling
           </p>
         </div>
-        <div className="text-sm text-gray-500 dark:text-gray-400">
-          Real-time Manufacturing Control Center
+        <div className="flex items-center gap-4">
+          <div className="text-sm text-gray-500 dark:text-gray-400">
+            Real-time Manufacturing Control Center
+          </div>
+          <Button
+            onClick={handleLogout}
+            variant="outline"
+            size="sm"
+            className="flex items-center gap-2 hover:bg-red-50 hover:border-red-200 hover:text-red-600"
+          >
+            <LogOut className="w-4 h-4" />
+            Logout
+          </Button>
         </div>
       </div>
 

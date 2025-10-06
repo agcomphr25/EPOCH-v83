@@ -726,9 +726,7 @@ export interface IStorage {
   updateVendorPurchaseOrderItem(id: number, data: Partial<InsertVendorPurchaseOrderItem & { totalPrice?: number }>): Promise<VendorPurchaseOrderItem | undefined>;
   deleteVendorPurchaseOrderItem(id: number): Promise<boolean>;
 
-  // ============================================================================
   // INVENTORY MANAGEMENT & MRP METHODS
-  // ============================================================================
 
   // Robust Parts Management
   getAllRobustParts(params?: { q?: string; type?: string; active?: boolean; page?: number; limit?: number }): Promise<{ data: RobustPart[]; total: number }>;
@@ -796,9 +794,7 @@ export interface IStorage {
   // MRP Calculation History
   getMrpCalculationHistory(limit?: number): Promise<MrpCalculationHistory[]>;
 
-  // ============================================================================
   // ENHANCED INVENTORY MANAGEMENT & MRP METHODS
-  // ============================================================================
 
   // Allocation Detail Management - Demand-to-Supply Pegging
   getAllAllocationDetails(params?: { partId?: string; demandOrderId?: string; supplyOrderId?: string; status?: string }): Promise<AllocationDetail[]>;

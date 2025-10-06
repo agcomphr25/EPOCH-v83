@@ -219,6 +219,23 @@ router.post("/logout", async (req, res) => {
 
 // GET /api/auth/session - Check current session (enhanced timeout handling)
 router.get('/session', async (req: Request, res: Response) => {
+  // Check if we're in development environment using secure server-side detection only
+  const isDevelopment = process.env.NODE_ENV === 'development';
+  const devAuthBypass = process.env.DEV_AUTH_BYPASS === 'true';
+  
+  // Skip authentication in development environment (server-side detection only)
+  if (isDevelopment || devAuthBypass) {
+    console.log('🔧 BACKEND AUTH BYPASS: Development environment - session check skipped');
+    return res.json({
+      id: 999,
+      username: 'dev-user',
+      role: 'ADMIN',
+      employeeId: null,
+      isActive: true,
+      canOverridePrices: true
+    });
+  }
+
   // Timeout adjusted for deployment environments
   const isDeployment = req.get('host')?.includes('.replit.app') || 
                       req.get('host')?.includes('.repl.co') ||

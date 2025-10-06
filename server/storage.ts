@@ -38,6 +38,9 @@ import {
   // Vendor management tables
   vendors, vendorContacts, vendorAddresses, vendorContactPhones, vendorContactEmails, vendorDocuments, vendorScoringCriteria, vendorScores,
 
+  // Internal communications tables
+  departments, internalMessages, messageAttachments, messageRecipients,
+  
   // Non-Conforming Items table
   nonConformingItems,
 
@@ -148,6 +151,12 @@ import {
   type VendorScoringCriteria, type InsertVendorScoringCriteria,
   type VendorScore, type InsertVendorScore,
 
+  // Internal communications types
+  type Department, type InsertDepartment,
+  type InternalMessage, type InsertInternalMessage,
+  type MessageAttachment, type InsertMessageAttachment,
+  type MessageRecipient, type InsertMessageRecipient,
+  
   // Non-Conforming Items types
   type NonConformingItem, type InsertNonConformingItem,
 
@@ -723,9 +732,7 @@ export interface IStorage {
   updateVendorPurchaseOrderItem(id: number, data: Partial<InsertVendorPurchaseOrderItem & { totalPrice?: number }>): Promise<VendorPurchaseOrderItem | undefined>;
   deleteVendorPurchaseOrderItem(id: number): Promise<boolean>;
 
-  // ============================================================================
   // INVENTORY MANAGEMENT & MRP METHODS
-  // ============================================================================
 
   // Robust Parts Management
   getAllRobustParts(params?: { q?: string; type?: string; active?: boolean; page?: number; limit?: number }): Promise<{ data: RobustPart[]; total: number }>;
@@ -793,9 +800,7 @@ export interface IStorage {
   // MRP Calculation History
   getMrpCalculationHistory(limit?: number): Promise<MrpCalculationHistory[]>;
 
-  // ============================================================================
   // ENHANCED INVENTORY MANAGEMENT & MRP METHODS
-  // ============================================================================
 
   // Allocation Detail Management - Demand-to-Supply Pegging
   getAllAllocationDetails(params?: { partId?: string; demandOrderId?: string; supplyOrderId?: string; status?: string }): Promise<AllocationDetail[]>;
@@ -915,6 +920,36 @@ export interface IStorage {
   deleteVendorScore(id: number): Promise<void>;
   calculateVendorTotalScore(vendorId: number): Promise<number>;
 
+  // ===== INTERNAL COMMUNICATIONS =====
+  
+  // Departments CRUD
+  getAllDepartments(): Promise<Department[]>;
+  getDepartment(id: number): Promise<Department | undefined>;
+  createDepartment(data: InsertDepartment): Promise<Department>;
+  updateDepartment(id: number, data: Partial<InsertDepartment>): Promise<Department>;
+  deleteDepartment(id: number): Promise<void>;
+  
+  // Internal Messages CRUD
+  getAllInternalMessages(userId?: number): Promise<(InternalMessage & { attachments?: MessageAttachment[], recipients?: MessageRecipient[] })[]>;
+  getInternalMessage(id: number): Promise<(InternalMessage & { attachments?: MessageAttachment[], recipients?: MessageRecipient[] }) | undefined>;
+  getMessagesForUser(userId: number): Promise<(InternalMessage & { attachments?: MessageAttachment[], recipients?: MessageRecipient[] })[]>;
+  getMessagesForDepartment(departmentId: number): Promise<(InternalMessage & { attachments?: MessageAttachment[], recipients?: MessageRecipient[] })[]>;
+  createInternalMessage(data: InsertInternalMessage): Promise<InternalMessage>;
+  updateInternalMessage(id: number, data: Partial<InsertInternalMessage>): Promise<InternalMessage>;
+  deleteInternalMessage(id: number): Promise<void>;
+  
+  // Message Attachments CRUD
+  getMessageAttachments(messageId: number): Promise<MessageAttachment[]>;
+  createMessageAttachment(data: InsertMessageAttachment): Promise<MessageAttachment>;
+  deleteMessageAttachment(id: number): Promise<void>;
+  
+  // Message Recipients CRUD
+  getMessageRecipients(messageId: number): Promise<MessageRecipient[]>;
+  createMessageRecipient(data: InsertMessageRecipient): Promise<MessageRecipient>;
+  updateMessageRecipient(id: number, data: Partial<InsertMessageRecipient>): Promise<MessageRecipient>;
+  markMessageAsRead(messageId: number, userId: number): Promise<void>;
+  markMessageAsAccomplished(messageId: number, userId: number): Promise<void>;
+  
   // Non-Conforming Items CRUD
   getAllNonConformingItems(): Promise<NonConformingItem[]>;
   getNonConformingItem(id: number): Promise<NonConformingItem | undefined>;
@@ -9093,6 +9128,172 @@ AG Composites Team`;
     return results;
   }
 
+  // ===== INTERNAL COMMUNICATIONS IMPLEMENTATIONS =====
+  
+  // Departments CRUD
+  async getAllDepartments(): Promise<Department[]> {
+    return await db.select().from(departments).orderBy(asc(departments.name));
+  }
+
+  async getDepartment(id: number): Promise<Department | undefined> {
+    const [department] = await db.select().from(departments).where(eq(departments.id, id));
+    return department || undefined;
+  }
+
+  async createDepartment(data: InsertDepartment): Promise<Department> {
+    const [department] = await db.insert(departments).values(data).returning();
+    return department;
+  }
+
+  async updateDepartment(id: number, data: Partial<InsertDepartment>): Promise<Department> {
+    const [department] = await db.update(departments)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(departments.id, id))
+      .returning();
+    return department;
+  }
+
+  async deleteDepartment(id: number): Promise<void> {
+    await db.delete(departments).where(eq(departments.id, id));
+  }
+  
+  // Internal Messages CRUD
+  async getAllInternalMessages(userId?: number): Promise<(InternalMessage & { attachments?: MessageAttachment[], recipients?: MessageRecipient[] })[]> {
+    const messages = await db.select().from(internalMessages).orderBy(desc(internalMessages.sentAt));
+    
+    const messagesWithDetails = await Promise.all(
+      messages.map(async (message) => {
+        const attachments = await this.getMessageAttachments(message.id);
+        const recipients = await this.getMessageRecipients(message.id);
+        return { ...message, attachments, recipients };
+      })
+    );
+    
+    return messagesWithDetails;
+  }
+
+  async getInternalMessage(id: number): Promise<(InternalMessage & { attachments?: MessageAttachment[], recipients?: MessageRecipient[] }) | undefined> {
+    const [message] = await db.select().from(internalMessages).where(eq(internalMessages.id, id));
+    if (!message) return undefined;
+    
+    const attachments = await this.getMessageAttachments(message.id);
+    const recipients = await this.getMessageRecipients(message.id);
+    
+    return { ...message, attachments, recipients };
+  }
+
+  async getMessagesForUser(userId: number): Promise<(InternalMessage & { attachments?: MessageAttachment[], recipients?: MessageRecipient[] })[]> {
+    const recipientRecords = await db.select()
+      .from(messageRecipients)
+      .where(eq(messageRecipients.userId, userId));
+    
+    const messageIds = recipientRecords.map(r => r.messageId);
+    
+    const messages = await db.select()
+      .from(internalMessages)
+      .where(
+        or(
+          eq(internalMessages.recipientUserId, userId),
+          inArray(internalMessages.id, messageIds.length > 0 ? messageIds : [0])
+        )
+      )
+      .orderBy(desc(internalMessages.sentAt));
+    
+    const messagesWithDetails = await Promise.all(
+      messages.map(async (message) => {
+        const attachments = await this.getMessageAttachments(message.id);
+        const recipients = await this.getMessageRecipients(message.id);
+        return { ...message, attachments, recipients };
+      })
+    );
+    
+    return messagesWithDetails;
+  }
+
+  async getMessagesForDepartment(departmentId: number): Promise<(InternalMessage & { attachments?: MessageAttachment[], recipients?: MessageRecipient[] })[]> {
+    const messages = await db.select()
+      .from(internalMessages)
+      .where(eq(internalMessages.recipientDepartmentId, departmentId))
+      .orderBy(desc(internalMessages.sentAt));
+    
+    const messagesWithDetails = await Promise.all(
+      messages.map(async (message) => {
+        const attachments = await this.getMessageAttachments(message.id);
+        const recipients = await this.getMessageRecipients(message.id);
+        return { ...message, attachments, recipients };
+      })
+    );
+    
+    return messagesWithDetails;
+  }
+
+  async createInternalMessage(data: InsertInternalMessage): Promise<InternalMessage> {
+    const [message] = await db.insert(internalMessages).values(data).returning();
+    return message;
+  }
+
+  async updateInternalMessage(id: number, data: Partial<InsertInternalMessage>): Promise<InternalMessage> {
+    const [message] = await db.update(internalMessages)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(internalMessages.id, id))
+      .returning();
+    return message;
+  }
+
+  async deleteInternalMessage(id: number): Promise<void> {
+    await db.delete(internalMessages).where(eq(internalMessages.id, id));
+  }
+  
+  // Message Attachments CRUD
+  async getMessageAttachments(messageId: number): Promise<MessageAttachment[]> {
+    return await db.select().from(messageAttachments).where(eq(messageAttachments.messageId, messageId));
+  }
+
+  async createMessageAttachment(data: InsertMessageAttachment): Promise<MessageAttachment> {
+    const [attachment] = await db.insert(messageAttachments).values(data).returning();
+    return attachment;
+  }
+
+  async deleteMessageAttachment(id: number): Promise<void> {
+    await db.delete(messageAttachments).where(eq(messageAttachments.id, id));
+  }
+  
+  // Message Recipients CRUD
+  async getMessageRecipients(messageId: number): Promise<MessageRecipient[]> {
+    return await db.select().from(messageRecipients).where(eq(messageRecipients.messageId, messageId));
+  }
+
+  async createMessageRecipient(data: InsertMessageRecipient): Promise<MessageRecipient> {
+    const [recipient] = await db.insert(messageRecipients).values(data).returning();
+    return recipient;
+  }
+
+  async updateMessageRecipient(id: number, data: Partial<InsertMessageRecipient>): Promise<MessageRecipient> {
+    const [recipient] = await db.update(messageRecipients)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(messageRecipients.id, id))
+      .returning();
+    return recipient;
+  }
+
+  async markMessageAsRead(messageId: number, userId: number): Promise<void> {
+    await db.update(messageRecipients)
+      .set({ isRead: true, readAt: new Date(), updatedAt: new Date() })
+      .where(and(
+        eq(messageRecipients.messageId, messageId),
+        eq(messageRecipients.userId, userId)
+      ));
+  }
+
+  async markMessageAsAccomplished(messageId: number, userId: number): Promise<void> {
+    await db.update(messageRecipients)
+      .set({ isAccomplished: true, accomplishedAt: new Date(), updatedAt: new Date() })
+      .where(and(
+        eq(messageRecipients.messageId, messageId),
+        eq(messageRecipients.userId, userId)
+      ));
+  }
+  
   // Non-Conforming Items CRUD Implementation
   async getAllNonConformingItems(): Promise<NonConformingItem[]> {
     return await db.select().from(nonConformingItems).orderBy(desc(nonConformingItems.date));

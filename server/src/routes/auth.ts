@@ -1,3 +1,4 @@
+
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import cookieParser from 'cookie-parser';
@@ -123,8 +124,8 @@ router.post('/login', async (req: Request, res: Response) => {
       // Set secure cookie with enhanced security
       res.cookie('sessionToken', result.sessionToken, {
         httpOnly: true,
-        secure: true, // Always use secure cookies
-        sameSite: 'strict',
+        secure: process.env.NODE_ENV === 'production', // Secure only in production
+        sameSite: 'lax', // Changed from 'strict' to 'lax' for better compatibility
         maxAge: 8 * 60 * 60 * 1000, // 8 hours
         path: '/', // Explicit path
       });
@@ -167,26 +168,54 @@ router.post('/login', async (req: Request, res: Response) => {
       console.log('Error message:', error.message);
       return res.status(400).json({ error: error.message });
     }
-    res.status(500).json({ error: "Login failed" });
+    return res.status(500).json({ error: "Login failed" });
   }
 });
 
-// POST /api/auth/logout
-router.post('/logout', authenticateToken, async (req: Request, res: Response) => {
+// Session validation endpoint
+router.get("/validate", async (req, res) => {
   try {
     const sessionToken = req.cookies?.sessionToken || req.headers.authorization?.replace('Bearer ', '');
-    
+
+    if (!sessionToken) {
+      return res.status(401).json({ valid: false, error: "No session token" });
+    }
+
+    const session = await AuthService.validateSession(sessionToken);
+
+    if (!session) {
+      return res.status(401).json({ valid: false, error: "Invalid session" });
+    }
+
+    res.json({
+      valid: true,
+      user: session
+    });
+  } catch (error) {
+    console.error('Session validation error:', error);
+    res.status(500).json({ valid: false, error: "Validation failed" });
+  }
+});
+
+// Logout endpoint
+router.post("/logout", async (req, res) => {
+  try {
+    const sessionToken = req.cookies?.sessionToken || req.headers.authorization?.replace('Bearer ', '');
+
     if (sessionToken) {
       await AuthService.invalidateSession(sessionToken);
     }
 
+    // Clear the session cookie
     res.clearCookie('sessionToken');
-    res.json({ success: true, message: "Logged out successfully" });
+
+    res.json({ success: true });
   } catch (error) {
     console.error('Logout error:', error);
     res.status(500).json({ error: "Logout failed" });
   }
 });
+
 
 // GET /api/auth/session - Check current session (enhanced timeout handling)
 router.get('/session', async (req: Request, res: Response) => {

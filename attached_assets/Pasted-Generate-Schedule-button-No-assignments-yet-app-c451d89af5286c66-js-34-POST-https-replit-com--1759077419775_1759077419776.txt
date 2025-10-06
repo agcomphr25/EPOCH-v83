@@ -1,0 +1,112 @@
+Generate Schedule button) - No assignments yet
+_app-c451d89af5286c66.js:34  POST https://replit.com/data/repls/b444f108-f57d-4d01-8ed6-7336da15ce13/get_ssh_token 404 (Not Found)
+(anonymous) @ _app-c451d89af5286c66.js:34
+(anonymous) @ _app-c451d89af5286c66.js:34
+(anonymous) @ _app-c451d89af5286c66.js:1
+y @ _app-c451d89af5286c66.js:1
+u @ _app-c451d89af5286c66.js:36
+c @ _app-c451d89af5286c66.js:36
+(anonymous) @ 3377-7688e0878af693cc.js:1
+(anonymous) @ _app-c451d89af5286c66.js:36
+(anonymous) @ main-d56181b1634033ed.js:1
+n @ main-d56181b1634033ed.js:1
+u @ main-d56181b1634033ed.js:1
+(anonymous) @ main-d56181b1634033ed.js:1
+(anonymous) @ main-d56181b1634033ed.js:1
+s @ _app-c451d89af5286c66.js:36
+(anonymous) @ 3377-7688e0878af693cc.js:1
+(anonymous) @ main-d56181b1634033ed.js:1
+n @ main-d56181b1634033ed.js:1
+u @ main-d56181b1634033ed.js:1
+(anonymous) @ main-d56181b1634033ed.js:1
+(anonymous) @ main-d56181b1634033ed.js:1
+b @ 3377-7688e0878af693cc.js:1
+(anonymous) @ 3377-7688e0878af693cc.js:1
+(anonymous) @ main-d56181b1634033ed.js:1
+n @ main-d56181b1634033ed.js:1
+u @ main-d56181b1634033ed.js:1
+(anonymous) @ main-d56181b1634033ed.js:1
+(anonymous) @ main-d56181b1634033ed.js:1
+(anonymous) @ 3377-7688e0878af693cc.js:1
+(anonymous) @ 6504-3100f28a3641ebac.js:1
+handleCommand @ 6504-3100f28a3641ebac.js:1
+onSocketMessage @ 6504-3100f28a3641ebac.js:1Understand this error
+_app-c451d89af5286c66.js:34  POST https://replit.com/data/repls/b444f108-f57d-4d01-8ed6-7336da15ce13/get_ssh_token 404 (Not Found)
+(anonymous) @ _app-c451d89af5286c66.js:34
+(anonymous) @ _app-c451d89af5286c66.js:34
+(anonymous) @ _app-c451d89af5286c66.js:1
+y @ _app-c451d89af5286c66.js:1
+u @ _app-c451d89af5286c66.js:36
+c @ _app-c451d89af5286c66.js:36
+(anonymous) @ 3377-7688e0878af693cc.js:1
+(anonymous) @ _app-c451d89af5286c66.js:36
+(anonymous) @ main-d56181b1634033ed.js:1
+n @ main-d56181b1634033ed.js:1
+u @ main-d56181b1634033ed.js:1
+(anonymous) @ main-d56181b1634033ed.js:1
+(anonymous) @ main-d56181b1634033ed.js:1
+s @ _app-c451d89af5286c66.js:36
+(anonymous) @ 3377-7688e0878af693cc.js:1
+(anonymous) @ main-d56181b1634033ed.js:1
+n @ main-d56181b1634033ed.js:1
+u @ main-d56181b1634033ed.js:1
+(anonymous) @ main-d56181b1634033ed.js:1
+(anonymous) @ main-d56181b1634033ed.js:1
+b @ 3377-7688e0878af693cc.js:1
+(anonymous) @ 3377-7688e0878af693cc.js:1
+(anonymous) @ main-d56181b1634033ed.js:1
+n @ main-d56181b1634033ed.js:1
+u @ main-d56181b1634033ed.js:1
+(anonymous) @ main-d56181b1634033ed.js:1
+(anonymous) @ main-d56181b1634033ed.js:1
+(anonymous) @ 3377-7688e0878af693cc.js:1
+(anonymous) @ 6504-3100f28a3641ebac.js:1
+handleCommand @ 6504-3100f28a3641ebac.js:1
+onSocketMessage @ 6504-3100f28a3641ebac.js:1Understand this error
+_app-c451d89af5286c66.js:34  POST https://replit.com/data/repls/b444f108-f57d-4d01-8ed6-7336da15ce13/get_ssh_token 404 (Not Found)
+(anonymous) @ _app-c451d89af5286c66.js:34
+(anonymous) @ _app-c451d89af5286c66.js:34
+(anonymous) @ _app-c451d89af5286c66.js:1
+y @ _app-c451d89af5286c66.js:1
+u @ _app-c451d89af5286c66.js:36
+c @ _app-c451d89af5286c66.js:36
+(anonymous) @ 3377-7688e0878af693cc.js:1
+(anonymous) @ _app-c451d89af5286c66.js:36
+(anonymous) @ main-d56181b1634033ed.js:1
+n @ main-d56181b1634033ed.js:1
+u @ main-d56181b1634033ed.js:1
+(anonymous) @ main-d56181b1634033ed.js:1
+(anonymous) @ main-d56181b1634033ed.js:1
+s @ _app-c451d89af5286c66.js:36
+(anonymous) @ 3377-7688e0878af693cc.js:1
+(anonymous) @ main-d56181b1634033ed.js:1
+n @ main-d56181b1634033ed.js:1
+u @ main-d56181b1634033ed.js:1
+(anonymous) @ main-d56181b1634033ed.js:1
+(anonymous) @ main-d56181b1634033ed.js:1
+b @ 3377-7688e0878af693cc.js:1
+(anonymous) @ 3377-7688e0878af693cc.js:1
+(anonymous) @ main-d56181b1634033ed.js:1
+n @ main-d56181b1634033ed.js:1
+u @ main-d56181b1634033ed.js:1
+(anonymous) @ main-d56181b1634033ed.js:1
+(anonymous) @ main-d56181b1634033ed.js:1
+(anonymous) @ 3377-7688e0878af693cc.js:1
+(anonymous) @ 6504-3100f28a3641ebac.js:1
+handleCommand @ 6504-3100f28a3641ebac.js:1
+onSocketMessage @ 6504-3100f28a3641ebac.js:1Understand this error
+eruda.js:2 [vite] server connection lost. Polling for restart...
+workspace_iframe.html?initialPath=%2F&id=%3Ar71u%3A:32 Unrecognized feature: 'ambient-light-sensor'.Understand this warning
+workspace_iframe.html?initialPath=%2F&id=%3Ar71u%3A:32 Unrecognized feature: 'battery'.Understand this warning
+workspace_iframe.html?initialPath=%2F&id=%3Ar71u%3A:32 Unrecognized feature: 'execution-while-not-rendered'.Understand this warning
+workspace_iframe.html?initialPath=%2F&id=%3Ar71u%3A:32 Unrecognized feature: 'execution-while-out-of-viewport'.Understand this warning
+workspace_iframe.html?initialPath=%2F&id=%3Ar71u%3A:32 Unrecognized feature: 'layout-animations'.Understand this warning
+workspace_iframe.html?initialPath=%2F&id=%3Ar71u%3A:32 Unrecognized feature: 'legacy-image-formats'.Understand this warning
+workspace_iframe.html?initialPath=%2F&id=%3Ar71u%3A:32 Unrecognized feature: 'navigation-override'.Understand this warning
+workspace_iframe.html?initialPath=%2F&id=%3Ar71u%3A:32 Unrecognized feature: 'oversized-images'.Understand this warning
+workspace_iframe.html?initialPath=%2F&id=%3Ar71u%3A:32 Unrecognized feature: 'publickey-credentials'.Understand this warning
+workspace_iframe.html?initialPath=%2F&id=%3Ar71u%3A:32 Unrecognized feature: 'speaker-selection'.Understand this warning
+workspace_iframe.html?initialPath=%2F&id=%3Ar71u%3A:32 Unrecognized feature: 'unoptimized-images'.Understand this warning
+workspace_iframe.html?initialPath=%2F&id=%3Ar71u%3A:32 Unrecognized feature: 'unsized-media'.Understand this warning
+workspace_iframe.html?initialPath=%2F&id=%3Ar71u%3A:32 Allow attribute will take precedence over 'allowfullscreen'.Understand this warning
+workspace_iframe.html?initialPath=%2F&id=%3Ar71u%3A:32 Allow attribute will take precedence over 'allowpaymentrequest'.

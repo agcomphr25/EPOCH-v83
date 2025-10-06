@@ -13,7 +13,7 @@ import { BarcodeScanner } from '@/components/BarcodeScanner';
 import { toast } from 'react-hot-toast';
 import { format, isAfter } from 'date-fns';
 import { OrderTooltip } from '@/components/OrderTooltip';
-import { AlertTriangle, FileText, Eye, TrendingDown, Search, ArrowRight, RefreshCw, X } from 'lucide-react';
+import { AlertTriangle, FileText, Eye, TrendingDown, Search } from 'lucide-react';
 import { apiRequest } from '@/lib/queryClient';
 import { SalesOrderModal } from '@/components/SalesOrderModal';
 import { getDisplayOrderId } from '@/lib/orderUtils';
@@ -88,15 +88,9 @@ export default function FinishQCPage() {
       const fbNumber = order.fbOrderNumber?.toLowerCase() || '';
       const displayOrderId = getDisplayOrderId(order.orderId)?.toLowerCase() || '';
       
-      // Check for exact match first (higher priority)
-      if (orderId === query || fbNumber === query || displayOrderId === query) {
-        return true;
-      }
-      
-      // Then check if query starts with the search (e.g., "ag342" matches "ag342" but not "ag344")
-      return orderId.startsWith(query) || 
-             fbNumber.startsWith(query) || 
-             displayOrderId.startsWith(query);
+      return orderId.includes(query) || 
+             fbNumber.includes(query) || 
+             displayOrderId.includes(query);
     });
   }, [orders, searchQuery]);
 
@@ -106,7 +100,7 @@ export default function FinishQCPage() {
     const orderExists = filteredOrders.some((order: any) => order.orderId === orderId);
     if (orderExists) {
       // Select the found order
-      setSelectedOrders(prev => new Set([...Array.from(prev), orderId]));
+      setSelectedOrders(prev => new Set([...prev, orderId]));
       toast.success(`Order ${orderId} found and selected in Finish QC department`);
     } else {
       // Find the order in all orders to show current department
@@ -119,29 +113,19 @@ export default function FinishQCPage() {
     }
   };
 
-  // Auto-select order when scanned via barcode scanner
-  const handleOrderScanned = (orderId: string) => {
-    // Check if the order exists in the current queue
-    const orderExists = orders.some((order: any) => order.orderId === orderId);
-    if (orderExists) {
-      setSelectedOrders(prev => new Set([...Array.from(prev), orderId]));
-      toast.success(`Order ${orderId} selected automatically`);
-    } else {
-      toast.error(`Order ${orderId} not found in Finish QC department`);
-    }
-  };
-
-  // Handle search input - just filter, don't auto-select
-  const handleSearchInput = (query: string) => {
+  // Handle search with auto-selection
+  const handleSearchWithSelection = (query: string) => {
     setSearchQuery(query);
-  };
-
-  // Handle manual selection of all filtered orders
-  const handleSelectFilteredOrders = () => {
-    if (searchQuery.trim()) {
-      const matchingOrderIds = filteredOrders.map((order: any) => order.orderId);
-      setSelectedOrders(new Set(matchingOrderIds));
-      toast.success(`${matchingOrderIds.length} matching order(s) selected`);
+    
+    if (query.trim()) {
+      // Auto-select matching orders after a short delay
+      setTimeout(() => {
+        const matchingOrderIds = filteredOrders.map((order: any) => order.orderId);
+        if (matchingOrderIds.length > 0) {
+          setSelectedOrders(new Set(matchingOrderIds));
+          toast.success(`${matchingOrderIds.length} matching order(s) selected`);
+        }
+      }, 300);
     }
   };
 
@@ -369,7 +353,7 @@ export default function FinishQCPage() {
       </div>
 
       {/* Barcode Scanner */}
-      <BarcodeScanner onOrderScanned={handleOrderScanned} />
+      <BarcodeScanner />
 
       {/* Search Box */}
       <Card>
@@ -388,15 +372,19 @@ export default function FinishQCPage() {
                 type="text"
                 placeholder="Enter Order ID (e.g., AG123) or FB Number (e.g., AK072)..."
                 value={searchQuery}
-                onChange={(e) => handleSearchInput(e.target.value)}
+                onChange={(e) => handleSearchWithSelection(e.target.value)}
                 className="flex-1"
-                data-testid="input-search-orders"
               />
               <Button
                 variant="outline"
-                onClick={handleSelectFilteredOrders}
+                onClick={() => {
+                  if (searchQuery.trim()) {
+                    const matchingOrderIds = filteredOrders.map((order: any) => order.orderId);
+                    setSelectedOrders(new Set(matchingOrderIds));
+                    toast.success(`${matchingOrderIds.length} matching order(s) selected`);
+                  }
+                }}
                 disabled={!searchQuery.trim() || filteredOrders.length === 0}
-                data-testid="button-select-matches"
               >
                 Select Matches
               </Button>
@@ -570,52 +558,6 @@ export default function FinishQCPage() {
         onClose={() => setSalesOrderModalOpen(false)}
         orderId={selectedOrderId}
       />
-
-      {/* Floating Sticky Progression Button */}
-      {selectedOrders.size > 0 && (
-        <div className="fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 shadow-lg">
-          <div className="container mx-auto p-4">
-            <div className="flex items-center justify-between flex-wrap gap-4">
-              <div className="flex items-center gap-2">
-                <Badge variant="default" className="bg-blue-600 text-white px-4 py-2 text-base">
-                  {selectedOrders.size} Order{selectedOrders.size > 1 ? 's' : ''} Selected
-                </Badge>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setSelectedOrders(new Set());
-                    setSelectAllByTechnician({});
-                  }}
-                  data-testid="button-clear-selection"
-                >
-                  <X className="h-4 w-4 mr-2" />
-                  Clear Selection
-                </Button>
-              </div>
-              
-              <div className="flex gap-2">
-                <Button
-                  onClick={handleMoveToPaint}
-                  disabled={moveToPaintMutation.isPending}
-                  className="bg-green-600 hover:bg-green-700 text-white"
-                  size="lg"
-                  data-testid="button-progress-to-paint"
-                >
-                  {moveToPaintMutation.isPending ? (
-                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                  ) : (
-                    <ArrowRight className="h-4 w-4 mr-2" />
-                  )}
-                  {moveToPaintMutation.isPending 
-                    ? 'Progressing...' 
-                    : `Move to Paint (${selectedOrders.size})`}
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

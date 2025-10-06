@@ -236,10 +236,10 @@ export default function PipelineVisualization() {
             <span>Pipeline Flow Direction:</span>
             <div className="flex items-center space-x-2 flex-wrap">
               {departments.map((dept, index) => (
-                <React.Fragment key={dept.name}>
+                <div key={dept.name} className="flex items-center space-x-2">
                   <span className="text-xs">{dept.name}</span>
                   {index < departments.length - 1 && <span>→</span>}
-                </React.Fragment>
+                </div>
               ))}
             </div>
           </div>

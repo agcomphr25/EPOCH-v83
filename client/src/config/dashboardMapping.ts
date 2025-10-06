@@ -5,13 +5,14 @@ export const DASHBOARD_ROUTES: Record<string, string> = {
   // Admin users
   admin: '/admin-dashboard',
   glennj: '/admin-dashboard',
+  staciw: '/admin-dashboard',
   
   // Test/Development users
   automation_user: '/', // Default dashboard for automation
   deploy: '/', // Default dashboard for deploy user
   
   // Production users
-  agrace: '/agrace-dashboard',
+  agrace: '/ag-dashboard',
   angiet: '/angiet-dashboard',
   blaket: '/blaket-dashboard',
   bradw: '/bradw-dashboard',
@@ -23,7 +24,6 @@ export const DASHBOARD_ROUTES: Record<string, string> = {
   joeyb: '/joeyb-dashboard',
   johnl: '/johnl-dashboard',
   lauriet: '/lauriet-dashboard',
-  staciw: '/staciw-dashboard',
   tandyd: '/tandyd-dashboard',
   tandym: '/tandym-dashboard',
   tasham: '/admin-dashboard',

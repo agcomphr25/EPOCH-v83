@@ -32,7 +32,6 @@ import unifiedPaymentsRoutes from './unifiedPayments';
 import algorithmicSchedulerRoutes from './algorithmicScheduler';
 import productionQueueRoutes from './productionQueue';
 import layupScheduleRoutes from './layupSchedule';
-import oemSettingsRoutes from './oemSettings';
 // import gatewayReportsRoutes from './gatewayReports'; // Temporarily removed
 import customerSatisfactionRoutes from './customerSatisfaction';
 import poProductsRoutes from './poProducts';
@@ -152,7 +151,6 @@ export function registerRoutes(app: Express): Server {
   
   // Layup schedule management routes
   app.use('/api/layup-schedule', layupScheduleRoutes);
-  app.use('/api/oem-settings', oemSettingsRoutes);
   
   // Gateway reports routes - temporarily removed
   // app.use('/api/gateway-reports', gatewayReportsRoutes);
@@ -208,7 +206,7 @@ export function registerRoutes(app: Express): Server {
   app.post('/api/algorithmic-schedule', async (req, res) => {
     console.log('🏭 LAYUP SCHEDULER FLOW: Algorithmic schedule called for comprehensive flow');
     try {
-      const { maxOrdersPerDay = 50, scheduleDays = 60, workDays = [1, 2, 3, 4], oemSettings = {} } = req.body;
+      const { maxOrdersPerDay = 50, scheduleDays = 60, workDays = [1, 2, 3, 4] } = req.body;
       
       // Use the comprehensive algorithmic scheduler for layup flow
       const fetch = (await import('node-fetch')).default;
@@ -221,8 +219,7 @@ export function registerRoutes(app: Express): Server {
           maxOrdersPerDay,
           scheduleDays, 
           workDays, // Ensure Monday-Thursday scheduling [1,2,3,4]
-          priorityWeighting: 'urgent', // Due date priority system
-          oemSettings // Forward OEM priority settings from frontend
+          priorityWeighting: 'urgent' // Due date priority system
         })
       });
       
@@ -328,7 +325,7 @@ export function registerRoutes(app: Express): Server {
           id,
           order_id as "orderId",
           customer_id as "customer",
-          model_id as "modelId",
+          product,
           date,
           due_date as "dueDate",
           current_department as "currentDepartment",
@@ -348,7 +345,7 @@ export function registerRoutes(app: Express): Server {
         currentDepartment: (order as any).currentDepartment,
         customerId: order.customer,
         features: {},
-        modelId: order.modelId,
+        modelId: order.product,
         status: (order as any).status,
         poId: null,
         productionOrderId: null

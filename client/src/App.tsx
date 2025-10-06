@@ -119,7 +119,6 @@ import CustomerSatisfaction from "./pages/CustomerSatisfaction";
 import VendorsPage from "./pages/VendorsPage";
 import VendorPOPage from "./pages/VendorPOPage";
 import NonConformingItemsPage from "./pages/NonConformingItemsPage";
-import InternalCommunicationsPage from "./pages/InternalCommunicationsPage";
 
 import { Toaster as HotToaster } from 'react-hot-toast';
 import DeploymentAuthWrapper from './components/DeploymentAuthWrapper';
@@ -289,7 +288,6 @@ function App() {
                   <Route path="/order-department-transfer" component={OrderDepartmentTransfer} />
                   <Route path="/communications/inbox" component={CommunicationInboxPage} />
                   <Route path="/communication" component={CommunicationInboxPage} />
-                  <Route path="/internal-communications" component={InternalCommunicationsPage} />
                   <Route path="/enhanced-forms" component={EnhancedFormsPage} />
                   <Route path="/enhanced-reports" component={EnhancedReportsPage} />
 

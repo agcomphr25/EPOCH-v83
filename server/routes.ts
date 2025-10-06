@@ -82,11 +82,6 @@ import {
   insertVendorDocumentSchema,
   insertVendorScoringCriteriaSchema,
   insertVendorScoreSchema,
-  // Internal communications schemas
-  insertDepartmentSchema,
-  insertInternalMessageSchema,
-  insertMessageAttachmentSchema,
-  insertMessageRecipientSchema,
   // Non-Conforming Items schema
   insertNonConformingItemSchema
 } from "@shared/schema";
@@ -98,42 +93,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Authentication routes
   app.post("/api/auth/login", async (req, res) => {
     try {
-      const { username, password } = req.body;
-      
-      if (!username || !password) {
-        return res.status(400).json({ error: "Username and password are required" });
-      }
+      const { username, password } = loginSchema.parse(req.body);
+      const ipAddress = req.ip || req.connection.remoteAddress || null;
+      const userAgent = req.get('User-Agent') || null;
 
-      const result = await AuthService.login(username, password);
+      const result = await AuthService.authenticate(username, password, ipAddress, userAgent);
       
-      if (!result.success) {
-        return res.status(401).json({ error: result.error });
+      if (!result) {
+        return res.status(401).json({ error: "Invalid username or password" });
       }
 
       // Set secure cookie
       res.cookie('sessionToken', result.sessionToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+        sameSite: 'strict',
+        maxAge: 8 * 60 * 60 * 1000, // 8 hours
       });
 
       res.json({
         success: true,
-        user: result.user
+        user: result.user,
+        token: result.token
       });
     } catch (error) {
       console.error('Login error:', error);
+      if (error instanceof Error) {
+        return res.status(400).json({ error: error.message });
+      }
       res.status(500).json({ error: "Login failed" });
     }
   });
 
-  app.post("/api/auth/logout", async (req, res) => {
+  app.post("/api/auth/logout", authenticateToken, async (req, res) => {
     try {
       const sessionToken = req.cookies?.sessionToken || req.headers.authorization?.replace('Bearer ', '');
       
       if (sessionToken) {
-        await AuthService.logout(sessionToken);
+        await AuthService.invalidateSession(sessionToken);
       }
 
       res.clearCookie('sessionToken');
@@ -141,27 +138,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Logout error:', error);
       res.status(500).json({ error: "Logout failed" });
-    }
-  });
-
-  app.get("/api/auth/validate", async (req, res) => {
-    try {
-      const sessionToken = req.cookies?.sessionToken || req.headers.authorization?.replace('Bearer ', '');
-      
-      if (!sessionToken) {
-        return res.status(401).json({ valid: false });
-      }
-
-      const user = await AuthService.validateSession(sessionToken);
-      
-      if (!user) {
-        return res.status(401).json({ valid: false });
-      }
-
-      res.json({ valid: true, user });
-    } catch (error) {
-      console.error('Session validation error:', error);
-      res.status(500).json({ valid: false });
     }
   });
 
@@ -214,11 +190,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/users", authenticateToken, async (req, res) => {
+  app.get("/api/users", authenticateToken, requireRole('ADMIN', 'HR'), async (req, res) => {
     try {
-      const allUsers = await storage.getAllUsers();
-      const usersWithoutPasswords = allUsers.map(({ passwordHash, ...user }) => user);
-      res.json(usersWithoutPasswords);
+      // This would need to be implemented in storage
+      res.json([]);
     } catch (error) {
       console.error('Get users error:', error);
       res.status(500).json({ error: "Failed to retrieve users" });
@@ -2597,8 +2572,102 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // });
 
   // COMMENTED OUT - Using modular routes instead
-  // Customer CSV import route is now handled in modular routes
-  
+  // Customer CSV import
+  // app.post("/api/customers/import/csv", async (req, res) => {
+    try {
+      const { csvData } = req.body;
+      
+      if (!csvData || typeof csvData !== 'string') {
+        return res.status(400).json({ error: "CSV data is required" });
+      }
+
+      const lines = csvData.split('\n').filter(line => line.trim());
+      if (lines.length < 2) {
+        return res.status(400).json({ error: "CSV must contain at least a header and one data row" });
+      }
+
+      const header = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+      const importedCustomers = [];
+      const updatedCustomers = [];
+      const errors = [];
+
+      // Expected columns: Name, Email, Phone
+      const nameIndex = header.findIndex(h => h.toLowerCase().includes('name'));
+      const emailIndex = header.findIndex(h => h.toLowerCase().includes('email'));
+      const phoneIndex = header.findIndex(h => h.toLowerCase().includes('phone'));
+      
+      if (nameIndex === -1) {
+        return res.status(400).json({ error: "CSV must contain a 'Name' column" });
+      }
+      
+      for (let i = 1; i < lines.length; i++) {
+        try {
+          const values = lines[i].split(',').map(v => v.trim().replace(/"/g, ''));
+          
+          if (values.length < 1) continue; // Skip empty rows
+          
+          const customerData: any = {
+            name: values[nameIndex] || '',
+            email: emailIndex >= 0 ? (values[emailIndex] || undefined) : undefined,
+            phone: phoneIndex >= 0 ? (values[phoneIndex] || undefined) : undefined,
+            customerType: 'standard',
+            isActive: true
+          };
+
+          if (!customerData.name) {
+            errors.push(`Row ${i + 1}: Name is required`);
+            continue;
+          }
+
+          // Clean up empty strings to undefined for optional fields
+          if (customerData.email === '') customerData.email = undefined;
+          if (customerData.phone === '') customerData.phone = undefined;
+
+          // Check if customer already exists by name
+          const existingCustomers = await storage.searchCustomers(customerData.name);
+          const existingCustomer = existingCustomers.find(c => 
+            c.name.toLowerCase() === customerData.name.toLowerCase()
+          );
+
+          let customer;
+          if (existingCustomer) {
+            // Update existing customer with new data (only if new data is provided)
+            const updateData: any = {};
+            if (customerData.email) updateData.email = customerData.email;
+            if (customerData.phone) updateData.phone = customerData.phone;
+            
+            // Only update if we have new information to add
+            if (Object.keys(updateData).length > 0) {
+              customer = await storage.updateCustomer(existingCustomer.id, updateData);
+              updatedCustomers.push(customer);
+            } else {
+              customer = existingCustomer; // No new data to update
+            }
+          } else {
+            // Create new customer
+            const validatedData = insertCustomerSchema.parse(customerData);
+            customer = await storage.createCustomer(validatedData);
+            importedCustomers.push(customer);
+          }
+        } catch (error) {
+          errors.push(`Row ${i + 1}: ${error instanceof Error ? error.message : 'Invalid data'}`);
+        }
+      }
+
+      res.json({
+        success: true,
+        importedCount: importedCustomers.length,
+        updatedCount: updatedCustomers.length,
+        totalProcessed: importedCustomers.length + updatedCustomers.length,
+        errors: errors,
+        newCustomers: importedCustomers,
+        updatedCustomers: updatedCustomers
+      });
+    } catch (error) {
+      console.error("Import customers CSV error:", error);
+      res.status(500).json({ error: "Failed to import customers CSV" });
+    }
+  });
   app.get("/api/address/autocomplete", async (req, res) => {
     try {
       const { query } = req.query;
@@ -5839,124 +5908,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // ===== INTERNAL COMMUNICATIONS ROUTES =====
-  
-  // Departments
-  app.get("/api/departments", async (req, res) => {
-    try {
-      const departments = await storage.getAllDepartments();
-      res.json(departments);
-    } catch (error) {
-      console.error("Get departments error:", error);
-      res.status(500).json({ error: "Failed to retrieve departments" });
-    }
-  });
-
-  app.post("/api/departments", async (req, res) => {
-    try {
-      const data = insertDepartmentSchema.parse(req.body);
-      const department = await storage.createDepartment(data);
-      res.status(201).json(department);
-    } catch (error) {
-      console.error("Create department error:", error);
-      if (error instanceof z.ZodError) {
-        res.status(400).json({ error: "Invalid department data", details: error.errors });
-      } else {
-        res.status(500).json({ error: "Failed to create department" });
-      }
-    }
-  });
-  
-  // Internal Messages
-  app.get("/api/internal-messages", async (req, res) => {
-    try {
-      const userId = req.query.userId ? parseInt(req.query.userId as string) : undefined;
-      const messages = await storage.getAllInternalMessages(userId);
-      res.json(messages);
-    } catch (error) {
-      console.error("Get internal messages error:", error);
-      res.status(500).json({ error: "Failed to retrieve messages" });
-    }
-  });
-
-  app.get("/api/internal-messages/user/:userId", async (req, res) => {
-    try {
-      const userId = parseInt(req.params.userId);
-      const messages = await storage.getMessagesForUser(userId);
-      res.json(messages);
-    } catch (error) {
-      console.error("Get user messages error:", error);
-      res.status(500).json({ error: "Failed to retrieve user messages" });
-    }
-  });
-
-  app.get("/api/internal-messages/department/:departmentId", async (req, res) => {
-    try {
-      const departmentId = parseInt(req.params.departmentId);
-      const messages = await storage.getMessagesForDepartment(departmentId);
-      res.json(messages);
-    } catch (error) {
-      console.error("Get department messages error:", error);
-      res.status(500).json({ error: "Failed to retrieve department messages" });
-    }
-  });
-
-  app.get("/api/internal-messages/:id", async (req, res) => {
-    try {
-      const id = parseInt(req.params.id);
-      const message = await storage.getInternalMessage(id);
-      if (!message) {
-        res.status(404).json({ error: "Message not found" });
-        return;
-      }
-      res.json(message);
-    } catch (error) {
-      console.error("Get internal message error:", error);
-      res.status(500).json({ error: "Failed to retrieve message" });
-    }
-  });
-
-  app.post("/api/internal-messages", async (req, res) => {
-    try {
-      console.log("📨 Received message data:", JSON.stringify(req.body, null, 2));
-      const messageData = insertInternalMessageSchema.parse(req.body);
-      console.log("✅ Message data validated:", JSON.stringify(messageData, null, 2));
-      const message = await storage.createInternalMessage(messageData);
-      console.log("💾 Message created with ID:", message.id);
-      
-      if (messageData.recipientType === 'department' && messageData.recipientDepartmentId) {
-        const allUsers = await storage.getAllUsers();
-        const departmentUsers = allUsers.filter(user => user.isActive);
-        
-        for (const user of departmentUsers) {
-          await storage.createMessageRecipient({
-            messageId: message.id,
-            userId: user.id,
-            isRead: false,
-            isAccomplished: false,
-          });
-        }
-      } else if (messageData.recipientType === 'person' && messageData.recipientUserId) {
-        await storage.createMessageRecipient({
-          messageId: message.id,
-          userId: messageData.recipientUserId,
-          isRead: false,
-          isAccomplished: false,
-        });
-      }
-      
-      const fullMessage = await storage.getInternalMessage(message.id);
-      res.status(201).json(fullMessage);
-    } catch (error) {
-      console.error("Create internal message error:", error);
-      if (error instanceof z.ZodError) {
-        res.status(400).json({ error: "Invalid message data", details: error.errors });
-      } else {
-        res.status(500).json({ error: "Failed to create message" });
-      }
-    }
-  });
-  
   // ============================================================================
   // NON-CONFORMING ITEMS ROUTES
   // ============================================================================
@@ -5996,58 +5947,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         res.status(400).json({ error: "Invalid data", details: error.errors });
       } else {
         res.status(500).json({ error: "Failed to create non-conforming item" });
-      }
-    }
-  });
-
-  app.patch("/api/internal-messages/:id/read", async (req, res) => {
-    try {
-      const messageId = parseInt(req.params.id);
-      const { userId } = req.body;
-      
-      if (!userId) {
-        res.status(400).json({ error: "userId is required" });
-        return;
-      }
-      
-      await storage.markMessageAsRead(messageId, userId);
-      res.json({ success: true });
-    } catch (error) {
-      console.error("Mark message as read error:", error);
-      res.status(500).json({ error: "Failed to mark message as read" });
-    }
-  });
-
-  app.patch("/api/internal-messages/:id/accomplished", async (req, res) => {
-    try {
-      const messageId = parseInt(req.params.id);
-      const { userId } = req.body;
-      
-      if (!userId) {
-        res.status(400).json({ error: "userId is required" });
-        return;
-      }
-      
-      await storage.markMessageAsAccomplished(messageId, userId);
-      res.json({ success: true });
-    } catch (error) {
-      console.error("Mark message as accomplished error:", error);
-      res.status(500).json({ error: "Failed to mark message as accomplished" });
-    }
-  });
-
-  // Message Attachments
-  app.post("/api/message-attachments", async (req, res) => {
-    try {
-      const data = insertMessageAttachmentSchema.parse(req.body);
-      const attachment = await storage.createMessageAttachment(data);
-      res.status(201).json(attachment);
-    } catch (error) {
-      console.error("Create message attachment error:", error);
-      if (error instanceof z.ZodError) {
-        res.status(400).json({ error: "Invalid attachment data", details: error.errors });
-      } else {
-        res.status(500).json({ error: "Failed to create attachment" });
       }
     }
   });

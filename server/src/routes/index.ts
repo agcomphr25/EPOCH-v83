@@ -46,6 +46,11 @@ import vendorRoutes from './vendors';
 
 import mrpRoutes from './mrp';
 import enhancedRoutes from './enhanced';
+<<<<<<< HEAD
+import trainingRoutes from './training';
+import internalMessagesRoutes from './internalMessages';
+=======
+>>>>>>> origin/main
 
 import { getAccessToken } from '../utils/upsShipping';
 import { nonConformingItems, insertNonConformingItemSchema } from '@shared/schema';
@@ -54,7 +59,7 @@ import { z } from 'zod';
 import { eq, desc } from 'drizzle-orm';
 
 export function registerRoutes(app: Express): Server {
-  // Authentication routes
+  // Authentication routes (must be first)
   app.use('/api/auth', authRoutes);
 
   // Employee management routes
@@ -129,6 +134,9 @@ export function registerRoutes(app: Express): Server {
 
   // Communications management routes
   app.use('/api/communications', communicationsRoutes);
+
+  // Internal messages routes
+  app.use('/api/internal-messages', internalMessagesRoutes);
 
   // Nonconformance tracking routes
   // app.use('/api/nonconformance', nonconformanceRoutes);

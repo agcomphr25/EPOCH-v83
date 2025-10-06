@@ -25,6 +25,14 @@ export const users = pgTable("users", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+export const sessions = pgTable("sessions", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id),
+  sessionToken: text("session_token").notNull().unique(),
+  expiresAt: timestamp("expires_at").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // All finalized orders - production table
 export const allOrders = pgTable("all_orders", {
   id: serial("id").primaryKey(),
@@ -4487,6 +4495,15 @@ export type VendorScoringCriteria = typeof vendorScoringCriteria.$inferSelect;
 export type InsertVendorScore = z.infer<typeof insertVendorScoreSchema>;
 export type VendorScore = typeof vendorScores.$inferSelect;
 
+<<<<<<< HEAD
+// ===== INTERNAL COMMUNICATIONS =====
+
+export const departments = pgTable("departments", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull().unique(),
+  description: text("description"),
+  isActive: boolean("is_active").default(true),
+=======
 // ===== NON-CONFORMING ITEMS =====
 export const nonConformingItems = pgTable("non_conforming_items", {
   id: serial("id").primaryKey(),
@@ -4502,15 +4519,123 @@ export const nonConformingItems = pgTable("non_conforming_items", {
   serialTagNumber: text("serial_tag_number"),
   dispositionDate: date("disposition_date"),
   correctiveActionNotes: text("corrective_action_notes"),
+>>>>>>> origin/main
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+<<<<<<< HEAD
+export const internalMessages = pgTable("internal_messages", {
+  id: serial("id").primaryKey(),
+  subject: text("subject").notNull(),
+  message: text("message").notNull(),
+  senderId: integer("sender_id").references(() => users.id).notNull(),
+  senderName: text("sender_name").notNull(),
+  recipientType: text("recipient_type").notNull(), // 'person' or 'department'
+  recipientUserId: integer("recipient_user_id").references(() => users.id),
+  recipientDepartmentId: integer("recipient_department_id").references(() => departments.id),
+  recipientName: text("recipient_name").notNull(),
+  isUrgent: boolean("is_urgent").default(false),
+  hasReminder: boolean("has_reminder").default(false),
+  reminderDate: timestamp("reminder_date"),
+  sentAt: timestamp("sent_at").defaultNow(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const messageAttachments = pgTable("message_attachments", {
+  id: serial("id").primaryKey(),
+  messageId: integer("message_id").references(() => internalMessages.id).notNull(),
+  fileName: text("file_name").notNull(),
+  fileType: text("file_type").notNull(),
+  fileSize: integer("file_size").notNull(),
+  fileUrl: text("file_url").notNull(),
+  attachmentType: text("attachment_type"),
+  uploadedAt: timestamp("uploaded_at").defaultNow(),
+});
+
+export const messageRecipients = pgTable("message_recipients", {
+  id: serial("id").primaryKey(),
+  messageId: integer("message_id").references(() => internalMessages.id).notNull(),
+  userId: integer("user_id").references(() => users.id).notNull(),
+  isRead: boolean("is_read").default(false),
+  readAt: timestamp("read_at"),
+  isAccomplished: boolean("is_accomplished").default(false),
+  accomplishedAt: timestamp("accomplished_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertDepartmentSchema = createInsertSchema(departments).omit({
+=======
 export const insertNonConformingItemSchema = createInsertSchema(nonConformingItems).omit({
+>>>>>>> origin/main
   id: true,
   createdAt: true,
   updatedAt: true,
 }).extend({
+<<<<<<< HEAD
+  name: z.string().min(1, "Department name is required"),
+  description: z.string().optional().nullable(),
+  isActive: z.boolean().default(true),
+});
+
+export const insertInternalMessageSchema = createInsertSchema(internalMessages).omit({
+  id: true,
+  sentAt: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  subject: z.string().min(1, "Subject is required"),
+  message: z.string().min(1, "Message is required"),
+  senderId: z.number().min(1, "Sender ID is required"),
+  senderName: z.string().min(1, "Sender name is required"),
+  recipientType: z.enum(["person", "department"]),
+  recipientUserId: z.number().optional().nullable(),
+  recipientDepartmentId: z.number().optional().nullable(),
+  recipientName: z.string().min(1, "Recipient name is required"),
+  isUrgent: z.boolean().default(false),
+  hasReminder: z.boolean().default(false),
+  reminderDate: z.coerce.date().optional().nullable(),
+});
+
+export const insertMessageAttachmentSchema = createInsertSchema(messageAttachments).omit({
+  id: true,
+  uploadedAt: true,
+}).extend({
+  messageId: z.number().min(1, "Message ID is required"),
+  fileName: z.string().min(1, "File name is required"),
+  fileType: z.string().min(1, "File type is required"),
+  fileSize: z.number().min(1, "File size is required"),
+  fileUrl: z.string().min(1, "File URL is required"),
+  attachmentType: z.string().optional().nullable(),
+});
+
+export const insertMessageRecipientSchema = createInsertSchema(messageRecipients).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  messageId: z.number().min(1, "Message ID is required"),
+  userId: z.number().min(1, "User ID is required"),
+  isRead: z.boolean().default(false),
+  readAt: z.coerce.date().optional().nullable(),
+  isAccomplished: z.boolean().default(false),
+  accomplishedAt: z.coerce.date().optional().nullable(),
+});
+
+export type Department = typeof departments.$inferSelect;
+export type InsertDepartment = z.infer<typeof insertDepartmentSchema>;
+
+export type InternalMessage = typeof internalMessages.$inferSelect;
+export type InsertInternalMessage = z.infer<typeof insertInternalMessageSchema>;
+
+export type MessageAttachment = typeof messageAttachments.$inferSelect;
+export type InsertMessageAttachment = z.infer<typeof insertMessageAttachmentSchema>;
+
+export type MessageRecipient = typeof messageRecipients.$inferSelect;
+export type InsertMessageRecipient = z.infer<typeof insertMessageRecipientSchema>;
+=======
   date: z.coerce.date(),
   p1OrP2: z.enum(["P1", "P2"], { required_error: "P1 or P2 selection is required" }),
   customer: z.string().min(1, "Customer is required"),
@@ -4527,4 +4652,5 @@ export const insertNonConformingItemSchema = createInsertSchema(nonConformingIte
 
 export type NonConformingItem = typeof nonConformingItems.$inferSelect;
 export type InsertNonConformingItem = z.infer<typeof insertNonConformingItemSchema>;
+>>>>>>> origin/main
 

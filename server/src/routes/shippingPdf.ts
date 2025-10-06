@@ -1623,7 +1623,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     const wrappedBarrelInlet = wrapText(barrelInletDisplay, printableWidth - 200, 9, font);
     wrappedBarrelInlet.forEach((line, index) => {
       page.drawText(line, {
-        x: margin + 120,
+        x: selectionColX,
         y: summaryLineY - (index * 12),
         size: 8,
         font: font,
@@ -1662,7 +1662,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     const wrappedQD = wrapText(qdDisplay, printableWidth - 200, 9, font);
     wrappedQD.forEach((line, index) => {
       page.drawText(line, {
-        x: margin + 120,
+        x: selectionColX,
         y: summaryLineY - (index * 12),
         size: 8,
         font: font,
@@ -1704,7 +1704,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     const wrappedLOP = wrapText(lopDisplay, printableWidth - 200, 9, font);
     wrappedLOP.forEach((line, index) => {
       page.drawText(line, {
-        x: margin + 120,
+        x: selectionColX,
         y: summaryLineY - (index * 12),
         size: 8,
         font: font,
@@ -1754,7 +1754,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     const wrappedRails = wrapText(railsDisplay, printableWidth - 200, 9, font);
     wrappedRails.forEach((line, index) => {
       page.drawText(line, {
-        x: margin + 120,
+        x: selectionColX,
         y: summaryLineY - (index * 12),
         size: 8,
         font: font,
@@ -1794,7 +1794,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     const wrappedTexture = wrapText(textureDisplay, printableWidth - 200, 9, font);
     wrappedTexture.forEach((line, index) => {
       page.drawText(line, {
-        x: margin + 120,
+        x: selectionColX,
         y: summaryLineY - (index * 12),
         size: 8,
         font: font,
@@ -1833,7 +1833,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     const wrappedSwivel = wrapText(swivelDisplay, printableWidth - 200, 9, font);
     wrappedSwivel.forEach((line, index) => {
       page.drawText(line, {
-        x: margin + 120,
+        x: selectionColX,
         y: summaryLineY - (index * 12),
         size: 8,
         font: font,
@@ -1885,7 +1885,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     const wrappedOtherOptions = wrapText(otherOptionsDisplay, printableWidth - 200, 9, font);
     wrappedOtherOptions.forEach((line, index) => {
       page.drawText(line, {
-        x: margin + 120,
+        x: selectionColX,
         y: summaryLineY - (index * 12),
         size: 8,
         font: font,
@@ -1932,7 +1932,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     const wrappedMiscItems = wrapText(miscDisplay, printableWidth - 120, 9, font);
     wrappedMiscItems.forEach((line, index) => {
       page.drawText(line, {
-        x: margin + 120,
+        x: selectionColX,
         y: summaryLineY - (index * 12),
         size: 8,
         font: font,
@@ -2008,7 +2008,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     const wrappedPaintDisplay = wrapText(paintDisplay, printableWidth - 200, 9, font);
     wrappedPaintDisplay.forEach((line, index) => {
       page.drawText(line, {
-        x: margin + 120,
+        x: selectionColX,
         y: summaryLineY - (index * 12),
         size: 8,
         font: font,

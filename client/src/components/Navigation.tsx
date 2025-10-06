@@ -81,9 +81,24 @@ export default function Navigation() {
   // Get current user from localStorage or URL-based dashboard
   useEffect(() => {
     const getUserFromContext = () => {
-      // AUTHENTICATION DISABLED - Grant full access to all navigation
-      setCurrentUser('admin');
-      setHasFullNav(true);
+      // First check localStorage (for users who logged in via Login page)
+      const storedUser = localStorage.getItem('currentUser');
+      if (storedUser) {
+        const username = storedUser.toLowerCase();
+        setCurrentUser(username);
+        setHasFullNav(hasFullAccess(username));
+        setIsLoading(false);
+        return;
+      }
+      
+      // If no localStorage, extract username from dashboard URL pattern
+      const dashboardMatch = location.match(/^\/([a-z]+)-dashboard$/);
+      if (dashboardMatch) {
+        const username = dashboardMatch[1].toLowerCase();
+        setCurrentUser(username);
+        setHasFullNav(hasFullAccess(username));
+      }
+      
       setIsLoading(false);
     };
     
@@ -800,7 +815,14 @@ export default function Navigation() {
             {isLoading && (
               <span className="text-sm text-gray-500">Loading navigation...</span>
             )}
-            {!isLoading && filteredNavItems.map((item) => {
+            {!isLoading && !currentUser && (
+              <Link href="/login">
+                <span className="text-sm text-blue-600 hover:text-blue-700 cursor-pointer underline">
+                  Please log in to access navigation
+                </span>
+              </Link>
+            )}
+            {!isLoading && currentUser && filteredNavItems.map((item) => {
               const Icon = item.icon;
               const isActive = location === item.path;
 

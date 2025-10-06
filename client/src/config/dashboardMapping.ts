@@ -5,6 +5,7 @@ export const DASHBOARD_ROUTES: Record<string, string> = {
   // Admin users
   admin: '/admin-dashboard',
   glennj: '/admin-dashboard',
+  staciw: '/admin-dashboard',
   
   // Test/Development users
   automation_user: '/', // Default dashboard for automation
@@ -23,7 +24,6 @@ export const DASHBOARD_ROUTES: Record<string, string> = {
   joeyb: '/joeyb-dashboard',
   johnl: '/johnl-dashboard',
   lauriet: '/lauriet-dashboard',
-  staciw: '/staciw-dashboard',
   tandyd: '/tandyd-dashboard',
   tandym: '/tandym-dashboard',
   tasham: '/admin-dashboard',

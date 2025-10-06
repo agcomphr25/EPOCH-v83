@@ -1416,7 +1416,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     wrappedModel.forEach((line, index) => {
       if (summaryLineY - (index * 12) > currentY - featuresTableHeight + 8) { // Keep within table bounds
         page.drawText(line, {
-          x: margin + 150,
+          x: selectionColX,
           y: summaryLineY - (index * 12),
           size: 8,
           font: font,
@@ -1452,7 +1452,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       wrappedHandedness.forEach((line, index) => {
         if (summaryLineY - (index * 12) > currentY - featuresTableHeight + 8) {
           page.drawText(line, {
-            x: margin + 150,
+            x: selectionColX,
             y: summaryLineY - (index * 12),
             size: 8,
             font: font,
@@ -1494,7 +1494,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       wrappedActionLength.forEach((line, index) => {
         if (summaryLineY - (index * 12) > currentY - featuresTableHeight + 8) {
           page.drawText(line, {
-            x: margin + 150,
+            x: selectionColX,
             y: summaryLineY - (index * 12),
             size: 8,
             font: font,
@@ -1545,7 +1545,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       wrappedActionInlet.forEach((line, index) => {
         if (summaryLineY - (index * 12) > currentY - featuresTableHeight + 8) {
           page.drawText(line, {
-            x: margin + 150,
+            x: selectionColX,
             y: summaryLineY - (index * 12),
             size: 8,
             font: font,
@@ -1585,7 +1585,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       wrappedBottomMetal.forEach((line, index) => {
         if (summaryLineY - (index * 12) > currentY - featuresTableHeight + 8) {
           page.drawText(line, {
-            x: margin + 150,
+            x: selectionColX,
             y: summaryLineY - (index * 12),
             size: 8,
             font: font,

@@ -193,12 +193,7 @@ export default function Navigation() {
       icon: Users,
       description: 'Manage customer database'
     },
-    {
-      path: '/training',
-      label: 'Training',
-      icon: GraduationCap,
-      description: 'Employee training modules and certifications'
-    },
+
 
     {
       path: '/bom-administration',
@@ -354,11 +349,17 @@ export default function Navigation() {
       icon: Shield,
       description: 'QC inspections and definitions'
     },
+    // {
+    //   path: '/nonconformance',
+    //   label: 'Nonconformance Tracking',
+    //   icon: ClipboardList,
+    //   description: 'Track and manage quality issues and dispositions'
+    // },
     {
-      path: '/nonconformance',
-      label: 'Nonconformance Tracking',
+      path: '/non-conforming-items',
+      label: 'Non-Conforming Items',
       icon: ClipboardList,
-      description: 'Track and manage quality issues and dispositions'
+      description: 'Track non-conforming items with detailed dispositions'
     },
     {
       path: '/maintenance',

@@ -201,8 +201,9 @@ export default function InternalCommunicationBoard() {
       return;
     }
 
-    const senderUser = users.find(u => u.id === currentUserId);
-    const senderName = senderUser ? senderUser.username : 'Unknown';
+    // Use currentUser.username directly instead of looking up in users array
+    // This handles dev bypass where currentUser might not be in the users list
+    const senderName = currentUser?.username || 'Unknown';
     
     if (recipientType === 'department') {
       const dept = departments.find(d => d.id === parseInt(selectedDepartment));
@@ -282,7 +283,11 @@ export default function InternalCommunicationBoard() {
   };
 
   const filteredMessages = messages.filter(msg => {
-    if (filterType === 'sent') return msg.senderId === currentUserId;
+    if (filterType === 'sent') {
+      // In development, if sender doesn't match current user, check if current user is the recipient
+      // (this handles dev bypass where senderId might be remapped)
+      return msg.senderId === currentUserId || msg.senderName === currentUser?.username;
+    }
     if (filterType === 'received') {
       return msg.recipients?.some(r => r.userId === currentUserId);
     }

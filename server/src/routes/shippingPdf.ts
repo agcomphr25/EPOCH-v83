@@ -11,12 +11,25 @@ const router = Router();
 // Helper function to load and embed company logo
 async function embedCompanyLogo(pdfDoc: PDFDocument) {
   try {
-    // Fix for ES modules - use fileURLToPath for cross-platform compatibility
+    // Try file system first (development)
     const __filename = fileURLToPath(import.meta.url);
     const __dirname = path.dirname(__filename);
     const logoPath = path.join(__dirname, '../../assets/logo_updated.png');
-    const logoImageBytes = fs.readFileSync(logoPath);
-    return await pdfDoc.embedPng(logoImageBytes);
+    
+    if (fs.existsSync(logoPath)) {
+      const logoImageBytes = fs.readFileSync(logoPath);
+      return await pdfDoc.embedPng(logoImageBytes);
+    }
+    
+    // Fallback: try public folder (deployed)
+    const publicLogoPath = path.join(__dirname, '../public/logo_updated.png');
+    if (fs.existsSync(publicLogoPath)) {
+      const logoImageBytes = fs.readFileSync(publicLogoPath);
+      return await pdfDoc.embedPng(logoImageBytes);
+    }
+    
+    console.warn('Logo file not found in expected locations');
+    return null;
   } catch (error) {
     console.warn('Could not load company logo:', error);
     return null;

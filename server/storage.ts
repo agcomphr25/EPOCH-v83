@@ -920,7 +920,13 @@ export interface IStorage {
   deleteVendorScore(id: number): Promise<void>;
   calculateVendorTotalScore(vendorId: number): Promise<number>;
 
-<<<<<<< HEAD
+  // Non-Conforming Items CRUD
+  getAllNonConformingItems(): Promise<NonConformingItem[]>;
+  getNonConformingItem(id: number): Promise<NonConformingItem | undefined>;
+  createNonConformingItem(data: InsertNonConformingItem): Promise<NonConformingItem>;
+  updateNonConformingItem(id: number, data: Partial<InsertNonConformingItem>): Promise<NonConformingItem>;
+  deleteNonConformingItem(id: number): Promise<void>;
+
   // ===== INTERNAL COMMUNICATIONS =====
   
   // Departments CRUD
@@ -950,14 +956,6 @@ export interface IStorage {
   updateMessageRecipient(id: number, data: Partial<InsertMessageRecipient>): Promise<MessageRecipient>;
   markMessageAsRead(messageId: number, userId: number): Promise<void>;
   markMessageAsAccomplished(messageId: number, userId: number): Promise<void>;
-=======
-  // Non-Conforming Items CRUD
-  getAllNonConformingItems(): Promise<NonConformingItem[]>;
-  getNonConformingItem(id: number): Promise<NonConformingItem | undefined>;
-  createNonConformingItem(data: InsertNonConformingItem): Promise<NonConformingItem>;
-  updateNonConformingItem(id: number, data: Partial<InsertNonConformingItem>): Promise<NonConformingItem>;
-  deleteNonConformingItem(id: number): Promise<void>;
->>>>>>> origin/main
 
 }
 

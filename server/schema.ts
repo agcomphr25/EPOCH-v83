@@ -3273,9 +3273,6 @@ export const vendorContactSchema = z.object({
   isPrimary: z.boolean().default(false),
 });
 
-// Vendor types (using comprehensive schema defined later)
-export type Vendor = typeof vendors.$inferSelect;
-
 // Vendor Purchase Order Status Enum
 export const vendorPOStatusEnum = pgEnum('vendor_po_status', ['DRAFT', 'SENT', 'PARTIALLY_RECEIVED', 'FULLY_RECEIVED', 'CANCELLED']);
 

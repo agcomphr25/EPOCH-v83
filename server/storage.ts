@@ -38,6 +38,14 @@ import {
   // Vendor management tables
   vendors, vendorContacts, vendorAddresses, vendorContactPhones, vendorContactEmails, vendorDocuments, vendorScoringCriteria, vendorScores,
 
+<<<<<<< HEAD
+  // Internal communications tables
+  departments, internalMessages, messageAttachments, messageRecipients,
+=======
+  // Non-Conforming Items table
+  nonConformingItems,
+>>>>>>> origin/main
+
   // Types
   type User, type InsertUser, type Order, type InsertOrder, type CSVData, type InsertCSVData,
   type CustomerType, type InsertCustomerType,
@@ -145,7 +153,16 @@ import {
   type VendorScoringCriteria, type InsertVendorScoringCriteria,
   type VendorScore, type InsertVendorScore,
 
-
+<<<<<<< HEAD
+  // Internal communications types
+  type Department, type InsertDepartment,
+  type InternalMessage, type InsertInternalMessage,
+  type MessageAttachment, type InsertMessageAttachment,
+  type MessageRecipient, type InsertMessageRecipient,
+=======
+  // Non-Conforming Items types
+  type NonConformingItem, type InsertNonConformingItem,
+>>>>>>> origin/main
 
 } from "./schema";
 import { db } from "./db";
@@ -719,9 +736,7 @@ export interface IStorage {
   updateVendorPurchaseOrderItem(id: number, data: Partial<InsertVendorPurchaseOrderItem & { totalPrice?: number }>): Promise<VendorPurchaseOrderItem | undefined>;
   deleteVendorPurchaseOrderItem(id: number): Promise<boolean>;
 
-  // ============================================================================
   // INVENTORY MANAGEMENT & MRP METHODS
-  // ============================================================================
 
   // Robust Parts Management
   getAllRobustParts(params?: { q?: string; type?: string; active?: boolean; page?: number; limit?: number }): Promise<{ data: RobustPart[]; total: number }>;
@@ -789,9 +804,7 @@ export interface IStorage {
   // MRP Calculation History
   getMrpCalculationHistory(limit?: number): Promise<MrpCalculationHistory[]>;
 
-  // ============================================================================
   // ENHANCED INVENTORY MANAGEMENT & MRP METHODS
-  // ============================================================================
 
   // Allocation Detail Management - Demand-to-Supply Pegging
   getAllAllocationDetails(params?: { partId?: string; demandOrderId?: string; supplyOrderId?: string; status?: string }): Promise<AllocationDetail[]>;
@@ -910,6 +923,45 @@ export interface IStorage {
   updateVendorScore(id: number, data: Partial<InsertVendorScore>): Promise<VendorScore>;
   deleteVendorScore(id: number): Promise<void>;
   calculateVendorTotalScore(vendorId: number): Promise<number>;
+
+<<<<<<< HEAD
+  // ===== INTERNAL COMMUNICATIONS =====
+  
+  // Departments CRUD
+  getAllDepartments(): Promise<Department[]>;
+  getDepartment(id: number): Promise<Department | undefined>;
+  createDepartment(data: InsertDepartment): Promise<Department>;
+  updateDepartment(id: number, data: Partial<InsertDepartment>): Promise<Department>;
+  deleteDepartment(id: number): Promise<void>;
+  
+  // Internal Messages CRUD
+  getAllInternalMessages(userId?: number): Promise<(InternalMessage & { attachments?: MessageAttachment[], recipients?: MessageRecipient[] })[]>;
+  getInternalMessage(id: number): Promise<(InternalMessage & { attachments?: MessageAttachment[], recipients?: MessageRecipient[] }) | undefined>;
+  getMessagesForUser(userId: number): Promise<(InternalMessage & { attachments?: MessageAttachment[], recipients?: MessageRecipient[] })[]>;
+  getMessagesForDepartment(departmentId: number): Promise<(InternalMessage & { attachments?: MessageAttachment[], recipients?: MessageRecipient[] })[]>;
+  createInternalMessage(data: InsertInternalMessage): Promise<InternalMessage>;
+  updateInternalMessage(id: number, data: Partial<InsertInternalMessage>): Promise<InternalMessage>;
+  deleteInternalMessage(id: number): Promise<void>;
+  
+  // Message Attachments CRUD
+  getMessageAttachments(messageId: number): Promise<MessageAttachment[]>;
+  createMessageAttachment(data: InsertMessageAttachment): Promise<MessageAttachment>;
+  deleteMessageAttachment(id: number): Promise<void>;
+  
+  // Message Recipients CRUD
+  getMessageRecipients(messageId: number): Promise<MessageRecipient[]>;
+  createMessageRecipient(data: InsertMessageRecipient): Promise<MessageRecipient>;
+  updateMessageRecipient(id: number, data: Partial<InsertMessageRecipient>): Promise<MessageRecipient>;
+  markMessageAsRead(messageId: number, userId: number): Promise<void>;
+  markMessageAsAccomplished(messageId: number, userId: number): Promise<void>;
+=======
+  // Non-Conforming Items CRUD
+  getAllNonConformingItems(): Promise<NonConformingItem[]>;
+  getNonConformingItem(id: number): Promise<NonConformingItem | undefined>;
+  createNonConformingItem(data: InsertNonConformingItem): Promise<NonConformingItem>;
+  updateNonConformingItem(id: number, data: Partial<InsertNonConformingItem>): Promise<NonConformingItem>;
+  deleteNonConformingItem(id: number): Promise<void>;
+>>>>>>> origin/main
 
 }
 
@@ -2590,19 +2642,27 @@ export class DatabaseStorage implements IStorage {
     // Create payment map for fast lookup
     const paymentMap = new Map(paymentTotals.map(p => [p.orderId, p.totalPayments]));
 
-    // Process orders with payment info using CORRECTED payment logic
+    // Process orders with payment info using REAL-TIME calculated order totals
     const ordersWithPaymentInfo = await Promise.all(ordersWithCustomers.map(async order => {
       const paymentTotal = paymentMap.get(order.orderId) || 0;
       
-      // ULTRA SIMPLE FIX: Just compare payments to stored order total
-      // Use the same logic as Order Summary: if no stored total, assume payment covers it
-      const storedOrderTotal = Number(order.paymentAmount) || 0;
+      // CRITICAL FIX: Use actual calculated order total instead of stale paymentAmount field
+      let actualOrderTotal: number;
       
-      // If there's a stored order total, compare against it
-      // If no stored total but there are payments, consider it paid (like Order Summary shows)
-      const isFullyPaid = storedOrderTotal > 0 
-        ? (paymentTotal >= storedOrderTotal) 
-        : (paymentTotal > 0);
+      try {
+        // Calculate real-time order total using the existing method
+        actualOrderTotal = await this.calculateOrderTotal(order);
+        console.log(`💰 Payment calc for ${order.orderId}: paymentTotal=${paymentTotal}, orderTotal=${actualOrderTotal}`);
+      } catch (error) {
+        // Fallback to stored paymentAmount if calculation fails
+        console.warn(`Failed to calculate order total for ${order.orderId}, using stored amount:`, error);
+        actualOrderTotal = Number(order.paymentAmount) || 0;
+      }
+      
+      // Fixed payment status logic using real current order total
+      const isFullyPaid = actualOrderTotal > 0 
+        ? (paymentTotal >= actualOrderTotal)
+        : (paymentTotal > 0); // If no total calculated, any payment means paid
 
       return {
         ...order,
@@ -4093,8 +4153,24 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateCustomerAddress(id: number, data: Partial<InsertCustomerAddress>): Promise<CustomerAddress> {
+    // Filter data to only include valid customerAddresses fields and exclude problematic timestamp fields
+    const validFields = {
+      ...(data.customerId !== undefined && { customerId: data.customerId }),
+      ...(data.street !== undefined && { street: data.street }),
+      ...(data.street2 !== undefined && { street2: data.street2 }),
+      ...(data.city !== undefined && { city: data.city }),
+      ...(data.state !== undefined && { state: data.state }),
+      ...(data.zipCode !== undefined && { zipCode: data.zipCode }),
+      ...(data.country !== undefined && { country: data.country }),
+      ...(data.type !== undefined && { type: data.type }),
+      ...(data.isDefault !== undefined && { isDefault: data.isDefault }),
+      ...(data.isValidated !== undefined && { isValidated: data.isValidated }),
+      // Always set updatedAt to current timestamp on updates
+      updatedAt: new Date()
+    };
+
     const [address] = await db.update(customerAddresses)
-      .set(data)
+      .set(validFields)
       .where(eq(customerAddresses.id, id))
       .returning();
     return address;
@@ -9056,6 +9132,200 @@ AG Composites Team`;
     }
 
     return results;
+  }
+
+<<<<<<< HEAD
+  // ===== INTERNAL COMMUNICATIONS IMPLEMENTATIONS =====
+  
+  // Departments CRUD
+  async getAllDepartments(): Promise<Department[]> {
+    return await db.select().from(departments).orderBy(asc(departments.name));
+  }
+
+  async getDepartment(id: number): Promise<Department | undefined> {
+    const [department] = await db.select().from(departments).where(eq(departments.id, id));
+    return department || undefined;
+  }
+
+  async createDepartment(data: InsertDepartment): Promise<Department> {
+    const [department] = await db.insert(departments).values(data).returning();
+    return department;
+  }
+
+  async updateDepartment(id: number, data: Partial<InsertDepartment>): Promise<Department> {
+    const [department] = await db.update(departments)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(departments.id, id))
+      .returning();
+    return department;
+  }
+
+  async deleteDepartment(id: number): Promise<void> {
+    await db.delete(departments).where(eq(departments.id, id));
+  }
+  
+  // Internal Messages CRUD
+  async getAllInternalMessages(userId?: number): Promise<(InternalMessage & { attachments?: MessageAttachment[], recipients?: MessageRecipient[] })[]> {
+    const messages = await db.select().from(internalMessages).orderBy(desc(internalMessages.sentAt));
+    
+    const messagesWithDetails = await Promise.all(
+      messages.map(async (message) => {
+        const attachments = await this.getMessageAttachments(message.id);
+        const recipients = await this.getMessageRecipients(message.id);
+        return { ...message, attachments, recipients };
+      })
+    );
+    
+    return messagesWithDetails;
+  }
+
+  async getInternalMessage(id: number): Promise<(InternalMessage & { attachments?: MessageAttachment[], recipients?: MessageRecipient[] }) | undefined> {
+    const [message] = await db.select().from(internalMessages).where(eq(internalMessages.id, id));
+    if (!message) return undefined;
+    
+    const attachments = await this.getMessageAttachments(message.id);
+    const recipients = await this.getMessageRecipients(message.id);
+    
+    return { ...message, attachments, recipients };
+  }
+
+  async getMessagesForUser(userId: number): Promise<(InternalMessage & { attachments?: MessageAttachment[], recipients?: MessageRecipient[] })[]> {
+    const recipientRecords = await db.select()
+      .from(messageRecipients)
+      .where(eq(messageRecipients.userId, userId));
+    
+    const messageIds = recipientRecords.map(r => r.messageId);
+    
+    const messages = await db.select()
+      .from(internalMessages)
+      .where(
+        or(
+          eq(internalMessages.recipientUserId, userId),
+          inArray(internalMessages.id, messageIds.length > 0 ? messageIds : [0])
+        )
+      )
+      .orderBy(desc(internalMessages.sentAt));
+    
+    const messagesWithDetails = await Promise.all(
+      messages.map(async (message) => {
+        const attachments = await this.getMessageAttachments(message.id);
+        const recipients = await this.getMessageRecipients(message.id);
+        return { ...message, attachments, recipients };
+      })
+    );
+    
+    return messagesWithDetails;
+  }
+
+  async getMessagesForDepartment(departmentId: number): Promise<(InternalMessage & { attachments?: MessageAttachment[], recipients?: MessageRecipient[] })[]> {
+    const messages = await db.select()
+      .from(internalMessages)
+      .where(eq(internalMessages.recipientDepartmentId, departmentId))
+      .orderBy(desc(internalMessages.sentAt));
+    
+    const messagesWithDetails = await Promise.all(
+      messages.map(async (message) => {
+        const attachments = await this.getMessageAttachments(message.id);
+        const recipients = await this.getMessageRecipients(message.id);
+        return { ...message, attachments, recipients };
+      })
+    );
+    
+    return messagesWithDetails;
+  }
+
+  async createInternalMessage(data: InsertInternalMessage): Promise<InternalMessage> {
+    const [message] = await db.insert(internalMessages).values(data).returning();
+    return message;
+  }
+
+  async updateInternalMessage(id: number, data: Partial<InsertInternalMessage>): Promise<InternalMessage> {
+    const [message] = await db.update(internalMessages)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(internalMessages.id, id))
+      .returning();
+    return message;
+  }
+
+  async deleteInternalMessage(id: number): Promise<void> {
+    await db.delete(internalMessages).where(eq(internalMessages.id, id));
+  }
+  
+  // Message Attachments CRUD
+  async getMessageAttachments(messageId: number): Promise<MessageAttachment[]> {
+    return await db.select().from(messageAttachments).where(eq(messageAttachments.messageId, messageId));
+  }
+
+  async createMessageAttachment(data: InsertMessageAttachment): Promise<MessageAttachment> {
+    const [attachment] = await db.insert(messageAttachments).values(data).returning();
+    return attachment;
+  }
+
+  async deleteMessageAttachment(id: number): Promise<void> {
+    await db.delete(messageAttachments).where(eq(messageAttachments.id, id));
+  }
+  
+  // Message Recipients CRUD
+  async getMessageRecipients(messageId: number): Promise<MessageRecipient[]> {
+    return await db.select().from(messageRecipients).where(eq(messageRecipients.messageId, messageId));
+  }
+
+  async createMessageRecipient(data: InsertMessageRecipient): Promise<MessageRecipient> {
+    const [recipient] = await db.insert(messageRecipients).values(data).returning();
+    return recipient;
+  }
+
+  async updateMessageRecipient(id: number, data: Partial<InsertMessageRecipient>): Promise<MessageRecipient> {
+    const [recipient] = await db.update(messageRecipients)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(messageRecipients.id, id))
+      .returning();
+    return recipient;
+  }
+
+  async markMessageAsRead(messageId: number, userId: number): Promise<void> {
+    await db.update(messageRecipients)
+      .set({ isRead: true, readAt: new Date(), updatedAt: new Date() })
+      .where(and(
+        eq(messageRecipients.messageId, messageId),
+        eq(messageRecipients.userId, userId)
+      ));
+  }
+
+  async markMessageAsAccomplished(messageId: number, userId: number): Promise<void> {
+    await db.update(messageRecipients)
+      .set({ isAccomplished: true, accomplishedAt: new Date(), updatedAt: new Date() })
+      .where(and(
+        eq(messageRecipients.messageId, messageId),
+        eq(messageRecipients.userId, userId)
+      ));
+=======
+  // Non-Conforming Items CRUD Implementation
+  async getAllNonConformingItems(): Promise<NonConformingItem[]> {
+    return await db.select().from(nonConformingItems).orderBy(desc(nonConformingItems.date));
+  }
+
+  async getNonConformingItem(id: number): Promise<NonConformingItem | undefined> {
+    const [item] = await db.select().from(nonConformingItems).where(eq(nonConformingItems.id, id));
+    return item || undefined;
+  }
+
+  async createNonConformingItem(data: InsertNonConformingItem): Promise<NonConformingItem> {
+    const [item] = await db.insert(nonConformingItems).values(data).returning();
+    return item;
+  }
+
+  async updateNonConformingItem(id: number, data: Partial<InsertNonConformingItem>): Promise<NonConformingItem> {
+    const [item] = await db.update(nonConformingItems)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(nonConformingItems.id, id))
+      .returning();
+    return item;
+  }
+
+  async deleteNonConformingItem(id: number): Promise<void> {
+    await db.delete(nonConformingItems).where(eq(nonConformingItems.id, id));
+>>>>>>> origin/main
   }
 
 }

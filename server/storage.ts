@@ -966,8 +966,7 @@ export interface IStorage {
   createNonConformingItem(data: InsertNonConformingItem): Promise<NonConformingItem>;
   updateNonConformingItem(id: number, data: Partial<InsertNonConformingItem>): Promise<NonConformingItem>;
   deleteNonConformingItem(id: number): Promise<void>;
-
-
+}
 
 export class DatabaseStorage implements IStorage {
   async getUser(id: number): Promise<User | undefined> {

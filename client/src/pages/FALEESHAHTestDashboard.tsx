@@ -1,6 +1,6 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Shield, Palette, CheckCircle, Truck, FileText, Users2, Users, Factory } from 'lucide-react';
+import { Shield, Palette, CheckCircle, Truck, FileText, Users2, Users, Factory, Ship, ArrowRightLeft } from 'lucide-react';
 import { Link } from 'wouter';
 import PipelineVisualization from '@/components/PipelineVisualization';
 
@@ -78,6 +78,26 @@ export default function FALEESHAHTestDashboard() {
               <Users2 className="w-8 h-8 text-purple-600 mx-auto mb-3" />
               <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Customer Management</h3>
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Manage customers</p>
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link href="/shipping-management">
+          <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-indigo-200">
+            <CardContent className="p-4 text-center">
+              <Ship className="w-8 h-8 text-indigo-600 mx-auto mb-3" />
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Shipping Management</h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Manage shipping operations</p>
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link href="/order-department-transfer">
+          <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-teal-200">
+            <CardContent className="p-4 text-center">
+              <ArrowRightLeft className="w-8 h-8 text-teal-600 mx-auto mb-3" />
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Order Transfer</h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Transfer orders between departments</p>
             </CardContent>
           </Card>
         </Link>

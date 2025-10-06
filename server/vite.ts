@@ -44,14 +44,11 @@ export async function setupVite(app: Express, server: Server) {
   app.use("*", async (req, res, next) => {
     const url = req.originalUrl;
 
-<<<<<<< HEAD
     // Skip API routes and static assets
     if (req.path.startsWith("/api") || url.startsWith('/attached_assets')) {
       return next();
     }
 
-=======
->>>>>>> origin/main
     try {
       const clientTemplate = path.resolve(
         import.meta.dirname,
@@ -92,16 +89,8 @@ export function serveStatic(app: Express) {
     if (req.path.startsWith("/api")) {
       return next();
     }
-
-    // fall through to index.html if the file doesn't exist
-    app.use("*", (req, res, next) => {
-      // Skip API routes
-      if (req.path.startsWith("/api")) {
-        return next();
-      }
-      // For all other routes, serve the React app
-      const indexPath = path.join(distPath, "index.html");
-      res.sendFile(indexPath);
-    });
+    // For all other routes, serve the React app
+    const indexPath = path.join(distPath, "index.html");
+    res.sendFile(indexPath);
   });
 }

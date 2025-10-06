@@ -88,8 +88,6 @@ import KickbackTracking from '@/components/KickbackTracking';
 import DocumentManagement from "./pages/DocumentManagement";
 import ShutdownProceduresTraining from "@/pages/ShutdownProceduresTraining";
 import FireSafetyTraining from "@/pages/FireSafetyTraining";
-import Training from "./pages/Training";
-import TrainingModule from "./pages/TrainingModule";
 import PurchaseOrderItemsQueuePage from "./pages/PurchaseOrderItemsQueuePage";
 import LayupPluggingQueuePage from "./pages/LayupPluggingQueuePage";
 import BarcodeQueuePage from "./pages/BarcodeQueuePage";
@@ -120,6 +118,7 @@ import SimplifiedLayupScheduler from "./components/SimplifiedLayupScheduler";
 import CustomerSatisfaction from "./pages/CustomerSatisfaction";
 import VendorsPage from "./pages/VendorsPage";
 import VendorPOPage from "./pages/VendorPOPage";
+import NonConformingItemsPage from "./pages/NonConformingItemsPage";
 
 import { Toaster as HotToaster } from 'react-hot-toast';
 import DeploymentAuthWrapper from './components/DeploymentAuthWrapper';
@@ -327,10 +326,6 @@ function App() {
                   <Route path="/shutdown-training" component={ShutdownProceduresTraining} />
                   <Route path="/fire-safety-training" component={FireSafetyTraining} />
 
-                  {/* Training Routes */}
-                  <Route path="/training" component={Training} />
-                  <Route path="/training/module/:id" component={TrainingModule} />
-
                   {/* Queue Management Routes */}
                   <Route path="/purchase-order-items-queue" component={PurchaseOrderItemsQueuePage} />
                   <Route path="/layup-scheduler" component={LayupSchedulerPage} />
@@ -341,8 +336,9 @@ function App() {
                   <Route path="/production-queue" component={ProductionQueueManager} />
 
                   {/* Nonconformance Tracking Routes */}
-                  <Route path="/nonconformance" component={NonconformanceDashboard} />
-                  <Route path="/nonconformance-report" component={NonconformanceReport} />
+                  {/* <Route path="/nonconformance" component={NonconformanceDashboard} /> */}
+                  {/* <Route path="/nonconformance-report" component={NonconformanceReport} /> */}
+                  <Route path="/non-conforming-items" component={NonConformingItemsPage} />
 
                   {/* Reports */}
                   <Route path="/ag-bottom-metal-report" component={AGBottomMetalReport} />

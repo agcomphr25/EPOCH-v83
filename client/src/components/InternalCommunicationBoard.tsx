@@ -59,7 +59,7 @@ export default function InternalCommunicationBoard() {
   const [message, setMessage] = useState('');
   const [isUrgent, setIsUrgent] = useState(false);
   const [showCompose, setShowCompose] = useState(false);
-  const [filterType, setFilterType] = useState<'all' | 'sent' | 'received'>('all');
+  const [filterType, setFilterType] = useState<'all' | 'sent' | 'received'>('received');
   
   // Attachment state
   const [attachmentType, setAttachmentType] = useState<'none' | 'sales_order' | 'email' | 'download'>('none');

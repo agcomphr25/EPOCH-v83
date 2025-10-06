@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Package, Plus, ShoppingCart, Search } from 'lucide-react';
+import { Package, Plus, ShoppingCart } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface POProduct {
@@ -58,7 +58,6 @@ interface SelectedProduct {
 
 export default function POProductSelector({ poId, customerName, isOpen, onClose, onSuccess }: POProductSelectorProps) {
   const [selectedProducts, setSelectedProducts] = useState<SelectedProduct[]>([]);
-  const [searchQuery, setSearchQuery] = useState('');
   const { toast } = useToast();
 
   // Fetch customer-associated PO products
@@ -79,31 +78,10 @@ export default function POProductSelector({ poId, customerName, isOpen, onClose,
     },
   });
 
-  // Filter products by customer name and search query
-  const customerProducts = allPOProducts.filter(product => {
-    // First filter by customer name
-    const matchesCustomer = product.customerName.toLowerCase().trim() === customerName.toLowerCase().trim();
-    
-    if (!matchesCustomer) return false;
-    
-    // Then filter by search query if provided
-    if (!searchQuery.trim()) return true;
-    
-    const query = searchQuery.toLowerCase();
-    const stockModelDisplayName = getStockModelDisplayName(product.stockModel).toLowerCase();
-    
-    return (
-      product.productName.toLowerCase().includes(query) ||
-      product.stockModel.toLowerCase().includes(query) ||
-      stockModelDisplayName.includes(query) ||
-      product.material.toLowerCase().includes(query) ||
-      product.handedness.toLowerCase().includes(query) ||
-      product.actionLength.toLowerCase().includes(query) ||
-      product.bottomMetal.toLowerCase().includes(query) ||
-      product.paintOptions.toLowerCase().includes(query) ||
-      product.texture.toLowerCase().includes(query)
-    );
-  });
+  // Filter products by customer name
+  const customerProducts = allPOProducts.filter(product => 
+    product.customerName.toLowerCase().trim() === customerName.toLowerCase().trim()
+  );
 
   const getStockModelDisplayName = (stockModelId: string) => {
     const stockModel = stockModels.find(sm => sm.id === stockModelId);
@@ -206,7 +184,6 @@ export default function POProductSelector({ poId, customerName, isOpen, onClose,
 
   const handleClose = () => {
     setSelectedProducts([]);
-    setSearchQuery('');
     onClose();
   };
 
@@ -240,58 +217,20 @@ export default function POProductSelector({ poId, customerName, isOpen, onClose,
         </DialogHeader>
         
         <div className="space-y-6">
-          {/* Get total customer products before search filter */}
-          {(() => {
-            const totalCustomerProducts = allPOProducts.filter(product => 
-              product.customerName.toLowerCase().trim() === customerName.toLowerCase().trim()
-            );
-            
-            if (totalCustomerProducts.length === 0) {
-              return (
-                <Card>
-                  <CardContent className="py-8">
-                    <div className="text-center">
-                      <Package className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                      <h3 className="text-lg font-medium text-gray-900 mb-2">No Products Available</h3>
-                      <p className="text-gray-500">
-                        No PO products have been created for customer "{customerName}".
-                        Products must be created on the PO Products page first.
-                      </p>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            }
-            
-            if (customerProducts.length === 0 && searchQuery.trim()) {
-              return (
-                <Card>
-                  <CardContent className="py-8">
-                    <div className="text-center">
-                      <Search className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                      <h3 className="text-lg font-medium text-gray-900 mb-2">No Products Found</h3>
-                      <p className="text-gray-500">
-                        No products match your search for "{searchQuery}".
-                        Try a different search term or clear the search to see all products.
-                      </p>
-                      <Button 
-                        variant="outline" 
-                        onClick={() => setSearchQuery('')}
-                        className="mt-4"
-                        data-testid="button-clear-search"
-                      >
-                        Clear Search
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            }
-            
-            return null;
-          })()}
-          
-          {customerProducts.length > 0 && (
+          {customerProducts.length === 0 ? (
+            <Card>
+              <CardContent className="py-8">
+                <div className="text-center">
+                  <Package className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">No Products Available</h3>
+                  <p className="text-gray-500">
+                    No PO products have been created for customer "{customerName}".
+                    Products must be created on the PO Products page first.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          ) : (
             <>
               {/* Available Products */}
               <Card>
@@ -299,24 +238,6 @@ export default function POProductSelector({ poId, customerName, isOpen, onClose,
                   <CardTitle>Available Products</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  {/* Search Box */}
-                  <div className="mb-4">
-                    <div className="relative">
-                      <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        placeholder="Search by product name, stock model, material, handedness..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="pl-10"
-                        data-testid="input-product-search"
-                      />
-                    </div>
-                    {searchQuery && (
-                      <p className="text-sm text-muted-foreground mt-2">
-                        Showing {customerProducts.length} product(s) matching "{searchQuery}"
-                      </p>
-                    )}
-                  </div>
                   <Table>
                     <TableHeader>
                       <TableRow>

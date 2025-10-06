@@ -7,7 +7,7 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
   try {
     // Use work days from frontend settings (respecting user configuration)
     // Default to 2 weeks (10 work days) instead of 60 days
-    const { scheduleDays = 10, workDays = [1, 2, 3, 4], maxOrdersPerDay = 21, employees = [], molds = [], oemSettings = {} } = req.body;
+    const { scheduleDays = 10, workDays = [1, 2, 3, 4], maxOrdersPerDay = 21, employees = [], molds = [] } = req.body;
     
     // Use the work days passed from the frontend settings
     const enforcedWorkDays = workDays; // Respect user's work day configuration
@@ -116,22 +116,7 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
           
           let priority = 0;
           
-          // OEM PRIORITY: Selected purchase orders get the highest priority (2000+)
-          if (oemSettings.prioritizeOEM && oemSettings.selectedPurchaseOrders && oemSettings.selectedPurchaseOrders.length > 0) {
-            // Check if this order is related to a selected OEM purchase order
-            const isSelectedOEMOrder = oemSettings.selectedPurchaseOrders.some((poId: string) => 
-              order.poId === poId || order.purchaseOrderId === poId || 
-              (order.source === 'production_order' && order.productionOrderId && 
-               oemSettings.selectedPurchaseOrders.includes(order.productionOrderId))
-            );
-            
-            if (isSelectedOEMOrder) {
-              priority += 2000; // Highest priority for selected OEM purchase orders
-              console.log(`🔥 OEM SELECTED PRIORITY: Order ${order.orderId} gets +2000 priority (Selected PO: ${order.poId || order.purchaseOrderId || order.productionOrderId})`);
-            }
-          }
-          
-          // ALL P1 PO orders get high priority (1000+) 
+          // ALL P1 PO orders get highest priority (1000+)
           if (order.source === 'production_order' || order.source === 'p1_purchase_order' || 
               order.poId || order.productionOrderId) {
             priority += 1000; // Very high priority for ALL P1 PO orders

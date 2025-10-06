@@ -37,78 +37,12 @@ import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ChevronLeft, ChevronRight, Calendar, Grid3X3, Calendar1, Settings, Users, Plus, Zap, Printer, ArrowRight, Save, Package, X, CheckCircle } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar, Grid3X3, Calendar1, Settings, Users, Plus, Zap, Printer, ArrowRight, Save, Package, X } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Separator } from "@/components/ui/separator";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getDisplayOrderId, validateNoFridayAssignments } from '@/lib/orderUtils';
 import { useToast } from '@/hooks/use-toast';
-
-// SaveOEMSettingsButton component with proper React Query mutation
-function SaveOEMSettingsButton({ 
-  selectedOEMPurchaseOrders, 
-  weekStart, 
-  onSaveSuccess 
-}: { 
-  selectedOEMPurchaseOrders: string[]; 
-  weekStart: string; 
-  onSaveSuccess: () => void;
-}) {
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
-
-  const saveOEMSettingsMutation = useMutation({
-    mutationFn: async () => {
-      const weekEnd = addDays(startOfWeek(new Date(weekStart), { weekStartsOn: 1 }), 4).toISOString().split('T')[0];
-      const response = await fetch('/api/oem-settings/save', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          selectedPurchaseOrders: selectedOEMPurchaseOrders,
-          weekStart,
-          weekEnd
-        })
-      });
-      
-      if (!response.ok) throw new Error('Failed to save OEM settings');
-      return response.json();
-    },
-    onSuccess: (result) => {
-      if (result.success) {
-        // Invalidate and refetch the saved OEM settings
-        queryClient.invalidateQueries({ queryKey: ['/api/oem-settings/week', weekStart] });
-        onSaveSuccess();
-        toast({
-          title: "OEM Settings Saved",
-          description: `${selectedOEMPurchaseOrders.length} purchase orders saved for priority scheduling`,
-        });
-      } else {
-        throw new Error(result.error || 'Save failed');
-      }
-    },
-    onError: (error) => {
-      console.error('Failed to save OEM settings:', error);
-      toast({
-        title: "Save Failed",
-        description: error instanceof Error ? error.message : 'Failed to save OEM settings',
-        variant: "destructive"
-      });
-    }
-  });
-
-  return (
-    <Button
-      onClick={() => saveOEMSettingsMutation.mutate()}
-      disabled={saveOEMSettingsMutation.isPending}
-      size="sm"
-      className="bg-purple-600 hover:bg-purple-700"
-      data-testid="button-save-oem-settings"
-    >
-      {saveOEMSettingsMutation.isPending ? 'Saving...' : 'Save OEM Settings'}
-    </Button>
-  );
-}
 
 
 // Draggable Order Item Component with responsive sizing - memoized for performance
@@ -725,7 +659,6 @@ function DroppableCell({
 }
 
 export default function LayupScheduler() {
-  const [activeTab, setActiveTab] = useState('schedule');
   const [viewType, setViewType] = useState<'day' | 'week' | 'month'>('week');
   const [currentDate, setCurrentDate] = useState(() => {
     // FORCE CURRENT WEEK: Initialize to start of current week to fix auto-advance issue
@@ -756,11 +689,6 @@ export default function LayupScheduler() {
   // Track order assignments (orderId -> { moldId, date })
   const [orderAssignments, setOrderAssignments] = useState<{[orderId: string]: { moldId: string, date: string }}>({});
   const [recentlyRemovedOrders, setRecentlyRemovedOrders] = useState<Set<string>>(new Set());
-
-  // OEM Settings state management
-  const [showOEMSettings, setShowOEMSettings] = useState(false);
-  const [selectedOEMPurchaseOrders, setSelectedOEMPurchaseOrders] = useState<string[]>([]);
-  const [oemSettingsSaved, setOemSettingsSaved] = useState(false);
 
 
   // Clear schedule function for testing
@@ -2278,11 +2206,7 @@ export default function LayupScheduler() {
           priorityWeighting: 'urgent', // Prioritize by due date and priority score
           workDays: selectedWorkDays, // Pass current work day settings
           employees: employees, // Pass employee settings
-          molds: molds.filter(m => m.enabled), // Pass enabled molds only
-          oemSettings: {
-            selectedPurchaseOrders: selectedOEMPurchaseOrders, // Pass OEM priority purchase orders
-            prioritizeOEM: oemSettingsSaved && selectedOEMPurchaseOrders.length > 0 // Enable OEM prioritization if settings saved
-          }
+          molds: molds.filter(m => m.enabled) // Pass enabled molds only
         }),
       });
 
@@ -2327,7 +2251,7 @@ export default function LayupScheduler() {
         variant: "destructive"
       });
     }
-  }, [orders, molds, employees, selectedOEMPurchaseOrders, oemSettingsSaved]);
+  }, [orders, molds, employees]);
 
   // Load generated schedule into order assignments
   useEffect(() => {
@@ -2435,7 +2359,7 @@ export default function LayupScheduler() {
         return; // Exit early, let it re-run with clean state
       }
 
-      // MANUAL SCHEDULING: User must manually click Generate Schedule button
+      // AUTO-TRIGGER DISABLED: User must manually click Auto Schedule button
       console.log('📊 SCHEDULE STATUS: Ready for manual scheduling (2-week limit) -', unscheduledOrderCount, 'unscheduled orders');
     } else {
       console.log('❌ PRODUCTION FLOW: Missing resources for scheduling:', {
@@ -2454,43 +2378,6 @@ export default function LayupScheduler() {
   const { data: features = [] } = useQuery({
     queryKey: ['/api/features'],
   }) as { data: any[] };
-
-  // Fetch P1 purchase orders for OEM settings
-  const { data: p1PurchaseOrders = [] } = useQuery({
-    queryKey: ['/api/pos'],
-    queryFn: async () => {
-      const response = await fetch('/api/pos');
-      if (!response.ok) throw new Error('Failed to fetch purchase orders');
-      const data = await response.json();
-      return data || [];
-    },
-  }) as { data: any[] };
-
-  // Load saved OEM settings for the current week
-  const weekStart = useMemo(() => {
-    const startDate = startOfWeek(currentDate, { weekStartsOn: 1 });
-    return startDate.toISOString().split('T')[0];
-  }, [currentDate]);
-
-  const { data: savedOEMSettings } = useQuery({
-    queryKey: ['/api/oem-settings/week', weekStart],
-    queryFn: async () => {
-      const response = await fetch(`/api/oem-settings/week/${weekStart}`);
-      if (!response.ok) throw new Error('Failed to fetch saved OEM settings');
-      const data = await response.json();
-      return data;
-    },
-    enabled: !!weekStart,
-  }) as { data: any };
-
-  // Update OEM settings state when saved settings are loaded
-  useEffect(() => {
-    if (savedOEMSettings?.success && savedOEMSettings?.selectedPurchaseOrders) {
-      console.log('🔧 Loading saved OEM settings for week', weekStart, savedOEMSettings.selectedPurchaseOrders);
-      setSelectedOEMPurchaseOrders(savedOEMSettings.selectedPurchaseOrders);
-      setOemSettingsSaved(savedOEMSettings.selectedPurchaseOrders.length > 0);
-    }
-  }, [savedOEMSettings, weekStart]);
 
   // Print functionality
   const handlePrint = () => {
@@ -3826,6 +3713,7 @@ export default function LayupScheduler() {
             <div>
               <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Layup Scheduler</h1>
               <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">P1 Order Production Scheduling</p>
+
             </div>
 
 
@@ -4607,18 +4495,8 @@ export default function LayupScheduler() {
         )}
       </div>
 
-      {/* Tabs Interface */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
-        <div className="px-6 pt-4">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="schedule" data-testid="tab-schedule">Schedule</TabsTrigger>
-            <TabsTrigger value="settings" data-testid="tab-settings">Settings</TabsTrigger>
-          </TabsList>
-        </div>
-
-        <TabsContent value="schedule" className="flex-1 overflow-auto mt-0">
-          {/* Scrollable Content Area */}
-          <div className="flex-1 overflow-auto">
+      {/* Scrollable Content Area */}
+      <div className="flex-1 overflow-auto">
         <DndContext
           sensors={sensors}
           onDragStart={handleDragStart}
@@ -4662,7 +4540,7 @@ export default function LayupScheduler() {
                         size="sm"
                       >
                         <Zap className="w-4 h-4 mr-1" />
-                        Generate Schedule ({processedOrders.filter(o => !getDisplayedAssignmentEntries().find(([id]) => id === o.orderId)).length} orders)
+                        Auto Schedule ({processedOrders.filter(o => !getDisplayedAssignmentEntries().find(([id]) => id === o.orderId)).length} orders)
                       </Button>
                       <Button
                         onClick={clearSchedule}
@@ -5004,99 +4882,7 @@ export default function LayupScheduler() {
             ) : null}
           </DragOverlay>
         </DndContext>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="settings" className="flex-1 overflow-auto mt-0">
-          <div className="px-6 py-6 space-y-6">
-            {/* OEM Purchase Order Priority Settings */}
-            <div className="bg-purple-50 dark:bg-purple-900/20 rounded-lg p-6">
-              <div className="flex justify-between items-center">
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                    OEM Priority Settings
-                  </h3>
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                    Select P1 purchase orders to prioritize in scheduling for the week of {format(startOfWeek(currentDate, { weekStartsOn: 1 }), 'M/d')} - {format(addDays(startOfWeek(currentDate, { weekStartsOn: 1 }), 4), 'M/d')}
-                  </p>
-                </div>
-              </div>
-              
-              <div className="mt-4 space-y-4">
-                <div className="border-t pt-4">
-                  <h4 className="font-medium text-gray-900 dark:text-white mb-3">
-                    Select P1 Purchase Orders for Priority Scheduling:
-                  </h4>
-                  {p1PurchaseOrders.length === 0 ? (
-                    <p className="text-sm text-gray-500 italic">No P1 purchase orders available</p>
-                  ) : (
-                    <div className="max-h-60 overflow-y-auto space-y-2">
-                      {p1PurchaseOrders.map((po: any) => (
-                        <div key={po.id} className="flex items-center space-x-3 p-2 bg-white dark:bg-gray-800 rounded border">
-                          <input
-                            type="checkbox"
-                            id={`po-${po.id}`}
-                            checked={selectedOEMPurchaseOrders.includes(po.id)}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setSelectedOEMPurchaseOrders([...selectedOEMPurchaseOrders, po.id]);
-                              } else {
-                                setSelectedOEMPurchaseOrders(selectedOEMPurchaseOrders.filter(id => id !== po.id));
-                              }
-                            }}
-                            className="rounded border-gray-300"
-                            data-testid={`checkbox-po-${po.id}`}
-                          />
-                          <label htmlFor={`po-${po.id}`} className="flex-1 text-sm">
-                            <div className="font-medium text-gray-900 dark:text-white">
-                              PO #{po.poNumber || po.id}
-                            </div>
-                            <div className="text-gray-500">
-                              Vendor: {po.vendorName || 'Unknown'} • Status: {po.status || 'Active'} • Due: {po.dueDate ? new Date(po.dueDate).toLocaleDateString() : 'Not set'}
-                            </div>
-                          </label>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                
-                <div className="flex justify-between items-center pt-3 border-t">
-                  <div className="text-sm text-gray-600 dark:text-gray-400">
-                    {selectedOEMPurchaseOrders.length} purchase order(s) selected for priority
-                  </div>
-                  <div className="space-x-2">
-                    <Button
-                      onClick={() => setSelectedOEMPurchaseOrders([])}
-                      variant="outline"
-                      size="sm"
-                      disabled={selectedOEMPurchaseOrders.length === 0}
-                      data-testid="button-clear-oem-selections"
-                    >
-                      Clear Selections
-                    </Button>
-                    <SaveOEMSettingsButton 
-                      selectedOEMPurchaseOrders={selectedOEMPurchaseOrders}
-                      weekStart={weekStart}
-                      onSaveSuccess={() => setOemSettingsSaved(true)}
-                    />
-                  </div>
-                </div>
-                {oemSettingsSaved && selectedOEMPurchaseOrders.length > 0 && (
-                  <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded p-3">
-                    <div className="flex items-center space-x-2">
-                      <CheckCircle className="w-4 h-4 text-green-600" />
-                      <span className="text-sm text-green-700 dark:text-green-300">
-                        OEM priority settings saved. Selected purchase orders will be prioritized during scheduling.
-                      </span>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </TabsContent>
-      </Tabs>
+      </div>
     </div>
   );
 }

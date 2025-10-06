@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -13,6 +13,17 @@ import { useToast } from '@/hooks/use-toast';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Plus, Edit, Trash2, AlertCircle, FileWarning } from 'lucide-react';
 import { format } from 'date-fns';
+
+type P1Customer = {
+  id: number;
+  name: string;
+};
+
+type P2Customer = {
+  id: number;
+  customerId: string;
+  customerName: string;
+};
 
 type NonConformingItem = {
   id: number;
@@ -100,6 +111,24 @@ export default function NonConformingItemsPage() {
   const { data: items = [], isLoading } = useQuery<NonConformingItem[]>({
     queryKey: ['/api/non-conforming-items'],
   });
+
+  const { data: p1Customers = [] } = useQuery<P1Customer[]>({
+    queryKey: ['/api/customers/bypass'],
+  });
+
+  const { data: p2Customers = [] } = useQuery<P2Customer[]>({
+    queryKey: ['/api/customers/p2-customers-bypass'],
+  });
+
+  const availableCustomers = formData.p1OrP2 === 'P1' 
+    ? p1Customers.map(c => c.name)
+    : p2Customers.map(c => c.customerName);
+
+  useEffect(() => {
+    if (formData.customer && !availableCustomers.includes(formData.customer)) {
+      setFormData(prev => ({ ...prev, customer: '' }));
+    }
+  }, [formData.p1OrP2]);
 
   const createMutation = useMutation({
     mutationFn: (data: FormData) => apiRequest('/api/non-conforming-items', {
@@ -261,14 +290,27 @@ export default function NonConformingItemsPage() {
 
                   <div className="space-y-2">
                     <Label htmlFor="customer">Customer *</Label>
-                    <Input
-                      id="customer"
+                    <Select
                       value={formData.customer}
-                      onChange={(e) => setFormData(prev => ({ ...prev, customer: e.target.value }))}
-                      required
-                      placeholder="Enter customer name"
-                      data-testid="input-customer"
-                    />
+                      onValueChange={(value) => setFormData(prev => ({ ...prev, customer: value }))}
+                    >
+                      <SelectTrigger id="customer" data-testid="select-customer">
+                        <SelectValue placeholder="Select customer" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableCustomers.length === 0 ? (
+                          <SelectItem value="no-customers" disabled>
+                            No customers available
+                          </SelectItem>
+                        ) : (
+                          availableCustomers.map((customer) => (
+                            <SelectItem key={customer} value={customer}>
+                              {customer}
+                            </SelectItem>
+                          ))
+                        )}
+                      </SelectContent>
+                    </Select>
                   </div>
 
                   <div className="space-y-2">

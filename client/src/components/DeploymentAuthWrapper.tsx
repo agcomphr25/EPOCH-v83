@@ -9,9 +9,22 @@ interface DeploymentAuthWrapperProps {
 function isDeploymentEnvironment(): boolean {
   const hostname = window.location.hostname;
   
-  // AUTHENTICATION DISABLED - ALWAYS BYPASS
-  console.log('🔓 AUTHENTICATION DISABLED: Bypassing authentication for all environments:', hostname);
-  return false;
+  // Development overrides - skip auth for known development environments
+  const isLocalhost = hostname.includes('localhost') || hostname.includes('127.0.0.1');
+  const isReplitDev = hostname.includes('replit.dev');
+  const isDevelopment = import.meta.env.NODE_ENV === 'development' || 
+                       import.meta.env.VITE_NODE_ENV === 'development' || 
+                       import.meta.env.MODE === 'development';
+  
+  // Skip auth for development environments
+  if (isLocalhost || isReplitDev || isDevelopment) {
+    console.log('🔧 FRONTEND AUTH BYPASS: Development environment detected, skipping authentication');
+    return false;
+  }
+  
+  // All other domains require authentication
+  console.log('🔐 FRONTEND PRODUCTION MODE: Authentication required for deployed site:', hostname);
+  return true;
 }
 
 export default function DeploymentAuthWrapper({ children }: DeploymentAuthWrapperProps) {

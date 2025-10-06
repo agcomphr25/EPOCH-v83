@@ -5,14 +5,23 @@
 /**
  * Check if we're running in a production/deployment environment
  * Production environments require authentication
- * AUTHENTICATION DISABLED - ALWAYS RETURNS FALSE
  */
 export function isProductionEnvironment(): boolean {
   const host = window.location.host;
   
-  // AUTHENTICATION DISABLED - BYPASS FOR ALL ENVIRONMENTS
-  console.log('🔓 AUTHENTICATION DISABLED FOR ALL ENVIRONMENTS:', host);
-  return false;
+  // Development environments (bypass authentication)
+  const isLocalhost = host.includes('localhost') || host.includes('127.0.0.1');
+  const isReplitDev = host.includes('replit.dev');
+  
+  // Skip auth for development environments
+  if (isLocalhost || isReplitDev) {
+    console.log('🔧 DEVELOPMENT MODE: Authentication bypassed for:', host);
+    return false;
+  }
+  
+  // All other domains require authentication
+  console.log('🔒 PRODUCTION MODE: Authentication required for:', host);
+  return true;
   
   // ORIGINAL CODE (COMMENTED OUT FOR TESTING):
   // Development environments (bypass authentication)

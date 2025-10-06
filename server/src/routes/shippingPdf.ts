@@ -11,24 +11,31 @@ const router = Router();
 // Helper function to load and embed company logo
 async function embedCompanyLogo(pdfDoc: PDFDocument) {
   try {
-    // Try file system first (development)
-    const __filename = fileURLToPath(import.meta.url);
-    const __dirname = path.dirname(__filename);
-    const logoPath = path.join(__dirname, '../../assets/logo_updated.png');
+    // Use process.cwd() for reliable path resolution in both dev and production
+    const cwd = process.cwd();
     
-    if (fs.existsSync(logoPath)) {
-      const logoImageBytes = fs.readFileSync(logoPath);
+    // Try development path first
+    const devLogoPath = path.resolve(cwd, 'server/assets/logo_updated.png');
+    if (fs.existsSync(devLogoPath)) {
+      const logoImageBytes = fs.readFileSync(devLogoPath);
       return await pdfDoc.embedPng(logoImageBytes);
     }
     
-    // Fallback: try public folder (deployed)
-    const publicLogoPath = path.join(__dirname, '../public/logo_updated.png');
+    // Try production path (deployed bundle)
+    const prodLogoPath = path.resolve(cwd, 'dist/assets/logo_updated.png');
+    if (fs.existsSync(prodLogoPath)) {
+      const logoImageBytes = fs.readFileSync(prodLogoPath);
+      return await pdfDoc.embedPng(logoImageBytes);
+    }
+    
+    // Try public folder as final fallback
+    const publicLogoPath = path.resolve(cwd, 'dist/public/logo_updated.png');
     if (fs.existsSync(publicLogoPath)) {
       const logoImageBytes = fs.readFileSync(publicLogoPath);
       return await pdfDoc.embedPng(logoImageBytes);
     }
     
-    console.warn('Logo file not found in expected locations');
+    console.warn('Logo file not found in expected locations:', { devLogoPath, prodLogoPath, publicLogoPath });
     return null;
   } catch (error) {
     console.warn('Could not load company logo:', error);

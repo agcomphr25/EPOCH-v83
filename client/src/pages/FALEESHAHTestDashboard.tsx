@@ -47,7 +47,7 @@ export default function FALEESHAHTestDashboard() {
             <CardContent className="p-4 text-center">
               <CheckCircle className="w-8 h-8 text-orange-600 mx-auto mb-3" />
               <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Shipping QC Queue</h3>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Shipping quality control orders</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Shipping quality control</p>
             </CardContent>
           </Card>
         </Link>

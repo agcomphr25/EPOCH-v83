@@ -2,20 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { useLocation, useRoute } from 'wouter';
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Package, Truck, DollarSign } from 'lucide-react';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { ArrowLeft, Package, Truck } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
-import { apiRequest } from '@/lib/queryClient';
-
-interface ShippingRate {
-  serviceCode: string;
-  serviceName: string;
-  totalCharges: number;
-  currency: string;
-  guaranteedDaysToDelivery?: string;
-}
 
 export default function ShippingLabelPage() {
   const [location, setLocation] = useLocation();
@@ -45,11 +35,6 @@ export default function ShippingLabelPage() {
       country: 'US'
     }
   });
-
-  // Rate shopping state
-  const [showRates, setShowRates] = useState(false);
-  const [rates, setRates] = useState<ShippingRate[]>([]);
-  const [selectedService, setSelectedService] = useState('03'); // UPS Ground default
 
   // Get order details with customer data in single request for better performance
   const { data: orderDetails, isLoading: orderLoading } = useQuery({
@@ -94,84 +79,6 @@ export default function ShippingLabelPage() {
     }
   }, [shippingAddress, customerAddress, customerInfo]);
 
-  // Get shipping rates mutation
-  const getRatesMutation = useMutation({
-    mutationFn: (data: any) => apiRequest('/api/shipping/get-rates', {
-      method: 'POST',
-      body: data,
-    }),
-    onSuccess: (data) => {
-      setRates(data.rates || []);
-      setShowRates(true);
-      
-      if (data.isEstimate) {
-        toast({
-          title: 'Estimated Rates',
-          description: data.message || 'Rate estimates provided. Enable UPS Rating API for live rates.',
-          variant: 'default',
-        });
-      } else {
-        toast({
-          title: 'Rates Retrieved',
-          description: `Found ${data.rates?.length || 0} shipping options`,
-        });
-      }
-    },
-    onError: (error: any) => {
-      toast({
-        title: 'Rate Error',
-        description: error.message || 'Failed to get shipping rates',
-        variant: 'destructive',
-      });
-    },
-  });
-
-  const handleGetRates = () => {
-    // Validate required fields
-    if (!shippingDetails.address.street || !shippingDetails.address.city || !shippingDetails.address.state || !shippingDetails.address.zip) {
-      toast({
-        title: 'Address Required',
-        description: 'Please complete the shipping address before getting rates',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    if (!shippingDetails.weight || parseFloat(shippingDetails.weight) <= 0) {
-      toast({
-        title: 'Package Weight Required',
-        description: 'Please enter a valid package weight',
-        variant: 'destructive',
-      });
-      return;
-    }
-    
-    getRatesMutation.mutate({
-      shipToAddress: {
-        name: shippingDetails.address.name,
-        street: shippingDetails.address.street,
-        city: shippingDetails.address.city,
-        state: shippingDetails.address.state,
-        zipCode: shippingDetails.address.zip,
-        country: shippingDetails.address.country
-      },
-      shipFromAddress: {
-        name: 'AG Composites',
-        street: '230 Hamer Road',
-        city: 'OWENS CROSS ROADS',
-        state: 'AL',
-        zipCode: '35763',
-        country: 'US'
-      },
-      packageWeight: parseFloat(shippingDetails.weight),
-      packageDimensions: shippingDetails.length ? {
-        length: parseFloat(shippingDetails.length),
-        width: parseFloat(shippingDetails.width),
-        height: parseFloat(shippingDetails.height)
-      } : undefined
-    });
-  };
-
   const generateShippingLabel = async () => {
     if (!orderId) return;
     
@@ -202,8 +109,7 @@ export default function ShippingLabelPage() {
           },
           declaredValue: parseFloat(shippingDetails.value),
           billingOption: shippingDetails.billingOption,
-          receiverAccount: shippingDetails.billingOption === 'receiver' ? shippingDetails.receiverAccount : undefined,
-          serviceCode: selectedService // Use the selected shipping service
+          receiverAccount: shippingDetails.billingOption === 'receiver' ? shippingDetails.receiverAccount : undefined
         }),
         signal: controller.signal
       });
@@ -395,10 +301,8 @@ export default function ShippingLabelPage() {
               <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label htmlFor="shipping-weight" className="block text-sm font-medium mb-1">Weight (lbs)</label>
+                    <label className="block text-sm font-medium mb-1">Weight (lbs)</label>
                     <input
-                      id="shipping-weight"
-                      name="weight"
                       type="number"
                       value={shippingDetails.weight}
                       onChange={(e) => setShippingDetails(prev => ({ ...prev, weight: e.target.value }))}
@@ -407,10 +311,8 @@ export default function ShippingLabelPage() {
                     />
                   </div>
                   <div>
-                    <label htmlFor="shipping-value" className="block text-sm font-medium mb-1">Declared Value ($)</label>
+                    <label className="block text-sm font-medium mb-1">Declared Value ($)</label>
                     <input
-                      id="shipping-value"
-                      name="value"
                       type="number"
                       value={shippingDetails.value}
                       onChange={(e) => setShippingDetails(prev => ({ ...prev, value: e.target.value }))}
@@ -423,10 +325,8 @@ export default function ShippingLabelPage() {
                 <h4 className="font-medium">Dimensions (inches)</h4>
                 <div className="grid grid-cols-3 gap-4">
                   <div>
-                    <label htmlFor="package-length" className="block text-sm font-medium mb-1">Length</label>
+                    <label className="block text-sm font-medium mb-1">Length</label>
                     <input
-                      id="package-length"
-                      name="length"
                       type="number"
                       value={shippingDetails.length}
                       onChange={(e) => setShippingDetails(prev => ({ ...prev, length: e.target.value }))}
@@ -435,10 +335,8 @@ export default function ShippingLabelPage() {
                     />
                   </div>
                   <div>
-                    <label htmlFor="package-width" className="block text-sm font-medium mb-1">Width</label>
+                    <label className="block text-sm font-medium mb-1">Width</label>
                     <input
-                      id="package-width"
-                      name="width"
                       type="number"
                       value={shippingDetails.width}
                       onChange={(e) => setShippingDetails(prev => ({ ...prev, width: e.target.value }))}
@@ -447,10 +345,8 @@ export default function ShippingLabelPage() {
                     />
                   </div>
                   <div>
-                    <label htmlFor="package-height" className="block text-sm font-medium mb-1">Height</label>
+                    <label className="block text-sm font-medium mb-1">Height</label>
                     <input
-                      id="package-height"
-                      name="height"
                       type="number"
                       value={shippingDetails.height}
                       onChange={(e) => setShippingDetails(prev => ({ ...prev, height: e.target.value }))}
@@ -486,10 +382,8 @@ export default function ShippingLabelPage() {
                 </div>
                 <div className="space-y-3">
                   <div>
-                    <label htmlFor="customer-name" className="block text-sm font-medium mb-1">Customer Name</label>
+                    <label className="block text-sm font-medium mb-1">Customer Name</label>
                     <input
-                      id="customer-name"
-                      name="customerName"
                       type="text"
                       value={shippingDetails.address.name}
                       onChange={(e) => setShippingDetails(prev => ({ 
@@ -502,10 +396,8 @@ export default function ShippingLabelPage() {
                   </div>
                   
                   <div>
-                    <label htmlFor="street-address" className="block text-sm font-medium mb-1">Street Address</label>
+                    <label className="block text-sm font-medium mb-1">Street Address</label>
                     <input
-                      id="street-address"
-                      name="streetAddress"
                       type="text"
                       value={shippingDetails.address.street}
                       onChange={(e) => setShippingDetails(prev => ({ 
@@ -519,10 +411,8 @@ export default function ShippingLabelPage() {
                   
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label htmlFor="city" className="block text-sm font-medium mb-1">City</label>
+                      <label className="block text-sm font-medium mb-1">City</label>
                       <input
-                        id="city"
-                        name="city"
                         type="text"
                         value={shippingDetails.address.city}
                         onChange={(e) => setShippingDetails(prev => ({ 
@@ -534,10 +424,8 @@ export default function ShippingLabelPage() {
                       />
                     </div>
                     <div>
-                      <label htmlFor="state" className="block text-sm font-medium mb-1">State</label>
+                      <label className="block text-sm font-medium mb-1">State</label>
                       <input
-                        id="state"
-                        name="state"
                         type="text"
                         value={shippingDetails.address.state}
                         onChange={(e) => setShippingDetails(prev => ({ 
@@ -552,10 +440,8 @@ export default function ShippingLabelPage() {
                   
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label htmlFor="zip-code" className="block text-sm font-medium mb-1">ZIP Code</label>
+                      <label className="block text-sm font-medium mb-1">ZIP Code</label>
                       <input
-                        id="zip-code"
-                        name="zipCode"
                         type="text"
                         value={shippingDetails.address.zip}
                         onChange={(e) => setShippingDetails(prev => ({ 
@@ -567,10 +453,8 @@ export default function ShippingLabelPage() {
                       />
                     </div>
                     <div>
-                      <label htmlFor="country" className="block text-sm font-medium mb-1">Country</label>
+                      <label className="block text-sm font-medium mb-1">Country</label>
                       <select
-                        id="country"
-                        name="country"
                         value={shippingDetails.address.country}
                         onChange={(e) => setShippingDetails(prev => ({ 
                           ...prev, 
@@ -603,24 +487,20 @@ export default function ShippingLabelPage() {
               <div className="space-y-4">
                 <h4 className="font-medium">Billing Options</h4>
                 <div className="space-y-3">
-                  <label htmlFor="billing-sender" className="flex items-center">
+                  <label className="flex items-center">
                     <input
-                      id="billing-sender"
                       type="radio"
                       name="billing"
-                      value="sender"
                       checked={shippingDetails.billingOption === 'sender'}
                       onChange={() => setShippingDetails(prev => ({ ...prev, billingOption: 'sender' }))}
                       className="mr-2"
                     />
                     Bill to Sender (Our Account)
                   </label>
-                  <label htmlFor="billing-receiver" className="flex items-center">
+                  <label className="flex items-center">
                     <input
-                      id="billing-receiver"
                       type="radio"
                       name="billing"
-                      value="receiver"
                       checked={shippingDetails.billingOption === 'receiver'}
                       onChange={() => setShippingDetails(prev => ({ ...prev, billingOption: 'receiver' }))}
                       className="mr-2"
@@ -633,10 +513,8 @@ export default function ShippingLabelPage() {
                   <div className="ml-6 space-y-3 p-4 bg-blue-50 rounded-lg">
                     <div className="grid grid-cols-1 gap-4">
                       <div>
-                        <label htmlFor="ups-account-number" className="block text-sm font-medium mb-1">UPS Account Number</label>
+                        <label className="block text-sm font-medium mb-1">UPS Account Number</label>
                         <input
-                          id="ups-account-number"
-                          name="upsAccountNumber"
                           type="text"
                           value={shippingDetails.receiverAccount.accountNumber}
                           onChange={(e) => setShippingDetails(prev => ({ 
@@ -648,10 +526,8 @@ export default function ShippingLabelPage() {
                         />
                       </div>
                       <div>
-                        <label htmlFor="account-zip-code" className="block text-sm font-medium mb-1">Account ZIP Code</label>
+                        <label className="block text-sm font-medium mb-1">Account ZIP Code</label>
                         <input
-                          id="account-zip-code"
-                          name="accountZipCode"
                           type="text"
                           value={shippingDetails.receiverAccount.zipCode}
                           onChange={(e) => setShippingDetails(prev => ({ 
@@ -669,71 +545,6 @@ export default function ShippingLabelPage() {
             </CardContent>
           </Card>
         </div>
-
-        {/* Rate Shopping Section */}
-        <Card className="mt-6">
-          <CardContent className="p-6">
-            <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-              <DollarSign className="h-5 w-5" />
-              Shipping Rate Shopping
-            </h3>
-            <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
-              <Button
-                onClick={handleGetRates}
-                disabled={getRatesMutation.isPending}
-                className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 text-lg font-bold min-w-[220px]"
-              >
-                <DollarSign className="w-5 h-5" />
-                {getRatesMutation.isPending ? 'Getting Rates...' : '💰 GET SHIPPING RATES'}
-              </Button>
-
-              {showRates && rates.length > 0 && (
-                <div className="flex items-center gap-3">
-                  <span className="text-sm font-medium text-gray-700">Service:</span>
-                  <Select value={selectedService} onValueChange={setSelectedService}>
-                    <SelectTrigger className="w-72">
-                      <SelectValue placeholder="Select shipping service" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {rates.map((rate) => (
-                        <SelectItem key={rate.serviceCode} value={rate.serviceCode}>
-                          <div className="flex justify-between w-full items-center">
-                            <span className="font-medium">{rate.serviceName}</span>
-                            <span className={`ml-4 font-bold ${(rate as any).isEstimate ? 'text-orange-600' : 'text-green-600'}`}>
-                              ${rate.totalCharges.toFixed(2)}
-                              {(rate as any).isEstimate && <span className="text-xs ml-1 text-orange-500">*est</span>}
-                            </span>
-                            {rate.guaranteedDaysToDelivery && (
-                              <span className="ml-2 text-xs text-gray-500">({rate.guaranteedDaysToDelivery} days)</span>
-                            )}
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-
-              {showRates && rates.length === 0 && (
-                <div className="text-sm text-gray-600 bg-yellow-50 p-3 rounded-md">
-                  No shipping rates available. Please check your address and package details.
-                </div>
-              )}
-            </div>
-
-            {showRates && rates.length > 0 && (
-              <div className={`mt-4 p-4 rounded-lg ${rates.some((r: any) => r.isEstimate) ? 'bg-orange-50' : 'bg-green-50'}`}>
-                <p className={`text-sm ${rates.some((r: any) => r.isEstimate) ? 'text-orange-800' : 'text-green-800'}`}>
-                  {rates.some((r: any) => r.isEstimate) ? (
-                    <>⚠️ <strong>{rates.length}</strong> estimated rates shown. Enable UPS Rating API in your developer account for live rates.</>
-                  ) : (
-                    <>✅ <strong>{rates.length}</strong> shipping options found! Select a service above, then generate your label.</>
-                  )}
-                </p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
 
         {/* Action Buttons */}
         <div className="mt-6 flex gap-4 justify-end">

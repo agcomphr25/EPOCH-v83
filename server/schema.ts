@@ -1780,6 +1780,7 @@ export const insertCustomerSchema = createInsertSchema(customers).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
+  billingSameAsShipping: true,
 }).extend({
   name: z.string().min(1, "Customer name is required"),
   email: z.string().optional().transform((val) => val === "" ? undefined : val).refine(

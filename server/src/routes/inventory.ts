@@ -87,7 +87,7 @@ router.get('/items/:id', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/items', async (req: Request, res: Response) => {
+router.post('/items', authenticateToken, async (req: Request, res: Response) => {
   try {
     const itemData = insertInventoryItemSchema.parse(req.body);
     const newItem = await storage.createInventoryItem(itemData);
@@ -101,7 +101,7 @@ router.post('/items', async (req: Request, res: Response) => {
   }
 });
 
-router.put('/items/:id', async (req: Request, res: Response) => {
+router.put('/items/:id', authenticateToken, async (req: Request, res: Response) => {
   try {
     const itemId = parseInt(req.params.id);
     const updates = updateInventoryItemSchema.parse(req.body);
@@ -113,7 +113,7 @@ router.put('/items/:id', async (req: Request, res: Response) => {
   }
 });
 
-router.delete('/items/:id', async (req: Request, res: Response) => {
+router.delete('/items/:id', authenticateToken, async (req: Request, res: Response) => {
   try {
     const itemId = parseInt(req.params.id);
     await storage.deleteInventoryItem(itemId);

@@ -82,16 +82,13 @@ import {
   insertVendorDocumentSchema,
   insertVendorScoringCriteriaSchema,
   insertVendorScoreSchema,
-<<<<<<< HEAD
   // Internal communications schemas
   insertDepartmentSchema,
   insertInternalMessageSchema,
   insertMessageAttachmentSchema,
-  insertMessageRecipientSchema
-=======
+  insertMessageRecipientSchema,
   // Non-Conforming Items schema
   insertNonConformingItemSchema
->>>>>>> origin/main
 } from "@shared/schema";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -5842,7 +5839,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-<<<<<<< HEAD
   // ===== INTERNAL COMMUNICATIONS ROUTES =====
   
   // Departments
@@ -5997,12 +5993,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         res.status(400).json({ error: "Invalid data", details: error.errors });
       } else {
         res.status(500).json({ error: "Failed to create non-conforming item" });
->>>>>>> origin/main
       }
     }
   });
 
-<<<<<<< HEAD
   app.patch("/api/internal-messages/:id/read", async (req, res) => {
     try {
       const messageId = parseInt(req.params.id);

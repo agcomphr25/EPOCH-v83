@@ -4071,13 +4071,15 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createCustomer(data: InsertCustomer): Promise<Customer> {
-    const [customer] = await db.insert(customers).values(data).returning();
+    const { billingSameAsShipping, ...safeData } = data as any;
+    const [customer] = await db.insert(customers).values(safeData).returning();
     return customer;
   }
 
   async updateCustomer(id: number, data: Partial<InsertCustomer>): Promise<Customer> {
+    const { billingSameAsShipping, ...safeData } = data as any;
     const [customer] = await db.update(customers)
-      .set(data)
+      .set(safeData)
       .where(eq(customers.id, id))
       .returning();
     return customer;

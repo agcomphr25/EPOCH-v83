@@ -38,11 +38,11 @@ import {
   // Vendor management tables
   vendors, vendorContacts, vendorAddresses, vendorContactPhones, vendorContactEmails, vendorDocuments, vendorScoringCriteria, vendorScores,
 
-  // Internal communications tables
-  departments, internalMessages, messageAttachments, messageRecipients,
-  
   // Non-Conforming Items table
   nonConformingItems,
+  
+  // Internal communications tables
+  departments, internalMessages, messageAttachments, messageRecipients,
 
   // Types
   type User, type InsertUser, type Order, type InsertOrder, type CSVData, type InsertCSVData,
@@ -151,6 +151,9 @@ import {
   type VendorScoringCriteria, type InsertVendorScoringCriteria,
   type VendorScore, type InsertVendorScore,
 
+  // Non-Conforming Items types
+  type NonConformingItem, type InsertNonConformingItem,
+  
   // Internal communications types
   type Department, type InsertDepartment,
   type InternalMessage, type InsertInternalMessage,
@@ -920,6 +923,13 @@ export interface IStorage {
   deleteVendorScore(id: number): Promise<void>;
   calculateVendorTotalScore(vendorId: number): Promise<number>;
 
+  // Non-Conforming Items CRUD
+  getAllNonConformingItems(): Promise<NonConformingItem[]>;
+  getNonConformingItem(id: number): Promise<NonConformingItem | undefined>;
+  createNonConformingItem(data: InsertNonConformingItem): Promise<NonConformingItem>;
+  updateNonConformingItem(id: number, data: Partial<InsertNonConformingItem>): Promise<NonConformingItem>;
+  deleteNonConformingItem(id: number): Promise<void>;
+
   // ===== INTERNAL COMMUNICATIONS =====
   
   // Departments CRUD
@@ -957,7 +967,7 @@ export interface IStorage {
   updateNonConformingItem(id: number, data: Partial<InsertNonConformingItem>): Promise<NonConformingItem>;
   deleteNonConformingItem(id: number): Promise<void>;
 
-}
+
 
 export class DatabaseStorage implements IStorage {
   async getUser(id: number): Promise<User | undefined> {

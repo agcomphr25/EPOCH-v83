@@ -1,4 +1,3 @@
-
 import bcrypt from 'bcrypt';
 import { randomBytes } from 'crypto';
 import jwt from 'jsonwebtoken';
@@ -468,11 +467,9 @@ export class AuthService {
         userId,
         timeout: error?.message === 'Database operation timeout'
       });
-
       return null;
     }
   }
-
 
   static async getUserBySession(sessionToken: string): Promise<AuthUser | null> {
     const session = await this.validateSession(sessionToken);
@@ -518,7 +515,6 @@ export class AuthService {
         );
     } catch (error) {
       console.error('Failed to cleanup expired sessions:', error);
-
     }
   }
 }

@@ -1,0 +1,971 @@
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+ stallwart: failed ping 1
+communication:1 The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+communication:1 The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+communication:1 The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+ 
+      /////////////////////
+   ///////////////////////////
+  ////////@@@@@@@//////////////
+  ////////@@@@@@@//////////////
+  ////////@@@@@@@//////////////        Curious and driven?
+  ///////////////@@@@@@@///////        Work with us!
+  ///////////////@@@@@@@///////
+  ///////////////@@@@@@@///////        https://join.replit.com/hack.with.us
+  ////////@@@@@@@//////////////
+  ////////@@@@@@@//////////////
+  ////////@@@@@@#//////////////
+   ///////////////////////////
+      /////////////////////
+      
+ [LaunchDarkly] LaunchDarkly client initialized
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+ Unrecognized feature: 'ambient-light-sensor'.
+_ @ framework-23cfcc29806aebfa.js:1
+ Unrecognized feature: 'battery'.
+_ @ framework-23cfcc29806aebfa.js:1
+ Unrecognized feature: 'execution-while-not-rendered'.
+_ @ framework-23cfcc29806aebfa.js:1
+ Unrecognized feature: 'execution-while-out-of-viewport'.
+_ @ framework-23cfcc29806aebfa.js:1
+ Unrecognized feature: 'layout-animations'.
+_ @ framework-23cfcc29806aebfa.js:1
+ Unrecognized feature: 'legacy-image-formats'.
+_ @ framework-23cfcc29806aebfa.js:1
+ Unrecognized feature: 'navigation-override'.
+_ @ framework-23cfcc29806aebfa.js:1
+ Unrecognized feature: 'oversized-images'.
+_ @ framework-23cfcc29806aebfa.js:1
+ Unrecognized feature: 'publickey-credentials'.
+_ @ framework-23cfcc29806aebfa.js:1
+ Unrecognized feature: 'speaker-selection'.
+_ @ framework-23cfcc29806aebfa.js:1
+ Unrecognized feature: 'unoptimized-images'.
+_ @ framework-23cfcc29806aebfa.js:1
+ Unrecognized feature: 'unsized-media'.
+_ @ framework-23cfcc29806aebfa.js:1
+ Unrecognized feature: 'pointer-lock'.
+_ @ framework-23cfcc29806aebfa.js:1
+ Allow attribute will take precedence over 'allowfullscreen'.
+_ @ framework-23cfcc29806aebfa.js:1
+ Allow attribute will take precedence over 'allowpaymentrequest'.
+_ @ framework-23cfcc29806aebfa.js:1
+communication:1 Banner not shown: beforeinstallpromptevent.preventDefault() called. The page must call beforeinstallpromptevent.prompt() to show the banner.
+o1151714.ingest.sentry.io/api/6318792/envelope/?sentry_key=8aa91189a4274b5a8c9b7b01d46ea360&sentry_version=7&sentry_client=sentry.javascript.browser%2F7.112.0:1  Failed to load resource: the server responded with a status of 429 ()
+r.stripe.com/b:1  Failed to load resource: net::ERR_NAME_NOT_RESOLVED
+r.stripe.com/b:1  Failed to load resource: net::ERR_NAME_NOT_RESOLVED
+ stallwart: failed ping 1
+ stallwart: failed ping 2
+ [Coframe] Error initializing SDK 
+(anonymous) @ _app-53b366338366d4f7.js:34
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+/data/repls/03940859-712b-4f0f-9422-59623821a3ca/get_connection_metadata:1  Failed to load resource: net::ERR_NAME_NOT_RESOLVED
+graphql:1  Failed to load resource: net::ERR_NAME_NOT_RESOLVED
+ingest.app.coframe.com/ingest/v2/monitoring/68c9ad4d4cddb58cf3a1f93d/:1  Failed to load resource: net::ERR_NAME_NOT_RESOLVED
+logs.browser-intake-us5-datadoghq.com/api/v2/logs?ddsource=browser&ddtags=sdk_version%3A4.46.0%2Capi%3Afetch%2Cenv%3Aproduction%2Cservice%3Awebsite%2Cversion%3A85f67ca5&dd-api-key=pub31a5047a3a4692afb84a423db984dc57&dd-evp-origin-version=4.46.0&dd-evp-origin=browser&dd-request-id=3a53e48d-e86c-4e54-921e-53aa044b10ac:1  Failed to load resource: net::ERR_NAME_NOT_RESOLVED
+ WebSocket connection to 'wss://replit.com/graphql_subscriptions' failed: 
+(anonymous) @ _app-53b366338366d4f7.js:10
+ stallwart: failed ping 1
+ Measure loop restarted more than 5 times
+(anonymous) @ _app-53b366338366d4f7.js:34
+ Measure loop restarted more than 5 times
+(anonymous) @ _app-53b366338366d4f7.js:34
+ stallwart: failed ping 1
+ stallwart: failed ping 2
+ stallwart: failed ping 3
+ stallwart: failed ping 4
+ stallwart: failed ping 5
+ stallwart: session stalled
+r.stripe.com/b:1  Failed to load resource: net::ERR_NAME_NOT_RESOLVED
+r.stripe.com/b:1  Failed to load resource: net::ERR_NAME_NOT_RESOLVED
+logs.browser-intake-us5-datadoghq.com/api/v2/logs?ddsource=browser&ddtags=sdk_version%3A4.46.0%2Capi%3Abeacon%2Cenv%3Aproduction%2Cservice%3Awebsite%2Cversion%3A85f67ca5&dd-api-key=pub31a5047a3a4692afb84a423db984dc57&dd-evp-origin-version=4.46.0&dd-evp-origin=browser&dd-request-id=ae4be5a8-f767-47df-b046-174ac61679b0:1  Failed to load resource: net::ERR_NETWORK_IO_SUSPENDED
+o1151714.ingest.sentry.io/api/6318792/envelope/?sentry_key=8aa91189a4274b5a8c9b7b01d46ea360&sentry_version=7&sentry_client=sentry.javascript.browser%2F7.112.0:1  Failed to load resource: net::ERR_NAME_NOT_RESOLVED
+ WebSocket connection to 'wss://production-chort.replit.com/api/river' failed: 
+(anonymous) @ 1588-912ad2082672e42a.js:1
+r.stripe.com/b:1  Failed to load resource: net::ERR_NAME_NOT_RESOLVED
+r.stripe.com/b:1  Failed to load resource: net::ERR_NAME_NOT_RESOLVED
+ WebSocket connection to 'wss://replit.com/graphql_subscriptions' failed: 
+(anonymous) @ _app-53b366338366d4f7.js:10
+prodregistryv2.org/v1/rgstr?k=client-Bp7m7pNB6H0fnSGjVtxN5BeWQw4BSAat4OFsXa3VcTF&st=javascript-client-react&sv=3.25.5&t=1759709488327&sid=4bc288c6-7981-4879-ba3e-c4acb3616792&ec=1&gz=1:1  Failed to load resource: net::ERR_NAME_NOT_RESOLVED
+shared-8e40638c019e6…13df20850fae3c.js:1 Uncaught (in promise) 
+logs.browser-intake-us5-datadoghq.com/api/v2/logs?ddsource=browser&ddtags=sdk_version%3A4.46.0%2Capi%3Afetch%2Cenv%3Aproduction%2Cservice%3Awebsite%2Cversion%3A85f67ca5&dd-api-key=pub31a5047a3a4692afb84a423db984dc57&dd-evp-origin-version=4.46.0&dd-evp-origin=browser&dd-request-id=26351bf4-38ef-4f6d-a808-961fe8a0b82a:1  Failed to load resource: net::ERR_NAME_NOT_RESOLVED
+/data/repls/03940859-712b-4f0f-9422-59623821a3ca/get_connection_metadata:1  Failed to load resource: net::ERR_NAME_NOT_RESOLVED
+graphql:1  Failed to load resource: net::ERR_NAME_NOT_RESOLVED
+graphql:1  Failed to load resource: net::ERR_NAME_NOT_RESOLVED
+/data/repls/03940859-712b-4f0f-9422-59623821a3ca/get_connection_metadata:1  Failed to load resource: net::ERR_NAME_NOT_RESOLVED
+attached_assets/image_1759554230238.png:1  Failed to load resource: the server responded with a status of 404 ()
+attached_assets/image_1759554770053.png:1  Failed to load resource: the server responded with a status of 404 ()
+attached_assets/image_1759554410016.png:1  Failed to load resource: the server responded with a status of 404 ()
+o1151714.ingest.sentry.io/api/6318792/envelope/?sentry_key=8aa91189a4274b5a8c9b7b01d46ea360&sentry_version=7&sentry_client=sentry.javascript.browser%2F7.112.0:1  Failed to load resource: the server responded with a status of 429 ()
+o1151714.ingest.sentry.io/api/6318792/envelope/?sentry_key=8aa91189a4274b5a8c9b7b01d46ea360&sentry_version=7&sentry_client=sentry.javascript.browser%2F7.112.0:1  Failed to load resource: the server responded with a status of 429 ()
+r.stripe.com/b:1  Failed to load resource: net::ERR_NETWORK_CHANGED
+r.stripe.com/b:1  Failed to load resource: net::ERR_NETWORK_CHANGED
+o1151714.ingest.sentry.io/api/6318792/envelope/?sentry_key=8aa91189a4274b5a8c9b7b01d46ea360&sentry_version=7&sentry_client=sentry.javascript.browser%2F7.112.0:1  Failed to load resource: net::ERR_NETWORK_CHANGED
+securetoken.googleapis.com/v1/token?key=AIzaSyARAzVTWc_KOBojIholLo2wzwNOQ6VKcB8:1  Failed to load resource: net::ERR_INTERNET_DISCONNECTED
+o1151714.ingest.sentry.io/api/6318792/envelope/?sentry_key=8aa91189a4274b5a8c9b7b01d46ea360&sentry_version=7&sentry_client=sentry.javascript.browser%2F7.112.0:1  Failed to load resource: net::ERR_INTERNET_DISCONNECTED
+o1151714.ingest.sentry.io/api/6318792/envelope/?sentry_key=8aa91189a4274b5a8c9b7b01d46ea360&sentry_version=7&sentry_client=sentry.javascript.browser%2F7.112.0:1  Failed to load resource: net::ERR_INTERNET_DISCONNECTED
+graphql:1  Failed to load resource: net::ERR_INTERNET_DISCONNECTED
+events.launchdarkly.com/events/diagnostic/62b35a865152ab14c5942820:1  Failed to load resource: net::ERR_INTERNET_DISCONNECTED
+api.sorryapp.com/v1/pages/27c7b5fc:1  Failed to load resource: net::ERR_INTERNET_DISCONNECTED
+api.sorryapp.com/v1/pages/27c7b5fc:1  Failed to load resource: net::ERR_INTERNET_DISCONNECTED
+api.sorryapp.com/v1/pages/27c7b5fc:1  Failed to load resource: net::ERR_INTERNET_DISCONNECTED
+events.launchdarkly.com/events/diagnostic/62b35a865152ab14c5942820:1  Failed to load resource: net::ERR_INTERNET_DISCONNECTED
+/data/repls/03940859-712b-4f0f-9422-59623821a3ca/get_connection_metadata:1  Failed to load resource: net::ERR_INTERNET_DISCONNECTED
+graphql:1  Failed to load resource: net::ERR_INTERNET_DISCONNECTED
+beyondwickedmapping.org/v1/rgstr?k=client-Bp7m7pNB6H0fnSGjVtxN5BeWQw4BSAat4OFsXa3VcTF&st=javascript-client-react&sv=3.25.5&t=1759723977924&sid=3aeef184-79c0-44a6-a4fa-16a54c3a46cb&ec=1&gz=1:1  Failed to load resource: net::ERR_NAME_NOT_RESOLVED
+logs.browser-intake-us5-datadoghq.com/api/v2/logs?ddsource=browser&ddtags=sdk_version%3A4.46.0%2Capi%3Afetch%2Cenv%3Aproduction%2Cservice%3Awebsite%2Cversion%3A85f67ca5&dd-api-key=pub31a5047a3a4692afb84a423db984dc57&dd-evp-origin-version=4.46.0&dd-evp-origin=browser&dd-request-id=33f5c737-56b2-4f1a-b7de-9907c68b4836:1  Failed to load resource: net::ERR_NAME_NOT_RESOLVED
+sp.replit.com/v1/m:1  Failed to load resource: net::ERR_NAME_NOT_RESOLVED
+ Error sending segment performance metrics 
+(anonymous) @ _app-53b366338366d4f7.js:34
+ WebSocket connection to 'wss://replit.com/graphql_subscriptions' failed: 
+(anonymous) @ _app-53b366338366d4f7.js:10
+logs.browser-intake-us5-datadoghq.com/api/v2/logs?ddsource=browser&ddtags=sdk_version%3A4.46.0%2Capi%3Axhr%2Cenv%3Aproduction%2Cservice%3Awebsite%2Cversion%3A85f67ca5&dd-api-key=pub31a5047a3a4692afb84a423db984dc57&dd-evp-origin-version=4.46.0&dd-evp-origin=browser&dd-request-id=74901f6c-64bf-4058-84c9-79c2ea999b78:1  Failed to load resource: net::ERR_NAME_NOT_RESOLVED
+graphql:1  Failed to load resource: net::ERR_NAME_NOT_RESOLVED
+cloudflare-dns.com/dns-query:1  Failed to load resource: net::ERR_NAME_NOT_RESOLVED
+   WARN  [Statsig] Caught error in _tryFetchFallbackUrlsFromNetwork Object
+(anonymous) @ _app-53b366338366d4f7.js:34
+statsigapi.net/v1/sdk_exception:1  Failed to load resource: net::ERR_NETWORK_IO_SUSPENDED
+analytics.google.com/g/collect?v=2&tid=G-MPJY3F1YEL&gtm=45je5a11v9135634466za200&_p=1759701572742&gcd=13l3l3l3l2l1&npa=0&dma=0&ul=en-us&sr=1280x720&cid=1115069335.1749577234&ecid=779859605&ir=1&uaa=x86&uab=64&uafvl=Google%2520Chrome%3B141.0.7390.54%7CNot%253FA_Brand%3B8.0.0.0%7CChromium%3B141.0.7390.54&uamb=0&uam=&uap=Windows&uapv=19.0.0&uaw=0&are=1&frm=0&pscdl=noapi&_eu=EBAIAAQ&_s=140&tag_exp=101509157~103116026~103200004~103233427~104527907~104528500~104684208~104684211~104948813~115480709~115834636~115834638&dl=https%3A%2F%2Freplit.com%2Ft%2Fag-composites%2Frepls%2Fcommunication&dp=%2Ft%2Fag-composites%2Frepls%2Fcommunication&dt=replEnvironmentDesktop&sid=1759712833&sct=317&seg=1&_tu=wAQ&en=Shell%20Command%20Evaled&_ee=1&ep.event_category=All&ep.value=0&_et=6055&tfd=22410143:1  Failed to load resource: net::ERR_NETWORK_IO_SUSPENDED
+attached_assets/image_1759554770053.png:1  Failed to load resource: the server responded with a status of 404 ()
+workspace_iframe.html?initialPath=%2F&id=%3Ar93u%3A:32 Unrecognized feature: 'ambient-light-sensor'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar93u%3A:32 Unrecognized feature: 'battery'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar93u%3A:32 Unrecognized feature: 'execution-while-not-rendered'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar93u%3A:32 Unrecognized feature: 'execution-while-out-of-viewport'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar93u%3A:32 Unrecognized feature: 'layout-animations'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar93u%3A:32 Unrecognized feature: 'legacy-image-formats'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar93u%3A:32 Unrecognized feature: 'navigation-override'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar93u%3A:32 Unrecognized feature: 'oversized-images'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar93u%3A:32 Unrecognized feature: 'publickey-credentials'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar93u%3A:32 Unrecognized feature: 'speaker-selection'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar93u%3A:32 Unrecognized feature: 'unoptimized-images'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar93u%3A:32 Unrecognized feature: 'unsized-media'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar93u%3A:32 Allow attribute will take precedence over 'allowfullscreen'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar93u%3A:32 Allow attribute will take precedence over 'allowpaymentrequest'.
+ [vite] connecting...
+ [vite] connected.
+ React initialized: Object
+ React hooks: Object
+ App component is rendering...
+ Environment: development
+ Base URL: /
+ App component is rendering...
+ Environment: development
+ Base URL: /
+ 🔧 FRONTEND AUTH BYPASS: Development environment detected, skipping authentication
+ 🔧 FRONTEND AUTH BYPASS: Development environment detected, skipping authentication
+ 🔧 FRONTEND AUTH BYPASS: Development environment detected, skipping authentication
+ 🔧 FRONTEND AUTH BYPASS: Development environment detected, skipping authentication
+ OrderEntry component rendering...
+ 💰 Rails calculation - No rails selected
+ 💰 Price calculation - Misc items total: 0
+ 💰 Price calculation - Final total: 0
+ 💰 Subtotal recalculated: 0
+ 💰 Discount recalculated: 0
+ 💰 Discount details: null
+ 💰 Base model price: 0
+ 💰 Subtotal price: 0
+ 💰 Total recalculated: 0
+ 🔧 Stock Model Dropdown Debug:
+   - Current modelId: 
+   - ModelOptions length: 0
+   - RenderKey: 0
+   - No models available in dropdown
+ 🔧 Rails feature found: false undefined
+ 🔧 Rails state debug: Object
+ 🎨 Paint state debug: Object
+ OrderEntry component rendering...
+ 💰 Rails calculation - No rails selected
+ 💰 Price calculation - Misc items total: 0
+ 💰 Price calculation - Final total: 0
+ 💰 Subtotal recalculated: 0
+ 💰 Discount recalculated: 0
+ 💰 Discount details: null
+ 💰 Base model price: 0
+ 💰 Subtotal price: 0
+ 💰 Total recalculated: 0
+ 🔧 Stock Model Dropdown Debug:
+   - Current modelId: 
+   - ModelOptions length: 0
+   - RenderKey: 0
+   - No models available in dropdown
+ 🔧 Rails feature found: false undefined
+ 🔧 Rails state debug: Object
+ 🎨 Paint state debug: Object
+ 🔍 Loading stock models from API...
+ 🌐 API Request to /api/stock-models (timeout: 30000ms, deployment: false)
+ 🌐 API Request to /api/features (timeout: 30000ms, deployment: false)
+ 🌐 API Request to /api/short-term-sales (timeout: 30000ms, deployment: false)
+ 🌐 API Request to /api/persistent-discounts (timeout: 30000ms, deployment: false)
+ 🔍 Loading stock models from API...
+ 🌐 API Request to /api/stock-models (timeout: 30000ms, deployment: false)
+ 🌐 API Request to /api/features (timeout: 30000ms, deployment: false)
+ 🌐 API Request to /api/short-term-sales (timeout: 30000ms, deployment: false)
+ 🌐 API Request to /api/persistent-discounts (timeout: 30000ms, deployment: false)
+ OrderEntry component rendering...
+ 🔧 Stock Model Dropdown Debug:
+   - Current modelId: 
+   - ModelOptions length: 0
+   - RenderKey: 0
+   - No models available in dropdown
+ 🔧 Rails feature found: false undefined
+ 🔧 Rails state debug: Object
+ 🎨 Paint state debug: Object
+ OrderEntry component rendering...
+ 🔧 Stock Model Dropdown Debug:
+   - Current modelId: 
+   - ModelOptions length: 0
+   - RenderKey: 0
+   - No models available in dropdown
+ 🔧 Rails feature found: false undefined
+ 🔧 Rails state debug: Object
+ 🎨 Paint state debug: Object
+ ✅ API Response from /api/persistent-discounts: 200
+ ✅ API Response from /api/persistent-discounts: 200
+ ✅ API Response from /api/features: 200
+ 🔍 Raw features data from API: Array(16)
+ 🔍 Features array length: 16
+ 🔍 First feature sample: Object
+ 🔍 Available feature IDs: action_length, action, bottom_metal, barrel_inlet, base_colors, custom_graphics, protective_coatings, special_effects, camo_patterns, premium_patterns, qd_accessory, length_of_pull, rail_accessory, texture_options, swivel_studs, other_options
+ 🔍 setFeatureDefs called with: 16 features
+ OrderEntry component rendering...
+ 💰 Rails calculation - No rails selected
+ 💰 Price calculation - Misc items total: 0
+ 💰 Price calculation - Final total: 0
+ 💰 Subtotal recalculated: 0
+ 🔧 Stock Model Dropdown Debug:
+   - Current modelId: 
+   - ModelOptions length: 0
+   - RenderKey: 0
+   - No models available in dropdown
+ 🔧 Rails feature found: true Rails
+ 🔧 Rails state debug: Object
+ 🎨 Paint state debug: Object
+ OrderEntry component rendering...
+ 💰 Rails calculation - No rails selected
+ 💰 Price calculation - Misc items total: 0
+ 💰 Price calculation - Final total: 0
+ 💰 Subtotal recalculated: 0
+ 🔧 Stock Model Dropdown Debug:
+   - Current modelId: 
+   - ModelOptions length: 0
+   - RenderKey: 0
+   - No models available in dropdown
+ 🔧 Rails feature found: true Rails
+ 🔧 Rails state debug: Object
+ 🎨 Paint state debug: Object
+ ⚠️  Missing feature IDs detected: Array(1)
+Mt.forEach.n.<computed> @ eruda.js:2
+ Available feature IDs: Array(16)
+ ✅ Set default texture to: No Texture with value: no_texture
+ ✅ Set default swivel studs to: Standard Swivel Studs with value: standard_swivel_studs
+ ✅ Set default rail accessory to: No Rail with value: no_rail
+ 🔍 Looking for LOP feature in featureDefs: Array(16)
+ 🔍 Found LOP feature: Object
+ 🔍 LOP feature options: Array(4)
+ 🔍 Found LOP default option: undefined
+ ❌ Could not find LOP default option
+ ✅ Set default QD accessory to: No QDs with value: no_qds
+ OrderEntry component rendering...
+ 💰 Rails calculation - current rails: Array(1)
+ 💰 Rails calculation - found feature: Rails
+ 💰 Rails calculation - available options: Array(7)
+ 💰 Rails calculation - NO PRICE FOUND for: no_rail
+ 💰 Rails calculation - Total rails price: 0
+ 💰 Price calculation - Misc items total: 0
+ 💰 Price calculation - Final total: 0
+ 💰 Subtotal recalculated: 0
+ 🔧 Stock Model Dropdown Debug:
+   - Current modelId: 
+   - ModelOptions length: 0
+   - RenderKey: 0
+   - No models available in dropdown
+ 🔧 Rails feature found: true Rails
+ 🔧 Rails state debug: Object
+ 🔧 Rails option lookup: no_rail → No Rail
+ 🎨 Paint state debug: Object
+ OrderEntry component rendering...
+ 💰 Rails calculation - current rails: Array(1)
+ 💰 Rails calculation - found feature: Rails
+ 💰 Rails calculation - available options: Array(7)
+ 💰 Rails calculation - NO PRICE FOUND for: no_rail
+ 💰 Rails calculation - Total rails price: 0
+ 💰 Price calculation - Misc items total: 0
+ 💰 Price calculation - Final total: 0
+ 💰 Subtotal recalculated: 0
+ 🔧 Stock Model Dropdown Debug:
+   - Current modelId: 
+   - ModelOptions length: 0
+   - RenderKey: 0
+   - No models available in dropdown
+ 🔧 Rails feature found: true Rails
+ 🔧 Rails state debug: Object
+ 🔧 Rails option lookup: no_rail → No Rail
+ 🎨 Paint state debug: Object
+ Select is changing from uncontrolled to controlled. Components should not switch from controlled to uncontrolled (or vice versa). Decide between using a controlled or uncontrolled value for the lifetime of the component.
+Mt.forEach.n.<computed> @ eruda.js:2
+ Select is changing from uncontrolled to controlled. Components should not switch from controlled to uncontrolled (or vice versa). Decide between using a controlled or uncontrolled value for the lifetime of the component.
+Mt.forEach.n.<computed> @ eruda.js:2
+ ✅ API Response from /api/features: 200
+ 🔍 Raw features data from API: Array(16)
+ 🔍 Features array length: 16
+ 🔍 First feature sample: Object
+ 🔍 Available feature IDs: action_length, action, bottom_metal, barrel_inlet, base_colors, custom_graphics, protective_coatings, special_effects, camo_patterns, premium_patterns, qd_accessory, length_of_pull, rail_accessory, texture_options, swivel_studs, other_options
+ 🔍 setFeatureDefs called with: 16 features
+ ✅ API Response from /api/stock-models: 200
+ ✅ API Response from /api/stock-models: 200
+ OrderEntry component rendering...
+ 💰 Rails calculation - current rails: Array(1)
+ 💰 Rails calculation - found feature: Rails
+ 💰 Rails calculation - available options: Array(7)
+ 💰 Rails calculation - NO PRICE FOUND for: no_rail
+ 💰 Rails calculation - Total rails price: 0
+ 💰 Price calculation - Misc items total: 0
+ 💰 Price calculation - Final total: 0
+ 💰 Subtotal recalculated: 0
+ 🔧 Stock Model Dropdown Debug:
+   - Current modelId: 
+   - ModelOptions length: 0
+   - RenderKey: 0
+   - No models available in dropdown
+ 🔧 Rails feature found: true Rails
+ 🔧 Rails state debug: Object
+ 🔧 Rails option lookup: no_rail → No Rail
+ 🎨 Paint state debug: Object
+ OrderEntry component rendering...
+ 💰 Rails calculation - current rails: Array(1)
+ 💰 Rails calculation - found feature: Rails
+ 💰 Rails calculation - available options: Array(7)
+ 💰 Rails calculation - NO PRICE FOUND for: no_rail
+ 💰 Rails calculation - Total rails price: 0
+ 💰 Price calculation - Misc items total: 0
+ 💰 Price calculation - Final total: 0
+ 💰 Subtotal recalculated: 0
+ 🔧 Stock Model Dropdown Debug:
+   - Current modelId: 
+   - ModelOptions length: 0
+   - RenderKey: 0
+   - No models available in dropdown
+ 🔧 Rails feature found: true Rails
+ 🔧 Rails state debug: Object
+ 🔧 Rails option lookup: no_rail → No Rail
+ 🎨 Paint state debug: Object
+ ⚠️  Missing feature IDs detected: Array(1)
+Mt.forEach.n.<computed> @ eruda.js:2
+ Available feature IDs: Array(16)
+ 🔍 Looking for LOP feature in featureDefs: Array(16)
+ 🔍 Found LOP feature: Object
+ 🔍 LOP feature options: Array(4)
+ 🔍 Found LOP default option: undefined
+ ❌ Could not find LOP default option
+ 🔍 Raw models from API: Array(47)
+ 🔍 Total models received: 47
+ 🔍 First model sample: Object
+ 🔍 Model properties: Array(9)
+ 🔍 Active models filtered: 44
+ 🔍 Active models IDs: Array(44)
+ 🔍 Active models display names: Array(44)
+ ✅ Stock models loaded successfully: 44
+ 🔍 Raw models from API: Array(47)
+ 🔍 Total models received: 47
+ 🔍 First model sample: Object
+ 🔍 Model properties: Array(9)
+ 🔍 Active models filtered: 44
+ 🔍 Active models IDs: Array(44)
+ 🔍 Active models display names: Array(44)
+ ✅ Stock models loaded successfully: 44
+ OrderEntry component rendering...
+ 💰 Rails calculation - current rails: Array(1)
+ 💰 Rails calculation - found feature: Rails
+ 💰 Rails calculation - available options: Array(7)
+ 💰 Rails calculation - NO PRICE FOUND for: no_rail
+ 💰 Rails calculation - Total rails price: 0
+ 💰 Price calculation - Misc items total: 0
+ 💰 Price calculation - Final total: 0
+ 💰 Subtotal recalculated: 0
+ 💰 Discount recalculated: 0
+ 💰 Discount details: null
+ 💰 Base model price: 0
+ 💰 Subtotal price: 0
+ 🔧 Stock Model Dropdown Debug:
+   - Current modelId: 
+   - ModelOptions length: 44
+   - RenderKey: 0
+   - Available models: Array(5)
+   - Selected model found: false undefined
+ 🔧 Rails feature found: true Rails
+ 🔧 Rails state debug: Object
+ 🔧 Rails option lookup: no_rail → No Rail
+ 🎨 Paint state debug: Object
+ OrderEntry component rendering...
+ 💰 Rails calculation - current rails: Array(1)
+ 💰 Rails calculation - found feature: Rails
+ 💰 Rails calculation - available options: Array(7)
+ 💰 Rails calculation - NO PRICE FOUND for: no_rail
+ 💰 Rails calculation - Total rails price: 0
+ 💰 Price calculation - Misc items total: 0
+ 💰 Price calculation - Final total: 0
+ 💰 Subtotal recalculated: 0
+ 💰 Discount recalculated: 0
+ 💰 Discount details: null
+ 💰 Base model price: 0
+ 💰 Subtotal price: 0
+ 🔧 Stock Model Dropdown Debug:
+   - Current modelId: 
+   - ModelOptions length: 44
+   - RenderKey: 0
+   - Available models: Array(5)
+   - Selected model found: false undefined
+ 🔧 Rails feature found: true Rails
+ 🔧 Rails state debug: Object
+ 🔧 Rails option lookup: no_rail → No Rail
+ 🎨 Paint state debug: Object
+ ✅ API Response from /api/short-term-sales: 200
+ ✅ API Response from /api/short-term-sales: 200
+ 💳 Discount options processed: 9 total discounts
+ 💳 Discount options: Array(9)
+ 💳 Discount options processed: 9 total discounts
+ 💳 Discount options: Array(9)
+ OrderEntry component rendering...
+ 💰 Discount recalculated: 0
+ 💰 Discount details: null
+ 💰 Base model price: 0
+ 💰 Subtotal price: 0
+ 🔧 Stock Model Dropdown Debug:
+   - Current modelId: 
+   - ModelOptions length: 44
+   - RenderKey: 0
+   - Available models: Array(5)
+   - Selected model found: false undefined
+ 🔧 Rails feature found: true Rails
+ 🔧 Rails state debug: Object
+ 🔧 Rails option lookup: no_rail → No Rail
+ 🎨 Paint state debug: Object
+ OrderEntry component rendering...
+ 💰 Discount recalculated: 0
+ 💰 Discount details: null
+ 💰 Base model price: 0
+ 💰 Subtotal price: 0
+ 🔧 Stock Model Dropdown Debug:
+   - Current modelId: 
+   - ModelOptions length: 44
+   - RenderKey: 0
+   - Available models: Array(5)
+   - Selected model found: false undefined
+ 🔧 Rails feature found: true Rails
+ 🔧 Rails state debug: Object
+ 🔧 Rails option lookup: no_rail → No Rail
+ 🎨 Paint state debug: Object
+ 🌐 API Request to /api/orders/generate-id (timeout: 30000ms, deployment: false)
+ OrderEntry component rendering...
+ 🔧 Stock Model Dropdown Debug:
+   - Current modelId: 
+   - ModelOptions length: 44
+   - RenderKey: 0
+   - Available models: Array(5)
+   - Selected model found: false undefined
+ 🔧 Rails feature found: true Rails
+ 🔧 Rails state debug: Object
+ 🔧 Rails option lookup: no_rail → No Rail
+ 🎨 Paint state debug: Object
+ OrderEntry component rendering...
+ 🔧 Stock Model Dropdown Debug:
+   - Current modelId: 
+   - ModelOptions length: 44
+   - RenderKey: 0
+   - Available models: Array(5)
+   - Selected model found: false undefined
+ 🔧 Rails feature found: true Rails
+ 🔧 Rails state debug: Object
+ 🔧 Rails option lookup: no_rail → No Rail
+ 🎨 Paint state debug: Object
+ ✅ API Response from /api/orders/generate-id: 200
+ OrderEntry component rendering...
+ 🔧 Stock Model Dropdown Debug:
+   - Current modelId: 
+   - ModelOptions length: 44
+   - RenderKey: 0
+   - Available models: Array(5)
+   - Selected model found: false undefined
+ 🔧 Rails feature found: true Rails
+ 🔧 Rails state debug: Object
+ 🔧 Rails option lookup: no_rail → No Rail
+ 🎨 Paint state debug: Object
+ OrderEntry component rendering...
+ 🔧 Stock Model Dropdown Debug:
+   - Current modelId: 
+   - ModelOptions length: 44
+   - RenderKey: 0
+   - Available models: Array(5)
+   - Selected model found: false undefined
+ 🔧 Rails feature found: true Rails
+ 🔧 Rails state debug: Object
+ 🔧 Rails option lookup: no_rail → No Rail
+ 🎨 Paint state debug: Object
+ 🌐 API Request to /api/orders/EJ001/payments (timeout: 30000ms, deployment: false)
+ OrderEntry component rendering...
+ 🔧 Stock Model Dropdown Debug:
+   - Current modelId: 
+   - ModelOptions length: 44
+   - RenderKey: 0
+   - Available models: Array(5)
+   - Selected model found: false undefined
+ 🔧 Rails feature found: true Rails
+ 🔧 Rails state debug: Object
+ 🔧 Rails option lookup: no_rail → No Rail
+ 🎨 Paint state debug: Object
+ OrderEntry component rendering...
+ 🔧 Stock Model Dropdown Debug:
+   - Current modelId: 
+   - ModelOptions length: 44
+   - RenderKey: 0
+   - Available models: Array(5)
+   - Selected model found: false undefined
+ 🔧 Rails feature found: true Rails
+ 🔧 Rails state debug: Object
+ 🔧 Rails option lookup: no_rail → No Rail
+ 🎨 Paint state debug: Object
+ OrderEntry component rendering...
+ 🔧 Stock Model Dropdown Debug:
+   - Current modelId: 
+   - ModelOptions length: 44
+   - RenderKey: 0
+   - Available models: Array(5)
+   - Selected model found: false undefined
+ 🔧 Rails feature found: true Rails
+ 🔧 Rails state debug: Object
+ 🔧 Rails option lookup: no_rail → No Rail
+ 🎨 Paint state debug: Object
+ OrderEntry component rendering...
+ 🔧 Stock Model Dropdown Debug:
+   - Current modelId: 
+   - ModelOptions length: 44
+   - RenderKey: 0
+   - Available models: Array(5)
+   - Selected model found: false undefined
+ 🔧 Rails feature found: true Rails
+ 🔧 Rails state debug: Object
+ 🔧 Rails option lookup: no_rail → No Rail
+ 🎨 Paint state debug: Object
+ OrderEntry component rendering...
+ 🔧 Stock Model Dropdown Debug:
+   - Current modelId: 
+   - ModelOptions length: 44
+   - RenderKey: 0
+   - Available models: Array(5)
+   - Selected model found: false undefined
+ 🔧 Rails feature found: true Rails
+ 🔧 Rails state debug: Object
+ 🔧 Rails option lookup: no_rail → No Rail
+ 🎨 Paint state debug: Object
+ OrderEntry component rendering...
+ 🔧 Stock Model Dropdown Debug:
+   - Current modelId: 
+   - ModelOptions length: 44
+   - RenderKey: 0
+   - Available models: Array(5)
+   - Selected model found: false undefined
+ 🔧 Rails feature found: true Rails
+ 🔧 Rails state debug: Object
+ 🔧 Rails option lookup: no_rail → No Rail
+ 🎨 Paint state debug: Object
+ ✅ API Response from /api/orders/EJ001/payments: 200
+ OrderEntry component rendering...
+ 🔧 Stock Model Dropdown Debug:
+   - Current modelId: 
+   - ModelOptions length: 44
+   - RenderKey: 0
+   - Available models: Array(5)
+   - Selected model found: false undefined
+ 🔧 Rails feature found: true Rails
+ 🔧 Rails state debug: Object
+ 🔧 Rails option lookup: no_rail → No Rail
+ 🎨 Paint state debug: Object
+ OrderEntry component rendering...
+ 🔧 Stock Model Dropdown Debug:
+   - Current modelId: 
+   - ModelOptions length: 44
+   - RenderKey: 0
+   - Available models: Array(5)
+   - Selected model found: false undefined
+ 🔧 Rails feature found: true Rails
+ 🔧 Rails state debug: Object
+ 🔧 Rails option lookup: no_rail → No Rail
+ 🎨 Paint state debug: Object
+ OrderEntry component rendering...
+ 🔧 Stock Model Dropdown Debug:
+   - Current modelId: 
+   - ModelOptions length: 44
+   - RenderKey: 0
+   - Available models: Array(5)
+   - Selected model found: false undefined
+ 🔧 Rails feature found: true Rails
+ 🔧 Rails state debug: Object
+ 🔧 Rails option lookup: no_rail → No Rail
+ 🎨 Paint state debug: Object
+ OrderEntry component rendering...
+ 🔧 Stock Model Dropdown Debug:
+   - Current modelId: 
+   - ModelOptions length: 44
+   - RenderKey: 0
+   - Available models: Array(5)
+   - Selected model found: false undefined
+ 🔧 Rails feature found: true Rails
+ 🔧 Rails state debug: Object
+ 🔧 Rails option lookup: no_rail → No Rail
+ 🎨 Paint state debug: Object
+ OrderEntry component rendering...
+ 🔧 Stock Model Dropdown Debug:
+   - Current modelId: 
+   - ModelOptions length: 44
+   - RenderKey: 0
+   - Available models: Array(5)
+   - Selected model found: false undefined
+ 🔧 Rails feature found: true Rails
+ 🔧 Rails state debug: Object
+ 🔧 Rails option lookup: no_rail → No Rail
+ 🎨 Paint state debug: Object
+ OrderEntry component rendering...
+ 🔧 Stock Model Dropdown Debug:
+   - Current modelId: 
+   - ModelOptions length: 44
+   - RenderKey: 0
+   - Available models: Array(5)
+   - Selected model found: false undefined
+ 🔧 Rails feature found: true Rails
+ 🔧 Rails state debug: Object
+ 🔧 Rails option lookup: no_rail → No Rail
+ 🎨 Paint state debug: Object
+ Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+Mt.forEach.n.<computed> @ eruda.js:2
+ Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+Mt.forEach.n.<computed> @ eruda.js:2
+ Fetching SmartyStreets suggestions for: 230 Hamer Road
+ 🌐 API Request to /api/customers/address-autocomplete-bypass (timeout: 30000ms, deployment: false)
+ ✅ API Response from /api/customers/address-autocomplete-bypass: 200
+ SmartyStreets autocomplete response: Object
+ SmartyStreets suggestions received: Array(4)
+ 🌐 API Request to /api/customers/create-bypass (timeout: 30000ms, deployment: false)
+create-bypass:1  Failed to load resource: the server responded with a status of 400 (Bad Request)
+ ✅ API Response from /api/customers/create-bypass: 400
+ 💥 API Request failed for /api/customers/create-bypass: 
+Mt.forEach.n.<computed> @ eruda.js:2
+ OrderEntry component rendering...
+ 🔧 Stock Model Dropdown Debug:
+   - Current modelId: 
+Console.js:61   - ModelOptions length: 44
+Console.js:61   - RenderKey: 0
+Console.js:61   - Available models: Array(5)
+Console.js:61   - Selected model found: false undefined
+Console.js:61 🔧 Rails feature found: true Rails
+Console.js:61 🔧 Rails state debug: Object
+Console.js:61 🔧 Rails option lookup: no_rail → No Rail
+Console.js:61 🎨 Paint state debug: Object
+Console.js:61 OrderEntry component rendering...
+Console.js:61 🔧 Stock Model Dropdown Debug:
+Console.js:61   - Current modelId: 
+Console.js:61   - ModelOptions length: 44
+Console.js:61   - RenderKey: 0
+Console.js:61   - Available models: Array(5)
+Console.js:61   - Selected model found: false undefined
+Console.js:61 🔧 Rails feature found: true Rails
+Console.js:61 🔧 Rails state debug: Object
+Console.js:61 🔧 Rails option lookup: no_rail → No Rail
+Console.js:61 🎨 Paint state debug: Object
+Console.js:61 [vite] hot updated: /src/components/KickbackTracking.tsx
+Console.js:61 [vite] hot updated: /src/index.css?v=zzwVgt3dA_MiFlovMVi_4
+Console.js:61 [vite] hot updated: /src/pages/OrdersList.tsx
+Console.js:61 [vite] hot updated: /src/components/QCManager.tsx
+Console.js:61 [vite] hot updated: /src/components/CustomerTypeManager.tsx
+Console.js:61 [vite] hot updated: /src/components/PersistentDiscountManager.tsx
+Console.js:61 [vite] hot updated: /src/components/MaintenanceManager.tsx
+Console.js:61 [vite] hot updated: /src/components/AccessoriesQCChecklist.tsx
+Console.js:61 OrderEntry component rendering...
+Console.js:61 🔧 Stock Model Dropdown Debug:
+Console.js:61   - Current modelId: 
+Console.js:61   - ModelOptions length: 44
+Console.js:61   - RenderKey: 0
+Console.js:61   - Available models: Array(5)
+Console.js:61   - Selected model found: false undefined
+Console.js:61 🔧 Rails feature found: true Rails
+Console.js:61 🔧 Rails state debug: Object
+Console.js:61 🔧 Rails option lookup: no_rail → No Rail
+Console.js:61 🎨 Paint state debug: Object
+Console.js:61 OrderEntry component rendering...
+Console.js:61 🔧 Stock Model Dropdown Debug:
+Console.js:61   - Current modelId: 
+Console.js:61   - ModelOptions length: 44
+Console.js:61   - RenderKey: 0
+Console.js:61   - Available models: Array(5)
+Console.js:61   - Selected model found: false undefined
+Console.js:61 🔧 Rails feature found: true Rails
+Console.js:61 🔧 Rails state debug: Object
+Console.js:61 🔧 Rails option lookup: no_rail → No Rail
+Console.js:61 🎨 Paint state debug: Object
+Console.js:61 🌐 API Request to /api/customers/create-bypass (timeout: 30000ms, deployment: false)
+0ce1429f-ab65-4d48-bef3-611aab96e0df-00-316wz2g2s5raf.janeway.replit.dev/api/customers/create-bypass:1  Failed to load resource: the server responded with a status of 400 (Bad Request)
+Console.js:61 ✅ API Response from /api/customers/create-bypass: 400
+Console.js:61 💥 API Request failed for /api/customers/create-bypass: Error: column "billing_same_as_shipping" of relation "customers" does not exist
+    at apiRequest (queryClient.ts:100:13)
+    at async Object.mutationFn (CustomerSearchInput.tsx:102:24)
+Mt.forEach.n.<computed> @ Console.js:61
+Console.js:61 OrderEntry component rendering...
+Console.js:61 🔧 Stock Model Dropdown Debug:
+Console.js:61   - Current modelId: 
+Console.js:61   - ModelOptions length: 44
+Console.js:61   - RenderKey: 0
+Console.js:61   - Available models: Array(5)
+Console.js:61   - Selected model found: false undefined
+Console.js:61 🔧 Rails feature found: true Rails
+Console.js:61 🔧 Rails state debug: Object
+Console.js:61 🔧 Rails option lookup: no_rail → No Rail
+Console.js:61 🎨 Paint state debug: Object
+Console.js:61 OrderEntry component rendering...
+Console.js:61 🔧 Stock Model Dropdown Debug:
+Console.js:61   - Current modelId: 
+Console.js:61   - ModelOptions length: 44
+Console.js:61   - RenderKey: 0
+Console.js:61   - Available models: Array(5)
+Console.js:61   - Selected model found: false undefined
+Console.js:61 🔧 Rails feature found: true Rails
+Console.js:61 🔧 Rails state debug: Object
+Console.js:61 🔧 Rails option lookup: no_rail → No Rail
+Console.js:61 🎨 Paint state debug: Object
+Console.js:61 OrderEntry component rendering...
+Console.js:61 🔧 Stock Model Dropdown Debug:
+Console.js:61   - Current modelId: 
+Console.js:61   - ModelOptions length: 44
+Console.js:61   - RenderKey: 0
+Console.js:61   - Available models: (5) ['mesa_universal:Mesa Universal', 'no_stock:None', 'mesa_adjustable:Mesa Adjustable', 'mesa_tikka:Mesa Tikka', 'cf_privateer:CF Privateer']
+Console.js:61   - Selected model found: false undefined
+Console.js:61 🔧 Rails feature found: true Rails
+Console.js:61 🔧 Rails state debug: {features.rail_accessory: Array(1), currentRails: Array(1), featureDefsCount: 16}
+Console.js:61 🔧 Rails option lookup: no_rail → No Rail
+Console.js:61 🎨 Paint state debug: {features.metallic_finishes: undefined, features.paint_options: undefined, features.paint_options_combined: undefined, currentPaint: undefined, featureDefsCount: 16}
+Console.js:61 OrderEntry component rendering...
+Console.js:61 🔧 Stock Model Dropdown Debug:
+Console.js:61   - Current modelId: 
+Console.js:61   - ModelOptions length: 44
+Console.js:61   - RenderKey: 0
+Console.js:61   - Available models: (5) ['mesa_universal:Mesa Universal', 'no_stock:None', 'mesa_adjustable:Mesa Adjustable', 'mesa_tikka:Mesa Tikka', 'cf_privateer:CF Privateer']
+Console.js:61   - Selected model found: false undefined
+Console.js:61 🔧 Rails feature found: true Rails
+Console.js:61 🔧 Rails state debug: {features.rail_accessory: Array(1), currentRails: Array(1), featureDefsCount: 16}
+Console.js:61 🔧 Rails option lookup: no_rail → No Rail
+Console.js:61 🎨 Paint state debug: {features.metallic_finishes: undefined, features.paint_options: undefined, features.paint_options_combined: undefined, currentPaint: undefined, featureDefsCount: 16}
+Console.js:61 🌐 API Request to /api/customers/create-bypass (timeout: 30000ms, deployment: false)
+injected.js:278  POST https://0ce1429f-ab65-4d48-bef3-611aab96e0df-00-316wz2g2s5raf.janeway.replit.dev/api/customers/create-bypass 400 (Bad Request)
+window.fetch @ Network.js:219
+apply @ injected.js:278
+apiRequest @ queryClient.ts:76
+mutationFn @ CustomerSearchInput.tsx:102
+fn @ chunk-65LAIXSP.js?v=85170350:1234
+run @ chunk-65LAIXSP.js?v=85170350:507
+start @ chunk-65LAIXSP.js?v=85170350:550
+execute @ chunk-65LAIXSP.js?v=85170350:1270
+await in execute
+mutate @ chunk-65LAIXSP.js?v=85170350:2692
+(anonymous) @ chunk-65LAIXSP.js?v=85170350:3415
+handleAddCustomer @ CustomerSearchInput.tsx:179
+callCallback2 @ chunk-276SZO74.js?v=85170350:3674
+invokeGuardedCallbackDev @ chunk-276SZO74.js?v=85170350:3699
+invokeGuardedCallback @ chunk-276SZO74.js?v=85170350:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-276SZO74.js?v=85170350:3736
+executeDispatch @ chunk-276SZO74.js?v=85170350:7014
+processDispatchQueueItemsInOrder @ chunk-276SZO74.js?v=85170350:7034
+processDispatchQueue @ chunk-276SZO74.js?v=85170350:7043
+dispatchEventsForPlugins @ chunk-276SZO74.js?v=85170350:7051
+(anonymous) @ chunk-276SZO74.js?v=85170350:7174
+batchedUpdates$1 @ chunk-276SZO74.js?v=85170350:18913
+batchedUpdates @ chunk-276SZO74.js?v=85170350:3579
+dispatchEventForPluginEventSystem @ chunk-276SZO74.js?v=85170350:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-276SZO74.js?v=85170350:5478
+dispatchEvent @ chunk-276SZO74.js?v=85170350:5472
+dispatchDiscreteEvent @ chunk-276SZO74.js?v=85170350:5449
+Console.js:61 ✅ API Response from /api/customers/create-bypass: 400
+Console.js:61 💥 API Request failed for /api/customers/create-bypass: Error: column "billing_same_as_shipping" of relation "customers" does not exist
+    at apiRequest (queryClient.ts:100:13)
+    at async Object.mutationFn (CustomerSearchInput.tsx:102:24)
+Mt.forEach.n.<computed> @ Console.js:61
+console.error @ main.tsx:33
+apiRequest @ queryClient.ts:117
+await in apiRequest
+mutationFn @ CustomerSearchInput.tsx:102
+fn @ chunk-65LAIXSP.js?v=85170350:1234
+run @ chunk-65LAIXSP.js?v=85170350:507
+start @ chunk-65LAIXSP.js?v=85170350:550
+execute @ chunk-65LAIXSP.js?v=85170350:1270
+await in execute
+mutate @ chunk-65LAIXSP.js?v=85170350:2692
+(anonymous) @ chunk-65LAIXSP.js?v=85170350:3415
+handleAddCustomer @ CustomerSearchInput.tsx:179
+callCallback2 @ chunk-276SZO74.js?v=85170350:3674
+invokeGuardedCallbackDev @ chunk-276SZO74.js?v=85170350:3699
+invokeGuardedCallback @ chunk-276SZO74.js?v=85170350:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-276SZO74.js?v=85170350:3736
+executeDispatch @ chunk-276SZO74.js?v=85170350:7014
+processDispatchQueueItemsInOrder @ chunk-276SZO74.js?v=85170350:7034
+processDispatchQueue @ chunk-276SZO74.js?v=85170350:7043
+dispatchEventsForPlugins @ chunk-276SZO74.js?v=85170350:7051
+(anonymous) @ chunk-276SZO74.js?v=85170350:7174
+batchedUpdates$1 @ chunk-276SZO74.js?v=85170350:18913
+batchedUpdates @ chunk-276SZO74.js?v=85170350:3579
+dispatchEventForPluginEventSystem @ chunk-276SZO74.js?v=85170350:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-276SZO74.js?v=85170350:5478
+dispatchEvent @ chunk-276SZO74.js?v=85170350:5472
+dispatchDiscreteEvent @ chunk-276SZO74.js?v=85170350:5449
+Console.js:61 OrderEntry component rendering...
+Console.js:61 🔧 Stock Model Dropdown Debug:
+Console.js:61   - Current modelId: 
+Console.js:61   - ModelOptions length: 44
+Console.js:61   - RenderKey: 0
+Console.js:61   - Available models: (5) ['mesa_universal:Mesa Universal', 'no_stock:None', 'mesa_adjustable:Mesa Adjustable', 'mesa_tikka:Mesa Tikka', 'cf_privateer:CF Privateer']
+Console.js:61   - Selected model found: false undefined
+Console.js:61 🔧 Rails feature found: true Rails
+Console.js:61 🔧 Rails state debug: {features.rail_accessory: Array(1), currentRails: Array(1), featureDefsCount: 16}
+Console.js:61 🔧 Rails option lookup: no_rail → No Rail
+Console.js:61 🎨 Paint state debug: {features.metallic_finishes: undefined, features.paint_options: undefined, features.paint_options_combined: undefined, currentPaint: undefined, featureDefsCount: 16}
+Console.js:61 OrderEntry component rendering...
+Console.js:61 🔧 Stock Model Dropdown Debug:
+Console.js:61   - Current modelId: 
+Console.js:61   - ModelOptions length: 44
+Console.js:61   - RenderKey: 0
+Console.js:61   - Available models: (5) ['mesa_universal:Mesa Universal', 'no_stock:None', 'mesa_adjustable:Mesa Adjustable', 'mesa_tikka:Mesa Tikka', 'cf_privateer:CF Privateer']
+Console.js:61   - Selected model found: false undefined
+Console.js:61 🔧 Rails feature found: true Rails
+Console.js:61 🔧 Rails state debug: {features.rail_accessory: Array(1), currentRails: Array(1), featureDefsCount: 16}
+Console.js:61 🔧 Rails option lookup: no_rail → No Rail
+Console.js:61 🎨 Paint state debug: {features.metallic_finishes: undefined, features.paint_options: undefined, features.paint_options_combined: undefined, currentPaint: undefined, featureDefsCount: 16}

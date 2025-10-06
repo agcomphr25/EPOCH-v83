@@ -11,31 +11,26 @@ const router = Router();
 // Helper function to load and embed company logo
 async function embedCompanyLogo(pdfDoc: PDFDocument) {
   try {
-    // Use process.cwd() for reliable path resolution in both dev and production
     const cwd = process.cwd();
     
-    // Try development path first
-    const devLogoPath = path.resolve(cwd, 'server/assets/logo_updated.png');
-    if (fs.existsSync(devLogoPath)) {
-      const logoImageBytes = fs.readFileSync(devLogoPath);
-      return await pdfDoc.embedPng(logoImageBytes);
+    // List of possible logo locations to check
+    const logoPaths = [
+      path.resolve(cwd, 'server/assets/logo_updated.png'),           // Development
+      path.resolve(cwd, 'assets/logo_updated.png'),                  // Production (in dist folder)
+      path.resolve(cwd, 'dist/assets/logo_updated.png'),             // Production (from workspace root)
+      path.resolve(cwd, 'public/logo_updated.png'),                  // Public folder in dist
+      path.resolve(cwd, 'dist/public/logo_updated.png'),             // Public folder from root
+    ];
+    
+    // Try each path until we find the logo
+    for (const logoPath of logoPaths) {
+      if (fs.existsSync(logoPath)) {
+        const logoImageBytes = fs.readFileSync(logoPath);
+        return await pdfDoc.embedPng(logoImageBytes);
+      }
     }
     
-    // Try production path (deployed bundle)
-    const prodLogoPath = path.resolve(cwd, 'dist/assets/logo_updated.png');
-    if (fs.existsSync(prodLogoPath)) {
-      const logoImageBytes = fs.readFileSync(prodLogoPath);
-      return await pdfDoc.embedPng(logoImageBytes);
-    }
-    
-    // Try public folder as final fallback
-    const publicLogoPath = path.resolve(cwd, 'dist/public/logo_updated.png');
-    if (fs.existsSync(publicLogoPath)) {
-      const logoImageBytes = fs.readFileSync(publicLogoPath);
-      return await pdfDoc.embedPng(logoImageBytes);
-    }
-    
-    console.warn('Logo file not found in expected locations:', { devLogoPath, prodLogoPath, publicLogoPath });
+    console.warn('Logo file not found. Searched paths:', logoPaths);
     return null;
   } catch (error) {
     console.warn('Could not load company logo:', error);

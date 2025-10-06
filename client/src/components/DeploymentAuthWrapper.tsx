@@ -7,20 +7,23 @@ interface DeploymentAuthWrapperProps {
 }
 
 function isDeploymentEnvironment(): boolean {
-  // SECURITY UPDATE: Login requirements re-enabled for all sites
-  // Only skip authentication for development environments
   const hostname = window.location.hostname;
-  const isLocalhost = hostname.includes('localhost') || hostname.includes('127.0.0.1');
-  const isReplitDev = hostname.includes('replit.dev');
   
-  // Bypass authentication for development environments
-  if (isLocalhost || isReplitDev) {
-    console.log('🔧 FRONTEND AUTH BYPASS: Development environment detected:', hostname);
+  // Development overrides - skip auth for known development environments
+  const isLocalhost = hostname.includes('localhost') || hostname.includes('127.0.0.1');
+  const isReplitDev = hostname.includes('replit.dev'); // All replit.dev domains (including workspaces)
+  const isDevelopment = import.meta.env.NODE_ENV === 'development' || 
+                       import.meta.env.VITE_NODE_ENV === 'development' || 
+                       import.meta.env.MODE === 'development';
+  
+  // Skip auth for development environments only
+  if (isLocalhost || isReplitDev || isDevelopment) {
+    console.log('🔧 FRONTEND AUTH BYPASS: Development environment detected, skipping authentication');
     return false;
   }
   
-  // Require authentication for production deployments (including custom domains)
-  console.log('🔧 FRONTEND PRODUCTION MODE: Authentication required for:', hostname);
+  // All other domains (including custom domains like apcompepoch.xyz) require authentication
+  console.log('🔐 FRONTEND PRODUCTION MODE: Authentication required for deployed site:', hostname);
   return true;
 }
 

@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { storage } from '../../storage';
+import { authenticateToken } from '../../middleware/auth';
 import {
   insertQcDefinitionSchema,
   insertQcSubmissionSchema,
@@ -36,7 +37,7 @@ router.get('/definitions/:id', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/definitions', async (req: Request, res: Response) => {
+router.post('/definitions', authenticateToken, async (req: Request, res: Response) => {
   try {
     const definitionData = insertQcDefinitionSchema.parse(req.body);
     const newDefinition = await storage.createQcDefinition(definitionData);
@@ -50,7 +51,7 @@ router.post('/definitions', async (req: Request, res: Response) => {
   }
 });
 
-router.put('/definitions/:id', async (req: Request, res: Response) => {
+router.put('/definitions/:id', authenticateToken, async (req: Request, res: Response) => {
   try {
     const definitionId = parseInt(req.params.id);
     const updates = req.body;
@@ -62,7 +63,7 @@ router.put('/definitions/:id', async (req: Request, res: Response) => {
   }
 });
 
-router.delete('/definitions/:id', async (req: Request, res: Response) => {
+router.delete('/definitions/:id', authenticateToken, async (req: Request, res: Response) => {
   try {
     const definitionId = parseInt(req.params.id);
     await storage.deleteQcDefinition(definitionId);
@@ -125,7 +126,7 @@ router.get('/maintenance/schedules', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/maintenance/schedules', async (req: Request, res: Response) => {
+router.post('/maintenance/schedules', authenticateToken, async (req: Request, res: Response) => {
   try {
     const scheduleData = insertMaintenanceScheduleSchema.parse(req.body);
     const newSchedule = await storage.createMaintenanceSchedule(scheduleData);
@@ -136,7 +137,7 @@ router.post('/maintenance/schedules', async (req: Request, res: Response) => {
   }
 });
 
-router.put('/maintenance/schedules/:id', async (req: Request, res: Response) => {
+router.put('/maintenance/schedules/:id', authenticateToken, async (req: Request, res: Response) => {
   try {
     const scheduleId = parseInt(req.params.id);
     const updates = req.body;
@@ -148,7 +149,7 @@ router.put('/maintenance/schedules/:id', async (req: Request, res: Response) => 
   }
 });
 
-router.delete('/maintenance/schedules/:id', async (req: Request, res: Response) => {
+router.delete('/maintenance/schedules/:id', authenticateToken, async (req: Request, res: Response) => {
   try {
     const scheduleId = parseInt(req.params.id);
     await storage.deleteMaintenanceSchedule(scheduleId);

@@ -1,0 +1,40 @@
+.replit
+attached_assets/AS9100 Employee Training_1759352917898.pdf
+attached_assets/Annual ITAR Training.docx - Google Docs_1759352442796.pdf
+attached_assets/Counterfeit Prevention Training_1759353475520.pdf
+attached_assets/Employee Chemical Handling Training_1759351845055.pdf
+attached_assets/Ethics - Google Docs_1759353564278.pdf
+attached_assets/ITAR Compliance Policies.docx - Google Docs_1759352442797.pdf
+attached_assets/ITAR Employee Summary.docx - Google Docs_1759352442798.pdf
+attached_assets/Leader Training Shut Down Procedures_1759353935946.pdf
+attached_assets/Leader Training Topic Chemical Handling_1759351634113.pdf
+attached_assets/Leader Training Topic_ Nonconforming Items_1759353723875.pdf
+attached_assets/Pasted--Fire-Safety-Training-AG-Composites-Training-Objective-To-ensure-all-AG-Composites-employees-un-1759351941754_1759351941754.txt
+attached_assets/Preservation Training_1759346239221.pdf
+attached_assets/image_1758503262909.png
+attached_assets/image_1758505192802.png
+attached_assets/image_1758505494758.png
+attached_assets/image_1758505625974.png
+attached_assets/image_1758506609839.png
+attached_assets/image_1758635471313.png
+attached_assets/image_1758659953708.png
+attached_assets/image_1759181443674.png
+attached_assets/image_1759181811104.png
+attached_assets/image_1759182249722.png
+attached_assets/image_1759182553613.png
+attached_assets/preservation-training.pdf
+client/src/App.tsx
+client/src/components/Navigation.tsx
+client/src/components/VendorFormModal.tsx
+client/src/components/inventory/VendorPOManager.tsx
+client/src/pages/CustomerManagement.tsx
+client/src/pages/Training.tsx
+client/src/pages/TrainingModule.tsx
+replit.md
+server/index.ts
+server/schema.ts
+server/seeds/preservation-training-seed.ts
+server/src/routes/index.ts
+server/src/routes/training.ts
+server/storage.ts
+server/vite.ts

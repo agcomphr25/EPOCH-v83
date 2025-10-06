@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link, useLocation } from 'wouter';
 
-import { Factory, User, FileText, TrendingDown, Plus, Settings, Package, FilePenLine, ClipboardList, BarChart, ChevronDown, ChevronRight, FormInput, PieChart, Scan, Warehouse, Shield, Wrench, Users, TestTube, DollarSign, Receipt, TrendingUp, List, BookOpen, Calendar, CheckSquare, Truck, Mail, MessageSquare, CreditCard, XCircle, Cog, ArrowRight, LogOut, Scissors, MapPin, Snowflake, ShoppingCart, GraduationCap } from "lucide-react";
+
+import { Factory, User, FileText, TrendingDown, Plus, Settings, Package, FilePenLine, ClipboardList, BarChart, ChevronDown, ChevronRight, FormInput, PieChart, Scan, Warehouse, Shield, Wrench, Users, TestTube, DollarSign, Receipt, TrendingUp, List, BookOpen, Calendar, CheckSquare, Truck, Mail, MessageSquare, CreditCard, XCircle, Cog, ArrowRight, LogOut, Scissors, MapPin, Snowflake, ShoppingCart, GraduationCap, Flame, AlertTriangle, ShieldAlert, Award, PackageX, Scale, ClipboardCheck, Power } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -17,9 +18,14 @@ import {
   NavigationMenuIndicator,
   NavigationMenuViewport,
 } from "@/components/ui/navigation-menu"
+import { hasFullAccess, hasRouteAccess } from "@/config/userPermissions";
+import { getDashboardRoute } from "@/config/dashboardMapping";
 
 export default function Navigation() {
-  const [location] = useLocation();
+  const [location, setLocation] = useLocation();
+  const [currentUser, setCurrentUser] = useState<string>('');
+  const [hasFullNav, setHasFullNav] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
   
   // Check if we're in deployment environment to show logout button
   const isDeploymentEnvironment = () => {
@@ -30,7 +36,7 @@ export default function Navigation() {
   };
   
   // Fetch current user data
-  const { data: currentUser } = useQuery({
+  const { data: userData } = useQuery({
     queryKey: ['currentUser'],
     queryFn: async () => {
       const token = localStorage.getItem('sessionToken') || localStorage.getItem('jwtToken');
@@ -46,8 +52,8 @@ export default function Navigation() {
         });
         
         if (response.ok) {
-          const userData = await response.json();
-          return userData;
+          const userDataResponse = await response.json();
+          return userDataResponse;
         }
         return null;
       } catch (error) {
@@ -59,17 +65,10 @@ export default function Navigation() {
     staleTime: 5 * 60 * 1000, // 5 minutes
     retry: false
   });
-  
-  // Logout function
-  const handleLogout = () => {
-    localStorage.removeItem('sessionToken');
-    localStorage.removeItem('jwtToken');
-    // Force a complete page reload to trigger authentication check
-    window.location.reload();
-  };
 
   const [verifiedModulesExpanded, setVerifiedModulesExpanded] = useState(false);
   const [formsReportsExpanded, setFormsReportsExpanded] = useState(false);
+  const [trainingExpanded, setTrainingExpanded] = useState(false);
   const [inventoryExpanded, setInventoryExpanded] = useState(false);
   const [employeesExpanded, setEmployeesExpanded] = useState(false);
   const [qcMaintenanceExpanded, setQcMaintenanceExpanded] = useState(false);
@@ -78,6 +77,50 @@ export default function Navigation() {
   const [purchaseOrdersExpanded, setPurchaseOrdersExpanded] = useState(false);
   const [productionSchedulingExpanded, setProductionSchedulingExpanded] = useState(false);
   const [departmentQueueExpanded, setDepartmentQueueExpanded] = useState(false);
+
+  // Get current user from localStorage or URL-based dashboard
+  useEffect(() => {
+    const getUserFromContext = () => {
+      // First check localStorage (for users who logged in via Login page)
+      const storedUser = localStorage.getItem('currentUser');
+      if (storedUser) {
+        const username = storedUser.toLowerCase();
+        setCurrentUser(username);
+        setHasFullNav(hasFullAccess(username));
+        setIsLoading(false);
+        return;
+      }
+      
+      // If no localStorage, extract username from dashboard URL pattern
+      // e.g., /tims-dashboard -> tims, /staciw-dashboard -> staciw
+      const dashboardMatch = location.match(/^\/([a-z]+)-dashboard$/);
+      if (dashboardMatch) {
+        const username = dashboardMatch[1].toLowerCase();
+        setCurrentUser(username);
+        setHasFullNav(hasFullAccess(username));
+      }
+      
+      setIsLoading(false);
+    };
+    
+    getUserFromContext();
+  }, [location]);
+
+  // Handle logout
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        credentials: 'include',
+      });
+    } catch (error) {
+      console.error('Logout error:', error);
+    } finally {
+      localStorage.removeItem('currentUser');
+      localStorage.removeItem('userData');
+      setLocation('/login');
+    }
+  };
 
   // Helper function to close all dropdowns
   const closeAllDropdowns = useCallback(() => {
@@ -111,6 +154,13 @@ export default function Navigation() {
       if (dropdownName !== 'verifiedModules') setVerifiedModulesExpanded(false);
     }
   }, []);
+
+  // Helper function to check if user has access to a route
+  const canAccessRoute = (route: string): boolean => {
+    if (!currentUser) return false;
+    if (hasFullNav) return true;
+    return hasRouteAccess(currentUser, route);
+  };
 
   const navItems = [
     {
@@ -300,11 +350,17 @@ export default function Navigation() {
       icon: Shield,
       description: 'QC inspections and definitions'
     },
+    // {
+    //   path: '/nonconformance',
+    //   label: 'Nonconformance Tracking',
+    //   icon: ClipboardList,
+    //   description: 'Track and manage quality issues and dispositions'
+    // },
     {
-      path: '/nonconformance',
-      label: 'Nonconformance Tracking',
+      path: '/non-conforming-items',
+      label: 'Non-Conforming Items',
       icon: ClipboardList,
-      description: 'Track and manage quality issues and dispositions'
+      description: 'Track non-conforming items with detailed dispositions'
     },
     {
       path: '/maintenance',
@@ -599,16 +655,95 @@ export default function Navigation() {
     }
   ];
 
-  const isVerifiedModulesActive = verifiedModulesItems.some(item => location === item.path);
-  const isFormsReportsActive = formsReportsItems.some(item => location === item.path);
-  const isInventoryActive = inventoryItems.some(item => location === item.path);
-  const isQcMaintenanceActive = qcMaintenanceItems.some(item => location === item.path);
-  const isEmployeesActive = employeesItems.some(item => location === item.path);
-  const isFinanceActive = financeItems.some(item => location === item.path);
-  const isUserDashboardsActive = userDashboardsItems.some(item => location === item.path);
-  const isPurchaseOrdersActive = purchaseOrdersItems.some(item => location === item.path);
-  const isProductionSchedulingActive = productionSchedulingItems.some(item => location === item.path);
-  const isDepartmentQueueActive = departmentQueueItems.some(item => location === item.path);
+  const trainingItems = [
+    {
+      path: '/training',
+      label: 'Training Home',
+      icon: GraduationCap,
+      description: 'View all training modules'
+    },
+    {
+      path: '/training/module/2',
+      label: 'Preservation & FOD Training',
+      icon: Shield,
+      description: 'Foreign Object Debris prevention'
+    },
+    {
+      path: '/training/module/3',
+      label: 'Chemical Handling & Storage',
+      icon: AlertTriangle,
+      description: 'Safe chemical handling procedures'
+    },
+    {
+      path: '/training/module/4',
+      label: 'Fire Safety Training',
+      icon: Flame,
+      description: 'Fire prevention and safety'
+    },
+    {
+      path: '/training/module/5',
+      label: 'ITAR Compliance',
+      icon: ShieldAlert,
+      description: 'Export control regulations'
+    },
+    {
+      path: '/training/module/6',
+      label: 'AS9100 Orientation',
+      icon: Award,
+      description: 'Quality management system training'
+    },
+    {
+      path: '/training/module/7',
+      label: 'Counterfeit Prevention',
+      icon: PackageX,
+      description: 'Prevent counterfeit materials'
+    },
+    {
+      path: '/training/module/8',
+      label: 'Ethics in Quality Systems',
+      icon: Scale,
+      description: 'Aerospace quality ethics'
+    },
+    {
+      path: '/training/module/9',
+      label: 'Nonconforming Items (Leader)',
+      icon: ClipboardCheck,
+      description: 'Leader training for nonconforming items'
+    },
+    {
+      path: '/training/module/10',
+      label: 'Shut Down Procedures (Leader)',
+      icon: Power,
+      description: 'Leader training for shutdown procedures'
+    }
+  ];
+
+  // Filter items based on user permissions - only if user is loaded
+  const filteredNavItems = (isLoading || !currentUser) ? [] : (hasFullNav ? navItems : navItems.filter(item => canAccessRoute(item.path)));
+  const filteredInventoryItems = (isLoading || !currentUser) ? [] : (hasFullNav ? inventoryItems : inventoryItems.filter(item => canAccessRoute(item.path)));
+  const filteredFormsReportsItems = (isLoading || !currentUser) ? [] : (hasFullNav ? formsReportsItems : formsReportsItems.filter(item => canAccessRoute(item.path)));
+  const filteredTrainingItems = (isLoading || !currentUser) ? [] : (hasFullNav ? trainingItems : trainingItems.filter(item => canAccessRoute(item.path)));
+  const filteredQcMaintenanceItems = (isLoading || !currentUser) ? [] : (hasFullNav ? qcMaintenanceItems : qcMaintenanceItems.filter(item => canAccessRoute(item.path)));
+  const filteredEmployeesItems = (isLoading || !currentUser) ? [] : (hasFullNav ? employeesItems : employeesItems.filter(item => canAccessRoute(item.path)));
+  const filteredFinanceItems = (isLoading || !currentUser) ? [] : (hasFullNav ? financeItems : financeItems.filter(item => canAccessRoute(item.path)));
+  const filteredUserDashboardsItems = (isLoading || !currentUser) ? [] : (hasFullNav ? userDashboardsItems : userDashboardsItems.filter(item => canAccessRoute(item.path)));
+  const filteredPurchaseOrdersItems = (isLoading || !currentUser) ? [] : (hasFullNav ? purchaseOrdersItems : purchaseOrdersItems.filter(item => canAccessRoute(item.path)));
+  const filteredVerifiedModulesItems = (isLoading || !currentUser) ? [] : (hasFullNav ? verifiedModulesItems : verifiedModulesItems.filter(item => canAccessRoute(item.path)));
+  const filteredProductionSchedulingItems = (isLoading || !currentUser) ? [] : (hasFullNav ? productionSchedulingItems : productionSchedulingItems.filter(item => canAccessRoute(item.path)));
+  const filteredDepartmentQueueItems = (isLoading || !currentUser) ? [] : (hasFullNav ? departmentQueueItems : departmentQueueItems.filter(item => canAccessRoute(item.path)));
+
+  const isVerifiedModulesActive = filteredVerifiedModulesItems.some(item => location === item.path);
+  const isFormsReportsActive = filteredFormsReportsItems.some(item => location === item.path);
+  const isTrainingActive = filteredTrainingItems.some(item => location === item.path);
+  const isInventoryActive = filteredInventoryItems.some(item => location === item.path);
+  const isQcMaintenanceActive = filteredQcMaintenanceItems.some(item => location === item.path);
+  const isEmployeesActive = filteredEmployeesItems.some(item => location === item.path);
+  const isFinanceActive = filteredFinanceItems.some(item => location === item.path);
+  const isUserDashboardsActive = filteredUserDashboardsItems.some(item => location === item.path);
+  const isPurchaseOrdersActive = filteredPurchaseOrdersItems.some(item => location === item.path);
+  const isProductionSchedulingActive = filteredProductionSchedulingItems.some(item => location === item.path);
+  const isDepartmentQueueActive = filteredDepartmentQueueItems.some(item => location === item.path);
+
 
   // Close all dropdowns when navigating to a new page
   useEffect(() => {
@@ -657,14 +792,38 @@ export default function Navigation() {
     <header className="bg-white shadow-sm border-b border-gray-200">
       <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center py-4 gap-4">
-          <div className="flex items-center">
-            <Factory className="h-6 w-6 text-primary mr-3" />
-            <h1 className="text-xl font-semibold text-gray-900">EPOCH v8</h1>
+          <div className="flex items-center gap-4">
+            <div className="flex items-center">
+              <Factory className="h-6 w-6 text-primary mr-3" />
+              <h1 className="text-xl font-semibold text-gray-900">EPOCH v8</h1>
+            </div>
+            {currentUser && (
+              <Link href={getDashboardRoute(currentUser)}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex items-center gap-2"
+                  data-testid="button-home"
+                >
+                  Home
+                </Button>
+              </Link>
+            )}
           </div>
 
           {/* Navigation Links */}
           <nav className="flex flex-wrap items-center gap-2 lg:gap-4">
-            {navItems.map((item) => {
+            {isLoading && (
+              <span className="text-sm text-gray-500">Loading navigation...</span>
+            )}
+            {!isLoading && !currentUser && (
+              <Link href="/">
+                <span className="text-sm text-red-600 hover:text-red-700 cursor-pointer underline">
+                  Please log in to access navigation
+                </span>
+              </Link>
+            )}
+            {!isLoading && currentUser && filteredNavItems.map((item) => {
               const Icon = item.icon;
               const isActive = location === item.path;
 
@@ -684,419 +843,488 @@ export default function Navigation() {
               );
             })}
 
-            {/* Communications Dropdown */}
-            <div className="relative">
-              <Button
-                variant="ghost"
-                className="flex items-center gap-2 text-sm"
-                onClick={() => window.location.href = '/communications/inbox'}
-              >
-                <Mail className="h-4 w-4" />
-                Communications
-              </Button>
-            </div>
+            {/* Communications Dropdown - Only show if user has full access */}
+            {hasFullNav && (
+              <div className="relative">
+                <Button
+                  variant="ghost"
+                  className="flex items-center gap-2 text-sm"
+                  onClick={() => window.location.href = '/communications/inbox'}
+                >
+                  <Mail className="h-4 w-4" />
+                  Communications
+                </Button>
+              </div>
+            )}
 
             {/* Forms & Reports Dropdown */}
-            <div className="relative">
-              <Button
-                variant={isFormsReportsActive ? "default" : "ghost"}
-                className={cn(
-                  "flex items-center gap-2 text-sm",
-                  isFormsReportsActive && "bg-primary text-white"
-                )}
-                onClick={() => toggleDropdown('formsReports', formsReportsExpanded, setFormsReportsExpanded)}
-              >
-                <FormInput className="h-4 w-4" />
-                Forms & Reports
-                {formsReportsExpanded ? (
-                  <ChevronDown className="h-4 w-4" />
-                ) : (
-                  <ChevronRight className="h-4 w-4" />
-                )}
-              </Button>
+            {filteredFormsReportsItems.length > 0 && (
+              <div className="relative">
+                <Button
+                  variant={isFormsReportsActive ? "default" : "ghost"}
+                  className={cn(
+                    "flex items-center gap-2 text-sm",
+                    isFormsReportsActive && "bg-primary text-white"
+                  )}
+                  onClick={() => toggleDropdown('formsReports', formsReportsExpanded, setFormsReportsExpanded)}
+                >
+                  <FormInput className="h-4 w-4" />
+                  Forms & Reports
+                  {formsReportsExpanded ? (
+                    <ChevronDown className="h-4 w-4" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4" />
+                  )}
+                </Button>
 
-              {formsReportsExpanded && (
-                <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
-                  {formsReportsItems.map((item) => {
-                    const Icon = item.icon;
-                    const isActive = location === item.path;
+                {formsReportsExpanded && (
+                  <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
+                    {filteredFormsReportsItems.map((item) => {
+                      const Icon = item.icon;
+                      const isActive = location === item.path;
 
-                    return (
-                      <Link key={item.path} href={item.path}>
-                        <button
-                          className={cn(
-                            "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
-                            isActive && "bg-primary text-white hover:bg-primary"
-                          )}
-                          onClick={closeAllDropdowns}
-                        >
-                          <Icon className="h-4 w-4" />
-                          {item.label}
-                        </button>
-                      </Link>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+                      return (
+                        <Link key={item.path} href={item.path}>
+                          <button
+                            className={cn(
+                              "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
+                              isActive && "bg-primary text-white hover:bg-primary"
+                            )}
+                            onClick={closeAllDropdowns}
+                          >
+                            <Icon className="h-4 w-4" />
+                            {item.label}
+                          </button>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
+
+            {/* Training Dropdown */}
+            {filteredTrainingItems.length > 0 && (
+              <div className="relative">
+                <Button
+                  variant={isTrainingActive ? "default" : "ghost"}
+                  className={cn(
+                    "flex items-center gap-2 text-sm",
+                    isTrainingActive && "bg-primary text-white"
+                  )}
+                  onClick={() => toggleDropdown('training', trainingExpanded, setTrainingExpanded)}
+                >
+                  <GraduationCap className="h-4 w-4" />
+                  Training
+                  {trainingExpanded ? (
+                    <ChevronDown className="h-4 w-4" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4" />
+                  )}
+                </Button>
+
+                {trainingExpanded && (
+                  <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
+                    {filteredTrainingItems.map((item) => {
+                      const Icon = item.icon;
+                      const isActive = location === item.path;
+
+                      return (
+                        <Link key={item.path} href={item.path}>
+                          <button
+                            className={cn(
+                              "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
+                              isActive && "bg-primary text-white hover:bg-primary"
+                            )}
+                            onClick={closeAllDropdowns}
+                          >
+                            <Icon className="h-4 w-4" />
+                            {item.label}
+                          </button>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
 
             {/* Inventory Dropdown */}
-            <div className="relative">
-              <Button
-                variant={isInventoryActive ? "default" : "ghost"}
-                className={cn(
-                  "flex items-center gap-2 text-sm",
-                  isInventoryActive && "bg-primary text-white"
-                )}
-                onClick={() => toggleDropdown('inventory', inventoryExpanded, setInventoryExpanded)}
-              >
-                <Warehouse className="h-4 w-4" />
-                Inventory
-                {inventoryExpanded ? (
-                  <ChevronDown className="h-4 w-4" />
-                ) : (
-                  <ChevronRight className="h-4 w-4" />
-                )}
-              </Button>
+            {filteredInventoryItems.length > 0 && (
+              <div className="relative">
+                <Button
+                  variant={isInventoryActive ? "default" : "ghost"}
+                  className={cn(
+                    "flex items-center gap-2 text-sm",
+                    isInventoryActive && "bg-primary text-white"
+                  )}
+                  onClick={() => toggleDropdown('inventory', inventoryExpanded, setInventoryExpanded)}
+                >
+                  <Warehouse className="h-4 w-4" />
+                  Inventory
+                  {inventoryExpanded ? (
+                    <ChevronDown className="h-4 w-4" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4" />
+                  )}
+                </Button>
 
-              {inventoryExpanded && (
-                <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
-                  {inventoryItems.map((item) => {
-                    const Icon = item.icon;
-                    const isActive = location === item.path;
+                {inventoryExpanded && (
+                  <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
+                    {filteredInventoryItems.map((item) => {
+                      const Icon = item.icon;
+                      const isActive = location === item.path;
 
-                    return (
-                      <Link key={item.path} href={item.path}>
-                        <button
-                          className={cn(
-                            "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
-                            isActive && "bg-primary text-white hover:bg-primary"
-                          )}
-                          onClick={closeAllDropdowns}
-                        >
-                          <Icon className="h-4 w-4" />
-                          {item.label}
-                        </button>
-                      </Link>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+                      return (
+                        <Link key={item.path} href={item.path}>
+                          <button
+                            className={cn(
+                              "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
+                              isActive && "bg-primary text-white hover:bg-primary"
+                            )}
+                            onClick={closeAllDropdowns}
+                          >
+                            <Icon className="h-4 w-4" />
+                            {item.label}
+                          </button>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* QC & Maintenance Dropdown */}
-            <div className="relative">
-              <Button
-                variant={isQcMaintenanceActive ? "default" : "ghost"}
-                className={cn(
-                  "flex items-center gap-2 text-sm",
-                  isQcMaintenanceActive && "bg-primary text-white"
-                )}
-                onClick={() => toggleDropdown('qcMaintenance', qcMaintenanceExpanded, setQcMaintenanceExpanded)}
-              >
-                <Shield className="h-4 w-4" />
-                QC & Maintenance
-                {qcMaintenanceExpanded ? (
-                  <ChevronDown className="h-4 w-4" />
-                ) : (
-                  <ChevronRight className="h-4 w-4" />
-                )}
-              </Button>
+            {filteredQcMaintenanceItems.length > 0 && (
+              <div className="relative">
+                <Button
+                  variant={isQcMaintenanceActive ? "default" : "ghost"}
+                  className={cn(
+                    "flex items-center gap-2 text-sm",
+                    isQcMaintenanceActive && "bg-primary text-white"
+                  )}
+                  onClick={() => toggleDropdown('qcMaintenance', qcMaintenanceExpanded, setQcMaintenanceExpanded)}
+                >
+                  <Shield className="h-4 w-4" />
+                  QC & Maintenance
+                  {qcMaintenanceExpanded ? (
+                    <ChevronDown className="h-4 w-4" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4" />
+                  )}
+                </Button>
 
-              {qcMaintenanceExpanded && (
-                <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
-                  {qcMaintenanceItems.map((item) => {
-                    const Icon = item.icon;
-                    const isActive = location === item.path;
+                {qcMaintenanceExpanded && (
+                  <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
+                    {filteredQcMaintenanceItems.map((item) => {
+                      const Icon = item.icon;
+                      const isActive = location === item.path;
 
-                    return (
-                      <Link key={item.path} href={item.path}>
-                        <button
-                          className={cn(
-                            "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
-                            isActive && "bg-primary text-white hover:bg-primary"
-                          )}
-                          onClick={closeAllDropdowns}
-                        >
-                          <Icon className="h-4 w-4" />
-                          {item.label}
-                        </button>
-                      </Link>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+                      return (
+                        <Link key={item.path} href={item.path}>
+                          <button
+                            className={cn(
+                              "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
+                              isActive && "bg-primary text-white hover:bg-primary"
+                            )}
+                            onClick={closeAllDropdowns}
+                          >
+                            <Icon className="h-4 w-4" />
+                            {item.label}
+                          </button>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Employees Dropdown */}
-            <div className="relative">
-              <Button
-                variant={isEmployeesActive ? "default" : "ghost"}
-                className={cn(
-                  "flex items-center gap-2 text-sm",
-                  isEmployeesActive && "bg-primary text-white"
-                )}
-                onClick={() => toggleDropdown('employees', employeesExpanded, setEmployeesExpanded)}
-              >
-                <Users className="h-4 w-4" />
-                Employees
-                {employeesExpanded ? (
-                  <ChevronDown className="h-4 w-4" />
-                ) : (
-                  <ChevronRight className="h-4 w-4" />
-                )}
-              </Button>
+            {filteredEmployeesItems.length > 0 && (
+              <div className="relative">
+                <Button
+                  variant={isEmployeesActive ? "default" : "ghost"}
+                  className={cn(
+                    "flex items-center gap-2 text-sm",
+                    isEmployeesActive && "bg-primary text-white"
+                  )}
+                  onClick={() => toggleDropdown('employees', employeesExpanded, setEmployeesExpanded)}
+                >
+                  <Users className="h-4 w-4" />
+                  Employees
+                  {employeesExpanded ? (
+                    <ChevronDown className="h-4 w-4" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4" />
+                  )}
+                </Button>
 
-              {employeesExpanded && (
-                <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
-                  {employeesItems.map((item) => {
-                    const Icon = item.icon;
-                    const isActive = location === item.path;
+                {employeesExpanded && (
+                  <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
+                    {filteredEmployeesItems.map((item) => {
+                      const Icon = item.icon;
+                      const isActive = location === item.path;
 
-                    return (
-                      <Link key={item.path} href={item.path}>
-                        <button
-                          className={cn(
-                            "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
-                            isActive && "bg-primary text-white hover:bg-primary"
-                          )}
-                          onClick={closeAllDropdowns}
-                        >
-                          <Icon className="h-4 w-4" />
-                          {item.label}
-                        </button>
-                      </Link>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+                      return (
+                        <Link key={item.path} href={item.path}>
+                          <button
+                            className={cn(
+                              "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
+                              isActive && "bg-primary text-white hover:bg-primary"
+                            )}
+                            onClick={closeAllDropdowns}
+                          >
+                            <Icon className="h-4 w-4" />
+                            {item.label}
+                          </button>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Finance Dropdown */}
-            <div className="relative">
-              <Button
-                variant={isFinanceActive ? "default" : "ghost"}
-                className={cn(
-                  "flex items-center gap-2 text-sm",
-                  isFinanceActive && "bg-primary text-white"
-                )}
-                onClick={() => toggleDropdown('finance', financeExpanded, setFinanceExpanded)}
-              >
-                <DollarSign className="h-4 w-4" />
-                Finance
-                {financeExpanded ? (
-                  <ChevronDown className="h-4 w-4" />
-                ) : (
-                  <ChevronRight className="h-4 w-4" />
-                )}
-              </Button>
+            {filteredFinanceItems.length > 0 && (
+              <div className="relative">
+                <Button
+                  variant={isFinanceActive ? "default" : "ghost"}
+                  className={cn(
+                    "flex items-center gap-2 text-sm",
+                    isFinanceActive && "bg-primary text-white"
+                  )}
+                  onClick={() => toggleDropdown('finance', financeExpanded, setFinanceExpanded)}
+                >
+                  <DollarSign className="h-4 w-4" />
+                  Finance
+                  {financeExpanded ? (
+                    <ChevronDown className="h-4 w-4" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4" />
+                  )}
+                </Button>
 
-              {financeExpanded && (
-                <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
-                  {financeItems.map((item) => {
-                    const Icon = item.icon;
-                    const isActive = location === item.path;
+                {financeExpanded && (
+                  <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
+                    {filteredFinanceItems.map((item) => {
+                      const Icon = item.icon;
+                      const isActive = location === item.path;
 
-                    return (
-                      <Link key={item.path} href={item.path}>
-                        <button
-                          className={cn(
-                            "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
-                            isActive && "bg-primary text-white hover:bg-primary"
-                          )}
-                          onClick={closeAllDropdowns}
-                        >
-                          <Icon className="h-4 w-4" />
-                          {item.label}
-                        </button>
-                      </Link>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+                      return (
+                        <Link key={item.path} href={item.path}>
+                          <button
+                            className={cn(
+                              "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
+                              isActive && "bg-primary text-white hover:bg-primary"
+                            )}
+                            onClick={closeAllDropdowns}
+                          >
+                            <Icon className="h-4 w-4" />
+                            {item.label}
+                          </button>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Purchase Orders Dropdown */}
-            <div className="relative">
-              <Button
-                variant={isPurchaseOrdersActive ? "default" : "ghost"}
-                className={cn(
-                  "flex items-center gap-2 text-sm",
-                  isPurchaseOrdersActive && "bg-primary text-white"
-                )}
-                onClick={() => toggleDropdown('purchaseOrders', purchaseOrdersExpanded, setPurchaseOrdersExpanded)}
-              >
-                <ClipboardList className="h-4 w-4" />
-                Purchase Orders
-                {purchaseOrdersExpanded ? (
-                  <ChevronDown className="h-4 w-4" />
-                ) : (
-                  <ChevronRight className="h-4 w-4" />
-                )}
-              </Button>
+            {filteredPurchaseOrdersItems.length > 0 && (
+              <div className="relative">
+                <Button
+                  variant={isPurchaseOrdersActive ? "default" : "ghost"}
+                  className={cn(
+                    "flex items-center gap-2 text-sm",
+                    isPurchaseOrdersActive && "bg-primary text-white"
+                  )}
+                  onClick={() => toggleDropdown('purchaseOrders', purchaseOrdersExpanded, setPurchaseOrdersExpanded)}
+                >
+                  <Receipt className="h-4 w-4" />
+                  Purchase Orders
+                  {purchaseOrdersExpanded ? (
+                    <ChevronDown className="h-4 w-4" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4" />
+                  )}
+                </Button>
 
-              {purchaseOrdersExpanded && (
-                <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
-                  {purchaseOrdersItems.map((item) => {
-                    const Icon = item.icon;
-                    const isActive = location === item.path;
+                {purchaseOrdersExpanded && (
+                  <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
+                    {filteredPurchaseOrdersItems.map((item) => {
+                      const Icon = item.icon;
+                      const isActive = location === item.path;
 
-                    return (
-                      <Link key={item.path} href={item.path}>
-                        <button
-                          className={cn(
-                            "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
-                            isActive && "bg-primary text-white hover:bg-primary"
-                          )}
-                          onClick={closeAllDropdowns}
-                        >
-                          <Icon className="h-4 w-4" />
-                          {item.label}
-                        </button>
-                      </Link>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+                      return (
+                        <Link key={item.path} href={item.path}>
+                          <button
+                            className={cn(
+                              "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
+                              isActive && "bg-primary text-white hover:bg-primary"
+                            )}
+                            onClick={closeAllDropdowns}
+                          >
+                            <Icon className="h-4 w-4" />
+                            {item.label}
+                          </button>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Production Scheduling Dropdown */}
-            <div className="relative">
-              <Button
-                variant={isProductionSchedulingActive ? "default" : "ghost"}
-                className={cn(
-                  "flex items-center gap-2 text-sm",
-                  isProductionSchedulingActive && "bg-primary text-white"
-                )}
-                onClick={() => toggleDropdown('productionScheduling', productionSchedulingExpanded, setProductionSchedulingExpanded)}
-              >
-                <Calendar className="h-4 w-4" />
-                Production Scheduling
-                {productionSchedulingExpanded ? (
-                  <ChevronDown className="h-4 w-4" />
-                ) : (
-                  <ChevronRight className="h-4 w-4" />
-                )}
-              </Button>
+            {filteredProductionSchedulingItems.length > 0 && (
+              <div className="relative">
+                <Button
+                  variant={isProductionSchedulingActive ? "default" : "ghost"}
+                  className={cn(
+                    "flex items-center gap-2 text-sm",
+                    isProductionSchedulingActive && "bg-primary text-white"
+                  )}
+                  onClick={() => toggleDropdown('productionScheduling', productionSchedulingExpanded, setProductionSchedulingExpanded)}
+                >
+                  <Calendar className="h-4 w-4" />
+                  Production Scheduling
+                  {productionSchedulingExpanded ? (
+                    <ChevronDown className="h-4 w-4" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4" />
+                  )}
+                </Button>
 
-              {productionSchedulingExpanded && (
-                <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
-                  {productionSchedulingItems.map((item) => {
-                    const Icon = item.icon;
-                    const isActive = location === item.path;
+                {productionSchedulingExpanded && (
+                  <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
+                    {filteredProductionSchedulingItems.map((item) => {
+                      const Icon = item.icon;
+                      const isActive = location === item.path;
 
-                    return (
-                      <Link key={item.path} href={item.path}>
-                        <button
-                          className={cn(
-                            "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
-                            isActive && "bg-primary text-white hover:bg-primary"
-                          )}
-                          onClick={closeAllDropdowns}
-                        >
-                          <Icon className="h-4 w-4" />
-                          {item.label}
-                        </button>
-                      </Link>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+                      return (
+                        <Link key={item.path} href={item.path}>
+                          <button
+                            className={cn(
+                              "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
+                              isActive && "bg-primary text-white hover:bg-primary"
+                            )}
+                            onClick={closeAllDropdowns}
+                          >
+                            <Icon className="h-4 w-4" />
+                            {item.label}
+                          </button>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Department Manager Dropdown */}
-            <div className="relative">
-              <Button
-                variant={isDepartmentQueueActive ? "default" : "ghost"}
-                className={cn(
-                  "flex items-center gap-2 text-sm",
-                  isDepartmentQueueActive && "bg-primary text-white"
-                )}
-                onClick={() => toggleDropdown('departmentQueue', departmentQueueExpanded, setDepartmentQueueExpanded)}
-              >
-                <Factory className="h-4 w-4" />
-                P1 Department Manager
-                {departmentQueueExpanded ? (
-                  <ChevronDown className="h-4 w-4" />
-                ) : (
-                  <ChevronRight className="h-4 w-4" />
-                )}
-              </Button>
+            {filteredDepartmentQueueItems.length > 0 && (
+              <div className="relative">
+                <Button
+                  variant={isDepartmentQueueActive ? "default" : "ghost"}
+                  className={cn(
+                    "flex items-center gap-2 text-sm",
+                    isDepartmentQueueActive && "bg-primary text-white"
+                  )}
+                  onClick={() => toggleDropdown('departmentQueue', departmentQueueExpanded, setDepartmentQueueExpanded)}
+                >
+                  <Factory className="h-4 w-4" />
+                  P1 Department Manager
+                  {departmentQueueExpanded ? (
+                    <ChevronDown className="h-4 w-4" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4" />
+                  )}
+                </Button>
 
-              {departmentQueueExpanded && (
-                <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[250px]">
-                  {departmentQueueItems.map((item) => {
-                    const Icon = item.icon;
-                    const isActive = location === item.path;
+                {departmentQueueExpanded && (
+                  <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[250px]">
+                    {filteredDepartmentQueueItems.map((item) => {
+                      const Icon = item.icon;
+                      const isActive = location === item.path;
 
-                    return (
-                      <Link key={item.path} href={item.path}>
-                        <button
-                          className={cn(
-                            "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
-                            isActive && "bg-primary text-white hover:bg-primary"
-                          )}
-                          onClick={closeAllDropdowns}
-                        >
-                          <Icon className="h-4 w-4" />
-                          {item.label}
-                        </button>
-                      </Link>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+                      return (
+                        <Link key={item.path} href={item.path}>
+                          <button
+                            className={cn(
+                              "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
+                              isActive && "bg-primary text-white hover:bg-primary"
+                            )}
+                            onClick={closeAllDropdowns}
+                          >
+                            <Icon className="h-4 w-4" />
+                            {item.label}
+                          </button>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Verified Modules Dropdown */}
-            <div className="relative">
-              <Button
-                variant={isVerifiedModulesActive ? "default" : "ghost"}
-                className={cn(
-                  "flex items-center gap-2 text-sm",
-                  isVerifiedModulesActive && "bg-primary text-white"
-                )}
-                onClick={() => toggleDropdown('verifiedModules', verifiedModulesExpanded, setVerifiedModulesExpanded)}
-              >
-                <Settings className="h-4 w-4" />
-                Verified Modules
-                {verifiedModulesExpanded ? (
-                  <ChevronDown className="h-4 w-4" />
-                ) : (
-                  <ChevronRight className="h-4 w-4" />
-                )}
-              </Button>
+            {filteredVerifiedModulesItems.length > 0 && (
+              <div className="relative">
+                <Button
+                  variant={isVerifiedModulesActive ? "default" : "ghost"}
+                  className={cn(
+                    "flex items-center gap-2 text-sm",
+                    isVerifiedModulesActive && "bg-primary text-white"
+                  )}
+                  onClick={() => toggleDropdown('verifiedModules', verifiedModulesExpanded, setVerifiedModulesExpanded)}
+                >
+                  <Settings className="h-4 w-4" />
+                  Verified Modules
+                  {verifiedModulesExpanded ? (
+                    <ChevronDown className="h-4 w-4" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4" />
+                  )}
+                </Button>
 
-              {verifiedModulesExpanded && (
-                <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
-                  {verifiedModulesItems.map((item) => {
-                    const Icon = item.icon;
-                    const isActive = location === item.path;
+                {verifiedModulesExpanded && (
+                  <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
+                    {filteredVerifiedModulesItems.map((item) => {
+                      const Icon = item.icon;
+                      const isActive = location === item.path;
 
-                    return (
-                      <Link key={item.path} href={item.path}>
-                        <button
-                          className={cn(
-                            "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
-                            isActive && "bg-primary text-white hover:bg-primary"
-                          )}
-                          onClick={closeAllDropdowns}
-                        >
-                          <Icon className="h-4 w-4" />
-                          {item.label}
-                        </button>
-                      </Link>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+                      return (
+                        <Link key={item.path} href={item.path}>
+                          <button
+                            className={cn(
+                              "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
+                              isActive && "bg-primary text-white hover:bg-primary"
+                            )}
+                            onClick={closeAllDropdowns}
+                          >
+                            <Icon className="h-4 w-4" />
+                            {item.label}
+                          </button>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
 
 
           </nav>
 
           <div className="flex flex-wrap items-center gap-2 lg:gap-4">
             <InstallPWAButton />
+
             <span className="text-sm text-gray-600">Manufacturing ERP System</span>
             {isDeploymentEnvironment() && currentUser?.username && (
               <span className="text-sm font-medium text-gray-700" data-testid="text-username">
@@ -1118,6 +1346,7 @@ export default function Navigation() {
             <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center">
               <User className="h-4 w-4 text-white" />
             </div>
+
           </div>
         </div>
       </div>

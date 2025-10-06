@@ -4510,14 +4510,6 @@ export const nonConformingItems = pgTable("non_conforming_items", {
   serialTagNumber: text("serial_tag_number"),
   dispositionDate: date("disposition_date"),
   correctiveActionNotes: text("corrective_action_notes"),
-
-// ===== INTERNAL COMMUNICATIONS =====
-
-export const departments = pgTable("departments", {
-  id: serial("id").primaryKey(),
-  name: text("name").notNull().unique(),
-  description: text("description"),
-  isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -4572,25 +4564,6 @@ export const messageRecipients = pgTable("message_recipients", {
   accomplishedAt: timestamp("accomplished_at"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-});
-
-export const insertNonConformingItemSchema = createInsertSchema(nonConformingItems).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-}).extend({
-  date: z.coerce.date(),
-  p1OrP2: z.string().min(1, "P1 or P2 is required"),
-  customer: z.string().min(1, "Customer is required"),
-  sku: z.string().min(1, "SKU is required"),
-  qty: z.number().min(1, "Quantity must be at least 1").default(1),
-  issueCause: z.string().min(1, "Issue cause is required"),
-  manufacturerDefect: z.boolean().default(false),
-  disposition: z.string().min(1, "Disposition is required"),
-  authorization: z.string().min(1, "Authorization is required"),
-  serialTagNumber: z.string().optional().nullable(),
-  dispositionDate: z.coerce.date().optional().nullable(),
-  correctiveActionNotes: z.string().optional().nullable(),
 });
 
 export const insertDepartmentSchema = createInsertSchema(departments).omit({

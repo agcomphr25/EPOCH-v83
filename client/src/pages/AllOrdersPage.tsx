@@ -124,8 +124,8 @@ export default function AllOrdersPage() {
 
   const { data: allOrders, isLoading } = useQuery<Order[]>({
     queryKey: ['/api/orders'],
-    staleTime: 30000, // Cache for 30 seconds to improve performance  
-    gcTime: 60000 // Keep in cache for 1 minute
+    staleTime: 0, // No caching for debugging
+    gcTime: 0 // No caching for debugging
   });
 
   // Manual pagination for now

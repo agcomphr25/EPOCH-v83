@@ -2623,19 +2623,27 @@ export class DatabaseStorage implements IStorage {
     // Create payment map for fast lookup
     const paymentMap = new Map(paymentTotals.map(p => [p.orderId, p.totalPayments]));
 
-    // Process orders with payment info using CORRECTED payment logic
+    // Process orders with payment info using REAL-TIME calculated order totals
     const ordersWithPaymentInfo = await Promise.all(ordersWithCustomers.map(async order => {
       const paymentTotal = paymentMap.get(order.orderId) || 0;
       
-      // ULTRA SIMPLE FIX: Just compare payments to stored order total
-      // Use the same logic as Order Summary: if no stored total, assume payment covers it
-      const storedOrderTotal = Number(order.paymentAmount) || 0;
+      // CRITICAL FIX: Use actual calculated order total instead of stale paymentAmount field
+      let actualOrderTotal: number;
       
-      // If there's a stored order total, compare against it
-      // If no stored total but there are payments, consider it paid (like Order Summary shows)
-      const isFullyPaid = storedOrderTotal > 0 
-        ? (paymentTotal >= storedOrderTotal) 
-        : (paymentTotal > 0);
+      try {
+        // Calculate real-time order total using the existing method
+        actualOrderTotal = await this.calculateOrderTotal(order);
+        console.log(`💰 Payment calc for ${order.orderId}: paymentTotal=${paymentTotal}, orderTotal=${actualOrderTotal}`);
+      } catch (error) {
+        // Fallback to stored paymentAmount if calculation fails
+        console.warn(`Failed to calculate order total for ${order.orderId}, using stored amount:`, error);
+        actualOrderTotal = Number(order.paymentAmount) || 0;
+      }
+      
+      // Fixed payment status logic using real current order total
+      const isFullyPaid = actualOrderTotal > 0 
+        ? (paymentTotal >= actualOrderTotal)
+        : (paymentTotal > 0); // If no total calculated, any payment means paid
 
       return {
         ...order,

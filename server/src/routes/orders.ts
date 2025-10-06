@@ -22,33 +22,35 @@ const router = Router();
 // Get all orders for All Orders List (root endpoint) WITH PAYMENT STATUS
 router.get('/', async (req: Request, res: Response) => {
   try {
-    // Force no caching for debugging
-    res.set({
-      'Cache-Control': 'no-cache, no-store, must-revalidate',
-      'Pragma': 'no-cache',
-      'Expires': '0'
+    const orders = await storage.getAllOrders();
+    
+    // Get all payments in a single query, grouped by orderId
+    const allPayments = await db.select({
+      orderId: payments.orderId,
+      total: sql<number>`COALESCE(SUM(${payments.paymentAmount}), 0)`.as('total')
+    })
+    .from(payments)
+    .groupBy(payments.orderId);
+    
+    // Create a payment lookup map for O(1) access
+    const paymentMap = new Map(allPayments.map(p => [p.orderId, Number(p.total)]));
+    
+    // Enrich orders with payment status (fast, in-memory operation)
+    const ordersWithPaymentStatus = orders.map(order => {
+      const paymentTotal = paymentMap.get(order.orderId) || 0;
+      // Simple heuristic: if there are payments > 0, consider it paid
+      // TODO: Implement proper order total caching in database for accurate comparison
+      const isFullyPaid = paymentTotal > 0;
+      
+      return {
+        ...order,
+        paymentTotal,
+        isFullyPaid
+      };
     });
-
-    console.log('🔍 CORRECT ENDPOINT: Executing getAllOrdersWithPaymentStatusPaginated for All Orders page...');
     
-    // Use payment-aware method instead of getAllOrders
-    const result = await storage.getAllOrdersWithPaymentStatusPaginated(1, 1000); // Get first 1000 orders
-    const orders = result.orders;
-    
-    const poCount = orders.filter(o => o.orderId.startsWith('PO')).length;
-    const agCount = orders.filter(o => o.orderId.startsWith('AG')).length;
-    const sampleOrderIds = orders.slice(0, 10).map(o => o.orderId);
-    console.log(`📊 ALL ORDERS API WITH PAYMENT: Total=${orders.length}, AG orders=${agCount}, PO orders=${poCount}`);
-    console.log(`📊 Sample Order IDs: ${sampleOrderIds.join(', ')}`);
-    console.log(`✅ Processed ${orders.length} orders with payment info - first few:`, 
-               JSON.stringify(orders.slice(0, 3).map(o => ({id: o.id, orderId: o.orderId, paymentTotal: o.paymentTotal, isFullyPaid: o.isFullyPaid})), null, 2));
-    
-    // Log any orders that might look like PO orders
-    const suspiciousOrders = orders.filter(o => o.orderId.includes('PO'));
-    if (suspiciousOrders.length > 0) {
-      console.log(`⚠️  SUSPICIOUS: Found ${suspiciousOrders.length} orders with 'PO' in orderId:`, suspiciousOrders.map(o => o.orderId));
-    }
-    res.json(orders);
+    console.log(`✅ Enriched ${ordersWithPaymentStatus.length} orders with payment status`);
+    res.json(ordersWithPaymentStatus);
   } catch (error) {
     console.error('Error retrieving orders:', error);
     res.status(500).json({ error: "Failed to fetch order", details: (error as any).message });

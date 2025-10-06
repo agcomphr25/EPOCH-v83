@@ -324,7 +324,7 @@ export function registerRoutes(app: Express): Server {
         SELECT 
           id,
           order_id as "orderId",
-          customer_id as "customer",
+          customer as "customer",
           product,
           date,
           due_date as "dueDate",
@@ -355,27 +355,32 @@ export function registerRoutes(app: Express): Server {
       const combinedUnscheduledOrders = [...unscheduledOrders, ...formattedActiveOrders];
       
       // Fetch P1 PO orders from all_orders table (orders created from P1 PO week selection)
-      console.log('🔍 Fetching P1 PO orders from all_orders table...');
+      // IMPORTANT: Only fetch STOCK ITEMS - vendor parts and non-stock items should stay on P1 PO page
+      // Stock items have valid stock model IDs (not null, not empty, not 'none')
+      console.log('🔍 Fetching P1 PO STOCK orders from all_orders table...');
       const p1POOrdersResult = await pool.query(`
         SELECT 
-          order_id as "orderId",
-          customer_id as "customerId",
-          model_id as "stockModelId",
-          due_date as "dueDate",
-          current_department as "currentDepartment",
-          status,
-          features,
-          created_at as "createdAt",
+          ao.order_id as "orderId",
+          ao.customer_id as "customerId",
+          ao.model_id as "stockModelId",
+          ao.due_date as "dueDate",
+          ao.current_department as "currentDepartment",
+          ao.status,
+          ao.features,
+          ao.created_at as "createdAt",
           'p1_purchase_order' as source
-        FROM all_orders 
-        WHERE order_id LIKE 'PO%'
-          AND (current_department = 'P1 Production Queue' OR current_department = 'Layup/Plugging')
-        ORDER BY due_date ASC
+        FROM all_orders ao
+        WHERE ao.order_id LIKE 'PO%'
+          AND (ao.current_department = 'P1 Production Queue' OR ao.current_department = 'Layup/Plugging')
+          AND ao.model_id IS NOT NULL 
+          AND ao.model_id != '' 
+          AND LOWER(ao.model_id) NOT IN ('none', 'no_stock', 'vendor_part', 'custom_part')
+        ORDER BY ao.due_date ASC
       `);
 
       // Format the P1 PO orders
       const p1POOrdersRows = Array.isArray(p1POOrdersResult) ? p1POOrdersResult : [];
-      console.log(`🔍 Found ${p1POOrdersRows.length} P1 PO orders in all_orders table`);
+      console.log(`📦 Found ${p1POOrdersRows.length} P1 PO STOCK items (vendor/non-stock items excluded)`);
       
       const p1POOrders = p1POOrdersRows.map((po: any) => ({
         id: po.orderId,

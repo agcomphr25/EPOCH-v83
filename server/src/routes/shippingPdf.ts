@@ -1319,115 +1319,8 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       }
     }
 
-    // Order Details Section - Position properly after customer box
-    currentY = customerBoxY - 30; // Continue below the customer box
-    page.drawText('ORDER DETAILS', {
-      x: margin,
-      y: currentY,
-      size: 14,
-      font: boldFont,
-    });
-
-    // Create order details table
-    currentY -= 25;
-
-    // Table border (reduced height)
-    page.drawRectangle({
-      x: margin,
-      y: currentY - 70,
-      width: printableWidth,
-      height: 70,
-      borderColor: rgb(0, 0, 0),
-      borderWidth: 1,
-    });
-
-    // Table headers (reduced height)
-    page.drawRectangle({
-      x: margin,
-      y: currentY - 20,
-      width: printableWidth,
-      height: 20,
-      color: rgb(0.9, 0.9, 0.9),
-      borderColor: rgb(0, 0, 0),
-      borderWidth: 1,
-    });
-
-    page.drawText('Item Description', {
-      x: margin + 5,
-      y: currentY - 12,
-      size: 9,
-      font: boldFont,
-    });
-
-    page.drawText('Model/SKU', {
-      x: margin + 200,
-      y: currentY - 12,
-      size: 9,
-      font: boldFont,
-    });
-
-    page.drawText('Qty', {
-      x: margin + 320,
-      y: currentY - 12,
-      size: 9,
-      font: boldFont,
-    });
-
-    page.drawText('Unit Price', {
-      x: margin + 380,
-      y: currentY - 12,
-      size: 9,
-      font: boldFont,
-    });
-
-    page.drawText('Total', {
-      x: margin + 460,
-      y: currentY - 12,
-      size: 9,
-      font: boldFont,
-    });
-
-    // Main product line (reduced spacing and font size)
-    currentY -= 30;
-    const productName = model?.displayName || model?.name || 'Custom Stock';
-    page.drawText(productName, {
-      x: margin + 5,
-      y: currentY,
-      size: 9,
-      font: font,
-    });
-
-    page.drawText(order.modelId || 'CUSTOM', {
-      x: margin + 200,
-      y: currentY,
-      size: 9,
-      font: font,
-    });
-
-    page.drawText('1', {
-      x: margin + 320,
-      y: currentY,
-      size: 9,
-      font: font,
-    });
-
-    const basePrice = model?.price || 0;
-    page.drawText(`$${basePrice.toFixed(2)}`, {
-      x: margin + 380,
-      y: currentY,
-      size: 9,
-      font: font,
-    });
-
-    page.drawText(`$${basePrice.toFixed(2)}`, {
-      x: margin + 460,
-      y: currentY,
-      size: 9,
-      font: font,
-    });
-
-    // Features and Customizations Section - ORDER SUMMARY PRICING (moved higher)
-    currentY -= 54;
+    // Features and Customizations Section - Position properly after customer box
+    currentY = customerBoxY - 30;
     page.drawText('FEATURES & CUSTOMIZATIONS', {
       x: margin,
       y: currentY,
@@ -1496,6 +1389,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     let summaryLineY = currentY - 35; // Start content below header
 
     // Initialize all price variables
+    const basePrice = model?.price || 0;
     let actionLengthPrice = 0;
     let actionInletPrice = 0;
     let bottomMetalPrice = 0;

@@ -38,11 +38,11 @@ import {
   // Vendor management tables
   vendors, vendorContacts, vendorAddresses, vendorContactPhones, vendorContactEmails, vendorDocuments, vendorScoringCriteria, vendorScores,
 
-  // Non-Conforming Items table
-  nonConformingItems,
-  
   // Internal communications tables
   departments, internalMessages, messageAttachments, messageRecipients,
+
+  // Non-Conforming Items table
+  nonConformingItems,
 
   // Types
   type User, type InsertUser, type Order, type InsertOrder, type CSVData, type InsertCSVData,
@@ -141,7 +141,8 @@ import {
   type OutsideProcessingBatch, type InsertOutsideProcessingBatch,
   type MrpPlanningParameters, type InsertMrpPlanningParameters,
 
-  // Vendor management types (extended)
+  // Vendor management types
+  type Vendor, type InsertVendor,
   type VendorContact, type InsertVendorContact,
   type VendorAddress, type InsertVendorAddress,
   type VendorContactPhone, type InsertVendorContactPhone,
@@ -149,12 +150,15 @@ import {
   type VendorDocument, type InsertVendorDocument,
   type VendorScoringCriteria, type InsertVendorScoringCriteria,
   type VendorScore, type InsertVendorScore,
-  
+
   // Internal communications types
   type Department, type InsertDepartment,
   type InternalMessage, type InsertInternalMessage,
   type MessageAttachment, type InsertMessageAttachment,
   type MessageRecipient, type InsertMessageRecipient,
+
+  // Non-Conforming Items types
+  type NonConformingItem, type InsertNonConformingItem,
 
 } from "./schema";
 import { db } from "./db";
@@ -916,13 +920,6 @@ export interface IStorage {
   deleteVendorScore(id: number): Promise<void>;
   calculateVendorTotalScore(vendorId: number): Promise<number>;
 
-  // Non-Conforming Items CRUD
-  getAllNonConformingItems(): Promise<NonConformingItem[]>;
-  getNonConformingItem(id: number): Promise<NonConformingItem | undefined>;
-  createNonConformingItem(data: InsertNonConformingItem): Promise<NonConformingItem>;
-  updateNonConformingItem(id: number, data: Partial<InsertNonConformingItem>): Promise<NonConformingItem>;
-  deleteNonConformingItem(id: number): Promise<void>;
-
   // ===== INTERNAL COMMUNICATIONS =====
   
   // Departments CRUD
@@ -952,13 +949,14 @@ export interface IStorage {
   updateMessageRecipient(id: number, data: Partial<InsertMessageRecipient>): Promise<MessageRecipient>;
   markMessageAsRead(messageId: number, userId: number): Promise<void>;
   markMessageAsAccomplished(messageId: number, userId: number): Promise<void>;
-  
+
   // Non-Conforming Items CRUD
   getAllNonConformingItems(): Promise<NonConformingItem[]>;
   getNonConformingItem(id: number): Promise<NonConformingItem | undefined>;
   createNonConformingItem(data: InsertNonConformingItem): Promise<NonConformingItem>;
   updateNonConformingItem(id: number, data: Partial<InsertNonConformingItem>): Promise<NonConformingItem>;
   deleteNonConformingItem(id: number): Promise<void>;
+
 }
 
 export class DatabaseStorage implements IStorage {
@@ -9295,7 +9293,7 @@ AG Composites Team`;
         eq(messageRecipients.userId, userId)
       ));
   }
-  
+
   // Non-Conforming Items CRUD Implementation
   async getAllNonConformingItems(): Promise<NonConformingItem[]> {
     return await db.select().from(nonConformingItems).orderBy(desc(nonConformingItems.date));

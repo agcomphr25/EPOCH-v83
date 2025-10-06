@@ -17,19 +17,12 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
     fullAccess: true
   },
   
-  // Regular users with limited access based on their dashboard cards
   staciw: {
-    routes: [
-      '/order-entry',
-      '/orders-list',
-      '/draft-orders',
-      '/cancelled-orders',
-      '/customers',
-      '/refund-request',
-      '/department-queue/layup-plugging',
-      '/department-queue/finish-qc'
-    ]
+    routes: [],
+    fullAccess: true
   },
+  
+  // Regular users with limited access based on their dashboard cards
   
   agrace: {
     routes: [

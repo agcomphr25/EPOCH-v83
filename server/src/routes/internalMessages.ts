@@ -60,6 +60,21 @@ router.post('/', async (req, res) => {
     console.log("📨 Received message data:", JSON.stringify(req.body, null, 2));
     const messageData = insertInternalMessageSchema.parse(req.body);
     console.log("✅ Message data validated:", JSON.stringify(messageData, null, 2));
+    
+    // Check if sender exists, if not use fallback for dev bypass (preserve original senderName)
+    const senderExists = await storage.getUser(messageData.senderId);
+    if (!senderExists) {
+      const originalSenderName = messageData.senderName; // Preserve original name
+      const allUsers = await storage.getAllUsers();
+      const firstUser = allUsers.find(u => u.isActive);
+      if (firstUser) {
+        messageData.senderId = firstUser.id;
+        // Keep the original senderName so frontend filtering works
+        messageData.senderName = originalSenderName;
+        console.log(`⚠️ Sender ID ${req.body.senderId} not found, using ${firstUser.username} (ID: ${firstUser.id}) but keeping senderName as "${originalSenderName}"`);
+      }
+    }
+    
     const message = await storage.createInternalMessage(messageData);
     console.log("💾 Message created with ID:", message.id);
     

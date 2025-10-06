@@ -46,11 +46,8 @@ import vendorRoutes from './vendors';
 
 import mrpRoutes from './mrp';
 import enhancedRoutes from './enhanced';
-<<<<<<< HEAD
 import trainingRoutes from './training';
 import internalMessagesRoutes from './internalMessages';
-=======
->>>>>>> origin/main
 
 import { getAccessToken } from '../utils/upsShipping';
 import { nonConformingItems, insertNonConformingItemSchema } from '@shared/schema';

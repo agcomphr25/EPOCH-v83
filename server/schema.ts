@@ -9,8 +9,6 @@ import { relations, sql } from "drizzle-orm";
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   username: text("username").notNull().unique(),
-  firstName: text("first_name").notNull(),
-  lastName: text("last_name").notNull(),
   password: text("password").notNull(),
   passwordHash: text("password_hash"),
   role: text("role").notNull().default("EMPLOYEE"), // ADMIN, HR, MANAGER, EMPLOYEE
@@ -1622,6 +1620,20 @@ export const layupSchedule = pgTable("layup_schedule", {
 }, (table) => ({
   // Unique constraint: exactly one order per mold per day
   uniqueMoldPerDay: uniqueIndex("ux_layup_mold_day").on(table.layupDay, table.moldId),
+}));
+
+export const oemLayupSettings = pgTable("oem_layup_settings", {
+  id: serial("id").primaryKey(),
+  purchaseOrderId: text("purchase_order_id").notNull(),
+  weekStart: timestamp("week_start").notNull(),
+  weekEnd: timestamp("week_end"),
+  priorityLevel: integer("priority_level").default(2000),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  // Unique constraint: one priority setting per PO per week
+  uniquePOPerWeek: uniqueIndex("ux_oem_po_week").on(table.purchaseOrderId, table.weekStart),
 }));
 
 // Insert schemas for Layup Scheduler
@@ -3275,6 +3287,9 @@ export const vendorContactSchema = z.object({
   isPrimary: z.boolean().default(false),
 });
 
+// Vendor types (using comprehensive schema defined later)
+export type Vendor = typeof vendors.$inferSelect;
+
 // Vendor Purchase Order Status Enum
 export const vendorPOStatusEnum = pgEnum('vendor_po_status', ['DRAFT', 'SENT', 'PARTIALLY_RECEIVED', 'FULLY_RECEIVED', 'CANCELLED']);
 
@@ -4494,25 +4509,6 @@ export type VendorScoringCriteria = typeof vendorScoringCriteria.$inferSelect;
 export type InsertVendorScore = z.infer<typeof insertVendorScoreSchema>;
 export type VendorScore = typeof vendorScores.$inferSelect;
 
-// ===== NON-CONFORMING ITEMS =====
-export const nonConformingItems = pgTable("non_conforming_items", {
-  id: serial("id").primaryKey(),
-  date: date("date").notNull(),
-  p1OrP2: text("p1_or_p2").notNull(),
-  customer: text("customer").notNull(),
-  sku: text("sku").notNull(),
-  qty: integer("qty").notNull().default(1),
-  issueCause: text("issue_cause").notNull(),
-  manufacturerDefect: boolean("manufacturer_defect").notNull().default(false),
-  disposition: text("disposition").notNull(),
-  authorization: text("authorization").notNull(),
-  serialTagNumber: text("serial_tag_number"),
-  dispositionDate: date("disposition_date"),
-  correctiveActionNotes: text("corrective_action_notes"),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-});
-
 // ===== INTERNAL COMMUNICATIONS =====
 
 export const departments = pgTable("departments", {
@@ -4561,6 +4557,25 @@ export const messageRecipients = pgTable("message_recipients", {
   readAt: timestamp("read_at"),
   isAccomplished: boolean("is_accomplished").default(false),
   accomplishedAt: timestamp("accomplished_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// ===== NON-CONFORMING ITEMS =====
+export const nonConformingItems = pgTable("non_conforming_items", {
+  id: serial("id").primaryKey(),
+  date: date("date").notNull(),
+  p1OrP2: text("p1_or_p2").notNull(),
+  customer: text("customer").notNull(),
+  sku: text("sku").notNull(),
+  qty: integer("qty").notNull().default(1),
+  issueCause: text("issue_cause").notNull(),
+  manufacturerDefect: boolean("manufacturer_defect").notNull().default(false),
+  disposition: text("disposition").notNull(),
+  authorization: text("authorization").notNull(),
+  serialTagNumber: text("serial_tag_number"),
+  dispositionDate: date("disposition_date"),
+  correctiveActionNotes: text("corrective_action_notes"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -4619,6 +4634,18 @@ export const insertMessageRecipientSchema = createInsertSchema(messageRecipients
   accomplishedAt: z.coerce.date().optional().nullable(),
 });
 
+export type Department = typeof departments.$inferSelect;
+export type InsertDepartment = z.infer<typeof insertDepartmentSchema>;
+
+export type InternalMessage = typeof internalMessages.$inferSelect;
+export type InsertInternalMessage = z.infer<typeof insertInternalMessageSchema>;
+
+export type MessageAttachment = typeof messageAttachments.$inferSelect;
+export type InsertMessageAttachment = z.infer<typeof insertMessageAttachmentSchema>;
+
+export type MessageRecipient = typeof messageRecipients.$inferSelect;
+export type InsertMessageRecipient = z.infer<typeof insertMessageRecipientSchema>;
+
 export const insertNonConformingItemSchema = createInsertSchema(nonConformingItems).omit({
   id: true,
   createdAt: true,
@@ -4637,18 +4664,6 @@ export const insertNonConformingItemSchema = createInsertSchema(nonConformingIte
   dispositionDate: z.coerce.date().optional().nullable(),
   correctiveActionNotes: z.string().optional().nullable(),
 });
-
-export type Department = typeof departments.$inferSelect;
-export type InsertDepartment = z.infer<typeof insertDepartmentSchema>;
-
-export type InternalMessage = typeof internalMessages.$inferSelect;
-export type InsertInternalMessage = z.infer<typeof insertInternalMessageSchema>;
-
-export type MessageAttachment = typeof messageAttachments.$inferSelect;
-export type InsertMessageAttachment = z.infer<typeof insertMessageAttachmentSchema>;
-
-export type MessageRecipient = typeof messageRecipients.$inferSelect;
-export type InsertMessageRecipient = z.infer<typeof insertMessageRecipientSchema>;
 
 export type NonConformingItem = typeof nonConformingItems.$inferSelect;
 export type InsertNonConformingItem = z.infer<typeof insertNonConformingItemSchema>;

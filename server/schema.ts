@@ -4495,6 +4495,33 @@ export type VendorScoringCriteria = typeof vendorScoringCriteria.$inferSelect;
 export type InsertVendorScore = z.infer<typeof insertVendorScoreSchema>;
 export type VendorScore = typeof vendorScores.$inferSelect;
 
+// ===== NON-CONFORMING ITEMS =====
+export const nonConformingItems = pgTable("non_conforming_items", {
+  id: serial("id").primaryKey(),
+  date: date("date").notNull(),
+  p1OrP2: text("p1_or_p2").notNull(),
+  customer: text("customer").notNull(),
+  sku: text("sku").notNull(),
+  qty: integer("qty").notNull().default(1),
+  issueCause: text("issue_cause").notNull(),
+  manufacturerDefect: boolean("manufacturer_defect").notNull().default(false),
+  disposition: text("disposition").notNull(),
+  authorization: text("authorization").notNull(),
+  serialTagNumber: text("serial_tag_number"),
+  dispositionDate: date("disposition_date"),
+  correctiveActionNotes: text("corrective_action_notes"),
+
+// ===== INTERNAL COMMUNICATIONS =====
+
+export const departments = pgTable("departments", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull().unique(),
+  description: text("description"),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // ===== INTERNAL COMMUNICATIONS =====
 
 export const departments = pgTable("departments", {
@@ -4547,23 +4574,23 @@ export const messageRecipients = pgTable("message_recipients", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-// Non-Conforming Items table
-export const nonConformingItems = pgTable("non_conforming_items", {
-  id: serial("id").primaryKey(),
-  date: date("date").notNull(),
-  p1OrP2: text("p1_or_p2").notNull(),
-  customer: text("customer").notNull(),
-  sku: text("sku").notNull(),
-  qty: integer("qty").notNull().default(1),
-  issueCause: text("issue_cause").notNull(),
-  manufacturerDefect: boolean("manufacturer_defect").notNull().default(false),
-  disposition: text("disposition").notNull(),
-  authorization: text("authorization").notNull(),
-  serialTagNumber: text("serial_tag_number"),
-  dispositionDate: date("disposition_date"),
-  correctiveActionNotes: text("corrective_action_notes"),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
+export const insertNonConformingItemSchema = createInsertSchema(nonConformingItems).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  date: z.coerce.date(),
+  p1OrP2: z.string().min(1, "P1 or P2 is required"),
+  customer: z.string().min(1, "Customer is required"),
+  sku: z.string().min(1, "SKU is required"),
+  qty: z.number().min(1, "Quantity must be at least 1").default(1),
+  issueCause: z.string().min(1, "Issue cause is required"),
+  manufacturerDefect: z.boolean().default(false),
+  disposition: z.string().min(1, "Disposition is required"),
+  authorization: z.string().min(1, "Authorization is required"),
+  serialTagNumber: z.string().optional().nullable(),
+  dispositionDate: z.coerce.date().optional().nullable(),
+  correctiveActionNotes: z.string().optional().nullable(),
 });
 
 export const insertDepartmentSchema = createInsertSchema(departments).omit({

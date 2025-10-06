@@ -848,52 +848,6 @@ export const onboardingDocs = pgTable("onboarding_docs", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-// Training Module Tables
-export const trainingModules = pgTable("training_modules", {
-  id: serial("id").primaryKey(),
-  title: text("title").notNull(),
-  description: text("description"),
-  pdfUrl: text("pdf_url"), // PDF presentation URL
-  passingScore: integer("passing_score").default(80), // Percentage needed to pass
-  isActive: boolean("is_active").default(true),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-});
-
-export const trainingQuizQuestions = pgTable("training_quiz_questions", {
-  id: serial("id").primaryKey(),
-  moduleId: integer("module_id").references(() => trainingModules.id).notNull(),
-  question: text("question").notNull(),
-  questionType: text("question_type").notNull().default('multiple_choice'), // multiple_choice, true_false
-  correctAnswer: text("correct_answer").notNull(), // The correct answer text or index
-  explanation: text("explanation"), // Optional explanation for the answer
-  sortOrder: integer("sort_order").default(0),
-  isActive: boolean("is_active").default(true),
-  createdAt: timestamp("created_at").defaultNow(),
-});
-
-export const trainingQuizAnswers = pgTable("training_quiz_answers", {
-  id: serial("id").primaryKey(),
-  questionId: integer("question_id").references(() => trainingQuizQuestions.id).notNull(),
-  answerText: text("answer_text").notNull(),
-  isCorrect: boolean("is_correct").default(false),
-  sortOrder: integer("sort_order").default(0),
-  createdAt: timestamp("created_at").defaultNow(),
-});
-
-export const trainingCompletions = pgTable("training_completions", {
-  id: serial("id").primaryKey(),
-  moduleId: integer("module_id").references(() => trainingModules.id).notNull(),
-  employeeId: text("employee_id").notNull(),
-  employeeName: text("employee_name").notNull(),
-  score: integer("score").notNull(), // Quiz score percentage
-  passed: boolean("passed").default(false),
-  answers: jsonb("answers"), // Store user's answers
-  certificateIssued: boolean("certificate_issued").default(false),
-  completedAt: timestamp("completed_at").defaultNow(),
-  expiresAt: timestamp("expires_at"), // Optional expiration for recertification
-});
-
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
   passwordHash: true,
@@ -1440,56 +1394,6 @@ export const insertOnboardingDocSchema = createInsertSchema(onboardingDocs).omit
   signatureDataURL: z.string().optional().nullable(),
 });
 
-// Training Module Schemas
-export const insertTrainingModuleSchema = createInsertSchema(trainingModules).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-}).extend({
-  title: z.string().min(1, "Title is required"),
-  description: z.string().optional().nullable(),
-  pdfUrl: z.string().optional().nullable(),
-  passingScore: z.number().min(0).max(100).default(80),
-  isActive: z.boolean().default(true),
-});
-
-export const insertTrainingQuizQuestionSchema = createInsertSchema(trainingQuizQuestions).omit({
-  id: true,
-  createdAt: true,
-}).extend({
-  moduleId: z.number().min(1, "Module ID is required"),
-  question: z.string().min(1, "Question is required"),
-  questionType: z.enum(['multiple_choice', 'true_false']).default('multiple_choice'),
-  correctAnswer: z.string().min(1, "Correct answer is required"),
-  explanation: z.string().optional().nullable(),
-  sortOrder: z.number().default(0),
-  isActive: z.boolean().default(true),
-});
-
-export const insertTrainingQuizAnswerSchema = createInsertSchema(trainingQuizAnswers).omit({
-  id: true,
-  createdAt: true,
-}).extend({
-  questionId: z.number().min(1, "Question ID is required"),
-  answerText: z.string().min(1, "Answer text is required"),
-  isCorrect: z.boolean().default(false),
-  sortOrder: z.number().default(0),
-});
-
-export const insertTrainingCompletionSchema = createInsertSchema(trainingCompletions).omit({
-  id: true,
-  completedAt: true,
-}).extend({
-  moduleId: z.number().min(1, "Module ID is required"),
-  employeeId: z.string().min(1, "Employee ID is required"),
-  employeeName: z.string().min(1, "Employee name is required"),
-  score: z.number().min(0).max(100, "Score must be between 0 and 100"),
-  passed: z.boolean().default(false),
-  answers: z.any().optional().nullable(),
-  certificateIssued: z.boolean().default(false),
-  expiresAt: z.coerce.date().optional().nullable(),
-});
-
 export const insertPartsRequestSchema = createInsertSchema(partsRequests).omit({
   id: true,
   createdAt: true,
@@ -1593,16 +1497,6 @@ export type InsertOnboardingDoc = z.infer<typeof insertOnboardingDocSchema>;
 export type OnboardingDoc = typeof onboardingDocs.$inferSelect;
 export type InsertPartsRequest = z.infer<typeof insertPartsRequestSchema>;
 export type PartsRequest = typeof partsRequests.$inferSelect;
-
-// Training module types
-export type InsertTrainingModule = z.infer<typeof insertTrainingModuleSchema>;
-export type TrainingModule = typeof trainingModules.$inferSelect;
-export type InsertTrainingQuizQuestion = z.infer<typeof insertTrainingQuizQuestionSchema>;
-export type TrainingQuizQuestion = typeof trainingQuizQuestions.$inferSelect;
-export type InsertTrainingQuizAnswer = z.infer<typeof insertTrainingQuizAnswerSchema>;
-export type TrainingQuizAnswer = typeof trainingQuizAnswers.$inferSelect;
-export type InsertTrainingCompletion = z.infer<typeof insertTrainingCompletionSchema>;
-export type TrainingCompletion = typeof trainingCompletions.$inferSelect;
 
 // Purchase Review Checklist Table
 export const purchaseReviewChecklists = pgTable("purchase_review_checklists", {
@@ -1815,6 +1709,7 @@ export const customers = pgTable('customers', {
   customerType: text('customer_type').default('standard'),
   preferredCommunicationMethod: json('preferred_communication_method'), // Array of strings: ["email", "sms"]
   notes: text('notes'),
+  billingSameAsShipping: boolean('billing_same_as_shipping').default(true), // Default to unified address management
   isActive: boolean('is_active').default(true),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
@@ -4600,6 +4495,7 @@ export type VendorScoringCriteria = typeof vendorScoringCriteria.$inferSelect;
 export type InsertVendorScore = z.infer<typeof insertVendorScoreSchema>;
 export type VendorScore = typeof vendorScores.$inferSelect;
 
+<<<<<<< HEAD
 // ===== INTERNAL COMMUNICATIONS =====
 
 export const departments = pgTable("departments", {
@@ -4607,10 +4503,28 @@ export const departments = pgTable("departments", {
   name: text("name").notNull().unique(),
   description: text("description"),
   isActive: boolean("is_active").default(true),
+=======
+// ===== NON-CONFORMING ITEMS =====
+export const nonConformingItems = pgTable("non_conforming_items", {
+  id: serial("id").primaryKey(),
+  date: date("date").notNull(),
+  p1OrP2: text("p1_or_p2").notNull(),
+  customer: text("customer").notNull(),
+  sku: text("sku").notNull(),
+  qty: integer("qty").notNull().default(1),
+  issueCause: text("issue_cause").notNull(),
+  manufacturerDefect: boolean("manufacturer_defect").notNull().default(false),
+  disposition: text("disposition").notNull(),
+  authorization: text("authorization").notNull(),
+  serialTagNumber: text("serial_tag_number"),
+  dispositionDate: date("disposition_date"),
+  correctiveActionNotes: text("corrective_action_notes"),
+>>>>>>> origin/main
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+<<<<<<< HEAD
 export const internalMessages = pgTable("internal_messages", {
   id: serial("id").primaryKey(),
   subject: text("subject").notNull(),
@@ -4653,10 +4567,14 @@ export const messageRecipients = pgTable("message_recipients", {
 });
 
 export const insertDepartmentSchema = createInsertSchema(departments).omit({
+=======
+export const insertNonConformingItemSchema = createInsertSchema(nonConformingItems).omit({
+>>>>>>> origin/main
   id: true,
   createdAt: true,
   updatedAt: true,
 }).extend({
+<<<<<<< HEAD
   name: z.string().min(1, "Department name is required"),
   description: z.string().optional().nullable(),
   isActive: z.boolean().default(true),
@@ -4717,4 +4635,22 @@ export type InsertMessageAttachment = z.infer<typeof insertMessageAttachmentSche
 
 export type MessageRecipient = typeof messageRecipients.$inferSelect;
 export type InsertMessageRecipient = z.infer<typeof insertMessageRecipientSchema>;
+=======
+  date: z.coerce.date(),
+  p1OrP2: z.enum(["P1", "P2"], { required_error: "P1 or P2 selection is required" }),
+  customer: z.string().min(1, "Customer is required"),
+  sku: z.string().min(1, "SKU is required"),
+  qty: z.number().min(1, "Quantity must be at least 1"),
+  issueCause: z.string().min(1, "Issue/Cause is required"),
+  manufacturerDefect: z.boolean().default(false),
+  disposition: z.string().min(1, "Disposition is required"),
+  authorization: z.string().min(1, "Authorization is required"),
+  serialTagNumber: z.string().optional().nullable(),
+  dispositionDate: z.coerce.date().optional().nullable(),
+  correctiveActionNotes: z.string().optional().nullable(),
+});
+
+export type NonConformingItem = typeof nonConformingItems.$inferSelect;
+export type InsertNonConformingItem = z.infer<typeof insertNonConformingItemSchema>;
+>>>>>>> origin/main
 

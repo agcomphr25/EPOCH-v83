@@ -2412,7 +2412,7 @@ export default function OrderEntry() {
                       disabled={isFlattop}
                     >
                       <SelectTrigger className={isFlattop ? "opacity-50 cursor-not-allowed" : ""}>
-                        <SelectValue placeholder={isFlattop ? "Not Available (Flattop)" : "Short"} />
+                        <SelectValue placeholder={isFlattop ? "Not Available (Flattop)" : "Select action length..."} />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="short">Short</SelectItem>

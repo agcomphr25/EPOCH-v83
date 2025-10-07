@@ -145,7 +145,7 @@ export function SalesOrderModal({ isOpen, onClose, orderId }: SalesOrderModalPro
               </div>
             </div>
 
-            {/* Notes */}
+            {/* Notes Section */}
             {orderData.notes && (
               <>
                 <Separator />

@@ -2022,22 +2022,31 @@ export class DatabaseStorage implements IStorage {
     const paymentMap = new Map(paymentTotals.map(p => [p.orderId, p.totalPayments]));
 
     // Process orders with payment info (using proper order total calculation)
-    const ordersWithPaymentInfo = await Promise.all(ordersWithCustomers.map(async order => {
-      const paymentTotal = paymentMap.get(order.orderId) || 0;
+    // FIXED: Process in batches to avoid database connection pool exhaustion
+    const BATCH_SIZE = 10; // Process 10 orders at a time
+    const ordersWithPaymentInfo: any[] = [];
+    
+    for (let i = 0; i < ordersWithCustomers.length; i += BATCH_SIZE) {
+      const batch = ordersWithCustomers.slice(i, i + BATCH_SIZE);
+      const batchResults = await Promise.all(batch.map(async order => {
+        const paymentTotal = paymentMap.get(order.orderId) || 0;
+        
+        // CRITICAL FIX: Use actual calculated order total, not stale paymentAmount field
+        const actualOrderTotal = await this.calculateOrderTotal(order);
+
+        // Fixed payment status logic using real current order total
+        const isFullyPaid = paymentTotal >= actualOrderTotal && actualOrderTotal > 0;
+
+        return {
+          ...order,
+          customer: order.customerName || 'Unknown Customer',
+          paymentTotal,
+          isFullyPaid
+        };
+      }));
       
-      // CRITICAL FIX: Use actual calculated order total, not stale paymentAmount field
-      const actualOrderTotal = await this.calculateOrderTotal(order);
-
-      // Fixed payment status logic using real current order total
-      const isFullyPaid = paymentTotal >= actualOrderTotal && actualOrderTotal > 0;
-
-      return {
-        ...order,
-        customer: order.customerName || 'Unknown Customer',
-        paymentTotal,
-        isFullyPaid
-      };
-    }));
+      ordersWithPaymentInfo.push(...batchResults);
+    }
 
     return ordersWithPaymentInfo;
   }

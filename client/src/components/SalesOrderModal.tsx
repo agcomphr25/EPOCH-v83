@@ -72,6 +72,14 @@ export function SalesOrderModal({ isOpen, onClose, orderId }: SalesOrderModalPro
       .replace(/\b\w/g, l => l.toUpperCase());
   };
 
+  // Debug log to verify component version
+  React.useEffect(() => {
+    if (isOpen && orderData) {
+      console.log('📋 SalesOrderModal rendering - Notes position: AFTER Product Details, BEFORE Features');
+      console.log('📝 Order has notes:', !!orderData.notes);
+    }
+  }, [isOpen, orderData]);
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">

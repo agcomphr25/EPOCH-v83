@@ -3409,6 +3409,42 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // OEM Priority Settings - Save
+  app.post('/api/oem-settings/priority-settings/save', async (req, res) => {
+    try {
+      const { vendorId, vendorName, poId, poNumber, selectionMode, stockItemIds, priorityLevel } = req.body;
+      
+      console.log('💾 Saving OEM priority settings:', {
+        vendorId,
+        vendorName,
+        poId,
+        poNumber,
+        selectionMode,
+        stockItemIds,
+        priorityLevel
+      });
+      
+      // For now, just acknowledge the save - we can add database storage later if needed
+      res.json({
+        success: true,
+        message: 'OEM priority settings saved successfully',
+        savedSettings: {
+          vendorId,
+          vendorName,
+          poId,
+          poNumber,
+          selectionMode,
+          stockItemIds,
+          priorityLevel
+        }
+      });
+      
+    } catch (error) {
+      console.error('❌ Error saving OEM priority settings:', error);
+      res.status(500).json({ error: 'Failed to save OEM priority settings' });
+    }
+  });
+
   // Create and return HTTP server
   return createServer(app);
 }

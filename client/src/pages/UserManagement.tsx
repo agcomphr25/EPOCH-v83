@@ -15,6 +15,8 @@ import { useToast } from "@/hooks/use-toast";
 interface User {
   id: number;
   username: string;
+  firstName: string;
+  lastName: string;
   password: string;
   passwordHash?: string;
   role: string;
@@ -32,6 +34,8 @@ interface User {
 
 interface InsertUser {
   username: string;
+  firstName: string;
+  lastName: string;
   password: string;
   role?: string;
   employeeId?: number;
@@ -47,6 +51,8 @@ export default function UserManagement() {
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [formData, setFormData] = useState<InsertUser>({
     username: '',
+    firstName: '',
+    lastName: '',
     password: '',
     role: 'EMPLOYEE',
     canOverridePrices: false,
@@ -137,6 +143,8 @@ export default function UserManagement() {
   const resetForm = () => {
     setFormData({
       username: '',
+      firstName: '',
+      lastName: '',
       password: '',
       role: 'EMPLOYEE',
       canOverridePrices: false,
@@ -154,6 +162,8 @@ export default function UserManagement() {
     setEditingUser(user);
     setFormData({
       username: user.username,
+      firstName: user.firstName,
+      lastName: user.lastName,
       password: '', // Don't pre-fill password for security
       role: user.role,
       employeeId: user.employeeId,
@@ -163,8 +173,8 @@ export default function UserManagement() {
     setShowUserModal(true);
   };
 
-  const handleDeleteUser = (id: number, username: string) => {
-    if (confirm(`Are you sure you want to deactivate user "${username}"? This will remove them from the active user list but preserve their data for audit purposes.`)) {
+  const handleDeleteUser = (id: number, firstName: string, lastName: string) => {
+    if (confirm(`Are you sure you want to deactivate user "${firstName} ${lastName}"? This will remove them from the active user list but preserve their data for audit purposes.`)) {
       deleteUserMutation.mutate(id);
     }
   };
@@ -172,17 +182,19 @@ export default function UserManagement() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.username || !formData.password) {
-      toast({
-        title: "Missing Information",
-        description: "Please provide both username and password.",
-        variant: "destructive",
-      });
-      return;
-    }
-
+    // Different validation for create vs edit
     if (editingUser) {
-      // For updates, don't require password if not provided
+      // When editing: only require first name and last name
+      if (!formData.firstName || !formData.lastName) {
+        toast({
+          title: "Missing Information",
+          description: "Please provide first name and last name.",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      // For updates, don't include password if not provided
       const updateData = { ...formData };
       if (!updateData.password) {
         const { password, ...dataWithoutPassword } = updateData;
@@ -197,6 +209,15 @@ export default function UserManagement() {
         data: updateData,
       });
     } else {
+      // When creating: require all fields
+      if (!formData.username || !formData.firstName || !formData.lastName || !formData.password) {
+        toast({
+          title: "Missing Information",
+          description: "Please provide username, first name, last name, and password.",
+          variant: "destructive",
+        });
+        return;
+      }
       createUserMutation.mutate(formData);
     }
   };
@@ -260,7 +281,7 @@ export default function UserManagement() {
                     ) : (
                       <UserX className="h-5 w-5 text-red-500" />
                     )}
-                    {user.username}
+                    {user.firstName} {user.lastName}
                   </CardTitle>
                   <Badge className={getRoleColor(user.role)}>
                     {user.role}
@@ -269,6 +290,9 @@ export default function UserManagement() {
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="text-sm text-gray-600">
+                  <div className="text-xs text-gray-500 mb-2">
+                    Username: <span className="font-medium text-gray-700">{user.username}</span>
+                  </div>
                   <div className="flex items-center gap-2 mb-1">
                     <Key className="h-4 w-4" />
                     <span className={`font-medium ${user.canOverridePrices ? 'text-orange-600' : 'text-gray-500'}`}>
@@ -311,7 +335,7 @@ export default function UserManagement() {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => handleDeleteUser(user.id, user.username)}
+                    onClick={() => handleDeleteUser(user.id, user.firstName, user.lastName)}
                     className="flex items-center gap-1 text-red-600 hover:text-red-700"
                   >
                     <Trash2 className="h-3 w-3" />
@@ -342,8 +366,40 @@ export default function UserManagement() {
                   type="text"
                   value={formData.username}
                   onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-                  required
+                  required={!editingUser}
+                  disabled={!!editingUser}
                   placeholder="Enter username"
+                  data-testid="input-username"
+                  className={editingUser ? "bg-gray-100 cursor-not-allowed" : ""}
+                />
+                {editingUser && (
+                  <p className="text-xs text-gray-500 mt-1">Username cannot be changed</p>
+                )}
+              </div>
+              
+              <div>
+                <Label htmlFor="firstName">First Name *</Label>
+                <Input
+                  id="firstName"
+                  type="text"
+                  value={formData.firstName}
+                  onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
+                  required
+                  placeholder="Enter first name"
+                  data-testid="input-firstname"
+                />
+              </div>
+              
+              <div>
+                <Label htmlFor="lastName">Last Name *</Label>
+                <Input
+                  id="lastName"
+                  type="text"
+                  value={formData.lastName}
+                  onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
+                  required
+                  placeholder="Enter last name"
+                  data-testid="input-lastname"
                 />
               </div>
               

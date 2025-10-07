@@ -3400,6 +3400,266 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // Training Module Routes
+  const trainingModules = [
+    {
+      id: "preservation-fod",
+      title: "Preservation & FOD Training",
+      description: "Preservation and Foreign Object Debris prevention procedures",
+      estimatedMinutes: 25,
+      passingScore: 80,
+      pdfUrl: "/attached_assets/training/Preservation-FOD.pdf",
+      questions: [
+        {
+          id: 1,
+          question: "What does FOD stand for?",
+          answers: [
+            { id: 1, answerText: "Foreign Object Debris", isCorrect: true },
+            { id: 2, answerText: "Foreign Object Detection", isCorrect: false },
+            { id: 3, answerText: "First Order Delivery", isCorrect: false },
+            { id: 4, answerText: "Final Object Document", isCorrect: false }
+          ]
+        },
+        {
+          id: 2,
+          question: "What should you do with expired materials?",
+          answers: [
+            { id: 1, answerText: "Use them anyway", isCorrect: false },
+            { id: 2, answerText: "Place in collection area and submit waste management form", isCorrect: true },
+            { id: 3, answerText: "Hide them in storage", isCorrect: false },
+            { id: 4, answerText: "Give them to another department", isCorrect: false }
+          ]
+        }
+      ]
+    },
+    {
+      id: "chemical-handling",
+      title: "Chemical Handling, Storage, & Disposal",
+      description: "Safe chemical handling procedures and environmental safety",
+      estimatedMinutes: 30,
+      passingScore: 80,
+      pdfUrl: "/attached_assets/training/Chemical-Handling.pdf",
+      questions: [
+        {
+          id: 1,
+          question: "Where can you find information about chemical hazards?",
+          answers: [
+            { id: 1, answerText: "Safety Data Sheet (SDS)", isCorrect: true },
+            { id: 2, answerText: "Employee handbook", isCorrect: false },
+            { id: 3, answerText: "Chemical container only", isCorrect: false },
+            { id: 4, answerText: "Internet search", isCorrect: false }
+          ]
+        }
+      ]
+    },
+    {
+      id: "fire-safety",
+      title: "Fire Safety Training",
+      description: "Fire prevention, emergency response, and PASS technique",
+      estimatedMinutes: 20,
+      passingScore: 80,
+      pdfUrl: "/attached_assets/training/Fire-Safety.pdf",
+      questions: [
+        {
+          id: 1,
+          question: "What does PASS stand for in fire extinguisher use?",
+          answers: [
+            { id: 1, answerText: "Pull, Aim, Squeeze, Sweep", isCorrect: true },
+            { id: 2, answerText: "Push, Aim, Spray, Stop", isCorrect: false },
+            { id: 3, answerText: "Prepare, Activate, Spray, Secure", isCorrect: false },
+            { id: 4, answerText: "Pull, Activate, Spray, Sweep", isCorrect: false }
+          ]
+        }
+      ]
+    },
+    {
+      id: "itar",
+      title: "Annual ITAR Training",
+      description: "International Traffic in Arms Regulations compliance",
+      estimatedMinutes: 35,
+      passingScore: 85,
+      pdfUrl: "/attached_assets/training/ITAR.pdf",
+      questions: [
+        {
+          id: 1,
+          question: "ITAR controls the export of what types of items?",
+          answers: [
+            { id: 1, answerText: "Defense articles, technical data, and defense services", isCorrect: true },
+            { id: 2, answerText: "Only physical weapons", isCorrect: false },
+            { id: 3, answerText: "All manufactured goods", isCorrect: false },
+            { id: 4, answerText: "Consumer electronics", isCorrect: false }
+          ]
+        }
+      ]
+    },
+    {
+      id: "as9100",
+      title: "AS9100 Employee Orientation Training",
+      description: "Quality Management System for Aerospace & Defense",
+      estimatedMinutes: 30,
+      passingScore: 80,
+      pdfUrl: "/attached_assets/training/AS9100.pdf",
+      questions: [
+        {
+          id: 1,
+          question: "What is the company quality policy?",
+          answers: [
+            { id: 1, answerText: "Continuously improve while producing quality products in a timely manner to meet customer requirements", isCorrect: true },
+            { id: 2, answerText: "Make products as fast as possible", isCorrect: false },
+            { id: 3, answerText: "Reduce costs at all times", isCorrect: false },
+            { id: 4, answerText: "Meet deadlines no matter what", isCorrect: false }
+          ]
+        }
+      ]
+    },
+    {
+      id: "counterfeit-prevention",
+      title: "Counterfeit Materials Prevention Training",
+      description: "Protecting product integrity from counterfeit parts",
+      estimatedMinutes: 25,
+      passingScore: 80,
+      pdfUrl: "/attached_assets/training/Counterfeit-Prevention.pdf",
+      questions: [
+        {
+          id: 1,
+          question: "What is the lowest risk source for procuring parts?",
+          answers: [
+            { id: 1, answerText: "Original Component or Equipment Manufacturer (OCM/OEM)", isCorrect: true },
+            { id: 2, answerText: "Any online marketplace", isCorrect: false },
+            { id: 3, answerText: "Lowest price supplier", isCorrect: false },
+            { id: 4, answerText: "Unauthorized distributors", isCorrect: false }
+          ]
+        }
+      ]
+    },
+    {
+      id: "ethics",
+      title: "Ethics in Aerospace Quality Systems",
+      description: "Integrity, honesty, and transparency in manufacturing",
+      estimatedMinutes: 20,
+      passingScore: 80,
+      pdfUrl: "/attached_assets/training/Ethics.pdf",
+      questions: [
+        {
+          id: 1,
+          question: "What should you do if you see unethical behavior?",
+          answers: [
+            { id: 1, answerText: "Report it to management immediately", isCorrect: true },
+            { id: 2, answerText: "Ignore it", isCorrect: false },
+            { id: 3, answerText: "Join in to fit in", isCorrect: false },
+            { id: 4, answerText: "Wait to see if it happens again", isCorrect: false }
+          ]
+        }
+      ]
+    },
+    {
+      id: "nonconforming-items",
+      title: "Nonconforming Items Handling",
+      description: "Procedures for handling nonconforming products",
+      estimatedMinutes: 20,
+      passingScore: 80,
+      pdfUrl: "/attached_assets/training/Nonconforming-Items.pdf",
+      questions: [
+        {
+          id: 1,
+          question: "What should you do if you identify a nonconforming item?",
+          answers: [
+            { id: 1, answerText: "Quarantine it and notify quality control", isCorrect: true },
+            { id: 2, answerText: "Try to fix it yourself", isCorrect: false },
+            { id: 3, answerText: "Ship it anyway", isCorrect: false },
+            { id: 4, answerText: "Throw it away", isCorrect: false }
+          ]
+        }
+      ]
+    },
+    {
+      id: "shutdown-procedures",
+      title: "Department Shut Down Procedures",
+      description: "End-of-day shutdown procedures for all departments",
+      estimatedMinutes: 15,
+      passingScore: 80,
+      pdfUrl: "/attached_assets/training/Shutdown-Procedures.pdf",
+      questions: [
+        {
+          id: 1,
+          question: "What must be done with CNC spindles at end of day?",
+          answers: [
+            { id: 1, answerText: "Remove all tools from spindles", isCorrect: true },
+            { id: 2, answerText: "Leave tools in place", isCorrect: false },
+            { id: 3, answerText: "Run them overnight", isCorrect: false },
+            { id: 4, answerText: "Lock the spindles", isCorrect: false }
+          ]
+        }
+      ]
+    }
+  ];
+
+  app.get("/api/training/modules", async (req, res) => {
+    try {
+      res.json(trainingModules);
+    } catch (error) {
+      console.error("Get training modules error:", error);
+      res.status(500).json({ error: "Failed to retrieve training modules" });
+    }
+  });
+
+  app.get("/api/training/modules/:moduleId", async (req, res) => {
+    try {
+      const { moduleId } = req.params;
+      const module = trainingModules.find(m => m.id === moduleId);
+      
+      if (!module) {
+        return res.status(404).json({ error: "Training module not found" });
+      }
+      
+      res.json(module);
+    } catch (error) {
+      console.error("Get training module error:", error);
+      res.status(500).json({ error: "Failed to retrieve training module" });
+    }
+  });
+
+  app.post("/api/training/modules/:moduleId/complete", async (req, res) => {
+    try {
+      const { moduleId } = req.params;
+      const { employeeId, employeeName, answers } = req.body;
+      
+      const module = trainingModules.find(m => m.id === moduleId);
+      if (!module) {
+        return res.status(404).json({ error: "Training module not found" });
+      }
+
+      let correctCount = 0;
+      const totalQuestions = module.questions.length;
+
+      module.questions.forEach(question => {
+        const userAnswer = answers[question.id];
+        const correctAnswer = question.answers.find(a => a.isCorrect);
+        if (userAnswer === correctAnswer?.answerText) {
+          correctCount++;
+        }
+      });
+
+      const score = Math.round((correctCount / totalQuestions) * 100);
+      const passed = score >= module.passingScore;
+
+      res.json({
+        score,
+        passed,
+        correctCount,
+        totalQuestions,
+        employeeId,
+        employeeName,
+        moduleId: module.id,
+        moduleTitle: module.title,
+        completedAt: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error("Complete training module error:", error);
+      res.status(500).json({ error: "Failed to complete training module" });
+    }
+  });
+
   // Create and return HTTP server
   return createServer(app);
 }

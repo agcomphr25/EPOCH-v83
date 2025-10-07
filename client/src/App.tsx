@@ -7,6 +7,7 @@ import { Toaster } from "@/components/ui/toaster";
 import Navigation from "./components/Navigation";
 import OfflineIndicator from "./components/OfflineIndicator";
 import NotFound from "./pages/not-found";
+import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import OrderManagement from "./pages/OrderManagement";
 import OrdersManagementPage from "./pages/OrdersManagementPage";
@@ -106,7 +107,7 @@ import { Toaster as HotToaster } from 'react-hot-toast';
 // Component to conditionally render Navigation
 function ConditionalNavigation() {
   const [location] = useLocation();
-  const hideNavigation = location === '/darleneb-dashboard' || location === '/ag-dashboard' || location === '/staciw-dashboard';
+  const hideNavigation = location === '/login' || location === '/darleneb-dashboard' || location === '/ag-dashboard' || location === '/staciw-dashboard';
   
   return hideNavigation ? null : <Navigation />;
 }
@@ -171,6 +172,7 @@ function App() {
               <OfflineIndicator />
               <main className="container mx-auto px-4 py-8">
                   <Switch>
+                  <Route path="/login" component={Login} />
                   <Route path="/" component={Dashboard} />
                   <Route path="/order-management" component={OrderManagement} />
                   <Route path="/orders-management" component={OrdersManagementPage} />

@@ -26,7 +26,7 @@ import {
   // Refund requests table
   refundRequests,
   // OEM Priority Settings table
-  oemPrioritySettings,
+  
   // Types
   type Order, type InsertOrder, type CSVData, type InsertCSVData,
   type CustomerType, type InsertCustomerType,

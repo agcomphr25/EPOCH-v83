@@ -2620,10 +2620,20 @@ export default function OrderEntry() {
                                       key={option.value}
                                       onSelect={() => {
                                         const currentRails = Array.isArray(features.rail_accessory) ? features.rail_accessory : [];
+                                        
                                         if (isChecked) {
+                                          // Remove this option
                                           setFeatures(prev => ({ ...prev, rail_accessory: currentRails.filter((item: string) => item !== option.value) }));
                                         } else {
-                                          setFeatures(prev => ({ ...prev, rail_accessory: [...currentRails, option.value] }));
+                                          // Adding a new option
+                                          if (option.value === 'no_rail') {
+                                            // If selecting "No Rail", clear all other rails
+                                            setFeatures(prev => ({ ...prev, rail_accessory: ['no_rail'] }));
+                                          } else {
+                                            // If selecting any other rail, remove "No Rail" and add the new rail
+                                            const railsWithoutNoRail = currentRails.filter((item: string) => item !== 'no_rail');
+                                            setFeatures(prev => ({ ...prev, rail_accessory: [...railsWithoutNoRail, option.value] }));
+                                          }
                                         }
                                       }}
                                       className="cursor-pointer"

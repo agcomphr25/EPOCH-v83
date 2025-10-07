@@ -7,6 +7,7 @@ interface RouteDebuggerProps {
 
 export function RouteDebugger({ routes }: RouteDebuggerProps) {
   const [location] = useLocation();
+  const [isVisible, setIsVisible] = React.useState(true);
   
   React.useEffect(() => {
     console.log('🛣️ Route Debug Info:');
@@ -28,10 +29,21 @@ export function RouteDebugger({ routes }: RouteDebuggerProps) {
     return null;
   }
 
+  if (!isVisible) {
+    return null;
+  }
+
   const isRouteRegistered = routes.includes(location);
 
   return (
     <div className="fixed bottom-4 left-4 bg-black bg-opacity-75 text-white p-2 rounded text-xs z-50">
+      <button 
+        onClick={() => setIsVisible(false)}
+        className="absolute top-1 right-1 text-white hover:text-gray-300 font-bold"
+        data-testid="button-close-debugger"
+      >
+        ×
+      </button>
       <div>Route: {location}</div>
       <div>Status: {isRouteRegistered ? '✅ Registered' : '❌ Not Found'}</div>
       <div>Total Routes: {routes.length}</div>

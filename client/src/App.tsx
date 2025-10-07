@@ -25,6 +25,7 @@ import InventoryScannerPage from "./pages/InventoryScannerPage";
 import InventoryDashboardPage from "./pages/InventoryDashboardPage";
 import InventoryManagerPage from "./pages/InventoryManagerPage";
 import InventoryReceivingPage from "./pages/InventoryReceivingPage";
+import EnhancedInventoryMRPPage from "./pages/EnhancedInventoryMRPPage";
 import QCPage from "./pages/QCPage";
 import MaintenancePage from "./pages/MaintenancePage";
 import EmployeePortalPage from "./pages/EmployeePortalPage";
@@ -40,6 +41,7 @@ import EnhancedReportsPage from './pages/EnhancedReportsPage';
 import FormRendererPage from "./pages/FormRendererPage";
 import DocumentationPageNew from "./pages/DocumentationPageNew";
 import CustomerManagement from "./pages/CustomerManagement";
+import VendorManagement from "./pages/VendorManagement";
 import PurchaseOrders from "./pages/PurchaseOrders";
 import P2PurchaseOrders from "./pages/P2PurchaseOrders";
 import POProductsPage from "./pages/POProductsPage";
@@ -61,16 +63,24 @@ import FALEESHAHTestDashboard from "./pages/FALEESHAHTestDashboard";
 import JOEYBTestDashboard from "./pages/JOEYBTestDashboard";
 import OrderDepartmentTransfer from "./pages/OrderDepartmentTransfer";
 import { BOMAdministration } from "./pages/BOMAdministration";
+import RobustBOMAdministration from "./pages/RobustBOMAdministration";
 import AGBottomMetalReport from "./pages/AGBottomMetalReport";
 import EmployeeDashboard from "./pages/EmployeeDashboard";
 import EmployeeDetail from "./pages/EmployeeDetail";
 import EmployeePortal from "./pages/EmployeePortal";
 import UserManagement from "./pages/UserManagement";
+import LoginPage from "./pages/LoginPage";
+import ProtectedRoute from "./components/auth/ProtectedRoute";
 import P2Forms from '@/pages/P2Forms';
 import WasteManagementForm from '@/pages/WasteManagementForm';
 import TaskTracker from '@/pages/TaskTracker';
 import KickbackTracking from '@/components/KickbackTracking';
 import DocumentManagement from "./pages/DocumentManagement";
+import ShutdownProceduresTraining from "@/pages/ShutdownProceduresTraining";
+import CounterfeitPreventionTraining from "@/pages/CounterfeitPreventionTraining";
+import Training from "@/pages/Training";
+import TrainingModule from "@/pages/TrainingModule";
+import Calendar from "./pages/Calendar";
 import PurchaseOrderItemsQueuePage from "./pages/PurchaseOrderItemsQueuePage";
 import LayupPluggingQueuePage from "./pages/LayupPluggingQueuePage";
 import BarcodeQueuePage from "./pages/BarcodeQueuePage";
@@ -99,8 +109,11 @@ import RefundQueue from "./pages/RefundQueue";
 import ProductionQueuePage from "./pages/ProductionQueuePage";
 import SimplifiedLayupScheduler from "./components/SimplifiedLayupScheduler";
 import CustomerSatisfaction from "./pages/CustomerSatisfaction";
+import VendorsPage from "./pages/VendorsPage";
+import VendorPOPage from "./pages/VendorPOPage";
 
 import { Toaster as HotToaster } from 'react-hot-toast';
+import DeploymentAuthWrapper from './components/DeploymentAuthWrapper';
 
 
 // Component to conditionally render Navigation
@@ -165,6 +178,7 @@ function App() {
   try {
     return (
       <QueryClientProvider client={queryClient}>
+        <DeploymentAuthWrapper>
           <Router>
             <div className="min-h-screen bg-gray-50">
               <ConditionalNavigation />
@@ -191,6 +205,12 @@ function App() {
                   <Route path="/customers" component={CustomerManagement} />
                   <Route path="/customer-satisfaction" component={CustomerSatisfaction} />
 
+                  {/* Vendor Management Routes */}
+
+                  <Route path="/vendors" component={VendorsPage} />
+                  <Route path="/vendor-pos" component={VendorPOPage} />
+
+
                   {/* Purchase Order Routes */}
                   <Route path="/purchase-orders" component={PurchaseOrders} />
                   <Route path="/p1-purchase-orders" component={PurchaseOrders} />
@@ -200,16 +220,21 @@ function App() {
                   {/* Production and BOM Routes */}
                   <Route path="/production-tracking" component={ProductionTracking} />
                   <Route path="/bom-administration" component={BOMAdministration} />
+                  <Route path="/robust-bom-administration" component={RobustBOMAdministration} />
 
                   {/* Barcode and Scanner Routes */}
                   <Route path="/barcode-scanner" component={BarcodeScannerPage} />
 
-                  {/* Inventory Routes */}
+                  {/* Inventory Routes (Legacy) */}
                   <Route path="/inventory" component={InventoryManagerPage} />
                   <Route path="/inventory/scanner" component={InventoryScannerPage} />
                   <Route path="/inventory/dashboard" component={InventoryDashboardPage} />
                   <Route path="/inventory/manager" component={InventoryManagerPage} />
                   <Route path="/inventory/receiving" component={InventoryReceivingPage} />
+                  <Route path="/inventory/enhanced-mrp" component={EnhancedInventoryMRPPage} />
+                  
+                  {/* Enhanced System Routes (Independent) */}
+                  <Route path="/enhanced-inventory" component={EnhancedInventoryMRPPage} />
 
                   {/* QC and Maintenance Routes */}
                   <Route path="/qc" component={QCPage} />
@@ -224,6 +249,8 @@ function App() {
                   <Route path="/employee-portal-new" component={EmployeePortal} />
                   <Route path="/time-clock-admin" component={TimeClockAdminPage} />
 
+                  {/* Auth Routes */}
+                  <Route path="/login" component={LoginPage} />
 
                   {/* User Dashboard Routes */}
                   <Route path="/ag-dashboard" component={AGTestDashboard} />
@@ -276,10 +303,17 @@ function App() {
                   <Route path="/task-tracker" component={TaskTracker} />
                   <Route path="/kickback-tracking" component={KickbackTracking} />
                   <Route path="/document-management" component={DocumentManagement} />
+                  
+                  {/* Training Routes */}
+                  <Route path="/training" component={Training} />
+                  <Route path="/training/:moduleId" component={TrainingModule} />
+                  <Route path="/shutdown-training" component={ShutdownProceduresTraining} />
+                  <Route path="/counterfeit-prevention-training" component={CounterfeitPreventionTraining} />
+                  
+                  <Route path="/calendar" component={Calendar} />
 
                   {/* Queue Management Routes */}
                   <Route path="/purchase-order-items-queue" component={PurchaseOrderItemsQueuePage} />
-                  <Route path="/layup" component={LayupSchedulerPage} />
                   <Route path="/layup-scheduler" component={LayupSchedulerPage} />
                   <Route path="/enhanced-layup-scheduler" component={EnhancedLayupSchedulerPage} />
                   <Route path="/work-day-scheduler" component={() => <WorkDayAwareScheduler />} />
@@ -321,6 +355,7 @@ function App() {
           <Toaster />
           <HotToaster />
         </Router>
+        </DeploymentAuthWrapper>
       </QueryClientProvider>
     );
   } catch (error) {

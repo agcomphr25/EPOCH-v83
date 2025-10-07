@@ -659,6 +659,7 @@ export default function LayupScheduler() {
   const [oemMode, setOemMode] = useState(false);
   const [selectedPOOrders, setSelectedPOOrders] = useState<string[]>([]);
   const [pendingOemChanges, setPendingOemChanges] = useState<PendingOemChanges>({ mode: false, orders: [] });
+  const [stockItemQuantities, setStockItemQuantities] = useState<{[itemId: string]: number}>({});
 
   // Track order assignments (orderId -> { moldId, date })
   const [orderAssignments, setOrderAssignments] = useState<{[orderId: string]: { moldId: string, date: string }}>({});
@@ -3886,8 +3887,19 @@ export default function LayupScheduler() {
                                   onCheckedChange={(checked) => {
                                     if (checked) {
                                       setSelectedStockItemIds([...selectedStockItemIds, item.id.toString()]);
+                                      // Initialize quantity to full amount when first selected
+                                      setStockItemQuantities(prev => ({
+                                        ...prev,
+                                        [item.id.toString()]: item.quantity
+                                      }));
                                     } else {
                                       setSelectedStockItemIds(selectedStockItemIds.filter(id => id !== item.id.toString()));
+                                      // Remove quantity when unchecked
+                                      setStockItemQuantities(prev => {
+                                        const updated = { ...prev };
+                                        delete updated[item.id.toString()];
+                                        return updated;
+                                      });
                                     }
                                   }}
                                   data-testid={`checkbox-stock-${item.id}`}
@@ -3897,18 +3909,46 @@ export default function LayupScheduler() {
                                     {item.itemName}
                                   </div>
                                   <div className="text-xs text-gray-600 dark:text-gray-400">
-                                    Qty: {item.quantity} • Type: {item.itemType}
+                                    Available Qty: {item.quantity} • Type: {item.itemType}
                                   </div>
                                 </label>
+                                {selectedStockItemIds.includes(item.id.toString()) && (
+                                  <div className="flex items-center space-x-2">
+                                    <label className="text-xs text-gray-600 dark:text-gray-400">Schedule:</label>
+                                    <input
+                                      type="number"
+                                      min="1"
+                                      max={item.quantity}
+                                      value={stockItemQuantities[item.id.toString()] || item.quantity}
+                                      onChange={(e) => {
+                                        const value = parseInt(e.target.value) || 1;
+                                        const clampedValue = Math.min(Math.max(1, value), item.quantity);
+                                        setStockItemQuantities(prev => ({
+                                          ...prev,
+                                          [item.id.toString()]: clampedValue
+                                        }));
+                                      }}
+                                      className="w-20 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                      data-testid={`input-quantity-${item.id}`}
+                                    />
+                                    <span className="text-xs text-gray-500">units</span>
+                                  </div>
+                                )}
                               </div>
                             ))}
                           </div>
                         )}
-                        {selectedStockItemIds.length > 0 && (
-                          <div className="mt-2 text-sm text-blue-600 dark:text-blue-400">
-                            {selectedStockItemIds.length} item{selectedStockItemIds.length !== 1 ? 's' : ''} selected for priority
-                          </div>
-                        )}
+                        {selectedStockItemIds.length > 0 && (() => {
+                          const totalScheduledQty = selectedStockItemIds.reduce((sum, itemId) => {
+                            return sum + (stockItemQuantities[itemId] || 0);
+                          }, 0);
+                          
+                          return (
+                            <div className="mt-2 text-sm text-blue-600 dark:text-blue-400">
+                              {selectedStockItemIds.length} item{selectedStockItemIds.length !== 1 ? 's' : ''} selected • {totalScheduledQty} units to schedule
+                            </div>
+                          );
+                        })()}
                       </div>
                     )}
 
@@ -3944,8 +3984,13 @@ export default function LayupScheduler() {
                                 <div className="font-medium text-gray-900 dark:text-white">Items to Prioritize:</div>
                                 <div className="text-gray-600 dark:text-gray-400">
                                   {selectionMode === 'entire_po' 
-                                    ? `All ${eligibleStockItems.length} stock items`
-                                    : `${selectedStockItemIds.length} selected items`
+                                    ? `All ${totalEligibleQuantity} units (${eligibleStockItems.length} item${eligibleStockItems.length !== 1 ? 's' : ''})`
+                                    : (() => {
+                                        const totalScheduledQty = selectedStockItemIds.reduce((sum, itemId) => {
+                                          return sum + (stockItemQuantities[itemId] || 0);
+                                        }, 0);
+                                        return `${totalScheduledQty} units (${selectedStockItemIds.length} item${selectedStockItemIds.length !== 1 ? 's' : ''})`;
+                                      })()
                                   }
                                 </div>
                               </div>

@@ -306,7 +306,7 @@ function App() {
                   
                   {/* Training Routes */}
                   <Route path="/training" component={Training} />
-                  <Route path="/training/module/:id" component={TrainingModule} />
+                  <Route path="/training/:moduleId" component={TrainingModule} />
                   <Route path="/shutdown-training" component={ShutdownProceduresTraining} />
                   <Route path="/counterfeit-prevention-training" component={CounterfeitPreventionTraining} />
                   

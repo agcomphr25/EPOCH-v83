@@ -1,4 +1,5 @@
 import express, { type Request, Response, NextFunction } from "express";
+import cookieParser from "cookie-parser";
 import path from "path";
 import fs from "fs";
 import { registerRoutes } from "./src/routes/index";
@@ -59,6 +60,7 @@ app.get('/attached_assets/*', (req, res, next) => {
   next();
 });
 
+app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 

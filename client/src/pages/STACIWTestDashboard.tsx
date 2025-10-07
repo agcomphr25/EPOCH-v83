@@ -6,13 +6,23 @@ import { Link } from 'wouter';
 import PipelineVisualization from '@/components/PipelineVisualization';
 
 export default function STACIWTestDashboard() {
-  const handleLogout = () => {
-    // Clear authentication tokens
-    localStorage.removeItem('sessionToken');
-    localStorage.removeItem('jwtToken');
-    
-    // Redirect to login page
-    window.location.href = '/login';
+  const handleLogout = async () => {
+    try {
+      // Call backend logout endpoint to destroy session
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        credentials: 'include', // Include cookies
+      });
+    } catch (error) {
+      console.error('Logout error:', error);
+    } finally {
+      // Clear any local storage tokens
+      localStorage.removeItem('sessionToken');
+      localStorage.removeItem('jwtToken');
+      
+      // Redirect to login page
+      window.location.href = '/login';
+    }
   };
 
   return (

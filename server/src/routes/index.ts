@@ -1928,12 +1928,14 @@ export function registerRoutes(app: Express): Server {
     try {
       const { vendorId } = req.params;
       const { storage } = await import('../../storage');
+      const { pool } = await import('../../db');
       const purchaseOrders = await storage.getAllPurchaseOrders();
       
       // Filter POs by vendor (customer)
       const vendorPOs = purchaseOrders.filter(po => po.customerId === vendorId);
       
-      // Enhance with stock counts
+      // FIXED: Only return POs that have production orders available for OEM scheduling
+      // Enhance with stock counts and production order counts
       const enhancedPOs = await Promise.all(
         vendorPOs.map(async (po) => {
           const items = await storage.getPurchaseOrderItems(po.id);
@@ -1942,6 +1944,13 @@ export function registerRoutes(app: Express): Server {
             item.itemType === 'custom_model' ||
             (item.itemName && (item.itemName.includes('AG-') || item.itemName.includes('stock')))
           );
+          
+          // FIXED: Count production orders for this PO
+          const productionOrdersResult = await pool.query(
+            'SELECT COUNT(*) as count FROM production_orders WHERE po_id = $1',
+            [po.id]
+          );
+          const productionOrderCount = parseInt((productionOrdersResult as any).rows?.[0]?.count || 0);
           
           return {
             id: po.id,
@@ -1952,13 +1961,19 @@ export function registerRoutes(app: Express): Server {
             status: po.status,
             stockCount: stockItems.length,
             itemCount: items.length,
+            productionOrderCount, // Add production order count
             poDate: po.poDate,
             notes: po.notes
           };
         })
       );
       
-      res.json(enhancedPOs);
+      // FIXED: Filter out POs with zero production orders
+      const posWithProductionOrders = enhancedPOs.filter(po => po.productionOrderCount > 0);
+      
+      console.log(`🟢 OEM Priority Settings: Found ${posWithProductionOrders.length} POs with production orders (filtered from ${enhancedPOs.length} total POs for vendor ${vendorId})`);
+      
+      res.json(posWithProductionOrders);
     } catch (error) {
       console.error('🔧 PO by vendor fetch error:', error);
       res.status(500).json({ error: "Failed to fetch POs by vendor" });

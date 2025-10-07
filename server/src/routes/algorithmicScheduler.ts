@@ -485,12 +485,11 @@ router.post('/oem-priority-only', async (req, res) => {
       let isSelectedItem = false;
       
       if (selectionMode === 'entire_po') {
-        // For entire PO mode, match by PO number
-        // Production orders have orderId format: PO-P18261-2-1 where P18261 is the PO number
-        if (order.orderId && order.orderId.startsWith('PO-') && poNumber) {
-          const orderPoNumber = order.orderId.split('-')[1]; // Extract P18261 from PO-P18261-2-1
-          isSelectedItem = orderPoNumber === poNumber; // Match against actual PO number (P18261)
-        }
+        // FIXED: Match by purchase order ID (po_id) instead of po_number
+        // Production orders have a po_id field that links to purchase_orders.id
+        isSelectedItem = order.poId === poId || order.poId?.toString() === poId?.toString();
+        
+        console.log(`🟢 Entire PO matching: order.poId=${order.poId}, target poId=${poId}, match=${isSelectedItem}`);
       } else {
         // For individual stock item mode, match by stock item IDs
         isSelectedItem = stockItemIds.includes(order.poItemId?.toString()) || 
@@ -498,6 +497,8 @@ router.post('/oem-priority-only', async (req, res) => {
                         stockItemIds.includes(order.id?.toString()) ||
                         // Match production order format: PO-P18261-2-1 where '2' is stock item ID
                         (order.orderId && stockItemIds.some((id: string) => order.orderId.includes(`-${id}-`)));
+        
+        console.log(`🟢 Specific items matching: stockItemIds=${JSON.stringify(stockItemIds)}, order props=${JSON.stringify({poItemId: order.poItemId, stockItemId: order.stockItemId, id: order.id})}, match=${isSelectedItem}`);
       }
       
       console.log(`🟢 OEM Order ${order.orderId}: isOEM=${isOemOrder}, needsScheduling=${needsScheduling}, isSelected=${isSelectedItem}`);

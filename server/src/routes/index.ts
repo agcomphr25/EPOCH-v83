@@ -1892,14 +1892,15 @@ export function registerRoutes(app: Express): Server {
               id: customerId,
               name: customerName,
               poCount: 0,
-              totalStockItems: 0
+              totalStockItems: 0,
+              totalQuantity: 0
             });
           }
           
           const vendor = vendorMap.get(customerId);
           vendor.poCount++;
           
-          // Count stock items for this PO
+          // Count stock items and sum quantities for this PO
           const items = await storage.getPurchaseOrderItems(po.id);
           const stockItems = items.filter(item => 
             item.itemType === 'stock_model' || 
@@ -1907,6 +1908,10 @@ export function registerRoutes(app: Express): Server {
             (item.itemName && (item.itemName.includes('AG-') || item.itemName.includes('stock')))
           );
           vendor.totalStockItems += stockItems.length;
+          
+          // Sum up quantities from stock items
+          const totalQuantity = stockItems.reduce((sum, item) => sum + (item.quantity || 0), 0);
+          vendor.totalQuantity += totalQuantity;
         })
       );
       

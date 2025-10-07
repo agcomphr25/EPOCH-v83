@@ -3750,7 +3750,7 @@ export default function LayupScheduler() {
                               {vendor.name}
                             </div>
                             <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                              {vendor.poCount} PO{vendor.poCount !== 1 ? 's' : ''} • {vendor.totalStockItems} stock items
+                              {vendor.poCount} PO{vendor.poCount !== 1 ? 's' : ''} • {vendor.totalQuantity || vendor.totalStockItems} units across {vendor.totalStockItems} item{vendor.totalStockItems !== 1 ? 's' : ''}
                             </div>
                           </div>
                         ))}

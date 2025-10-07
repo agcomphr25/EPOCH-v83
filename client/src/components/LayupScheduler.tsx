@@ -763,6 +763,11 @@ export default function LayupScheduler() {
     );
   }, [poStockItems]);
 
+  // Calculate total quantity across all eligible stock items
+  const totalEligibleQuantity = useMemo(() => {
+    return eligibleStockItems.reduce((sum: number, item: any) => sum + (item.quantity || 0), 0);
+  }, [eligibleStockItems]);
+
   // Apply functions for settings
   const applyWorkDayChanges = () => {
     setIsApplyingChanges(true);
@@ -3816,7 +3821,7 @@ export default function LayupScheduler() {
                               data-testid="radio-entire-po"
                             />
                             <label htmlFor="mode-entire-po" className="text-sm text-gray-900 dark:text-white">
-                              Entire Purchase Order ({eligibleStockItems.length} stock items needing layup)
+                              Entire Purchase Order ({totalEligibleQuantity} units across {eligibleStockItems.length} item{eligibleStockItems.length !== 1 ? 's' : ''})
                             </label>
                           </div>
                           <div className="flex items-center space-x-2">
@@ -3851,7 +3856,7 @@ export default function LayupScheduler() {
                         <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
                           <div className="flex items-center space-x-2 mb-2">
                             <div className="text-blue-700 dark:text-blue-300 text-sm font-medium">
-                              ✅ All {eligibleStockItems.length} stock items will be prioritized
+                              ✅ All {totalEligibleQuantity} units ({eligibleStockItems.length} item{eligibleStockItems.length !== 1 ? 's' : ''}) will be prioritized
                             </div>
                           </div>
                           <div className="text-xs text-blue-600 dark:text-blue-400">
@@ -4074,7 +4079,7 @@ export default function LayupScheduler() {
                           <CheckCircle className="w-4 h-4 text-green-600" />
                           <span className="text-sm text-green-700 dark:text-green-300">
                             Priority settings saved. {selectionMode === 'entire_po' 
-                              ? `All ${eligibleStockItems.length} stock items from this PO` 
+                              ? `All ${totalEligibleQuantity} units (${eligibleStockItems.length} item${eligibleStockItems.length !== 1 ? 's' : ''}) from this PO` 
                               : `${selectedStockItemIds.length} selected items`
                             } will be prioritized during scheduling.
                           </span>

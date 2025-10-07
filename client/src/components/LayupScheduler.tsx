@@ -757,11 +757,23 @@ export default function LayupScheduler() {
     enabled: oemDialogOpen && !!selectedPOId
   });
 
-  // Filter stock items to only show those that need layup scheduling (in P1 Production Queue)
+  // Filter stock items for layup scheduling:
+  // - Purchase order items (no current_department field): show all stock/custom models
+  // - Production order items (has current_department): only show if in 'P1 Production Queue'
   const eligibleStockItems = useMemo(() => {
-    return poStockItems.filter((item: any) => 
-      item.current_department === 'P1 Production Queue'
-    );
+    return poStockItems.filter((item: any) => {
+      const isStockItem = item.itemType === 'stock_model' || item.itemType === 'custom_model';
+      
+      if (!isStockItem) return false;
+      
+      // If item has current_department (production order), check if in P1 Production Queue
+      if ('current_department' in item && item.current_department !== null) {
+        return item.current_department === 'P1 Production Queue';
+      }
+      
+      // Purchase order items (no department tracking) are always eligible
+      return true;
+    });
   }, [poStockItems]);
 
   // Calculate total quantity across all eligible stock items

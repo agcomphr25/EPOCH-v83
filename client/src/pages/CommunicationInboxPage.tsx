@@ -1,20 +1,23 @@
-import { MessageSquare } from 'lucide-react';
-import InternalCommunicationBoard from '@/components/InternalCommunicationBoard';
+
+import React from 'react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import CommunicationInbox from '@/components/CommunicationInbox';
+import { Mail } from 'lucide-react';
 
 export default function CommunicationInboxPage() {
   return (
     <div className="container mx-auto p-6">
       <div className="mb-6">
         <h1 className="text-3xl font-bold flex items-center gap-2">
-          <MessageSquare className="h-8 w-8" />
-          Internal Communication Board
+          <Mail className="h-8 w-8" />
+          Customer Communication Inbox
         </h1>
         <p className="text-muted-foreground mt-2">
-          Send messages to departments or specific people with attachments, track read status, and manage urgent communications
+          View and respond to customer messages and inquiries
         </p>
       </div>
 
-      <InternalCommunicationBoard />
+      <CommunicationInbox />
     </div>
   );
 }

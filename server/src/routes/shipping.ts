@@ -32,8 +32,8 @@ router.get('/order/:orderId', async (req: Request, res: Response) => {
     
     if (order.customerId) {
       try {
-        customer = await storage.getCustomer(order.customerId);
-        addresses = await storage.getCustomerAddresses(order.customerId);
+        customer = await storage.getCustomer(parseInt(order.customerId));
+        addresses = await storage.getCustomerAddresses(parseInt(order.customerId));
       } catch (customerError) {
         console.warn('Could not fetch customer data:', customerError);
       }
@@ -58,8 +58,9 @@ router.get('/order/:orderId', async (req: Request, res: Response) => {
     // Priority 2: Check if using existing customer as alternate shipping
     else if (order.hasAltShipTo && order.altShipToCustomerId && addresses.length > 0) {
       try {
-        const altCustomer = await storage.getCustomer(order.altShipToCustomerId);
-        const altAddresses = await storage.getCustomerAddresses(order.altShipToCustomerId);
+        const altCustomerId = parseInt(order.altShipToCustomerId);
+        const altCustomer = await storage.getCustomer(altCustomerId);
+        const altAddresses = await storage.getCustomerAddresses(altCustomerId);
         if (altCustomer && altAddresses.length > 0) {
           shippingAddress = {
             source: 'alternate_customer',
@@ -695,202 +696,110 @@ function getServiceName(serviceCode: string): string {
   return serviceMap[serviceCode] || 'UPS Ground';
 }
 
-function getEstimatedDeliveryDays(serviceCode: string): string {
-  const deliveryMap: { [key: string]: string } = {
-    '01': '1 business day',
-    '02': '2 business days',
-    '03': '3-5 business days',
-    '07': '1-3 business days',
-    '08': '3-5 business days',
-    '11': '6-10 business days',
-    '12': '3 business days',
-    '13': '1 business day',
-    '14': '1 business day (early AM)',
-    '54': '1-3 business days',
-    '59': '2 business days (AM)',
-    '65': '6-10 business days',
-  };
-  return deliveryMap[serviceCode] || '3-5 business days';
-}
-
 // Get UPS service rates for an address
 router.post('/get-rates', async (req: Request, res: Response) => {
   try {
     const { shipToAddress, shipFromAddress, packageWeight, packageDimensions } = req.body;
 
-    // Log the addresses for debugging
-    console.log('🏠 Ship FROM address:', JSON.stringify(shipFromAddress, null, 2));
-    console.log('🏠 Ship TO address:', JSON.stringify(shipToAddress, null, 2));
-
-    // Use OAuth 2.0 credentials (same as working label creation)
-    const upsClientId = process.env.UPS_CLIENT_ID?.trim();
-    const upsClientSecret = process.env.UPS_CLIENT_SECRET?.trim();
-    const upsShipperNumber = process.env.UPS_SHIPPER_NUMBER?.trim();
-
-    if (!upsClientId || !upsClientSecret || !upsShipperNumber) {
+    if (!process.env.UPS_USERNAME || !process.env.UPS_PASSWORD || !process.env.UPS_ACCESS_KEY) {
       return res.status(500).json({ 
-        error: 'UPS API credentials not configured. Please set UPS_CLIENT_ID, UPS_CLIENT_SECRET, and UPS_SHIPPER_NUMBER environment variables.' 
+        error: 'UPS API credentials not configured.' 
       });
     }
 
-    // Get OAuth token (same as label creation)
-    let accessToken;
-    try {
-      accessToken = await getUPSOAuthToken(upsClientId, upsClientSecret);
-      console.log('⚡ UPS OAuth token ready for rate shopping (same flow as labels)');
-    } catch (tokenError: any) {
-      console.error('Failed to get UPS OAuth token for rates:', tokenError.message);
-      return res.status(500).json({ 
-        error: 'Failed to authenticate with UPS OAuth API for rate shopping',
-        details: tokenError.message
-      });
-    }
-
-    // Use OAuth 2.0 API endpoint - same environment as working labels
-    const isProduction = process.env.NODE_ENV === 'production' || process.env.REPLIT_DEPLOYMENT === '1';
-    const upsEndpoint = isProduction
-      ? 'https://onlinetools.ups.com/api/rating/v1/Rate'  // Production
-      : 'https://wwwcie.ups.com/api/rating/v1/Rate';      // Test/Sandbox
-    console.log(`Using UPS ${isProduction ? 'PRODUCTION' : 'TEST'} OAuth 2.0 Rate API endpoint:`, upsEndpoint);
-
-    // Try multiple service codes one by one to find what works from Alabama
-    const servicesToTry = [
-      { code: '03', name: 'UPS Ground' },
-      { code: '02', name: 'UPS 2nd Day Air' },
-      { code: '01', name: 'UPS Next Day Air' },
-      { code: '12', name: 'UPS 3 Day Select' }
-    ];
-
-    const successfulRates = [];
-    
-    for (const service of servicesToTry) {
-      try {
-        const ratePayload = {
-          RateRequest: {
-            Request: {
-              RequestOption: 'Rate'
+    const ratePayload = {
+      UPSSecurity: {
+        UsernameToken: {
+          Username: process.env.UPS_USERNAME,
+          Password: process.env.UPS_PASSWORD,
+        },
+        ServiceAccessToken: {
+          AccessLicenseNumber: process.env.UPS_ACCESS_KEY,
+        },
+      },
+      RateRequest: {
+        Request: {
+          RequestOption: 'Rate',
+        },
+        Shipment: {
+          Shipper: {
+            Address: {
+              AddressLine: [shipFromAddress.street],
+              City: shipFromAddress.city,
+              StateProvinceCode: shipFromAddress.state,
+              PostalCode: shipFromAddress.zipCode,
+              CountryCode: shipFromAddress.country || 'US',
             },
-            Shipment: {
-              Shipper: {
-                Name: 'AG Composites',
-                ShipperNumber: upsShipperNumber,
-                Address: {
-                  AddressLine: [shipFromAddress.street],
-                  City: shipFromAddress.city,
-                  StateProvinceCode: shipFromAddress.state,
-                  PostalCode: shipFromAddress.zipCode,
-                  CountryCode: 'US'
-                }
-              },
-              ShipTo: {
-                Name: shipToAddress.name || 'Customer',
-                Address: {
-                  AddressLine: [shipToAddress.street],
-                  City: shipToAddress.city,
-                  StateProvinceCode: shipToAddress.state,
-                  PostalCode: shipToAddress.zipCode,
-                  CountryCode: 'US'
-                }
-              },
-              Service: {
-                Code: service.code
-              },
-              Package: {
-                PackagingType: {
-                  Code: '02'
-                },
-                PackageWeight: {
-                  UnitOfMeasurement: {
-                    Code: 'LBS'
-                  },
-                  Weight: (packageWeight || 5).toString()
-                }
-              }
-            }
-          }
-        };
-
-        console.log(`🚚 Trying UPS service ${service.code} (${service.name})`);
-        
-        const serviceResponse = await axios.post(upsEndpoint, ratePayload, {
-          headers: { 
-            'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
-            'Accept': 'application/json'
           },
-          timeout: 15000,
-        });
+          ShipTo: {
+            Address: {
+              AddressLine: [shipToAddress.street],
+              City: shipToAddress.city,
+              StateProvinceCode: shipToAddress.state,
+              PostalCode: shipToAddress.zipCode,
+              CountryCode: shipToAddress.country || 'US',
+            },
+          },
+          Package: {
+            PackagingType: {
+              Code: '02', // Customer Package
+            },
+            Dimensions: packageDimensions ? {
+              UnitOfMeasurement: {
+                Code: 'IN',
+              },
+              Length: packageDimensions.length.toString(),
+              Width: packageDimensions.width.toString(),
+              Height: packageDimensions.height.toString(),
+            } : undefined,
+            PackageWeight: {
+              UnitOfMeasurement: {
+                Code: 'LBS',
+              },
+              Weight: packageWeight?.toString() || '1',
+            },
+          },
+        },
+      },
+    };
 
-        const ratedShipment = serviceResponse.data?.RateResponse?.RatedShipment;
-        if (ratedShipment) {
-          successfulRates.push({
-            serviceCode: service.code,
-            serviceName: service.name,
-            totalCharges: parseFloat(ratedShipment.TotalCharges?.MonetaryValue || '0'),
-            currency: ratedShipment.TotalCharges?.CurrencyCode || 'USD',
-            guaranteedDaysToDelivery: ratedShipment.GuaranteedDaysToDelivery,
-            scheduleDeliveryDate: ratedShipment.ScheduledDeliveryDate,
-          });
-          console.log(`✅ ${service.name}: $${ratedShipment.TotalCharges?.MonetaryValue}`);
-        }
-      } catch (serviceError: any) {
-        console.log(`❌ ${service.name} (${service.code}): ${serviceError.response?.data?.response?.errors?.[0]?.message || 'Failed'}`);
-        // Continue to next service
-      }
-    }
+    const isProduction = process.env.NODE_ENV === 'production';
+    const upsEndpoint = isProduction 
+      ? 'https://onlinetools.ups.com/rest/Rate'
+      : 'https://wwwcie.ups.com/rest/Rate';
 
-    if (successfulRates.length > 0) {
-      console.log(`🎉 Successfully got ${successfulRates.length} real UPS rates!`);
-      return res.json({
+    const response = await axios.post(upsEndpoint, ratePayload, {
+      headers: { 
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      timeout: 30000,
+    });
+
+    const ratedShipments = response.data?.RateResponse?.RatedShipment;
+    if (ratedShipments) {
+      const rates = Array.isArray(ratedShipments) ? ratedShipments : [ratedShipments];
+      const formattedRates = rates.map((rate: any) => ({
+        serviceCode: rate.Service?.Code,
+        serviceName: getServiceName(rate.Service?.Code),
+        totalCharges: parseFloat(rate.TotalCharges?.MonetaryValue || '0'),
+        currency: rate.TotalCharges?.CurrencyCode || 'USD',
+        guaranteedDaysToDelivery: rate.GuaranteedDaysToDelivery,
+        scheduleDeliveryDate: rate.ScheduledDeliveryDate,
+      }));
+
+      res.json({
         success: true,
-        rates: successfulRates
+        rates: formattedRates
+      });
+    } else {
+      res.status(500).json({ 
+        error: 'No rates returned from UPS',
+        details: response.data 
       });
     }
   } catch (error: any) {
-    console.error('UPS Rate API error details:', JSON.stringify(error.response?.data, null, 2));
-    console.error('UPS Rate API error message:', error.message);
-    
-    // Check if this is the known 111100 permission error
-    const isPermissionError = error.response?.data?.response?.errors?.some((err: any) => 
-      err.code === '111100' && err.message.includes('requested service is invalid')
-    );
-    
-    if (isPermissionError) {
-      // Provide helpful fallback rate estimates based on weight and distance
-      const weight = req.body.packageWeight || 5;
-      const estimatedRates = [
-        {
-          serviceCode: '03',
-          serviceName: 'UPS Ground',
-          totalCharges: Math.round((8.50 + (weight * 0.85)) * 100) / 100,
-          currency: 'USD',
-          isEstimate: true
-        },
-        {
-          serviceCode: '02', 
-          serviceName: 'UPS 2nd Day Air',
-          totalCharges: Math.round((18.75 + (weight * 1.25)) * 100) / 100,
-          currency: 'USD',
-          isEstimate: true
-        },
-        {
-          serviceCode: '01',
-          serviceName: 'UPS Next Day Air',
-          totalCharges: Math.round((32.50 + (weight * 2.15)) * 100) / 100,
-          currency: 'USD',
-          isEstimate: true
-        }
-      ];
-      
-      console.log('🔄 Providing estimated rates due to UPS Rating API permissions');
-      
-      return res.json({
-        rates: estimatedRates,
-        message: 'Rate estimates provided. Enable UPS Rating API in your developer account for live rates.',
-        isEstimate: true
-      });
-    }
-    
+    console.error('UPS Rate API error:', error.response?.data || error.message);
     res.status(500).json({ 
       error: 'Failed to get shipping rates',
       details: error.response?.data || error.message
@@ -938,13 +847,10 @@ router.post('/test-ups-shipment', async (req: Request, res: Response) => {
 
 // UPS OAuth 2.0 Authentication (2024+ API)
 async function getUPSOAuthToken(clientId: string, clientSecret: string): Promise<string> {
-  // Use appropriate environment endpoint
-  const isProduction = process.env.NODE_ENV === 'production' || process.env.REPLIT_DEPLOYMENT === '1';
-  const tokenEndpoint = isProduction
-    ? 'https://onlinetools.ups.com/security/v1/oauth/token'  // Production
-    : 'https://wwwcie.ups.com/security/v1/oauth/token';      // Test/Sandbox
+  // Use production OAuth endpoint for real tracking numbers
+  const tokenEndpoint = 'https://onlinetools.ups.com/security/v1/oauth/token';
     
-  console.log(`UPS ${isProduction ? 'PRODUCTION' : 'TEST'} OAuth Token Endpoint:`, tokenEndpoint);
+  console.log('UPS OAuth Token Endpoint:', tokenEndpoint);
   
   const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
   
@@ -1129,399 +1035,5 @@ router.post('/add-tracking/:orderId', async (req: Request, res: Response) => {
     res.status(500).json({ error: 'Failed to add tracking number' });
   }
 });
-
-// Calculate UPS shipping rates (rate shopping)
-router.post('/calculate-rates', async (req: Request, res: Response) => {
-  try {
-    const { destination, packageDetails } = req.body;
-    
-    if (!destination?.zipCode || !packageDetails?.weight) {
-      return res.status(400).json({ 
-        error: 'Destination ZIP code and package weight are required' 
-      });
-    }
-
-    console.log('⚡ Calculating UPS rates for:', { destination, packageDetails });
-
-    // Validate UPS credentials
-    const upsClientId = process.env.UPS_CLIENT_ID?.trim();
-    const upsClientSecret = process.env.UPS_CLIENT_SECRET?.trim();
-    const upsShipperNumber = process.env.UPS_SHIPPER_NUMBER?.trim();
-    
-    if (!upsClientId || !upsClientSecret || !upsShipperNumber) {
-      return res.status(500).json({ 
-        error: 'UPS credentials not configured' 
-      });
-    }
-
-    // Get OAuth token
-    const accessToken = await getUPSOAuthToken(upsClientId, upsClientSecret);
-
-    // Build rate request for multiple services
-    const rateRequest = {
-      RateRequest: {
-        Request: {
-          RequestOption: 'Shop',
-          TransactionReference: {
-            CustomerContext: 'Rate Shopping Request',
-          },
-        },
-        Shipment: {
-          Shipper: {
-            Name: process.env.SHIP_FROM_NAME || 'AG Composites',
-            ShipperNumber: upsShipperNumber,
-            Address: {
-              AddressLine: [process.env.SHIP_FROM_ADDRESS1 || '230 Hamer Rd.'],
-              City: process.env.SHIP_FROM_CITY || 'Owens Crossroads',
-              StateProvinceCode: process.env.SHIP_FROM_STATE || 'AL',
-              PostalCode: process.env.SHIP_FROM_POSTAL || '35763',
-              CountryCode: 'US',
-            },
-          },
-          ShipTo: {
-            Name: 'Customer',
-            Address: {
-              PostalCode: destination.zipCode,
-              CountryCode: destination.country || 'US',
-            },
-          },
-          ShipFrom: {
-            Name: process.env.SHIP_FROM_NAME || 'AG Composites',
-            Address: {
-              AddressLine: [process.env.SHIP_FROM_ADDRESS1 || '230 Hamer Rd.'],
-              City: process.env.SHIP_FROM_CITY || 'Owens Crossroads',
-              StateProvinceCode: process.env.SHIP_FROM_STATE || 'AL',
-              PostalCode: process.env.SHIP_FROM_POSTAL || '35763',
-              CountryCode: 'US',
-            },
-          },
-          Package: {
-            PackagingType: {
-              Code: '02', // Customer Packaging
-            },
-            Dimensions: packageDetails.dimensions ? {
-              UnitOfMeasurement: {
-                Code: 'IN',
-              },
-              Length: packageDetails.dimensions.length.toString(),
-              Width: packageDetails.dimensions.width.toString(),
-              Height: packageDetails.dimensions.height.toString(),
-            } : undefined,
-            PackageWeight: {
-              UnitOfMeasurement: {
-                Code: 'LBS',
-              },
-              Weight: packageDetails.weight.toString(),
-            },
-          },
-        },
-      },
-    };
-
-    // Call UPS Rate API
-    const response = await axios.post(
-      'https://onlinetools.ups.com/api/rating/v1/Shop',
-      rateRequest,
-      {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
-        timeout: 30000,
-      }
-    );
-
-    // Parse response and format rates
-    const rateResponse = response.data?.RateResponse;
-    const shipments = rateResponse?.RatedShipment;
-    
-    if (!shipments || shipments.length === 0) {
-      return res.json({ rates: [] });
-    }
-
-    // Format rates for frontend
-    const rates = shipments.map((shipment: any) => {
-      const service = shipment.Service;
-      const charges = shipment.TotalCharges || shipment.TransportationCharges;
-      
-      return {
-        serviceCode: service.Code,
-        serviceName: getServiceName(service.Code),
-        totalCharges: charges.MonetaryValue,
-        currency: charges.CurrencyCode,
-        estimatedDelivery: getEstimatedDeliveryDays(service.Code),
-        transitTime: shipment.GuaranteedDelivery?.BusinessDaysInTransit || 'N/A'
-      };
-    });
-
-    console.log(`✅ Found ${rates.length} UPS rates`);
-    res.json({ rates });
-
-  } catch (error: any) {
-    console.error('Error calculating UPS rates:', error.response?.data || error.message);
-    res.status(500).json({ 
-      error: 'Failed to calculate shipping rates',
-      details: error.message 
-    });
-  }
-});
-
-// Create bulk shipping label for multiple orders
-router.post('/create-bulk-label', async (req: Request, res: Response) => {
-  try {
-    const { orderIds, shipTo, packageDetails, serviceCode, billingOption, receiverAccount } = req.body;
-    
-    console.log('⚡ Creating bulk UPS label for orders:', orderIds, 'billing:', billingOption);
-    
-    if (!orderIds || !Array.isArray(orderIds) || orderIds.length === 0) {
-      return res.status(400).json({ error: 'Order IDs are required' });
-    }
-
-    if (!shipTo || !packageDetails) {
-      return res.status(400).json({ error: 'Shipping address and package details are required' });
-    }
-
-    // Build shipment details from request body
-    const shipmentDetails = {
-      orderId: orderIds.join(','), // Combine order IDs for reference
-      shipToAddress: {
-        name: shipTo.name,
-        street: shipTo.street,
-        city: shipTo.city,
-        state: shipTo.state,
-        zipCode: shipTo.zip,
-        country: shipTo.country || 'US',
-        phone: shipTo.phone || '',
-      },
-      shipFromAddress: {
-        name: process.env.SHIP_FROM_NAME || 'AG Composites',
-        company: process.env.SHIP_FROM_NAME || 'AG Composites',
-        contact: process.env.SHIP_FROM_ATTENTION || 'Shipping',
-        street: process.env.SHIP_FROM_ADDRESS1 || '230 Hamer Rd.',
-        city: process.env.SHIP_FROM_CITY || 'Owens Crossroads',
-        state: process.env.SHIP_FROM_STATE || 'AL',
-        zipCode: process.env.SHIP_FROM_POSTAL || '35763',
-        country: 'US',
-        phone: process.env.SHIP_FROM_PHONE || '256-723-8381',
-      },
-      packageWeight: packageDetails.weight,
-      packageDimensions: packageDetails.dimensions,
-      serviceCode: serviceCode || '03', // Default to UPS Ground
-      billingOption,
-      receiverAccount,
-    };
-
-    // Validate required UPS OAuth credentials
-    const upsClientId = process.env.UPS_CLIENT_ID?.trim();
-    const upsClientSecret = process.env.UPS_CLIENT_SECRET?.trim();
-    const upsShipperNumber = process.env.UPS_SHIPPER_NUMBER?.trim();
-    
-    if (!upsClientId || !upsClientSecret || !upsShipperNumber) {
-      return res.status(500).json({ 
-        error: 'UPS OAuth credentials not configured. Please set UPS_CLIENT_ID, UPS_CLIENT_SECRET, and UPS_SHIPPER_NUMBER environment variables.' 
-      });
-    }
-
-    // Get OAuth Token from UPS
-    console.log('⚡ Getting UPS OAuth token for bulk shipping...');
-    let accessToken;
-    try {
-      accessToken = await getUPSOAuthToken(upsClientId, upsClientSecret);
-      console.log('⚡ UPS OAuth token ready for bulk shipping');
-    } catch (tokenError: any) {
-      console.error('Failed to get UPS OAuth token for bulk shipping:', tokenError.message);
-      return res.status(500).json({ 
-        error: 'Failed to authenticate with UPS OAuth API',
-        details: tokenError.message
-      });
-    }
-
-    // Build bulk shipment payload for UPS OAuth API
-    const payload = buildUPSBulkShipmentPayloadOAuth(shipmentDetails, upsShipperNumber);
-
-    // Use UPS Production REST API endpoints for real tracking numbers
-    const upsEndpoint = 'https://onlinetools.ups.com/api/shipments/v1/ship';
-    console.log('Creating bulk UPS shipping label via OAuth API');
-    console.log('UPS Bulk Payload:', JSON.stringify(payload, null, 2));
-
-    // UPS OAuth API call for bulk shipment creation
-    let response;
-    try {
-      const isDeployment = process.env.REPLIT_DEPLOYMENT === '1';
-      
-      response = await axios.post(upsEndpoint, payload, {
-        headers: { 
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
-        timeout: isDeployment ? 45000 : 30000,
-      });
-      console.log('Bulk UPS OAuth API call successful');
-    } catch (error: any) {
-      console.error('UPS Bulk OAuth endpoint failed:', error.response?.data || error.message);
-      
-      // Generate a mock tracking number and return success for development
-      const mockTrackingNumber = `1ZA999${Date.now().toString().slice(-8)}0`;
-      console.log('⚠️ UPS API failed, using mock tracking number for bulk shipping:', mockTrackingNumber);
-      
-      return res.json({
-        success: true,
-        trackingNumber: mockTrackingNumber,
-        message: 'Mock tracking number generated (UPS API unavailable)',
-        orderIds: orderIds
-      });
-    }
-
-    // Parse UPS response for bulk shipment
-    const shipmentResults = response.data?.ShipmentResponse?.ShipmentResults;
-    const labelBase64 = shipmentResults?.PackageResults?.[0]?.ShippingLabel?.GraphicImage || 
-                       shipmentResults?.PackageResults?.ShippingLabel?.GraphicImage;
-    const trackingNumber = shipmentResults?.ShipmentIdentificationNumber;
-    const shipmentCost = shipmentResults?.ShipmentCharges?.TotalCharges?.MonetaryValue;
-
-    if (labelBase64 && trackingNumber) {
-      // Update all orders with tracking information
-      for (const orderId of orderIds) {
-        try {
-          const updateData = {
-            trackingNumber,
-            shippingCarrier: 'UPS',
-            shippingMethod: getServiceName(serviceCode || '03'),
-            shippingCost: shipmentCost ? parseFloat(shipmentCost) : null,
-            labelGenerated: true,
-            labelGeneratedAt: new Date(),
-            currentDepartment: 'Shipped',
-            shippedDate: new Date(),
-          };
-
-          // Try updating finalized order first, fall back to draft
-          try {
-            await storage.updateFinalizedOrder(orderId, updateData);
-            console.log(`✅ Updated finalized order ${orderId} with bulk tracking ${trackingNumber}`);
-          } catch (error) {
-            await storage.updateOrderDraft(orderId, updateData);
-            console.log(`✅ Updated draft order ${orderId} with bulk tracking ${trackingNumber}`);
-          }
-        } catch (updateError) {
-          console.error(`Failed to update order ${orderId} with bulk tracking:`, updateError);
-        }
-      }
-
-      console.log(`✅ Bulk shipping label created successfully for ${orderIds.length} orders with tracking: ${trackingNumber}`);
-      
-      res.json({
-        success: true,
-        trackingNumber,
-        labelBase64,
-        orderIds: orderIds,
-        shippingCost: shipmentCost,
-        message: `Bulk label created for ${orderIds.length} orders`
-      });
-    } else {
-      console.error('UPS bulk response missing label or tracking number:', response.data);
-      res.status(500).json({ 
-        error: 'UPS API did not return valid label data for bulk shipment'
-      });
-    }
-
-  } catch (error) {
-    console.error('Error creating bulk shipping label:', error);
-    res.status(500).json({ error: 'Failed to create bulk shipping label' });
-  }
-});
-
-// Helper function to build bulk UPS shipment payload for OAuth API
-function buildUPSBulkShipmentPayloadOAuth(shipmentDetails: any, shipperNumber: string): any {
-  return {
-    "ShipmentRequest": {
-      "Request": {
-        "RequestOption": "nonvalidate",
-        "TransactionReference": {
-          "CustomerContext": `Bulk Orders: ${shipmentDetails.orderId}`
-        }
-      },
-      "Shipment": {
-        "Description": `Bulk Shipment: ${shipmentDetails.orderId}`,
-        "Shipper": {
-          "Name": process.env.SHIP_FROM_NAME || "AG Composites",
-          "AttentionName": process.env.SHIP_FROM_ATTENTION || "Shipping",
-          "CompanyDisplayableName": process.env.SHIP_FROM_NAME || "AG Composites",
-          "Phone": {
-            "Number": process.env.SHIP_FROM_PHONE || "256-723-8381"
-          },
-          "ShipperNumber": shipperNumber,
-          "Address": {
-            "AddressLine": [process.env.SHIP_FROM_ADDRESS1 || "230 Hamer Rd."],
-            "City": process.env.SHIP_FROM_CITY || "Owens Crossroads",
-            "StateProvinceCode": process.env.SHIP_FROM_STATE || "AL",
-            "PostalCode": process.env.SHIP_FROM_POSTAL || "35763",
-            "CountryCode": "US"
-          }
-        },
-        "ShipTo": {
-          "Name": shipmentDetails.shipToAddress.name,
-          "AttentionName": shipmentDetails.shipToAddress.name,
-          "Address": {
-            "AddressLine": [shipmentDetails.shipToAddress.street],
-            "City": shipmentDetails.shipToAddress.city,
-            "StateProvinceCode": convertStateToAbbreviation(shipmentDetails.shipToAddress.state),
-            "PostalCode": shipmentDetails.shipToAddress.zipCode.replace(/\D/g, ''),
-            "CountryCode": shipmentDetails.shipToAddress.country || "US"
-          }
-        },
-        "PaymentInformation": {
-          "ShipmentCharge": shipmentDetails.billingOption === 'receiver' ? {
-            "Type": "01",
-            "BillReceiver": {
-              "AccountNumber": shipmentDetails.receiverAccount?.accountNumber,
-              "Address": {
-                "PostalCode": shipmentDetails.receiverAccount?.zipCode,
-              },
-            },
-          } : {
-            "Type": "01",
-            "BillShipper": {
-              "AccountNumber": shipperNumber
-            }
-          }
-        },
-        "Service": {
-          "Code": shipmentDetails.serviceCode || "03"  // UPS Ground default
-        },
-        "Package": {
-          "Description": `Bulk Orders: ${shipmentDetails.orderId}`,
-          "Packaging": {
-            "Code": "02"  // Customer Supplied Package
-          },
-          "Dimensions": {
-            "UnitOfMeasurement": {
-              "Code": "IN"
-            },
-            "Length": shipmentDetails.packageDimensions.length.toString(),
-            "Width": shipmentDetails.packageDimensions.width.toString(),
-            "Height": shipmentDetails.packageDimensions.height.toString()
-          },
-          "PackageWeight": {
-            "UnitOfMeasurement": {
-              "Code": "LBS"
-            },
-            "Weight": shipmentDetails.packageWeight.toString()
-          }
-        },
-        "LabelSpecification": {
-          "LabelImageFormat": {
-            "Code": "GIF"
-          },
-          "LabelStockSize": {
-            "Height": "6",
-            "Width": "4"
-          }
-        }
-      }
-    }
-  };
-}
 
 export default router;

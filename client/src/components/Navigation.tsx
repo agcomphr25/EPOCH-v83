@@ -91,7 +91,6 @@ export default function Navigation() {
       }
       
       // If no localStorage, extract username from dashboard URL pattern
-      // e.g., /tims-dashboard -> tims, /staciw-dashboard -> staciw
       const dashboardMatch = location.match(/^\/([a-z]+)-dashboard$/);
       if (dashboardMatch) {
         const username = dashboardMatch[1].toLowerCase();
@@ -816,8 +815,8 @@ export default function Navigation() {
               <span className="text-sm text-gray-500">Loading navigation...</span>
             )}
             {!isLoading && !currentUser && (
-              <Link href="/">
-                <span className="text-sm text-red-600 hover:text-red-700 cursor-pointer underline">
+              <Link href="/login">
+                <span className="text-sm text-blue-600 hover:text-blue-700 cursor-pointer underline">
                   Please log in to access navigation
                 </span>
               </Link>

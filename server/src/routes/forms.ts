@@ -1,61 +1,13 @@
 import { Router, Request, Response } from 'express';
 import { storage } from '../../storage';
-import { authenticateToken } from '../../middleware/auth';
 import {
   insertFormSchema,
   insertFormSubmissionSchema,
   insertPurchaseReviewChecklistSchema,
-  insertManufacturersCertificateSchema,
-  insertEnhancedFormCategorySchema
+  insertManufacturersCertificateSchema
 } from '@shared/schema';
-import { insertEnhancedFormSchema } from '../../schema';
 
 const router = Router();
-
-// Enhanced Form Categories Management (put before parametrized routes)
-router.get('/enhanced/categories', async (req: Request, res: Response) => {
-  try {
-    const categories = await storage.getAllEnhancedFormCategories();
-    res.json(categories);
-  } catch (error) {
-    console.error('Get enhanced form categories error:', error);
-    res.status(500).json({ error: "Failed to fetch categories" });
-  }
-});
-
-router.post('/enhanced/categories', authenticateToken, async (req: Request, res: Response) => {
-  try {
-    const categoryData = insertEnhancedFormCategorySchema.parse(req.body);
-    const newCategory = await storage.createEnhancedFormCategory(categoryData);
-    res.status(201).json(newCategory);
-  } catch (error) {
-    console.error('Create enhanced form category error:', error);
-    res.status(500).json({ error: "Failed to create category" });
-  }
-});
-
-router.put('/enhanced/categories/:id', authenticateToken, async (req: Request, res: Response) => {
-  try {
-    const categoryId = parseInt(req.params.id);
-    const updates = req.body;
-    const updatedCategory = await storage.updateEnhancedFormCategory(categoryId, updates);
-    res.json(updatedCategory);
-  } catch (error) {
-    console.error('Update enhanced form category error:', error);
-    res.status(500).json({ error: "Failed to update category" });
-  }
-});
-
-router.delete('/enhanced/categories/:id', authenticateToken, async (req: Request, res: Response) => {
-  try {
-    const categoryId = parseInt(req.params.id);
-    await storage.deleteEnhancedFormCategory(categoryId);
-    res.status(204).end();
-  } catch (error) {
-    console.error('Delete enhanced form category error:', error);
-    res.status(500).json({ error: "Failed to delete category" });
-  }
-});
 
 // Enhanced Forms Management
 router.get('/enhanced', async (req: Request, res: Response) => {
@@ -84,12 +36,9 @@ router.get('/enhanced/:id', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/enhanced', authenticateToken, async (req: Request, res: Response) => {
+router.post('/enhanced', async (req: Request, res: Response) => {
   try {
-    const formData = insertEnhancedFormSchema.parse(req.body);
-    console.log('DEBUG - Parsed form data keys:', Object.keys(formData));
-    console.log('DEBUG - schemaConfig type:', typeof formData.schemaConfig);
-    console.log('DEBUG - layout type:', typeof formData.layout);
+    const formData = insertFormSchema.parse(req.body);
     const newForm = await storage.createEnhancedForm(formData);
     res.status(201).json(newForm);
   } catch (error) {
@@ -98,7 +47,7 @@ router.post('/enhanced', authenticateToken, async (req: Request, res: Response) 
   }
 });
 
-router.put('/enhanced/:id', authenticateToken, async (req: Request, res: Response) => {
+router.put('/enhanced/:id', async (req: Request, res: Response) => {
   try {
     const formId = parseInt(req.params.id);
     const updates = req.body;
@@ -110,7 +59,7 @@ router.put('/enhanced/:id', authenticateToken, async (req: Request, res: Respons
   }
 });
 
-router.delete('/enhanced/:id', authenticateToken, async (req: Request, res: Response) => {
+router.delete('/enhanced/:id', async (req: Request, res: Response) => {
   try {
     const formId = parseInt(req.params.id);
     await storage.deleteEnhancedForm(formId);

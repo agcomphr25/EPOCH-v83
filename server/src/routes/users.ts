@@ -7,6 +7,8 @@ const router = Router();
 // User schema for validation
 const insertUserSchema = z.object({
   username: z.string().min(1, "Username is required"),
+  firstName: z.string().min(1, "First name is required"),
+  lastName: z.string().min(1, "Last name is required"),
   password: z.string().min(4, "Password must be at least 4 characters"),
   role: z.string().optional().default('EMPLOYEE'),
   employeeId: z.number().optional(),
@@ -16,6 +18,8 @@ const insertUserSchema = z.object({
 
 const updateUserSchema = z.object({
   username: z.string().min(1).optional(),
+  firstName: z.string().min(1).optional(),
+  lastName: z.string().min(1).optional(),
   password: z.string().min(4).optional(),
   role: z.string().optional(),
   employeeId: z.number().optional().nullable(),

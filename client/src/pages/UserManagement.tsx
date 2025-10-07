@@ -182,17 +182,19 @@ export default function UserManagement() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.username || !formData.firstName || !formData.lastName || !formData.password) {
-      toast({
-        title: "Missing Information",
-        description: "Please provide username, first name, last name, and password.",
-        variant: "destructive",
-      });
-      return;
-    }
-
+    // Different validation for create vs edit
     if (editingUser) {
-      // For updates, don't require password if not provided
+      // When editing: only require first name and last name
+      if (!formData.firstName || !formData.lastName) {
+        toast({
+          title: "Missing Information",
+          description: "Please provide first name and last name.",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      // For updates, don't include password if not provided
       const updateData = { ...formData };
       if (!updateData.password) {
         const { password, ...dataWithoutPassword } = updateData;
@@ -207,6 +209,15 @@ export default function UserManagement() {
         data: updateData,
       });
     } else {
+      // When creating: require all fields
+      if (!formData.username || !formData.firstName || !formData.lastName || !formData.password) {
+        toast({
+          title: "Missing Information",
+          description: "Please provide username, first name, last name, and password.",
+          variant: "destructive",
+        });
+        return;
+      }
       createUserMutation.mutate(formData);
     }
   };
@@ -355,10 +366,15 @@ export default function UserManagement() {
                   type="text"
                   value={formData.username}
                   onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-                  required
+                  required={!editingUser}
+                  disabled={!!editingUser}
                   placeholder="Enter username"
                   data-testid="input-username"
+                  className={editingUser ? "bg-gray-100 cursor-not-allowed" : ""}
                 />
+                {editingUser && (
+                  <p className="text-xs text-gray-500 mt-1">Username cannot be changed</p>
+                )}
               </div>
               
               <div>

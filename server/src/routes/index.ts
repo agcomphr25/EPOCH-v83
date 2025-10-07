@@ -268,8 +268,8 @@ export function registerRoutes(app: Express): Server {
         SELECT 
           id,
           order_id as "orderId",
-          customer_id as "customer",
-          model_id as "product",
+          customer,
+          product,
           date,
           due_date as "dueDate",
           current_department as "currentDepartment",
@@ -2039,8 +2039,8 @@ export function registerRoutes(app: Express): Server {
               status,
               due_date
             FROM orders 
-            WHERE po_id IS NOT NULL OR customer_id = $1
-          `, [item.customer_id]);
+            WHERE po_id IS NOT NULL OR customer = $1
+          `, [item.customer_name || item.customer_id]);
           
           const productionOrders = productionOrdersResult.rows || [];
           

@@ -61,11 +61,23 @@ export default function Navigation() {
   });
   
   // Logout function
-  const handleLogout = () => {
-    localStorage.removeItem('sessionToken');
-    localStorage.removeItem('jwtToken');
-    // Force a complete page reload to trigger authentication check
-    window.location.reload();
+  const handleLogout = async () => {
+    try {
+      // Call backend logout endpoint to destroy session
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        credentials: 'include', // Include cookies
+      });
+    } catch (error) {
+      console.error('Logout error:', error);
+    } finally {
+      // Clear any local storage tokens
+      localStorage.removeItem('sessionToken');
+      localStorage.removeItem('jwtToken');
+      
+      // Redirect to login page
+      window.location.href = '/login';
+    }
   };
 
   const [verifiedModulesExpanded, setVerifiedModulesExpanded] = useState(false);

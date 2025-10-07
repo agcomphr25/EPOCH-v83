@@ -2412,7 +2412,7 @@ export default function OrderEntry() {
                       disabled={isFlattop}
                     >
                       <SelectTrigger className={isFlattop ? "opacity-50 cursor-not-allowed" : ""}>
-                        <SelectValue placeholder={isFlattop ? "Not Available (Flattop)" : "Short"} />
+                        <SelectValue placeholder={isFlattop ? "Not Available (Flattop)" : "Select action length..."} />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="short">Short</SelectItem>
@@ -2517,7 +2517,7 @@ export default function OrderEntry() {
                                              selectedModel?.name?.toLowerCase().includes('chalk');
                           
                           // Define limited QD options for Chalk models (based on actual database values)
-                          const chalkQDOptions = ['no_qds', 'qd_1_right_butt', 'qd_1_left_butt'];
+                          const chalkQDOptions = ['no_qds', 'qd_1_right_butt', 'qd_1_left_butt', 'qd_2_butt'];
                           
                           // Filter options based on model type
                           let availableOptions = qdFeature.options.filter(option => option.value && option.value.trim() !== '');
@@ -2620,10 +2620,20 @@ export default function OrderEntry() {
                                       key={option.value}
                                       onSelect={() => {
                                         const currentRails = Array.isArray(features.rail_accessory) ? features.rail_accessory : [];
+                                        
                                         if (isChecked) {
+                                          // Remove this option
                                           setFeatures(prev => ({ ...prev, rail_accessory: currentRails.filter((item: string) => item !== option.value) }));
                                         } else {
-                                          setFeatures(prev => ({ ...prev, rail_accessory: [...currentRails, option.value] }));
+                                          // Adding a new option
+                                          if (option.value === 'no_rail') {
+                                            // If selecting "No Rail", clear all other rails
+                                            setFeatures(prev => ({ ...prev, rail_accessory: ['no_rail'] }));
+                                          } else {
+                                            // If selecting any other rail, remove "No Rail" and add the new rail
+                                            const railsWithoutNoRail = currentRails.filter((item: string) => item !== 'no_rail');
+                                            setFeatures(prev => ({ ...prev, rail_accessory: [...railsWithoutNoRail, option.value] }));
+                                          }
                                         }
                                       }}
                                       className="cursor-pointer"

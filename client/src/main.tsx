@@ -57,7 +57,6 @@ root.render(
       <BrowserRouter>
         <App />
         <Toaster position="top-right" />
-        <ReactQueryDevtools initialIsOpen={false} />
       </BrowserRouter>
     </QueryClientProvider>
   </React.StrictMode>

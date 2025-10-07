@@ -86,6 +86,7 @@ export default function AllOrdersPage() {
     'Gunsmith',
     'Finish QC',
     'Paint',
+    'Shipping QC',
     'Shipping'
   ];
   
@@ -110,7 +111,8 @@ export default function AllOrdersPage() {
       
       // Clear all caches and force immediate refetch
       queryClient.clear();
-      await queryClient.refetchQueries({ queryKey: ['/api/orders'] });
+      await queryClient.refetchQueries({ queryKey: ['/api/orders/with-payment-status/paginated'] });
+      await queryClient.refetchQueries({ queryKey: ['/api/orders/with-payment-status'] });
     },
     onError: (error: any, variables) => {
       console.error(`❌ Failed to progress order ${variables.orderId}:`, error);
@@ -122,26 +124,16 @@ export default function AllOrdersPage() {
     }
   });
 
-  const { data: allOrders, isLoading } = useQuery<Order[]>({
-    queryKey: ['/api/orders'],
-    staleTime: 0, // No caching for debugging
-    gcTime: 0 // No caching for debugging
+  const { data: paginatedData, isLoading } = useQuery<PaginatedOrdersResponse>({
+    queryKey: ['/api/orders/with-payment-status/paginated', currentPage, pageSize],
+    queryFn: () => apiRequest(`/api/orders/with-payment-status/paginated?page=${currentPage}&limit=${pageSize}`),
+    staleTime: 30000, // Cache for 30 seconds to improve performance
+    gcTime: 60000 // Keep in cache for 1 minute
   });
 
-  // Manual pagination for now
-  const totalOrders = allOrders?.length || 0;
-  const totalPages = Math.ceil(totalOrders / pageSize);
-  const startIndex = (currentPage - 1) * pageSize;
-  const endIndex = startIndex + pageSize;
-  const orders = allOrders?.slice(startIndex, endIndex) || [];
-
-  const paginatedData = {
-    orders,
-    total: totalOrders,
-    totalPages,
-    currentPage
-  };
-
+  const orders = paginatedData?.orders || [];
+  const totalOrders = paginatedData?.total || 0;
+  const totalPages = paginatedData?.totalPages || 1;
 
   // Cancel order mutation
   const cancelOrderMutation = useMutation({
@@ -152,7 +144,8 @@ export default function AllOrdersPage() {
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status/paginated'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
       queryClient.invalidateQueries({ queryKey: ['/api/orders/pipeline-counts'] });
       queryClient.invalidateQueries({ queryKey: ['/api/production-queue/prioritized'] });
       queryClient.invalidateQueries({ queryKey: ['/api/layup-schedule'] });

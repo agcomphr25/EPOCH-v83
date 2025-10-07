@@ -1,16 +1,12 @@
 import { Express } from 'express';
 import { createServer, type Server } from "http";
-import authRoutes from './auth';
 import employeesRoutes from './employees';
-import usersRoutes from './users';
 import ordersRoutes from './orders';
 import formsRoutes from './forms';
 import tasksRoutes from './tasks';
 import kickbackRoutes from './kickbacks';
 import inventoryRoutes from './inventory';
 import customersRoutes from './customers';
-import vendorsRoutes, { contactRouter, vendorDocumentRouter } from './vendors';
-import vendorPOsRoutes from './vendorPOs';
 import qualityRoutes from './quality';
 import documentsRoutes from './documents';
 import moldsRoutes from './molds';
@@ -21,14 +17,9 @@ import shippingTestRoutes from './shipping-test';
 import orderAttachmentsRoutes from './orderAttachments';
 import discountsRoutes from './discounts';
 import bomsRoutes from './boms';
-import robustBomRoutes from './robustBom';
-import p2BomsRoutes from './p2boms';
 import communicationsRoutes from './communications';
-import secureVerificationRoutes from './secureVerification';
-// import nonconformanceRoutes from '../../routes/nonconformance';
+import nonconformanceRoutes from '../../routes/nonconformance';
 import paymentsRoutes from './payments';
-import acceptBluePaymentsRoutes from './acceptBluePayments';
-import unifiedPaymentsRoutes from './unifiedPayments';
 import algorithmicSchedulerRoutes from './algorithmicScheduler';
 import productionQueueRoutes from './productionQueue';
 import layupScheduleRoutes from './layupSchedule';
@@ -36,34 +27,13 @@ import layupScheduleRoutes from './layupSchedule';
 import customerSatisfactionRoutes from './customerSatisfaction';
 import poProductsRoutes from './poProducts';
 import refundRoutes from './refunds';
-
-import vendorRoutes from './vendors';
-
-
-// import cuttingTableRoutes from './cuttingTable';
-// import materialInventoryRoutes from './materialInventory';
-// import defrostScheduleRoutes from './defrostSchedule';
-
-import mrpRoutes from './mrp';
-import enhancedRoutes from './enhanced';
-import trainingRoutes from './training';
-import internalMessagesRoutes from './internalMessages';
-
+import oemSettingsRoutes from './oemSettings';
+import moldSyncRoutes from './moldSync';
 import { getAccessToken } from '../utils/upsShipping';
-import { nonConformingItems, insertNonConformingItemSchema } from '@shared/schema';
-import { db } from '../../db';
-import { z } from 'zod';
-import { eq, desc } from 'drizzle-orm';
 
 export function registerRoutes(app: Express): Server {
-  // Authentication routes (must be first)
-  app.use('/api/auth', authRoutes);
-
   // Employee management routes
   app.use('/api/employees', employeesRoutes);
-
-  // User management routes
-  app.use('/api/users', usersRoutes);
 
   // Order management routes  
   app.use('/api/orders', ordersRoutes);
@@ -83,18 +53,6 @@ export function registerRoutes(app: Express): Server {
   // Customer management routes
   app.use('/api/customers', customersRoutes);
 
-  // Vendor management routes
-  app.use('/api/vendors', vendorsRoutes);
-  
-  // Vendor purchase orders routes
-  app.use('/api/vendor-pos', vendorPOsRoutes);
-  
-  // Vendor contacts routes (generic)
-  app.use('/api/vendor-contacts', contactRouter);
-  
-  // Vendor documents routes  
-  app.use('/api/vendor-documents', vendorDocumentRouter);
-
   // Quality control and maintenance routes
   app.use('/api/quality', qualityRoutes);
 
@@ -106,6 +64,9 @@ export function registerRoutes(app: Express): Server {
 
   // Mold management routes
   app.use('/api/molds', moldsRoutes);
+  
+  // Mold synchronization routes
+  app.use('/api', moldSyncRoutes);
 
   // Layup PDF generation routes
   app.use('/api/pdf', layupPdfRoute);
@@ -122,26 +83,15 @@ export function registerRoutes(app: Express): Server {
 
   // BOM management routes
   app.use('/api/boms', bomsRoutes);
-  
-  // Robust BOM management routes (P2 Enhanced)
-  app.use('/api/robust-bom', robustBomRoutes);
-  
-  // P2 BOM management routes (CRUD)
-  app.use('/api/p2-boms', p2BomsRoutes);
 
   // Communications management routes
   app.use('/api/communications', communicationsRoutes);
 
-  // Internal messages routes
-  app.use('/api/internal-messages', internalMessagesRoutes);
-
   // Nonconformance tracking routes
-  // app.use('/api/nonconformance', nonconformanceRoutes);
+  app.use('/api/nonconformance', nonconformanceRoutes);
 
   // Payment processing routes
   app.use('/api/payments', paymentsRoutes);
-  app.use('/api/accept-blue', acceptBluePaymentsRoutes);
-  app.use('/api/unified-payments', unifiedPaymentsRoutes);
 
   // Algorithmic scheduler routes
   app.use('/api/scheduler', algorithmicSchedulerRoutes);
@@ -164,24 +114,9 @@ export function registerRoutes(app: Express): Server {
   // Refund management routes
   app.use('/api/refund-requests', refundRoutes);
 
-  // Vendor management routes
-  app.use('/api/vendors', vendorRoutes);
+  // OEM Priority Settings routes
+  app.use('/api/oem-settings', oemSettingsRoutes);
   
-
-
-
-  // app.use('/api', cuttingTableRoutes);
-  // app.use('/api', materialInventoryRoutes);
-  // app.use('/api', defrostScheduleRoutes);
-
-  
-  // MRP and advanced inventory management routes (legacy)
-  app.use('/api/mrp', mrpRoutes);
-
-  // Enhanced system routes (completely separate from legacy)
-  app.use('/api/enhanced', enhancedRoutes);
-  
-
   // UPS Test endpoint
   app.post('/api/test-ups-auth', async (req, res) => {
     try {
@@ -275,6 +210,12 @@ export function registerRoutes(app: Express): Server {
   // P1 Layup Queue endpoint - provides unified production queue for layup scheduler
   app.get('/api/p1-layup-queue', async (req, res) => {
     try {
+      // Extract OEM settings from query parameters
+      const oemMode = req.query.oemMode === 'true';
+      const selectedPOOrders = req.query.selectedPOOrders ? String(req.query.selectedPOOrders).split(',') : [];
+      
+      console.log('🔧 P1 layup queue with OEM settings:', { oemMode, selectedPOOrdersCount: selectedPOOrders.length });
+      
       const { storage } = await import('../../storage');
       const { inferStockModelFromFeatures } = await import('../utils/stockModelInference');
       
@@ -316,6 +257,7 @@ export function registerRoutes(app: Express): Server {
         return true;
       });
       
+
       // Also get active orders from the orders table (for P1 PO production orders)
       const { pool } = await import('../../db');
       
@@ -324,8 +266,8 @@ export function registerRoutes(app: Express): Server {
         SELECT 
           id,
           order_id as "orderId",
-          customer as "customer",
-          product,
+          customer_id as "customer",
+          model_id as "product",
           date,
           due_date as "dueDate",
           current_department as "currentDepartment",
@@ -350,61 +292,161 @@ export function registerRoutes(app: Express): Server {
         poId: null,
         productionOrderId: null
       }));
+
       
       // Combine both sources  
       const combinedUnscheduledOrders = [...unscheduledOrders, ...formattedActiveOrders];
       
       // Fetch P1 PO orders from all_orders table (orders created from P1 PO week selection)
-      // IMPORTANT: Only fetch STOCK ITEMS - vendor parts and non-stock items should stay on P1 PO page
-      // Stock items have valid stock model IDs (not null, not empty, not 'none')
-      console.log('🔍 Fetching P1 PO STOCK orders from all_orders table...');
+      console.log('🔍 Fetching P1 PO orders from all_orders table...');
       const p1POOrdersResult = await pool.query(`
         SELECT 
-          ao.order_id as "orderId",
-          ao.customer_id as "customerId",
-          ao.model_id as "stockModelId",
-          ao.due_date as "dueDate",
-          ao.current_department as "currentDepartment",
-          ao.status,
-          ao.features,
-          ao.created_at as "createdAt",
+          order_id as "orderId",
+          customer_id as "customerId",
+          model_id as "stockModelId",
+          due_date as "dueDate",
+          current_department as "currentDepartment",
+          status,
+          features,
+          created_at as "createdAt",
           'p1_purchase_order' as source
-        FROM all_orders ao
-        WHERE ao.order_id LIKE 'PO%'
-          AND (ao.current_department = 'P1 Production Queue' OR ao.current_department = 'Layup/Plugging')
-          AND ao.model_id IS NOT NULL 
-          AND ao.model_id != '' 
-          AND LOWER(ao.model_id) NOT IN ('none', 'no_stock', 'vendor_part', 'custom_part')
-        ORDER BY ao.due_date ASC
+        FROM all_orders 
+        WHERE order_id LIKE 'PO%'
+          AND (current_department = 'P1 Production Queue' OR current_department = 'Layup/Plugging')
+        ORDER BY due_date ASC
       `);
 
       // Format the P1 PO orders
       const p1POOrdersRows = Array.isArray(p1POOrdersResult) ? p1POOrdersResult : [];
-      console.log(`📦 Found ${p1POOrdersRows.length} P1 PO STOCK items (vendor/non-stock items excluded)`);
+      console.log(`🔍 Found ${p1POOrdersRows.length} P1 PO orders in all_orders table`);
       
-      const p1POOrders = p1POOrdersRows.map((po: any) => ({
-        id: po.orderId,
-        orderId: po.orderId,
-        orderDate: po.createdAt,
-        dueDate: po.dueDate,
-        currentDepartment: po.currentDepartment,
-        customerId: po.customerId,
-        features: po.features || {},
-        modelId: po.stockModelId,
-        stockModelId: po.stockModelId,
-        product: po.stockModelId,
-        status: po.status,
-        source: po.source,  // This will be 'p1_purchase_order'
-        priorityScore: po.priorityScore || 1500
-      }));
+      const p1POOrders = p1POOrdersRows.map((po: any) => {
+        // Apply OEM priority boost if this P1 PO is selected in OEM mode
+        let priorityScore = po.priorityScore || 1500;
+        if (oemMode && selectedPOOrders.includes(po.orderId)) {
+          priorityScore = 1; // Highest priority for selected P1 PO orders in OEM mode
+          console.log(`🚀 OEM PRIORITY BOOST: Order ${po.orderId} priority boosted to ${priorityScore}`);
+        }
+        
+        return {
+          id: po.orderId,
+          orderId: po.orderId,
+          orderDate: po.createdAt,
+          dueDate: po.dueDate,
+          currentDepartment: po.currentDepartment,
+          customerId: po.customerId,
+          features: po.features || {},
+          modelId: po.stockModelId,
+          stockModelId: po.stockModelId,
+          product: po.stockModelId,
+          status: po.status,
+          source: po.source,  // This will be 'p1_purchase_order'
+          priorityScore: priorityScore
+        };
+      });
 
       console.log(`🏭 Found ${p1POOrders.length} P1 PO orders from week selection`);
 
-      // Combine both order types into unified production queue with enhanced stock model inference
-      console.log(`📦 Processing ${combinedUnscheduledOrders.length} total main orders + ${p1POOrders.length} P1 PO orders for P1 layup queue`);
+      // Fetch production orders from production_orders table (OEM orders)
+      console.log('🔍 Fetching production orders from production_orders table...');
+      const productionOrdersResult = await pool.query(`
+        SELECT 
+          order_id as "orderId",
+          customer_id as "customerId",
+          CASE 
+            WHEN item_id = '10' THEN 'cf_alpine_hunter'
+            WHEN item_id = '11' THEN 'cf_privateer' 
+            WHEN item_id = '12' THEN 'fg_privateer'
+            ELSE 'mesa_universal'
+          END as "stockModelId",
+          due_date as "dueDate",
+          current_department as "currentDepartment",
+          production_status as "status",
+          '{}' as features,
+          created_at as "createdAt",
+          'production_order' as source
+        FROM production_orders 
+        WHERE production_status = 'PENDING'
+        ORDER BY due_date ASC
+      `);
+
+      // Format the production orders
+      const productionOrdersRows = Array.isArray(productionOrdersResult) ? productionOrdersResult : [];
+      console.log(`🔍 Found ${productionOrdersRows.length} production orders in production_orders table`);
+      
+      const productionOrders = productionOrdersRows.map((po: any) => {
+        // FIXED: Infer features from stock model for OEM orders to display action length
+        const inferFeaturesFromStockModel = (stockModelId: string) => {
+          const features: any = {};
+          
+          // Map stock models to their typical action length
+          const stockModelActionMap: {[key: string]: string} = {
+            'cf_alpine_hunter': 'short',
+            'fg_alpine_hunter': 'short', 
+            'cf_privateer': 'short',
+            'fg_privateer': 'short',
+            'cf_sportsman': 'short',
+            'fg_sportsman': 'short',
+            'cf_armor': 'short',
+            'fg_armor': 'short',
+            'cf_chalk_branch': 'short',
+            'fg_chalk_branch': 'short',
+            'cf_adj_chalk_branch': 'short',
+            'cf_adj_alp_hunter': 'short',
+            'fg_adj_alp_hunter': 'short',
+            'cf_adj_armor': 'short',
+            'fg_adj_armor': 'short',
+            'cf_visigoth': 'long',
+            'fg_visigoth': 'long',
+            'cf_k2': 'long',
+            'fg_k2': 'long',
+            'cf_adj_k2': 'long',
+            'fg_adj_k2': 'long',
+            'cf_ferrata': 'short',
+            'fg_ferrata': 'short',
+            'cf_cat': 'short',
+            'fg_cat': 'short',
+            'cf_cat_lh': 'short',
+            'fg_cat_lh': 'short',
+            'apr_hunter': 'short',
+            'm1a_carbon': 'medium',
+            'mesa_universal': 'short'
+          };
+          
+          const actionLength = stockModelActionMap[stockModelId] || 'short';
+          features.action_length = actionLength;
+          
+          console.log(`🎯 OEM Order ${po.orderId}: Inferred action_length="${actionLength}" from stockModelId="${stockModelId}"`);
+          
+          return features;
+        };
+        
+        return {
+          id: po.orderId,
+          orderId: po.orderId,
+          orderDate: po.createdAt,
+          dueDate: po.dueDate,
+          currentDepartment: po.currentDepartment,
+          customerId: po.customerId,
+          features: inferFeaturesFromStockModel(po.stockModelId),
+          modelId: po.stockModelId,
+          stockModelId: po.stockModelId,
+          status: po.status,
+          source: po.source,
+          priorityScore: 2000, // High priority for OEM orders
+          product: po.stockModelId.replace('_', ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())
+        };
+      });
+
+      console.log(`🏭 Found ${productionOrders.length} production orders from production_orders table`);
+
+      // Combine all order types into unified production queue with enhanced stock model inference
+      console.log(`📦 Processing ${combinedUnscheduledOrders.length} total main orders + ${p1POOrders.length} P1 PO orders + ${productionOrders.length} production orders for P1 layup queue`);
       
       const combinedQueue = [
-        // Add the P1 PO orders first (highest priority)
+        // Add the production orders first (highest priority for OEM)
+        ...productionOrders,
+        // Add the P1 PO orders second (high priority)
         ...p1POOrders,
         ...combinedUnscheduledOrders.map(order => {
           // Determine correct source type based on order characteristics
@@ -441,6 +483,23 @@ export function registerRoutes(app: Express): Server {
       
       // Sort by priority score (lower = higher priority)
       combinedQueue.sort((a, b) => a.priorityScore - b.priorityScore);
+      
+
+      // Log OEM priority verification
+      if (oemMode && selectedPOOrders.length > 0) {
+        const topOrders = combinedQueue.slice(0, Math.min(5, combinedQueue.length));
+        console.log('🚀 OEM MODE VERIFICATION: Top 5 orders after sorting:', 
+          topOrders.map(o => ({ orderId: o.orderId, priorityScore: o.priorityScore, source: o.source }))
+        );
+        const boostedOrdersInTop = topOrders.filter(o => selectedPOOrders.includes(o.orderId));
+        console.log(`🚀 OEM MODE SUCCESS: ${boostedOrdersInTop.length}/${selectedPOOrders.length} selected P1 POs appear in top 5`);
+      }
+
+      // Add cache-control headers to prevent browser caching
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+
       
       res.json(combinedQueue);
     } catch (error) {
@@ -656,14 +715,9 @@ export function registerRoutes(app: Express): Server {
       console.log('🔧 LAYUP SCHEDULE GENERATE CALLED');
       const { storage } = await import('../../storage');
       
-      // Get orders from the same source as the frontend - P1 layup queue
-      console.log('🔧 Fetching orders from P1 layup queue (same as frontend)...');
-      const p1QueueResponse = await fetch('http://localhost:5000/api/p1-layup-queue');
-      if (!p1QueueResponse.ok) {
-        throw new Error(`Failed to fetch P1 layup queue: ${p1QueueResponse.statusText}`);
-      }
-      const p1Orders = await p1QueueResponse.json();
-      console.log('🔧 Found orders from P1 layup queue for scheduling:', p1Orders.length);
+      // Get production orders (already sorted by priority)
+      const productionOrders = await storage.getAllProductionOrders();
+      console.log('🔧 Found production orders for scheduling:', productionOrders.length);
       
       // Get mold and employee settings (using same API as LayupScheduler component)
       const molds = await storage.getAllMolds();
@@ -672,25 +726,29 @@ export function registerRoutes(app: Express): Server {
       
       console.log('🔧 Found molds:', molds.length);
       console.log('🔧 Found layup employees:', layupEmployees.length);
-      console.log('🔧 First few P1 orders from queue:', p1Orders.slice(0, 3).map((o: any) => ({ 
+      console.log('🔧 First few production orders:', productionOrders.slice(0, 3).map(o => ({ 
         orderId: o.orderId, 
-        stockModelId: o.stockModelId || o.modelId,
-        source: o.source,
-        currentDepartment: o.currentDepartment
+        itemName: o.itemName, 
+        itemId: o.itemId 
       })));
       
       // Get stock models for proper mapping
       const stockModels = await storage.getAllStockModels();
       
-      // Transform P1 orders for scheduler utility (these already have proper stock model IDs)
-      const orders = p1Orders.map((order: any) => {
-        // P1 orders already have stockModelId or modelId
-        let stockModelId = order.stockModelId || order.modelId;
-        
-        // If still no stock model, try to infer from product name
-        if (!stockModelId || stockModelId === 'unknown') {
-          const productName = order.product || order.modelId || '';
-          if (productName.toLowerCase().includes('mesa')) {
+      // Transform data for scheduler utility
+      const orders = productionOrders.map(order => {
+        // Map item names to stock model IDs using itemId or itemName
+        let stockModelId = (order as any).itemId;
+        if (!stockModelId && (order as any).itemName) {
+          // Try to find matching stock model by name
+          const matchingModel = stockModels.find(model => 
+            model.displayName === (order as any).itemName || 
+            model.name === (order as any).itemName.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '')
+          );
+          if (matchingModel) {
+            stockModelId = matchingModel.id;
+          } else if ((order as any).itemName.includes('Mesa')) {
+            // Default Mesa items to mesa_universal if no exact match
             stockModelId = 'mesa_universal';
           } else {
             stockModelId = 'unknown';
@@ -699,23 +757,22 @@ export function registerRoutes(app: Express): Server {
         
         return {
           orderId: order.orderId,
-          product: order.product || order.modelId || 'Unknown Product',
-          customer: order.customer || 'Unknown Customer',
-          stockModelId: stockModelId,
+          product: (order as any).itemName || 'Unknown Product',
+          customer: (order as any).customerName || 'Unknown Customer',
+          stockModelId: stockModelId || 'unknown',
           dueDate: order.dueDate,
           orderDate: order.orderDate,
-          priorityScore: order.priorityScore || (order.source === 'p1_purchase_order' ? 20 : 50), // P1 PO orders get higher priority
+          priorityScore: 50, // Default priority score since productionOrders doesn't have this field
           quantity: 1,
-          features: order.features || {},
-          source: order.source || 'main_orders'
+          features: (order as any).specifications || {}, // Include specifications as features
+          source: 'production_order' // Add source for identification
         };
       });
       
-      console.log('🔧 Transformed P1 orders with stock models:', orders.slice(0, 3).map(o => ({ 
+      console.log('🔧 Transformed orders with stock models:', orders.slice(0, 3).map(o => ({ 
         orderId: o.orderId, 
         product: o.product, 
-        stockModelId: o.stockModelId,
-        source: o.source
+        stockModelId: o.stockModelId 
       })));
       
       const employeeSettings = layupEmployees.map((emp: any) => ({
@@ -740,7 +797,7 @@ export function registerRoutes(app: Express): Server {
         moldId: mold.moldId,
         modelName: mold.modelName || mold.moldId, // Use moldId as fallback for modelName
         enabled: true,
-        multiplier: 1, // Default capacity multiplier: 1 order per mold per day
+        multiplier: 2, // Default capacity multiplier
         instanceNumber: 1, // Default instance
         stockModels: mold.stockModels || [] // Include stock model compatibility
       }));
@@ -1231,13 +1288,15 @@ export function registerRoutes(app: Express): Server {
 
   app.put('/api/addresses/:id', async (req, res) => {
     try {
+      console.log('🔧 ADDRESS UPDATE ROUTE CALLED');
       const { storage } = await import('../../storage');
       const { id } = req.params;
       const addressData = req.body;
       const address = await storage.updateCustomerAddress(parseInt(id), addressData);
+      console.log('🔧 Updated address:', address.id);
       res.json(address);
     } catch (error) {
-      console.error('Address update error:', error);
+      console.error('🔧 Address update error:', error);
       res.status(500).json({ error: "Failed to update address" });
     }
   });
@@ -1479,66 +1538,6 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  // Move single order to different department (for layup scheduler action buttons)
-  app.post('/api/move-order-department', async (req, res) => {
-    try {
-      console.log('🏭 SINGLE ORDER MOVE: Move order department API called');
-      const { orderId, department, status } = req.body;
-      
-      if (!orderId || !department || !status) {
-        return res.status(400).json({ 
-          error: "orderId, department, and status are required", 
-          success: false 
-        });
-      }
-
-      console.log(`🏭 SINGLE ORDER MOVE: Moving order ${orderId} to ${department} with status ${status}`);
-      const { storage } = await import('../../storage');
-      
-      // Update order status and department
-      const updateResult = await storage.updateOrderDepartment(orderId, department, status);
-      
-      if (updateResult.success) {
-        console.log(`✅ SINGLE ORDER MOVE: Order ${orderId} moved to ${department} department`);
-        
-        // If moving back to Production Queue, also remove from layup schedule
-        if (department === 'P1 Production Queue') {
-          try {
-            await storage.deleteLayupScheduleByOrder(orderId);
-            console.log(`🗑️ SINGLE ORDER MOVE: Removed ${orderId} from layup schedule`);
-          } catch (scheduleError) {
-            console.warn(`⚠️ SINGLE ORDER MOVE: Could not remove ${orderId} from schedule:`, scheduleError);
-            // Don't fail the whole operation if schedule cleanup fails
-          }
-        }
-        
-        const result = {
-          success: true,
-          message: `Successfully moved order ${orderId} to ${department} department`,
-          orderId,
-          department,
-          status
-        };
-
-        res.json(result);
-      } else {
-        console.warn(`⚠️ SINGLE ORDER MOVE: Failed to update order ${orderId}: ${updateResult.message}`);
-        res.status(400).json({
-          error: updateResult.message,
-          success: false,
-          orderId
-        });
-      }
-      
-    } catch (error) {
-      console.error('❌ SINGLE ORDER MOVE: Move order department error:', error);
-      res.status(500).json({ 
-        error: "Failed to move order to new department",
-        success: false 
-      });
-    }
-  });
-
   app.get('/api/production-queue/unified', async (req, res) => {
     try {
       console.log('🏭 Unified Production Queue API called');
@@ -1623,7 +1622,7 @@ export function registerRoutes(app: Express): Server {
           quantity: (order as any).quantity || 1,
           priority: (order as any).priorityScore || 50,
           deadline: order.dueDate || order.orderDate,
-          stock_model_id: (order as any).stockModelId
+          stock_model_id: (order as any).stockModelId || (order as any).modelId
         })),
         molds: molds.map((mold: any) => ({
           mold_id: mold.moldId,
@@ -1828,6 +1827,333 @@ export function registerRoutes(app: Express): Server {
   });
 
   // Note: Order ID generation routes now handled by modular orders routes
+
+  // P1 Purchase Orders with enhanced customer and stock information
+  app.get('/api/p1-purchase-orders', async (req, res) => {
+    try {
+      console.log('🔧 P1 Purchase Orders endpoint called');
+      const { storage } = await import('../../storage');
+      const purchaseOrders = await storage.getAllPurchaseOrders();
+      
+      // Enhance each purchase order with customer details and stock counts
+      const enhancedPOs = await Promise.all(
+        purchaseOrders.map(async (po) => {
+          // Get purchase order items to count stocks
+          const items = await storage.getPurchaseOrderItems(po.id);
+          // Count all items that are stock items (custom_model items are the actual stocks for PO#P18261)
+          const stockItems = items.filter(item => 
+            item.itemType === 'stock_model' || 
+            item.itemType === 'custom_model' ||
+            (item.itemName && (item.itemName.includes('AG-') || item.itemName.includes('stock')))
+          );
+          const stockCount = stockItems.length; // Count number of stock items, not quantities
+          
+          return {
+            id: po.id,
+            poNumber: po.poNumber,
+            customerName: po.customerName, // Use customerName instead of vendorName
+            customerId: po.customerId,
+            dueDate: po.expectedDelivery, // Use expectedDelivery as due date
+            status: po.status,
+            stockCount: stockCount, // Number of stocks associated
+            itemCount: items.length, // Total number of items
+            poDate: po.poDate,
+            notes: po.notes
+          };
+        })
+      );
+      
+      console.log('🔧 Found P1 purchase orders:', enhancedPOs.length);
+      res.json(enhancedPOs);
+    } catch (error) {
+      console.error('🔧 P1 purchase orders fetch error:', error);
+      res.status(500).json({ error: "Failed to fetch P1 purchase orders" });
+    }
+  });
+
+  // Get list of PO vendors (customers)
+  app.get('/api/po-vendors', async (req, res) => {
+    try {
+      const { storage } = await import('../../storage');
+      const purchaseOrders = await storage.getAllPurchaseOrders();
+      
+      // Group by customer to get unique vendors with counts
+      const vendorMap = new Map();
+      
+      await Promise.all(
+        purchaseOrders.map(async (po) => {
+          const customerId = po.customerId;
+          const customerName = po.customerName;
+          
+          if (!vendorMap.has(customerId)) {
+            vendorMap.set(customerId, {
+              id: customerId,
+              name: customerName,
+              poCount: 0,
+              totalStockItems: 0
+            });
+          }
+          
+          const vendor = vendorMap.get(customerId);
+          vendor.poCount++;
+          
+          // Count stock items for this PO
+          const items = await storage.getPurchaseOrderItems(po.id);
+          const stockItems = items.filter(item => 
+            item.itemType === 'stock_model' || 
+            item.itemType === 'custom_model' ||
+            (item.itemName && (item.itemName.includes('AG-') || item.itemName.includes('stock')))
+          );
+          vendor.totalStockItems += stockItems.length;
+        })
+      );
+      
+      const vendors = Array.from(vendorMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+      res.json(vendors);
+    } catch (error) {
+      console.error('🔧 PO vendors fetch error:', error);
+      res.status(500).json({ error: "Failed to fetch PO vendors" });
+    }
+  });
+
+  // Get POs filtered by vendor
+  app.get('/api/po-by-vendor/:vendorId', async (req, res) => {
+    try {
+      const { vendorId } = req.params;
+      const { storage } = await import('../../storage');
+      const purchaseOrders = await storage.getAllPurchaseOrders();
+      
+      // Filter POs by vendor (customer)
+      const vendorPOs = purchaseOrders.filter(po => po.customerId === vendorId);
+      
+      // Enhance with stock counts
+      const enhancedPOs = await Promise.all(
+        vendorPOs.map(async (po) => {
+          const items = await storage.getPurchaseOrderItems(po.id);
+          const stockItems = items.filter(item => 
+            item.itemType === 'stock_model' || 
+            item.itemType === 'custom_model' ||
+            (item.itemName && (item.itemName.includes('AG-') || item.itemName.includes('stock')))
+          );
+          
+          return {
+            id: po.id,
+            poNumber: po.poNumber,
+            customerName: po.customerName,
+            customerId: po.customerId,
+            dueDate: po.expectedDelivery,
+            status: po.status,
+            stockCount: stockItems.length,
+            itemCount: items.length,
+            poDate: po.poDate,
+            notes: po.notes
+          };
+        })
+      );
+      
+      res.json(enhancedPOs);
+    } catch (error) {
+      console.error('🔧 PO by vendor fetch error:', error);
+      res.status(500).json({ error: "Failed to fetch POs by vendor" });
+    }
+  });
+
+  // Get stock items for a specific PO
+  app.get('/api/po-stock-items-list/:poId', async (req, res) => {
+    try {
+      const { poId } = req.params;
+      const { storage } = await import('../../storage');
+      
+      const items = await storage.getPurchaseOrderItems(parseInt(poId));
+      const stockItems = items.filter(item => 
+        item.itemType === 'stock_model' || 
+        item.itemType === 'custom_model' ||
+        (item.itemName && (item.itemName.includes('AG-') || item.itemName.includes('stock')))
+      );
+      
+      const enhancedStockItems = stockItems.map(item => {
+        // Parse specifications if available
+        let specs = {};
+        try {
+          specs = item.specifications ? JSON.parse(item.specifications as string) : {};
+        } catch (e) {
+          specs = {};
+        }
+        
+        return {
+          id: item.id,
+          itemId: item.itemId,
+          itemName: item.itemName,
+          itemType: item.itemType,
+          quantity: item.quantity,
+          specifications: specs,
+          unitPrice: item.unitPrice,
+          totalPrice: item.totalPrice,
+          orderCount: item.orderCount
+        };
+      });
+      
+      res.json(enhancedStockItems);
+    } catch (error) {
+      console.error('🔧 PO stock items fetch error:', error);
+      res.status(500).json({ error: "Failed to fetch PO stock items" });
+    }
+  });
+
+  // PO Stock Items to Production Connection endpoint
+  app.get('/api/po-stock-items/:poNumber', async (req, res) => {
+    try {
+      const { poNumber } = req.params;
+      console.log('🔧 Fetching stock items for PO:', poNumber);
+      
+      // Get PO stock items with detailed specifications
+      const stockItemsResult = await pool.query(`
+        SELECT 
+          poi.id,
+          poi.item_name,
+          poi.item_type,
+          poi.quantity,
+          poi.stock_model_id,
+          poi.specifications,
+          poi.order_count,
+          po.po_number,
+          po.customer_id,
+          po.customer_name
+        FROM purchase_order_items poi 
+        JOIN purchase_orders po ON poi.po_id = po.id 
+        WHERE po.po_number = $1
+      `, [poNumber]);
+      
+      const stockItems = stockItemsResult.rows || [];
+      
+      // For each stock item, check if there are associated production orders
+      const enhancedItems = await Promise.all(
+        stockItems.map(async (item: any) => {
+          // Check for existing production orders that might be linked to this PO item
+          const productionOrdersResult = await pool.query(`
+            SELECT 
+              order_id,
+              current_department,
+              status,
+              due_date
+            FROM orders 
+            WHERE po_id IS NOT NULL OR customer_id = $1
+          `, [item.customer_id]);
+          
+          const productionOrders = productionOrdersResult.rows || [];
+          
+          // Parse specifications if available
+          let specs = {};
+          try {
+            specs = item.specifications ? JSON.parse(item.specifications) : {};
+          } catch (e) {
+            console.warn('⚠️ Failed to parse specifications for item:', item.id);
+          }
+          
+          return {
+            ...item,
+            specifications: specs,
+            productionOrders: productionOrders,
+            canCreateProductionOrder: productionOrders.length === 0,
+            productionStatus: productionOrders.length > 0 ? 'In Production' : 'Ready for Production'
+          };
+        })
+      );
+      
+      console.log(`🔧 Found ${enhancedItems.length} stock items for PO ${poNumber}`);
+      res.json(enhancedItems);
+    } catch (error) {
+      console.error('❌ PO stock items fetch error:', error);
+      res.status(500).json({ error: 'Failed to fetch PO stock items' });
+    }
+  });
+
+  // Create production orders from PO stock items
+  app.post('/api/po-stock-items/:poNumber/create-production-orders', async (req, res) => {
+    try {
+      const { poNumber } = req.params;
+      const { selectedItems } = req.body;
+      
+      console.log(`🔧 Creating production orders for PO ${poNumber}, items:`, selectedItems);
+      
+      const { storage } = await import('../../storage');
+      
+      // Get PO details and selected items
+      const poResult = await pool.query(`
+        SELECT * FROM purchase_orders WHERE po_number = $1
+      `, [poNumber]);
+      
+      if (poResult.rows.length === 0) {
+        return res.status(404).json({ error: 'Purchase order not found' });
+      }
+      
+      const po = poResult.rows[0];
+      const createdOrders = [];
+      
+      // Create production orders for each selected item
+      for (const itemId of selectedItems) {
+        const itemResult = await pool.query(`
+          SELECT * FROM purchase_order_items WHERE id = $1
+        `, [itemId]);
+        
+        if (itemResult.rows.length === 0) {
+          console.warn(`⚠️ PO item ${itemId} not found, skipping`);
+          continue;
+        }
+        
+        const item = itemResult.rows[0];
+        let specs = {};
+        
+        try {
+          specs = item.specifications ? JSON.parse(item.specifications) : {};
+        } catch (e) {
+          console.warn('⚠️ Failed to parse specifications for item:', item.id);
+        }
+        
+        // Generate order ID for new production order
+        const orderIdResult = await storage.generateOrderId();
+        const newOrderId = orderIdResult.orderId;
+        
+        // Create production order with PO connection
+        const productionOrderData = {
+          orderId: newOrderId,
+          customer: po.customer_name || po.customer_id,
+          product: item.item_name,
+          quantity: item.quantity,
+          status: 'ACTIVE',
+          date: new Date(),
+          currentDepartment: 'P1 Production Queue',
+          priorityScore: 40, // Higher priority for PO items
+          poId: po.id,
+          itemId: item.id.toString(),
+          stockModelId: specs.stockModel || null,
+          customerId: po.customer_id,
+          notes: `Created from PO ${poNumber} - ${item.item_name}`,
+          dueDate: po.expected_delivery || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days if no due date
+        };
+        
+        const createdOrder = await storage.createOrder(productionOrderData);
+        createdOrders.push({
+          orderId: newOrderId,
+          poItemId: item.id,
+          itemName: item.item_name,
+          specs: specs
+        });
+        
+        console.log(`✅ Created production order ${newOrderId} for PO item ${item.item_name}`);
+      }
+      
+      res.json({
+        success: true,
+        createdOrders: createdOrders,
+        message: `Successfully created ${createdOrders.length} production orders from PO ${poNumber}`
+      });
+      
+    } catch (error) {
+      console.error('❌ Create production orders error:', error);
+      res.status(500).json({ error: 'Failed to create production orders from PO items' });
+    }
+  });
 
   // Purchase Orders routes (POs)
   app.get('/api/pos', async (req, res) => {
@@ -2732,7 +3058,7 @@ export function registerRoutes(app: Express): Server {
           const labelHeight = 72; // 1" * 72 points/inch
           const columnGap = 9; // 0.125" * 72 points/inch (reduced gap between columns)
           const x = leftMargin + (col * (labelWidth + columnGap));
-          const y = 792 - labelHeight - (row * labelHeight) - 36; // Position labels properly from top, shifted down 0.5 inches
+          const y = 792 - labelHeight - (row * labelHeight); // Position labels properly from top
           
           // Draw label border with clear separation  
           page.drawRectangle({
@@ -2821,101 +3147,66 @@ export function registerRoutes(app: Express): Server {
           const actionLength = (order as any).features?.action_length || 'unknown';
           const modelDisplayName = stockModelMap.get((order as any).modelId) || (order as any).modelId || 'Unknown';
           
-          // Check for special features to add to label
-          const features = (order as any).features || {};
-          
-          // 1. Order ID / Stock Type / Action Length (top line)
-          const orderStockAction = `${order.orderId}/ ${modelDisplayName}/ ${actionLength.toUpperCase()}`;
-          page.drawText(orderStockAction, {
+          // Add order information at top
+          page.drawText(`${order.orderId}`, {
             x: x + 8,
             y: y + 50,
-            size: 9,
+            size: 11,
             color: rgb(0, 0, 0),
           });
           
-          // 3. Paint color (below barcode) - check all possible paint fields
-          const paintOption = features.metallic_finishes || features.paint_options || features.paint_options_combined || '';
-          if (paintOption && paintOption !== 'none' && paintOption !== 'no_paint' && paintOption !== 'no_finish') {
-            let paintDisplayText = paintOption;
-            
-            // Handle paint_options_combined format (e.g., "special_effects:carbon_black_tan_camo")
-            if (paintOption.includes(':')) {
-              const parts = paintOption.split(':');
-              paintDisplayText = parts.length > 1 ? parts[1] : parts[0];
-            }
-            
-            // Clean up display text
-            paintDisplayText = paintDisplayText.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase());
-            
-            page.drawText(`Paint: ${paintDisplayText}`, {
-              x: x + 8,
-              y: y + 22,
-              size: 7,
-              color: rgb(0, 0.4, 0.8),
-            });
-          }
+          // Add stock model and action length on same line below barcode
+          page.drawText(`${modelDisplayName} - ${actionLength.toUpperCase()}`, {
+            x: x + 8,
+            y: y + 22,
+            size: 7,
+            color: rgb(0, 0, 0),
+          });
           
-          // 4. Due Date
-          const dueDate = (order as any).dueDate;
-          if (dueDate) {
-            const dueDateFormatted = new Date(dueDate).toLocaleDateString('en-US', {
-              month: 'short',
-              day: 'numeric',
-              year: 'numeric'
-            });
-            page.drawText(`Due: ${dueDateFormatted}`, {
-              x: x + 8,
-              y: y + 14,
-              size: 7,
-              color: rgb(0, 0, 0),
-            });
-          }
+          // Check for special features to add to label
+          const features = (order as any).features || {};
+          const specialLabels = [];
           
-          // 5. Texture/Swivel Studs different than standard (NSNH)
-          let specialFeaturesText = '';
+          // Extract swivel studs and texture options for color-coded display
+          const swivelStudsText = features.swivel_studs && 
+                                 features.swivel_studs !== 'standard_swivel_studs' && 
+                                 features.swivel_studs !== 'standard' 
+                                 ? features.swivel_studs.replace(/_/g, ' ') : null;
           
-          // Check for NSNH (No Swivel Studs No Holes)
+          const textureText = features.texture_options && 
+                             features.texture_options !== 'no_texture' && 
+                             features.texture_options !== 'none'
+                             ? features.texture_options.replace(/_/g, ' ') : null;
+          
+          // Check for NSNH (No Swivel Studs No Holes) - this should show as "NSNH"
           const hasNSNH = features.swivel_studs === 'no_swivel_studs' || 
                          features.swivel_studs === 'no_swivel_no_holes' ||
                          (features.swivel_studs && features.swivel_studs.includes('no_swivel')) ||
                          (features.swivel_studs && features.swivel_studs.includes('no_holes'));
           
           if (hasNSNH) {
-            specialFeaturesText = 'NSNH';
-          } else {
-            // Check for non-standard swivel studs
-            const swivelStudsText = features.swivel_studs && 
-                                   features.swivel_studs !== 'standard_swivel_studs' && 
-                                   features.swivel_studs !== 'standard' 
-                                   ? features.swivel_studs.replace(/_/g, ' ').toUpperCase() : null;
-            
-            // Check for texture options
-            const textureText = features.texture_options && 
-                               features.texture_options !== 'no_texture' && 
-                               features.texture_options !== 'none'
-                               ? features.texture_options.replace(/_/g, ' ').toUpperCase() : null;
-            
-            const specialParts = [];
-            if (textureText) specialParts.push(textureText);
-            if (swivelStudsText) specialParts.push(swivelStudsText);
-            
-            if (specialParts.length > 0) {
-              specialFeaturesText = specialParts.join(' / ');
-            }
+            specialLabels.push('NSNH');
           }
           
-          if (specialFeaturesText) {
-            page.drawText(specialFeaturesText, {
-              x: x + 8,
-              y: y + 6,
-              size: 6,
-              color: rgb(0.6, 0, 0.8), // Purple color for special features
-            });
+          // Add non-standard swivel studs (only if it's not a "no swivel" case)
+          if (swivelStudsText && !hasNSNH) {
+            specialLabels.push(`SWIVEL: ${swivelStudsText.toUpperCase()}`);
           }
-          // (Removed old special labels logic - now handled above in structured format)
+          
+          // Add texture options in purple (simulated with different style in PDF)
+          if (textureText) {
+            specialLabels.push(`TEXTURE: ${textureText.toUpperCase()}`);
+          }
+          
+          // Carbon Camo Ready
+          if (features.paint_options === 'carbon_camo_ready' ||
+              (features.paint_options && features.paint_options.includes('carbon_camo'))) {
+            specialLabels.push('CARBON CAMO READY');
+          }
           
           
           // Determine barcode color based on specifications
+          const paintOption = features.paint_options || '';
           const modelId = (order as any).modelId || '';
           
           // Check if this order is high priority or late (you can add this logic later)
@@ -2986,8 +3277,50 @@ export function registerRoutes(app: Express): Server {
             }
           };
           
-          // 2. Draw the barcode in the middle (between top info and paint color)
+          // Draw the barcode with appropriate color (blue for terrain/premium/standard paint, black otherwise)
           redrawCode39Barcode(barcodeText, x + 8, y + 32, barcodeColor);
+          
+          
+          // Draw special labels with appropriate colors on separate line below stock model
+          if (specialLabels.length > 0) {
+            let xOffset = x + 8;
+            
+            for (let i = 0; i < specialLabels.length; i++) {
+              const label = specialLabels[i];
+              let textColor = rgb(0, 0, 0); // Default black
+              
+              // Orange for swivel studs
+              if (label.includes('SWIVEL') || label === 'NSNH') {
+                textColor = rgb(1, 0.5, 0); // Orange
+              }
+              // Purple for texture
+              else if (label.includes('TEXTURE')) {
+                textColor = rgb(0.5, 0, 0.8); // Purple
+              }
+              
+              const separator = i > 0 ? ' - ' : '';
+              page.drawText(`${separator}${label}`, {
+                x: xOffset,
+                y: y + 16, // Move special labels higher
+                size: 5,
+                color: textColor,
+              });
+              
+              xOffset += (separator.length + label.length) * 3; // Approximate text width
+            }
+          }
+          
+          // Add due date
+          const dueDate = new Date(order.dueDate).toLocaleDateString('en-US', { 
+            month: 'short', 
+            day: 'numeric' 
+          });
+          page.drawText(`Due: ${dueDate}`, {
+            x: x + 8,
+            y: y + 10,
+            size: 6,
+            color: rgb(0, 0, 0),
+          });
         }
       }
       
@@ -3069,82 +3402,6 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  // ============================================================================
-  // NON-CONFORMING ITEMS ROUTES
-  // ============================================================================
-
-  app.get("/api/non-conforming-items", async (req, res) => {
-    try {
-      const items = await db.select().from(nonConformingItems).orderBy(desc(nonConformingItems.date));
-      res.json(items);
-    } catch (error) {
-      console.error("Get non-conforming items error:", error);
-      res.status(500).json({ error: "Failed to retrieve non-conforming items" });
-    }
-  });
-
-  app.get("/api/non-conforming-items/:id", async (req, res) => {
-    try {
-      const id = parseInt(req.params.id);
-      const [item] = await db.select().from(nonConformingItems).where(eq(nonConformingItems.id, id));
-      if (!item) {
-        return res.status(404).json({ error: "Non-conforming item not found" });
-      }
-      res.json(item);
-    } catch (error) {
-      console.error("Get non-conforming item error:", error);
-      res.status(500).json({ error: "Failed to retrieve non-conforming item" });
-    }
-  });
-
-  app.post("/api/non-conforming-items", async (req, res) => {
-    try {
-      console.log("📝 POST /api/non-conforming-items - Request body:", req.body);
-      const data = insertNonConformingItemSchema.parse(req.body);
-      console.log("✅ Validation passed, data:", data);
-      const [item] = await db.insert(nonConformingItems).values(data).returning();
-      console.log("✅ Item created:", item);
-      res.status(201).json(item);
-    } catch (error) {
-      console.error("❌ Create non-conforming item error:", error);
-      if (error instanceof z.ZodError) {
-        res.status(400).json({ error: "Invalid data", details: error.errors });
-      } else {
-        res.status(500).json({ error: "Failed to create non-conforming item" });
-      }
-    }
-  });
-
-  app.put("/api/non-conforming-items/:id", async (req, res) => {
-    try {
-      const id = parseInt(req.params.id);
-      const data = insertNonConformingItemSchema.partial().parse(req.body);
-      const [item] = await db.update(nonConformingItems)
-        .set({ ...data, updatedAt: new Date() })
-        .where(eq(nonConformingItems.id, id))
-        .returning();
-      res.json(item);
-    } catch (error) {
-      console.error("Update non-conforming item error:", error);
-      if (error instanceof z.ZodError) {
-        res.status(400).json({ error: "Invalid data", details: error.errors });
-      } else {
-        res.status(500).json({ error: "Failed to update non-conforming item" });
-      }
-    }
-  });
-
-  app.delete("/api/non-conforming-items/:id", async (req, res) => {
-    try {
-      const id = parseInt(req.params.id);
-      await db.delete(nonConformingItems).where(eq(nonConformingItems.id, id));
-      res.json({ success: true });
-    } catch (error) {
-      console.error("Delete non-conforming item error:", error);
-      res.status(500).json({ error: "Failed to delete non-conforming item" });
-    }
-  });
-
   // Create and return HTTP server
   return createServer(app);
 }
@@ -3164,5 +3421,4 @@ export {
   orderAttachmentsRoutes as orderAttachmentsRouter,
   tasksRoutes as tasksRouter,
   communicationsRoutes as communicationsRouter,
-  secureVerificationRoutes as secureVerificationRouter
 };

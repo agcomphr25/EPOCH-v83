@@ -35,6 +35,17 @@ export default function LoginPage() {
       return response.json();
     },
     onSuccess: (data) => {
+      // Store user data in localStorage for Navigation component
+      if (data.user) {
+        localStorage.setItem('currentUser', data.user.username);
+        localStorage.setItem('userData', JSON.stringify(data.user));
+      }
+      
+      // Store JWT token if provided
+      if (data.token) {
+        localStorage.setItem('sessionToken', data.token);
+      }
+      
       toast({
         title: "Login Successful",
         description: `Welcome back, ${data.user?.username || 'User'}!`,

@@ -17,7 +17,7 @@ import { z } from 'zod';
 import { CalendarIcon, Plus, FileDown, Edit, Trash2, Printer } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
-import type { CalendarEvent } from '@shared/schema';
+// import type { CalendarEvent } from '@shared/schema'; // Type not exported from schema
 
 // Setup moment localizer for react-big-calendar
 const localizer = momentLocalizer(moment);

@@ -8,26 +8,27 @@ const sessions = new Map<string, { username: string; expiresAt: number }>();
 
 // Hardcoded test users mapped from dashboardMapping.ts
 // Password for all users is 'test123' (hashed with bcrypt)
+// Hash: $2b$10$eqwAR9UqwOGL4dOWvYQUzOsmZIqDSAenu7FM7P1Ba5OB6mS71pMnu
 const USERS = new Map([
-  ['epoch', { id: 1, username: 'epoch', password: '$2a$10$8K1p/a0dL3.qdhlQ4aF8O.vxNkl9RfG3uWjL9o2J3Zlq7MH1k4gHi', role: 'admin' }],
-  ['glennj', { id: 2, username: 'glennj', password: '$2a$10$8K1p/a0dL3.qdhlQ4aF8O.vxNkl9RfG3uWjL9o2J3Zlq7MH1k4gHi', role: 'admin' }],
-  ['tasham', { id: 3, username: 'tasham', password: '$2a$10$8K1p/a0dL3.qdhlQ4aF8O.vxNkl9RfG3uWjL9o2J3Zlq7MH1k4gHi', role: 'admin' }],
-  ['staciw', { id: 4, username: 'staciw', password: '$2a$10$8K1p/a0dL3.qdhlQ4aF8O.vxNkl9RfG3uWjL9o2J3Zlq7MH1k4gHi', role: 'user' }],
-  ['agrace', { id: 5, username: 'agrace', password: '$2a$10$8K1p/a0dL3.qdhlQ4aF8O.vxNkl9RfG3uWjL9o2J3Zlq7MH1k4gHi', role: 'user' }],
-  ['tims', { id: 6, username: 'tims', password: '$2a$10$8K1p/a0dL3.qdhlQ4aF8O.vxNkl9RfG3uWjL9o2J3Zlq7MH1k4gHi', role: 'user' }],
-  ['angiet', { id: 7, username: 'angiet', password: '$2a$10$8K1p/a0dL3.qdhlQ4aF8O.vxNkl9RfG3uWjL9o2J3Zlq7MH1k4gHi', role: 'user' }],
-  ['blaket', { id: 8, username: 'blaket', password: '$2a$10$8K1p/a0dL3.qdhlQ4aF8O.vxNkl9RfG3uWjL9o2J3Zlq7MH1k4gHi', role: 'user' }],
-  ['bradw', { id: 9, username: 'bradw', password: '$2a$10$8K1p/a0dL3.qdhlQ4aF8O.vxNkl9RfG3uWjL9o2J3Zlq7MH1k4gHi', role: 'user' }],
-  ['darleneb', { id: 10, username: 'darleneb', password: '$2a$10$8K1p/a0dL3.qdhlQ4aF8O.vxNkl9RfG3uWjL9o2J3Zlq7MH1k4gHi', role: 'user' }],
-  ['faleeshah', { id: 11, username: 'faleeshah', password: '$2a$10$8K1p/a0dL3.qdhlQ4aF8O.vxNkl9RfG3uWjL9o2J3Zlq7MH1k4gHi', role: 'user' }],
-  ['halls', { id: 12, username: 'halls', password: '$2a$10$8K1p/a0dL3.qdhlQ4aF8O.vxNkl9RfG3uWjL9o2J3Zlq7MH1k4gHi', role: 'user' }],
-  ['hunta', { id: 13, username: 'hunta', password: '$2a$10$8K1p/a0dL3.qdhlQ4aF8O.vxNkl9RfG3uWjL9o2J3Zlq7MH1k4gHi', role: 'user' }],
-  ['jens', { id: 14, username: 'jens', password: '$2a$10$8K1p/a0dL3.qdhlQ4aF8O.vxNkl9RfG3uWjL9o2J3Zlq7MH1k4gHi', role: 'user' }],
-  ['joeyb', { id: 15, username: 'joeyb', password: '$2a$10$8K1p/a0dL3.qdhlQ4aF8O.vxNkl9RfG3uWjL9o2J3Zlq7MH1k4gHi', role: 'user' }],
-  ['johnl', { id: 16, username: 'johnl', password: '$2a$10$8K1p/a0dL3.qdhlQ4aF8O.vxNkl9RfG3uWjL9o2J3Zlq7MH1k4gHi', role: 'user' }],
-  ['lauriet', { id: 17, username: 'lauriet', password: '$2a$10$8K1p/a0dL3.qdhlQ4aF8O.vxNkl9RfG3uWjL9o2J3Zlq7MH1k4gHi', role: 'user' }],
-  ['tandyd', { id: 18, username: 'tandyd', password: '$2a$10$8K1p/a0dL3.qdhlQ4aF8O.vxNkl9RfG3uWjL9o2J3Zlq7MH1k4gHi', role: 'user' }],
-  ['tandym', { id: 19, username: 'tandym', password: '$2a$10$8K1p/a0dL3.qdhlQ4aF8O.vxNkl9RfG3uWjL9o2J3Zlq7MH1k4gHi', role: 'user' }],
+  ['epoch', { id: 1, username: 'epoch', password: '$2b$10$eqwAR9UqwOGL4dOWvYQUzOsmZIqDSAenu7FM7P1Ba5OB6mS71pMnu', role: 'admin' }],
+  ['glennj', { id: 2, username: 'glennj', password: '$2b$10$eqwAR9UqwOGL4dOWvYQUzOsmZIqDSAenu7FM7P1Ba5OB6mS71pMnu', role: 'admin' }],
+  ['tasham', { id: 3, username: 'tasham', password: '$2b$10$eqwAR9UqwOGL4dOWvYQUzOsmZIqDSAenu7FM7P1Ba5OB6mS71pMnu', role: 'admin' }],
+  ['staciw', { id: 4, username: 'staciw', password: '$2b$10$eqwAR9UqwOGL4dOWvYQUzOsmZIqDSAenu7FM7P1Ba5OB6mS71pMnu', role: 'user' }],
+  ['agrace', { id: 5, username: 'agrace', password: '$2b$10$eqwAR9UqwOGL4dOWvYQUzOsmZIqDSAenu7FM7P1Ba5OB6mS71pMnu', role: 'user' }],
+  ['tims', { id: 6, username: 'tims', password: '$2b$10$eqwAR9UqwOGL4dOWvYQUzOsmZIqDSAenu7FM7P1Ba5OB6mS71pMnu', role: 'user' }],
+  ['angiet', { id: 7, username: 'angiet', password: '$2b$10$eqwAR9UqwOGL4dOWvYQUzOsmZIqDSAenu7FM7P1Ba5OB6mS71pMnu', role: 'user' }],
+  ['blaket', { id: 8, username: 'blaket', password: '$2b$10$eqwAR9UqwOGL4dOWvYQUzOsmZIqDSAenu7FM7P1Ba5OB6mS71pMnu', role: 'user' }],
+  ['bradw', { id: 9, username: 'bradw', password: '$2b$10$eqwAR9UqwOGL4dOWvYQUzOsmZIqDSAenu7FM7P1Ba5OB6mS71pMnu', role: 'user' }],
+  ['darleneb', { id: 10, username: 'darleneb', password: '$2b$10$eqwAR9UqwOGL4dOWvYQUzOsmZIqDSAenu7FM7P1Ba5OB6mS71pMnu', role: 'user' }],
+  ['faleeshah', { id: 11, username: 'faleeshah', password: '$2b$10$eqwAR9UqwOGL4dOWvYQUzOsmZIqDSAenu7FM7P1Ba5OB6mS71pMnu', role: 'user' }],
+  ['halls', { id: 12, username: 'halls', password: '$2b$10$eqwAR9UqwOGL4dOWvYQUzOsmZIqDSAenu7FM7P1Ba5OB6mS71pMnu', role: 'user' }],
+  ['hunta', { id: 13, username: 'hunta', password: '$2b$10$eqwAR9UqwOGL4dOWvYQUzOsmZIqDSAenu7FM7P1Ba5OB6mS71pMnu', role: 'user' }],
+  ['jens', { id: 14, username: 'jens', password: '$2b$10$eqwAR9UqwOGL4dOWvYQUzOsmZIqDSAenu7FM7P1Ba5OB6mS71pMnu', role: 'user' }],
+  ['joeyb', { id: 15, username: 'joeyb', password: '$2b$10$eqwAR9UqwOGL4dOWvYQUzOsmZIqDSAenu7FM7P1Ba5OB6mS71pMnu', role: 'user' }],
+  ['johnl', { id: 16, username: 'johnl', password: '$2b$10$eqwAR9UqwOGL4dOWvYQUzOsmZIqDSAenu7FM7P1Ba5OB6mS71pMnu', role: 'user' }],
+  ['lauriet', { id: 17, username: 'lauriet', password: '$2b$10$eqwAR9UqwOGL4dOWvYQUzOsmZIqDSAenu7FM7P1Ba5OB6mS71pMnu', role: 'user' }],
+  ['tandyd', { id: 18, username: 'tandyd', password: '$2b$10$eqwAR9UqwOGL4dOWvYQUzOsmZIqDSAenu7FM7P1Ba5OB6mS71pMnu', role: 'user' }],
+  ['tandym', { id: 19, username: 'tandym', password: '$2b$10$eqwAR9UqwOGL4dOWvYQUzOsmZIqDSAenu7FM7P1Ba5OB6mS71pMnu', role: 'user' }],
 ]);
 
 // Generate simple session token

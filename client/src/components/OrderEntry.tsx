@@ -2517,7 +2517,7 @@ export default function OrderEntry() {
                                              selectedModel?.name?.toLowerCase().includes('chalk');
                           
                           // Define limited QD options for Chalk models (based on actual database values)
-                          const chalkQDOptions = ['no_qds', 'qd_1_right_butt', 'qd_1_left_butt'];
+                          const chalkQDOptions = ['no_qds', 'qd_1_right_butt', 'qd_1_left_butt', 'qd_2_butt'];
                           
                           // Filter options based on model type
                           let availableOptions = qdFeature.options.filter(option => option.value && option.value.trim() !== '');

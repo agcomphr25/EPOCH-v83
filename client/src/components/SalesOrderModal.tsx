@@ -145,6 +145,19 @@ export function SalesOrderModal({ isOpen, onClose, orderId }: SalesOrderModalPro
               </div>
             </div>
 
+            {/* Notes */}
+            {orderData.notes && (
+              <>
+                <Separator />
+                <div className="space-y-2">
+                  <h3 className="font-semibold">Notes</h3>
+                  <p className="text-sm text-gray-600 bg-gray-50 dark:bg-gray-800 p-3 rounded-lg">
+                    {orderData.notes}
+                  </p>
+                </div>
+              </>
+            )}
+
             {/* Features/Options */}
             {orderData.features && Object.keys(orderData.features).length > 0 && (
               <>
@@ -184,19 +197,6 @@ export function SalesOrderModal({ isOpen, onClose, orderId }: SalesOrderModalPro
                 <p className="text-2xl font-bold">${orderData.totalPrice?.toFixed(2) || '0.00'}</p>
               </div>
             </div>
-
-            {/* Notes */}
-            {orderData.notes && (
-              <>
-                <Separator />
-                <div className="space-y-2">
-                  <h3 className="font-semibold">Notes</h3>
-                  <p className="text-sm text-gray-600 bg-gray-50 dark:bg-gray-800 p-3 rounded-lg">
-                    {orderData.notes}
-                  </p>
-                </div>
-              </>
-            )}
 
             {/* Actions */}
             <Separator />

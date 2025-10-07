@@ -352,6 +352,8 @@ export interface IStorage {
 
   // Time Clock CRUD
   getTimeClockStatus(employeeId: string): Promise<{ status: 'IN' | 'OUT'; clockIn: string | null; clockOut: string | null }>;
+  clockIn(employeeId: string, timestamp: string): Promise<void>;
+  clockOut(employeeId: string, timestamp: string): Promise<void>;
   getTimeClockEntries(employeeId?: string, date?: string): Promise<TimeClockEntry[]>;
   createTimeClockEntry(data: InsertTimeClockEntry): Promise<TimeClockEntry>;
   updateTimeClockEntry(id: number, data: Partial<InsertTimeClockEntry>): Promise<TimeClockEntry>;
@@ -3198,8 +3200,55 @@ export class DatabaseStorage implements IStorage {
       clockIn: entry.clockIn?.toISOString() || null,
       clockOut: entry.clockOut?.toISOString() || null
     };
-}
+  }
 
+  async clockIn(employeeId: string, timestamp: string): Promise<void> {
+    const today = new Date().toISOString().split('T')[0];
+    const clockInTime = new Date(timestamp);
+
+    // Check if entry already exists for today
+    const [existing] = await db
+      .select()
+      .from(timeClockEntries)
+      .where(and(eq(timeClockEntries.employeeId, employeeId), eq(timeClockEntries.date, today)))
+      .orderBy(desc(timeClockEntries.id))
+      .limit(1);
+
+    if (existing) {
+      // Update existing entry
+      await db.update(timeClockEntries)
+        .set({ clockIn: clockInTime, clockOut: null })
+        .where(eq(timeClockEntries.id, existing.id));
+    } else {
+      // Create new entry
+      await db.insert(timeClockEntries).values({
+        employeeId,
+        clockIn: clockInTime,
+        clockOut: null,
+        date: today
+      });
+    }
+  }
+
+  async clockOut(employeeId: string, timestamp: string): Promise<void> {
+    const today = new Date().toISOString().split('T')[0];
+    const clockOutTime = new Date(timestamp);
+
+    const [existing] = await db
+      .select()
+      .from(timeClockEntries)
+      .where(and(eq(timeClockEntries.employeeId, employeeId), eq(timeClockEntries.date, today)))
+      .orderBy(desc(timeClockEntries.id))
+      .limit(1);
+
+    if (existing) {
+      await db.update(timeClockEntries)
+        .set({ clockOut: clockOutTime })
+        .where(eq(timeClockEntries.id, existing.id));
+    }
+  }
+
+  async getTimeClockEntries(employeeId?: string, date?: string): Promise<TimeClockEntry[]>;
   async getTimeClockEntries(employeeId?: string, date?: string): Promise<TimeClockEntry[]> {
     let query = db.select().from(timeClockEntries);
 

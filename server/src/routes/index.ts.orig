@@ -27,6 +27,7 @@ import layupScheduleRoutes from './layupSchedule';
 import customerSatisfactionRoutes from './customerSatisfaction';
 import poProductsRoutes from './poProducts';
 import refundRoutes from './refunds';
+import oemSettingsRoutes from './oemSettings';
 import moldSyncRoutes from './moldSync';
 import { getAccessToken } from '../utils/upsShipping';
 
@@ -114,6 +115,7 @@ export function registerRoutes(app: Express): Server {
   app.use('/api/refund-requests', refundRoutes);
 
   // OEM Priority Settings routes
+  app.use('/api/oem-settings', oemSettingsRoutes);
   
   // UPS Test endpoint
   app.post('/api/test-ups-auth', async (req, res) => {

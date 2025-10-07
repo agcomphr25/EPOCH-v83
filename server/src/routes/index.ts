@@ -1931,6 +1931,11 @@ export function registerRoutes(app: Express): Server {
       const { pool } = await import('../../db');
       const purchaseOrders = await storage.getAllPurchaseOrders();
       
+      console.log(`🔍 OEM PRIORITY DEBUG: Looking for vendor ${vendorId}, found ${purchaseOrders.length} total POs`);
+      purchaseOrders.forEach(po => {
+        console.log(`  PO #${po.poNumber}: customerId="${po.customerId}" (type: ${typeof po.customerId}), vendorId="${vendorId}" (type: ${typeof vendorId}), match: ${po.customerId === vendorId}`);
+      });
+      
       // Filter POs by vendor (customer)
       const vendorPOs = purchaseOrders.filter(po => po.customerId === vendorId);
       

@@ -110,6 +110,7 @@ export const orders = pgTable("orders", {
   orderDate: timestamp("order_date"),
   // Department progression fields
   currentDepartment: text("current_department").default("Layup").notNull(),
+  departmentHistory: jsonb("department_history").default('[]'),
   isOnSchedule: boolean("is_on_schedule").default(true),
   priorityScore: integer("priority_score").default(50), // Lower = higher priority
   rushTier: text("rush_tier"), // e.g., "STANDARD", "RUSH", "EXPEDITE"

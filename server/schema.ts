@@ -1844,6 +1844,7 @@ export const productionOrders = pgTable('production_orders', {
   dueDate: timestamp('due_date').notNull(),
   // Production tracking fields
   productionStatus: text('production_status').notNull().default('PENDING'), // PENDING, LAID_UP, SHIPPED
+  currentDepartment: text('current_department'),
   laidUpAt: timestamp('laid_up_at'),
   shippedAt: timestamp('shipped_at'),
   notes: text('notes'),

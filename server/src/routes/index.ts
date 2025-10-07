@@ -362,6 +362,7 @@ export function registerRoutes(app: Express): Server {
             ELSE 'mesa_universal'
           END as "stockModelId",
           due_date as "dueDate",
+          current_department as "currentDepartment",
           production_status as "status",
           '{}' as features,
           created_at as "createdAt",
@@ -427,7 +428,7 @@ export function registerRoutes(app: Express): Server {
           orderId: po.orderId,
           orderDate: po.createdAt,
           dueDate: po.dueDate,
-          currentDepartment: 'P1 Production Queue', // Default department for production orders
+          currentDepartment: po.currentDepartment,
           customerId: po.customerId,
           features: inferFeaturesFromStockModel(po.stockModelId),
           modelId: po.stockModelId,

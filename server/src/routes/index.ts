@@ -29,9 +29,13 @@ import customerSatisfactionRoutes from './customerSatisfaction';
 import poProductsRoutes from './poProducts';
 import refundRoutes from './refunds';
 import moldSyncRoutes from './moldSync';
+import authRoutes from './auth';
 import { getAccessToken } from '../utils/upsShipping';
 
 export function registerRoutes(app: Express): Server {
+  // Authentication routes
+  app.use('/api/auth', authRoutes);
+  
   // Employee management routes
   app.use('/api/employees', employeesRoutes);
 

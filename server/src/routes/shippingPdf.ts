@@ -2661,9 +2661,9 @@ router.post('/ups-shipping-label/:orderId', async (req: Request, res: Response) 
         estimatedDelivery: undefined // UPS response may include this
       });
 
-      // Update order status and move to Shipping Manager
+      // Update order status and move to Fulfilled
       try {
-        console.log(`Moving order ${orderId} to Shipping Manager after individual label creation`);
+        console.log(`Moving order ${orderId} to Fulfilled after individual label creation`);
         
         const { storage } = await import('../../storage');
         const updateData = {
@@ -2672,18 +2672,18 @@ router.post('/ups-shipping-label/:orderId', async (req: Request, res: Response) 
           shippingMethod: 'UPS Ground',
           shippedDate: new Date(),
           shippingLabelGenerated: true,
-          currentDepartment: 'Shipping Manager',
+          currentDepartment: 'Fulfilled',
           status: 'COMPLETED'
         };
 
         // Try to update the order in both tables
         try {
           await storage.updateOrder(orderId, updateData);
-          console.log(`Updated finalized order ${orderId} status to Shipping Manager`);
+          console.log(`Updated finalized order ${orderId} status to Fulfilled`);
         } catch (finalizedError) {
           // If not found in finalized orders, try draft orders
           await storage.updateOrderDraft(orderId, updateData);
-          console.log(`Updated draft order ${orderId} status to Shipping Manager`);
+          console.log(`Updated draft order ${orderId} status to Fulfilled`);
         }
       } catch (updateError) {
         console.error(`Failed to update order ${orderId} status:`, updateError);
@@ -2783,9 +2783,9 @@ router.post('/ups-shipping-label/:orderId', async (req: Request, res: Response) 
         estimatedDelivery: undefined
       });
 
-      // Update order status and move to Shipping Manager even for placeholder labels
+      // Update order status and move to Fulfilled even for placeholder labels
       try {
-        console.log(`Moving order ${orderId} to Shipping Manager after placeholder label creation`);
+        console.log(`Moving order ${orderId} to Fulfilled after placeholder label creation`);
         
         const { storage } = await import('../../storage');
         const updateData = {
@@ -2794,18 +2794,18 @@ router.post('/ups-shipping-label/:orderId', async (req: Request, res: Response) 
           shippingMethod: 'UPS Ground',
           shippedDate: new Date(),
           shippingLabelGenerated: true,
-          currentDepartment: 'Shipping Manager',
+          currentDepartment: 'Fulfilled',
           status: 'COMPLETED'
         };
 
         // Try to update the order in both tables
         try {
           await storage.updateOrder(orderId, updateData);
-          console.log(`Updated finalized order ${orderId} status to Shipping Manager`);
+          console.log(`Updated finalized order ${orderId} status to Fulfilled`);
         } catch (finalizedError) {
           // If not found in finalized orders, try draft orders
           await storage.updateOrderDraft(orderId, updateData);
-          console.log(`Updated draft order ${orderId} status to Shipping Manager`);
+          console.log(`Updated draft order ${orderId} status to Fulfilled`);
         }
       } catch (updateError) {
         console.error(`Failed to update order ${orderId} status:`, updateError);
@@ -3126,9 +3126,9 @@ router.post('/bulk-shipping-labels', async (req: Request, res: Response) => {
           console.log(`UPS label created for ${order.orderId}: ${trackingNumber}`);
           trackingNumbers.push({ orderId: order.orderId, trackingNumber });
 
-          // Update order status and move to Shipping Manager
+          // Update order status and move to Fulfilled
           try {
-            console.log(`Moving order ${order.orderId} to Shipping Manager after label creation`);
+            console.log(`Moving order ${order.orderId} to Fulfilled after label creation`);
             
             // Update tracking information and order status
             const updateData = {
@@ -3137,7 +3137,7 @@ router.post('/bulk-shipping-labels', async (req: Request, res: Response) => {
               shippingMethod: 'UPS Ground',
               shippedDate: new Date(),
               shippingLabelGenerated: true,
-              currentDepartment: 'Shipping Manager',
+              currentDepartment: 'Fulfilled',
               status: 'COMPLETED'
             };
 
@@ -3152,7 +3152,7 @@ router.post('/bulk-shipping-labels', async (req: Request, res: Response) => {
                 .set({
                   trackingNumber: trackingNumber,
                   shippingCarrier: 'UPS',
-                  currentDepartment: 'Shipping Manager',
+                  currentDepartment: 'Fulfilled',
                   shippedDate: new Date(),
                   updatedAt: new Date()
                 })
@@ -3165,7 +3165,7 @@ router.post('/bulk-shipping-labels', async (req: Request, res: Response) => {
                 .set({
                   trackingNumber: trackingNumber,
                   shippingCarrier: 'UPS', 
-                  currentDepartment: 'Shipping Manager',
+                  currentDepartment: 'Fulfilled',
                   shippedDate: new Date(),
                   updatedAt: new Date()
                 })

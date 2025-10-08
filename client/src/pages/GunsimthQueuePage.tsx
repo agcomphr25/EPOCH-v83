@@ -196,7 +196,7 @@ export default function GunsimthQueuePage() {
 
   const getModelDisplayName = (modelId: string) => {
     if (!modelId) return 'Unknown Model';
-    const model = stockModels.find((m: any) => m.id === modelId);
+    const model = (stockModels as any[]).find((m: any) => m.id === modelId);
     return model?.displayName || model?.name || modelId;
   };
 
@@ -361,7 +361,7 @@ export default function GunsimthQueuePage() {
     // Check if the order exists in the current queue
     const orderExists = gunsmithOrders.some((order: any) => order.orderId === orderId);
     if (orderExists) {
-      setSelectedOrders(prev => new Set([...prev, orderId]));
+      setSelectedOrders(prev => new Set([...Array.from(prev), orderId]));
       toast({
         title: "Success",
         description: `Order ${orderId} selected automatically`,
@@ -380,7 +380,7 @@ export default function GunsimthQueuePage() {
     // Check if the order exists in the current Gunsmith queue
     const orderExists = gunsmithOrders.some((order: any) => order.orderId === orderId);
     if (orderExists) {
-      setSelectedOrders(prev => new Set([...prev, orderId]));
+      setSelectedOrders(prev => new Set([...Array.from(prev), orderId]));
       toast({
         title: "Success",
         description: `Order ${orderId} found and selected`,

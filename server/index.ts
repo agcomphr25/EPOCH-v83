@@ -26,13 +26,24 @@ console.log('Environment check:', {
 const app = express();
 
 // CORS configuration - critical for production authentication
+// Check if we're on Replit deployment (agcompepoch.xyz) or development
+const isReplitDeployment = process.env.REPL_DEPLOYMENT === 'true' || process.env.REPLIT_DEPLOYMENT === 'true';
+const isProduction = process.env.NODE_ENV === 'production' || isReplitDeployment;
+
 const corsOptions = {
-  origin: process.env.NODE_ENV === 'production' 
+  origin: isProduction
     ? ['https://agcompepoch.xyz', 'https://www.agcompepoch.xyz']
     : true, // Allow all origins in development
   credentials: true, // Allow cookies to be sent
   optionsSuccessStatus: 200
 };
+
+console.log('🔒 CORS Configuration:', {
+  NODE_ENV: process.env.NODE_ENV,
+  REPL_DEPLOYMENT: process.env.REPL_DEPLOYMENT,
+  isProduction,
+  allowedOrigins: corsOptions.origin
+});
 
 app.use(cors(corsOptions));
 

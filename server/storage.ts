@@ -1642,9 +1642,8 @@ export class DatabaseStorage implements IStorage {
       
       if (discount && discount.isActive) {
         if (discount.appliesTo === 'stock_model') {
-          // Apply discount only to the base model price
+          // Apply discount only to the base model price (using cached stockModels)
           if (order.modelId) {
-            const stockModels = await this.getAllStockModels();
             const selectedModel = stockModels.find(model => model.id === order.modelId);
             if (selectedModel) {
               const basePrice = Number(order.priceOverride || selectedModel.price || 0);

@@ -1552,7 +1552,6 @@ export class DatabaseStorage implements IStorage {
       const currentPaint = orderFeatures.metallic_finishes || orderFeatures.paint_options || orderFeatures.paint_options_combined;
       
       if (currentPaint && currentPaint !== 'none') {
-        const features = await this.getAllFeatures();
         const paintFeatures = features.filter(f => 
           f.displayName?.includes('Options') || 
           f.displayName?.includes('Camo') || 
@@ -1577,7 +1576,6 @@ export class DatabaseStorage implements IStorage {
 
       // Add bottom metal price (separately handled like frontend)
       if (orderFeatures.bottom_metal && orderFeatures.bottom_metal !== 'none') {
-        const features = await this.getAllFeatures();
         const bottomMetalFeature = features.find(f => f.id === 'bottom_metal');
         if (bottomMetalFeature?.options) {
           const option = (bottomMetalFeature.options as any[])?.find((opt: any) => opt.value === orderFeatures.bottom_metal);
@@ -1598,7 +1596,6 @@ export class DatabaseStorage implements IStorage {
 
       // Add rail accessory price (separately handled like frontend)
       if (orderFeatures.rail_accessory && Array.isArray(orderFeatures.rail_accessory) && orderFeatures.rail_accessory.length > 0) {
-        const features = await this.getAllFeatures();
         const railFeature = features.find(f => f.id === 'rail_accessory');
         if (railFeature?.options) {
           orderFeatures.rail_accessory.forEach((railValue: string) => {
@@ -1615,7 +1612,6 @@ export class DatabaseStorage implements IStorage {
 
       // Add other options price (separately handled like frontend)
       if (orderFeatures.other_options && Array.isArray(orderFeatures.other_options) && orderFeatures.other_options.length > 0) {
-        const features = await this.getAllFeatures();
         const otherOptionsFeature = features.find(f => f.id === 'other_options');
         if (otherOptionsFeature?.options) {
           orderFeatures.other_options.forEach((optionValue: string) => {
@@ -4632,7 +4628,7 @@ export class DatabaseStorage implements IStorage {
     };
 
     // Define department sequence
-    const departmentSequence = ['P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 'Gunsmith', 'Finish', 'Finish QC', 'Paint', 'Shipping QC', 'Shipping'];
+    const departmentSequence = ['P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 'Finish', 'Paint', 'Finish QC', 'Gunsmith', 'Shipping QC', 'Shipping'];
 
     // Check if order is overdue in current department
     const currentDeptStandardTime = departmentTimes[order.currentDepartment] || 7;
@@ -4688,7 +4684,7 @@ export class DatabaseStorage implements IStorage {
 
       // Department progression logic
       const departmentFlow = [
-        'P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 'Gunsmith', 'Finish', 'Finish QC', 'Paint', 'Shipping QC', 'Shipping'
+        'P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 'Finish', 'Paint', 'Finish QC', 'Gunsmith', 'Shipping QC', 'Shipping'
       ];
 
       // Special handling for flat top orders - they bypass CNC and go directly to Finish

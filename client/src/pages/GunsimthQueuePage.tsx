@@ -15,6 +15,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useLocation } from 'wouter';
 import FBNumberSearch from '@/components/FBNumberSearch';
 import { SalesOrderModal } from '@/components/SalesOrderModal';
+import { isOrderInDepartment } from '@/lib/departmentUtils';
 
 export default function GunsimthQueuePage() {
   // Multi-select state
@@ -105,21 +106,9 @@ export default function GunsimthQueuePage() {
 
   // Get orders in Gunsmith department
   const gunsmithOrders = useMemo(() => {
-    const filtered = (allOrders as any[]).filter((order: any) => {
-      const normalizedDept = order.currentDepartment?.trim().toLowerCase();
-      // Match exact "gunsmith" OR department starting with "gun" (catches typos like "gunsmit", "gun", etc.)
-      return normalizedDept === 'gunsmith' || normalizedDept?.startsWith('gun');
-    });
-    
-    // Debug logging to help identify mismatches in production
-    console.log('🔍 Gunsmith Queue - Total orders:', allOrders.length);
-    console.log('🔍 Gunsmith Queue - Filtered orders:', filtered.length);
-    const gunsmithDepts = (allOrders as any[])
-      .filter((o: any) => o.currentDepartment?.toLowerCase().includes('gun'))
-      .map((o: any) => ({ orderId: o.orderId, dept: `"${o.currentDepartment}"` }));
-    if (gunsmithDepts.length > 0) {
-      console.log('🔍 Orders with "gun" in department:', gunsmithDepts);
-    }
+    const filtered = (allOrders as any[]).filter((order: any) => 
+      isOrderInDepartment(order, 'Gunsmith')
+    );
     
     return filtered;
   }, [allOrders]);

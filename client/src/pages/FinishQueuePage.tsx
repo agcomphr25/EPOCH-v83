@@ -14,6 +14,7 @@ import { toast } from 'react-hot-toast';
 import { useLocation } from 'wouter';
 import FBNumberSearch from '@/components/FBNumberSearch';
 import { SalesOrderModal } from '@/components/SalesOrderModal';
+import { isOrderInDepartment } from '@/lib/departmentUtils';
 
 export default function FinishQueuePage() {
   // Multi-select state
@@ -77,28 +78,9 @@ export default function FinishQueuePage() {
 
   // Get orders in Finish department
   const finishOrders = useMemo(() => {
-    // Check for specific order EJ179 for debugging
-    const ej179 = (allOrders as any[]).find((o: any) => o.orderId === 'EJ179');
-    if (ej179) {
-      console.log('🔍 Found EJ179:', { 
-        orderId: ej179.orderId, 
-        currentDepartment: ej179.currentDepartment,
-        raw: JSON.stringify(ej179.currentDepartment),
-        normalized: ej179.currentDepartment?.trim().toLowerCase().replace(/['"]/g, '')
-      });
-    }
-    
-    const filtered = (allOrders as any[]).filter((order: any) => {
-      const normalizedDept = order.currentDepartment?.trim().toLowerCase().replace(/['"]/g, '');
-      const normalizedLegacyDept = order.department?.trim().toLowerCase().replace(/['"]/g, '');
-      return normalizedDept === 'finish' || 
-             (normalizedLegacyDept === 'finish' && order.status === 'IN_PROGRESS');
-    });
-    
-    // Debug logging to help identify mismatches in production
-    console.log('🔍 Finish Queue - Total orders:', allOrders.length);
-    console.log('🔍 Finish Queue - Filtered orders:', filtered.length);
-    console.log('🔍 Filtered order IDs:', filtered.map((o: any) => o.orderId).join(', '));
+    const filtered = (allOrders as any[]).filter((order: any) => 
+      isOrderInDepartment(order, 'Finish')
+    );
     
     return filtered;
   }, [allOrders]);

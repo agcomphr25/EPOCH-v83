@@ -16,6 +16,7 @@ import { useLocation } from 'wouter';
 import FBNumberSearch from '@/components/FBNumberSearch';
 import { OrderSearchBox } from '@/components/OrderSearchBox';
 import { SalesOrderModal } from '@/components/SalesOrderModal';
+import { isOrderInDepartment } from '@/lib/departmentUtils';
 
 export default function PaintQueuePage() {
   const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
@@ -107,16 +108,9 @@ export default function PaintQueuePage() {
 
   // Get orders in Paint department
   const paintOrders = useMemo(() => {
-    const filtered = (allOrders as any[]).filter((order: any) => {
-      const normalizedDept = order.currentDepartment?.trim().toLowerCase();
-      const normalizedLegacyDept = order.department?.trim().toLowerCase();
-      return normalizedDept === 'paint' || 
-             (normalizedLegacyDept === 'paint' && order.status === 'IN_PROGRESS');
-    });
-    
-    // Debug logging to help identify mismatches in production
-    console.log('🔍 Paint Queue - Total orders:', allOrders.length);
-    console.log('🔍 Paint Queue - Filtered orders:', filtered.length);
+    const filtered = (allOrders as any[]).filter((order: any) => 
+      isOrderInDepartment(order, 'Paint')
+    );
 
     // Sort orders alphabetically and numerically
     return filtered.sort((a: any, b: any) => {

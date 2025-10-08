@@ -13,6 +13,7 @@ import { format } from 'date-fns';
 import { getDisplayOrderId } from '@/lib/orderUtils';
 import FBNumberSearch from '@/components/FBNumberSearch';
 import { toast } from 'react-hot-toast';
+import { isOrderInDepartment } from '@/lib/departmentUtils';
 
 export default function FinishQCQueuePage() {
   const [searchQuery, setSearchQuery] = useState('');
@@ -26,14 +27,9 @@ export default function FinishQCQueuePage() {
 
   // Get orders in Finish QC department
   const finishQCOrders = useMemo(() => {
-    const filtered = (allOrders as any[]).filter((order: any) => {
-      const normalizedDept = order.currentDepartment?.trim().toLowerCase();
-      return normalizedDept === 'finish qc';
-    });
-    
-    // Debug logging to help identify mismatches in production
-    console.log('🔍 Finish QC Queue - Total orders:', allOrders.length);
-    console.log('🔍 Finish QC Queue - Filtered orders:', filtered.length);
+    const filtered = (allOrders as any[]).filter((order: any) => 
+      isOrderInDepartment(order, 'Finish QC')
+    );
     
     return filtered;
   }, [allOrders]);

@@ -78,9 +78,35 @@ export default function FinishQueuePage() {
 
   // Get orders in Finish department
   const finishOrders = useMemo(() => {
-    const filtered = (allOrders as any[]).filter((order: any) => 
-      isOrderInDepartment(order, 'Finish')
-    );
+    console.log('🔍 FINISH QUEUE DEBUG: Total orders from API:', allOrders?.length || 0);
+    
+    const filtered = (allOrders as any[]).filter((order: any) => {
+      const matches = isOrderInDepartment(order, 'Finish');
+      
+      // Debug log for orders that don't match but might be expected to
+      if (!matches && order.currentDepartment) {
+        const dept = order.currentDepartment.trim().toLowerCase();
+        if (dept.includes('finish')) {
+          console.log('⚠️ FINISH QUEUE: Order not matching but has finish in department:', {
+            orderId: order.orderId,
+            currentDepartment: order.currentDepartment,
+            status: order.status,
+            dept: order.department
+          });
+        }
+      }
+      
+      return matches;
+    });
+    
+    console.log('🔍 FINISH QUEUE DEBUG: Filtered to', filtered.length, 'orders in Finish department');
+    if (filtered.length > 0) {
+      console.log('🔍 FINISH QUEUE DEBUG: Sample order:', {
+        orderId: filtered[0].orderId,
+        currentDepartment: filtered[0].currentDepartment,
+        status: filtered[0].status
+      });
+    }
     
     return filtered;
   }, [allOrders]);

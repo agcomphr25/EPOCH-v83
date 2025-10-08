@@ -97,6 +97,19 @@ export function SalesOrderModal({ isOpen, onClose, orderId }: SalesOrderModalPro
 
         {orderData && (
           <div className="space-y-6">
+            {/* Notes - Moved to top for visibility */}
+            {orderData.notes && (
+              <>
+                <div className="space-y-2">
+                  <h3 className="font-semibold">Notes</h3>
+                  <p className="text-sm text-gray-600 bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded-lg border border-yellow-200 dark:border-yellow-800">
+                    {orderData.notes}
+                  </p>
+                </div>
+                <Separator />
+              </>
+            )}
+
             {/* Header Information */}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
@@ -184,19 +197,6 @@ export function SalesOrderModal({ isOpen, onClose, orderId }: SalesOrderModalPro
                 <p className="text-2xl font-bold">${orderData.totalPrice?.toFixed(2) || '0.00'}</p>
               </div>
             </div>
-
-            {/* Notes */}
-            {orderData.notes && (
-              <>
-                <Separator />
-                <div className="space-y-2">
-                  <h3 className="font-semibold">Notes</h3>
-                  <p className="text-sm text-gray-600 bg-gray-50 dark:bg-gray-800 p-3 rounded-lg">
-                    {orderData.notes}
-                  </p>
-                </div>
-              </>
-            )}
 
             {/* Actions */}
             <Separator />

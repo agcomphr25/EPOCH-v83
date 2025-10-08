@@ -154,10 +154,10 @@ export default function FinishQueuePage() {
     ).length;
   }, [allOrders]);
 
-  // Count orders in next department (Finish QC)
-  const finishQCCount = useMemo(() => {
+  // Count orders in next department (Paint)
+  const paintCount = useMemo(() => {
     return (allOrders as any[]).filter((order: any) => 
-      order.currentDepartment === 'Finish QC'
+      order.currentDepartment === 'Paint'
     ).length;
   }, [allOrders]);
 
@@ -252,14 +252,14 @@ export default function FinishQueuePage() {
     }
   });
 
-  // Progress mutation for moving orders to next department
+  // Progress mutation for moving orders to next department (Paint)
   const progressMutation = useMutation({
     mutationFn: async ({ orderIds, technician }: { orderIds: string[], technician: string }) => {
       const response = await apiRequest('/api/orders/update-department', {
         method: 'POST',
         body: JSON.stringify({
           orderIds: orderIds,
-          department: 'Finish QC',
+          department: 'Paint',
           status: 'Active',
           assignedTechnician: technician
         })
@@ -268,8 +268,8 @@ export default function FinishQueuePage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/orders/department', 'Finish QC'] });
-      toast.success(`${selectedOrders.size} orders progressed to Finish QC`);
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/department', 'Paint'] });
+      toast.success(`${selectedOrders.size} orders progressed to Paint`);
       setSelectedOrders(new Set());
       setSelectAll(false);
     },
@@ -383,13 +383,13 @@ export default function FinishQueuePage() {
         <Card className="bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800">
           <CardHeader className="pb-3">
             <CardTitle className="text-green-700 dark:text-green-300 flex items-center gap-2">
-              Finish QC
+              Paint
               <ArrowRight className="h-5 w-5" />
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold text-green-600 dark:text-green-400">
-              {finishQCCount}
+              {paintCount}
             </div>
             <p className="text-sm text-green-600 dark:text-green-400 mt-1">
               Orders in next department
@@ -464,7 +464,7 @@ export default function FinishQueuePage() {
                           size="sm"
                         >
                           <ArrowRight className="h-4 w-4 mr-1" />
-                          Move to Finish QC ({selectedOrders.size})
+                          Move to Paint ({selectedOrders.size})
                         </Button>
                       )}
                       
@@ -1062,7 +1062,7 @@ export default function FinishQueuePage() {
                   <ArrowRight className="h-4 w-4 mr-2" />
                   {progressMutation.isPending 
                     ? 'Progressing...' 
-                    : `Progress to Finish QC (${selectedOrders.size})`}
+                    : `Progress to Paint (${selectedOrders.size})`}
                 </Button>
               </div>
             </div>

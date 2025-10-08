@@ -26,9 +26,16 @@ export default function FinishQCQueuePage() {
 
   // Get orders in Finish QC department
   const finishQCOrders = useMemo(() => {
-    return (allOrders as any[]).filter((order: any) => 
-      order.currentDepartment === 'Finish QC'
-    );
+    const filtered = (allOrders as any[]).filter((order: any) => {
+      const normalizedDept = order.currentDepartment?.trim().toLowerCase();
+      return normalizedDept === 'finish qc';
+    });
+    
+    // Debug logging to help identify mismatches in production
+    console.log('🔍 Finish QC Queue - Total orders:', allOrders.length);
+    console.log('🔍 Finish QC Queue - Filtered orders:', filtered.length);
+    
+    return filtered;
   }, [allOrders]);
 
   // Filter orders based on search query

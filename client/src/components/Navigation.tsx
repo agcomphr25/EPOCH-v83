@@ -286,6 +286,12 @@ export default function Navigation() {
       label: 'Calendar',
       icon: Calendar,
       description: 'Multi-user calendar system'
+    },
+    {
+      path: '/shipping-tracker',
+      label: 'Shipping Tracker',
+      icon: Package,
+      description: 'Track stocks shipped by company week'
     }
   ];
 

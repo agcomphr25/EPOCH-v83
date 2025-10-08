@@ -65,6 +65,7 @@ import OrderDepartmentTransfer from "./pages/OrderDepartmentTransfer";
 import { BOMAdministration } from "./pages/BOMAdministration";
 import RobustBOMAdministration from "./pages/RobustBOMAdministration";
 import AGBottomMetalReport from "./pages/AGBottomMetalReport";
+import ShippingTracker from "./pages/ShippingTracker";
 import EmployeeDashboard from "./pages/EmployeeDashboard";
 import EmployeeDetail from "./pages/EmployeeDetail";
 import EmployeePortal from "./pages/EmployeePortal";
@@ -326,6 +327,7 @@ function App() {
 
                   {/* Reports */}
                   <Route path="/ag-bottom-metal-report" component={AGBottomMetalReport} />
+                  <Route path="/shipping-tracker" component={ShippingTracker} />
 
                   {/* Department Queue Management Routes */}
                   <Route path="/department-queue/production-queue" component={ProductionQueuePage} />

@@ -2603,4 +2603,99 @@ export const insertOemPrioritySettingsSchema = createInsertSchema(oemPrioritySet
 // Types for OEM Priority Settings
 export type InsertOemPrioritySettings = z.infer<typeof insertOemPrioritySettingsSchema>;
 export type OemPrioritySettings = typeof oemPrioritySettings.$inferSelect;
+
+// Internal Messaging System Tables
+
+// Departments table for internal messaging
+export const departments = pgTable("departments", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description"),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Internal messages table
+export const internalMessages = pgTable("internal_messages", {
+  id: serial("id").primaryKey(),
+  subject: text("subject").notNull(),
+  message: text("message").notNull(),
+  senderId: integer("sender_id").notNull(),
+  senderName: text("sender_name").notNull(),
+  recipientType: text("recipient_type").notNull(), // 'user' or 'department'
+  recipientUserId: integer("recipient_user_id"),
+  recipientDepartmentId: integer("recipient_department_id"),
+  recipientName: text("recipient_name").notNull(),
+  isUrgent: boolean("is_urgent").default(false),
+  hasReminder: boolean("has_reminder").default(false),
+  reminderDate: timestamp("reminder_date"),
+  sentAt: timestamp("sent_at").defaultNow(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Message recipients table (for tracking read/accomplished status)
+export const messageRecipients = pgTable("message_recipients", {
+  id: serial("id").primaryKey(),
+  messageId: integer("message_id").notNull(),
+  userId: integer("user_id").notNull(),
+  isRead: boolean("is_read").default(false),
+  readAt: timestamp("read_at"),
+  isAccomplished: boolean("is_accomplished").default(false),
+  accomplishedAt: timestamp("accomplished_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Message attachments table
+export const messageAttachments = pgTable("message_attachments", {
+  id: serial("id").primaryKey(),
+  messageId: integer("message_id").notNull(),
+  fileName: text("file_name").notNull(),
+  fileType: text("file_type").notNull(),
+  fileSize: integer("file_size").notNull(),
+  fileUrl: text("file_url").notNull(),
+  attachmentType: text("attachment_type"),
+  uploadedAt: timestamp("uploaded_at").defaultNow(),
+});
+
+// Insert schemas for internal messaging
+export const insertDepartmentSchema = createInsertSchema(departments).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertInternalMessageSchema = createInsertSchema(internalMessages).omit({
+  id: true,
+  sentAt: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertMessageRecipientSchema = createInsertSchema(messageRecipients).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertMessageAttachmentSchema = createInsertSchema(messageAttachments).omit({
+  id: true,
+  uploadedAt: true,
+});
+
+// Types for internal messaging
+export type Department = typeof departments.$inferSelect;
+export type InsertDepartment = z.infer<typeof insertDepartmentSchema>;
+
+export type InternalMessage = typeof internalMessages.$inferSelect;
+export type InsertInternalMessage = z.infer<typeof insertInternalMessageSchema>;
+
+export type MessageRecipient = typeof messageRecipients.$inferSelect;
+export type InsertMessageRecipient = z.infer<typeof insertMessageRecipientSchema>;
+
+export type MessageAttachment = typeof messageAttachments.$inferSelect;
+export type InsertMessageAttachment = z.infer<typeof insertMessageAttachmentSchema>;
+
 export * from './calendar.schema';

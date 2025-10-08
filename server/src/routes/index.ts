@@ -2608,12 +2608,23 @@ export function registerRoutes(app: Express): Server {
       let order = null;
       let orderSource = 'unknown';
 
-      // Check finalized orders first
+      // Check all_orders table FIRST - this is the single source of truth for current department
       try {
-        order = await storage.getFinalizedOrderById(orderId);
-        if (order) orderSource = 'finalized';
+        const allOrders = await storage.getAllOrders();
+        order = allOrders.find(o => o.orderId === orderId);
+        if (order) orderSource = 'all_orders';
       } catch (e) {
-        // Continue searching
+        console.error('Error checking all_orders:', e);
+      }
+
+      // Check finalized orders if not found
+      if (!order) {
+        try {
+          order = await storage.getFinalizedOrderById(orderId);
+          if (order) orderSource = 'finalized';
+        } catch (e) {
+          // Continue searching
+        }
       }
 
       // Check draft orders if not found

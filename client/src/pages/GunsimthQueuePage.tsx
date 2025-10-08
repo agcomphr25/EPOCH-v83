@@ -321,14 +321,14 @@ export default function GunsimthQueuePage() {
     setSelectedOrders(new Set());
   };
 
-  // Progress orders to Shipping QC mutation (natural progression from Gunsmith)
-  const progressToShippingQcMutation = useMutation({
+  // Progress orders to Finish mutation (natural progression from Gunsmith)
+  const progressToFinishMutation = useMutation({
     mutationFn: async (orderIds: string[]) => {
       const response = await apiRequest('/api/orders/update-department', {
         method: 'POST',
         body: JSON.stringify({
           orderIds: orderIds,
-          department: 'Shipping QC',
+          department: 'Finish',
           status: 'IN_PROGRESS'
         })
       });
@@ -338,22 +338,22 @@ export default function GunsimthQueuePage() {
       queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
       toast({
         title: "Success",
-        description: `${selectedOrders.size} orders moved to Shipping QC department`,
+        description: `${selectedOrders.size} orders moved to Finish department`,
       });
       setSelectedOrders(new Set());
     },
     onError: () => {
       toast({
         title: "Error",
-        description: "Failed to move orders to Shipping QC",
+        description: "Failed to move orders to Finish",
         variant: "destructive",
       });
     }
   });
 
-  const handleProgressToShippingQc = () => {
+  const handleProgressToFinish = () => {
     if (selectedOrders.size === 0) return;
-    progressToShippingQcMutation.mutate(Array.from(selectedOrders));
+    progressToFinishMutation.mutate(Array.from(selectedOrders));
   };
 
   // Auto-select order when scanned

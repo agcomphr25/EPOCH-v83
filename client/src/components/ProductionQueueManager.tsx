@@ -311,6 +311,9 @@ export default function ProductionQueueManager() {
   const [productionSchedule, setProductionSchedule] = useState<ProductionSchedule | null>(null);
   const [selectedWeeks, setSelectedWeeks] = useState<number[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  
+  // State for P1 Production Queue order selection
+  const [selectedQueueOrders, setSelectedQueueOrders] = useState<Set<string>>(new Set());
 
   // Fetch prioritized production queue
   const { data: productionQueue = [], isLoading, refetch } = useQuery<ProductionQueueOrder[]>({
@@ -441,6 +444,60 @@ export default function ProductionQueueManager() {
       });
     }
   });
+
+  // Progress orders to Layup/Plugging mutation
+  const progressToBarcodeMutation = useMutation({
+    mutationFn: async (orderIds: string[]) => {
+      const progressPromises = orderIds.map(orderId => 
+        apiRequest(`/api/orders/${orderId}/progress`, {
+          method: 'POST',
+          body: { toDepartment: 'Layup/Plugging' }
+        })
+      );
+      return Promise.all(progressPromises);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/production-queue/prioritized'] });
+      toast({
+        title: "Success",
+        description: `Successfully progressed ${selectedQueueOrders.size} order(s) to Layup/Plugging`,
+      });
+      setSelectedQueueOrders(new Set());
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to progress orders",
+        variant: "destructive",
+      });
+    }
+  });
+
+  // Handlers for P1 Production Queue selection
+  const handleToggleOrderSelection = (orderId: string) => {
+    setSelectedQueueOrders(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(orderId)) {
+        newSet.delete(orderId);
+      } else {
+        newSet.add(orderId);
+      }
+      return newSet;
+    });
+  };
+
+  const handleSelectAllQueueOrders = () => {
+    if (selectedQueueOrders.size === productionQueue.length) {
+      setSelectedQueueOrders(new Set());
+    } else {
+      setSelectedQueueOrders(new Set(productionQueue.map(o => o.orderId)));
+    }
+  };
+
+  const handleProgressSelectedToBarcode = () => {
+    if (selectedQueueOrders.size === 0) return;
+    progressToBarcodeMutation.mutate(Array.from(selectedQueueOrders));
+  };
 
   const getUrgencyBadgeColor = (urgencyLevel: string) => {
     switch (urgencyLevel) {
@@ -728,7 +785,7 @@ export default function ProductionQueueManager() {
               <CardHeader className="p-0">
                 <CardTitle className="flex items-center gap-2">
                   <Package className="w-5 h-5" />
-                  Regular Production Queue
+                  Regular Production Queue ({productionQueue.length})
                 </CardTitle>
                 <p className="text-sm text-gray-500 text-left">
                   Ready for layup orders - these will fill remaining schedule slots
@@ -737,6 +794,29 @@ export default function ProductionQueueManager() {
             </AccordionTrigger>
             <AccordionContent>
               <CardContent>
+                {productionQueue.length > 0 && (
+                  <div className="flex items-center gap-2 mb-4">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleSelectAllQueueOrders}
+                      className="flex items-center gap-2"
+                    >
+                      {selectedQueueOrders.size === productionQueue.length ? 'Deselect All' : 'Select All'}
+                    </Button>
+                    {selectedQueueOrders.size > 0 && (
+                      <Button
+                        onClick={handleProgressSelectedToBarcode}
+                        disabled={progressToBarcodeMutation.isPending}
+                        className="flex items-center gap-2 bg-green-600 hover:bg-green-700"
+                        size="sm"
+                      >
+                        <ArrowRight className="h-4 w-4" />
+                        Progress to Layup/Plugging ({selectedQueueOrders.size})
+                      </Button>
+                    )}
+                  </div>
+                )}
           {productionQueue.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
               <Package className="w-12 h-12 mx-auto mb-4 text-gray-300" />
@@ -747,6 +827,12 @@ export default function ProductionQueueManager() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-12">
+                    <Checkbox
+                      checked={selectedQueueOrders.size === productionQueue.length && productionQueue.length > 0}
+                      onCheckedChange={handleSelectAllQueueOrders}
+                    />
+                  </TableHead>
                   <TableHead className="w-20">Priority</TableHead>
                   <TableHead>Order ID</TableHead>
                   <TableHead>Customer</TableHead>
@@ -771,6 +857,12 @@ export default function ProductionQueueManager() {
                   
                   return (
                     <TableRow key={order.orderId} className={order.isOverdue ? 'bg-red-50' : ''}>
+                    <TableCell>
+                      <Checkbox
+                        checked={selectedQueueOrders.has(order.orderId)}
+                        onCheckedChange={() => handleToggleOrderSelection(order.orderId)}
+                      />
+                    </TableCell>
                     <TableCell className="font-bold text-center">
                       #{order.queuePosition}
                     </TableCell>

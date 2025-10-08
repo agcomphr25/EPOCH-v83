@@ -50,17 +50,21 @@ router.post('/email', async (req, res) => {
     
     const emailResult = await sgMail.send(msg);
     
-    // Store in database using existing schema columns
+    // Store in database with new columns
     const [communicationLog] = await db.insert(communicationLogs).values({
       customerId: data.customerId,
       orderId: data.orderId || null,
       messageType: 'email-outbound',
       type: 'shipping-notification',
       method: 'email',
+      direction: 'outbound',
+      sender: 'stacisales@agcomposites.com',
       recipient: data.to,
       subject: data.subject,
       message: data.message,
       status: 'sent',
+      isRead: false,
+      externalId: emailResult[0].headers['x-message-id'],
       sentAt: new Date()
     }).returning();
     
@@ -112,25 +116,30 @@ router.post('/sms', async (req, res) => {
       to: data.to
     });
 
-    // Skip database logging for now to focus on SMS functionality
-    console.log(`SMS sent successfully - MessageID: ${message.sid}, Status: ${message.status}`);
-
-    // Communication logged successfully
-    
-    console.log(`SMS Details:`, {
-      messageId: message.sid,
-      to: data.to,
-      from: fromNumber,
-      status: message.status,
-      direction: message.direction,
+    // Store in database with new columns
+    const [communicationLog] = await db.insert(communicationLogs).values({
       customerId: data.customerId,
-      orderId: data.orderId
-    });
+      orderId: data.orderId || null,
+      messageType: 'sms-outbound',
+      type: 'sms-notification',
+      method: 'sms',
+      direction: 'outbound',
+      sender: fromNumber,
+      recipient: data.to,
+      subject: null,
+      message: data.message,
+      status: message.status,
+      isRead: false,
+      externalId: message.sid,
+      sentAt: new Date()
+    }).returning();
+    
+    console.log(`SMS sent to ${data.to} for customer ${data.customerId}${data.orderId ? ` (Order: ${data.orderId})` : ''}`);
     
     res.json({ 
       success: true, 
       message: 'SMS sent successfully',
-      messageId: message.sid,
+      messageId: communicationLog.id,
       externalId: message.sid,
       status: message.status,
       twilioResponse: {
@@ -300,11 +309,15 @@ router.get('/inbox', async (req, res) => {
         customerId: communicationLogs.customerId,
         type: communicationLogs.type,
         method: communicationLogs.method,
+        direction: communicationLogs.direction,
+        sender: communicationLogs.sender,
         recipient: communicationLogs.recipient,
         subject: communicationLogs.subject,
         message: communicationLogs.message,
         status: communicationLogs.status,
+        isRead: communicationLogs.isRead,
         sentAt: communicationLogs.sentAt,
+        receivedAt: communicationLogs.receivedAt,
         createdAt: communicationLogs.createdAt,
         customerName: customers.name,
         customerEmail: customers.email,
@@ -315,7 +328,7 @@ router.get('/inbox', async (req, res) => {
       .orderBy(desc(communicationLogs.createdAt))
       .limit(100);
     
-    // Transform the results to flatten the structure (direction defaults to 'inbound' for inbox messages)
+    // Transform the results to flatten the structure
     const transformedMessages = inboxMessages.map(row => ({
       id: row.id,
       customerId: row.customerId,
@@ -324,12 +337,15 @@ router.get('/inbox', async (req, res) => {
       customerPhone: row.customerPhone,
       type: row.type,
       method: row.method,
-      direction: 'inbound', // Default direction for inbox messages
+      direction: row.direction,
+      sender: row.sender,
       recipient: row.recipient,
       subject: row.subject,
       message: row.message,
       status: row.status,
+      isRead: row.isRead,
       sentAt: row.sentAt,
+      receivedAt: row.receivedAt,
       createdAt: row.createdAt
     }));
     

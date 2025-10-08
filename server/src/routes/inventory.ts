@@ -8,6 +8,17 @@ import {
 
 const router = Router();
 
+// Enhanced Inventory API - Get all items
+router.get('/enhanced/inventory/items', async (req: Request, res: Response) => {
+  try {
+    const items = await storage.getAllInventoryItems();
+    res.json(items);
+  } catch (error) {
+    console.error('Get enhanced inventory items error:', error);
+    res.status(500).json({ error: "Failed to fetch inventory items" });
+  }
+});
+
 // Inventory Items Management - Direct access route
 router.get('/', async (req: Request, res: Response) => {
   try {

@@ -296,30 +296,41 @@ router.get('/inbox', async (req, res) => {
   try {
     const inboxMessages = await db
       .select({
-        communication_logs: communicationLogs,
-        customers: customers
+        id: communicationLogs.id,
+        customerId: communicationLogs.customerId,
+        type: communicationLogs.type,
+        method: communicationLogs.method,
+        recipient: communicationLogs.recipient,
+        subject: communicationLogs.subject,
+        message: communicationLogs.message,
+        status: communicationLogs.status,
+        sentAt: communicationLogs.sentAt,
+        createdAt: communicationLogs.createdAt,
+        customerName: customers.name,
+        customerEmail: customers.email,
+        customerPhone: customers.phone
       })
       .from(communicationLogs)
       .leftJoin(customers, eq(communicationLogs.customerId, sql`${customers.id}::text`))
       .orderBy(desc(communicationLogs.createdAt))
       .limit(100);
     
-    // Transform the results to flatten the structure using existing columns only
+    // Transform the results to flatten the structure (direction defaults to 'inbound' for inbox messages)
     const transformedMessages = inboxMessages.map(row => ({
-      id: row.communication_logs.id,
-      customerId: row.communication_logs.customerId,
-      customerName: row.customers?.name || 'Unknown Customer',
-      customerEmail: row.customers?.email,
-      customerPhone: row.customers?.phone,
-      type: row.communication_logs.type,
-      method: row.communication_logs.method,
-      direction: row.communication_logs.direction,
-      recipient: row.communication_logs.recipient,
-      subject: row.communication_logs.subject,
-      message: row.communication_logs.message,
-      status: row.communication_logs.status,
-      sentAt: row.communication_logs.sentAt,
-      createdAt: row.communication_logs.createdAt
+      id: row.id,
+      customerId: row.customerId,
+      customerName: row.customerName || 'Unknown Customer',
+      customerEmail: row.customerEmail,
+      customerPhone: row.customerPhone,
+      type: row.type,
+      method: row.method,
+      direction: 'inbound', // Default direction for inbox messages
+      recipient: row.recipient,
+      subject: row.subject,
+      message: row.message,
+      status: row.status,
+      sentAt: row.sentAt,
+      createdAt: row.createdAt
     }));
     
     res.json(transformedMessages);

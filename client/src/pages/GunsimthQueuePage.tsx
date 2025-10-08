@@ -441,13 +441,13 @@ export default function GunsimthQueuePage() {
         <Card className="bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800">
           <CardHeader className="pb-3">
             <CardTitle className="text-green-700 dark:text-green-300 flex items-center gap-2">
-              Finish
+              Shipping QC
               <ArrowRight className="h-5 w-5" />
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold text-green-600 dark:text-green-400">
-              {finishCount}
+              {shippingQcCount}
             </div>
             <p className="text-sm text-green-600 dark:text-green-400 mt-1">
               Orders in next department

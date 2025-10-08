@@ -78,13 +78,16 @@ export default function FinishQueuePage() {
   // Get orders in Finish department
   const finishOrders = useMemo(() => {
     const filtered = (allOrders as any[]).filter((order: any) => {
-      const normalizedDept = order.currentDepartment?.trim().toLowerCase();
+      const normalizedDept = order.currentDepartment?.trim().toLowerCase().replace(/['"]/g, '');
       return normalizedDept === 'finish';
     });
     
     // Debug logging to help identify mismatches in production
     console.log('🔍 Finish Queue - Total orders:', allOrders.length);
     console.log('🔍 Finish Queue - Filtered orders:', filtered.length);
+    if (filtered.length === 0 && allOrders.length > 0) {
+      console.log('🔍 Sample department values:', (allOrders as any[]).slice(0, 10).map(o => ({ orderId: o.orderId, dept: o.currentDepartment })));
+    }
     
     return filtered;
   }, [allOrders]);

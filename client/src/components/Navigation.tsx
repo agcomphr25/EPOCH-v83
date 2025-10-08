@@ -141,19 +141,6 @@ export default function Navigation() {
       description: 'View all created orders'
     },
     {
-      path: '/draft-orders',
-      label: 'Draft Orders',
-      icon: FilePenLine,
-      description: 'Manage saved draft orders'
-    },
-    {
-      path: '/cancelled-orders',
-      label: 'Cancelled Orders',
-      icon: XCircle,
-      description: 'View cancelled orders'
-    },
-
-    {
       path: '/customers',
       label: 'Customer Management',
       icon: Users,

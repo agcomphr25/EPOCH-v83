@@ -917,9 +917,12 @@ router.post('/:orderId/progress', async (req: Request, res: Response) => {
     }
 
     // Define the departments sequence for automatic progression
+    // Note: After CNC, orders can go to either Gunsmith or Finish
+    // If they go to Gunsmith, they then proceed to Finish
+    // Both paths converge at Finish, then continue through the rest of the flow
     const departments = [
       'P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 
-      'Finish', 'Gunsmith', 'Paint', 'Shipping QC', 'Shipping'
+      'Gunsmith', 'Finish', 'Finish QC', 'Paint', 'Shipping QC', 'Shipping', 'Fulfilled'
     ];
 
     // CRITICAL SAFEGUARD: Prevent backwards department progression

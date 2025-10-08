@@ -69,12 +69,13 @@ router.post('/login', async (req, res) => {
       expiresAt
     });
 
-    // Set HTTP-only cookie
+    // Set HTTP-only cookie with production-safe settings
     res.cookie('sessionToken', sessionToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      sameSite: 'lax', // 'lax' works for same-origin (agcompepoch.xyz)
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+      path: '/',
     });
 
     res.json({

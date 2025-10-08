@@ -1,0 +1,10 @@
+client/src/components/inventory/InventoryBalancesCard.tsx
+client/src/components/inventory/InventoryItemsCard.tsx
+client/src/components/inventory/InventoryTransactionsCard.tsx
+client/src/components/inventory/MRPCalculationCard.tsx
+client/src/components/inventory/MRPShortagesCard.tsx
+client/src/components/inventory/OutsideProcessingCard.tsx
+client/src/components/inventory/POSuggestionsCard.tsx
+client/src/components/inventory/ProgressiveAllocationCard.tsx
+client/src/components/inventory/VendorPartsCard.tsx
+github-export/client/src/components/inventory/InventoryItemsCard.tsx

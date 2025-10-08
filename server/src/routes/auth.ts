@@ -1,10 +1,8 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
+import { pool } from '../../db';
 
 const router = Router();
-
-// Simple in-memory session store
-const sessions = new Map<string, { username: string; expiresAt: number }>();
 
 // Hardcoded test users mapped from dashboardMapping.ts
 // Password for all users is 'test123' (hashed with bcrypt)
@@ -61,13 +59,18 @@ router.post('/login', async (req, res) => {
 
     // Generate session token
     const sessionToken = generateSessionToken();
-    const expiresAt = Date.now() + (7 * 24 * 60 * 60 * 1000); // 7 days
+    const expiresAt = new Date(Date.now() + (7 * 24 * 60 * 60 * 1000)); // 7 days
 
-    // Store session
-    sessions.set(sessionToken, {
-      username: user.username,
-      expiresAt
-    });
+    // Store session in database for persistence
+    await pool.query(
+      `INSERT INTO user_sessions (session_token, user_id, username, expires_at, is_active) 
+       VALUES ($1, $2, $3, $4, true)
+       ON CONFLICT (session_token) DO UPDATE 
+       SET expires_at = $4, is_active = true`,
+      [sessionToken, user.id, user.username, expiresAt]
+    );
+    
+    console.log('✅ Session saved to database for user:', user.username);
 
     // Set HTTP-only cookie with production-safe settings
     const isProduction = process.env.NODE_ENV === 'production' || 
@@ -111,7 +114,8 @@ router.post('/logout', async (req, res) => {
     const sessionToken = req.cookies?.sessionToken || req.headers.authorization?.replace('Bearer ', '');
     
     if (sessionToken) {
-      sessions.delete(sessionToken);
+      await pool.query('DELETE FROM user_sessions WHERE session_token = $1', [sessionToken]);
+      console.log('✅ Session deleted from database');
     }
 
     res.clearCookie('sessionToken');
@@ -131,12 +135,21 @@ router.get('/validate', async (req, res) => {
       return res.status(401).json({ valid: false });
     }
 
-    const session = sessions.get(sessionToken);
+    // Query database for session
+    const result = await pool.query(
+      'SELECT user_id, username, expires_at FROM user_sessions WHERE session_token = $1',
+      [sessionToken]
+    );
     
-    if (!session || session.expiresAt < Date.now()) {
-      if (session) {
-        sessions.delete(sessionToken);
-      }
+    if (!result || result.length === 0) {
+      return res.status(401).json({ valid: false });
+    }
+    
+    const session = result[0];
+    
+    // Check if session is expired
+    if (new Date(session.expires_at) < new Date()) {
+      await pool.query('DELETE FROM user_sessions WHERE session_token = $1', [sessionToken]);
       return res.status(401).json({ valid: false });
     }
 
@@ -144,7 +157,7 @@ router.get('/validate', async (req, res) => {
     const user = USERS.get(session.username.toLowerCase());
 
     if (!user) {
-      sessions.delete(sessionToken);
+      await pool.query('DELETE FROM user_sessions WHERE session_token = $1', [sessionToken]);
       return res.status(401).json({ valid: false });
     }
 
@@ -171,12 +184,21 @@ router.get('/session', async (req, res) => {
       return res.status(401).json({ error: 'Not authenticated' });
     }
 
-    const session = sessions.get(sessionToken);
+    // Query database for session
+    const result = await pool.query(
+      'SELECT user_id, username, expires_at FROM user_sessions WHERE session_token = $1',
+      [sessionToken]
+    );
     
-    if (!session || session.expiresAt < Date.now()) {
-      if (session) {
-        sessions.delete(sessionToken);
-      }
+    if (!result || result.length === 0) {
+      return res.status(401).json({ error: 'Session expired' });
+    }
+    
+    const session = result[0];
+    
+    // Check if session is expired
+    if (new Date(session.expires_at) < new Date()) {
+      await pool.query('DELETE FROM user_sessions WHERE session_token = $1', [sessionToken]);
       return res.status(401).json({ error: 'Session expired' });
     }
 
@@ -184,7 +206,7 @@ router.get('/session', async (req, res) => {
     const user = USERS.get(session.username.toLowerCase());
 
     if (!user) {
-      sessions.delete(sessionToken);
+      await pool.query('DELETE FROM user_sessions WHERE session_token = $1', [sessionToken]);
       return res.status(401).json({ error: 'User not found' });
     }
 

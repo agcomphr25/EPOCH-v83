@@ -367,6 +367,23 @@ export function BarcodeScanner({ onOrderScanned }: BarcodeScannerProps = {}) {
             </Card>
           )}
 
+          {/* Notes - Moved to top for immediate visibility */}
+          {orderSummary.notes && (
+            <Card className="border-yellow-300 bg-yellow-50 dark:bg-yellow-900/20">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-yellow-800 dark:text-yellow-200">
+                  <FileText className="h-5 w-5" />
+                  Notes
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-sm whitespace-pre-wrap bg-white dark:bg-gray-800 p-4 rounded border border-yellow-200 dark:border-yellow-700 font-medium">
+                  {orderSummary.notes}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Order Header */}
           <Card>
             <CardHeader>
@@ -636,23 +653,6 @@ export function BarcodeScanner({ onOrderScanned }: BarcodeScannerProps = {}) {
               </div>
             </CardContent>
           </Card>
-
-          {/* Notes */}
-          {orderSummary.notes && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <FileText className="h-5 w-5" />
-                  Notes
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-sm whitespace-pre-wrap bg-gray-50 p-3 rounded">
-                  {orderSummary.notes}
-                </div>
-              </CardContent>
-            </Card>
-          )}
         </div>
       )}
 

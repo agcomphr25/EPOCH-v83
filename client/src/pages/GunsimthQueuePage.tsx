@@ -182,10 +182,10 @@ export default function GunsimthQueuePage() {
     ).length;
   }, [allOrders]);
 
-  // Count orders in next department (Shipping QC)
-  const shippingQcCount = useMemo(() => {
+  // Count orders in next department (Finish)
+  const finishCount = useMemo(() => {
     return (allOrders as any[]).filter((order: any) => 
-      order.currentDepartment === 'Shipping QC'
+      order.currentDepartment === 'Finish'
     ).length;
   }, [allOrders]);
 
@@ -321,14 +321,14 @@ export default function GunsimthQueuePage() {
     setSelectedOrders(new Set());
   };
 
-  // Progress orders to Finish mutation (natural progression from Gunsmith)
-  const progressToFinishMutation = useMutation({
+  // Progress orders to Shipping QC mutation (natural progression from Gunsmith)
+  const progressToShippingQcMutation = useMutation({
     mutationFn: async (orderIds: string[]) => {
       const response = await apiRequest('/api/orders/update-department', {
         method: 'POST',
         body: JSON.stringify({
           orderIds: orderIds,
-          department: 'Finish',
+          department: 'Shipping QC',
           status: 'IN_PROGRESS'
         })
       });
@@ -338,22 +338,22 @@ export default function GunsimthQueuePage() {
       queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
       toast({
         title: "Success",
-        description: `${selectedOrders.size} orders moved to Finish department`,
+        description: `${selectedOrders.size} orders moved to Shipping QC department`,
       });
       setSelectedOrders(new Set());
     },
     onError: () => {
       toast({
         title: "Error",
-        description: "Failed to move orders to Finish",
+        description: "Failed to move orders to Shipping QC",
         variant: "destructive",
       });
     }
   });
 
-  const handleProgressToFinish = () => {
+  const handleProgressToShippingQc = () => {
     if (selectedOrders.size === 0) return;
-    progressToFinishMutation.mutate(Array.from(selectedOrders));
+    progressToShippingQcMutation.mutate(Array.from(selectedOrders));
   };
 
   // Auto-select order when scanned
@@ -441,13 +441,13 @@ export default function GunsimthQueuePage() {
         <Card className="bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800">
           <CardHeader className="pb-3">
             <CardTitle className="text-green-700 dark:text-green-300 flex items-center gap-2">
-              Shipping QC
+              Finish
               <ArrowRight className="h-5 w-5" />
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold text-green-600 dark:text-green-400">
-              {shippingQcCount}
+              {finishCount}
             </div>
             <p className="text-sm text-green-600 dark:text-green-400 mt-1">
               Orders in next department
@@ -1122,7 +1122,7 @@ export default function GunsimthQueuePage() {
                   <ArrowRight className="h-4 w-4 mr-2" />
                   {progressMutation.isPending 
                     ? 'Progressing...' 
-                    : `Progress to Shipping QC (${selectedOrders.size})`}
+                    : `Progress to Finish (${selectedOrders.size})`}
                 </Button>
               </div>
             </div>

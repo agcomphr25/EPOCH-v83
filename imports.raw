@@ -1,0 +1,16 @@
+react
+@/components/ui/card
+@/components/ui/button
+@/components/ui/badge
+@/components/ui/separator
+@/components/ui/dialog
+lucide-react
+../components/inventory/InventoryItemsCard
+../components/inventory/InventoryBalancesCard
+../components/inventory/InventoryTransactionsCard
+../components/inventory/ProgressiveAllocationCard
+../components/inventory/MRPCalculationCard
+../components/inventory/MRPShortagesCard
+../components/inventory/OutsideProcessingCard
+../components/inventory/VendorPartsCard
+../components/inventory/POSuggestionsCard

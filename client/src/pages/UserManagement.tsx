@@ -65,8 +65,8 @@ export default function UserManagement() {
     queryFn: () => apiRequest('/api/users'),
   });
 
-  // Filter to show only active users
-  const users = allUsers.filter((user: User) => user.isActive);
+  // Filter to show only active users (with safety check for array)
+  const users = Array.isArray(allUsers) ? allUsers.filter((user: User) => user.isActive) : [];
 
   // Create user mutation
   const createUserMutation = useMutation({

@@ -4635,6 +4635,10 @@ export class DatabaseStorage implements IStorage {
 
       // Special handling for flat top orders - they bypass CNC and go directly to Finish
       const isFlatTop = currentOrder.isFlattop || false;
+      
+      // Check if order has no_rail - these bypass Gunsmith entirely
+      const features = typeof currentOrder.features === 'string' ? JSON.parse(currentOrder.features) : currentOrder.features;
+      const hasNoRail = features?.rail_accessory?.includes?.('no_rail') || false;
 
       let nextDept = nextDepartment;
       if (!nextDept) {
@@ -4642,7 +4646,13 @@ export class DatabaseStorage implements IStorage {
         if (isFlatTop && currentOrder.currentDepartment === 'Layup/Plugging') {
           nextDept = 'Finish';
           console.log(`🏔️ Order ${orderId} is flat top - bypassing CNC, routing directly to Finish`);
-        } else {
+        }
+        // Orders with no_rail skip Gunsmith and go directly from CNC to Finish
+        else if (hasNoRail && currentOrder.currentDepartment === 'CNC') {
+          nextDept = 'Finish';
+          console.log(`🔧 Order ${orderId} has no_rail - bypassing Gunsmith, routing directly from CNC to Finish`);
+        }
+        else {
           const currentIndex = departmentFlow.indexOf(currentOrder.currentDepartment || '');
           if (currentIndex === -1 || currentIndex >= departmentFlow.length - 1) {
             throw new Error(`Cannot progress from ${currentOrder.currentDepartment}`);

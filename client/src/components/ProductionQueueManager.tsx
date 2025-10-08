@@ -34,6 +34,7 @@ interface ProductionQueueOrder {
   status: string;
   customerId: string;
   customerName?: string;
+  features?: any;
   priorityScore: number;
   queuePosition: number;
   daysToDue: number;
@@ -751,6 +752,7 @@ export default function ProductionQueueManager() {
                   <TableHead>Customer</TableHead>
                   <TableHead>Model</TableHead>
                   <TableHead>Stock Model</TableHead>
+                  <TableHead>Bottom Metal</TableHead>
                   <TableHead>Due Date</TableHead>
                   <TableHead>Days to Due</TableHead>
                   <TableHead>Urgency</TableHead>
@@ -759,8 +761,16 @@ export default function ProductionQueueManager() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {productionQueue.map((order, index) => (
-                  <TableRow key={order.orderId} className={order.isOverdue ? 'bg-red-50' : ''}>
+                {productionQueue.map((order, index) => {
+                  // Check if bottom metal contains "adl"
+                  const bottomMetal = order.features?.bottom_metal;
+                  const showBottomMetal = bottomMetal && bottomMetal.toLowerCase().includes('adl');
+                  const bottomMetalDisplay = showBottomMetal 
+                    ? bottomMetal.replace(/_/g, ' ').toUpperCase() 
+                    : '';
+                  
+                  return (
+                    <TableRow key={order.orderId} className={order.isOverdue ? 'bg-red-50' : ''}>
                     <TableCell className="font-bold text-center">
                       #{order.queuePosition}
                     </TableCell>
@@ -781,6 +791,13 @@ export default function ProductionQueueManager() {
                     <TableCell>{order.modelId}</TableCell>
                     <TableCell>
                       <Badge variant="outline">{order.stockModelId}</Badge>
+                    </TableCell>
+                    <TableCell>
+                      {showBottomMetal && (
+                        <Badge className="bg-blue-100 text-blue-800 border-blue-200 font-semibold">
+                          {bottomMetalDisplay}
+                        </Badge>
+                      )}
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1">
@@ -819,8 +836,9 @@ export default function ProductionQueueManager() {
                         </Button>
                       </div>
                     </TableCell>
-                  </TableRow>
-                ))}
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           )}

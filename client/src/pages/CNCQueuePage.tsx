@@ -248,7 +248,15 @@ export default function CNCQueuePage() {
 
   // Get all CNC orders with department type for unified queue
   const cncOrders = useMemo(() => {
-    const allCncOrders = (allOrders as any[]).filter(order => order.currentDepartment === 'CNC');
+    const allCncOrders = (allOrders as any[]).filter(order => {
+      const normalizedDept = order.currentDepartment?.trim().toLowerCase();
+      return normalizedDept === 'cnc';
+    });
+    
+    // Debug logging to help identify mismatches in production
+    console.log('🔍 CNC Queue - Total orders:', allOrders.length);
+    console.log('🔍 CNC Queue - Filtered orders:', allCncOrders.length);
+    
     const uniqueOrders = allCncOrders.filter((order, index, self) => 
       index === self.findIndex(o => o.orderId === order.orderId)
     );

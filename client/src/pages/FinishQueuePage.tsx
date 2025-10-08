@@ -77,9 +77,16 @@ export default function FinishQueuePage() {
 
   // Get orders in Finish department
   const finishOrders = useMemo(() => {
-    return (allOrders as any[]).filter((order: any) => 
-      order.currentDepartment === 'Finish'
-    );
+    const filtered = (allOrders as any[]).filter((order: any) => {
+      const normalizedDept = order.currentDepartment?.trim().toLowerCase();
+      return normalizedDept === 'finish';
+    });
+    
+    // Debug logging to help identify mismatches in production
+    console.log('🔍 Finish Queue - Total orders:', allOrders.length);
+    console.log('🔍 Finish Queue - Filtered orders:', filtered.length);
+    
+    return filtered;
   }, [allOrders]);
 
   // Categorize orders by due date

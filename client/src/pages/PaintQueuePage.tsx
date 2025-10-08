@@ -107,10 +107,16 @@ export default function PaintQueuePage() {
 
   // Get orders in Paint department
   const paintOrders = useMemo(() => {
-    const filtered = (allOrders as any[]).filter((order: any) => 
-      order.currentDepartment === 'Paint' || 
-      (order.department === 'Paint' && order.status === 'IN_PROGRESS')
-    );
+    const filtered = (allOrders as any[]).filter((order: any) => {
+      const normalizedDept = order.currentDepartment?.trim().toLowerCase();
+      const normalizedLegacyDept = order.department?.trim().toLowerCase();
+      return normalizedDept === 'paint' || 
+             (normalizedLegacyDept === 'paint' && order.status === 'IN_PROGRESS');
+    });
+    
+    // Debug logging to help identify mismatches in production
+    console.log('🔍 Paint Queue - Total orders:', allOrders.length);
+    console.log('🔍 Paint Queue - Filtered orders:', filtered.length);
 
     // Sort orders alphabetically and numerically
     return filtered.sort((a: any, b: any) => {

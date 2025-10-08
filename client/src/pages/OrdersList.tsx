@@ -769,32 +769,8 @@ export default function OrdersList() {
           </div>
         </div>
 
-        {/* Search and Filter Controls */}
-        <div className="flex flex-col gap-4">
-          <div className="flex items-center gap-2 max-w-md">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-              <Input
-                type="text"
-                placeholder="Search by Order ID, Customer Name, Phone, or FB Order #..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
-              />
-            </div>
-            {searchTerm && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setSearchTerm('')}
-                className="px-3"
-              >
-                Clear
-              </Button>
-            )}
-          </div>
-
-          {/* Filter and Sort Controls */}
+        {/* Filter and Sort Controls */}
+        <div className="flex flex-col gap-4 mt-4">
           <div className="flex items-center gap-4 flex-wrap">
             {/* Department Filter */}
             <div className="flex items-center gap-2">

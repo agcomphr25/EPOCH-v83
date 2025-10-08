@@ -6,6 +6,15 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from '@/components/ui/dialog';
+import { 
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious
+} from '@/components/ui/pagination';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -115,6 +124,14 @@ interface StockModel {
   updatedAt: string;
 }
 
+interface PaginatedOrdersResponse {
+  orders: Order[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
 export default function OrdersList() {
   console.log('OrdersList component rendering - with CSV export');
   
@@ -146,6 +163,10 @@ export default function OrdersList() {
   // PDF modal state
   const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
   const [currentPdfUrl, setCurrentPdfUrl] = useState<string>('');
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize] = useState(50);
 
   // Initialize kickback form
   const kickbackForm = useForm<KickbackFormData>({
@@ -413,18 +434,24 @@ export default function OrdersList() {
   };
 
   try {
-    const { data: orders, isLoading, error } = useQuery<Order[]>({
-      queryKey: ['/api/orders/with-payment-status', searchTerm],
+    const { data: paginatedData, isLoading, error } = useQuery<PaginatedOrdersResponse>({
+      queryKey: ['/api/orders/with-payment-status/paginated', currentPage, pageSize, searchTerm],
       queryFn: () => {
         const params = new URLSearchParams();
+        params.append('page', currentPage.toString());
+        params.append('limit', pageSize.toString());
         if (searchTerm) params.append('search', searchTerm);
-        const url = `/api/orders/with-payment-status${params.toString() ? `?${params.toString()}` : ''}`;
+        const url = `/api/orders/with-payment-status/paginated?${params.toString()}`;
         return apiRequest(url);
       },
       refetchInterval: false, // Completely disable automatic refetching
       refetchOnWindowFocus: false, // Disable refetch on window focus
       refetchOnReconnect: false, // Disable refetch on network reconnect
     });
+
+    const orders = paginatedData?.orders || [];
+    const totalOrders = paginatedData?.total || 0;
+    const totalPages = paginatedData?.totalPages || 1;
 
     // Debug logging to check if isVerified field is present
     if (orders && orders.length > 0) {
@@ -1180,6 +1207,67 @@ export default function OrdersList() {
               </TableBody>
             </Table>
           </CardContent>
+          
+          {/* Pagination Controls */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-6 py-4 border-t">
+              <div className="text-sm text-gray-500">
+                Showing {((currentPage - 1) * pageSize) + 1} to {Math.min(currentPage * pageSize, totalOrders)} of {totalOrders} orders
+              </div>
+              <Pagination>
+                <PaginationContent>
+                  <PaginationItem>
+                    <PaginationPrevious 
+                      onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                      className={currentPage === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                      data-testid="pagination-previous"
+                    />
+                  </PaginationItem>
+                  
+                  {/* Page Numbers */}
+                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                    let pageNumber;
+                    if (totalPages <= 5) {
+                      pageNumber = i + 1;
+                    } else if (currentPage <= 3) {
+                      pageNumber = i + 1;
+                    } else if (currentPage >= totalPages - 2) {
+                      pageNumber = totalPages - 4 + i;
+                    } else {
+                      pageNumber = currentPage - 2 + i;
+                    }
+                    
+                    return (
+                      <PaginationItem key={pageNumber}>
+                        <PaginationLink
+                          onClick={() => setCurrentPage(pageNumber)}
+                          isActive={currentPage === pageNumber}
+                          className="cursor-pointer"
+                          data-testid={`pagination-page-${pageNumber}`}
+                        >
+                          {pageNumber}
+                        </PaginationLink>
+                      </PaginationItem>
+                    );
+                  })}
+
+                  {totalPages > 5 && currentPage < totalPages - 2 && (
+                    <PaginationItem>
+                      <PaginationEllipsis />
+                    </PaginationItem>
+                  )}
+                  
+                  <PaginationItem>
+                    <PaginationNext 
+                      onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                      className={currentPage === totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                      data-testid="pagination-next"
+                    />
+                  </PaginationItem>
+                </PaginationContent>
+              </Pagination>
+            </div>
+          )}
         </Card>
       )}
 

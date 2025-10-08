@@ -838,6 +838,7 @@ export default function ProductionQueueManager() {
                   <TableHead>Customer</TableHead>
                   <TableHead>Model</TableHead>
                   <TableHead>Stock Model</TableHead>
+                  <TableHead>Action Length</TableHead>
                   <TableHead>Bottom Metal</TableHead>
                   <TableHead>Due Date</TableHead>
                   <TableHead>Days to Due</TableHead>
@@ -848,9 +849,20 @@ export default function ProductionQueueManager() {
               </TableHeader>
               <TableBody>
                 {productionQueue.map((order, index) => {
+                  // Get action length
+                  let actionLength = order.features?.action_length;
+                  if (!actionLength || actionLength === 'none') {
+                    // Try to derive from action_inlet
+                    const actionInlet = order.features?.action_inlet;
+                    if (actionInlet) {
+                      if (actionInlet.toLowerCase().includes('short')) actionLength = 'Short';
+                      else if (actionInlet.toLowerCase().includes('long')) actionLength = 'Long';
+                    }
+                  }
+                  
                   // Check if bottom metal contains "adl"
                   const bottomMetal = order.features?.bottom_metal;
-                  const showBottomMetal = bottomMetal && bottomMetal.toLowerCase().includes('adl');
+                  const showBottomMetal = bottomMetal && typeof bottomMetal === 'string' && bottomMetal.toLowerCase().includes('adl');
                   const bottomMetalDisplay = showBottomMetal 
                     ? bottomMetal.replace(/_/g, ' ').toUpperCase() 
                     : '';
@@ -883,6 +895,13 @@ export default function ProductionQueueManager() {
                     <TableCell>{order.modelId}</TableCell>
                     <TableCell>
                       <Badge variant="outline">{order.stockModelId}</Badge>
+                    </TableCell>
+                    <TableCell>
+                      {actionLength && actionLength !== 'none' && (
+                        <Badge variant="secondary" className="font-medium">
+                          {actionLength}
+                        </Badge>
+                      )}
                     </TableCell>
                     <TableCell>
                       {showBottomMetal && (

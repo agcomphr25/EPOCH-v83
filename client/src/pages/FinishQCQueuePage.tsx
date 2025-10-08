@@ -27,9 +27,7 @@ export default function FinishQCQueuePage() {
   // Get orders in Finish QC department
   const finishQCOrders = useMemo(() => {
     return (allOrders as any[]).filter((order: any) => 
-      order.currentDepartment === 'Finish' || 
-      order.currentDepartment === 'FinishQC' ||
-      (order.department === 'Finish' && order.status === 'IN_PROGRESS')
+      order.currentDepartment === 'Finish QC'
     );
   }, [allOrders]);
 

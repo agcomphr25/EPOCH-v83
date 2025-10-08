@@ -4564,15 +4564,17 @@ export class DatabaseStorage implements IStorage {
       'Layup': 35,
       'Plugging': 7,
       'CNC': 7,
-      'Finish': isAdjusted ? 14 : 7,
       'Gunsmith': isAdjusted ? 14 : 7,
+      'Finish': isAdjusted ? 14 : 7,
+      'Finish QC': 7,
       'Paint': 7,
       'QC': 7,
+      'Shipping QC': 7,
       'Shipping': 7
     };
 
     // Define department sequence
-    const departmentSequence = ['P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 'Finish', 'Gunsmith', 'Paint', 'Shipping QC', 'Shipping'];
+    const departmentSequence = ['P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 'Gunsmith', 'Finish', 'Finish QC', 'Paint', 'Shipping QC', 'Shipping'];
 
     // Check if order is overdue in current department
     const currentDeptStandardTime = departmentTimes[order.currentDepartment] || 7;
@@ -4628,7 +4630,7 @@ export class DatabaseStorage implements IStorage {
 
       // Department progression logic
       const departmentFlow = [
-        'P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 'Finish', 'Gunsmith', 'Paint', 'Shipping QC', 'Shipping'
+        'P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 'Gunsmith', 'Finish', 'Finish QC', 'Paint', 'Shipping QC', 'Shipping'
       ];
 
       // Special handling for flat top orders - they bypass CNC and go directly to Finish

@@ -7,6 +7,10 @@ interface DeploymentAuthWrapperProps {
 }
 
 function isDeploymentEnvironment(): boolean {
+  // TEMPORARY: Authentication disabled for agcompepoch.xyz to allow access
+  // TODO: Re-enable authentication once login issues are fully resolved
+  return false;
+  
   // Prioritize NODE_ENV for development - always bypass auth in development
   if (import.meta.env.VITE_NODE_ENV === 'development' || import.meta.env.DEV) {
     return false;

@@ -41,14 +41,8 @@ export async function apiRequest(url: string, options: ApiRequestOptions = {}) {
   
   console.log(`🌐 API Request to ${url} (timeout: ${timeoutDuration}ms, deployment: ${isDeployment})`);
 
-  // Get tokens from localStorage (prefer JWT token for API requests)
-  const jwtToken = localStorage.getItem('jwtToken') || '';
-  const sessionToken = localStorage.getItem('sessionToken') || '';
-  const token = jwtToken || sessionToken;
-
   const defaultHeaders = {
     'Content-Type': 'application/json',
-    ...(token && { 'Authorization': `Bearer ${token}` }),
     ...options.headers,
   };
 
@@ -135,16 +129,6 @@ export const getQueryFn: <T>(options: {
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
-    // Get tokens for authenticated requests
-    const jwtToken = localStorage.getItem('jwtToken') || '';
-    const sessionToken = localStorage.getItem('sessionToken') || '';
-    const token = jwtToken || sessionToken;
-
-    const headers: Record<string, string> = {};
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-
     // Deployment-aware timeout to prevent hanging
     const isDeployment = typeof window !== 'undefined' && (
       window.location.hostname.includes('.replit.app') || 
@@ -162,7 +146,6 @@ export const getQueryFn: <T>(options: {
     try {
       const res = await fetch(queryKey.join("/") as string, {
         credentials: "include",
-        headers,
         signal: controller.signal,
       });
       clearTimeout(timeoutId);

@@ -69,14 +69,14 @@ export default function GunsimthQueuePage() {
     setSalesOrderModalOpen(true);
   };
 
-  // Mutation to progress orders from Gunsmith to Shipping QC
+  // Mutation to progress orders from Gunsmith to Finish
   const progressMutation = useMutation({
     mutationFn: async (orderIds: string[]) => {
       // Process each order individually using the existing progress endpoint
       const progressPromises = orderIds.map(orderId => 
         apiRequest(`/api/orders/${orderId}/progress`, {
           method: 'POST',
-          body: { nextDepartment: 'Shipping QC' }
+          body: { nextDepartment: 'Finish' }
         })
       );
       return Promise.all(progressPromises);
@@ -85,7 +85,7 @@ export default function GunsimthQueuePage() {
       queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
       toast({
         title: "Success",
-        description: `Successfully progressed ${selectedOrders.size} order(s) to Shipping QC department.`,
+        description: `Successfully progressed ${selectedOrders.size} order(s) to Finish department.`,
       });
       setSelectedOrders(new Set());
     },

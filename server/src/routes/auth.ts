@@ -70,13 +70,25 @@ router.post('/login', async (req, res) => {
     });
 
     // Set HTTP-only cookie with production-safe settings
-    res.cookie('sessionToken', sessionToken, {
+    const isProduction = process.env.NODE_ENV === 'production' || 
+                         process.env.REPL_DEPLOYMENT === 'true' || 
+                         process.env.REPLIT_DEPLOYMENT === 'true';
+    
+    const cookieOptions = {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax', // 'lax' works for same-origin (agcompepoch.xyz)
+      secure: isProduction,
+      sameSite: 'lax' as const, // 'lax' works for same-origin (agcompepoch.xyz)
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
       path: '/',
+    };
+    
+    console.log('🍪 Setting cookie:', { 
+      isProduction, 
+      secure: cookieOptions.secure,
+      sameSite: cookieOptions.sameSite 
     });
+    
+    res.cookie('sessionToken', sessionToken, cookieOptions);
 
     res.json({
       success: true,

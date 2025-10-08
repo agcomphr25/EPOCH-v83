@@ -305,7 +305,7 @@ export default function OrdersList() {
     console.log(`🔄 Progressing order ${orderId} from ${currentDepartment} to ${nextDepartment}`);
 
     // IMMEDIATELY update React Query cache - this prevents any reversion
-    queryClient.setQueryData(['/api/orders/with-payment-status', 'v2'], (old: any[]) => {
+    queryClient.setQueryData(['/api/orders/with-payment-status', searchTerm], (old: any[]) => {
       if (!old) return old;
       const updated = old.map((order: any) => {
         if (order.orderId === orderId) {
@@ -413,8 +413,13 @@ export default function OrdersList() {
 
   try {
     const { data: orders, isLoading, error } = useQuery<Order[]>({
-      queryKey: ['/api/orders/with-payment-status', 'v2'],
-      queryFn: () => apiRequest('/api/orders/with-payment-status'),
+      queryKey: ['/api/orders/with-payment-status', searchTerm],
+      queryFn: () => {
+        const params = new URLSearchParams();
+        if (searchTerm) params.append('search', searchTerm);
+        const url = `/api/orders/with-payment-status${params.toString() ? `?${params.toString()}` : ''}`;
+        return apiRequest(url);
+      },
       refetchInterval: false, // Completely disable automatic refetching
       refetchOnWindowFocus: false, // Disable refetch on window focus
       refetchOnReconnect: false, // Disable refetch on network reconnect
@@ -722,10 +727,21 @@ export default function OrdersList() {
               All Orders
             </h1>
             <p className="text-gray-600 mt-1">
-              View and manage all created orders - with CSV export
+              {searchTerm ? `Search results for "${searchTerm}"` : 'Showing last 25 orders - use search to find specific orders'}
             </p>
           </div>
           <div className="flex items-center gap-2">
+            <div className="relative w-80">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Input
+                type="text"
+                placeholder="Search by Order ID, FB Order #, Customer PO, or Customer Name..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10 pr-4"
+                data-testid="input-search-orders"
+              />
+            </div>
             <Button 
               onClick={handleExportCSV}
               variant="outline" 

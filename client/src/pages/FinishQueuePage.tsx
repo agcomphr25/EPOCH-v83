@@ -90,7 +90,9 @@ export default function FinishQueuePage() {
     
     const filtered = (allOrders as any[]).filter((order: any) => {
       const normalizedDept = order.currentDepartment?.trim().toLowerCase().replace(/['"]/g, '');
-      return normalizedDept === 'finish';
+      const normalizedLegacyDept = order.department?.trim().toLowerCase().replace(/['"]/g, '');
+      return normalizedDept === 'finish' || 
+             (normalizedLegacyDept === 'finish' && order.status === 'IN_PROGRESS');
     });
     
     // Debug logging to help identify mismatches in production

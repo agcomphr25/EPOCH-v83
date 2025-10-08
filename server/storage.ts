@@ -1480,13 +1480,16 @@ export class DatabaseStorage implements IStorage {
     })) as any;
   }
 
-  // Helper function to calculate order total from features and pricing
-  private async calculateOrderTotal(order: AllOrder): Promise<number> {
+  // PERFORMANCE OPTIMIZED: Calculate order total with cached stock models and features
+  private async calculateOrderTotalOptimized(
+    order: AllOrder, 
+    stockModels: StockModel[], 
+    features: Feature[]
+  ): Promise<number> {
     let total = 0;
 
     // Add base stock model price (use override if set, otherwise use standard price)
     if (order.modelId) {
-      const stockModels = await this.getAllStockModels();
       const selectedModel = stockModels.find(model => model.id === order.modelId);
       if (selectedModel) {
         // CRITICAL FIX: Ensure all values are proper numbers to prevent NaN
@@ -1506,7 +1509,6 @@ export class DatabaseStorage implements IStorage {
 
     // Add feature prices from features object (but NOT bottom_metal, paint_options, rail_accessory, other_options as they are handled separately)
     if (order.features && typeof order.features === 'object') {
-      const features = await this.getAllFeatures();
       Object.entries(order.features).forEach(([featureId, value]) => {
         // Skip features that have separate state variables to avoid double counting (MATCH FRONTEND LOGIC)
         if (featureId === 'bottom_metal' || featureId === 'paint_options' || featureId === 'rail_accessory' || featureId === 'other_options') {
@@ -2092,12 +2094,16 @@ export class DatabaseStorage implements IStorage {
     // Create payment map for fast lookup
     const paymentMap = new Map(paymentTotals.map(p => [p.orderId, p.totalPayments]));
 
+    // PERFORMANCE FIX: Fetch stock models and features ONCE instead of per-order
+    const stockModels = await this.getAllStockModels();
+    const features = await this.getAllFeatures();
+
     // Process orders with payment info (using proper order total calculation)
     const ordersWithPaymentInfo = await Promise.all(ordersWithCustomers.map(async order => {
       const paymentTotal = paymentMap.get(order.orderId) || 0;
       
-      // CRITICAL FIX: Use actual calculated order total, not stale paymentAmount field
-      const actualOrderTotal = await this.calculateOrderTotal(order);
+      // CRITICAL FIX: Use actual calculated order total with cached data for performance
+      const actualOrderTotal = await this.calculateOrderTotalOptimized(order, stockModels, features);
 
       // Fixed payment status logic using real current order total
       const isFullyPaid = paymentTotal >= actualOrderTotal && actualOrderTotal > 0;

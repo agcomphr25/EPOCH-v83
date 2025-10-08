@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Link, useLocation } from 'wouter';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -31,20 +30,12 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
+  AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
-import { Search, X, Download, MoreHorizontal, XCircle, ArrowRight, AlertTriangle, Edit, FileText, QrCode, User, CalendarDays, Package, Mail, MessageSquare, Eye } from 'lucide-react';
-import { format } from 'date-fns';
+import { Search, X, Download, MoreHorizontal, XCircle, ArrowRight, AlertTriangle, Edit, FileText } from 'lucide-react';
 import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
-import { cn } from '@/lib/utils';
-import CustomerDetailsTooltip from '@/components/CustomerDetailsTooltip';
-import OrderSummaryTooltip from '@/components/OrderSummaryTooltip';
-import { BarcodeDisplay } from '@/components/BarcodeDisplay';
-import CommunicationCompose from '@/components/CommunicationCompose';
-import { getDisplayOrderId } from '@/lib/orderUtils';
-import hotToast from 'react-hot-toast';
 
 interface Order {
   id: number;
@@ -54,7 +45,6 @@ interface Order {
   customerId: string;
   customer?: string;
   product?: string;
-  customerPO?: string;
   modelId: string;
   currentDepartment: string;
   status: string;
@@ -66,14 +56,6 @@ interface Order {
   cancelReason?: string;
   isVerified?: boolean;
   createdAt?: string;
-  barcode?: string;
-}
-
-interface Customer {
-  id: number;
-  name: string;
-  email?: string;
-  phone?: string;
 }
 
 interface PaginatedOrdersResponse {
@@ -93,12 +75,6 @@ export default function AllOrdersPage() {
   const [orderToCancel, setOrderToCancel] = useState<string>('');
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize] = useState(50); // Orders per page
-  const [communicationModal, setCommunicationModal] = useState<{
-    isOpen: boolean;
-    customer: { id: number; name: string; email?: string; phone?: string };
-    orderId?: string;
-  } | null>(null);
-  const [, setLocation] = useLocation();
 
   // Department progression flow
   const departments = [
@@ -151,19 +127,8 @@ export default function AllOrdersPage() {
   const { data: paginatedData, isLoading } = useQuery<PaginatedOrdersResponse>({
     queryKey: ['/api/orders/with-payment-status/paginated', currentPage, pageSize],
     queryFn: () => apiRequest(`/api/orders/with-payment-status/paginated?page=${currentPage}&limit=${pageSize}`),
-    staleTime: 30000,
-    gcTime: 60000
-  });
-
-  // Fetch customers for communication
-  const { data: customers } = useQuery<Customer[]>({
-    queryKey: ['/api/customers'],
-  });
-
-  // Fetch kickbacks to check for unresolved issues
-  const { data: kickbacks } = useQuery<any[]>({
-    queryKey: ['/api/kickbacks'],
-    refetchInterval: 60000,
+    staleTime: 30000, // Cache for 30 seconds to improve performance
+    gcTime: 60000 // Keep in cache for 1 minute
   });
 
   const orders = paginatedData?.orders || [];
@@ -201,53 +166,6 @@ export default function AllOrdersPage() {
     }
   });
 
-  // CSV Export handlers
-  const handleExportCSV = async () => {
-    try {
-      const response = await fetch('/api/orders/export/csv');
-      if (!response.ok) {
-        throw new Error('Failed to export CSV');
-      }
-
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.style.display = 'none';
-      a.href = url;
-      a.download = `orders_export_${new Date().toISOString().split('T')[0]}.csv`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-    } catch (error) {
-      console.error('CSV export error:', error);
-      hotToast.error('Failed to export CSV. Please try again.');
-    }
-  };
-
-  const handleExportAllCSV = async () => {
-    try {
-      const response = await fetch('/api/orders/export/csv-all');
-      if (!response.ok) {
-        throw new Error('Failed to export all orders CSV');
-      }
-
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.style.display = 'none';
-      a.href = url;
-      a.download = `all_orders_export_${new Date().toISOString().split('T')[0]}.csv`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-    } catch (error) {
-      console.error('Full CSV export error:', error);
-      hotToast.error('Failed to export all orders CSV. Please try again.');
-    }
-  };
-
   const handleCancelOrder = (orderId: string) => {
     setOrderToCancel(orderId);
     setIsDialogOpen(true);
@@ -261,40 +179,6 @@ export default function AllOrdersPage() {
     if (orderToCancel && cancelReason.trim()) {
       cancelOrderMutation.mutate({ orderId: orderToCancel, reason: cancelReason });
     }
-  };
-
-  const handleKickbackClick = () => {
-    setLocation('/kickback-tracking');
-  };
-
-  const handleOpenCommunication = (order: Order, customersList: Customer[]) => {
-    const customer = customersList?.find(c => c.id.toString() === order.customerId);
-    if (customer) {
-      setCommunicationModal({
-        isOpen: true,
-        customer: {
-          id: customer.id,
-          name: customer.name,
-          email: customer.email,
-          phone: customer.phone
-        },
-        orderId: order.orderId
-      });
-    }
-  };
-
-  const handleCloseCommunication = () => {
-    setCommunicationModal(null);
-  };
-
-  // Check if an order has unresolved kickbacks
-  const hasUnresolvedKickback = (orderId: string) => {
-    if (!kickbacks) return false;
-    return kickbacks?.some((kickback: any) => 
-      kickback.orderId === orderId && 
-      kickback.status !== 'RESOLVED' && 
-      kickback.status !== 'CLOSED'
-    );
   };
 
   // Department progression helpers
@@ -311,25 +195,9 @@ export default function AllOrdersPage() {
     progressOrderMutation.mutate({ orderId, nextDepartment: 'Layup/Plugging' });
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status?.toUpperCase()) {
-      case 'HOLDING':
-        return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300';
-      case 'DRAFT':
-        return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300';
-      case 'FINALIZED':
-        return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300';
-      case 'IN_PROGRESS':
-        return 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300';
-      case 'FULFILLED':
-        return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300';
-      case 'SHIPPED':
-        return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300';
-      case 'CANCELLED':
-        return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300';
-      default:
-        return 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300';
-    }
+  const getDepartmentBadgeColor = (department: string) => {
+    // Keep badges black/default as requested
+    return 'bg-gray-600';
   };
 
   // Filter orders based on search and department, excluding cancelled orders
@@ -350,7 +218,7 @@ export default function AllOrdersPage() {
     const searchLower = searchTerm.toLowerCase();
     const searchFields = [
       order.orderId?.toLowerCase(),
-      order.fbOrderNumber?.toLowerCase(),
+      order.fbOrderNumber?.toLowerCase(), // Include FB Order Number in search
       order.customer?.toLowerCase(),
       order.customerId?.toLowerCase(),
       order.product?.toLowerCase(),
@@ -369,6 +237,7 @@ export default function AllOrdersPage() {
     const searchLower = searchTerm.toLowerCase();
     let score = 0;
     
+    // Higher scores for exact matches and earlier field matches
     if (order.orderId?.toLowerCase() === searchLower) score += 100;
     else if (order.orderId?.toLowerCase().startsWith(searchLower)) score += 50;
     else if (order.orderId?.toLowerCase().includes(searchLower)) score += 20;
@@ -381,35 +250,48 @@ export default function AllOrdersPage() {
     else if (order.customer?.toLowerCase().startsWith(searchLower)) score += 40;
     else if (order.customer?.toLowerCase().includes(searchLower)) score += 15;
     
+    if (order.customerId?.toLowerCase() === searchLower) score += 70;
+    else if (order.customerId?.toLowerCase().includes(searchLower)) score += 10;
+    
+    if (order.modelId?.toLowerCase() === searchLower) score += 60;
+    else if (order.modelId?.toLowerCase().startsWith(searchLower)) score += 30;
+    else if (order.modelId?.toLowerCase().includes(searchLower)) score += 8;
+    
+    if (order.product?.toLowerCase().includes(searchLower)) score += 5;
+    
     return score;
   };
 
   // Sort orders based on search relevance first, then selected sort option
   const sortedOrders = [...filteredOrders].sort((a, b) => {
+    // If search term exists, prioritize by relevance first
     if (searchTerm.trim()) {
       const scoreA = getSearchRelevanceScore(a, searchTerm);
       const scoreB = getSearchRelevanceScore(b, searchTerm);
       
       if (scoreA !== scoreB) {
-        return scoreB - scoreA;
+        return scoreB - scoreA; // Higher relevance first
       }
     }
     
+    // Then apply regular sorting
     switch (sortBy) {
       case 'orderDate':
-        return new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime();
+        return new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime(); // Newest first
       case 'dueDate':
-        return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+        return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime(); // Earliest due date first
       case 'customer':
         return (a.customer || '').localeCompare(b.customer || '');
       case 'model':
         return (a.modelId || '').localeCompare(b.modelId || '');
       case 'enteredDate':
-        return new Date(b.createdAt || '').getTime() - new Date(a.createdAt || '').getTime();
+        return new Date(b.createdAt || '').getTime() - new Date(a.createdAt || '').getTime(); // Newest entered first
       default:
         return 0;
     }
   });
+
+
 
   if (isLoading) {
     return (
@@ -432,28 +314,14 @@ export default function AllOrdersPage() {
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-          <Package className="h-6 w-6" />
-          All Orders
-        </h1>
-        <div className="flex items-center gap-2">
-          <Button 
-            onClick={handleExportCSV}
-            variant="outline" 
-            className="flex items-center gap-2"
-            data-testid="export-csv-button"
-          >
+        <h1 className="text-2xl font-bold text-gray-900">All Orders</h1>
+        <div className="flex items-center gap-4">
+          <div className="text-sm text-gray-500">
+            View and manage all created orders - with CSV export
+          </div>
+          <Button variant="outline" className="flex items-center gap-2">
             <Download className="h-4 w-4" />
-            Export CSV (Active)
-          </Button>
-          <Button 
-            onClick={handleExportAllCSV}
-            variant="outline" 
-            className="flex items-center gap-2"
-            data-testid="export-all-csv-button"
-          >
-            <Download className="h-4 w-4" />
-            Export All CSV
+            Export CSV
           </Button>
         </div>
       </div>
@@ -462,8 +330,7 @@ export default function AllOrdersPage() {
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <FileText className="h-5 w-5" />
-              <span>Orders ({sortedOrders.length})</span>
+              <span>📋 All Orders</span>
               <span className="text-sm text-gray-500">
                 Page {currentPage} of {totalPages} ({totalOrders} total orders)
               </span>
@@ -473,11 +340,10 @@ export default function AllOrdersPage() {
               <div className="relative">
                 <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Search by Order ID, Customer, FB Order #..."
+                  placeholder="Search by Order ID, Customer Name, Phone, or FB Order #..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-8 w-96"
-                  data-testid="input-search-orders"
                 />
                 {searchTerm && (
                   <Button
@@ -532,208 +398,122 @@ export default function AllOrdersPage() {
                 <TableHead>Order ID</TableHead>
                 <TableHead>Current Department</TableHead>
                 <TableHead>Customer</TableHead>
-                <TableHead>Customer PO</TableHead>
                 <TableHead>Product</TableHead>
                 <TableHead>Order Date</TableHead>
                 <TableHead>Due Date</TableHead>
+                <TableHead>Status</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {sortedOrders.map(order => (
-                <TableRow key={order.orderId} className={cn(order.isVerified ? "bg-green-50 dark:bg-green-950" : "")}>
+              {orders.map(order => (
+                <TableRow key={order.orderId} className={order.isVerified ? "bg-green-50 dark:bg-green-950" : ""}>
                   <TableCell className="font-medium">
+                    {order.fbOrderNumber || order.orderId}
+                  </TableCell>
+                  <TableCell>
+                    <Badge className={`${getDepartmentBadgeColor(order.currentDepartment)} text-white`}>
+                      {order.currentDepartment}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>{order.customer || 'N/A'}</TableCell>
+                  <TableCell>{order.product || order.modelId}</TableCell>
+                  <TableCell>
+                    {order.orderDate ? new Date(order.orderDate).toLocaleDateString() : '-'}
+                  </TableCell>
+                  <TableCell>
+                    {order.dueDate ? new Date(order.dueDate).toLocaleDateString() : '-'}
+                  </TableCell>
+                  <TableCell>
                     <div className="flex items-center gap-2">
-                      <OrderSummaryTooltip orderId={order.orderId}>
-                        <span className="text-blue-600 hover:text-blue-800 cursor-pointer">
-                          {getDisplayOrderId(order)}
-                        </span>
-                      </OrderSummaryTooltip>
-                      {order.status && (
-                        <Badge 
-                          className={`${getStatusColor(order.status)} text-xs px-1 py-0`}
-                          title={`Order Status: ${order.status}`}
-                        >
-                          {order.status}
-                        </Badge>
-                      )}
-                      {hasUnresolvedKickback(order.orderId) && (
-                        <Badge 
-                          className="bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300 text-xs px-1 py-0 cursor-pointer hover:bg-red-200 hover:text-red-900 transition-colors"
-                          title="This order has unresolved kickbacks - Click to view Kickback Tracking"
-                          onClick={handleKickbackClick}
-                        >
-                          KICKBACK
-                        </Badge>
-                      )}
+                      <Badge variant={order.status === 'SCRAPPED' ? 'destructive' : 'default'}>
+                        {order.status || 'ACTIVE'}
+                      </Badge>
                       {order.isFullyPaid ? (
-                        <Badge 
-                          className="bg-green-500 hover:bg-green-600 text-white text-xs px-1 py-0"
-                          title="Order is paid"
-                        >
+                        <Badge className="bg-green-500 hover:bg-green-600 text-white">
                           PAID
                         </Badge>
                       ) : (
-                        <Badge 
-                          className="bg-red-500 hover:bg-red-600 text-white text-xs px-1 py-0"
-                        >
+                        <Badge className="bg-red-500 hover:bg-red-600 text-white">
                           NOT PAID
+                        </Badge>
+                      )}
+                      {order.status === 'FULFILLED' && (
+                        <Badge className="bg-blue-500 hover:bg-blue-600 text-white">
+                          FULFILLED
+                        </Badge>
+                      )}
+                      {order.isCancelled && (
+                        <Badge variant="destructive" className="bg-red-100 text-red-800">
+                          CANCELLED
                         </Badge>
                       )}
                     </div>
                   </TableCell>
                   <TableCell>
-                    <Badge variant="secondary">
-                      {order.currentDepartment || 'Not Set'}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <div className="relative group">
-                      <CustomerDetailsTooltip 
-                        customerId={order.customerId} 
-                        customerName={order.customer || 'N/A'}
-                      >
-                        <div className="flex items-center gap-2">
-                          <User className="h-4 w-4 text-gray-400" />
-                          {order.customer || 'N/A'}
-                        </div>
-                      </CustomerDetailsTooltip>
-
-                      {/* Communication Buttons - Show on Hover */}
-                      <div className="absolute left-0 top-full mt-1 hidden group-hover:flex bg-white border border-gray-200 rounded-md shadow-lg p-1 z-10">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-8 w-8 p-0 hover:bg-blue-50"
-                          onClick={() => handleOpenCommunication(order, customers || [])}
-                          title="Send Email"
-                        >
-                          <Mail className="h-4 w-4 text-blue-600" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-8 w-8 p-0 hover:bg-green-50"
-                          onClick={() => handleOpenCommunication(order, customers || [])}
-                          title="Send SMS"
-                        >
-                          <MessageSquare className="h-4 w-4 text-green-600" />
-                        </Button>
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="text-sm text-gray-600">
-                      {order.customerPO || '-'}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <Package className="h-4 w-4 text-gray-400" />
-                      {order.product || order.modelId}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <CalendarDays className="h-4 w-4 text-gray-400" />
-                      {order.orderDate ? format(new Date(order.orderDate), 'MMM d, yyyy') : '-'}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <CalendarDays className="h-4 w-4 text-gray-400" />
-                      {order.dueDate ? format(new Date(order.dueDate), 'MMM d, yyyy') : '-'}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      {/* Edit Button */}
-                      <Link href={`/order-entry?draft=${order.orderId}`}>
-                        <Button variant="outline" size="sm">
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                      </Link>
-                      
-                      {/* View Sales Order */}
-                      <Badge
-                        variant="outline"
-                        className="cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 text-xs ml-1 border-blue-300 text-blue-700 dark:text-blue-300"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleViewSalesOrder(order.orderId);
-                        }}
-                      >
-                        <Eye className="w-3 h-3" />
-                      </Badge>
-
-                      {/* Barcode Button */}
-                      <Dialog>
-                        <DialogTrigger asChild>
-                          <Button variant="outline" size="sm">
-                            <QrCode className="h-4 w-4" />
-                          </Button>
-                        </DialogTrigger>
-                        <DialogContent className="max-w-4xl">
-                          <DialogHeader>
-                            <DialogTitle>Order Barcode</DialogTitle>
-                          </DialogHeader>
-                          {order.barcode && <BarcodeDisplay orderId={order.orderId} barcode={order.barcode} />}
-                        </DialogContent>
-                      </Dialog>
-
-                      {/* Progress Button */}
+                    <div className="flex space-x-2">
                       {(() => {
                         const nextDept = getNextDepartment(order.currentDepartment);
                         const isComplete = order.currentDepartment === 'Shipping';
                         const isScrapped = order.status === 'SCRAPPED';
-                        const isFulfilled = order.status === 'FULFILLED';
-
-                        if (!isScrapped && !isComplete && !isFulfilled && nextDept) {
-                          return (
-                            <Button
-                              size="sm"
-                              onClick={() => handleProgressOrder(order.orderId, nextDept)}
-                              disabled={progressOrderMutation.isPending}
-                            >
-                              <ArrowRight className="w-4 h-4 mr-1" />
-                              {nextDept}
-                            </Button>
-                          );
-                        }
-                        return null;
+                        const isFulfilled = order.status === 'FULFILLED'; // Only exclude FULFILLED, not FINALIZED
+                        
+                        return (
+                          <>
+                            {/* Push to Layup/Plugging Button - Only for P1 Production Queue */}
+                            {!isScrapped && !isComplete && !isFulfilled && order.currentDepartment === 'P1 Production Queue' && (
+                              <Button
+                                size="sm"
+                                onClick={() => handlePushToLayupPlugging(order.orderId)}
+                                disabled={progressOrderMutation.isPending}
+                                className="bg-green-600 hover:bg-green-700 text-white"
+                              >
+                                <ArrowRight className="w-4 h-4 mr-1" />
+                                Push to Layup/Plugging
+                              </Button>
+                            )}
+                            
+                            {/* Progress to Next Department Button - For all other departments */}
+                            {!isScrapped && !isComplete && !isFulfilled && nextDept && order.currentDepartment !== 'P1 Production Queue' && (
+                              <Button
+                                size="sm"
+                                onClick={() => handleProgressOrder(order.orderId, nextDept)}
+                                disabled={progressOrderMutation.isPending}
+                                className={progressOrderMutation.isPending ? 'opacity-50 cursor-not-allowed' : ''}
+                              >
+                                <ArrowRight className="w-4 h-4 mr-1" />
+                                {progressOrderMutation.isPending ? 'Progressing...' : nextDept}
+                              </Button>
+                            )}
+                            
+                            {/* More Actions Dropdown */}
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" className="h-8 w-8 p-0">
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem 
+                                  onClick={() => handleViewSalesOrder(order.orderId)}
+                                >
+                                  <FileText className="mr-2 h-4 w-4" />
+                                  Sales Order PDF
+                                </DropdownMenuItem>
+                                {!order.isCancelled && (
+                                  <DropdownMenuItem 
+                                    onClick={() => handleCancelOrder(order.orderId)}
+                                    className="text-red-600"
+                                  >
+                                    <XCircle className="mr-2 h-4 w-4" />
+                                    Cancel Order
+                                  </DropdownMenuItem>
+                                )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </>
+                        );
                       })()}
-
-                      {/* More Actions Dropdown */}
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" className="h-8 w-8 p-0">
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem 
-                            onClick={() => handleViewSalesOrder(order.orderId)}
-                          >
-                            <FileText className="mr-2 h-4 w-4" />
-                            Sales Order PDF
-                          </DropdownMenuItem>
-                          <DropdownMenuItem 
-                            onClick={() => setLocation('/kickback-tracking')}
-                          >
-                            <AlertTriangle className="mr-2 h-4 w-4" />
-                            Report Kickback
-                          </DropdownMenuItem>
-                          {!order.isCancelled && (
-                            <DropdownMenuItem 
-                              onClick={() => handleCancelOrder(order.orderId)}
-                              className="text-red-600"
-                            >
-                              <XCircle className="mr-2 h-4 w-4" />
-                              Cancel Order
-                            </DropdownMenuItem>
-                          )}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -741,7 +521,7 @@ export default function AllOrdersPage() {
             </TableBody>
           </Table>
 
-          {sortedOrders.length === 0 && !isLoading && (
+          {orders.length === 0 && !isLoading && (
             <div className="text-center py-8 text-gray-500">
               No orders found for the selected criteria
             </div>
@@ -806,16 +586,6 @@ export default function AllOrdersPage() {
           </div>
         )}
       </Card>
-
-      {/* Communication Modal */}
-      {communicationModal && (
-        <CommunicationCompose
-          isOpen={communicationModal.isOpen}
-          onClose={handleCloseCommunication}
-          customer={communicationModal.customer}
-          orderId={communicationModal.orderId}
-        />
-      )}
 
       {/* Cancel Order Dialog */}
       <AlertDialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>

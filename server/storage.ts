@@ -18,6 +18,9 @@ import {
   certifications, employeeCertifications, evaluations, employeeDocuments, employeeAuditLog,
   // allOrders table as the finalized orders table
   allOrders,
+  // Order reference tables
+  orderStatusTypes,
+  orderDepartmentTypes,
   // Order attachments table
   orderAttachments,
   // Gateway reports table - temporarily removed
@@ -38,6 +41,8 @@ import {
   type StockModel, type InsertStockModel,
   type OrderDraft, type InsertOrderDraft,
   type AllOrder, type InsertAllOrder, // Type for finalized orders
+  type OrderStatusType, type InsertOrderStatusType,
+  type OrderDepartmentType, type InsertOrderDepartmentType,
   type Form, type InsertForm,
   type FormSubmission, type InsertFormSubmission,
   type InventoryItem, type InsertInventoryItem,
@@ -1301,8 +1306,10 @@ export class DatabaseStorage implements IStorage {
       shipping: allOrders.shipping,
       tikkaOption: allOrders.tikkaOption,
       status: allOrders.status,
+      statusId: allOrders.statusId,
       barcode: allOrders.barcode,
       currentDepartment: allOrders.currentDepartment,
+      currentDepartmentId: allOrders.currentDepartmentId,
       departmentHistory: allOrders.departmentHistory,
       scrappedQuantity: allOrders.scrappedQuantity,
       totalProduced: allOrders.totalProduced,
@@ -1403,8 +1410,10 @@ export class DatabaseStorage implements IStorage {
       shipping: allOrders.shipping,
       tikkaOption: allOrders.tikkaOption,
       status: allOrders.status,
+      statusId: allOrders.statusId,
       barcode: allOrders.barcode,
       currentDepartment: allOrders.currentDepartment,
+      currentDepartmentId: allOrders.currentDepartmentId,
       departmentHistory: allOrders.departmentHistory,
       scrappedQuantity: allOrders.scrappedQuantity,
       totalProduced: allOrders.totalProduced,
@@ -2001,8 +2010,10 @@ export class DatabaseStorage implements IStorage {
         shipping: allOrders.shipping,
         tikkaOption: allOrders.tikkaOption,
         status: allOrders.status,
+        statusId: allOrders.statusId,
         barcode: allOrders.barcode,
         currentDepartment: allOrders.currentDepartment,
+        currentDepartmentId: allOrders.currentDepartmentId,
         departmentHistory: allOrders.departmentHistory,
         scrappedQuantity: allOrders.scrappedQuantity,
         totalProduced: allOrders.totalProduced,

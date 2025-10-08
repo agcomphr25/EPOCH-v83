@@ -693,16 +693,22 @@ export default function OrdersList() {
 
   const getStatusColor = (status: string) => {
     switch (status?.toUpperCase()) {
+      case 'HOLDING':
+        return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300';
       case 'DRAFT':
-        return 'bg-yellow-100 text-yellow-800';
+        return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300';
       case 'FINALIZED':
-        return 'bg-green-100 text-green-800';
+        return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300';
+      case 'IN_PROGRESS':
+        return 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300';
+      case 'FULFILLED':
+        return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300';
       case 'SHIPPED':
-        return 'bg-blue-100 text-blue-800';
+        return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300';
       case 'CANCELLED':
-        return 'bg-red-100 text-red-800';
+        return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300';
       default:
-        return 'bg-gray-100 text-gray-800';
+        return 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300';
     }
   };
 
@@ -922,6 +928,14 @@ export default function OrdersList() {
                             {getDisplayOrderId(order)}
                           </span>
                         </OrderSummaryTooltip>
+                        {order.status && (
+                          <Badge 
+                            className={`${getStatusColor(order.status)} text-xs px-1 py-0`}
+                            title={`Order Status: ${order.status}`}
+                          >
+                            {order.status}
+                          </Badge>
+                        )}
                         {hasUnresolvedKickback(order.orderId) && (
                           <Badge 
                             className="bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300 text-xs px-1 py-0 cursor-pointer hover:bg-red-200 hover:text-red-900 transition-colors"

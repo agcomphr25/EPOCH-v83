@@ -107,7 +107,8 @@ export default function GunsimthQueuePage() {
   const gunsmithOrders = useMemo(() => {
     const filtered = (allOrders as any[]).filter((order: any) => {
       const normalizedDept = order.currentDepartment?.trim().toLowerCase();
-      return normalizedDept === 'gunsmith';
+      // Match exact "gunsmith" OR department starting with "gun" (catches typos like "gunsmit", "gun", etc.)
+      return normalizedDept === 'gunsmith' || normalizedDept?.startsWith('gun');
     });
     
     // Debug logging to help identify mismatches in production

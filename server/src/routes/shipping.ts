@@ -160,7 +160,7 @@ router.get('/ready-for-shipping', async (req: Request, res: Response) => {
     const allOrders = [...finalizedOrders, ...draftOrders];
     const shippingOrders = allOrders.filter((order: any) => 
       order.currentDepartment === 'Shipping' ||
-      order.currentDepartment === 'Shipping Management' ||
+      order.currentDepartment === 'Fulfilled' ||
       order.status === 'Ready for Shipping' ||
       order.status === 'FULFILLED' ||
       (order.qcCompletedAt && !order.shippedDate) ||
@@ -193,7 +193,7 @@ router.post('/mark-shipped/:orderId', async (req: Request, res: Response) => {
 
     // Update order with shipping information
     const updateData = {
-      currentDepartment: 'Shipped',
+      currentDepartment: 'Fulfilled',
       trackingNumber,
       shippingCarrier,
       shippingMethod,

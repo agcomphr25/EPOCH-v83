@@ -93,7 +93,6 @@ import PaintQueuePage from "./pages/PaintQueuePage";
 import QCShippingQueuePage from "./pages/QCShippingQueuePage";
 import ShippingQueuePage from "./pages/ShippingQueuePage";
 import ShippingLabelPage from "./pages/ShippingLabelPage";
-import ShippingManagement from "./pages/ShippingManagement";
 import NonconformanceDashboard from "./components/NonconformanceDashboard";
 import NonconformanceReport from "./components/NonconformanceReport";
 import RFQRiskAssessment from "./pages/RFQRiskAssessment";
@@ -342,10 +341,6 @@ function App() {
                   
                   {/* Shipping Label Route */}
                   <Route path="/shipping/label/:orderId" component={ShippingLabelPage} />
-
-                  {/* Shipping Management Routes */}
-                  <Route path="/shipping-management" component={ShippingManagement} />
-
 
                   {/* Catch-all route for 404 */}
                   <Route component={NotFound} />

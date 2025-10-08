@@ -211,8 +211,8 @@ export default function InventoryItemsCard() {
     queryFn: () => apiRequest('/api/enhanced/inventory/items'),
   });
 
-  // Filter items based on search term
-  const items = allItems.filter(item => {
+  // Filter items based on search term (with safety check for array)
+  const items = Array.isArray(allItems) ? allItems.filter(item => {
     if (!searchTerm.trim()) return true;
     
     const searchLower = searchTerm.toLowerCase();
@@ -225,7 +225,7 @@ export default function InventoryItemsCard() {
       (item.secondarySource && item.secondarySource.toLowerCase().includes(searchLower)) ||
       (item.notes && item.notes.toLowerCase().includes(searchLower))
     );
-  });
+  }) : [];
 
   // Create mutation
   const createMutation = useMutation({

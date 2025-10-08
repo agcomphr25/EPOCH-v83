@@ -105,9 +105,22 @@ export default function GunsimthQueuePage() {
 
   // Get orders in Gunsmith department
   const gunsmithOrders = useMemo(() => {
-    return (allOrders as any[]).filter((order: any) => 
-      order.currentDepartment === 'Gunsmith'
-    );
+    const filtered = (allOrders as any[]).filter((order: any) => {
+      const normalizedDept = order.currentDepartment?.trim().toLowerCase();
+      return normalizedDept === 'gunsmith';
+    });
+    
+    // Debug logging to help identify mismatches in production
+    console.log('🔍 Gunsmith Queue - Total orders:', allOrders.length);
+    console.log('🔍 Gunsmith Queue - Filtered orders:', filtered.length);
+    const gunsmithDepts = (allOrders as any[])
+      .filter((o: any) => o.currentDepartment?.toLowerCase().includes('gun'))
+      .map((o: any) => ({ orderId: o.orderId, dept: `"${o.currentDepartment}"` }));
+    if (gunsmithDepts.length > 0) {
+      console.log('🔍 Orders with "gun" in department:', gunsmithDepts);
+    }
+    
+    return filtered;
   }, [allOrders]);
 
   // Categorize orders by due date

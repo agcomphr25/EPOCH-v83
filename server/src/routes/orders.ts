@@ -41,7 +41,12 @@ router.get('/with-payment-status', async (req: Request, res: Response) => {
     const search = (req.query.search as string) || '';
     const limit = parseInt(req.query.limit as string) || 25; // Default to 25 orders
     
+    console.log(`📊 Orders API called with search="${search}", limit=${limit}`);
+    
     const orders = await storage.getAllOrdersWithPaymentStatus(search, limit);
+    
+    console.log(`📊 Returning ${orders.length} orders`);
+    
     res.json(orders);
   } catch (error) {
     console.error('Error retrieving orders with payment status:', error);

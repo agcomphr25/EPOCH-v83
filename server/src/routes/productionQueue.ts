@@ -275,6 +275,11 @@ router.get('/prioritized', async (req: Request, res: Response) => {
       LEFT JOIN customers c ON CAST(o.customer_id AS INTEGER) = c.id
       WHERE o.current_department = 'P1 Production Queue'
         AND o.status IN ('FINALIZED', 'Active')
+        AND o.model_id IS NOT NULL 
+        AND o.model_id != '' 
+        AND o.model_id != 'None'
+        AND o.model_id != 'no_stock'
+        AND (o.features->>'action_length' IS NOT NULL AND o.features->>'action_length' != '' AND o.features->>'action_length' != 'null')
       ORDER BY 
         o.due_date ASC,
         o.created_at ASC
@@ -893,21 +898,14 @@ router.get('/attention', async (req: Request, res: Response) => {
         o.customer_id as customerId,
         o.features,
         o.created_at as createdAt,
-        c.name as customerName,
-        poi.specifications as poItemSpecs
+        c.name as customerName
       FROM all_orders o
       LEFT JOIN customers c ON CAST(o.customer_id AS INTEGER) = c.id
-      LEFT JOIN purchase_order_items poi ON o.order_id = poi.item_id
       WHERE o.current_department = 'P1 Production Queue'
         AND o.status IN ('FINALIZED', 'Active')
         AND (
           (o.model_id IS NULL OR o.model_id = '' OR o.model_id = 'None') OR
-          (
-            (o.features->>'action_length' IS NULL OR o.features->>'action_length' = '' OR o.features->>'action_length' = 'null') 
-            AND NOT (o.features->>'action_inlet' LIKE '%flattop%')
-            AND (poi.specifications IS NULL OR poi.specifications->>'actionLength' IS NULL OR poi.specifications->>'actionLength' = '')
-            AND NOT (poi.specifications->>'flatTop' = 'true')
-          )
+          (o.features->>'action_length' IS NULL OR o.features->>'action_length' = '' OR o.features->>'action_length' = 'null')
         )
       ORDER BY 
         o.due_date ASC,

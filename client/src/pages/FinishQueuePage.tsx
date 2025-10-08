@@ -458,8 +458,8 @@ export default function FinishQueuePage() {
                     <div className="flex items-center gap-2">
                       {selectedTechnician && (
                         <Button
-                          onClick={handleMoveToFinishQC}
-                          disabled={moveToFinishQCMutation.isPending}
+                          onClick={handleProgressOrders}
+                          disabled={progressMutation.isPending}
                           className="bg-blue-600 hover:bg-blue-700"
                           size="sm"
                         >

@@ -20,6 +20,7 @@ import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
 import { useLocation } from 'wouter';
 import FBNumberSearch from '@/components/FBNumberSearch';
+import WeeklyShippingWidget from '@/components/WeeklyShippingWidget';
 
 export default function ShippingQueuePage() {
   const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
@@ -674,7 +675,7 @@ export default function ShippingQueuePage() {
       )}
 
       {/* Department Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         {/* Previous Department Count */}
         <Card className="bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800">
           <CardHeader className="pb-3">
@@ -710,6 +711,9 @@ export default function ShippingQueuePage() {
             </p>
           </CardContent>
         </Card>
+
+        {/* Weekly Shipping Tracker Widget */}
+        <WeeklyShippingWidget />
       </div>
 
       {/* Orders List - Categorized by Due Date */}

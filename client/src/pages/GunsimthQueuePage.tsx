@@ -69,14 +69,14 @@ export default function GunsimthQueuePage() {
     setSalesOrderModalOpen(true);
   };
 
-  // Mutation to progress orders from Gunsmith to Shipping QC
+  // Mutation to progress orders from Gunsmith to Finish
   const progressMutation = useMutation({
     mutationFn: async (orderIds: string[]) => {
       // Process each order individually using the existing progress endpoint
       const progressPromises = orderIds.map(orderId => 
         apiRequest(`/api/orders/${orderId}/progress`, {
           method: 'POST',
-          body: { nextDepartment: 'Shipping QC' }
+          body: { nextDepartment: 'Finish' }
         })
       );
       return Promise.all(progressPromises);
@@ -85,7 +85,7 @@ export default function GunsimthQueuePage() {
       queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
       toast({
         title: "Success",
-        description: `Successfully progressed ${selectedOrders.size} order(s) to Shipping QC department.`,
+        description: `Successfully progressed ${selectedOrders.size} order(s) to Finish department.`,
       });
       setSelectedOrders(new Set());
     },
@@ -321,14 +321,14 @@ export default function GunsimthQueuePage() {
     setSelectedOrders(new Set());
   };
 
-  // Progress orders to Finish mutation (natural progression from Gunsmith)
-  const progressToFinishMutation = useMutation({
+  // Progress orders to Shipping QC mutation (natural progression from Gunsmith)
+  const progressToShippingQcMutation = useMutation({
     mutationFn: async (orderIds: string[]) => {
       const response = await apiRequest('/api/orders/update-department', {
         method: 'POST',
         body: JSON.stringify({
           orderIds: orderIds,
-          department: 'Finish',
+          department: 'Shipping QC',
           status: 'IN_PROGRESS'
         })
       });
@@ -338,22 +338,22 @@ export default function GunsimthQueuePage() {
       queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
       toast({
         title: "Success",
-        description: `${selectedOrders.size} orders moved to Finish department`,
+        description: `${selectedOrders.size} orders moved to Shipping QC department`,
       });
       setSelectedOrders(new Set());
     },
     onError: () => {
       toast({
         title: "Error",
-        description: "Failed to move orders to Finish",
+        description: "Failed to move orders to Shipping QC",
         variant: "destructive",
       });
     }
   });
 
-  const handleProgressToFinish = () => {
+  const handleProgressToShippingQc = () => {
     if (selectedOrders.size === 0) return;
-    progressToFinishMutation.mutate(Array.from(selectedOrders));
+    progressToShippingQcMutation.mutate(Array.from(selectedOrders));
   };
 
   // Auto-select order when scanned
@@ -492,12 +492,12 @@ export default function GunsimthQueuePage() {
                     </Button>
                     
                     <Button
-                      onClick={handleProgressToFinish}
-                      disabled={progressToFinishMutation.isPending}
+                      onClick={handleProgressToShippingQc}
+                      disabled={progressToShippingQcMutation.isPending}
                       className="flex items-center gap-2 bg-green-600 hover:bg-green-700"
                     >
                       <ArrowRightCircle className="h-4 w-4" />
-                      Move to Finish ({selectedOrders.size})
+                      Move to Shipping QC ({selectedOrders.size})
                     </Button>
                   </>
                 )}
@@ -1122,7 +1122,7 @@ export default function GunsimthQueuePage() {
                   <ArrowRight className="h-4 w-4 mr-2" />
                   {progressMutation.isPending 
                     ? 'Progressing...' 
-                    : `Progress to Finish (${selectedOrders.size})`}
+                    : `Progress to Shipping QC (${selectedOrders.size})`}
                 </Button>
               </div>
             </div>

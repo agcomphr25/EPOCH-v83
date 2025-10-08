@@ -3,6 +3,27 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { relations } from "drizzle-orm";
 
+// Order Department Types Reference Table (separate from order_departments tracking table)
+export const orderDepartmentTypes = pgTable("order_department_types", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull().unique(),
+  displayName: text("display_name").notNull(),
+  sortOrder: integer("sort_order").default(0),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Order Status Types Reference Table
+export const orderStatusTypes = pgTable("order_status_types", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull().unique(),
+  displayName: text("display_name").notNull(),
+  sortOrder: integer("sort_order").default(0),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
 
 // All finalized orders - production table
 export const allOrders = pgTable("all_orders", {
@@ -29,10 +50,12 @@ export const allOrders = pgTable("all_orders", {
   priceOverride: real("price_override"), // Manual price override for stock model
   shipping: real("shipping").default(0),
   tikkaOption: text("tikka_option"),
-  status: text("status").default("FINALIZED"),
+  status: text("status").default("FINALIZED"), // Legacy - will be removed after migration
+  statusId: integer("status_id").references(() => orderStatusTypes.id), // New FK reference
   barcode: text("barcode").unique(), // Code 39 barcode for order identification
   // Department Progression Fields
-  currentDepartment: text("current_department").default("Layup"),
+  currentDepartment: text("current_department").default("Layup"), // Legacy - will be removed after migration
+  currentDepartmentId: integer("current_department_id").references(() => orderDepartmentTypes.id), // New FK reference
   departmentHistory: jsonb("department_history").default('[]'),
   scrappedQuantity: integer("scrapped_quantity").default(0),
   totalProduced: integer("total_produced").default(0),
@@ -105,11 +128,13 @@ export const orders = pgTable("orders", {
   customer: text("customer").notNull(),
   product: text("product").notNull(),
   quantity: integer("quantity").notNull(),
-  status: text("status").notNull(),
+  status: text("status").notNull(), // Legacy - will be removed after migration
+  statusId: integer("status_id").references(() => orderStatusTypes.id), // New FK reference
   date: timestamp("date").notNull(),
   orderDate: timestamp("order_date"),
   // Department progression fields
-  currentDepartment: text("current_department").default("Layup").notNull(),
+  currentDepartment: text("current_department").default("Layup").notNull(), // Legacy - will be removed after migration
+  currentDepartmentId: integer("current_department_id").references(() => orderDepartmentTypes.id), // New FK reference
   isOnSchedule: boolean("is_on_schedule").default(true),
   priorityScore: integer("priority_score").default(50), // Lower = higher priority
   rushTier: text("rush_tier"), // e.g., "STANDARD", "RUSH", "EXPEDITE"
@@ -165,10 +190,12 @@ export const cancelledOrders = pgTable("cancelled_orders", {
   priceOverride: real("price_override"), // Manual price override for stock model
   shipping: real("shipping").default(0),
   tikkaOption: text("tikka_option"),
-  status: text("status").default("CANCELLED"),
+  status: text("status").default("CANCELLED"), // Legacy - will be removed after migration
+  statusId: integer("status_id").references(() => orderStatusTypes.id), // New FK reference
   barcode: text("barcode"), // Code 39 barcode for order identification
   // Department Progression Fields at time of cancellation
-  currentDepartment: text("current_department"),
+  currentDepartment: text("current_department"), // Legacy - will be removed after migration
+  currentDepartmentId: integer("current_department_id").references(() => orderDepartmentTypes.id), // New FK reference
   departmentHistory: jsonb("department_history").default('[]'),
   scrappedQuantity: integer("scrapped_quantity").default(0),
   totalProduced: integer("total_produced").default(0),
@@ -318,10 +345,12 @@ export const orderDrafts = pgTable("order_drafts", {
   priceOverride: real("price_override"), // Manual price override for stock model
   shipping: real("shipping").default(0),
   tikkaOption: text("tikka_option"),
-  status: text("status").default("DRAFT"),
+  status: text("status").default("FINALIZED"), // Legacy - will be removed after migration
+  statusId: integer("status_id").references(() => orderStatusTypes.id), // New FK reference
   barcode: text("barcode").unique(), // Code 39 barcode for order identification
   // Department Progression Fields
-  currentDepartment: text("current_department").default("Layup"),
+  currentDepartment: text("current_department").default("Layup"), // Legacy - will be removed after migration
+  currentDepartmentId: integer("current_department_id").references(() => orderDepartmentTypes.id), // New FK reference
   departmentHistory: jsonb("department_history").default('[]'),
   scrappedQuantity: integer("scrapped_quantity").default(0),
   totalProduced: integer("total_produced").default(0),
@@ -723,8 +752,24 @@ export const onboardingDocs = pgTable("onboarding_docs", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Insert schemas and types for order departments and statuses
+export const insertOrderDepartmentTypeSchema = createInsertSchema(orderDepartmentTypes).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
 
+export const insertOrderStatusTypeSchema = createInsertSchema(orderStatusTypes).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
 
+export type OrderDepartmentType = typeof orderDepartmentTypes.$inferSelect;
+export type InsertOrderDepartmentType = z.infer<typeof insertOrderDepartmentTypeSchema>;
+
+export type OrderStatusType = typeof orderStatusTypes.$inferSelect;
+export type InsertOrderStatusType = z.infer<typeof insertOrderStatusTypeSchema>;
 
 export const insertOrderSchema = createInsertSchema(orders).omit({
   id: true,
@@ -735,9 +780,11 @@ export const insertOrderSchema = createInsertSchema(orders).omit({
   customer: z.string().min(1, "Customer is required"),
   product: z.string().min(1, "Product is required"),
   quantity: z.number().min(1, "Quantity must be at least 1"),
-  status: z.string().min(1, "Status is required"),
+  status: z.string().min(1, "Status is required"), // Legacy field
+  statusId: z.number().optional().nullable(), // New FK field
   date: z.coerce.date(),
-  currentDepartment: z.string().default("Layup"),
+  currentDepartment: z.string().default("Layup"), // Legacy field
+  currentDepartmentId: z.number().optional().nullable(), // New FK field
   isOnSchedule: z.boolean().default(true),
   priorityScore: z.number().default(50),
   rushTier: z.string().optional().nullable(),
@@ -870,7 +917,10 @@ export const insertOrderDraftSchema = createInsertSchema(orderDrafts).omit({
   discountCode: z.string().optional().nullable(),
   shipping: z.number().min(0).default(0),
   tikkaOption: z.string().optional().nullable(),
-  status: z.string().default("DRAFT"),
+  status: z.string().default("DRAFT"), // Legacy field
+  statusId: z.number().optional().nullable(), // New FK field
+  currentDepartment: z.string().default("Layup"), // Legacy field
+  currentDepartmentId: z.number().optional().nullable(), // New FK field
   // Payment fields
   isPaid: z.boolean().default(false),
   paymentType: z.string().optional().nullable(),
@@ -901,7 +951,10 @@ export const insertAllOrderSchema = createInsertSchema(allOrders).omit({
   discountCode: z.string().optional().nullable(),
   shipping: z.number().min(0).default(0),
   tikkaOption: z.string().optional().nullable(),
-  status: z.string().default("FINALIZED"),
+  status: z.string().default("DRAFT"), // Legacy field
+  statusId: z.number().optional().nullable(), // New FK field
+  currentDepartment: z.string().default("Layup"), // Legacy field
+  currentDepartmentId: z.number().optional().nullable(), // New FK field
   // Payment fields
   isPaid: z.boolean().default(false),
   paymentType: z.string().optional().nullable(),

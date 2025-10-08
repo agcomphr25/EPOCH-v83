@@ -118,7 +118,7 @@ import DeploymentAuthWrapper from './components/DeploymentAuthWrapper';
 // Component to conditionally render Navigation
 function ConditionalNavigation() {
   const [location] = useLocation();
-  const hideNavigation = location === '/darleneb-dashboard' || location === '/ag-dashboard' || location === '/staciw-dashboard';
+  const hideNavigation = location === '/darleneb-dashboard' || location === '/ag-dashboard' || location === '/staciw-dashboard' || location === '/login';
   
   return hideNavigation ? null : <Navigation />;
 }

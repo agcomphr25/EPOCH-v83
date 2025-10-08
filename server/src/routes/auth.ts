@@ -41,8 +41,6 @@ router.post('/login', async (req, res) => {
   try {
     const { username, password } = req.body;
 
-    console.log('🔐 Login attempt:', { username, passwordLength: password?.length });
-
     if (!username || !password) {
       return res.status(400).json({ error: 'Username and password are required' });
     }
@@ -51,16 +49,11 @@ router.post('/login', async (req, res) => {
     const user = USERS.get(username.toLowerCase());
 
     if (!user) {
-      console.log('❌ User not found:', username);
       return res.status(401).json({ error: 'Invalid username or password' });
     }
 
-    console.log('✅ User found:', username);
-
     // Verify password (all test users use password 'test123')
     const isValidPassword = await bcrypt.compare(password, user.password);
-
-    console.log('🔑 Password verification:', { isValid: isValidPassword });
 
     if (!isValidPassword) {
       return res.status(401).json({ error: 'Invalid username or password' });

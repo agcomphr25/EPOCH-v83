@@ -200,7 +200,7 @@ export interface IStorage {
   getLastOrderId(): Promise<string>;
   getAllOrders(): Promise<AllOrder[]>;
   getCancelledOrders(): Promise<AllOrder[]>; // Returns finalized orders from allOrders table
-  getAllOrdersWithPaymentStatus(): Promise<(AllOrder & { paymentTotal: number; isFullyPaid: boolean })[]>; // Returns finalized orders with payment status
+  getAllOrdersWithPaymentStatus(search?: string, limit?: number): Promise<(AllOrder & { paymentTotal: number; isFullyPaid: boolean })[]>; // Returns finalized orders with payment status
   getAllOrdersWithPaymentStatusPaginated(page: number, limit: number): Promise<{ 
     orders: (AllOrder & { paymentTotal: number; isFullyPaid: boolean })[], 
     total: number, 
@@ -1980,10 +1980,32 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Get all finalized orders with payment status
-  async getAllOrdersWithPaymentStatus(): Promise<(AllOrder & { paymentTotal: number; isFullyPaid: boolean })[]> {
+  async getAllOrdersWithPaymentStatus(search: string = '', limit: number = 25): Promise<(AllOrder & { paymentTotal: number; isFullyPaid: boolean })[]> {
     // Optimized: Use single query to get orders with customer names and payment totals
     // Exclude P1 purchase orders from All Orders list
     // FIXED: Select ALL fields needed by calculateOrderTotal to prevent type errors
+    
+    // Build WHERE conditions
+    const whereConditions = [
+      sql`${allOrders.orderId} NOT LIKE 'P1-%'`,
+      sql`${allOrders.orderId} NOT LIKE 'PO%'`,
+      sql`${allOrders.orderId} != 'AG1'`,
+      sql`${allOrders.orderId} NOT LIKE '%PO%'`
+    ];
+    
+    // Add search filter if provided
+    if (search && search.trim() !== '') {
+      const searchPattern = `%${search}%`;
+      whereConditions.push(
+        sql`(
+          ${allOrders.orderId} ILIKE ${searchPattern} OR
+          ${allOrders.fbOrderNumber} ILIKE ${searchPattern} OR
+          ${allOrders.customerPO} ILIKE ${searchPattern} OR
+          ${customers.name} ILIKE ${searchPattern}
+        )`
+      );
+    }
+    
     const ordersWithCustomers = await db
       .select({
         // ALL Order fields (matching getAllOrders to ensure calculateOrderTotal works)
@@ -2076,17 +2098,9 @@ export class DatabaseStorage implements IStorage {
       })
       .from(allOrders)
       .leftJoin(customers, eq(allOrders.customerId, sql`${customers.id}::text`))
-      .where(
-        and(
-          sql`${allOrders.orderId} NOT LIKE 'P1-%'`,
-          sql`${allOrders.orderId} NOT LIKE 'PO%'`,
-          // TEMPORARILY COMMENTED OUT: This was hiding orders like AG137
-          // sql`${allOrders.orderId} NOT LIKE 'AG1%'`,
-          sql`${allOrders.orderId} != 'AG1'`,
-          sql`${allOrders.orderId} NOT LIKE '%PO%'`
-        )
-      )
-      .orderBy(desc(allOrders.updatedAt));
+      .where(and(...whereConditions))
+      .orderBy(desc(allOrders.id))
+      .limit(limit);
 
     // Get all payments aggregated by order ID in parallel
     const paymentTotals = await db

@@ -142,9 +142,7 @@ export default function PaintQueuePage() {
   // Count orders in previous department (Finish QC)
   const finishQCCount = useMemo(() => {
     return (allOrders as any[]).filter((order: any) => 
-      order.currentDepartment === 'Finish' || 
-      order.currentDepartment === 'FinishQC' ||
-      (order.department === 'Finish' && order.status === 'IN_PROGRESS')
+      order.currentDepartment === 'Finish QC'
     ).length;
   }, [allOrders]);
 

@@ -957,6 +957,10 @@ router.post('/:orderId/progress', async (req: Request, res: Response) => {
     // Special handling for flat top orders - they bypass CNC and go directly to Finish
     const isFlatTop = existingOrder.isFlattop || false;
     
+    // Check if order has no_rail - these bypass Gunsmith entirely
+    const features = typeof existingOrder.features === 'string' ? JSON.parse(existingOrder.features) : existingOrder.features;
+    const hasNoRail = features?.rail_accessory?.includes?.('no_rail') || false;
+    
     // If no nextDepartment provided, calculate it automatically
     let targetDepartment = nextDepartment;
     if (!targetDepartment) {
@@ -969,6 +973,11 @@ router.post('/:orderId/progress', async (req: Request, res: Response) => {
       else if (isFlatTop && existingOrder.currentDepartment === 'Layup/Plugging') {
         targetDepartment = 'Finish';
         console.log(`🏔️ Order ${orderId} is flat top - bypassing CNC, routing directly to Finish`);
+      }
+      // Orders with no_rail skip Gunsmith and go directly from CNC to Finish
+      else if (hasNoRail && existingOrder.currentDepartment === 'CNC') {
+        targetDepartment = 'Finish';
+        console.log(`🔧 Order ${orderId} has no_rail - bypassing Gunsmith, routing directly from CNC to Finish`);
       }
       // Regular progression for all other cases
       else {

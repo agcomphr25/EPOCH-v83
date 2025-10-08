@@ -82,16 +82,6 @@ export default function FALEESHAHTestDashboard() {
           </Card>
         </Link>
 
-        <Link href="/shipping-management">
-          <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-indigo-200">
-            <CardContent className="p-4 text-center">
-              <Ship className="w-8 h-8 text-indigo-600 mx-auto mb-3" />
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Shipping Management</h3>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Manage shipping operations</p>
-            </CardContent>
-          </Card>
-        </Link>
-
         <Link href="/order-department-transfer">
           <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-teal-200">
             <CardContent className="p-4 text-center">

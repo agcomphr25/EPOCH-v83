@@ -127,6 +127,7 @@ export default function OrdersList() {
   const [selectedOrderForKickback, setSelectedOrderForKickback] = useState<Order | null>(null);
   const [isKickbackDialogOpen, setIsKickbackDialogOpen] = useState(false);
   const [departmentFilter, setDepartmentFilter] = useState<string>('all');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
   const [sortBy, setSortBy] = useState<string>('orderDate');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [communicationModal, setCommunicationModal] = useState<{
@@ -466,24 +467,34 @@ export default function OrdersList() {
     return customer?.phone || '';
   };
 
-  // Get unique departments for filter options
-  const availableDepartments = useMemo(() => {
-    if (!orders) return [];
-    const departments = orders
-      .map(order => order.currentDepartment || 'Not Set')
-      .filter((dept, index, arr) => arr.indexOf(dept) === index)
-      .sort();
-    return departments;
-  }, [orders]);
+  // Fixed list of valid departments based on production flow
+  const availableDepartments = [
+    'P1 Production Queue',
+    'Layup/Plugging',
+    'Barcode',
+    'CNC',
+    'Finish',
+    'Paint',
+    'Finish QC',
+    'Gunsmith',
+    'Shipping QC',
+    'Shipping'
+  ];
 
-  // Filter and sort orders based on search term, department filter, and sort options
+  // Fixed list of valid statuses
+  const availableStatuses = [
+    'HOLDING',
+    'FINALIZED',
+    'IN_PROGRESS',
+    'FULFILLED',
+    'CANCELLED'
+  ];
+
+  // Filter and sort orders based on search term, department filter, status filter, and sort options
   const filteredOrders = useMemo(() => {
     if (!orders) return [];
 
     let filtered = [...orders];
-
-    // Exclude cancelled orders from main list
-    filtered = filtered.filter((order) => !order.isCancelled && order.status !== 'CANCELLED');
 
     // Apply search filter
     if (searchTerm.trim()) {
@@ -520,6 +531,13 @@ export default function OrdersList() {
       filtered = filtered.filter(order => {
         const dept = order.currentDepartment || 'Not Set';
         return dept === departmentFilter;
+      });
+    }
+
+    // Apply status filter
+    if (statusFilter !== 'all') {
+      filtered = filtered.filter(order => {
+        return order.status === statusFilter;
       });
     }
 
@@ -565,7 +583,7 @@ export default function OrdersList() {
     });
 
     return filtered;
-  }, [orders, customers, searchTerm, departmentFilter, sortBy, sortOrder]);
+  }, [orders, customers, searchTerm, departmentFilter, statusFilter, sortBy, sortOrder]);
 
   const getModelDisplayName = (modelId: string) => {
     if (!stockModels) return modelId;
@@ -792,6 +810,26 @@ export default function OrdersList() {
               </Select>
             </div>
 
+            {/* Status Filter */}
+            <div className="flex items-center gap-2">
+              <Label htmlFor="status-filter" className="text-sm font-medium whitespace-nowrap">
+                Status:
+              </Label>
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="w-40" id="status-filter">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Statuses</SelectItem>
+                  {availableStatuses.map(status => (
+                    <SelectItem key={status} value={status}>
+                      {status}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
             {/* Sort By */}
             <div className="flex items-center gap-2">
               <Label htmlFor="sort-by" className="text-sm font-medium whitespace-nowrap">
@@ -830,12 +868,13 @@ export default function OrdersList() {
             </div>
 
             {/* Clear Filters Button */}
-            {(departmentFilter !== 'all' || sortBy !== 'orderDate' || sortOrder !== 'desc') && (
+            {(departmentFilter !== 'all' || statusFilter !== 'all' || sortBy !== 'orderDate' || sortOrder !== 'desc') && (
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => {
                   setDepartmentFilter('all');
+                  setStatusFilter('all');
                   setSortBy('orderDate');
                   setSortOrder('desc');
                 }}

@@ -18,6 +18,7 @@ import orderAttachmentsRoutes from './orderAttachments';
 import discountsRoutes from './discounts';
 import bomsRoutes from './boms';
 import communicationsRoutes from './communications';
+import internalMessagesRoutes from './internalMessages';
 import nonconformanceRoutes from '../../routes/nonconformance';
 import paymentsRoutes from './payments';
 import algorithmicSchedulerRoutes from './algorithmicScheduler';
@@ -85,6 +86,9 @@ export function registerRoutes(app: Express): Server {
 
   // Communications management routes
   app.use('/api/communications', communicationsRoutes);
+
+  // Internal messaging routes
+  app.use('/api/internal-messages', internalMessagesRoutes);
 
   // Nonconformance tracking routes
   app.use('/api/nonconformance', nonconformanceRoutes);

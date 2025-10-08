@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Plus, Edit, Trash2, Download, Upload, Search } from 'lucide-react';
 import toast from 'react-hot-toast';
-import type { EnhancedInventoryItem } from '@shared/schema';
+import type { InventoryItem } from '@shared/schema';
 
 interface InventoryFormData {
   agPartNumber: string;
@@ -39,7 +39,7 @@ const InventoryForm = ({
   onSubmit: (e: React.FormEvent) => void;
   onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
   onSelectChange: (name: string, value: string) => void;
-  editingItem: EnhancedInventoryItem | null;
+  editingItem: InventoryItem | null;
   isCreatePending: boolean;
   isUpdatePending: boolean;
   onCancel: () => void;
@@ -187,7 +187,7 @@ export default function InventoryItemsCard() {
   const queryClient = useQueryClient();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
-  const [editingItem, setEditingItem] = useState<EnhancedInventoryItem | null>(null);
+  const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -206,7 +206,7 @@ export default function InventoryItemsCard() {
   });
 
   // Load inventory items
-  const { data: allItems = [], isLoading } = useQuery<EnhancedInventoryItem[]>({
+  const { data: allItems = [], isLoading } = useQuery<InventoryItem[]>({
     queryKey: ['/api/enhanced/inventory/items'],
     queryFn: () => apiRequest('/api/enhanced/inventory/items'),
   });
@@ -395,7 +395,7 @@ export default function InventoryItemsCard() {
     }
   }, [formData, editingItem, updateMutation, createMutation]);
 
-  const handleEdit = (item: EnhancedInventoryItem) => {
+  const handleEdit = (item: InventoryItem) => {
     setEditingItem(item);
     setFormData({
       agPartNumber: item.agPartNumber,

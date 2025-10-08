@@ -38,7 +38,10 @@ router.get('/with-payment-status', async (req: Request, res: Response) => {
       'ETag': `"orders-${Date.now()}"`
     });
     
-    const orders = await storage.getAllOrdersWithPaymentStatus();
+    const search = (req.query.search as string) || '';
+    const limit = parseInt(req.query.limit as string) || 25; // Default to 25 orders
+    
+    const orders = await storage.getAllOrdersWithPaymentStatus(search, limit);
     res.json(orders);
   } catch (error) {
     console.error('Error retrieving orders with payment status:', error);

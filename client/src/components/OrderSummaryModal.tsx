@@ -263,6 +263,21 @@ export default function OrderSummaryModal({ children, orderId }: OrderSummaryMod
           ) : (
             <div className="space-y-6">
 
+              {/* Order Notes - Moved to top for visibility */}
+              {order.notes && (
+                <Card className="border-yellow-200 bg-yellow-50 dark:bg-yellow-900/20">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-yellow-800 dark:text-yellow-200">
+                      <FileText className="h-5 w-5" />
+                      Order Notes
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap font-medium">{order.notes}</p>
+                  </CardContent>
+                </Card>
+              )}
+
               {/* Product Information */}
               <Card>
                 <CardHeader>
@@ -308,23 +323,6 @@ export default function OrderSummaryModal({ children, orderId }: OrderSummaryMod
                   )}
                 </CardContent>
               </Card>
-
-
-
-              {/* Order Notes */}
-              {order.notes && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <FileText className="h-5 w-5" />
-                      Order Notes
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-gray-700 whitespace-pre-wrap">{order.notes}</p>
-                  </CardContent>
-                </Card>
-              )}
 
               {/* Special Conditions */}
               {(order.isReplacement || isScrapped) && (

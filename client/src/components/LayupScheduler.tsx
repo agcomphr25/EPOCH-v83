@@ -448,6 +448,32 @@ const DraggableOrderItem = React.memo(({ order, priority, totalOrdersInCell, mol
           );
         })()}
 
+        {/* Show Bottom Metal if ADL */}
+        {(() => {
+          const getBottomMetalDisplay = (orderFeatures: any) => {
+            if (!orderFeatures) return null;
+
+            const bottomMetal = orderFeatures.bottom_metal;
+            
+            // Show bottom metal if it contains "adl" (case insensitive)
+            if (bottomMetal && bottomMetal.toLowerCase().includes('adl')) {
+              // Format the display value - convert underscores to spaces and capitalize
+              const displayValue = bottomMetal.replace(/_/g, ' ').toUpperCase();
+              return displayValue;
+            }
+
+            return null;
+          };
+
+          const bottomMetalDisplay = getBottomMetalDisplay(order.features);
+
+          return bottomMetalDisplay ? (
+            <div className="text-xs opacity-90 mt-0.5 font-bold bg-blue-100 dark:bg-blue-900/50 px-1.5 py-0.5 rounded">
+              {bottomMetalDisplay}
+            </div>
+          ) : null;
+        })()}
+
         {/* Show Heavy Fill if selected */}
         {(() => {
           const getHeavyFillDisplay = (orderFeatures: any) => {

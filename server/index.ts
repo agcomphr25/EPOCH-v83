@@ -1,5 +1,6 @@
 import express, { type Request, Response, NextFunction } from "express";
 import cookieParser from "cookie-parser";
+import cors from "cors";
 import path from "path";
 import fs from "fs";
 import { registerRoutes } from "./src/routes/index";
@@ -23,6 +24,17 @@ console.log('Environment check:', {
 });
 
 const app = express();
+
+// CORS configuration - critical for production authentication
+const corsOptions = {
+  origin: process.env.NODE_ENV === 'production' 
+    ? ['https://agcompepoch.xyz', 'https://www.agcompepoch.xyz']
+    : true, // Allow all origins in development
+  credentials: true, // Allow cookies to be sent
+  optionsSuccessStatus: 200
+};
+
+app.use(cors(corsOptions));
 
 // Serve attached assets (PDFs, documents, etc.) - Must be before other routes
 // In production, assets are copied to dist/attached_assets

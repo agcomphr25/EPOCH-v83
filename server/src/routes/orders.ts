@@ -39,7 +39,7 @@ router.get('/with-payment-status', async (req: Request, res: Response) => {
     });
     
     const search = (req.query.search as string) || '';
-    const limit = parseInt(req.query.limit as string) || 25; // Default to 25 orders
+    const limit = parseInt(req.query.limit as string) || 99999; // Return ALL orders by default
     
     const orders = await storage.getAllOrdersWithPaymentStatus(search, limit);
     res.json(orders);

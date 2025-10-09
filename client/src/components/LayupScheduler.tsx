@@ -2144,7 +2144,7 @@ export default function LayupScheduler() {
           workDays: selectedWorkDays, // Pass current work day settings  
           employees: employees, // Pass employee settings
           molds: molds.filter(m => m.enabled), // Pass enabled molds only
-          excludeOEMOrders: true // Only add regular orders, skip OEM/priority orders
+          excludeOEMOrders: false // Include ALL orders: regular + OEM production orders
         }),
       });
 

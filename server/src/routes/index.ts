@@ -1952,6 +1952,9 @@ export function registerRoutes(app: Express): Server {
             (item.itemName && (item.itemName.includes('AG-') || item.itemName.includes('stock')))
           );
           
+          // Calculate total quantity across all stock items
+          const totalStockQuantity = stockItems.reduce((sum, item) => sum + (item.quantity || 0), 0);
+          
           return {
             id: po.id,
             poNumber: po.poNumber,
@@ -1959,7 +1962,8 @@ export function registerRoutes(app: Express): Server {
             customerId: po.customerId,
             dueDate: po.expectedDelivery,
             status: po.status,
-            stockCount: stockItems.length,
+            stockCount: totalStockQuantity, // Total quantity, not just count of items
+            distinctStockItems: stockItems.length, // Number of distinct stock item types
             itemCount: items.length,
             poDate: po.poDate,
             notes: po.notes

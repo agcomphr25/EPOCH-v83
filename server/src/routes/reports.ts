@@ -5,9 +5,19 @@ import { eq, and, gte, lt, sql, inArray } from 'drizzle-orm';
 
 const router = Router();
 
-// September 2025 FULFILLED Orders Report
-router.get('/september-fulfilled-2025', async (req, res) => {
+// Monthly FULFILLED Orders Report
+router.get('/monthly-fulfilled', async (req, res) => {
   try {
+    const { month, year } = req.query;
+    
+    // Default to September 2025 if not provided
+    const reportMonth = month ? parseInt(month as string) : 9;
+    const reportYear = year ? parseInt(year as string) : 2025;
+    
+    // Calculate date range for the selected month
+    const startDate = new Date(reportYear, reportMonth - 1, 1);
+    const endDate = new Date(reportYear, reportMonth, 1);
+    
     const orders = await db
       .select({
         orderId: allOrders.orderId,
@@ -27,8 +37,8 @@ router.get('/september-fulfilled-2025', async (req, res) => {
       .where(
         and(
           eq(allOrders.status, 'FULFILLED'),
-          gte(allOrders.updatedAt, new Date('2025-09-01')),
-          lt(allOrders.updatedAt, new Date('2025-10-01'))
+          gte(allOrders.updatedAt, startDate),
+          lt(allOrders.updatedAt, endDate)
         )
       )
       .orderBy(allOrders.updatedAt);
@@ -57,12 +67,15 @@ router.get('/september-fulfilled-2025', async (req, res) => {
         const shipping = Number(order.shipping) || 0;
         
         let orderTotal = basePrice + featuresTotal + shipping;
+        let discountAmount = 0;
         
         // Apply discount if applicable
         if (order.showCustomDiscount && order.customDiscountValue) {
           if (order.customDiscountType === 'percent') {
+            discountAmount = (basePrice + featuresTotal) * (order.customDiscountValue / 100);
             orderTotal = (basePrice + featuresTotal) * (1 - order.customDiscountValue / 100) + shipping;
           } else if (order.customDiscountType === 'fixed') {
+            discountAmount = order.customDiscountValue;
             orderTotal = (basePrice + featuresTotal) - order.customDiscountValue + shipping;
           }
         }
@@ -75,6 +88,7 @@ router.get('/september-fulfilled-2025', async (req, res) => {
           basePrice,
           featuresTotal,
           shipping,
+          discountAmount,
           customDiscountType: order.customDiscountType,
           customDiscountValue: order.customDiscountValue,
           showCustomDiscount: order.showCustomDiscount,
@@ -83,15 +97,23 @@ router.get('/september-fulfilled-2025', async (req, res) => {
       })
     );
 
-    const totalAmountDue = ordersWithTotals.reduce((sum, order) => sum + order.orderTotal, 0);
+    // Calculate column totals
+    const columnTotals = ordersWithTotals.reduce((totals, order) => ({
+      basePrice: totals.basePrice + order.basePrice,
+      featuresTotal: totals.featuresTotal + order.featuresTotal,
+      shipping: totals.shipping + order.shipping,
+      discountAmount: totals.discountAmount + order.discountAmount,
+      orderTotal: totals.orderTotal + order.orderTotal,
+    }), { basePrice: 0, featuresTotal: 0, shipping: 0, discountAmount: 0, orderTotal: 0 });
 
     res.json({
       orderCount: ordersWithTotals.length,
-      totalAmountDue,
+      totalAmountDue: columnTotals.orderTotal,
+      columnTotals,
       orders: ordersWithTotals,
     });
   } catch (error) {
-    console.error('Error fetching September 2025 FULFILLED orders:', error);
+    console.error('Error fetching monthly FULFILLED orders:', error);
     res.status(500).json({ error: 'Failed to fetch report data' });
   }
 });

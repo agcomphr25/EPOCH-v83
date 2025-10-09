@@ -1,10 +1,13 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Package, TrendingUp, Calendar } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { Package, TrendingUp, Calendar, Search, Truck, CheckCircle, XCircle } from 'lucide-react';
 import { getCurrentCompanyWeek, formatWeekRange, isDateInCompanyWeek } from '@shared/weekUtils';
+import { format } from 'date-fns';
 
 interface Order {
   id: number;
@@ -13,7 +16,21 @@ interface Order {
   status: string;
   currentDepartment?: string;
   modelId: string;
+  customerId?: string;
   updatedAt: string;
+  trackingNumber?: string;
+  shippedDate?: string;
+  customerNotified?: boolean;
+  notificationSentAt?: string;
+  shippingCarrier?: string;
+  shippingMethod?: string;
+}
+
+interface Customer {
+  id: string;
+  name: string;
+  email?: string;
+  phone?: string;
 }
 
 interface WeeklyStats {
@@ -29,6 +46,7 @@ export default function ShippingTracker() {
   
   const [selectedYear, setSelectedYear] = useState<number>(currentYear);
   const [selectedWeek, setSelectedWeek] = useState<number>(currentWeek);
+  const [searchTerm, setSearchTerm] = useState('');
 
   // Fetch all fulfilled orders
   const { data: orders, isLoading } = useQuery<Order[]>({
@@ -40,6 +58,34 @@ export default function ShippingTracker() {
     }
   });
 
+  // Fetch customers for name search
+  const { data: customers } = useQuery<Customer[]>({
+    queryKey: ['/api/customers'],
+  });
+
+  // Filter orders by search term (order number or customer name)
+  const filteredOrders = useMemo(() => {
+    if (!orders) return [];
+    
+    const fulfilled = orders.filter(order => order.status === 'FULFILLED');
+    
+    if (!searchTerm) return fulfilled;
+    
+    const searchLower = searchTerm.toLowerCase();
+    return fulfilled.filter(order => {
+      // Search by order number
+      if (order.orderId.toLowerCase().includes(searchLower)) return true;
+      
+      // Search by customer name
+      if (order.customerId && customers) {
+        const customer = customers.find(c => c.id === order.customerId);
+        if (customer && customer.name.toLowerCase().includes(searchLower)) return true;
+      }
+      
+      return false;
+    });
+  }, [orders, searchTerm, customers]);
+
   // Calculate weekly stats
   const weeklyStats: WeeklyStats[] = [];
   
@@ -48,7 +94,7 @@ export default function ShippingTracker() {
     const weekMap = new Map<string, { stocksShipped: number; orders: string[] }>();
     
     orders
-      .filter(order => order.status === 'FULFILLED' || order.currentDepartment === 'Fulfilled')
+      .filter(order => order.status === 'FULFILLED')
       .forEach(order => {
         // Use updatedAt as the fulfillment date
         const fulfillmentDate = new Date(order.updatedAt);
@@ -137,6 +183,116 @@ export default function ShippingTracker() {
               <div className="text-2xl font-bold text-indigo-600">{weeklyStats.length}</div>
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Search and Detailed Shipping Information */}
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Truck className="h-5 w-5" />
+              Shipping Details
+            </div>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {/* Search Input */}
+          <div className="mb-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Input
+                placeholder="Search by order number or customer name..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10"
+                data-testid="input-search-shipping"
+              />
+            </div>
+            {searchTerm && (
+              <p className="text-sm text-gray-600 mt-2">
+                Found {filteredOrders.length} order{filteredOrders.length !== 1 ? 's' : ''}
+              </p>
+            )}
+          </div>
+
+          {/* Detailed Shipping Table */}
+          {filteredOrders.length > 0 ? (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Order #</TableHead>
+                    <TableHead>Customer</TableHead>
+                    <TableHead>Tracking Number</TableHead>
+                    <TableHead>Shipped Date</TableHead>
+                    <TableHead>Carrier</TableHead>
+                    <TableHead>Customer Notified</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredOrders.slice(0, 50).map(order => {
+                    const customer = customers?.find(c => c.id === order.customerId);
+                    return (
+                      <TableRow key={order.id} data-testid={`row-shipment-${order.orderId}`}>
+                        <TableCell className="font-medium">{order.orderId}</TableCell>
+                        <TableCell>{customer?.name || 'N/A'}</TableCell>
+                        <TableCell>
+                          {order.trackingNumber ? (
+                            <span className="font-mono text-sm">{order.trackingNumber}</span>
+                          ) : (
+                            <span className="text-gray-400">-</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {order.shippedDate ? (
+                            format(new Date(order.shippedDate), 'MMM d, yyyy')
+                          ) : (
+                            <span className="text-gray-400">-</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {order.shippingCarrier ? (
+                            <Badge variant="outline">{order.shippingCarrier}</Badge>
+                          ) : (
+                            <span className="text-gray-400">-</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {order.customerNotified ? (
+                            <div className="flex items-center gap-1 text-green-600">
+                              <CheckCircle className="h-4 w-4" />
+                              <span className="text-xs">
+                                {order.notificationSentAt && format(new Date(order.notificationSentAt), 'MMM d')}
+                              </span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-1 text-gray-400">
+                              <XCircle className="h-4 w-4" />
+                              <span className="text-xs">No</span>
+                            </div>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+              {filteredOrders.length > 50 && (
+                <p className="text-sm text-gray-500 mt-2 text-center">
+                  Showing first 50 of {filteredOrders.length} results
+                </p>
+              )}
+            </div>
+          ) : searchTerm ? (
+            <div className="text-center py-8 text-gray-500">
+              No orders found matching "{searchTerm}"
+            </div>
+          ) : (
+            <div className="text-center py-8 text-gray-500">
+              Enter a search term to view detailed shipping information
+            </div>
+          )}
         </CardContent>
       </Card>
 

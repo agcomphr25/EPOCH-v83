@@ -54,7 +54,7 @@ export const allOrders = pgTable("all_orders", {
   statusId: integer("status_id").references(() => orderStatusTypes.id), // New FK reference
   barcode: text("barcode").unique(), // Code 39 barcode for order identification
   // Department Progression Fields
-  currentDepartment: text("current_department").default("Layup"), // Legacy - will be removed after migration
+  currentDepartment: text("current_department").default("P1 Production Queue"), // Default to P1 Production Queue until scheduled
   currentDepartmentId: integer("current_department_id").references(() => orderDepartmentTypes.id), // New FK reference
   departmentHistory: jsonb("department_history").default('[]'),
   scrappedQuantity: integer("scrapped_quantity").default(0),
@@ -133,7 +133,7 @@ export const orders = pgTable("orders", {
   date: timestamp("date").notNull(),
   orderDate: timestamp("order_date"),
   // Department progression fields
-  currentDepartment: text("current_department").default("Layup").notNull(), // Legacy - will be removed after migration
+  currentDepartment: text("current_department").default("P1 Production Queue").notNull(), // Default to P1 Production Queue until scheduled
   currentDepartmentId: integer("current_department_id").references(() => orderDepartmentTypes.id), // New FK reference
   isOnSchedule: boolean("is_on_schedule").default(true),
   priorityScore: integer("priority_score").default(50), // Lower = higher priority
@@ -349,7 +349,7 @@ export const orderDrafts = pgTable("order_drafts", {
   statusId: integer("status_id").references(() => orderStatusTypes.id), // New FK reference
   barcode: text("barcode").unique(), // Code 39 barcode for order identification
   // Department Progression Fields
-  currentDepartment: text("current_department").default("Layup"), // Legacy - will be removed after migration
+  currentDepartment: text("current_department").default("P1 Production Queue"), // Default to P1 Production Queue until scheduled
   currentDepartmentId: integer("current_department_id").references(() => orderDepartmentTypes.id), // New FK reference
   departmentHistory: jsonb("department_history").default('[]'),
   scrappedQuantity: integer("scrapped_quantity").default(0),

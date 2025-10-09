@@ -147,6 +147,7 @@ router.get('/layup-scheduler/oem-priority/:vendorId', async (req, res) => {
       })
     );
 
+    console.log(`✅ Returning ${consolidatedData.length} POs for vendor ${vendor.name} with ${consolidatedData.reduce((sum, po) => sum + po.stockItems.length, 0)} total stock items`);
     res.json({ vendor, pos: consolidatedData });
   } catch (error) {
     console.error('❌ Error fetching consolidated OEM priority data:', error);

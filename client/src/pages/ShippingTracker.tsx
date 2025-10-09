@@ -5,8 +5,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { Package, TrendingUp, Calendar, Search, Truck, CheckCircle, XCircle } from 'lucide-react';
+import { Package, TrendingUp, Calendar, Search, Truck, CheckCircle, XCircle, ExternalLink } from 'lucide-react';
 import { getCurrentCompanyWeek, formatWeekRange, isDateInCompanyWeek } from '@shared/weekUtils';
 import { format } from 'date-fns';
 
@@ -308,7 +309,19 @@ export default function ShippingTracker() {
                         <TableCell>{customer?.name || 'Unknown Customer'}</TableCell>
                         <TableCell>
                           {order.trackingNumber ? (
-                            <span className="font-mono text-sm">{order.trackingNumber}</span>
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono text-sm">{order.trackingNumber}</span>
+                              <Button
+                                size="sm"
+                                variant="default"
+                                className="bg-blue-600 hover:bg-blue-700 text-white h-7 px-2"
+                                onClick={() => window.open(`https://www.ups.com/track?loc=en_US&tracknum=${encodeURIComponent(order.trackingNumber || '')}`, '_blank', 'noopener,noreferrer')}
+                                data-testid={`button-track-${order.orderId}`}
+                              >
+                                <ExternalLink className="h-3 w-3 mr-1" />
+                                Track
+                              </Button>
+                            </div>
                           ) : (
                             <span className="text-gray-400">-</span>
                           )}

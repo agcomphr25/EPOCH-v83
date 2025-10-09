@@ -106,12 +106,13 @@ export default function AllOrdersPage() {
     'Layup/Plugging',
     'Barcode',
     'CNC',
-    'Finish',
     'Gunsmith',
+    'Finish',
     'Finish QC',
     'Paint',
     'Shipping QC',
-    'Shipping'
+    'Shipping',
+    'Fulfilled'
   ];
   
   const { toast } = useToast();
@@ -305,6 +306,13 @@ export default function AllOrdersPage() {
 
   const handlePushToLayupPlugging = (orderId: string) => {
     progressOrderMutation.mutate({ orderId, nextDepartment: 'Layup/Plugging' });
+  };
+
+  const getDepartmentDisplayName = (department: string) => {
+    if (department === 'Fulfilled') {
+      return 'Shipping Management';
+    }
+    return department;
   };
 
   const getStatusColor = (status: string) => {
@@ -604,7 +612,7 @@ export default function AllOrdersPage() {
                   </TableCell>
                   <TableCell>
                     <Badge variant="secondary">
-                      {order.currentDepartment || 'Not Set'}
+                      {getDepartmentDisplayName(order.currentDepartment) || 'Not Set'}
                     </Badge>
                   </TableCell>
                   <TableCell>
@@ -704,7 +712,7 @@ export default function AllOrdersPage() {
                       {/* Progress Button */}
                       {(() => {
                         const nextDept = getNextDepartment(order.currentDepartment);
-                        const isComplete = order.currentDepartment === 'Shipping';
+                        const isComplete = order.currentDepartment === 'Fulfilled';
                         const isScrapped = order.status === 'SCRAPPED';
                         const isFulfilled = order.status === 'FULFILLED';
 
@@ -716,7 +724,7 @@ export default function AllOrdersPage() {
                               disabled={progressOrderMutation.isPending}
                             >
                               <ArrowRight className="w-4 h-4 mr-1" />
-                              {nextDept}
+                              {getDepartmentDisplayName(nextDept)}
                             </Button>
                           );
                         }

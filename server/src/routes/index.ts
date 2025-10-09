@@ -263,10 +263,13 @@ export function registerRoutes(app: Express): Server {
           return false;
         }
         
-        // EXCLUDE orders without action_length - they need attention
+        // EXCLUDE orders without action_length - UNLESS they're from P1 Purchase Orders (which don't need action_length)
         const features = (order as any).features || {};
-        if (!features.action_length || features.action_length === '') {
-          console.log(`⚠️ FILTERING OUT: Order ${(order as any).orderId} has no action_length selected - needs attention`);
+        const orderId = (order as any).orderId || '';
+        const isP1POOrder = orderId.startsWith('PO-'); // P1 PO orders have format: PO-0046-5-1
+        
+        if (!isP1POOrder && (!features.action_length || features.action_length === '')) {
+          console.log(`⚠️ FILTERING OUT: Order ${orderId} has no action_length selected - needs attention`);
           return false;
         }
         

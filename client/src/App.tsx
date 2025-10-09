@@ -83,7 +83,6 @@ import CounterfeitPreventionTraining from "@/pages/CounterfeitPreventionTraining
 import Training from "@/pages/Training";
 import TrainingModule from "@/pages/TrainingModule";
 import Calendar from "./pages/Calendar";
-import PurchaseOrderItemsQueuePage from "./pages/PurchaseOrderItemsQueuePage";
 import LayupPluggingQueuePage from "./pages/LayupPluggingQueuePage";
 import BarcodeQueuePage from "./pages/BarcodeQueuePage";
 import CNCQueuePage from "./pages/CNCQueuePage";
@@ -315,7 +314,6 @@ function App() {
                   <Route path="/calendar" component={Calendar} />
 
                   {/* Queue Management Routes */}
-                  <Route path="/purchase-order-items-queue" component={PurchaseOrderItemsQueuePage} />
                   <Route path="/layup-scheduler" component={LayupSchedulerPage} />
                   <Route path="/enhanced-layup-scheduler" component={EnhancedLayupSchedulerPage} />
                   <Route path="/work-day-scheduler" component={() => <WorkDayAwareScheduler />} />

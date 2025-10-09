@@ -5,24 +5,22 @@ export function inferStockModelFromFeatures(order: any): { stockModelId: string;
   let stockModelId = order.stockModelId || order.modelId;
   let product = 'Unknown Product';
   
-  // CRITICAL FIX: Only check for Mesa Precision Summit if no valid model ID exists
-  // Don't override existing valid model IDs like 'privateer-tikka'
-  // IMPORTANT: Be very strict about Mesa Universal classification to prevent over-classification
+  // REMOVED: Mesa Universal auto-generation - user must manually select Mesa Universal
+  // Nothing should auto-fill, everything is initiated by the user
+  // If a user wants Mesa Universal, they must explicitly select it
   if (!stockModelId && order.features && typeof order.features === 'object') {
     const features = order.features;
     
-    // Check action_inlet for Mesa Precision Summit
+    // Log Mesa Precision Summit detection but don't auto-assign
     if (features.action_inlet === 'mesa_precision_summit') {
-      console.log(`🏔️ MESA PRECISION SUMMIT (action_inlet): ${order.orderId || order.order_id} → Mesa Universal`);
-      return { stockModelId: 'mesa_universal', product: 'Mesa Universal' };
+      console.log(`🏔️ MESA PRECISION SUMMIT DETECTED (action_inlet): ${order.orderId || order.order_id} → Needs manual stock model selection`);
     }
     
-    // Check special instructions for Mesa Precision Summit
+    // Log special instructions for Mesa Precision Summit but don't auto-assign
     if (features.specialInstructions && typeof features.specialInstructions === 'string') {
       const instructions = features.specialInstructions.toLowerCase();
       if (instructions.includes('mesa precision summit') || instructions.includes('mesa_precision_summit')) {
-        console.log(`🏔️ MESA PRECISION SUMMIT (specialInstructions): ${order.orderId || order.order_id} → Mesa Universal`);
-        return { stockModelId: 'mesa_universal', product: 'Mesa Universal' };
+        console.log(`🏔️ MESA PRECISION SUMMIT DETECTED (specialInstructions): ${order.orderId || order.order_id} → Needs manual stock model selection`);
       }
     }
   }
@@ -30,16 +28,15 @@ export function inferStockModelFromFeatures(order: any): { stockModelId: string;
   // PRIORITY: Respect existing valid stockModelId field first
   if (stockModelId && stockModelId !== 'universal' && stockModelId !== 'UNPROCESSED') {
     product = stockModelId;
-    console.log(`✅ EXISTING MODEL ID: ${order.orderId || order.order_id} → ${stockModelId} (preserved)`);
+    // COMMENTED OUT FOR PERFORMANCE - was logging 800+ times per API call
+    // console.log(`✅ EXISTING MODEL ID: ${order.orderId || order.order_id} → ${stockModelId} (preserved)`);
     return { stockModelId, product };
   }
   
-  // STRICT: Only classify as Mesa if explicitly Mesa production order with Mesa in itemName
+  // REMOVED: Mesa Universal auto-assignment - user must manually select
+  // Even for Mesa production orders, the user must explicitly select the stock model
   if (order.source === 'mesa_production_order' && order.itemName?.toLowerCase().includes('mesa')) {
-    stockModelId = 'mesa_universal';
-    product = 'Mesa Universal';
-    console.log(`🎯 MESA INFERENCE: ${order.orderId || order.order_id} → Mesa Universal (itemName: ${order.itemName})`);
-    return { stockModelId, product };
+    console.log(`🏔️ MESA PRODUCTION ORDER DETECTED: ${order.orderId || order.order_id} (itemName: ${order.itemName}) → Needs manual stock model selection`);
   }
   
   // Try to extract from features object

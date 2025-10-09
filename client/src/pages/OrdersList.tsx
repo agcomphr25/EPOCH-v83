@@ -418,13 +418,8 @@ export default function OrdersList() {
 
   try {
     const { data: orders, isLoading, error } = useQuery<Order[]>({
-      queryKey: ['/api/orders/with-payment-status', searchTerm],
-      queryFn: () => {
-        const params = new URLSearchParams();
-        if (searchTerm) params.append('search', searchTerm);
-        const url = `/api/orders/with-payment-status${params.toString() ? `?${params.toString()}` : ''}`;
-        return apiRequest(url);
-      },
+      queryKey: ['/api/orders/with-payment-status'],
+      queryFn: () => apiRequest('/api/orders/with-payment-status'),
       refetchInterval: false, // Completely disable automatic refetching
       refetchOnWindowFocus: false, // Disable refetch on window focus
       refetchOnReconnect: false, // Disable refetch on network reconnect

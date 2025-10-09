@@ -296,13 +296,31 @@ export default function OemPrioritySettingsDialog({
         description: "Production orders have been created successfully"
       });
     },
-    onError: (error) => {
-      toast({
-        title: "Generation Failed",
-        description: "Failed to generate production orders",
-        variant: "destructive"
-      });
-      console.error('Generation error:', error);
+    onError: (error: any) => {
+      const errorMessage = error?.message || String(error);
+      
+      // Check if error is about duplicate orders
+      if (errorMessage.includes('already exist')) {
+        // Extract order count from error message (e.g., "5 orders found")
+        const countMatch = errorMessage.match(/(\d+)\s+orders?\s+found/);
+        const orderCount = countMatch ? countMatch[1] : 'existing';
+        
+        toast({
+          title: "Orders Already Available",
+          description: `${orderCount} production orders for this PO are already in the system and ready to schedule`,
+        });
+        
+        // Still invalidate queries to refresh the UI
+        queryClient.invalidateQueries({ queryKey: ['/api/oem-settings/layup-scheduler/oem-priority'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/p1-layup-queue'] });
+      } else {
+        toast({
+          title: "Generation Failed",
+          description: "Failed to generate production orders",
+          variant: "destructive"
+        });
+        console.error('Generation error:', error);
+      }
     }
   });
 

@@ -135,7 +135,6 @@ export default function AllOrdersPage() {
       
       // Clear all caches and force immediate refetch
       queryClient.clear();
-      await queryClient.refetchQueries({ queryKey: ['/api/orders/with-payment-status/paginated'] });
       await queryClient.refetchQueries({ queryKey: ['/api/orders/with-payment-status'] });
     },
     onError: (error: any, variables) => {
@@ -148,9 +147,9 @@ export default function AllOrdersPage() {
     }
   });
 
-  const { data: paginatedData, isLoading } = useQuery<PaginatedOrdersResponse>({
-    queryKey: ['/api/orders/with-payment-status/paginated', currentPage, pageSize],
-    queryFn: () => apiRequest(`/api/orders/with-payment-status/paginated?page=${currentPage}&limit=${pageSize}`),
+  // Fetch ALL orders (not paginated)
+  const { data: allOrders, isLoading } = useQuery<Order[]>({
+    queryKey: ['/api/orders/with-payment-status'],
     staleTime: 30000,
     gcTime: 60000
   });
@@ -166,10 +165,6 @@ export default function AllOrdersPage() {
     refetchInterval: 60000,
   });
 
-  const orders = paginatedData?.orders || [];
-  const totalOrders = paginatedData?.total || 0;
-  const totalPages = paginatedData?.totalPages || 1;
-
   // Cancel order mutation
   const cancelOrderMutation = useMutation({
     mutationFn: async ({ orderId, reason }: { orderId: string; reason: string }) => {
@@ -179,7 +174,6 @@ export default function AllOrdersPage() {
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status/paginated'] });
       queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
       queryClient.invalidateQueries({ queryKey: ['/api/orders/pipeline-counts'] });
       queryClient.invalidateQueries({ queryKey: ['/api/production-queue/prioritized'] });
@@ -333,34 +327,50 @@ export default function AllOrdersPage() {
   };
 
   // Filter orders based on search and department, excluding cancelled orders
-  const filteredOrders = orders.filter(order => {
-    // Exclude cancelled orders from main list
-    if (order.isCancelled || order.status === 'CANCELLED') {
-      return false;
-    }
+  const filteredOrders = React.useMemo(() => {
+    if (!allOrders) return [];
 
-    // Department filter
-    const departmentMatch = selectedDepartment === 'all' || order.currentDepartment === selectedDepartment;
+    return allOrders.filter(order => {
+      // Exclude cancelled orders from main list
+      if (order.isCancelled || order.status === 'CANCELLED') {
+        return false;
+      }
 
-    // Search filter - search in multiple fields including FB Order Number
-    if (!searchTerm.trim()) {
-      return departmentMatch;
-    }
+      // Department filter
+      const departmentMatch = selectedDepartment === 'all' || order.currentDepartment === selectedDepartment;
 
-    const searchLower = searchTerm.toLowerCase();
-    const searchFields = [
-      order.orderId?.toLowerCase(),
-      order.fbOrderNumber?.toLowerCase(),
-      order.customer?.toLowerCase(),
-      order.customerId?.toLowerCase(),
-      order.product?.toLowerCase(),
-      order.modelId?.toLowerCase()
-    ].filter(Boolean);
+      // Search filter - search in multiple fields including FB Order Number
+      if (!searchTerm.trim()) {
+        return departmentMatch;
+      }
 
-    const searchMatch = searchFields.some(field => field?.includes(searchLower));
+      const searchLower = searchTerm.toLowerCase();
+      const searchFields = [
+        order.orderId?.toLowerCase(),
+        order.fbOrderNumber?.toLowerCase(),
+        order.customer?.toLowerCase(),
+        order.customerId?.toLowerCase(),
+        order.product?.toLowerCase(),
+        order.modelId?.toLowerCase()
+      ].filter(Boolean);
 
-    return departmentMatch && searchMatch;
-  });
+      const searchMatch = searchFields.some(field => field?.includes(searchLower));
+
+      return departmentMatch && searchMatch;
+    });
+  }, [allOrders, searchTerm, selectedDepartment]);
+
+  // Reset to page 1 when filters change
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, selectedDepartment, sortBy]);
+
+  // Calculate client-side pagination
+  const totalOrders = filteredOrders.length;
+  const totalPages = Math.ceil(totalOrders / pageSize);
+  const startIndex = (currentPage - 1) * pageSize;
+  const endIndex = startIndex + pageSize;
+  const orders = filteredOrders.slice(startIndex, endIndex);
 
   // Function to calculate search relevance score
   const getSearchRelevanceScore = (order: any, searchTerm: string) => {

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { PlusCircle, FileText, FilePenLine, XCircle, Users, User, Factory, RefreshCw, LogOut } from 'lucide-react';
+import { PlusCircle, FileText, FilePenLine, XCircle, Users, User, Factory, RefreshCw, LogOut, Truck, Package } from 'lucide-react';
 import { Link } from 'wouter';
 import PipelineVisualization from '@/components/PipelineVisualization';
 
@@ -99,6 +99,26 @@ export default function DARLENEBTestDashboard() {
               <RefreshCw className="w-8 h-8 text-purple-600 mx-auto mb-3" />
               <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Request Refund</h3>
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Process refunds</p>
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link href="/department-queue/shipping">
+          <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-teal-200">
+            <CardContent className="p-4 text-center">
+              <Truck className="w-8 h-8 text-teal-600 mx-auto mb-3" />
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Shipping Queue</h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">View shipping orders</p>
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link href="/shipping-management">
+          <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-indigo-200">
+            <CardContent className="p-4 text-center">
+              <Package className="w-8 h-8 text-indigo-600 mx-auto mb-3" />
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Shipping Management</h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Manage shipments</p>
             </CardContent>
           </Card>
         </Link>

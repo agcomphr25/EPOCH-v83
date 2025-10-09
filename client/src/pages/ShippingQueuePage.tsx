@@ -20,7 +20,6 @@ import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
 import { useLocation } from 'wouter';
 import FBNumberSearch from '@/components/FBNumberSearch';
-import WeeklyShippingWidget from '@/components/WeeklyShippingWidget';
 
 export default function ShippingQueuePage() {
   const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
@@ -712,8 +711,6 @@ export default function ShippingQueuePage() {
           </CardContent>
         </Card>
 
-        {/* Weekly Shipping Tracker Widget */}
-        <WeeklyShippingWidget />
       </div>
 
       {/* Orders List - Categorized by Due Date */}

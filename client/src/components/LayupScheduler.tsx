@@ -1530,7 +1530,7 @@ export default function LayupScheduler() {
   }) as { data: any[]; isLoading: boolean };
 
   // Use custom query with OEM settings instead of the default useUnifiedLayupOrders hook
-  const { data: allOrders = [], isLoading: ordersLoading, refetch: reloadOrders } = useQuery({
+  const { data: allOrders = [], isLoading: ordersLoading, refetch: reloadOrders } = useQuery<any[]>({
     queryKey: ['/api/p1-layup-queue', oemMode, selectedPOOrders.join(',')],
     queryFn: async () => {
       console.log('🚀 Making API call to /api/p1-layup-queue with OEM settings:', { oemMode, selectedPOOrders });
@@ -1549,17 +1549,25 @@ export default function LayupScheduler() {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
       const data = await response.json();
+      
+      // Handle different response formats
+      const orders = Array.isArray(data) ? data : (data.orders || data.data || []);
+      
       console.log('🎯 API response with OEM settings:', {
         status: response.status,
-        length: data?.length,
+        dataType: typeof data,
+        isArray: Array.isArray(data),
+        length: orders.length,
         oemMode,
-        selectedPOCount: selectedPOOrders.length
+        selectedPOCount: selectedPOOrders.length,
+        sampleOrder: orders[0]
       });
-      return data;
+      
+      return orders;
     },
     retry: 3,
     staleTime: 5000,
-    cacheTime: 60000,
+    gcTime: 60000,
     refetchOnWindowFocus: false,
     refetchOnMount: true,
     refetchInterval: false

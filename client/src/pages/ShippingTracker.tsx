@@ -78,7 +78,7 @@ export default function ShippingTracker() {
       
       // Search by customer name
       if (order.customerId && customers) {
-        const customer = customers.find(c => c.id === order.customerId);
+        const customer = customers.find(c => String(c.id) === String(order.customerId));
         if (customer && customer.name.toLowerCase().includes(searchLower)) return true;
       }
       
@@ -232,11 +232,11 @@ export default function ShippingTracker() {
                 </TableHeader>
                 <TableBody>
                   {filteredOrders.slice(0, 50).map(order => {
-                    const customer = customers?.find(c => c.id === order.customerId);
+                    const customer = customers?.find(c => String(c.id) === String(order.customerId));
                     return (
                       <TableRow key={order.id} data-testid={`row-shipment-${order.orderId}`}>
                         <TableCell className="font-medium">{order.orderId}</TableCell>
-                        <TableCell>{customer?.name || 'N/A'}</TableCell>
+                        <TableCell>{customer?.name || 'Unknown Customer'}</TableCell>
                         <TableCell>
                           {order.trackingNumber ? (
                             <span className="font-mono text-sm">{order.trackingNumber}</span>

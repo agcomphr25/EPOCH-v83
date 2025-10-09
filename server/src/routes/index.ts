@@ -436,7 +436,8 @@ export function registerRoutes(app: Express): Server {
           const actionLength = stockModelActionMap[stockModelId] || 'short';
           features.action_length = actionLength;
           
-          console.log(`🎯 OEM Order ${po.orderId}: Inferred action_length="${actionLength}" from stockModelId="${stockModelId}"`);
+          // COMMENTED OUT FOR PERFORMANCE - was logging 400+ times per API call
+          // console.log(`🎯 OEM Order ${po.orderId}: Inferred action_length="${actionLength}" from stockModelId="${stockModelId}"`);
           
           return features;
         };

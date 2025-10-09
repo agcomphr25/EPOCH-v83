@@ -13,7 +13,7 @@ import { getDisplayOrderId } from '@/lib/orderUtils';
 import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import { useLocation } from 'wouter';
-import FBNumberSearch from '@/components/FBNumberSearch';
+import { OrderSearchBox } from '@/components/OrderSearchBox';
 import { SalesOrderModal } from '@/components/SalesOrderModal';
 import { isOrderInDepartment } from '@/lib/departmentUtils';
 
@@ -22,6 +22,7 @@ export default function GunsimthQueuePage() {
   const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
   const [salesOrderModalOpen, setSalesOrderModalOpen] = useState(false);
   const [selectedOrderId, setSelectedOrderId] = useState<string>('');
+  const [highlightedOrderId, setHighlightedOrderId] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
@@ -375,32 +376,28 @@ export default function GunsimthQueuePage() {
     }
   };
 
-  // Handle order found via Facebook number search
-  const handleOrderFound = (orderId: string) => {
-    // Check if the order exists in the current Gunsmith queue
-    const orderExists = gunsmithOrders.some((order: any) => order.orderId === orderId);
+  // Handle order search selection
+  const handleOrderSearchSelect = (order: any) => {
+    const orderExists = gunsmithOrders.some((o: any) => o.orderId === order.orderId);
     if (orderExists) {
-      setSelectedOrders(prev => new Set([...Array.from(prev), orderId]));
+      setHighlightedOrderId(order.orderId);
+      // Auto-scroll to the highlighted order
+      setTimeout(() => {
+        const element = document.getElementById(`order-${order.orderId}`);
+        if (element) {
+          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 100);
       toast({
         title: "Success",
-        description: `Order ${orderId} found and selected`,
+        description: `Order ${order.orderId} highlighted in the list`,
       });
     } else {
-      // Find the order in all orders to show current department
-      const allOrder = (allOrders as any[]).find((order: any) => order.orderId === orderId);
-      if (allOrder) {
-        toast({
-          title: "Error",
-          description: `Order ${orderId} is currently in ${allOrder.currentDepartment} department, not Gunsmith`,
-          variant: "destructive",
-        });
-      } else {
-        toast({
-          title: "Error",
-          description: `Order ${orderId} not found`,
-          variant: "destructive",
-        });
-      }
+      toast({
+        title: "Error",
+        description: `Order ${order.orderId} is not in the Gunsmith department`,
+        variant: "destructive",
+      });
     }
   };
 
@@ -414,8 +411,28 @@ export default function GunsimthQueuePage() {
       {/* Barcode Scanner at top */}
       <BarcodeScanner onOrderScanned={handleOrderScanned} />
 
-      {/* Facebook Number Search */}
-      <FBNumberSearch onOrderFound={handleOrderFound} />
+      {/* Order Search Box */}
+      <Card>
+        <CardContent className="p-4">
+          <div className="flex items-center gap-4">
+            <OrderSearchBox 
+              orders={gunsmithOrders}
+              placeholder="Search orders by Order ID or FishBowl Number..."
+              onOrderSelect={handleOrderSearchSelect}
+            />
+            {highlightedOrderId && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setHighlightedOrderId(null)}
+                className="text-sm"
+              >
+                Clear highlight
+              </Button>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Department Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">

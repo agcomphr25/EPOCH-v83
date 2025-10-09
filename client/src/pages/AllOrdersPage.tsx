@@ -560,7 +560,7 @@ export default function AllOrdersPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {sortedOrders.map(order => (
+              {orders.map(order => (
                 <TableRow key={order.orderId} className={cn(order.isVerified ? "bg-green-50 dark:bg-green-950" : "")}>
                   <TableCell className="font-medium">
                     <div className="flex items-center gap-2">

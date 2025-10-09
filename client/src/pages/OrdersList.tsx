@@ -594,11 +594,17 @@ export default function OrdersList() {
     setCurrentPage(1);
   }, [searchTerm, departmentFilter, statusFilter, sortBy, sortOrder]);
 
-  // Calculate pagination
-  const totalPages = Math.ceil(filteredOrders.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const paginatedOrders = filteredOrders.slice(startIndex, endIndex);
+  // Calculate pagination - MEMOIZED to prevent re-renders
+  const paginationData = React.useMemo(() => {
+    const totalPages = Math.ceil(filteredOrders.length / itemsPerPage);
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    const paginatedOrders = filteredOrders.slice(startIndex, endIndex);
+    
+    return { totalPages, startIndex, endIndex, paginatedOrders };
+  }, [filteredOrders, currentPage, itemsPerPage]);
+
+  const { totalPages, startIndex, endIndex, paginatedOrders } = paginationData;
 
   const getModelDisplayName = (modelId: string) => {
     if (!stockModels) return modelId;

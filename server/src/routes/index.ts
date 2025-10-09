@@ -32,6 +32,7 @@ import moldSyncRoutes from './moldSync';
 import authRoutes from './auth';
 import usersRoutes from './users';
 import reportsRoutes from './reports';
+import oemSettingsRoutes from './oemSettings';
 import { getAccessToken } from '../utils/upsShipping';
 
 export function registerRoutes(app: Express): Server {
@@ -130,6 +131,7 @@ export function registerRoutes(app: Express): Server {
   app.use('/api/reports', reportsRoutes);
 
   // OEM Priority Settings routes
+  app.use('/api/oem-settings', oemSettingsRoutes);
   
   // UPS Test endpoint
   app.post('/api/test-ups-auth', async (req, res) => {
@@ -261,10 +263,13 @@ export function registerRoutes(app: Express): Server {
           return false;
         }
         
-        // EXCLUDE orders without action_length - they need attention
+        // EXCLUDE orders without action_length - UNLESS they're from P1 Purchase Orders (which don't need action_length)
         const features = (order as any).features || {};
-        if (!features.action_length || features.action_length === '') {
-          console.log(`⚠️ FILTERING OUT: Order ${(order as any).orderId} has no action_length selected - needs attention`);
+        const orderId = (order as any).orderId || '';
+        const isP1POOrder = orderId.startsWith('PO-'); // P1 PO orders have format: PO-0046-5-1
+        
+        if (!isP1POOrder && (!features.action_length || features.action_length === '')) {
+          console.log(`⚠️ FILTERING OUT: Order ${orderId} has no action_length selected - needs attention`);
           return false;
         }
         
@@ -280,8 +285,8 @@ export function registerRoutes(app: Express): Server {
         SELECT 
           id,
           order_id as "orderId",
-          customer_id as "customer",
-          model_id as "product",
+          customer as "customer",
+          product as "product",
           date,
           due_date as "dueDate",
           current_department as "currentDepartment",
@@ -312,6 +317,7 @@ export function registerRoutes(app: Express): Server {
       const combinedUnscheduledOrders = [...unscheduledOrders, ...formattedActiveOrders];
       
       // Fetch P1 PO orders from all_orders table (orders created from P1 PO week selection)
+      // ONLY include orders in P1 Production Queue - orders should NOT appear in queue until scheduled
       console.log('🔍 Fetching P1 PO orders from all_orders table...');
       const p1POOrdersResult = await pool.query(`
         SELECT 
@@ -326,7 +332,7 @@ export function registerRoutes(app: Express): Server {
           'p1_purchase_order' as source
         FROM all_orders 
         WHERE order_id LIKE 'PO%'
-          AND (current_department = 'P1 Production Queue' OR current_department = 'Layup/Plugging')
+          AND current_department = 'P1 Production Queue'
         ORDER BY due_date ASC
       `);
 
@@ -362,26 +368,29 @@ export function registerRoutes(app: Express): Server {
       console.log(`🏭 Found ${p1POOrders.length} P1 PO orders from week selection`);
 
       // Fetch production orders from production_orders table (OEM orders)
-      console.log('🔍 Fetching production orders from production_orders table...');
+      // IMPORTANT: Only fetch production orders that match ACTIVE OEM priority settings
+      console.log('🔍 Fetching production orders from production_orders table (filtering by active OEM settings)...');
       const productionOrdersResult = await pool.query(`
-        SELECT 
-          order_id as "orderId",
-          customer_id as "customerId",
+        SELECT DISTINCT
+          po.order_id as "orderId",
+          po.customer_id as "customerId",
           CASE 
-            WHEN item_id = '10' THEN 'cf_alpine_hunter'
-            WHEN item_id = '11' THEN 'cf_privateer' 
-            WHEN item_id = '12' THEN 'fg_privateer'
+            WHEN po.item_id = '10' THEN 'cf_alpine_hunter'
+            WHEN po.item_id = '11' THEN 'cf_privateer' 
+            WHEN po.item_id = '12' THEN 'fg_privateer'
             ELSE 'mesa_universal'
           END as "stockModelId",
-          due_date as "dueDate",
-          current_department as "currentDepartment",
-          production_status as "status",
+          po.due_date as "dueDate",
+          po.current_department as "currentDepartment",
+          po.production_status as "status",
           '{}' as features,
-          created_at as "createdAt",
+          po.created_at as "createdAt",
           'production_order' as source
-        FROM production_orders 
-        WHERE production_status = 'PENDING'
-        ORDER BY due_date ASC
+        FROM production_orders po
+        INNER JOIN oem_priority_settings ops ON po.po_id = ops.po_id
+        WHERE po.production_status = 'PENDING' 
+          AND ops.is_active = true
+        ORDER BY po.due_date ASC
       `);
 
       // Format the production orders
@@ -430,7 +439,8 @@ export function registerRoutes(app: Express): Server {
           const actionLength = stockModelActionMap[stockModelId] || 'short';
           features.action_length = actionLength;
           
-          console.log(`🎯 OEM Order ${po.orderId}: Inferred action_length="${actionLength}" from stockModelId="${stockModelId}"`);
+          // COMMENTED OUT FOR PERFORMANCE - was logging 400+ times per API call
+          // console.log(`🎯 OEM Order ${po.orderId}: Inferred action_length="${actionLength}" from stockModelId="${stockModelId}"`);
           
           return features;
         };
@@ -473,10 +483,10 @@ export function registerRoutes(app: Express): Server {
             source: sourceType
           });
           
-          // DEBUG: Log Mesa Universal orders specifically
-          if (stockModelId === 'mesa_universal') {
-            console.log(`🏔️ MESA ORDER: ${order.orderId} → ${stockModelId} (source: ${sourceType})`);
-          }
+          // DEBUG: Log Mesa Universal orders specifically - COMMENTED OUT FOR PERFORMANCE
+          // if (stockModelId === 'mesa_universal') {
+          //   console.log(`🏔️ MESA ORDER: ${order.orderId} → ${stockModelId} (source: ${sourceType})`);
+          // }
           
           return {
             ...order,
@@ -1950,6 +1960,9 @@ export function registerRoutes(app: Express): Server {
             (item.itemName && (item.itemName.includes('AG-') || item.itemName.includes('stock')))
           );
           
+          // Calculate total quantity across all stock items
+          const totalStockQuantity = stockItems.reduce((sum, item) => sum + (item.quantity || 0), 0);
+          
           return {
             id: po.id,
             poNumber: po.poNumber,
@@ -1957,7 +1970,8 @@ export function registerRoutes(app: Express): Server {
             customerId: po.customerId,
             dueDate: po.expectedDelivery,
             status: po.status,
-            stockCount: stockItems.length,
+            stockCount: totalStockQuantity, // Total quantity, not just count of items
+            distinctStockItems: stockItems.length, // Number of distinct stock item types
             itemCount: items.length,
             poDate: po.poDate,
             notes: po.notes
@@ -1972,7 +1986,7 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  // Get stock items for a specific PO
+  // Get stock items for a specific PO with current_department for filtering
   app.get('/api/po-stock-items-list/:poId', async (req, res) => {
     try {
       const { poId } = req.params;
@@ -1985,27 +1999,42 @@ export function registerRoutes(app: Express): Server {
         (item.itemName && (item.itemName.includes('AG-') || item.itemName.includes('stock')))
       );
       
-      const enhancedStockItems = stockItems.map(item => {
-        // Parse specifications if available
-        let specs = {};
-        try {
-          specs = item.specifications ? JSON.parse(item.specifications as string) : {};
-        } catch (e) {
-          specs = {};
-        }
-        
-        return {
-          id: item.id,
-          itemId: item.itemId,
-          itemName: item.itemName,
-          itemType: item.itemType,
-          quantity: item.quantity,
-          specifications: specs,
-          unitPrice: item.unitPrice,
-          totalPrice: item.totalPrice,
-          orderCount: item.orderCount
-        };
-      });
+      // Query production orders to get current_department for each item
+      const enhancedStockItems = await Promise.all(
+        stockItems.map(async (item) => {
+          // Parse specifications if available
+          let specs = {};
+          try {
+            specs = item.specifications ? JSON.parse(item.specifications as string) : {};
+          } catch (e) {
+            specs = {};
+          }
+          
+          // Get production orders for this PO item to find current_department
+          const productionOrders = await pool.query(`
+            SELECT order_id, current_department, stock_model_id
+            FROM production_orders
+            WHERE po_id = $1 AND item_id = $2::text
+            ORDER BY created_at DESC
+            LIMIT 1
+          `, [parseInt(poId), item.id.toString()]);
+          
+          const currentDepartment = productionOrders.rows?.[0]?.current_department || 'P1 Production Queue';
+          
+          return {
+            id: item.id,
+            itemId: item.itemId,
+            itemName: item.itemName,
+            itemType: item.itemType,
+            quantity: item.quantity,
+            specifications: specs,
+            unitPrice: item.unitPrice,
+            totalPrice: item.totalPrice,
+            orderCount: item.orderCount,
+            current_department: currentDepartment
+          };
+        })
+      );
       
       res.json(enhancedStockItems);
     } catch (error) {

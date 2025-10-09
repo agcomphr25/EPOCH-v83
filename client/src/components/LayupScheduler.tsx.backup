@@ -745,6 +745,7 @@ export default function LayupScheduler() {
   // OEM settings state
   const [oemDialogOpen, setOemDialogOpen] = useState(false);
   const [selectedOEMPurchaseOrders, setSelectedOEMPurchaseOrders] = useState<string[]>([]);
+  const [oemSettingsSaved, setOemSettingsSaved] = useState(false);
 
   // Employee settings state
   const [employeeDialogOpen, setEmployeeDialogOpen] = useState(false);
@@ -754,6 +755,41 @@ export default function LayupScheduler() {
   
   // Mold settings state
   const [moldDialogOpen, setMoldDialogOpen] = useState(false);
+  
+  // New state for cascading vendor-PO-stock selection
+  const [selectedVendorId, setSelectedVendorId] = useState<string | null>(null);
+  const [selectedPOId, setSelectedPOId] = useState<string | null>(null);
+  const [selectedStockItemId, setSelectedStockItemId] = useState<string | null>(null);
+  
+  // New state for selection mode (entire PO vs specific items)
+  const [selectionMode, setSelectionMode] = useState<'entire_po' | 'specific_items'>('entire_po');
+  const [selectedStockItemIds, setSelectedStockItemIds] = useState<string[]>([]);
+  // Manual quantity state: { [itemId]: quantity }
+  const [manualQuantities, setManualQuantities] = useState<Record<string, number>>({});
+
+  // Query for PO vendors
+  const { data: poVendors = [], isLoading: vendorsLoading } = useQuery<any[]>({
+    queryKey: ['/api/po-vendors'],
+    enabled: oemDialogOpen
+  });
+
+  // Query for POs by selected vendor
+  const { data: vendorPOs = [], isLoading: vendorPOsLoading } = useQuery<any[]>({
+    queryKey: [`/api/po-by-vendor/${selectedVendorId}`],
+    enabled: oemDialogOpen && !!selectedVendorId
+  });
+
+  // Query for stock items by selected PO
+  const { data: poStockItems = [], isLoading: stockItemsLoading } = useQuery<any[]>({
+    queryKey: [`/api/po-stock-items-list/${selectedPOId}`],
+    enabled: oemDialogOpen && !!selectedPOId
+  });
+
+  // Show all stock items for OEM priority selection - OEM priority system handles scheduling
+  // No longer filtering by P1 Production Queue since OEM priority settings are now the queue
+  const eligibleStockItems = useMemo(() => {
+    return poStockItems;
+  }, [poStockItems]);
 
   // Apply functions for settings
   const applyWorkDayChanges = () => {
@@ -1530,7 +1566,7 @@ export default function LayupScheduler() {
   }) as { data: any[]; isLoading: boolean };
 
   // Use custom query with OEM settings instead of the default useUnifiedLayupOrders hook
-  const { data: allOrders = [], isLoading: ordersLoading, refetch: reloadOrders } = useQuery<any[]>({
+  const { data: allOrders = [], isLoading: ordersLoading, refetch: reloadOrders } = useQuery({
     queryKey: ['/api/p1-layup-queue', oemMode, selectedPOOrders.join(',')],
     queryFn: async () => {
       console.log('🚀 Making API call to /api/p1-layup-queue with OEM settings:', { oemMode, selectedPOOrders });
@@ -1549,25 +1585,17 @@ export default function LayupScheduler() {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
       const data = await response.json();
-      
-      // Handle different response formats
-      const orders = Array.isArray(data) ? data : (data.orders || data.data || []);
-      
       console.log('🎯 API response with OEM settings:', {
         status: response.status,
-        dataType: typeof data,
-        isArray: Array.isArray(data),
-        length: orders.length,
+        length: data?.length,
         oemMode,
-        selectedPOCount: selectedPOOrders.length,
-        sampleOrder: orders[0]
+        selectedPOCount: selectedPOOrders.length
       });
-      
-      return orders;
+      return data;
     },
     retry: 3,
     staleTime: 5000,
-    gcTime: 60000,
+    cacheTime: 60000,
     refetchOnWindowFocus: false,
     refetchOnMount: true,
     refetchInterval: false
@@ -2133,26 +2161,18 @@ export default function LayupScheduler() {
 
     try {
       console.log('🏭 PRODUCTION FLOW: Adding regular orders to schedule after OEM priorities...');
-      
-      // Calculate selected week start (Monday) and end (Friday/last work day)
-      const weekStart = startOfWeek(currentDate, { weekStartsOn: 1 }); // Monday
-      const weekEnd = endOfWeek(currentDate, { weekStartsOn: 1 }); // Sunday
-      
-      console.log(`📅 Selected week: ${format(weekStart, 'yyyy-MM-dd')} to ${format(weekEnd, 'yyyy-MM-dd')}`);
-      
       const response = await apiRequest('/api/scheduler/add-regular-orders', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          selectedWeekStart: format(weekStart, 'yyyy-MM-dd'), // CRITICAL: Only schedule for selected week
-          selectedWeekEnd: format(weekEnd, 'yyyy-MM-dd'),     // CRITICAL: Stop after this week
           maxOrdersPerDay: Math.floor(employees.reduce((total, emp) => total + (emp.rate || 1.5) * (emp.hours || 8), 0)) || 21, // Use actual employee capacity settings
+          scheduleDays: 10,    // Limit schedule to next 2 weeks (10 work days)
           workDays: selectedWorkDays, // Pass current work day settings  
           employees: employees, // Pass employee settings
           molds: molds.filter(m => m.enabled), // Pass enabled molds only
-          excludeOEMOrders: false // Include ALL orders: regular + OEM production orders
+          excludeOEMOrders: true // Only add regular orders, skip OEM/priority orders
         }),
       });
 
@@ -3706,11 +3726,434 @@ export default function LayupScheduler() {
               </DropdownMenuContent>
             </DropdownMenu>
 
-            {/* OEM Priority Settings Dialog */}
-            <OemPrioritySettingsDialog 
-              open={oemDialogOpen} 
-              onOpenChange={setOemDialogOpen}
-            />
+            {/* OEM Priority Settings Dialog - Redesigned with 3 Components */}
+            <Dialog open={oemDialogOpen} onOpenChange={(open) => {
+              setOemDialogOpen(open);
+              if (!open) {
+                // Reset selections when modal closes
+                setSelectedVendorId(null);
+                setSelectedPOId(null);
+                setSelectedStockItemId(null);
+                setSelectedStockItemIds([]);
+                setManualQuantities({});
+                setSelectionMode('entire_po');
+              }
+            }}>
+              <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>OEM Priority Settings</DialogTitle>
+                </DialogHeader>
+                <div className="flex gap-6 pr-2">
+                  {/* Left Panel: PO Vendors List */}
+                  <div className="w-1/3 border-r pr-4">
+                    <h4 className="font-medium text-gray-900 dark:text-white mb-3">
+                      📋 PO Vendors
+                    </h4>
+                    {vendorsLoading ? (
+                      <p className="text-sm text-gray-500">Loading vendors...</p>
+                    ) : poVendors.length === 0 ? (
+                      <p className="text-sm text-gray-500 italic">No vendors available</p>
+                    ) : (
+                      <div className="space-y-2 max-h-[500px] overflow-y-auto">
+                        {poVendors.map((vendor: any) => (
+                          <div
+                            key={vendor.id}
+                            onClick={() => {
+                              setSelectedVendorId(vendor.id);
+                              setSelectedPOId(null); // Reset PO selection
+                              setSelectedStockItemId(null); // Reset stock selection
+                            }}
+                            className={`p-3 rounded border cursor-pointer transition-colors ${
+                              selectedVendorId === vendor.id
+                                ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-700'
+                                : 'bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700'
+                            }`}
+                            data-testid={`vendor-${vendor.id}`}
+                          >
+                            <div className="font-medium text-sm text-gray-900 dark:text-white">
+                              {vendor.name}
+                            </div>
+                            <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                              {vendor.poCount} PO{vendor.poCount !== 1 ? 's' : ''} • {vendor.totalStockItems} stock items
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Right Panel: Dropdowns and Details */}
+                  <div className="flex-1 space-y-4">
+                    <div className="text-sm text-gray-600 dark:text-gray-400">
+                      Select a vendor, then choose a purchase order and stock item for priority scheduling
+                    </div>
+
+                    {/* PO Dropdown */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">
+                        🔗 Purchase Orders
+                      </label>
+                      <Select
+                        value={selectedPOId || ""}
+                        onValueChange={(value) => {
+                          setSelectedPOId(value);
+                          setSelectedStockItemId(null); // Reset stock selection
+                        }}
+                        disabled={!selectedVendorId || vendorPOsLoading}
+                      >
+                        <SelectTrigger className="w-full" data-testid="select-po">
+                          <SelectValue
+                            placeholder={
+                              !selectedVendorId
+                                ? "Select a vendor first"
+                                : vendorPOsLoading
+                                ? "Loading POs..."
+                                : "Select a purchase order"
+                            }
+                          />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {vendorPOs.map((po: any) => (
+                            <SelectItem key={po.id} value={po.id.toString()}>
+                              PO #{po.poNumber} • {po.stockCount} stock{po.stockCount !== 1 ? 's' : ''} • Due: {po.dueDate ? new Date(po.dueDate).toLocaleDateString() : 'Not set'}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Selection Mode Toggle */}
+                    {selectedPOId && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">
+                          🎯 Selection Mode
+                        </label>
+                        <div className="flex gap-4">
+                          <div className="flex items-center space-x-2">
+                            <input
+                              type="radio"
+                              id="mode-entire-po"
+                              name="selection-mode"
+                              value="entire_po"
+                              checked={selectionMode === 'entire_po'}
+                              onChange={(e) => {
+                                setSelectionMode(e.target.value as 'entire_po' | 'specific_items');
+                                setSelectedStockItemId(null);
+                                setSelectedStockItemIds([]);
+                              }}
+                              className="w-4 h-4 text-blue-600"
+                              data-testid="radio-entire-po"
+                            />
+                            <label htmlFor="mode-entire-po" className="text-sm text-gray-900 dark:text-white">
+                              Entire Purchase Order ({eligibleStockItems.length} distinct {eligibleStockItems.length === 1 ? 'item' : 'items'})
+                            </label>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <input
+                              type="radio"
+                              id="mode-specific-items"
+                              name="selection-mode"
+                              value="specific_items"
+                              checked={selectionMode === 'specific_items'}
+                              onChange={(e) => {
+                                setSelectionMode(e.target.value as 'entire_po' | 'specific_items');
+                                setSelectedStockItemId(null);
+                                setSelectedStockItemIds([]);
+                              }}
+                              className="w-4 h-4 text-blue-600"
+                              data-testid="radio-specific-items"
+                            />
+                            <label htmlFor="mode-specific-items" className="text-sm text-gray-900 dark:text-white">
+                              Specific Stock Items
+                            </label>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Stock Items Section - Entire PO Mode */}
+                    {selectedPOId && selectionMode === 'entire_po' && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">
+                          📦 All Stock Items from PO
+                        </label>
+                        <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                          <div className="flex items-center space-x-2 mb-2">
+                            <div className="text-blue-700 dark:text-blue-300 text-sm font-medium">
+                              ✅ All {eligibleStockItems.reduce((sum: number, item: any) => sum + (item.quantity || 0), 0)} stock items will be prioritized
+                            </div>
+                          </div>
+                          <div className="text-xs text-blue-600 dark:text-blue-400">
+                            When you save, all {eligibleStockItems.length} distinct stock item {eligibleStockItems.length === 1 ? 'type' : 'types'} from this purchase order will receive priority scheduling.
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Stock Items Section - Specific Items Mode */}
+                    {selectedPOId && selectionMode === 'specific_items' && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">
+                          📦 Select Specific Stock Items
+                        </label>
+                        {stockItemsLoading ? (
+                          <p className="text-sm text-gray-500">Loading stock items...</p>
+                        ) : eligibleStockItems.length === 0 ? (
+                          <p className="text-sm text-gray-500 italic">No stock items need layup scheduling (all have progressed beyond P1 Production Queue)</p>
+                        ) : (
+                          <div className="space-y-2 max-h-60 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded-lg p-3">
+                            {eligibleStockItems.map((item: any) => (
+                              <div key={item.id} className="flex items-center space-x-3">
+                                <Checkbox
+                                  id={`stock-item-${item.id}`}
+                                  checked={selectedStockItemIds.includes(item.id.toString())}
+                                  onCheckedChange={(checked) => {
+                                    if (checked) {
+                                      setSelectedStockItemIds([...selectedStockItemIds, item.id.toString()]);
+                                      // Initialize manual quantity with PO quantity when first selected
+                                      setManualQuantities(prev => ({ ...prev, [item.id.toString()]: item.quantity || 1 }));
+                                    } else {
+                                      setSelectedStockItemIds(selectedStockItemIds.filter(id => id !== item.id.toString()));
+                                      // Remove manual quantity when unchecked
+                                      setManualQuantities(prev => {
+                                        const updated = { ...prev };
+                                        delete updated[item.id.toString()];
+                                        return updated;
+                                      });
+                                    }
+                                  }}
+                                  data-testid={`checkbox-stock-${item.id}`}
+                                />
+                                <label htmlFor={`stock-item-${item.id}`} className="flex-1 text-sm cursor-pointer">
+                                  <div className="font-medium text-gray-900 dark:text-white">
+                                    {item.itemName}
+                                  </div>
+                                  <div className="text-xs text-gray-600 dark:text-gray-400">
+                                    PO Qty: {item.quantity} • Type: {item.itemType}
+                                  </div>
+                                </label>
+                                {selectedStockItemIds.includes(item.id.toString()) && (
+                                  <div className="flex items-center gap-2">
+                                    <label className="text-xs text-gray-600 dark:text-gray-400">
+                                      Schedule Qty:
+                                    </label>
+                                    <Input
+                                      type="number"
+                                      min="1"
+                                      max={item.quantity}
+                                      value={manualQuantities[item.id.toString()] || item.quantity}
+                                      onChange={(e) => {
+                                        const value = parseInt(e.target.value) || 1;
+                                        setManualQuantities(prev => ({ 
+                                          ...prev, 
+                                          [item.id.toString()]: Math.min(Math.max(1, value), item.quantity)
+                                        }));
+                                      }}
+                                      className="w-20 h-8"
+                                      data-testid={`input-quantity-${item.id}`}
+                                    />
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {selectedStockItemIds.length > 0 && (
+                          <div className="mt-2 text-sm text-blue-600 dark:text-blue-400">
+                            {selectedStockItemIds.length} item{selectedStockItemIds.length !== 1 ? 's' : ''} selected for priority
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Priority Selection Summary */}
+                    {selectedPOId && (selectionMode === 'entire_po' || selectedStockItemIds.length > 0) && (() => {
+                      const selectedPO = vendorPOs.find((po: any) => po.id.toString() === selectedPOId);
+                      const selectedVendor = poVendors.find((vendor: any) => vendor.id === selectedVendorId);
+                      
+                      if (!selectedPO || !selectedVendor) return null;
+                      
+                      return (
+                        <div className="border-t pt-4">
+                          <h4 className="font-medium text-gray-900 dark:text-white mb-3">
+                            📋 Priority Selection Summary
+                          </h4>
+                          <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border">
+                            <div className="grid grid-cols-2 gap-4 text-sm">
+                              <div>
+                                <div className="font-medium text-gray-900 dark:text-white">Vendor:</div>
+                                <div className="text-gray-600 dark:text-gray-400">{selectedVendor.name}</div>
+                              </div>
+                              <div>
+                                <div className="font-medium text-gray-900 dark:text-white">Purchase Order:</div>
+                                <div className="text-gray-600 dark:text-gray-400">#{selectedPO.poNumber}</div>
+                              </div>
+                              <div>
+                                <div className="font-medium text-gray-900 dark:text-white">Selection Mode:</div>
+                                <div className="text-gray-600 dark:text-gray-400">
+                                  {selectionMode === 'entire_po' ? 'Entire Purchase Order' : 'Specific Items'}
+                                </div>
+                              </div>
+                              <div>
+                                <div className="font-medium text-gray-900 dark:text-white">Items to Prioritize:</div>
+                                <div className="text-gray-600 dark:text-gray-400">
+                                  {selectionMode === 'entire_po' 
+                                    ? `${eligibleStockItems.reduce((sum: number, item: any) => sum + (item.quantity || 0), 0)} total stock items (${eligibleStockItems.length} distinct ${eligibleStockItems.length === 1 ? 'type' : 'types'})`
+                                    : `${selectedStockItemIds.reduce((sum: number, id: string) => {
+                                        const item = eligibleStockItems.find((item: any) => item.id.toString() === id);
+                                        const qty = manualQuantities[id] || item?.quantity || 0;
+                                        return sum + qty;
+                                      }, 0)} items selected (${selectedStockItemIds.length} distinct ${selectedStockItemIds.length === 1 ? 'type' : 'types'})`
+                                  }
+                                </div>
+                              </div>
+                              <div>
+                                <div className="font-medium text-gray-900 dark:text-white">Due Date:</div>
+                                <div className="text-gray-600 dark:text-gray-400">{selectedPO.dueDate ? new Date(selectedPO.dueDate).toLocaleDateString() : 'Not set'}</div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                    {/* Action Buttons */}
+                    <div className="flex justify-between items-center pt-4 border-t">
+                      <div className="text-sm text-gray-600 dark:text-gray-400">
+                        {(() => {
+                          if (!selectedVendorId) return 'Select a vendor to continue';
+                          if (!selectedPOId) return 'Select a purchase order to continue';
+                          if (selectionMode === 'entire_po') return 'Ready to save priority for entire PO';
+                          if (selectedStockItemIds.length === 0) return 'Select specific stock items to continue';
+                          return 'Ready to save priority settings';
+                        })()}
+                      </div>
+                      <div className="space-x-2">
+                        <Button
+                          onClick={() => {
+                            setSelectedVendorId(null);
+                            setSelectedPOId(null);
+                            setSelectedStockItemId(null);
+                            setSelectedStockItemIds([]);
+                            setManualQuantities({});
+                            setSelectionMode('entire_po');
+                          }}
+                          variant="outline"
+                          size="sm"
+                          disabled={!selectedVendorId && !selectedPOId && selectedStockItemIds.length === 0}
+                          data-testid="button-clear-selections"
+                        >
+                          Clear All
+                        </Button>
+                        <Button
+                          onClick={async () => {
+                            try {
+                              // Enhanced save functionality for both modes with manual quantities
+                              const priorityData = {
+                                vendorId: selectedVendorId,
+                                vendorName: poVendors.find(v => v.id === selectedVendorId)?.name,
+                                poId: parseInt(selectedPOId!),
+                                poNumber: vendorPOs.find(po => po.id.toString() === selectedPOId)?.poNumber,
+                                selectionMode: selectionMode,
+                                stockItemIds: selectionMode === 'entire_po' 
+                                  ? eligibleStockItems.map((item: any) => item.id.toString())
+                                  : selectedStockItemIds,
+                                manualQuantities: selectionMode === 'specific_items' ? manualQuantities : {},
+                                priorityLevel: 1 // Default high priority
+                              };
+                              
+                              console.log('Saving OEM priority settings:', priorityData);
+                              
+                              // Call the new backend API endpoint
+                              const response = await fetch('/api/oem-settings/priority-settings/save', {
+                                method: 'POST',
+                                headers: {
+                                  'Content-Type': 'application/json',
+                                },
+                                body: JSON.stringify(priorityData)
+                              });
+                              
+                              if (!response.ok) {
+                                throw new Error(`Failed to save priority settings: ${response.statusText}`);
+                              }
+                              
+                              const result = await response.json();
+                              console.log('✅ Priority settings saved successfully:', result);
+                              setOemSettingsSaved(true);
+                              
+                              // 🟢 STEP 1: Immediately schedule the selected OEM stock orders
+                              try {
+                                console.log('🟢 Scheduling selected OEM stock orders onto the layup schedule...');
+                                const scheduleResponse = await fetch('/api/scheduler/oem-priority-only', {
+                                  method: 'POST',
+                                  headers: {
+                                    'Content-Type': 'application/json',
+                                  },
+                                  body: JSON.stringify(priorityData)
+                                });
+                                
+                                if (scheduleResponse.ok) {
+                                  const scheduleResult = await scheduleResponse.json();
+                                  console.log('✅ OEM stock orders scheduled:', scheduleResult);
+                                  toast({
+                                    title: "OEM Orders Scheduled!",
+                                    description: `${priorityData.stockItemIds.length} green OEM cards now on schedule. Use "Generate Schedule" to fill remaining capacity.`,
+                                  });
+                                  
+                                  // FIXED: Refresh the correct queries to show new scheduled items
+                                  queryClient.invalidateQueries({ queryKey: ['/api/layup-schedule'] });
+                                  queryClient.invalidateQueries({ queryKey: ['/api/p1-layup-queue'] });
+                                  
+                                } else {
+                                  throw new Error('Failed to schedule OEM orders');
+                                }
+                              } catch (scheduleError) {
+                                console.error('❌ Failed to schedule OEM orders:', scheduleError);
+                                toast({
+                                  title: "Settings Saved",
+                                  description: "Priority settings saved, but scheduling failed. Use 'Generate Schedule' button.",
+                                  variant: "destructive"
+                                });
+                              }
+                              
+                            } catch (error) {
+                              console.error('❌ Error saving priority settings:', error);
+                              toast({
+                                title: "Error",
+                                description: "Failed to save priority settings. Please try again.",
+                                variant: "destructive"
+                              });
+                            }
+                          }}
+                          disabled={!selectedPOId || (selectionMode === 'specific_items' && selectedStockItemIds.length === 0)}
+                          data-testid="button-save-priority"
+                        >
+                          Save Priority
+                        </Button>
+                      </div>
+                    </div>
+
+                    {oemSettingsSaved && selectedPOId && (selectionMode === 'entire_po' || selectedStockItemIds.length > 0) && (
+                      <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded p-3">
+                        <div className="flex items-center space-x-2">
+                          <CheckCircle className="w-4 h-4 text-green-600" />
+                          <span className="text-sm text-green-700 dark:text-green-300">
+                            Priority settings saved. {selectionMode === 'entire_po' 
+                              ? `All ${eligibleStockItems.reduce((sum: number, item: any) => sum + (item.quantity || 0), 0)} stock items (${eligibleStockItems.length} distinct ${eligibleStockItems.length === 1 ? 'type' : 'types'}) from this PO` 
+                              : `${selectedStockItemIds.reduce((sum: number, id: string) => {
+                                  const item = eligibleStockItems.find((item: any) => item.id.toString() === id);
+                                  const qty = manualQuantities[id] || item?.quantity || 0;
+                                  return sum + qty;
+                                }, 0)} items (${selectedStockItemIds.length} ${selectedStockItemIds.length === 1 ? 'type' : 'types'})`
+                            } will be prioritized during scheduling.
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
 
             {/* Work Days Settings Dialog - Outside the dropdown */}
             <Dialog open={workDaysDialogOpen} onOpenChange={setWorkDaysDialogOpen}>
@@ -4489,19 +4932,19 @@ export default function LayupScheduler() {
                       <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
                         {isCurrentWeekLocked() 
                           ? `Current week (${format(currentDate, 'MM/dd')}) is locked with assignments • ${Object.keys(orderAssignments).length} total orders scheduled`
-                          : `${processedOrders.filter(o => !orderAssignments[o.orderId] && o.source !== 'production_order' && o.source !== 'p1_purchase_order').length} regular orders + ${processedOrders.filter(o => !orderAssignments[o.orderId] && (o.source === 'production_order' || o.source === 'p1_purchase_order')).length} production orders ready • ${Object.keys(orderAssignments).length} scheduled`
+                          : `${processedOrders.filter(o => !orderAssignments[o.orderId]).length} orders ready to schedule • ${Object.keys(orderAssignments).length} orders currently scheduled`
                         }
                       </p>
                     </div>
                     <div className="space-x-2">
                       <Button
                         onClick={addRegularOrders}
-                        disabled={processedOrders.filter(o => !orderAssignments[o.orderId] && o.source !== 'production_order' && o.source !== 'p1_purchase_order').length === 0}
+                        disabled={processedOrders.filter(o => !orderAssignments[o.orderId]).length === 0}
                         className="bg-green-600 hover:bg-green-700"
                         size="sm"
                       >
                         <Plus className="w-4 h-4 mr-1" />
-                        Add Regular Orders ({processedOrders.filter(o => !orderAssignments[o.orderId] && o.source !== 'production_order' && o.source !== 'p1_purchase_order').length} orders)
+                        Add Regular Orders ({processedOrders.filter(o => !orderAssignments[o.orderId]).length} orders)
                       </Button>
                       <Button
                         onClick={clearSchedule}

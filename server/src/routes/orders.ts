@@ -1509,4 +1509,26 @@ router.get('/export/csv-all', async (req: Request, res: Response) => {
   }
 });
 
+// Get a single order by ID - MUST BE LAST to avoid catching other routes
+router.get('/:orderId', async (req: Request, res: Response) => {
+  try {
+    const { orderId } = req.params;
+    console.log(`📋 GET /${orderId} - Fetching order details`);
+    
+    // Try to find the order in both drafts and finalized tables
+    const order = await storage.getOrderById(orderId);
+    
+    if (!order) {
+      console.log(`❌ Order ${orderId} not found`);
+      return res.status(404).json({ error: `Order ${orderId} not found` });
+    }
+    
+    console.log(`✅ Found order ${orderId} in department: ${order.currentDepartment}`);
+    res.json(order);
+  } catch (error) {
+    console.error(`❌ GET /${req.params.orderId} error:`, error);
+    res.status(500).json({ error: 'Failed to fetch order' });
+  }
+});
+
 export default router;

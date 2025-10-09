@@ -12,6 +12,7 @@ Data integrity: Prevent orders from being saved with null/empty modelId fields t
 UI Performance: Department progression buttons use cache-first approach with disabled automatic refetching to prevent UI reversion issues.
 Default shipping charge: Should be 36.95 for new orders.
 Critical requirement: All completed functionality must be hard-coded to prevent loss of features and data.
+Search standardization: All department queue pages use unified OrderSearchBox component with "Search orders by Order ID or FishBowl Number..." placeholder for consistent user experience.
 
 ## System Architecture
 The application adopts a monorepo structure utilizing a full-stack TypeScript approach.

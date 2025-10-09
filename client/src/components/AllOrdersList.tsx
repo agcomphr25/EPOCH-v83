@@ -253,6 +253,11 @@ export default function AllOrdersList() {
 
     // Department filter (only apply to non-cancelled orders)
     if (!showCancelled) {
+      // Exclude fulfilled orders from department filters - they have no current department
+      if (order.status === 'FULFILLED') {
+        return false;
+      }
+      
       const departmentMatch = selectedDepartment === 'all' || order.currentDepartment === selectedDepartment;
       if (!departmentMatch) return false;
     }

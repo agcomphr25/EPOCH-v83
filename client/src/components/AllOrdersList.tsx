@@ -41,7 +41,7 @@ import { getDisplayOrderId } from '@/lib/orderUtils';
 import CustomerDetailsTooltip from './CustomerDetailsTooltip';
 import CommunicationCompose from './CommunicationCompose';
 
-const departments = ['P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 'Finish', 'Paint', 'Finish QC', 'Gunsmith', 'Shipping QC', 'Shipping'];
+const departments = ['P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 'Gunsmith', 'Finish', 'Finish QC', 'Paint', 'Shipping QC', 'Shipping'];
 
 export default function AllOrdersList() {
   const [selectedDepartment, setSelectedDepartment] = useState('all');
@@ -253,6 +253,11 @@ export default function AllOrdersList() {
 
     // Department filter (only apply to non-cancelled orders)
     if (!showCancelled) {
+      // Exclude fulfilled orders from department filters - they have no current department
+      if (order.status === 'FULFILLED') {
+        return false;
+      }
+      
       const departmentMatch = selectedDepartment === 'all' || order.currentDepartment === selectedDepartment;
       if (!departmentMatch) return false;
     }
@@ -294,7 +299,7 @@ export default function AllOrdersList() {
   });
 
   const departments = [
-    'P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 'Finish', 'Paint', 'Finish QC', 'Gunsmith', 'Shipping QC', 'Shipping'
+    'P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 'Gunsmith', 'Finish', 'Finish QC', 'Paint', 'Shipping QC', 'Shipping'
   ];
 
   const getNextDepartment = (currentDepartment: string) => {
@@ -521,7 +526,7 @@ export default function AllOrdersList() {
                 // Use local update if available, otherwise server data
                 const displayDepartment = localOrderUpdates[order.orderId] || order.currentDepartment;
                 const nextDept = getNextDepartment(displayDepartment);
-                const isComplete = displayDepartment === 'Shipping';
+                const isComplete = displayDepartment === 'Fulfilled';
                 const isScrapped = order.status === 'SCRAPPED';
                 const isFulfilled = order.status === 'FULFILLED'; // Only exclude FULFILLED, not FINALIZED
 
@@ -582,7 +587,7 @@ export default function AllOrdersList() {
                     </TableCell>
                     <TableCell>
                       <Badge className={`${getDepartmentBadgeColor(displayDepartment)} text-white`}>
-                        {displayDepartment}
+                        {displayDepartment || 'Completed'}
                       </Badge>
                     </TableCell>
                     <TableCell>

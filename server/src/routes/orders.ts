@@ -912,18 +912,20 @@ router.post('/:orderId/progress', async (req: Request, res: Response) => {
       case 'Layup/Plugging': completionUpdates.layupPluggingCompletedAt = now; break;
       case 'Barcode': completionUpdates.barcodeCompletedAt = now; break;
       case 'CNC': completionUpdates.cncCompletedAt = now; break;
-      case 'Finish': completionUpdates.finishCompletedAt = now; break;
       case 'Gunsmith': completionUpdates.gunsmithCompletedAt = now; break;
+      case 'Finish': completionUpdates.finishCompletedAt = now; break;
+      case 'Finish QC': completionUpdates.finishQcCompletedAt = now; break;
       case 'Paint': completionUpdates.paintCompletedAt = now; break;
       case 'Shipping QC': completionUpdates.shippingQcCompletedAt = now; break;
       case 'Shipping': completionUpdates.shippingCompletedAt = now; break;
     }
 
     // Define the departments sequence for automatic progression
-    // Flow: CNC → Finish (surface prep) → Paint → Finish QC (verify paint) → Gunsmith (final assembly) → Shipping QC → Shipping → Fulfilled
+    // Flow: Layup/Plugging → Barcode → CNC → Gunsmith → Finish → Finish QC → Paint → Shipping QC → Shipping (final department)
+    // After Shipping, order status becomes FULFILLED and currentDepartment is cleared
     const departments = [
       'P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 
-      'Finish', 'Paint', 'Finish QC', 'Gunsmith', 'Shipping QC', 'Shipping', 'Fulfilled'
+      'Gunsmith', 'Finish', 'Finish QC', 'Paint', 'Shipping QC', 'Shipping'
     ];
 
     // CRITICAL SAFEGUARD: Prevent backwards department progression
@@ -964,9 +966,18 @@ router.post('/:orderId/progress', async (req: Request, res: Response) => {
     
     // If no nextDepartment provided, calculate it automatically
     let targetDepartment = nextDepartment;
+    let shouldMarkFulfilled = false;
+    
     if (!targetDepartment) {
+      // Special case: Shipping is the final department
+      // When progressing from Shipping, set status to FULFILLED and clear department
+      if (existingOrder.currentDepartment === 'Shipping') {
+        shouldMarkFulfilled = true;
+        targetDepartment = null; // Clear department
+        console.log(`📦 Order ${orderId} completing Shipping - will be marked as FULFILLED with no department`);
+      }
       // Orders with no stock model should skip manufacturing departments
-      if (hasNoStockModel && existingOrder.currentDepartment === 'P1 Production Queue') {
+      else if (hasNoStockModel && existingOrder.currentDepartment === 'P1 Production Queue') {
         targetDepartment = 'Shipping QC';
         console.log(`🚀 Order ${orderId} has no stock model - routing directly to Shipping QC`);
       } 
@@ -994,65 +1005,64 @@ router.post('/:orderId/progress', async (req: Request, res: Response) => {
 
     console.log(`🎯 Target department: ${targetDepartment}`);
 
+    // Prepare update data
+    const updateData: any = {
+      ...completionUpdates
+    };
+    
+    if (shouldMarkFulfilled) {
+      updateData.status = 'FULFILLED';
+      updateData.currentDepartment = null; // Clear department when fulfilled
+      console.log(`📦 Marking order as FULFILLED with no department`);
+    } else {
+      updateData.currentDepartment = targetDepartment;
+    }
+
     // Update the appropriate table
     let updatedOrder;
     if (isFinalized && isP2Order) {
       console.log(`🔄 Updating P2 finalized order ${orderId} in P2 allOrders table`);
-      console.log(`🔄 Update data:`, { currentDepartment: targetDepartment, ...completionUpdates });
+      console.log(`🔄 Update data:`, updateData);
       try {
-        updatedOrder = await storage.updateFinalizedOrder(orderId, {
-          currentDepartment: targetDepartment,
-          ...completionUpdates
-        });
-        console.log(`✅ Updated P2 finalized order result:`, updatedOrder?.currentDepartment);
+        updatedOrder = await storage.updateFinalizedOrder(orderId, updateData);
+        console.log(`✅ Updated P2 finalized order result:`, updatedOrder?.currentDepartment, updatedOrder?.status);
       } catch (error) {
         console.error(`❌ P2 update method not available, falling back to P1 update:`, error);
-        updatedOrder = await storage.updateFinalizedOrder(orderId, {
-          currentDepartment: targetDepartment,
-          ...completionUpdates
-        });
+        updatedOrder = await storage.updateFinalizedOrder(orderId, updateData);
       }
     } else if (isFinalized) {
       console.log(`🔄 Updating P1 finalized order ${orderId} in allOrders table`);
-      console.log(`🔄 Update data:`, { currentDepartment: targetDepartment, ...completionUpdates });
-      updatedOrder = await storage.updateFinalizedOrder(orderId, {
-        currentDepartment: targetDepartment,
-        ...completionUpdates
-      });
-      console.log(`✅ Updated P1 finalized order result:`, updatedOrder?.currentDepartment);
+      console.log(`🔄 Update data:`, updateData);
+      updatedOrder = await storage.updateFinalizedOrder(orderId, updateData);
+      console.log(`✅ Updated P1 finalized order result:`, updatedOrder?.currentDepartment, updatedOrder?.status);
     } else if (isP2Order) {
       console.log(`🔄 Updating P2 draft order ${orderId} in P2 orderDrafts table`);
-      console.log(`🔄 Update data:`, { currentDepartment: targetDepartment, ...completionUpdates });
+      console.log(`🔄 Update data:`, updateData);
       try {
-        updatedOrder = await storage.updateOrderDraft(orderId, {
-          currentDepartment: targetDepartment,
-          ...completionUpdates
-        });
-        console.log(`✅ Updated P2 draft order result:`, updatedOrder?.currentDepartment);
+        updatedOrder = await storage.updateOrderDraft(orderId, updateData);
+        console.log(`✅ Updated P2 draft order result:`, updatedOrder?.currentDepartment, updatedOrder?.status);
       } catch (error) {
         console.error(`❌ P2 update method not available, falling back to P1 update:`, error);
-        updatedOrder = await storage.updateOrderDraft(orderId, {
-          currentDepartment: targetDepartment,
-          ...completionUpdates
-        });
+        updatedOrder = await storage.updateOrderDraft(orderId, updateData);
       }
     } else {
       console.log(`🔄 Updating P1 draft order ${orderId} in orderDrafts table`);
-      console.log(`🔄 Update data:`, { currentDepartment: targetDepartment, ...completionUpdates });
-      updatedOrder = await storage.updateOrderDraft(orderId, {
-        currentDepartment: targetDepartment,
-        ...completionUpdates
-      });
-      console.log(`✅ Updated P1 draft order result:`, updatedOrder?.currentDepartment);
+      console.log(`🔄 Update data:`, updateData);
+      updatedOrder = await storage.updateOrderDraft(orderId, updateData);
+      console.log(`✅ Updated P1 draft order result:`, updatedOrder?.currentDepartment, updatedOrder?.status);
     }
 
-    console.log(`✅ Successfully progressed order ${orderId} from ${existingOrder.currentDepartment} to ${targetDepartment}`);
-    console.log(`✅ Final order department: ${updatedOrder?.currentDepartment}`);
-    
-    // Verify the update succeeded
-    if (updatedOrder?.currentDepartment !== targetDepartment) {
-      console.error(`❌ Update failed: Expected ${targetDepartment}, got ${updatedOrder?.currentDepartment}`);
-      return res.status(500).json({ error: `Department update failed` });
+    if (shouldMarkFulfilled) {
+      console.log(`✅ Successfully marked order ${orderId} as FULFILLED (status: ${updatedOrder?.status})`);
+    } else {
+      console.log(`✅ Successfully progressed order ${orderId} from ${existingOrder.currentDepartment} to ${targetDepartment}`);
+      console.log(`✅ Final order department: ${updatedOrder?.currentDepartment}`);
+      
+      // Verify the update succeeded
+      if (updatedOrder?.currentDepartment !== targetDepartment) {
+        console.error(`❌ Update failed: Expected ${targetDepartment}, got ${updatedOrder?.currentDepartment}`);
+        return res.status(500).json({ error: `Department update failed` });
+      }
     }
     
     res.json({ success: true, order: updatedOrder });
@@ -1268,8 +1278,8 @@ router.patch('/:orderId/department', async (req: Request, res: Response) => {
     // Validate department name
     const validDepartments = [
       'P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 
-      'Finish', 'Paint', 'Finish QC', 'Gunsmith', 'Shipping QC', 
-      'Shipping', 'Fulfilled'
+      'Gunsmith', 'Finish', 'Finish QC', 'Paint', 'Shipping QC', 
+      'Shipping'
     ];
     
     if (!validDepartments.includes(department)) {

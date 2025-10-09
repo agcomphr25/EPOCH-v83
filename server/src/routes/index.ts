@@ -286,7 +286,7 @@ export function registerRoutes(app: Express): Server {
           id,
           order_id as "orderId",
           customer as "customer",
-          model_id as "product",
+          product as "product",
           date,
           due_date as "dueDate",
           current_department as "currentDepartment",
@@ -322,7 +322,7 @@ export function registerRoutes(app: Express): Server {
       const p1POOrdersResult = await pool.query(`
         SELECT 
           order_id as "orderId",
-          customer as "customerId",
+          customer_id as "customerId",
           model_id as "stockModelId",
           due_date as "dueDate",
           current_department as "currentDepartment",

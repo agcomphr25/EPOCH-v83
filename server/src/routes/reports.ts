@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { db } from '../../db';
 import { allOrders, stockModels, features } from '../../schema';
-import { eq, and, gte, lt, sql } from 'drizzle-orm';
+import { eq, and, gte, lt, sql, inArray } from 'drizzle-orm';
 
 const router = Router();
 
@@ -47,7 +47,7 @@ router.get('/september-fulfilled-2025', async (req, res) => {
                 price: features.price,
               })
               .from(features)
-              .where(sql`${features.id} = ANY(${featureKeys})`);
+              .where(inArray(features.id, featureKeys));
             
             featuresTotal = featuresList.reduce((sum, f) => sum + (f.price || 0), 0);
           }

@@ -368,26 +368,29 @@ export function registerRoutes(app: Express): Server {
       console.log(`🏭 Found ${p1POOrders.length} P1 PO orders from week selection`);
 
       // Fetch production orders from production_orders table (OEM orders)
-      console.log('🔍 Fetching production orders from production_orders table...');
+      // IMPORTANT: Only fetch production orders that match ACTIVE OEM priority settings
+      console.log('🔍 Fetching production orders from production_orders table (filtering by active OEM settings)...');
       const productionOrdersResult = await pool.query(`
-        SELECT 
-          order_id as "orderId",
-          customer_id as "customerId",
+        SELECT DISTINCT
+          po.order_id as "orderId",
+          po.customer_id as "customerId",
           CASE 
-            WHEN item_id = '10' THEN 'cf_alpine_hunter'
-            WHEN item_id = '11' THEN 'cf_privateer' 
-            WHEN item_id = '12' THEN 'fg_privateer'
+            WHEN po.item_id = '10' THEN 'cf_alpine_hunter'
+            WHEN po.item_id = '11' THEN 'cf_privateer' 
+            WHEN po.item_id = '12' THEN 'fg_privateer'
             ELSE 'mesa_universal'
           END as "stockModelId",
-          due_date as "dueDate",
-          current_department as "currentDepartment",
-          production_status as "status",
+          po.due_date as "dueDate",
+          po.current_department as "currentDepartment",
+          po.production_status as "status",
           '{}' as features,
-          created_at as "createdAt",
+          po.created_at as "createdAt",
           'production_order' as source
-        FROM production_orders 
-        WHERE production_status = 'PENDING'
-        ORDER BY due_date ASC
+        FROM production_orders po
+        INNER JOIN oem_priority_settings ops ON po.po_id = ops.po_id
+        WHERE po.production_status = 'PENDING' 
+          AND ops.is_active = true
+        ORDER BY po.due_date ASC
       `);
 
       // Format the production orders

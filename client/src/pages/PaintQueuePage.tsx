@@ -13,7 +13,6 @@ import { apiRequest } from '@/lib/queryClient';
 import { format } from 'date-fns';
 import { getDisplayOrderId } from '@/lib/orderUtils';
 import { useLocation } from 'wouter';
-import FBNumberSearch from '@/components/FBNumberSearch';
 import { OrderSearchBox } from '@/components/OrderSearchBox';
 import { SalesOrderModal } from '@/components/SalesOrderModal';
 import { isOrderInDepartment } from '@/lib/departmentUtils';
@@ -68,24 +67,6 @@ export default function PaintQueuePage() {
   const handleSalesOrderView = (orderId: string) => {
     setSelectedOrderId(orderId);
     setSalesOrderModalOpen(true);
-  };
-
-  // Handle order found via FishBowl number search
-  const handleOrderFound = (orderId: string) => {
-    // Check if the order exists in the current Paint queue
-    const orderExists = paintOrders.some((order: any) => order.orderId === orderId);
-    if (orderExists) {
-      setSelectedOrders(prev => new Set([...Array.from(prev), orderId]));
-      toast.success(`Order ${orderId} found and selected`);
-    } else {
-      // Find the order in all orders to show current department
-      const allOrder = (allOrders as any[]).find((order: any) => order.orderId === orderId);
-      if (allOrder) {
-        toast.error(`Order ${orderId} is currently in ${allOrder.currentDepartment} department, not Paint`);
-      } else {
-        toast.error(`Order ${orderId} not found`);
-      }
-    }
   };
 
   // Handle order search selection
@@ -330,9 +311,6 @@ export default function PaintQueuePage() {
 
       {/* Barcode Scanner at top */}
       <BarcodeScanner onOrderScanned={handleOrderScanned} />
-
-      {/* FishBowl Number Search */}
-      <FBNumberSearch onOrderFound={handleOrderFound} />
 
       {/* Order Search Box */}
       <Card>

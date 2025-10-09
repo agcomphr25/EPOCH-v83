@@ -1458,7 +1458,10 @@ export class DatabaseStorage implements IStorage {
     .where(
       and(
         ne(allOrders.status, 'CANCELLED'),
-        eq(allOrders.isCancelled, false),
+        or(
+          eq(allOrders.isCancelled, false),
+          isNull(allOrders.isCancelled)
+        ),
         sql`${allOrders.orderId} NOT LIKE 'P1-%'`
       )
     )

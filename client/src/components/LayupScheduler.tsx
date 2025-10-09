@@ -3844,7 +3844,7 @@ export default function LayupScheduler() {
                               data-testid="radio-entire-po"
                             />
                             <label htmlFor="mode-entire-po" className="text-sm text-gray-900 dark:text-white">
-                              Entire Purchase Order ({eligibleStockItems.length} stock items needing layup)
+                              Entire Purchase Order ({eligibleStockItems.length} distinct {eligibleStockItems.length === 1 ? 'item' : 'items'})
                             </label>
                           </div>
                           <div className="flex items-center space-x-2">
@@ -3879,11 +3879,11 @@ export default function LayupScheduler() {
                         <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
                           <div className="flex items-center space-x-2 mb-2">
                             <div className="text-blue-700 dark:text-blue-300 text-sm font-medium">
-                              ✅ All {eligibleStockItems.length} stock items will be prioritized
+                              ✅ All {eligibleStockItems.reduce((sum: number, item: any) => sum + (item.quantity || 0), 0)} stock items will be prioritized
                             </div>
                           </div>
                           <div className="text-xs text-blue-600 dark:text-blue-400">
-                            When you save, all stock items from this purchase order will receive priority scheduling.
+                            When you save, all {eligibleStockItems.length} distinct stock item {eligibleStockItems.length === 1 ? 'type' : 'types'} from this purchase order will receive priority scheduling.
                           </div>
                         </div>
                       </div>
@@ -3997,8 +3997,12 @@ export default function LayupScheduler() {
                                 <div className="font-medium text-gray-900 dark:text-white">Items to Prioritize:</div>
                                 <div className="text-gray-600 dark:text-gray-400">
                                   {selectionMode === 'entire_po' 
-                                    ? `All ${eligibleStockItems.length} stock items`
-                                    : `${selectedStockItemIds.length} selected items`
+                                    ? `${eligibleStockItems.reduce((sum: number, item: any) => sum + (item.quantity || 0), 0)} total stock items (${eligibleStockItems.length} distinct ${eligibleStockItems.length === 1 ? 'type' : 'types'})`
+                                    : `${selectedStockItemIds.reduce((sum: number, id: string) => {
+                                        const item = eligibleStockItems.find((item: any) => item.id.toString() === id);
+                                        const qty = manualQuantities[id] || item?.quantity || 0;
+                                        return sum + qty;
+                                      }, 0)} items selected (${selectedStockItemIds.length} distinct ${selectedStockItemIds.length === 1 ? 'type' : 'types'})`
                                   }
                                 </div>
                               </div>
@@ -4134,8 +4138,12 @@ export default function LayupScheduler() {
                           <CheckCircle className="w-4 h-4 text-green-600" />
                           <span className="text-sm text-green-700 dark:text-green-300">
                             Priority settings saved. {selectionMode === 'entire_po' 
-                              ? `All ${eligibleStockItems.length} stock items from this PO` 
-                              : `${selectedStockItemIds.length} selected items`
+                              ? `All ${eligibleStockItems.reduce((sum: number, item: any) => sum + (item.quantity || 0), 0)} stock items (${eligibleStockItems.length} distinct ${eligibleStockItems.length === 1 ? 'type' : 'types'}) from this PO` 
+                              : `${selectedStockItemIds.reduce((sum: number, id: string) => {
+                                  const item = eligibleStockItems.find((item: any) => item.id.toString() === id);
+                                  const qty = manualQuantities[id] || item?.quantity || 0;
+                                  return sum + qty;
+                                }, 0)} items (${selectedStockItemIds.length} ${selectedStockItemIds.length === 1 ? 'type' : 'types'})`
                             } will be prioritized during scheduling.
                           </span>
                         </div>

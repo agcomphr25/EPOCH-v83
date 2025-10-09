@@ -318,7 +318,7 @@ export default function OemPrioritySettingsDialog({
                       </div>
                     </AccordionTrigger>
                     <AccordionContent className="px-4 py-3">
-                      {!vendorPODataCache[vendor.id] ? (
+                      {!vendorPODataCache[vendor.id] || !Array.isArray(vendorPODataCache[vendor.id]) ? (
                         <div className="text-center py-4 text-gray-500">Loading purchase orders...</div>
                       ) : vendorPODataCache[vendor.id].length === 0 ? (
                         <div className="text-center py-4 text-gray-500">No open purchase orders</div>
@@ -504,7 +504,7 @@ export default function OemPrioritySettingsDialog({
                   <h4 className="font-medium mb-2 text-blue-700 dark:text-blue-400">
                     {vendors.find(v => v.id === vendorId)?.name || vendorId}
                   </h4>
-                  {pos.map((po: POWithStockItems) => (
+                  {(pos && Array.isArray(pos)) && pos.map((po: POWithStockItems) => (
                     <div key={po.id} className="mb-3 p-3 bg-white dark:bg-gray-800 rounded border ml-4">
                       <div className="flex justify-between items-start">
                         <div>

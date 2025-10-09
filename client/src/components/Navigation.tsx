@@ -675,9 +675,9 @@ export default function Navigation() {
     },
     {
       path: '/shipping-management',
-      label: 'Fulfilled Orders',
+      label: 'Shipping Tracker',
       icon: Truck,
-      description: 'Manage tracking numbers and customer notifications'
+      description: 'Track fulfilled orders and manage shipping information'
     }
   ];
 

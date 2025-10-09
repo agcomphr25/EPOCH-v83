@@ -419,6 +419,37 @@ router.post('/add-regular-orders', async (req, res) => {
     
     console.log(`📋 Scheduled ${allocations.length} regular orders`);
     
+    // Save scheduled assignments to database
+    try {
+      console.log(`💾 Saving ${allocations.length} regular order assignments to layup_schedule table...`);
+      
+      for (const allocation of allocations) {
+        // Create employee assignment map for this order
+        const employeeAssignment = allocation.employeeId ? 
+          { [allocation.employeeId]: 1 } : {}; // Assign 1 unit of work to the employee
+        
+        await pool.query(`
+          INSERT INTO layup_schedule (
+            order_id, scheduled_date, mold_id, employee_assignments,
+            is_override, created_at, updated_at
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+        `, [
+          allocation.orderId,
+          allocation.scheduledDate,
+          allocation.moldId,
+          JSON.stringify(employeeAssignment),
+          false, // not an override, this is algorithmic
+          new Date().toISOString(),
+          new Date().toISOString()
+        ]);
+      }
+      
+      console.log(`✅ Successfully saved ${allocations.length} regular order assignments to database`);
+    } catch (saveError) {
+      console.error('⚠️ Error saving regular order schedule to database:', saveError);
+      throw saveError; // Propagate error so frontend knows it failed
+    }
+    
     return res.json({
       success: true,
       allocations: allocations,

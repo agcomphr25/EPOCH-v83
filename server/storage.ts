@@ -2395,19 +2395,39 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  // Get order by ID (check both drafts and finalized)
+  // Get order by ID or FB Order Number (check both drafts and finalized)
   async getOrderById(orderId: string): Promise<OrderDraft | AllOrder | null> {
     try {
-      // Try finalized orders first
+      // Try finalized orders first by Order ID
       const finalizedOrder = await this.getFinalizedOrderById(orderId);
       if (finalizedOrder) {
-        return { ...finalizedOrder, isFinalized: true } as any; // Cast to any to satisfy the return type for now
+        return { ...finalizedOrder, isFinalized: true } as any;
       }
 
-      // If not found, try draft orders
+      // If not found, try draft orders by Order ID
       const draftOrder = await this.getOrderDraft(orderId);
       if (draftOrder) {
-        return { ...draftOrder, isFinalized: false } as any; // Cast to any to satisfy the return type for now
+        return { ...draftOrder, isFinalized: false } as any;
+      }
+
+      // If still not found, try searching by FB Order Number in finalized orders
+      const finalizedByFb = await db.select()
+        .from(allOrders)
+        .where(eq(allOrders.fbOrderNumber, orderId))
+        .limit(1);
+      
+      if (finalizedByFb.length > 0) {
+        return { ...finalizedByFb[0], isFinalized: true } as any;
+      }
+
+      // Try searching by FB Order Number in draft orders
+      const draftByFb = await db.select()
+        .from(orderDrafts)
+        .where(eq(orderDrafts.fbOrderNumber, orderId))
+        .limit(1);
+      
+      if (draftByFb.length > 0) {
+        return { ...draftByFb[0], isFinalized: false } as any;
       }
 
       return null;

@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { storage } from '../../storage';
+import type { PurchaseOrder } from '../../schema';
 
 const router = Router();
 
@@ -80,6 +81,71 @@ router.delete('/priority-settings/:id', async (req, res) => {
   } catch (error) {
     console.error('❌ Error deleting OEM priority settings:', error);
     res.status(500).json({ error: 'Failed to delete OEM priority settings' });
+  }
+});
+
+// Consolidated endpoint: Get vendor→PO→stock items with current overrides for layup scheduler
+router.get('/layup-scheduler/oem-priority/:vendorId', async (req, res) => {
+  try {
+    const { vendorId } = req.params;
+    console.log('🔍 Fetching consolidated OEM priority data for vendor:', vendorId);
+
+    // Get all POs for this vendor
+    const allPOs = await storage.getAllPurchaseOrders();
+    const vendorPOs = allPOs.filter((po: PurchaseOrder) => po.customerId === vendorId && po.status === 'OPEN');
+
+    if (vendorPOs.length === 0) {
+      return res.json([]);
+    }
+
+    // For each PO, get stock items and current priority settings
+    const consolidatedData = await Promise.all(
+      vendorPOs.map(async (po: PurchaseOrder) => {
+        // Get all items for this PO
+        const items = await storage.getPurchaseOrderItems(po.id);
+        
+        // Filter to only stock items (stock_model or custom_model)
+        const stockItems = items.filter(item => 
+          item.itemType === 'stock_model' || 
+          item.itemType === 'custom_model' ||
+          (item.itemName && (item.itemName.includes('AG-') || item.itemName.includes('stock')))
+        );
+
+        // Get current priority settings for this PO (if any)
+        const prioritySettings = await storage.getOemPrioritySettingsByPO(po.id);
+
+        // Calculate total stock quantity
+        const totalStockQuantity = stockItems.reduce((sum, item) => sum + item.quantity, 0);
+
+        return {
+          id: po.id,
+          poNumber: po.poNumber,
+          customerName: po.customerName,
+          customerId: po.customerId,
+          dueDate: po.expectedDelivery,
+          status: po.status,
+          totalStockQuantity,
+          distinctStockItems: stockItems.length,
+          stockItems: stockItems.map(item => ({
+            id: item.id,
+            itemId: item.itemId,
+            itemName: item.itemName,
+            itemType: item.itemType,
+            quantity: item.quantity,
+            unitPrice: item.unitPrice,
+            totalPrice: item.totalPrice,
+            specifications: item.specifications,
+            orderCount: item.orderCount
+          })),
+          prioritySettings: prioritySettings || null
+        };
+      })
+    );
+
+    res.json(consolidatedData);
+  } catch (error) {
+    console.error('❌ Error fetching consolidated OEM priority data:', error);
+    res.status(500).json({ error: 'Failed to fetch OEM priority data' });
   }
 });
 

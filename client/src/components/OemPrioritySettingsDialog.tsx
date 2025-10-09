@@ -624,28 +624,36 @@ export default function OemPrioritySettingsDialog({
                                 Items: {itemCount} {setting.selectionMode === 'entire_po' ? '(all items)' : 'selected'}
                               </div>
                             </div>
-                            <div className="flex items-center gap-2">
-                              <Badge className="bg-blue-100 text-blue-800 text-xs">
-                                Priority {setting.priorityLevel}
-                              </Badge>
-                              <Button
-                                onClick={() => generateOrdersMutation.mutate(setting.poId)}
-                                disabled={generateOrdersMutation.isPending}
-                                size="sm"
-                                variant="default"
-                                className="text-xs"
-                                data-testid={`button-add-to-schedule-${setting.poId}`}
-                              >
-                                <PlayCircle className="w-3.5 h-3.5 mr-1" />
-                                Add to Schedule
-                              </Button>
-                            </div>
+                            <Badge className="bg-blue-100 text-blue-800 text-xs">
+                              Priority {setting.priorityLevel}
+                            </Badge>
                           </div>
                         </div>
                       );
                     })}
                   </div>
                 ))
+              )}
+              
+              {/* Add to Schedule button at bottom */}
+              {!prioritySettingsLoading && savedPrioritySettings.length > 0 && (
+                <div className="mt-6 flex justify-end">
+                  <Button
+                    onClick={async () => {
+                      // Generate orders for all saved priority settings
+                      for (const setting of savedPrioritySettings as any[]) {
+                        await generateOrdersMutation.mutateAsync(setting.poId);
+                      }
+                    }}
+                    disabled={generateOrdersMutation.isPending}
+                    size="lg"
+                    className="w-full sm:w-auto"
+                    data-testid="button-add-all-to-schedule"
+                  >
+                    <PlayCircle className="w-4 h-4 mr-2" />
+                    Add All to Schedule
+                  </Button>
+                </div>
               )}
             </div>
           </TabsContent>

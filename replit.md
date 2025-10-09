@@ -34,7 +34,7 @@ The application adopts a monorepo structure utilizing a full-stack TypeScript ap
     -   **Order Management**: Dynamic product configuration, feature consolidation, robust order editing, and streamlined order-to-production with auto-population to P1 Production Queue.
     -   **Layup Scheduler**: Auto-scheduling with production queue auto-population, priority scoring, mold matching, employee capacity management, and automatic department progression.
     -   **Production Queue Manager**: Auto-populates from finalized orders, calculates priority scores, and manages queue positions.
-    -   **Department Manager**: Department-specific views, comprehensive order details, and critical workflow progression (Orders Entered → P1 Production Queue → Layup/Plugging → Barcode → CNC → Gunsmith → Finish → Finish QC → Paint → Shipping QC → Shipping). **FULFILLED orders are automatically excluded from all department filters** - they only appear in the Shipping Tracker.
+    -   **Department Manager**: Department-specific views, comprehensive order details, and critical workflow progression (**CORRECT ORDER**: Orders Entered → P1 Production Queue → Layup/Plugging → Barcode → CNC → **Gunsmith** → **Finish** → **Finish QC** → **Paint** → Shipping QC → Shipping). **FULFILLED orders are automatically excluded from all department filters** - they only appear in the Shipping Tracker.
     -   **Customer Management**: CRM with CSV import/update and address validation.
     -   **Inventory Management**: Search, BOM integration, and part number display.
     -   **P1 & P2 Systems**: Distinct modules for regular (P1) and OEM/supplier (P2) orders.

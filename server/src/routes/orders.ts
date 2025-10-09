@@ -1278,7 +1278,7 @@ router.patch('/:orderId/department', async (req: Request, res: Response) => {
     // Validate department name
     const validDepartments = [
       'P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 
-      'Finish', 'Paint', 'Finish QC', 'Gunsmith', 'Shipping QC', 
+      'Gunsmith', 'Finish', 'Finish QC', 'Paint', 'Shipping QC', 
       'Shipping'
     ];
     

@@ -231,7 +231,7 @@ export default function OrdersList() {
   // Department progression functions
   const getNextDepartment = (currentDepartment: string) => {
     const departmentFlow = [
-      'P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 'Finish', 'Paint', 'Finish QC', 'Gunsmith', 'Shipping QC', 'Shipping'
+      'P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 'Gunsmith', 'Finish', 'Finish QC', 'Paint', 'Shipping QC', 'Shipping'
     ];
 
     // Handle alternative department names

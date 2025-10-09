@@ -83,46 +83,105 @@ export default function OemPrioritySettingsDialog({
     enabled: open
   });
 
-  // Fetch vendor PO data when expanded
+  // Fetch vendor PO data when expanded - USES EXACT SAME LOGIC AS P1 PURCHASE ORDER QUEUE
   const fetchVendorPOData = async (vendorId: string) => {
     if (vendorPODataCache[vendorId]) return vendorPODataCache[vendorId];
     
-    const response = await apiRequest(`/api/oem-settings/layup-scheduler/oem-priority/${vendorId}`) as { vendor: Vendor, pos: POWithStockItems[] };
-    const data = response.pos;
-    setVendorPODataCache(prev => ({ ...prev, [vendorId]: data }));
-    
-    // Initialize selection state for new POs
-    if (data && Array.isArray(data)) {
-      const newSelectionMode: Record<number, 'entire_po' | 'specific_items'> = {};
-      const newSelectedItems: Record<number, Record<number, { selected: boolean, quantity: number }>> = {};
-      const newPriorityLevels: Record<number, number> = {};
+    try {
+      // 1. Fetch all purchase orders
+      const posResponse = await fetch('/api/pos');
+      if (!posResponse.ok) throw new Error('Failed to fetch purchase orders');
+      const allPOs = await posResponse.json();
+      
+      // Filter POs for this vendor
+      const vendorPOs = allPOs.filter((po: any) => po.customerId === vendorId);
+      
+      // 2. Fetch PO Products for product type filtering
+      let poProducts: any[] = [];
+      const poProductsResponse = await fetch('/api/po-products');
+      if (poProductsResponse.ok) {
+        poProducts = await poProductsResponse.json();
+      }
+      
+      // 3. Fetch items for each PO and filter to stock items only
+      const posWithItems: POWithStockItems[] = await Promise.all(
+        vendorPOs.map(async (po: any) => {
+          try {
+            const itemsResponse = await fetch(`/api/pos/${po.id}/items`);
+            if (!itemsResponse.ok) {
+              console.warn(`Failed to fetch items for PO ${po.id}`);
+              return null;
+            }
+            const items = await itemsResponse.json();
+            
+            // Filter items to only show stock items (same logic as P1 Purchase Order Queue)
+            const stockItems = items.filter((item: any) => {
+              // Include stock_model items directly
+              if (item.itemType === 'stock_model') {
+                return true;
+              }
+              // Include custom_model items with stock product type
+              if (item.itemType === 'custom_model') {
+                const poProduct = poProducts.find((product: any) => product.id.toString() === item.itemId);
+                return poProduct?.productType === 'stock';
+              }
+              return false;
+            });
+            
+            return {
+              id: po.id,
+              poNumber: po.poNumber,
+              customerName: po.customerName,
+              customerId: po.customerId,
+              dueDate: po.expectedDelivery,
+              status: po.status,
+              totalStockQuantity: stockItems.reduce((sum: number, item: any) => sum + item.quantity, 0),
+              distinctStockItems: stockItems.length,
+              stockItems: stockItems,
+              prioritySettings: null
+            };
+          } catch (err) {
+            console.warn(`Failed to fetch items for PO ${po.id}:`, err);
+            return null;
+          }
+        })
+      );
+      
+      const data = posWithItems.filter((po): po is POWithStockItems => po !== null);
+      setVendorPODataCache(prev => ({ ...prev, [vendorId]: data }));
+      
+      // Initialize selection state for new POs
+      if (data && Array.isArray(data)) {
+        const newSelectionMode: Record<number, 'entire_po' | 'specific_items'> = {};
+        const newSelectedItems: Record<number, Record<number, { selected: boolean, quantity: number }>> = {};
+        const newPriorityLevels: Record<number, number> = {};
 
-      data.forEach((po: POWithStockItems) => {
-        if (po.prioritySettings) {
-          newSelectionMode[po.id] = po.prioritySettings.selectionMode;
-          newPriorityLevels[po.id] = po.prioritySettings.priorityLevel;
-          
-          if (po.prioritySettings.selectionMode === 'specific_items' && po.prioritySettings.stockItemIds) {
-            newSelectedItems[po.id] = {};
-            po.prioritySettings.stockItemIds.forEach((itemId: string) => {
-              const item = po.stockItems.find((i: StockItem) => i.id.toString() === itemId);
-              if (item) {
+        data.forEach((po: POWithStockItems) => {
+          if (po.prioritySettings) {
+            newSelectionMode[po.id] = po.prioritySettings.selectionMode;
+            newPriorityLevels[po.id] = po.prioritySettings.priorityLevel;
+            
+            if (po.prioritySettings.selectionMode === 'specific_items' && po.prioritySettings.stockItemIds) {
+              newSelectedItems[po.id] = {};
+              po.prioritySettings.stockItemIds.forEach((itemId: string) => {
+                const item = po.stockItems.find((i: StockItem) => i.id.toString() === itemId);
+                if (item) {
+                  newSelectedItems[po.id][item.id] = {
+                    selected: true,
+                    quantity: po.prioritySettings!.manualQuantities?.[itemId] || item.quantity
+                  };
+                }
+              });
+            } else if (po.prioritySettings.selectionMode === 'entire_po') {
+              newSelectedItems[po.id] = {};
+              po.stockItems.forEach((item: StockItem) => {
                 newSelectedItems[po.id][item.id] = {
                   selected: true,
-                  quantity: po.prioritySettings!.manualQuantities?.[itemId] || item.quantity
+                  quantity: item.quantity
                 };
-              }
-            });
-          } else if (po.prioritySettings.selectionMode === 'entire_po') {
-            newSelectedItems[po.id] = {};
-            po.stockItems.forEach((item: StockItem) => {
-              newSelectedItems[po.id][item.id] = {
-                selected: true,
-                quantity: item.quantity
-              };
-            });
-          }
-        } else {
+              });
+            }
+          } else {
           newSelectionMode[po.id] = 'entire_po';
           newPriorityLevels[po.id] = 1;
         }
@@ -134,6 +193,15 @@ export default function OemPrioritySettingsDialog({
     }
     
     return data;
+    } catch (error) {
+      console.error('Error fetching vendor PO data:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load purchase order data",
+        variant: "destructive"
+      });
+      return [];
+    }
   };
 
   // Save priority settings mutation

@@ -182,8 +182,16 @@ export default function OemPrioritySettingsDialog({
               });
             }
           } else {
+          // Initialize new PO with entire_po mode and all items selected
           newSelectionMode[po.id] = 'entire_po';
           newPriorityLevels[po.id] = 1;
+          newSelectedItems[po.id] = {};
+          po.stockItems.forEach((item: StockItem) => {
+            newSelectedItems[po.id][item.id] = {
+              selected: true,
+              quantity: item.quantity
+            };
+          });
         }
       });
 
@@ -216,14 +224,13 @@ export default function OemPrioritySettingsDialog({
         ? poData.stockItems.map((item: StockItem) => item.id.toString())
         : Object.keys(items).filter(itemId => items[parseInt(itemId)]?.selected);
 
+      // Save manual quantities for ALL selected items, regardless of mode
       const manualQuantities: Record<string, number> = {};
-      if (mode === 'specific_items') {
-        Object.keys(items).forEach(itemId => {
-          if (items[parseInt(itemId)]?.selected) {
-            manualQuantities[itemId] = items[parseInt(itemId)].quantity;
-          }
-        });
-      }
+      Object.keys(items).forEach(itemId => {
+        if (items[parseInt(itemId)]?.selected) {
+          manualQuantities[itemId] = items[parseInt(itemId)].quantity;
+        }
+      });
 
       return apiRequest('/api/oem-settings/priority-settings/save', {
         method: 'POST',
@@ -493,18 +500,18 @@ export default function OemPrioritySettingsDialog({
                                               </TableCell>
                                               <TableCell className="text-sm py-2">{item.quantity}</TableCell>
                                               <TableCell className="py-2">
-                                                {isSelected && selectionMode[po.id] === 'specific_items' ? (
+                                                {isSelected ? (
                                                   <Input
                                                     type="number"
                                                     min={1}
                                                     max={item.quantity}
                                                     value={scheduleQty}
                                                     onChange={(e) => updateItemQuantity(po.id, item.id, parseInt(e.target.value) || 1)}
-                                                    className="w-16 h-7 text-sm"
+                                                    className="w-20 h-8 text-sm"
                                                     data-testid={`input-qty-${item.id}`}
                                                   />
                                                 ) : (
-                                                  <span className="text-sm text-gray-600">{scheduleQty}</span>
+                                                  <span className="text-sm text-gray-500">—</span>
                                                 )}
                                               </TableCell>
                                               <TableCell className="text-sm py-2">${item.unitPrice.toFixed(2)}</TableCell>

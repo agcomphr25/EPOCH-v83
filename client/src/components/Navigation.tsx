@@ -448,6 +448,12 @@ export default function Navigation() {
       label: 'COGS Report',
       icon: TrendingUp,
       description: 'Cost of Goods Sold reporting'
+    },
+    {
+      path: '/finance/september-fulfilled-2025',
+      label: 'September 2025 FULFILLED',
+      icon: FileText,
+      description: 'Orders changed to FULFILLED in September 2025'
     }
   ];
 

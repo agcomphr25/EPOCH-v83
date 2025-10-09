@@ -94,8 +94,13 @@ router.get('/layup-scheduler/oem-priority/:vendorId', async (req, res) => {
     const allPOs = await storage.getAllPurchaseOrders();
     const vendorPOs = allPOs.filter((po: PurchaseOrder) => po.customerId === vendorId && po.status === 'OPEN');
 
+    // Get vendor info
+    const vendor = vendorPOs.length > 0 
+      ? { id: vendorId, name: vendorPOs[0].customerName }
+      : { id: vendorId, name: 'Unknown Vendor' };
+
     if (vendorPOs.length === 0) {
-      return res.json([]);
+      return res.json({ vendor, pos: [] });
     }
 
     // For each PO, get stock items and current priority settings
@@ -142,7 +147,7 @@ router.get('/layup-scheduler/oem-priority/:vendorId', async (req, res) => {
       })
     );
 
-    res.json(consolidatedData);
+    res.json({ vendor, pos: consolidatedData });
   } catch (error) {
     console.error('❌ Error fetching consolidated OEM priority data:', error);
     res.status(500).json({ error: 'Failed to fetch OEM priority data' });

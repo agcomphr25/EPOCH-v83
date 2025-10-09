@@ -85,7 +85,6 @@ interface PaginatedOrdersResponse {
 }
 
 export default function AllOrdersPage() {
-  console.log('✅ ALL ORDERS PAGE IS RENDERING NOW!!!');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDepartment, setSelectedDepartment] = useState('all');
   const [sortBy, setSortBy] = useState<'orderDate' | 'dueDate' | 'customer' | 'model' | 'enteredDate'>('orderDate');
@@ -148,21 +147,14 @@ export default function AllOrdersPage() {
     }
   });
 
-  // Fetch ALL orders (not paginated)
-  const { data: allOrders, isLoading, error, status } = useQuery<Order[]>({
+  // Fetch ALL orders (not paginated) - using same pattern as OrdersList
+  const { data: allOrders, isLoading, error } = useQuery<Order[]>({
     queryKey: ['/api/orders/with-payment-status'],
-    queryFn: async () => {
-      const response = await fetch('/api/orders/with-payment-status', {
-        credentials: 'include'
-      });
-      if (!response.ok) throw new Error('Failed to fetch orders');
-      return response.json();
-    },
-    staleTime: 30000, 
-    gcTime: 60000
+    queryFn: () => apiRequest('/api/orders/with-payment-status'),
+    refetchInterval: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
-
-  console.log('🔍 Query State:', { isLoading, hasData: !!allOrders, dataLength: allOrders?.length, error, status });
 
   // Fetch customers for communication
   const { data: customers } = useQuery<Customer[]>({

@@ -44,14 +44,12 @@ router.post('/login', async (req, res) => {
     }
 
     // Try to find user in database first
-    console.log('🔍 Searching for user in database:', username.toLowerCase());
     const dbUserResult = await pool.query(
       `SELECT id, username, password_hash, role, is_active 
        FROM users 
        WHERE LOWER(username) = LOWER($1)`,
       [username]
     );
-    console.log('📊 Database query result:', dbUserResult ? `Found ${dbUserResult.length} user(s)` : 'No results');
 
     let user: any;
     let isValidPassword = false;
@@ -59,17 +57,14 @@ router.post('/login', async (req, res) => {
     if (dbUserResult && dbUserResult.length > 0) {
       // User exists in database
       const dbUser = dbUserResult[0];
-      console.log('✅ Found user in database:', dbUser.username, 'Active:', dbUser.is_active, 'Has password_hash:', !!dbUser.password_hash);
       
       // Check if user is active
       if (!dbUser.is_active) {
-        console.log('❌ User account is inactive');
         return res.status(401).json({ error: 'Account is inactive' });
       }
 
       // Verify password against database hash
       isValidPassword = await bcrypt.compare(password, dbUser.password_hash);
-      console.log('🔐 Password verification:', isValidPassword ? 'SUCCESS' : 'FAILED');
       
       if (isValidPassword) {
         user = {
@@ -80,18 +75,13 @@ router.post('/login', async (req, res) => {
       }
     } else {
       // Fall back to hardcoded users if not in database
-      console.log('⚠️ User not in database, checking hardcoded users...');
       const hardcodedUser = USERS.get(username.toLowerCase());
       
       if (hardcodedUser) {
-        console.log('✅ Found hardcoded user:', hardcodedUser.username);
         isValidPassword = await bcrypt.compare(password, hardcodedUser.password);
-        console.log('🔐 Hardcoded password verification:', isValidPassword ? 'SUCCESS' : 'FAILED');
         if (isValidPassword) {
           user = hardcodedUser;
         }
-      } else {
-        console.log('❌ User not found in hardcoded users either');
       }
     }
 

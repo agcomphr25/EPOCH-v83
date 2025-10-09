@@ -7,7 +7,9 @@ const router = Router();
 router.post('/add-regular-orders', async (req, res) => {
   try {
     console.log('📋 Add Regular Orders scheduling started');
-    const { maxOrdersPerDay, scheduleDays, workDays, employees: requestEmployees, molds, excludeOEMOrders } = req.body;
+    const { selectedWeekStart, selectedWeekEnd, maxOrdersPerDay, scheduleDays, workDays, employees: requestEmployees, molds, excludeOEMOrders } = req.body;
+    
+    console.log(`📅 WEEK-SPECIFIC SCHEDULING: Selected week ${selectedWeekStart} to ${selectedWeekEnd}`);
     
     // Get unified P1 layup queue to find regular orders (excluding OEM orders)
     const fetch = (await import('node-fetch')).default;
@@ -124,70 +126,30 @@ router.post('/add-regular-orders', async (req, res) => {
     // Initialize employee capacity tracking per day
     const employeeCapacity = new Map<string, Map<number, number>>();
     
-    // CONTINUITY FIX: Start scheduling immediately after the last PO order date
-    let startDate = new Date();
+    // WEEK-SPECIFIC SCHEDULING: Use the selected week dates from frontend
+    const startDate = selectedWeekStart ? new Date(selectedWeekStart) : new Date();
+    const endDate = selectedWeekEnd ? new Date(selectedWeekEnd) : new Date(startDate.getTime() + 7 * 24 * 60 * 60 * 1000);
     
-    // Check for existing PO assignments to find the latest date
-    const existingPOAssignments = await pool.query(`
-      SELECT MAX(DATE(scheduled_date)) as last_po_date,
-             COUNT(*) as po_count
-      FROM layup_schedule 
-      WHERE order_id LIKE 'PO-%'
-    `);
-    
-    // FIXED: Properly extract rows from PostgreSQL result with better debugging
-    console.log(`🔍 RAW PO QUERY RESULT:`, JSON.stringify(existingPOAssignments, null, 2));
-    const poRows = Array.isArray(existingPOAssignments) 
-      ? existingPOAssignments 
-      : (existingPOAssignments as any).rows ?? [];
-    console.log(`🔍 PO QUERY RESULT: Found ${poRows.length} rows, PO count: ${poRows[0]?.po_count || 0}`);
-    if (poRows.length > 0 && poRows[0]?.last_po_date) {
-      console.log(`🔍 PO QUERY RESULT: last_po_date = ${poRows[0].last_po_date}`);
-    }
-    
-    // FIXED: Start regular orders from current production week to fill alongside PO orders
-    // Use the same week as existing PO orders for efficient capacity utilization
-    startDate = new Date();
     startDate.setHours(0, 0, 0, 0);
+    endDate.setHours(23, 59, 59, 999);
     
-    // If today is weekend, start from Monday, otherwise start from today
-    if (startDate.getDay() === 0 || startDate.getDay() === 6) { // Sunday=0, Saturday=6
-      // Move to next Monday
-      const daysUntilMonday = startDate.getDay() === 0 ? 1 : 2;
-      startDate.setDate(startDate.getDate() + daysUntilMonday);
-    }
+    console.log(`📅 WEEK-SPECIFIC: Scheduling ONLY for week ${startDate.toDateString()} to ${endDate.toDateString()}`);
+    console.log(`📅 WEEK-SPECIFIC: Will NOT schedule beyond this week`);
     
-    console.log(`📅 SCHEDULING FIX: Starting regular orders from: ${startDate.toDateString()} (day ${startDate.getDay()})`);
-    console.log(`📅 SCHEDULING FIX: This allows regular orders to share current week capacity with PO orders`);
-    
-    if (poRows.length > 0 && poRows[0].last_po_date) {
-      console.log(`📅 INFO: Found existing PO orders through ${poRows[0].last_po_date}, but regular orders will start from schedule beginning`);
-    } else {
-      console.log(`📅 INFO: No existing PO orders found, regular orders starting fresh from tomorrow`);
-    }
-    
-    // CRITICAL FIX: Advance to next work day if calculated date is not a work day
-    while (!workDays.includes(startDate.getDay())) {
-      startDate.setDate(startDate.getDate() + 1);
-      console.log(`📅 CONTINUITY FIX: Advancing to next work day: ${startDate.toDateString()} (day ${startDate.getDay()})`);
-    }
-    
-    console.log(`📅 CONTINUITY FIX: Final start date for regular orders: ${startDate.toDateString()} (${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][startDate.getDay()]})`);
-    
-    // Initialize capacity for each work day for next 30 days
-    for (let i = 0; i < 30; i++) {
-      const date = new Date(startDate);
-      date.setDate(date.getDate() + i);
-      
-      if (workDays.includes(date.getDay())) {
-        const dateStr = date.toISOString().split('T')[0];
+    // Initialize capacity for each work day in the SELECTED WEEK ONLY
+    let currentDateIterator = new Date(startDate);
+    while (currentDateIterator <= endDate) {
+      if (workDays.includes(currentDateIterator.getDay())) {
+        const dateStr = currentDateIterator.toISOString().split('T')[0];
         employeeCapacity.set(dateStr, new Map<number, number>());
         
-        // Set each employee's daily capacity
+        // Set each employee's daily capacity (production_rate is per DAY)
         for (const emp of employees) {
           employeeCapacity.get(dateStr)!.set(emp.id, emp.production_rate);
+          console.log(`📊 Employee ${emp.name} capacity on ${dateStr}: ${emp.production_rate} orders/day`);
         }
       }
+      currentDateIterator.setDate(currentDateIterator.getDate() + 1);
     }
 
     // CRITICAL FIX: Reduce employee capacity based on existing database assignments
@@ -293,14 +255,27 @@ router.post('/add-regular-orders', async (req, res) => {
           const dateStr = currentDate.toISOString().split('T')[0];
           daysSearched++;
           
+          // WEEK-SPECIFIC: Stop if we've exceeded the selected week
+          if (currentDate > endDate) {
+            console.log(`📅 WEEK-SPECIFIC: Reached end of selected week, stopping schedule for order ${order.orderId}`);
+            break;
+          }
+          
           // Check if it's a work day and has employee capacity
           if (workDays.includes(currentDate.getDay())) {
-            // FIXED: Ensure capacity exists for this date (extend beyond 30 days if needed)
+            // WEEK-SPECIFIC: Do NOT create capacity beyond selected week
             if (!employeeCapacity.has(dateStr)) {
-              // Lazily initialize capacity for dates beyond 30 days
-              employeeCapacity.set(dateStr, new Map<number, number>());
-              for (const emp of employees) {
-                employeeCapacity.get(dateStr)!.set(emp.id, emp.production_rate);
+              if (currentDate <= endDate) {
+                // Only initialize capacity if still within selected week
+                employeeCapacity.set(dateStr, new Map<number, number>());
+                for (const emp of employees) {
+                  employeeCapacity.get(dateStr)!.set(emp.id, emp.production_rate);
+                }
+                console.log(`📅 WEEK-SPECIFIC: Initialized capacity for ${dateStr} within selected week`);
+              } else {
+                // Beyond selected week - don't schedule here
+                console.log(`📅 WEEK-SPECIFIC: Skipping ${dateStr} - beyond selected week`);
+                break;
               }
             }
             

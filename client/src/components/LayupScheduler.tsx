@@ -2133,14 +2133,22 @@ export default function LayupScheduler() {
 
     try {
       console.log('🏭 PRODUCTION FLOW: Adding regular orders to schedule after OEM priorities...');
+      
+      // Calculate selected week start (Monday) and end (Friday/last work day)
+      const weekStart = startOfWeek(currentDate, { weekStartsOn: 1 }); // Monday
+      const weekEnd = endOfWeek(currentDate, { weekStartsOn: 1 }); // Sunday
+      
+      console.log(`📅 Selected week: ${format(weekStart, 'yyyy-MM-dd')} to ${format(weekEnd, 'yyyy-MM-dd')}`);
+      
       const response = await apiRequest('/api/scheduler/add-regular-orders', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
+          selectedWeekStart: format(weekStart, 'yyyy-MM-dd'), // CRITICAL: Only schedule for selected week
+          selectedWeekEnd: format(weekEnd, 'yyyy-MM-dd'),     // CRITICAL: Stop after this week
           maxOrdersPerDay: Math.floor(employees.reduce((total, emp) => total + (emp.rate || 1.5) * (emp.hours || 8), 0)) || 21, // Use actual employee capacity settings
-          scheduleDays: 10,    // Limit schedule to next 2 weeks (10 work days)
           workDays: selectedWorkDays, // Pass current work day settings  
           employees: employees, // Pass employee settings
           molds: molds.filter(m => m.enabled), // Pass enabled molds only

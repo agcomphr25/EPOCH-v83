@@ -32,6 +32,7 @@ import moldSyncRoutes from './moldSync';
 import authRoutes from './auth';
 import usersRoutes from './users';
 import reportsRoutes from './reports';
+import oemSettingsRoutes from './oemSettings';
 import { getAccessToken } from '../utils/upsShipping';
 
 export function registerRoutes(app: Express): Server {
@@ -130,6 +131,7 @@ export function registerRoutes(app: Express): Server {
   app.use('/api/reports', reportsRoutes);
 
   // OEM Priority Settings routes
+  app.use('/api/oem-settings', oemSettingsRoutes);
   
   // UPS Test endpoint
   app.post('/api/test-ups-auth', async (req, res) => {
@@ -1972,7 +1974,7 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  // Get stock items for a specific PO
+  // Get stock items for a specific PO with current_department for filtering
   app.get('/api/po-stock-items-list/:poId', async (req, res) => {
     try {
       const { poId } = req.params;
@@ -1985,27 +1987,42 @@ export function registerRoutes(app: Express): Server {
         (item.itemName && (item.itemName.includes('AG-') || item.itemName.includes('stock')))
       );
       
-      const enhancedStockItems = stockItems.map(item => {
-        // Parse specifications if available
-        let specs = {};
-        try {
-          specs = item.specifications ? JSON.parse(item.specifications as string) : {};
-        } catch (e) {
-          specs = {};
-        }
-        
-        return {
-          id: item.id,
-          itemId: item.itemId,
-          itemName: item.itemName,
-          itemType: item.itemType,
-          quantity: item.quantity,
-          specifications: specs,
-          unitPrice: item.unitPrice,
-          totalPrice: item.totalPrice,
-          orderCount: item.orderCount
-        };
-      });
+      // Query production orders to get current_department for each item
+      const enhancedStockItems = await Promise.all(
+        stockItems.map(async (item) => {
+          // Parse specifications if available
+          let specs = {};
+          try {
+            specs = item.specifications ? JSON.parse(item.specifications as string) : {};
+          } catch (e) {
+            specs = {};
+          }
+          
+          // Get production orders for this PO item to find current_department
+          const productionOrders = await pool.query(`
+            SELECT order_id, current_department, stock_model_id
+            FROM production_orders
+            WHERE po_id = $1 AND item_id = $2::text
+            ORDER BY created_at DESC
+            LIMIT 1
+          `, [parseInt(poId), item.id.toString()]);
+          
+          const currentDepartment = productionOrders.rows?.[0]?.current_department || 'P1 Production Queue';
+          
+          return {
+            id: item.id,
+            itemId: item.itemId,
+            itemName: item.itemName,
+            itemType: item.itemType,
+            quantity: item.quantity,
+            specifications: specs,
+            unitPrice: item.unitPrice,
+            totalPrice: item.totalPrice,
+            orderCount: item.orderCount,
+            current_department: currentDepartment
+          };
+        })
+      );
       
       res.json(enhancedStockItems);
     } catch (error) {

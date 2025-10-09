@@ -31,6 +31,7 @@ import refundRoutes from './refunds';
 import moldSyncRoutes from './moldSync';
 import authRoutes from './auth';
 import usersRoutes from './users';
+import reportsRoutes from './reports';
 import { getAccessToken } from '../utils/upsShipping';
 
 export function registerRoutes(app: Express): Server {
@@ -124,6 +125,9 @@ export function registerRoutes(app: Express): Server {
 
   // Refund management routes
   app.use('/api/refund-requests', refundRoutes);
+  
+  // Reports routes
+  app.use('/api/reports', reportsRoutes);
 
   // OEM Priority Settings routes
   

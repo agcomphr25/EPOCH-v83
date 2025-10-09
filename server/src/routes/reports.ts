@@ -64,7 +64,8 @@ router.get('/monthly-fulfilled', async (req, res) => {
             values.forEach(value => {
               if (value && value !== 'none') {
                 // Find the option that matches the selected value
-                const option = featureDef.options?.find((opt: any) => opt.value === value);
+                const options = featureDef.options as any[];
+                const option = options?.find((opt: any) => opt.value === value);
                 if (option && option.price) {
                   featuresTotal += Number(option.price);
                 }
@@ -85,7 +86,7 @@ router.get('/monthly-fulfilled', async (req, res) => {
         if (order.customDiscountType === 'percent') {
           discountAmount = (basePrice + featuresTotal) * (order.customDiscountValue / 100);
           orderTotal = (basePrice + featuresTotal) * (1 - order.customDiscountValue / 100) + shipping;
-        } else if (order.customDiscountType === 'fixed') {
+        } else if (order.customDiscountType === 'fixed' || order.customDiscountType === 'amount') {
           discountAmount = order.customDiscountValue;
           orderTotal = (basePrice + featuresTotal) - order.customDiscountValue + shipping;
         }

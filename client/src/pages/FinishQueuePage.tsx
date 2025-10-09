@@ -12,7 +12,7 @@ import { getDisplayOrderId } from '@/lib/orderUtils';
 import { apiRequest } from '@/lib/queryClient';
 import { toast } from 'react-hot-toast';
 import { useLocation } from 'wouter';
-import FBNumberSearch from '@/components/FBNumberSearch';
+import { OrderSearchBox } from '@/components/OrderSearchBox';
 import { SalesOrderModal } from '@/components/SalesOrderModal';
 import { isOrderInDepartment } from '@/lib/departmentUtils';
 
@@ -23,6 +23,7 @@ export default function FinishQueuePage() {
   const [selectedTechnician, setSelectedTechnician] = useState<string>('');
   const [salesOrderModalOpen, setSalesOrderModalOpen] = useState(false);
   const [selectedOrderId, setSelectedOrderId] = useState<string>('');
+  const [highlightedOrderId, setHighlightedOrderId] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
 
@@ -354,21 +355,21 @@ export default function FinishQueuePage() {
     }
   };
 
-  // Handle order found via Facebook number search
-  const handleOrderFound = (orderId: string) => {
-    // Check if the order exists in the current Finish queue
-    const orderExists = finishOrders.some((order: any) => order.orderId === orderId);
+  // Handle order search selection
+  const handleOrderSearchSelect = (order: any) => {
+    const orderExists = finishOrders.some((o: any) => o.orderId === order.orderId);
     if (orderExists) {
-      setSelectedOrders(prev => new Set([...prev, orderId]));
-      toast.success(`Order ${orderId} found and selected`);
+      setHighlightedOrderId(order.orderId);
+      // Auto-scroll to the highlighted order
+      setTimeout(() => {
+        const element = document.getElementById(`order-${order.orderId}`);
+        if (element) {
+          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 100);
+      toast.success(`Order ${order.orderId} highlighted in the list`);
     } else {
-      // Find the order in all orders to show current department
-      const allOrder = (allOrders as any[]).find((order: any) => order.orderId === orderId);
-      if (allOrder) {
-        toast.error(`Order ${orderId} is currently in ${allOrder.currentDepartment} department, not Finish`);
-      } else {
-        toast.error(`Order ${orderId} not found`);
-      }
+      toast.error(`Order ${order.orderId} is not in the Finish department`);
     }
   };
 
@@ -382,8 +383,28 @@ export default function FinishQueuePage() {
       {/* Barcode Scanner at top */}
       <BarcodeScanner onOrderScanned={handleOrderScanned} />
 
-      {/* Facebook Number Search */}
-      <FBNumberSearch onOrderFound={handleOrderFound} />
+      {/* Order Search Box */}
+      <Card>
+        <CardContent className="p-4">
+          <div className="flex items-center gap-4">
+            <OrderSearchBox 
+              orders={finishOrders}
+              placeholder="Search orders by Order ID or FishBowl Number..."
+              onOrderSelect={handleOrderSearchSelect}
+            />
+            {highlightedOrderId && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setHighlightedOrderId(null)}
+                className="text-sm"
+              >
+                Clear highlight
+              </Button>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Department Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">

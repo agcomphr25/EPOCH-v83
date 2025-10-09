@@ -41,7 +41,7 @@ import { getDisplayOrderId } from '@/lib/orderUtils';
 import CustomerDetailsTooltip from './CustomerDetailsTooltip';
 import CommunicationCompose from './CommunicationCompose';
 
-const departments = ['P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 'Gunsmith', 'Finish', 'Finish QC', 'Paint', 'Shipping QC', 'Shipping', 'Fulfilled'];
+const departments = ['P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 'Gunsmith', 'Finish', 'Finish QC', 'Paint', 'Shipping QC', 'Shipping'];
 
 export default function AllOrdersList() {
   const [selectedDepartment, setSelectedDepartment] = useState('all');
@@ -294,15 +294,8 @@ export default function AllOrdersList() {
   });
 
   const departments = [
-    'P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 'Gunsmith', 'Finish', 'Finish QC', 'Paint', 'Shipping QC', 'Shipping', 'Fulfilled'
+    'P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 'Gunsmith', 'Finish', 'Finish QC', 'Paint', 'Shipping QC', 'Shipping'
   ];
-
-  const getDepartmentDisplayName = (department: string) => {
-    if (department === 'Fulfilled') {
-      return 'Shipping Management';
-    }
-    return department;
-  };
 
   const getNextDepartment = (currentDepartment: string) => {
     // Handle alternative department names
@@ -482,7 +475,7 @@ export default function AllOrdersList() {
                     <SelectContent>
                       <SelectItem value="all">All Departments</SelectItem>
                       {departments.map(dept => (
-                        <SelectItem key={dept} value={dept}>{getDepartmentDisplayName(dept)}</SelectItem>
+                        <SelectItem key={dept} value={dept}>{dept}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -589,7 +582,7 @@ export default function AllOrdersList() {
                     </TableCell>
                     <TableCell>
                       <Badge className={`${getDepartmentBadgeColor(displayDepartment)} text-white`}>
-                        {getDepartmentDisplayName(displayDepartment)}
+                        {displayDepartment || 'Completed'}
                       </Badge>
                     </TableCell>
                     <TableCell>

@@ -138,6 +138,10 @@ export default function OrdersList() {
   const { toast: showToast } = useToast();
   const [, setLocation] = useLocation();
 
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 25;
+
   // Cancel order state
   const [cancelReason, setCancelReason] = useState('');
   const [isCancelDialogOpen, setIsCancelDialogOpen] = useState(false);
@@ -585,6 +589,17 @@ export default function OrdersList() {
     return filtered;
   }, [orders, customers, searchTerm, departmentFilter, statusFilter, sortBy, sortOrder]);
 
+  // Reset to page 1 when filters change
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, departmentFilter, statusFilter, sortBy, sortOrder]);
+
+  // Calculate pagination
+  const totalPages = Math.ceil(filteredOrders.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedOrders = filteredOrders.slice(startIndex, endIndex);
+
   const getModelDisplayName = (modelId: string) => {
     if (!stockModels) return modelId;
     const model = stockModels.find(m => m.id === modelId);
@@ -926,7 +941,12 @@ export default function OrdersList() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <FileText className="h-5 w-5" />
-              Orders ({filteredOrders.length}{searchTerm ? ` of ${orders?.length || 0}` : ''})
+              Orders ({filteredOrders.length}{searchTerm || departmentFilter !== 'all' || statusFilter !== 'all' ? ` total` : ''})
+              {totalPages > 1 && (
+                <span className="text-sm font-normal text-gray-500">
+                  (Page {currentPage} of {totalPages})
+                </span>
+              )}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -944,7 +964,7 @@ export default function OrdersList() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredOrders.map((order) => (
+                {paginatedOrders.map((order) => (
                   <TableRow 
                     key={`${order.id}-${order.orderId}`}
                     className={cn(
@@ -1179,6 +1199,64 @@ export default function OrdersList() {
                 ))}
               </TableBody>
             </Table>
+
+            {/* Pagination Controls */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between mt-4 pt-4 border-t">
+                <div className="text-sm text-gray-600">
+                  Showing {startIndex + 1} to {Math.min(endIndex, filteredOrders.length)} of {filteredOrders.length} orders
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                    disabled={currentPage === 1}
+                    data-testid="button-previous-page"
+                  >
+                    Previous
+                  </Button>
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: totalPages }, (_, i) => i + 1).map(pageNum => {
+                      // Show first page, last page, current page, and pages around current
+                      const showPage = pageNum === 1 || 
+                                      pageNum === totalPages || 
+                                      Math.abs(pageNum - currentPage) <= 1;
+                      
+                      if (!showPage) {
+                        // Show ellipsis
+                        if (pageNum === currentPage - 2 || pageNum === currentPage + 2) {
+                          return <span key={pageNum} className="px-2">...</span>;
+                        }
+                        return null;
+                      }
+
+                      return (
+                        <Button
+                          key={pageNum}
+                          variant={currentPage === pageNum ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => setCurrentPage(pageNum)}
+                          className="min-w-[40px]"
+                          data-testid={`button-page-${pageNum}`}
+                        >
+                          {pageNum}
+                        </Button>
+                      );
+                    })}
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                    disabled={currentPage === totalPages}
+                    data-testid="button-next-page"
+                  >
+                    Next
+                  </Button>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}

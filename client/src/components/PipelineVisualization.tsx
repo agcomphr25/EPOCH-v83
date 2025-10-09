@@ -39,6 +39,9 @@ const statusColors: Record<ScheduleStatus, string> = {
 // Hybrid visualization components
 const OrderPixel = ({ order, onClick }: { order: OrderDetail; onClick?: () => void }) => {
   const getStatusStyle = (status: ScheduleStatus) => {
+    if (status === 'critical') {
+      return { backgroundColor: '#EF4444' }; // red-500
+    }
     if (status === 'cannot-meet-due') {
       return { backgroundColor: '#FFA500' };
     }
@@ -51,7 +54,7 @@ const OrderPixel = ({ order, onClick }: { order: OrderDetail; onClick?: () => vo
   return (
     <div 
       className={`w-2 h-2 cursor-pointer hover:scale-150 transition-transform ${
-        (order.scheduleStatus === 'cannot-meet-due' || order.scheduleStatus === 'dept-overdue') ? '' : statusColors[order.scheduleStatus]
+        (order.scheduleStatus === 'critical' || order.scheduleStatus === 'cannot-meet-due' || order.scheduleStatus === 'dept-overdue') ? '' : statusColors[order.scheduleStatus]
       }`}
       style={getStatusStyle(order.scheduleStatus)}
       onClick={onClick}
@@ -62,6 +65,9 @@ const OrderPixel = ({ order, onClick }: { order: OrderDetail; onClick?: () => vo
 
 const OrderChip = ({ order, onClick, getModelDisplayName }: { order: OrderDetail; onClick?: () => void; getModelDisplayName?: (modelId: string) => string }) => {
   const getStatusStyle = (status: ScheduleStatus) => {
+    if (status === 'critical') {
+      return { backgroundColor: '#EF4444', color: '#FFFFFF' }; // red-500 with white text
+    }
     if (status === 'cannot-meet-due') {
       return { backgroundColor: '#FFA500' };
     }
@@ -74,7 +80,7 @@ const OrderChip = ({ order, onClick, getModelDisplayName }: { order: OrderDetail
   return (
     <div 
       className={`px-2 py-1 rounded text-xs cursor-pointer hover:bg-opacity-80 transition-colors ${
-        (order.scheduleStatus === 'cannot-meet-due' || order.scheduleStatus === 'dept-overdue') ? '' : statusColors[order.scheduleStatus] + ' text-white'
+        (order.scheduleStatus === 'critical' || order.scheduleStatus === 'cannot-meet-due' || order.scheduleStatus === 'dept-overdue') ? '' : statusColors[order.scheduleStatus] + ' text-white'
       }`}
       style={getStatusStyle(order.scheduleStatus)}
       onClick={onClick}

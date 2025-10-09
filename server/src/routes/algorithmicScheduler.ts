@@ -110,8 +110,9 @@ router.post('/add-regular-orders', async (req, res) => {
     console.log(`📋 COLLISION FIX: Pre-populated currentAllocations with ${existingAssignments.size} existing assignments`);
     
     // Get employee data with production rates from employee_layup_settings table
+    // CRITICAL: Calculate daily capacity as rate (per hour) * hours (per day)
     const employeeResult = await pool.query(`
-      SELECT id, employee_id as name, rate as production_rate, is_active 
+      SELECT id, employee_id as name, (rate * hours) as production_rate, is_active 
       FROM employee_layup_settings 
       WHERE is_active = true AND rate > 0
     `);

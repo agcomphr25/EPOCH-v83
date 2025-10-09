@@ -1,7 +1,7 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { PlusCircle, FileText, FilePenLine, XCircle, Users, Wrench, Shield, User, Factory, RefreshCw, LogOut } from 'lucide-react';
+import { PlusCircle, FileText, FilePenLine, XCircle, Users, Wrench, Shield, User, Factory, RefreshCw, LogOut, Home } from 'lucide-react';
 import { Link } from 'wouter';
 import PipelineVisualization from '@/components/PipelineVisualization';
 
@@ -29,11 +29,24 @@ export default function STACIWTestDashboard() {
     <div className="p-6 space-y-6 max-w-full mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">STACIW Dashboard</h1>
-          <p className="text-gray-600 dark:text-gray-400 mt-1">
-            Comprehensive Order & Production Management
-          </p>
+        <div className="flex items-center gap-3">
+          <Link href="/admin-dashboard">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="flex items-center gap-2"
+              data-testid="button-home"
+            >
+              <Home className="w-4 h-4" />
+              <span className="hidden sm:inline">Home</span>
+            </Button>
+          </Link>
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">STACIW Dashboard</h1>
+            <p className="text-gray-600 dark:text-gray-400 mt-1">
+              Comprehensive Order & Production Management
+            </p>
+          </div>
         </div>
         <div className="flex items-center gap-4">
           <div className="text-sm text-gray-500 dark:text-gray-400">

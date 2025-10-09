@@ -1,13 +1,14 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link, useLocation } from 'wouter';
 
-import { Factory, User, FileText, TrendingDown, Plus, Settings, Package, FilePenLine, ClipboardList, BarChart, ChevronDown, ChevronRight, FormInput, PieChart, Scan, Warehouse, Shield, Wrench, Users, TestTube, DollarSign, Receipt, TrendingUp, List, BookOpen, Calendar, CheckSquare, Truck, Mail, MessageSquare, CreditCard, XCircle, Cog, ArrowRight, LogOut, Scissors, MapPin, Snowflake, ShoppingCart, GraduationCap } from "lucide-react";
+import { Factory, User, FileText, TrendingDown, Plus, Settings, Package, FilePenLine, ClipboardList, BarChart, ChevronDown, ChevronRight, FormInput, PieChart, Scan, Warehouse, Shield, Wrench, Users, TestTube, DollarSign, Receipt, TrendingUp, List, BookOpen, Calendar, CheckSquare, Truck, Mail, MessageSquare, CreditCard, XCircle, Cog, ArrowRight, LogOut, Scissors, MapPin, Snowflake, ShoppingCart, GraduationCap, Home } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import InstallPWAButton from "./InstallPWAButton";
 import { useQuery } from '@tanstack/react-query';
 import { hasFullAccess, hasRouteAccess } from '@/config/userPermissions';
+import { getDashboardRoute } from '@/config/dashboardMapping';
 import {
   NavigationMenu,
   NavigationMenuItem,
@@ -35,7 +36,17 @@ export default function Navigation() {
     queryKey: ['currentUser'],
     queryFn: async () => {
       const token = localStorage.getItem('sessionToken') || localStorage.getItem('jwtToken');
-      if (!token || !isDeploymentEnvironment()) {
+      
+      // In development, check localStorage for a stored username
+      if (!isDeploymentEnvironment()) {
+        const storedUsername = localStorage.getItem('dev_username');
+        if (storedUsername) {
+          return { username: storedUsername };
+        }
+        return null;
+      }
+      
+      if (!token) {
         return null;
       }
       
@@ -56,7 +67,6 @@ export default function Navigation() {
         return null;
       }
     },
-    enabled: isDeploymentEnvironment(),
     staleTime: 5 * 60 * 1000, // 5 minutes
     retry: false
   });
@@ -760,9 +770,22 @@ export default function Navigation() {
     <header className="bg-white shadow-sm border-b border-gray-200">
       <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center py-4 gap-4">
-          <div className="flex items-center">
-            <Factory className="h-6 w-6 text-primary mr-3" />
+          <div className="flex items-center gap-3">
+            <Factory className="h-6 w-6 text-primary" />
             <h1 className="text-xl font-semibold text-gray-900">EPOCH v8</h1>
+            
+            {/* Home button - navigates to user's personalized dashboard */}
+            <Link href={currentUser?.username ? getDashboardRoute(currentUser.username) : '/'}>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="flex items-center gap-2"
+                data-testid="button-home"
+              >
+                <Home className="h-4 w-4" />
+                <span className="hidden sm:inline">Home</span>
+              </Button>
+            </Link>
           </div>
 
           {/* Navigation Links */}

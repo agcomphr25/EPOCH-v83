@@ -584,33 +584,56 @@ export default function OemPrioritySettingsDialog({
           <TabsContent value="priorities" className="space-y-4 mt-4">
             <div className="bg-gray-50 dark:bg-gray-900 p-4 rounded-lg">
               <h3 className="font-semibold mb-4">Priority Summary</h3>
-              {Object.entries(vendorPODataCache).map(([vendorId, pos]) => (
-                <div key={vendorId} className="mb-6">
-                  <h4 className="font-medium mb-2 text-blue-700 dark:text-blue-400">
-                    {vendors.find(v => v.id === vendorId)?.name || vendorId}
-                  </h4>
-                  {(pos && Array.isArray(pos)) && pos.map((po: POWithStockItems) => (
-                    <div key={po.id} className="mb-3 p-3 bg-white dark:bg-gray-800 rounded border ml-4">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <div className="font-medium text-sm">PO #{po.poNumber}</div>
-                          <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                            Mode: {selectionMode[po.id] === 'entire_po' ? 'Entire PO' : 'Specific Items'}
-                          </div>
-                          <div className="text-xs text-gray-600 dark:text-gray-400">
-                            Items: {selectionMode[po.id] === 'entire_po' 
-                              ? `${po.totalStockQuantity} (all)`
-                              : `${Object.values(selectedItems[po.id] || {}).filter(i => i.selected).length} selected`}
+              {prioritySettingsLoading ? (
+                <div className="text-center py-8 text-gray-500">Loading saved settings...</div>
+              ) : savedPrioritySettings.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">No priority settings saved yet</div>
+              ) : (
+                // Group saved settings by vendor
+                Object.entries(
+                  (savedPrioritySettings as any[]).reduce((acc: Record<string, any[]>, setting: any) => {
+                    if (!acc[setting.vendorId]) acc[setting.vendorId] = [];
+                    acc[setting.vendorId].push(setting);
+                    return acc;
+                  }, {})
+                ).map(([vendorId, settings]: [string, any[]]) => (
+                  <div key={vendorId} className="mb-6">
+                    <h4 className="font-medium mb-2 text-blue-700 dark:text-blue-400">
+                      {settings[0]?.vendorName || vendorId}
+                    </h4>
+                    {settings.map((setting: any) => {
+                      // Calculate total scheduled quantity from manual quantities
+                      const totalScheduledQty = setting.manualQuantities 
+                        ? Object.values(setting.manualQuantities as Record<string, number>).reduce((sum: number, qty: number) => sum + qty, 0)
+                        : 0;
+                      
+                      const itemCount = setting.stockItemIds?.length || Object.keys(setting.manualQuantities || {}).length || 0;
+                      
+                      return (
+                        <div key={setting.id} className="mb-3 p-3 bg-white dark:bg-gray-800 rounded border ml-4">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <div className="font-medium text-sm">PO #{setting.poNumber}</div>
+                              <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                                Mode: {setting.selectionMode === 'entire_po' ? 'Entire PO' : 'Specific Items'}
+                              </div>
+                              <div className="text-xs text-gray-600 dark:text-gray-400">
+                                Scheduled Quantity: <span className="font-semibold text-blue-600 dark:text-blue-400">{totalScheduledQty}</span> units
+                              </div>
+                              <div className="text-xs text-gray-600 dark:text-gray-400">
+                                Items: {itemCount} {setting.selectionMode === 'entire_po' ? '(all items)' : 'selected'}
+                              </div>
+                            </div>
+                            <Badge className="bg-blue-100 text-blue-800 text-xs">
+                              Priority {setting.priorityLevel}
+                            </Badge>
                           </div>
                         </div>
-                        <Badge className="bg-blue-100 text-blue-800 text-xs">
-                          Priority {priorityLevels[po.id] || 1}
-                        </Badge>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ))}
+                      );
+                    })}
+                  </div>
+                ))
+              )}
             </div>
           </TabsContent>
         </Tabs>

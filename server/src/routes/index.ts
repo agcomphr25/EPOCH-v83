@@ -314,6 +314,7 @@ export function registerRoutes(app: Express): Server {
       const combinedUnscheduledOrders = [...unscheduledOrders, ...formattedActiveOrders];
       
       // Fetch P1 PO orders from all_orders table (orders created from P1 PO week selection)
+      // ONLY include orders in P1 Production Queue - orders should NOT appear in queue until scheduled
       console.log('🔍 Fetching P1 PO orders from all_orders table...');
       const p1POOrdersResult = await pool.query(`
         SELECT 
@@ -328,7 +329,7 @@ export function registerRoutes(app: Express): Server {
           'p1_purchase_order' as source
         FROM all_orders 
         WHERE order_id LIKE 'PO%'
-          AND (current_department = 'P1 Production Queue' OR current_department = 'Layup/Plugging')
+          AND current_department = 'P1 Production Queue'
         ORDER BY due_date ASC
       `);
 

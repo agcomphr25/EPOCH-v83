@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { db } from '../../db';
-import { allOrders, stockModels, features } from '../../schema';
-import { eq, and, gte, lt, sql, inArray } from 'drizzle-orm';
+import { allOrders, stockModels } from '../../schema';
+import { eq, and, gte, lt, sql } from 'drizzle-orm';
 
 const router = Router();
 
@@ -43,59 +43,69 @@ router.get('/monthly-fulfilled', async (req, res) => {
       )
       .orderBy(allOrders.updatedAt);
 
+    // Get all feature definitions to calculate prices
+    const { storage } = await import('../../storage');
+    const allFeatures = await storage.getAllFeatures();
+    
     // Calculate features total for each order
-    const ordersWithTotals = await Promise.all(
-      orders.map(async (order) => {
-        let featuresTotal = 0;
-        
-        if (order.features && typeof order.features === 'object') {
-          const featureKeys = Object.keys(order.features);
+    const ordersWithTotals = orders.map((order) => {
+      let featuresTotal = 0;
+      
+      if (order.features && typeof order.features === 'object') {
+        // Loop through each feature selection in the order
+        Object.entries(order.features).forEach(([featureCategory, selectedValue]) => {
+          // Find the feature definition for this category
+          const featureDef = allFeatures.find(f => f.id === featureCategory || f.name === featureCategory);
           
-          if (featureKeys.length > 0) {
-            const featuresList = await db
-              .select({
-                price: features.price,
-              })
-              .from(features)
-              .where(inArray(features.id, featureKeys));
+          if (featureDef && featureDef.options) {
+            // Handle both single values and arrays
+            const values = Array.isArray(selectedValue) ? selectedValue : [selectedValue];
             
-            featuresTotal = featuresList.reduce((sum, f) => sum + (f.price || 0), 0);
+            values.forEach(value => {
+              if (value && value !== 'none') {
+                // Find the option that matches the selected value
+                const option = featureDef.options?.find((opt: any) => opt.value === value);
+                if (option && option.price) {
+                  featuresTotal += Number(option.price);
+                }
+              }
+            });
           }
-        }
+        });
+      }
 
-        const basePrice = Number(order.basePrice) || 0;
-        const shipping = Number(order.shipping) || 0;
-        
-        let orderTotal = basePrice + featuresTotal + shipping;
-        let discountAmount = 0;
-        
-        // Apply discount if applicable
-        if (order.showCustomDiscount && order.customDiscountValue) {
-          if (order.customDiscountType === 'percent') {
-            discountAmount = (basePrice + featuresTotal) * (order.customDiscountValue / 100);
-            orderTotal = (basePrice + featuresTotal) * (1 - order.customDiscountValue / 100) + shipping;
-          } else if (order.customDiscountType === 'fixed') {
-            discountAmount = order.customDiscountValue;
-            orderTotal = (basePrice + featuresTotal) - order.customDiscountValue + shipping;
-          }
+      const basePrice = Number(order.basePrice) || 0;
+      const shipping = Number(order.shipping) || 0;
+      
+      let orderTotal = basePrice + featuresTotal + shipping;
+      let discountAmount = 0;
+      
+      // Apply discount if applicable
+      if (order.showCustomDiscount && order.customDiscountValue) {
+        if (order.customDiscountType === 'percent') {
+          discountAmount = (basePrice + featuresTotal) * (order.customDiscountValue / 100);
+          orderTotal = (basePrice + featuresTotal) * (1 - order.customDiscountValue / 100) + shipping;
+        } else if (order.customDiscountType === 'fixed') {
+          discountAmount = order.customDiscountValue;
+          orderTotal = (basePrice + featuresTotal) - order.customDiscountValue + shipping;
         }
+      }
 
-        return {
-          orderId: order.orderId,
-          customerId: order.customerId,
-          orderDate: order.orderDate,
-          updatedAt: order.updatedAt,
-          basePrice,
-          featuresTotal,
-          shipping,
-          discountAmount,
-          customDiscountType: order.customDiscountType,
-          customDiscountValue: order.customDiscountValue,
-          showCustomDiscount: order.showCustomDiscount,
-          orderTotal,
-        };
-      })
-    );
+      return {
+        orderId: order.orderId,
+        customerId: order.customerId,
+        orderDate: order.orderDate,
+        updatedAt: order.updatedAt,
+        basePrice,
+        featuresTotal,
+        shipping,
+        discountAmount,
+        customDiscountType: order.customDiscountType,
+        customDiscountValue: order.customDiscountValue,
+        showCustomDiscount: order.showCustomDiscount,
+        orderTotal,
+      };
+    });
 
     // Calculate column totals
     const columnTotals = ordersWithTotals.reduce((totals, order) => ({

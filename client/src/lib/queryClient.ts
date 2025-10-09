@@ -37,7 +37,8 @@ export async function apiRequest(url: string, options: ApiRequestOptions = {}) {
                       window.location.hostname.includes('agcompepoch.xyz');
   
   // Use reasonable timeout for deployments (allow for database latency with large datasets)
-  const timeoutDuration = isDeployment ? 15000 : 30000; // 15 seconds for deployment, 30 for dev
+  // Increased dev timeout to 120s to handle scheduling of 894 orders (takes ~60-90s)
+  const timeoutDuration = isDeployment ? 15000 : 120000; // 15 seconds for deployment, 120 for dev
   
   console.log(`🌐 API Request to ${url} (timeout: ${timeoutDuration}ms, deployment: ${isDeployment})`);
 

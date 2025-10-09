@@ -107,7 +107,11 @@ import {
   type RefundRequest, type InsertRefundRequest,
   // OEM Priority Settings types
   type OemPrioritySettings, type InsertOemPrioritySettings,
-
+  // Internal messaging types
+  type InternalMessage, type InsertInternalMessage,
+  type MessageRecipient, type InsertMessageRecipient,
+  type MessageAttachment, type InsertMessageAttachment,
+  type Department, type InsertDepartment,
 
 } from "./schema";
 import { db } from "./db";
@@ -656,6 +660,17 @@ export interface IStorage {
   createPOProduct(data: InsertPOProduct): Promise<POProduct>;
   updatePOProduct(id: number, data: Partial<InsertPOProduct>): Promise<POProduct>;
   deletePOProduct(id: number): Promise<void>;
+
+  // Internal Messaging Methods
+  getAllInternalMessages(): Promise<(InternalMessage & { recipients: MessageRecipient[] })[]>;
+  getInternalMessage(id: number): Promise<(InternalMessage & { recipients: MessageRecipient[] }) | undefined>;
+  createInternalMessage(data: InsertInternalMessage): Promise<InternalMessage>;
+  getMessagesBySender(senderId: number): Promise<(InternalMessage & { recipients: MessageRecipient[] })[]>;
+  getMessagesForUser(userId: number): Promise<(InternalMessage & { recipients: MessageRecipient[] })[]>;
+  getMessagesForDepartment(departmentId: number): Promise<(InternalMessage & { recipients: MessageRecipient[] })[]>;
+  createMessageRecipient(data: InsertMessageRecipient): Promise<MessageRecipient>;
+  markMessageAsRead(messageId: number, userId: number): Promise<void>;
+  markMessageAsAccomplished(messageId: number, userId: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -6670,6 +6685,205 @@ export class DatabaseStorage implements IStorage {
         updatedAt: new Date(),
       })
       .where(eq(poProducts.id, id));
+  }
+
+  // Internal Messaging Methods Implementation
+  async getAllInternalMessages(): Promise<(InternalMessage & { recipients: MessageRecipient[] })[]> {
+    const { internalMessages, messageRecipients } = await import('./schema');
+    
+    const messages = await db
+      .select()
+      .from(internalMessages)
+      .orderBy(desc(internalMessages.sentAt));
+
+    // Fetch recipients for each message
+    const messagesWithRecipients = await Promise.all(
+      messages.map(async (message) => {
+        const recipients = await db
+          .select()
+          .from(messageRecipients)
+          .where(eq(messageRecipients.messageId, message.id));
+        
+        return {
+          ...message,
+          recipients,
+        };
+      })
+    );
+
+    return messagesWithRecipients;
+  }
+
+  async getInternalMessage(id: number): Promise<(InternalMessage & { recipients: MessageRecipient[] }) | undefined> {
+    const { internalMessages, messageRecipients } = await import('./schema');
+    
+    const [message] = await db
+      .select()
+      .from(internalMessages)
+      .where(eq(internalMessages.id, id));
+
+    if (!message) {
+      return undefined;
+    }
+
+    const recipients = await db
+      .select()
+      .from(messageRecipients)
+      .where(eq(messageRecipients.messageId, message.id));
+
+    return {
+      ...message,
+      recipients,
+    };
+  }
+
+  async createInternalMessage(data: InsertInternalMessage): Promise<InternalMessage> {
+    const { internalMessages } = await import('./schema');
+    
+    const [message] = await db
+      .insert(internalMessages)
+      .values(data)
+      .returning();
+
+    return message;
+  }
+
+  async getMessagesBySender(senderId: number): Promise<(InternalMessage & { recipients: MessageRecipient[] })[]> {
+    const { internalMessages, messageRecipients } = await import('./schema');
+    
+    const messages = await db
+      .select()
+      .from(internalMessages)
+      .where(eq(internalMessages.senderId, senderId))
+      .orderBy(desc(internalMessages.sentAt));
+
+    const messagesWithRecipients = await Promise.all(
+      messages.map(async (message) => {
+        const recipients = await db
+          .select()
+          .from(messageRecipients)
+          .where(eq(messageRecipients.messageId, message.id));
+        
+        return {
+          ...message,
+          recipients,
+        };
+      })
+    );
+
+    return messagesWithRecipients;
+  }
+
+  async getMessagesForUser(userId: number): Promise<(InternalMessage & { recipients: MessageRecipient[] })[]> {
+    const { internalMessages, messageRecipients } = await import('./schema');
+    
+    // Get all message IDs where this user is a recipient
+    const userRecipients = await db
+      .select()
+      .from(messageRecipients)
+      .where(eq(messageRecipients.userId, userId));
+
+    const messageIds = userRecipients.map(r => r.messageId);
+
+    if (messageIds.length === 0) {
+      return [];
+    }
+
+    // Get the actual messages
+    const messages = await db
+      .select()
+      .from(internalMessages)
+      .where(inArray(internalMessages.id, messageIds))
+      .orderBy(desc(internalMessages.sentAt));
+
+    const messagesWithRecipients = await Promise.all(
+      messages.map(async (message) => {
+        const recipients = await db
+          .select()
+          .from(messageRecipients)
+          .where(eq(messageRecipients.messageId, message.id));
+        
+        return {
+          ...message,
+          recipients,
+        };
+      })
+    );
+
+    return messagesWithRecipients;
+  }
+
+  async getMessagesForDepartment(departmentId: number): Promise<(InternalMessage & { recipients: MessageRecipient[] })[]> {
+    const { internalMessages, messageRecipients } = await import('./schema');
+    
+    const messages = await db
+      .select()
+      .from(internalMessages)
+      .where(eq(internalMessages.recipientDepartmentId, departmentId))
+      .orderBy(desc(internalMessages.sentAt));
+
+    const messagesWithRecipients = await Promise.all(
+      messages.map(async (message) => {
+        const recipients = await db
+          .select()
+          .from(messageRecipients)
+          .where(eq(messageRecipients.messageId, message.id));
+        
+        return {
+          ...message,
+          recipients,
+        };
+      })
+    );
+
+    return messagesWithRecipients;
+  }
+
+  async createMessageRecipient(data: InsertMessageRecipient): Promise<MessageRecipient> {
+    const { messageRecipients } = await import('./schema');
+    
+    const [recipient] = await db
+      .insert(messageRecipients)
+      .values(data)
+      .returning();
+
+    return recipient;
+  }
+
+  async markMessageAsRead(messageId: number, userId: number): Promise<void> {
+    const { messageRecipients } = await import('./schema');
+    
+    await db
+      .update(messageRecipients)
+      .set({
+        isRead: true,
+        readAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(messageRecipients.messageId, messageId),
+          eq(messageRecipients.userId, userId)
+        )
+      );
+  }
+
+  async markMessageAsAccomplished(messageId: number, userId: number): Promise<void> {
+    const { messageRecipients } = await import('./schema');
+    
+    await db
+      .update(messageRecipients)
+      .set({
+        isAccomplished: true,
+        accomplishedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(messageRecipients.messageId, messageId),
+          eq(messageRecipients.userId, userId)
+        )
+      );
   }
 
 }

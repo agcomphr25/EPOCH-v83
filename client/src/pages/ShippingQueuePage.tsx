@@ -19,7 +19,7 @@ import { fetchPdf, downloadPdf } from '@/utils/pdfUtils';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
 import { useLocation } from 'wouter';
-import FBNumberSearch from '@/components/FBNumberSearch';
+import { OrderSearchBox } from '@/components/OrderSearchBox';
 import WeeklyShippingWidget from '@/components/WeeklyShippingWidget';
 
 export default function ShippingQueuePage() {
@@ -30,6 +30,7 @@ export default function ShippingQueuePage() {
   const [labelData, setLabelData] = useState<any>(null);
   const [showLabelViewer, setShowLabelViewer] = useState(false);
   const [showShippingDialog, setShowShippingDialog] = useState(false);
+  const [highlightedOrderId, setHighlightedOrderId] = useState<string | null>(null);
   const [shippingDetails, setShippingDetails] = useState({
     weight: '10',
     length: '12',
@@ -91,31 +92,28 @@ export default function ShippingQueuePage() {
     setLocation('/kickback-tracking');
   };
 
-  // Handle order found via Facebook number search
-  const handleOrderFound = (orderId: string) => {
-    // Check if the order exists in the current Shipping queue
-    const orderExists = shippingOrders.some((order: any) => order.orderId === orderId);
+  // Handle order search selection
+  const handleOrderSearchSelect = (order: any) => {
+    const orderExists = shippingOrders.some((o: any) => o.orderId === order.orderId);
     if (orderExists) {
+      setHighlightedOrderId(order.orderId);
+      // Auto-scroll to the highlighted order
+      setTimeout(() => {
+        const element = document.getElementById(`order-${order.orderId}`);
+        if (element) {
+          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 100);
       toast({
         title: "Success",
-        description: `Order ${orderId} found in Shipping department`,
+        description: `Order ${order.orderId} highlighted in the list`,
       });
     } else {
-      // Find the order in all orders to show current department
-      const allOrder = (allOrders as any[]).find((order: any) => order.orderId === orderId);
-      if (allOrder) {
-        toast({
-          title: "Error",
-          description: `Order ${orderId} is currently in ${allOrder.currentDepartment} department, not Shipping`,
-          variant: "destructive",
-        });
-      } else {
-        toast({
-          title: "Error",
-          description: `Order ${orderId} not found`,
-          variant: "destructive",
-        });
-      }
+      toast({
+        title: "Error",
+        description: `Order ${order.orderId} is not in the Shipping department`,
+        variant: "destructive",
+      });
     }
   };
 
@@ -662,8 +660,28 @@ export default function ShippingQueuePage() {
       {/* Barcode Scanner at top */}
       <BarcodeScanner />
 
-      {/* Facebook Number Search */}
-      <FBNumberSearch onOrderFound={handleOrderFound} />
+      {/* Order Search Box */}
+      <Card>
+        <CardContent className="p-4">
+          <div className="flex items-center gap-4">
+            <OrderSearchBox 
+              orders={shippingOrders}
+              placeholder="Search orders by Order ID or FishBowl Number..."
+              onOrderSelect={handleOrderSearchSelect}
+            />
+            {highlightedOrderId && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setHighlightedOrderId(null)}
+                className="text-sm"
+              >
+                Clear highlight
+              </Button>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Bulk Shipping Actions */}
       {selectedOrders.length > 0 && (

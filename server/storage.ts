@@ -1493,7 +1493,8 @@ export class DatabaseStorage implements IStorage {
   private async calculateOrderTotalOptimized(
     order: AllOrder, 
     stockModels: StockModel[], 
-    features: Feature[]
+    features: Feature[],
+    persistentDiscounts: PersistentDiscount[]
   ): Promise<number> {
     let total = 0;
 
@@ -1636,10 +1637,8 @@ export class DatabaseStorage implements IStorage {
       }
     }
 
-    // Apply persistent discount if present
+    // Apply persistent discount if present (using cached persistentDiscounts)
     if (order.discountCode && order.discountCode !== 'none') {
-      const persistentDiscounts = await this.getAllPersistentDiscounts();
-      
       // Handle both "persistent_2" format and direct name lookup
       let discount = null;
       if (order.discountCode.startsWith('persistent_')) {
@@ -2114,16 +2113,17 @@ export class DatabaseStorage implements IStorage {
     // Create payment map for fast lookup
     const paymentMap = new Map(paymentTotals.map(p => [p.orderId, p.totalPayments]));
 
-    // PERFORMANCE FIX: Fetch stock models and features ONCE instead of per-order
+    // PERFORMANCE FIX: Fetch stock models, features, and persistent discounts ONCE instead of per-order
     const stockModels = await this.getAllStockModels();
     const features = await this.getAllFeatures();
+    const persistentDiscounts = await this.getAllPersistentDiscounts();
 
     // Process orders with payment info (using proper order total calculation)
     const ordersWithPaymentInfo = await Promise.all(ordersWithCustomers.map(async order => {
       const paymentTotal = paymentMap.get(order.orderId) || 0;
       
       // CRITICAL FIX: Use actual calculated order total with cached data for performance
-      const actualOrderTotal = await this.calculateOrderTotalOptimized(order, stockModels, features);
+      const actualOrderTotal = await this.calculateOrderTotalOptimized(order, stockModels, features, persistentDiscounts);
 
       // Fixed payment status logic using real current order total
       const isFullyPaid = paymentTotal >= actualOrderTotal && actualOrderTotal > 0;

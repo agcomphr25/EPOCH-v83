@@ -782,11 +782,10 @@ export default function LayupScheduler() {
     enabled: oemDialogOpen && !!selectedPOId
   });
 
-  // Filter stock items to only show those that need layup scheduling (in P1 Production Queue)
+  // Show all stock items for OEM priority selection - OEM priority system handles scheduling
+  // No longer filtering by P1 Production Queue since OEM priority settings are now the queue
   const eligibleStockItems = useMemo(() => {
-    return poStockItems.filter((item: any) => 
-      item.current_department === 'P1 Production Queue'
-    );
+    return poStockItems;
   }, [poStockItems]);
 
   // Apply functions for settings

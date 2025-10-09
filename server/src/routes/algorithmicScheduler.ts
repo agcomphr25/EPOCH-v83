@@ -107,10 +107,10 @@ router.post('/add-regular-orders', async (req, res) => {
     const currentAllocations = new Set(existingAssignments);
     console.log(`📋 COLLISION FIX: Pre-populated currentAllocations with ${existingAssignments.size} existing assignments`);
     
-    // Get employee data with production rates from layup_employees table
+    // Get employee data with production rates from employee_layup_settings table
     const employeeResult = await pool.query(`
       SELECT id, employee_id as name, rate as production_rate, is_active 
-      FROM layup_employees 
+      FROM employee_layup_settings 
       WHERE is_active = true AND rate > 0
     `);
     // FIXED: Properly extract rows from QueryResult object

@@ -81,19 +81,6 @@ export default function Navigation() {
     }
   };
 
-  // Filter navigation items based on user permissions
-  const filterNavItems = useCallback((items: typeof navItems) => {
-    if (!currentUser?.username) {
-      return []; // No user logged in = no nav items
-    }
-    
-    if (hasFullAccess(currentUser.username)) {
-      return items; // Admin users see everything
-    }
-    
-    return items.filter(item => hasRouteAccess(currentUser.username, item.path));
-  }, [currentUser]);
-
   const [verifiedModulesExpanded, setVerifiedModulesExpanded] = useState(false);
   const [formsReportsExpanded, setFormsReportsExpanded] = useState(false);
   const [trainingExpanded, setTrainingExpanded] = useState(false);
@@ -684,19 +671,32 @@ export default function Navigation() {
     }
   ];
 
+  // Helper function to filter navigation items based on user permissions
+  const filterByPermissions = <T extends { path: string }>(items: T[], username: string | undefined): T[] => {
+    if (!username) {
+      return []; // No user logged in = no nav items
+    }
+    
+    if (hasFullAccess(username)) {
+      return items; // Admin users see everything
+    }
+    
+    return items.filter(item => hasRouteAccess(username, item.path));
+  };
+
   // Apply permission filtering to all navigation arrays
-  const filteredNavItems = useMemo(() => filterNavItems(navItems), [filterNavItems, navItems]);
-  const filteredInventoryItems = useMemo(() => filterNavItems(inventoryItems), [filterNavItems, inventoryItems]);
-  const filteredFormsReportsItems = useMemo(() => filterNavItems(formsReportsItems), [filterNavItems, formsReportsItems]);
-  const filteredQcMaintenanceItems = useMemo(() => filterNavItems(qcMaintenanceItems), [filterNavItems, qcMaintenanceItems]);
-  const filteredTrainingItems = useMemo(() => filterNavItems(trainingItems), [filterNavItems, trainingItems]);
-  const filteredEmployeesItems = useMemo(() => filterNavItems(employeesItems), [filterNavItems, employeesItems]);
-  const filteredFinanceItems = useMemo(() => filterNavItems(financeItems), [filterNavItems, financeItems]);
-  const filteredUserDashboardsItems = useMemo(() => filterNavItems(userDashboardsItems), [filterNavItems, userDashboardsItems]);
-  const filteredPurchaseOrdersItems = useMemo(() => filterNavItems(purchaseOrdersItems), [filterNavItems, purchaseOrdersItems]);
-  const filteredVerifiedModulesItems = useMemo(() => filterNavItems(verifiedModulesItems), [filterNavItems, verifiedModulesItems]);
-  const filteredProductionSchedulingItems = useMemo(() => filterNavItems(productionSchedulingItems), [filterNavItems, productionSchedulingItems]);
-  const filteredDepartmentQueueItems = useMemo(() => filterNavItems(departmentQueueItems), [filterNavItems, departmentQueueItems]);
+  const filteredNavItems = useMemo(() => filterByPermissions(navItems, currentUser?.username), [navItems, currentUser?.username]);
+  const filteredInventoryItems = useMemo(() => filterByPermissions(inventoryItems, currentUser?.username), [inventoryItems, currentUser?.username]);
+  const filteredFormsReportsItems = useMemo(() => filterByPermissions(formsReportsItems, currentUser?.username), [formsReportsItems, currentUser?.username]);
+  const filteredQcMaintenanceItems = useMemo(() => filterByPermissions(qcMaintenanceItems, currentUser?.username), [qcMaintenanceItems, currentUser?.username]);
+  const filteredTrainingItems = useMemo(() => filterByPermissions(trainingItems, currentUser?.username), [trainingItems, currentUser?.username]);
+  const filteredEmployeesItems = useMemo(() => filterByPermissions(employeesItems, currentUser?.username), [employeesItems, currentUser?.username]);
+  const filteredFinanceItems = useMemo(() => filterByPermissions(financeItems, currentUser?.username), [financeItems, currentUser?.username]);
+  const filteredUserDashboardsItems = useMemo(() => filterByPermissions(userDashboardsItems, currentUser?.username), [userDashboardsItems, currentUser?.username]);
+  const filteredPurchaseOrdersItems = useMemo(() => filterByPermissions(purchaseOrdersItems, currentUser?.username), [purchaseOrdersItems, currentUser?.username]);
+  const filteredVerifiedModulesItems = useMemo(() => filterByPermissions(verifiedModulesItems, currentUser?.username), [verifiedModulesItems, currentUser?.username]);
+  const filteredProductionSchedulingItems = useMemo(() => filterByPermissions(productionSchedulingItems, currentUser?.username), [productionSchedulingItems, currentUser?.username]);
+  const filteredDepartmentQueueItems = useMemo(() => filterByPermissions(departmentQueueItems, currentUser?.username), [departmentQueueItems, currentUser?.username]);
 
   const isVerifiedModulesActive = verifiedModulesItems.some(item => location === item.path);
   const isFormsReportsActive = formsReportsItems.some(item => location === item.path);
@@ -767,7 +767,7 @@ export default function Navigation() {
 
           {/* Navigation Links */}
           <nav className="flex flex-wrap items-center gap-2 lg:gap-4">
-            {navItems.map((item) => {
+            {filteredNavItems.map((item) => {
               const Icon = item.icon;
               const isActive = location === item.path;
 
@@ -800,6 +800,7 @@ export default function Navigation() {
             </div>
 
             {/* Forms & Reports Dropdown */}
+            {filteredFormsReportsItems.length > 0 && (
             <div className="relative">
               <Button
                 variant={isFormsReportsActive ? "default" : "ghost"}
@@ -820,7 +821,7 @@ export default function Navigation() {
 
               {formsReportsExpanded && (
                 <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
-                  {formsReportsItems.map((item) => {
+                  {filteredFormsReportsItems.map((item) => {
                     const Icon = item.icon;
                     const isActive = location === item.path;
 
@@ -842,8 +843,10 @@ export default function Navigation() {
                 </div>
               )}
             </div>
+            )}
 
             {/* Training Dropdown */}
+            {filteredTrainingItems.length > 0 && (
             <div className="relative">
               <Button
                 variant={isTrainingActive ? "default" : "ghost"}
@@ -864,7 +867,7 @@ export default function Navigation() {
 
               {trainingExpanded && (
                 <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
-                  {trainingItems.map((item) => {
+                  {filteredTrainingItems.map((item) => {
                     const Icon = item.icon;
                     const isActive = location === item.path;
 
@@ -886,8 +889,10 @@ export default function Navigation() {
                 </div>
               )}
             </div>
+            )}
 
             {/* Inventory Dropdown */}
+            {filteredInventoryItems.length > 0 && (
             <div className="relative">
               <Button
                 variant={isInventoryActive ? "default" : "ghost"}
@@ -908,7 +913,7 @@ export default function Navigation() {
 
               {inventoryExpanded && (
                 <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
-                  {inventoryItems.map((item) => {
+                  {filteredInventoryItems.map((item) => {
                     const Icon = item.icon;
                     const isActive = location === item.path;
 
@@ -930,8 +935,10 @@ export default function Navigation() {
                 </div>
               )}
             </div>
+            )}
 
             {/* QC & Maintenance Dropdown */}
+            {filteredQcMaintenanceItems.length > 0 && (
             <div className="relative">
               <Button
                 variant={isQcMaintenanceActive ? "default" : "ghost"}
@@ -952,7 +959,7 @@ export default function Navigation() {
 
               {qcMaintenanceExpanded && (
                 <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
-                  {qcMaintenanceItems.map((item) => {
+                  {filteredQcMaintenanceItems.map((item) => {
                     const Icon = item.icon;
                     const isActive = location === item.path;
 
@@ -974,8 +981,10 @@ export default function Navigation() {
                 </div>
               )}
             </div>
+            )}
 
             {/* Employees Dropdown */}
+            {filteredEmployeesItems.length > 0 && (
             <div className="relative">
               <Button
                 variant={isEmployeesActive ? "default" : "ghost"}
@@ -996,7 +1005,7 @@ export default function Navigation() {
 
               {employeesExpanded && (
                 <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
-                  {employeesItems.map((item) => {
+                  {filteredEmployeesItems.map((item) => {
                     const Icon = item.icon;
                     const isActive = location === item.path;
 
@@ -1018,8 +1027,10 @@ export default function Navigation() {
                 </div>
               )}
             </div>
+            )}
 
             {/* Finance Dropdown */}
+            {filteredFinanceItems.length > 0 && (
             <div className="relative">
               <Button
                 variant={isFinanceActive ? "default" : "ghost"}
@@ -1040,7 +1051,7 @@ export default function Navigation() {
 
               {financeExpanded && (
                 <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
-                  {financeItems.map((item) => {
+                  {filteredFinanceItems.map((item) => {
                     const Icon = item.icon;
                     const isActive = location === item.path;
 
@@ -1062,8 +1073,10 @@ export default function Navigation() {
                 </div>
               )}
             </div>
+            )}
 
             {/* Purchase Orders Dropdown */}
+            {filteredPurchaseOrdersItems.length > 0 && (
             <div className="relative">
               <Button
                 variant={isPurchaseOrdersActive ? "default" : "ghost"}
@@ -1084,7 +1097,7 @@ export default function Navigation() {
 
               {purchaseOrdersExpanded && (
                 <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
-                  {purchaseOrdersItems.map((item) => {
+                  {filteredPurchaseOrdersItems.map((item) => {
                     const Icon = item.icon;
                     const isActive = location === item.path;
 
@@ -1106,8 +1119,10 @@ export default function Navigation() {
                 </div>
               )}
             </div>
+            )}
 
             {/* Production Scheduling Dropdown */}
+            {filteredProductionSchedulingItems.length > 0 && (
             <div className="relative">
               <Button
                 variant={isProductionSchedulingActive ? "default" : "ghost"}
@@ -1128,7 +1143,7 @@ export default function Navigation() {
 
               {productionSchedulingExpanded && (
                 <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
-                  {productionSchedulingItems.map((item) => {
+                  {filteredProductionSchedulingItems.map((item) => {
                     const Icon = item.icon;
                     const isActive = location === item.path;
 
@@ -1150,8 +1165,10 @@ export default function Navigation() {
                 </div>
               )}
             </div>
+            )}
 
             {/* Department Manager Dropdown */}
+            {filteredDepartmentQueueItems.length > 0 && (
             <div className="relative">
               <Button
                 variant={isDepartmentQueueActive ? "default" : "ghost"}
@@ -1172,7 +1189,7 @@ export default function Navigation() {
 
               {departmentQueueExpanded && (
                 <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[250px]">
-                  {departmentQueueItems.map((item) => {
+                  {filteredDepartmentQueueItems.map((item) => {
                     const Icon = item.icon;
                     const isActive = location === item.path;
 
@@ -1194,8 +1211,10 @@ export default function Navigation() {
                 </div>
               )}
             </div>
+            )}
 
             {/* Verified Modules Dropdown */}
+            {filteredVerifiedModulesItems.length > 0 && (
             <div className="relative">
               <Button
                 variant={isVerifiedModulesActive ? "default" : "ghost"}
@@ -1216,7 +1235,7 @@ export default function Navigation() {
 
               {verifiedModulesExpanded && (
                 <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
-                  {verifiedModulesItems.map((item) => {
+                  {filteredVerifiedModulesItems.map((item) => {
                     const Icon = item.icon;
                     const isActive = location === item.path;
 
@@ -1238,6 +1257,7 @@ export default function Navigation() {
                 </div>
               )}
             </div>
+            )}
 
 
           </nav>

@@ -4473,19 +4473,19 @@ export default function LayupScheduler() {
                       <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
                         {isCurrentWeekLocked() 
                           ? `Current week (${format(currentDate, 'MM/dd')}) is locked with assignments • ${Object.keys(orderAssignments).length} total orders scheduled`
-                          : `${processedOrders.filter(o => !orderAssignments[o.orderId]).length} orders ready to schedule • ${Object.keys(orderAssignments).length} orders currently scheduled`
+                          : `${processedOrders.filter(o => !orderAssignments[o.orderId] && o.source !== 'production_order' && o.source !== 'p1_purchase_order').length} regular orders + ${processedOrders.filter(o => !orderAssignments[o.orderId] && (o.source === 'production_order' || o.source === 'p1_purchase_order')).length} production orders ready • ${Object.keys(orderAssignments).length} scheduled`
                         }
                       </p>
                     </div>
                     <div className="space-x-2">
                       <Button
                         onClick={addRegularOrders}
-                        disabled={processedOrders.filter(o => !orderAssignments[o.orderId]).length === 0}
+                        disabled={processedOrders.filter(o => !orderAssignments[o.orderId] && o.source !== 'production_order' && o.source !== 'p1_purchase_order').length === 0}
                         className="bg-green-600 hover:bg-green-700"
                         size="sm"
                       >
                         <Plus className="w-4 h-4 mr-1" />
-                        Add Regular Orders ({processedOrders.filter(o => !orderAssignments[o.orderId]).length} orders)
+                        Add Regular Orders ({processedOrders.filter(o => !orderAssignments[o.orderId] && o.source !== 'production_order' && o.source !== 'p1_purchase_order').length} orders)
                       </Button>
                       <Button
                         onClick={clearSchedule}

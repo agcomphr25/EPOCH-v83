@@ -5,6 +5,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Package, TrendingUp, Calendar, Search, Truck, CheckCircle, XCircle } from 'lucide-react';
 import { getCurrentCompanyWeek, formatWeekRange, isDateInCompanyWeek } from '@shared/weekUtils';
 import { format } from 'date-fns';
@@ -186,17 +187,85 @@ export default function ShippingTracker() {
         </CardContent>
       </Card>
 
-      {/* Search and Detailed Shipping Information */}
+      {/* View Specific Week - Moved under Current Week Summary */}
       <Card className="mb-6">
         <CardHeader>
-          <CardTitle className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Truck className="h-5 w-5" />
-              Shipping Details
-            </div>
+          <CardTitle className="flex items-center gap-2">
+            <TrendingUp className="h-5 w-5" />
+            View Specific Week
           </CardTitle>
         </CardHeader>
         <CardContent>
+          <div className="flex items-center gap-4 flex-wrap">
+            <div className="flex items-center gap-2">
+              <label className="text-sm font-medium whitespace-nowrap">Year:</label>
+              <Select value={selectedYear.toString()} onValueChange={(v) => setSelectedYear(parseInt(v))}>
+                <SelectTrigger className="w-32">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {yearOptions.map(year => (
+                    <SelectItem key={year} value={year.toString()}>{year}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center gap-2">
+              <label className="text-sm font-medium whitespace-nowrap">Week:</label>
+              <Select value={selectedWeek.toString()} onValueChange={(v) => setSelectedWeek(parseInt(v))}>
+                <SelectTrigger className="w-32">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {weekOptions.map(week => (
+                    <SelectItem key={week} value={week.toString()}>Week {week}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="text-sm text-gray-600">
+              {formatWeekRange(selectedWeek, selectedYear)}
+            </div>
+          </div>
+
+          <div className="mt-6 p-4 bg-gray-50 rounded-lg">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-sm text-gray-600">Stocks Shipped</div>
+                <div className="text-3xl font-bold text-blue-600">{selectedWeekStats.stocksShipped}</div>
+              </div>
+              <div className="text-right">
+                <div className="text-sm text-gray-600">Orders</div>
+                <div className="text-xl font-semibold text-gray-700">{selectedWeekStats.orders.length}</div>
+              </div>
+            </div>
+            {selectedWeekStats.orders.length > 0 && (
+              <div className="mt-4">
+                <div className="text-xs text-gray-600 mb-2">Order IDs:</div>
+                <div className="flex flex-wrap gap-1">
+                  {selectedWeekStats.orders.map(orderId => (
+                    <span key={orderId} className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs">
+                      {orderId}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Accordion Section for Shipping Details and All Weeks */}
+      <Accordion type="multiple" className="space-y-4" defaultValue={["shipping-details"]}>
+        {/* Shipping Details Accordion */}
+        <AccordionItem value="shipping-details" className="border rounded-lg">
+          <AccordionTrigger className="px-6 hover:no-underline">
+            <div className="flex items-center gap-2">
+              <Truck className="h-5 w-5" />
+              <span className="font-semibold">Shipping Details</span>
+            </div>
+          </AccordionTrigger>
+          <AccordionContent className="px-6 pb-6">
           {/* Search Input */}
           <div className="mb-4">
             <div className="relative">
@@ -293,121 +362,57 @@ export default function ShippingTracker() {
               Enter a search term to view detailed shipping information
             </div>
           )}
-        </CardContent>
-      </Card>
+          </AccordionContent>
+        </AccordionItem>
 
-      {/* Week Selector */}
-      <Card className="mb-6">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <TrendingUp className="h-5 w-5" />
-            View Specific Week
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center gap-4 flex-wrap">
+        {/* All Weeks Accordion */}
+        <AccordionItem value="all-weeks" className="border rounded-lg">
+          <AccordionTrigger className="px-6 hover:no-underline">
             <div className="flex items-center gap-2">
-              <label className="text-sm font-medium whitespace-nowrap">Year:</label>
-              <Select value={selectedYear.toString()} onValueChange={(v) => setSelectedYear(parseInt(v))}>
-                <SelectTrigger className="w-32">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {yearOptions.map(year => (
-                    <SelectItem key={year} value={year.toString()}>{year}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Calendar className="h-5 w-5" />
+              <span className="font-semibold">All Weeks</span>
             </div>
-            <div className="flex items-center gap-2">
-              <label className="text-sm font-medium whitespace-nowrap">Week:</label>
-              <Select value={selectedWeek.toString()} onValueChange={(v) => setSelectedWeek(parseInt(v))}>
-                <SelectTrigger className="w-32">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {weekOptions.map(week => (
-                    <SelectItem key={week} value={week.toString()}>Week {week}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="text-sm text-gray-600">
-              {formatWeekRange(selectedWeek, selectedYear)}
-            </div>
-          </div>
-
-          <div className="mt-6 p-4 bg-gray-50 rounded-lg">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-sm text-gray-600">Stocks Shipped</div>
-                <div className="text-3xl font-bold text-blue-600">{selectedWeekStats.stocksShipped}</div>
-              </div>
-              <div className="text-right">
-                <div className="text-sm text-gray-600">Orders</div>
-                <div className="text-xl font-semibold text-gray-700">{selectedWeekStats.orders.length}</div>
-              </div>
-            </div>
-            {selectedWeekStats.orders.length > 0 && (
-              <div className="mt-4">
-                <div className="text-xs text-gray-600 mb-2">Order IDs:</div>
-                <div className="flex flex-wrap gap-1">
-                  {selectedWeekStats.orders.map(orderId => (
-                    <span key={orderId} className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs">
-                      {orderId}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Weekly Stats Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle>All Weeks</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <div className="text-center py-8 text-gray-500">Loading shipping data...</div>
-          ) : weeklyStats.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">No fulfilled orders found</div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Week</TableHead>
-                  <TableHead>Date Range</TableHead>
-                  <TableHead>Stocks Shipped</TableHead>
-                  <TableHead>Orders</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {weeklyStats.map(stat => (
-                  <TableRow 
-                    key={`${stat.year}-W${stat.week}`}
-                    className={stat.week === currentWeek && stat.year === currentYear ? 'bg-blue-50' : ''}
-                  >
-                    <TableCell className="font-medium">
-                      Week {stat.week}, {stat.year}
-                      {stat.week === currentWeek && stat.year === currentYear && (
-                        <span className="ml-2 text-xs bg-blue-600 text-white px-2 py-0.5 rounded">Current</span>
-                      )}
-                    </TableCell>
-                    <TableCell>{formatWeekRange(stat.week, stat.year)}</TableCell>
-                    <TableCell>
-                      <span className="text-lg font-semibold text-blue-600">{stat.stocksShipped}</span>
-                    </TableCell>
-                    <TableCell className="text-sm text-gray-600">{stat.orders.join(', ')}</TableCell>
+          </AccordionTrigger>
+          <AccordionContent className="px-6 pb-6">
+            {isLoading ? (
+              <div className="text-center py-8 text-gray-500">Loading shipping data...</div>
+            ) : weeklyStats.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">No fulfilled orders found</div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Week</TableHead>
+                    <TableHead>Date Range</TableHead>
+                    <TableHead>Stocks Shipped</TableHead>
+                    <TableHead>Orders</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
+                </TableHeader>
+                <TableBody>
+                  {weeklyStats.map(stat => (
+                    <TableRow 
+                      key={`${stat.year}-W${stat.week}`}
+                      className={stat.week === currentWeek && stat.year === currentYear ? 'bg-blue-50' : ''}
+                    >
+                      <TableCell className="font-medium">
+                        Week {stat.week}, {stat.year}
+                        {stat.week === currentWeek && stat.year === currentYear && (
+                          <span className="ml-2 text-xs bg-blue-600 text-white px-2 py-0.5 rounded">Current</span>
+                        )}
+                      </TableCell>
+                      <TableCell>{formatWeekRange(stat.week, stat.year)}</TableCell>
+                      <TableCell>
+                        <span className="text-lg font-semibold text-blue-600">{stat.stocksShipped}</span>
+                      </TableCell>
+                      <TableCell className="text-sm text-gray-600">{stat.orders.join(', ')}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
     </div>
   );
 }

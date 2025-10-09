@@ -1,0 +1,647 @@
+ 
+      /////////////////////
+   ///////////////////////////
+  ////////@@@@@@@//////////////
+  ////////@@@@@@@//////////////
+  ////////@@@@@@@//////////////        Curious and driven?
+  ///////////////@@@@@@@///////        Work with us!
+  ///////////////@@@@@@@///////
+  ///////////////@@@@@@@///////        https://join.replit.com/hack.with.us
+  ////////@@@@@@@//////////////
+  ////////@@@@@@@//////////////
+  ////////@@@@@@#//////////////
+   ///////////////////////////
+      /////////////////////
+      
+ [LaunchDarkly] LaunchDarkly client initialized
+agcomphr-10-09:1 Banner not shown: beforeinstallpromptevent.preventDefault() called. The page must call beforeinstallpromptevent.prompt() to show the banner.
+ React initialized: [object Object]
+ React hooks: [object Object]
+ App component is rendering...
+ Environment: development
+ Base URL: /
+ App component is rendering...
+ Environment: development
+ Base URL: /
+ React initialized: Object
+ React hooks: Object
+ App component is rendering...
+ Environment: development
+ Base URL: /
+ App component is rendering...
+ Environment: development
+ Base URL: /
+ OrderEntry component rendering...
+ 💰 Rails calculation - No rails selected
+ 💰 Price calculation - Misc items total: 0
+ 💰 Price calculation - Final total: 0
+ 💰 Subtotal recalculated: 0
+ 💰 Discount recalculated: 0
+ 💰 Discount details: null
+ 💰 Base model price: 0
+ 💰 Subtotal price: 0
+ 💰 Total recalculated: 0
+ 🔧 Stock Model Dropdown Debug:
+   - Current modelId: 
+   - ModelOptions length: 0
+   - RenderKey: 0
+   - No models available in dropdown
+ 🔧 Rails feature found: false undefined
+ 🔧 Rails state debug: Object
+ 🎨 Paint state debug: Object
+ OrderEntry component rendering...
+ 💰 Rails calculation - No rails selected
+ 💰 Price calculation - Misc items total: 0
+ 💰 Price calculation - Final total: 0
+ 💰 Subtotal recalculated: 0
+ 💰 Discount recalculated: 0
+ 💰 Discount details: null
+ 💰 Base model price: 0
+ 💰 Subtotal price: 0
+ 💰 Total recalculated: 0
+ 🔧 Stock Model Dropdown Debug:
+   - Current modelId: 
+   - ModelOptions length: 0
+   - RenderKey: 0
+   - No models available in dropdown
+ 🔧 Rails feature found: false undefined
+ 🔧 Rails state debug: Object
+ 🎨 Paint state debug: Object
+ 🔍 Loading stock models from API...
+ 🌐 API Request to /api/stock-models (timeout: 30000ms, deployment: false)
+ 🌐 API Request to /api/features (timeout: 30000ms, deployment: false)
+ 🌐 API Request to /api/short-term-sales (timeout: 30000ms, deployment: false)
+ 🌐 API Request to /api/persistent-discounts (timeout: 30000ms, deployment: false)
+ 🔍 Loading stock models from API...
+ 🌐 API Request to /api/stock-models (timeout: 30000ms, deployment: false)
+ 🌐 API Request to /api/features (timeout: 30000ms, deployment: false)
+ 🌐 API Request to /api/short-term-sales (timeout: 30000ms, deployment: false)
+ 🌐 API Request to /api/persistent-discounts (timeout: 30000ms, deployment: false)
+ OrderEntry component rendering...
+ 🔧 Stock Model Dropdown Debug:
+   - Current modelId: 
+   - ModelOptions length: 0
+   - RenderKey: 0
+   - No models available in dropdown
+ 🔧 Rails feature found: false undefined
+ 🔧 Rails state debug: Object
+ 🎨 Paint state debug: Object
+ OrderEntry component rendering...
+ 🔧 Stock Model Dropdown Debug:
+   - Current modelId: 
+   - ModelOptions length: 0
+   - RenderKey: 0
+   - No models available in dropdown
+ 🔧 Rails feature found: false undefined
+ 🔧 Rails state debug: Object
+ 🎨 Paint state debug: Object
+ ✅ API Response from /api/short-term-sales: 200
+ ✅ API Response from /api/persistent-discounts: 200
+ ✅ API Response from /api/stock-models: 200
+ 💳 Discount options processed: 9 total discounts
+ 💳 Discount options: Array(9)
+ ✅ API Response from /api/features: 200
+ 🔍 Raw models from API: Array(47)
+ 🔍 Total models received: 47
+ 🔍 First model sample: Object
+ 🔍 Model properties: Array(9)
+ 🔍 Active models filtered: 44
+ 🔍 Active models IDs: Array(44)
+ 🔍 Active models display names: Array(44)
+ ✅ Stock models loaded successfully: 44
+ OrderEntry component rendering...
+ 💰 Rails calculation - No rails selected
+ 💰 Price calculation - Misc items total: 0
+ 💰 Price calculation - Final total: 0
+ 💰 Subtotal recalculated: 0
+ 💰 Discount recalculated: 0
+ 💰 Discount details: null
+ 💰 Base model price: 0
+ 💰 Subtotal price: 0
+ 🔧 Stock Model Dropdown Debug:
+   - Current modelId: 
+   - ModelOptions length: 44
+   - RenderKey: 0
+   - Available models: Array(5)
+   - Selected model found: false undefined
+ 🔧 Rails feature found: false undefined
+ 🔧 Rails state debug: Object
+ 🎨 Paint state debug: Object
+ OrderEntry component rendering...
+ 💰 Rails calculation - No rails selected
+ 💰 Price calculation - Misc items total: 0
+ 💰 Price calculation - Final total: 0
+ 💰 Subtotal recalculated: 0
+ 💰 Discount recalculated: 0
+ 💰 Discount details: null
+ 💰 Base model price: 0
+ 💰 Subtotal price: 0
+ 🔧 Stock Model Dropdown Debug:
+   - Current modelId: 
+   - ModelOptions length: 44
+   - RenderKey: 0
+   - Available models: Array(5)
+   - Selected model found: false undefined
+ 🔧 Rails feature found: false undefined
+ 🔧 Rails state debug: Object
+ 🎨 Paint state debug: Object
+ 🔍 Raw features data from API: Array(16)
+ 🔍 Features array length: 16
+ 🔍 First feature sample: Object
+ 🔍 Available feature IDs: action_length, action, bottom_metal, barrel_inlet, base_colors, custom_graphics, protective_coatings, special_effects, camo_patterns, premium_patterns, qd_accessory, length_of_pull, rail_accessory, texture_options, swivel_studs, other_options
+ 🔍 setFeatureDefs called with: 16 features
+ OrderEntry component rendering...
+ 💰 Rails calculation - No rails selected
+ 💰 Price calculation - Misc items total: 0
+ 💰 Price calculation - Final total: 0
+ 💰 Subtotal recalculated: 0
+ 🔧 Stock Model Dropdown Debug:
+   - Current modelId: 
+   - ModelOptions length: 44
+   - RenderKey: 0
+   - Available models: Array(5)
+   - Selected model found: false undefined
+ 🔧 Rails feature found: true Rails
+ 🔧 Rails state debug: Object
+ 🎨 Paint state debug: Object
+ OrderEntry component rendering...
+ 💰 Rails calculation - No rails selected
+ 💰 Price calculation - Misc items total: 0
+ 💰 Price calculation - Final total: 0
+ 💰 Subtotal recalculated: 0
+ 🔧 Stock Model Dropdown Debug:
+   - Current modelId: 
+   - ModelOptions length: 44
+   - RenderKey: 0
+   - Available models: Array(5)
+   - Selected model found: false undefined
+ 🔧 Rails feature found: true Rails
+ 🔧 Rails state debug: Object
+ 🎨 Paint state debug: Object
+ Available feature IDs: Array(16)
+ 🌐 API Request to /api/orders/generate-id (timeout: 30000ms, deployment: false)
+ ✅ Set default texture to: No Texture with value: no_texture
+ ✅ Set default swivel studs to: Standard Swivel Studs with value: standard_swivel_studs
+ ✅ Set default rail accessory to: No Rail with value: no_rail
+ 🔍 Looking for LOP feature in featureDefs: Array(16)
+ 🔍 Found LOP feature: Object
+ 🔍 LOP feature options: Array(4)
+ 🔍 Found LOP default option: undefined
+ ❌ Could not find LOP default option
+ ✅ Set default QD accessory to: No QDs with value: no_qds
+ ✅ API Response from /api/short-term-sales: 200
+ ✅ API Response from /api/persistent-discounts: 200
+ OrderEntry component rendering...
+ 💰 Rails calculation - current rails: Array(1)
+ 💰 Rails calculation - found feature: Rails
+ 💰 Rails calculation - available options: Array(7)
+ 💰 Rails calculation - NO PRICE FOUND for: no_rail
+ 💰 Rails calculation - Total rails price: 0
+ 💰 Price calculation - Misc items total: 0
+ 💰 Price calculation - Final total: 0
+ 💰 Subtotal recalculated: 0
+ 🔧 Stock Model Dropdown Debug:
+   - Current modelId: 
+   - ModelOptions length: 44
+   - RenderKey: 0
+   - Available models: Array(5)
+   - Selected model found: false undefined
+ 🔧 Rails feature found: true Rails
+ 🔧 Rails state debug: Object
+ 🔧 Rails option lookup: no_rail → No Rail
+ 🎨 Paint state debug: Object
+ OrderEntry component rendering...
+ 💰 Rails calculation - current rails: Array(1)
+ 💰 Rails calculation - found feature: Rails
+ 💰 Rails calculation - available options: Array(7)
+ 💰 Rails calculation - NO PRICE FOUND for: no_rail
+ 💰 Rails calculation - Total rails price: 0
+ 💰 Price calculation - Misc items total: 0
+ 💰 Price calculation - Final total: 0
+ 💰 Subtotal recalculated: 0
+ 🔧 Stock Model Dropdown Debug:
+   - Current modelId: 
+   - ModelOptions length: 44
+   - RenderKey: 0
+   - Available models: Array(5)
+   - Selected model found: false undefined
+ 🔧 Rails feature found: true Rails
+ 🔧 Rails state debug: Object
+ 🔧 Rails option lookup: no_rail → No Rail
+ 🎨 Paint state debug: Object
+ 💳 Discount options processed: 9 total discounts
+ 💳 Discount options: Array(9)
+ ✅ API Response from /api/features: 200
+ ✅ API Response from /api/stock-models: 200
+ OrderEntry component rendering...
+ 💰 Discount recalculated: 0
+ 💰 Discount details: null
+ 💰 Base model price: 0
+ 💰 Subtotal price: 0
+ 🔧 Stock Model Dropdown Debug:
+   - Current modelId: 
+   - ModelOptions length: 44
+   - RenderKey: 0
+   - Available models: Array(5)
+   - Selected model found: false undefined
+ 🔧 Rails feature found: true Rails
+ 🔧 Rails state debug: Object
+ 🔧 Rails option lookup: no_rail → No Rail
+ 🎨 Paint state debug: Object
+ OrderEntry component rendering...
+ 💰 Discount recalculated: 0
+ 💰 Discount details: null
+ 💰 Base model price: 0
+ 💰 Subtotal price: 0
+ 🔧 Stock Model Dropdown Debug:
+   - Current modelId: 
+   - ModelOptions length: 44
+   - RenderKey: 0
+   - Available models: Array(5)
+   - Selected model found: false undefined
+ 🔧 Rails feature found: true Rails
+ 🔧 Rails state debug: Object
+ 🔧 Rails option lookup: no_rail → No Rail
+ 🎨 Paint state debug: Object
+ 🔍 Raw features data from API: Array(16)
+ 🔍 Features array length: 16
+ 🔍 First feature sample: Object
+ 🔍 Available feature IDs: action_length, action, bottom_metal, barrel_inlet, base_colors, custom_graphics, protective_coatings, special_effects, camo_patterns, premium_patterns, qd_accessory, length_of_pull, rail_accessory, texture_options, swivel_studs, other_options
+ 🔍 setFeatureDefs called with: 16 features
+ 🔍 Raw models from API: Array(47)
+ 🔍 Total models received: 47
+ 🔍 First model sample: Object
+ 🔍 Model properties: Array(9)
+ 🔍 Active models filtered: 44
+ 🔍 Active models IDs: Array(44)
+ 🔍 Active models display names: Array(44)
+ ✅ Stock models loaded successfully: 44
+ OrderEntry component rendering...
+ 💰 Rails calculation - current rails: Array(1)
+ 💰 Rails calculation - found feature: Rails
+ 💰 Rails calculation - available options: Array(7)
+ 💰 Rails calculation - NO PRICE FOUND for: no_rail
+ 💰 Rails calculation - Total rails price: 0
+ 💰 Price calculation - Misc items total: 0
+ 💰 Price calculation - Final total: 0
+ 💰 Subtotal recalculated: 0
+ 💰 Discount recalculated: 0
+ 💰 Discount details: null
+ 💰 Base model price: 0
+ 💰 Subtotal price: 0
+ 🔧 Stock Model Dropdown Debug:
+   - Current modelId: 
+   - ModelOptions length: 44
+   - RenderKey: 0
+   - Available models: Array(5)
+   - Selected model found: false undefined
+ 🔧 Rails feature found: true Rails
+ 🔧 Rails state debug: Object
+ 🔧 Rails option lookup: no_rail → No Rail
+ 🎨 Paint state debug: Object
+ OrderEntry component rendering...
+ 💰 Rails calculation - current rails: Array(1)
+ 💰 Rails calculation - found feature: Rails
+ 💰 Rails calculation - available options: Array(7)
+ 💰 Rails calculation - NO PRICE FOUND for: no_rail
+ 💰 Rails calculation - Total rails price: 0
+ 💰 Price calculation - Misc items total: 0
+ 💰 Price calculation - Final total: 0
+ 💰 Subtotal recalculated: 0
+ 💰 Discount recalculated: 0
+ 💰 Discount details: null
+ 💰 Base model price: 0
+ 💰 Subtotal price: 0
+ 🔧 Stock Model Dropdown Debug:
+   - Current modelId: 
+   - ModelOptions length: 44
+   - RenderKey: 0
+   - Available models: Array(5)
+   - Selected model found: false undefined
+ 🔧 Rails feature found: true Rails
+ 🔧 Rails state debug: Object
+ 🔧 Rails option lookup: no_rail → No Rail
+ 🎨 Paint state debug: Object
+ Available feature IDs: Array(16)
+ 🔍 Looking for LOP feature in featureDefs: Array(16)
+ 🔍 Found LOP feature: Object
+ 🔍 LOP feature options: Array(4)
+ 🔍 Found LOP default option: undefined
+ ❌ Could not find LOP default option
+ ✅ API Response from /api/orders/generate-id: 200
+ OrderEntry component rendering...
+ 🔧 Stock Model Dropdown Debug:
+   - Current modelId: 
+   - ModelOptions length: 44
+   - RenderKey: 0
+   - Available models: Array(5)
+   - Selected model found: false undefined
+ 🔧 Rails feature found: true Rails
+ 🔧 Rails state debug: Object
+ 🔧 Rails option lookup: no_rail → No Rail
+ 🎨 Paint state debug: Object
+ OrderEntry component rendering...
+ 🔧 Stock Model Dropdown Debug:
+   - Current modelId: 
+   - ModelOptions length: 44
+   - RenderKey: 0
+   - Available models: Array(5)
+   - Selected model found: false undefined
+ 🔧 Rails feature found: true Rails
+ 🔧 Rails state debug: Object
+ 🔧 Rails option lookup: no_rail → No Rail
+ 🎨 Paint state debug: Object
+ 🌐 API Request to /api/orders/EJ002/payments (timeout: 30000ms, deployment: false)
+ OrderEntry component rendering...
+ 🔧 Stock Model Dropdown Debug:
+   - Current modelId: 
+   - ModelOptions length: 44
+   - RenderKey: 0
+   - Available models: Array(5)
+   - Selected model found: false undefined
+ 🔧 Rails feature found: true Rails
+ 🔧 Rails state debug: Object
+ 🔧 Rails option lookup: no_rail → No Rail
+ 🎨 Paint state debug: Object
+ OrderEntry component rendering...
+ 🔧 Stock Model Dropdown Debug:
+   - Current modelId: 
+   - ModelOptions length: 44
+   - RenderKey: 0
+   - Available models: Array(5)
+   - Selected model found: false undefined
+ 🔧 Rails feature found: true Rails
+ 🔧 Rails state debug: Object
+ 🔧 Rails option lookup: no_rail → No Rail
+ 🎨 Paint state debug: Object
+ OrderEntry component rendering...
+ 🔧 Stock Model Dropdown Debug:
+   - Current modelId: 
+   - ModelOptions length: 44
+   - RenderKey: 0
+   - Available models: Array(5)
+   - Selected model found: false undefined
+ 🔧 Rails feature found: true Rails
+ 🔧 Rails state debug: Object
+ 🔧 Rails option lookup: no_rail → No Rail
+ 🎨 Paint state debug: Object
+ OrderEntry component rendering...
+ 🔧 Stock Model Dropdown Debug:
+   - Current modelId: 
+   - ModelOptions length: 44
+   - RenderKey: 0
+   - Available models: Array(5)
+   - Selected model found: false undefined
+ 🔧 Rails feature found: true Rails
+ 🔧 Rails state debug: Object
+ 🔧 Rails option lookup: no_rail → No Rail
+ 🎨 Paint state debug: Object
+ ✅ API Response from /api/orders/EJ002/payments: 200
+ OrderEntry component rendering...
+ 🔧 Stock Model Dropdown Debug:
+   - Current modelId: 
+   - ModelOptions length: 44
+   - RenderKey: 0
+   - Available models: Array(5)
+   - Selected model found: false undefined
+ 🔧 Rails feature found: true Rails
+ 🔧 Rails state debug: Object
+ 🔧 Rails option lookup: no_rail → No Rail
+ 🎨 Paint state debug: Object
+ OrderEntry component rendering...
+ 🔧 Stock Model Dropdown Debug:
+   - Current modelId: 
+   - ModelOptions length: 44
+   - RenderKey: 0
+   - Available models: Array(5)
+   - Selected model found: false undefined
+ 🔧 Rails feature found: true Rails
+ 🔧 Rails state debug: Object
+ 🔧 Rails option lookup: no_rail → No Rail
+ 🎨 Paint state debug: Object
+ OrderEntry component rendering...
+ 🔧 Stock Model Dropdown Debug:
+   - Current modelId: 
+   - ModelOptions length: 44
+   - RenderKey: 0
+   - Available models: Array(5)
+   - Selected model found: false undefined
+ 🔧 Rails feature found: true Rails
+ 🔧 Rails state debug: Object
+ 🔧 Rails option lookup: no_rail → No Rail
+ 🎨 Paint state debug: Object
+ OrderEntry component rendering...
+ 🔧 Stock Model Dropdown Debug:
+   - Current modelId: 
+   - ModelOptions length: 44
+   - RenderKey: 0
+   - Available models: Array(5)
+   - Selected model found: false undefined
+ 🔧 Rails feature found: true Rails
+ 🔧 Rails state debug: Object
+ 🔧 Rails option lookup: no_rail → No Rail
+ 🎨 Paint state debug: Object
+ OrderEntry component rendering...
+ 🔧 Stock Model Dropdown Debug:
+   - Current modelId: 
+   - ModelOptions length: 44
+   - RenderKey: 0
+   - Available models: Array(5)
+   - Selected model found: false undefined
+ 🔧 Rails feature found: true Rails
+ 🔧 Rails state debug: Object
+ 🔧 Rails option lookup: no_rail → No Rail
+ 🎨 Paint state debug: Object
+ OrderEntry component rendering...
+ 🔧 Stock Model Dropdown Debug:
+   - Current modelId: 
+   - ModelOptions length: 44
+   - RenderKey: 0
+   - Available models: Array(5)
+   - Selected model found: false undefined
+ 🔧 Rails feature found: true Rails
+injected.js:27 🔧 Rails state debug: Object
+injected.js:27 🔧 Rails option lookup: no_rail → No Rail
+injected.js:27 🎨 Paint state debug: Object
+injected.js:27 OrdersList component rendering - with CSV export
+injected.js:27 🔍 DEBUG: AG640 order data: Object
+injected.js:27 🔍 DEBUG: AG640 isVerified: true
+injected.js:27 🔍 DEBUG: AG640 keys: Array(84)
+injected.js:27 Orders data: Array(803)
+injected.js:27 Customers data: Array(524)
+injected.js:27 Loading state: false
+injected.js:27 Error state: null
+injected.js:27 OrdersList component rendering - with CSV export
+injected.js:27 🔍 DEBUG: AG640 order data: Object
+injected.js:27 🔍 DEBUG: AG640 isVerified: true
+injected.js:27 🔍 DEBUG: AG640 keys: Array(84)
+injected.js:27 Orders data: Array(803)
+injected.js:27 Customers data: Array(524)
+injected.js:27 Loading state: false
+injected.js:27 Error state: null
+injected.js:27 🌐 API Request to /api/orders/with-payment-status (timeout: 30000ms, deployment: false)
+injected.js:27 OrdersList component rendering - with CSV export
+injected.js:27 🔍 DEBUG: AG640 order data: Object
+injected.js:27 🔍 DEBUG: AG640 isVerified: true
+injected.js:27 🔍 DEBUG: AG640 keys: Array(84)
+injected.js:27 Orders data: Array(803)
+injected.js:27 Customers data: Array(524)
+injected.js:27 Loading state: false
+injected.js:27 Error state: null
+injected.js:27 OrdersList component rendering - with CSV export
+injected.js:27 🔍 DEBUG: AG640 order data: Object
+injected.js:27 🔍 DEBUG: AG640 isVerified: true
+injected.js:27 🔍 DEBUG: AG640 keys: Array(84)
+injected.js:27 Orders data: Array(803)
+injected.js:27 Customers data: Array(524)
+injected.js:27 Loading state: false
+injected.js:27 Error state: null
+injected.js:27 OrdersList component rendering - with CSV export
+injected.js:27 🔍 DEBUG: AG640 order data: Object
+injected.js:27 🔍 DEBUG: AG640 isVerified: true
+injected.js:27 🔍 DEBUG: AG640 keys: Array(84)
+injected.js:27 Orders data: Array(803)
+injected.js:27 Customers data: Array(524)
+injected.js:27 Loading state: false
+injected.js:27 Error state: null
+injected.js:27 OrdersList component rendering - with CSV export
+injected.js:27 🔍 DEBUG: AG640 order data: Object
+injected.js:27 🔍 DEBUG: AG640 isVerified: true
+injected.js:27 🔍 DEBUG: AG640 keys: Array(84)
+injected.js:27 Orders data: Array(803)
+injected.js:27 Customers data: Array(524)
+injected.js:27 Loading state: false
+injected.js:27 Error state: null
+injected.js:27 OrdersList component rendering - with CSV export
+injected.js:27 🔍 DEBUG: AG640 order data: Object
+injected.js:27 🔍 DEBUG: AG640 isVerified: true
+injected.js:27 🔍 DEBUG: AG640 keys: Array(84)
+injected.js:27 Orders data: Array(803)
+injected.js:27 Customers data: Array(524)
+injected.js:27 Loading state: false
+injected.js:27 Error state: null
+injected.js:27 OrdersList component rendering - with CSV export
+injected.js:27 🔍 DEBUG: AG640 order data: Object
+injected.js:27 🔍 DEBUG: AG640 isVerified: true
+injected.js:27 🔍 DEBUG: AG640 keys: Array(84)
+injected.js:27 Orders data: Array(803)
+injected.js:27 Customers data: Array(524)
+injected.js:27 Loading state: false
+injected.js:27 Error state: null
+injected.js:27 OrdersList component rendering - with CSV export
+injected.js:27 🔍 DEBUG: AG640 order data: Object
+injected.js:27 🔍 DEBUG: AG640 isVerified: true
+injected.js:27 🔍 DEBUG: AG640 keys: Array(84)
+injected.js:27 Orders data: Array(803)
+injected.js:27 Customers data: Array(524)
+injected.js:27 Loading state: false
+injected.js:27 Error state: null
+injected.js:27 OrdersList component rendering - with CSV export
+injected.js:27 🔍 DEBUG: AG640 order data: Object
+injected.js:27 🔍 DEBUG: AG640 isVerified: true
+injected.js:27 🔍 DEBUG: AG640 keys: Array(84)
+injected.js:27 Orders data: Array(803)
+injected.js:27 Customers data: Array(524)
+injected.js:27 Loading state: false
+injected.js:27 Error state: null
+injected.js:27 ✅ API Response from /api/orders/with-payment-status: 500
+injected.js:27 🌐 API Request to /api/orders/with-payment-status (timeout: 30000ms, deployment: false)
+injected.js:27 ✅ API Response from /api/orders/with-payment-status: 500
+injected.js:27 OrdersList component rendering - with CSV export
+injected.js:27 🔍 DEBUG: AG640 order data: Object
+injected.js:27 🔍 DEBUG: AG640 isVerified: true
+injected.js:27 🔍 DEBUG: AG640 keys: Array(84)
+injected.js:27 Orders data: Array(803)
+injected.js:27 Customers data: Array(524)
+injected.js:27 Loading state: false
+injected.js:27 Error state: Error: Failed to fetch orders with payment status
+    at apiRequest (queryClient.ts:94:13)
+injected.js:27 OrdersList component rendering - with CSV export
+injected.js:27 🔍 DEBUG: AG640 order data: Object
+injected.js:27 🔍 DEBUG: AG640 isVerified: true
+injected.js:27 🔍 DEBUG: AG640 keys: Array(84)
+injected.js:27 Orders data: Array(803)
+injected.js:27 Customers data: Array(524)
+injected.js:27 Loading state: false
+injected.js:27 Error state: Error: Failed to fetch orders with payment status
+    at apiRequest (queryClient.ts:94:13)
+injected.js:27 🌐 API Request to /api/customers/bypass (timeout: 30000ms, deployment: false)
+injected.js:27 🌐 API Request to /api/addresses/all (timeout: 30000ms, deployment: false)
+injected.js:27 ✅ API Response from /api/customers/bypass: 200
+injected.js:27 ✅ API Response from /api/addresses/all: 200
+injected.js:27 OrdersList component rendering - with CSV export
+injected.js:27 🔍 DEBUG: AG640 order data: Object
+injected.js:27 🔍 DEBUG: AG640 isVerified: true
+injected.js:27 🔍 DEBUG: AG640 keys: Array(84)
+injected.js:27 Orders data: Array(803)
+injected.js:27 Customers data: Array(524)
+injected.js:27 Loading state: false
+injected.js:27 Error state: Error: Failed to fetch orders with payment status
+    at apiRequest (queryClient.ts:94:13)
+injected.js:27 OrdersList component rendering - with CSV export
+injected.js:27 🔍 DEBUG: AG640 order data: Object
+injected.js:27 🔍 DEBUG: AG640 isVerified: true
+injected.js:27 🔍 DEBUG: AG640 keys: Array(84)
+injected.js:27 Orders data: Array(803)
+injected.js:27 Customers data: Array(524)
+injected.js:27 Loading state: false
+injected.js:27 Error state: Error: Failed to fetch orders with payment status
+    at apiRequest (queryClient.ts:94:13)
+injected.js:27 🌐 API Request to /api/orders/with-payment-status (timeout: 30000ms, deployment: false)
+injected.js:27 OrdersList component rendering - with CSV export
+injected.js:27 🔍 DEBUG: AG640 order data: Object
+injected.js:27 🔍 DEBUG: AG640 isVerified: true
+injected.js:27 🔍 DEBUG: AG640 keys: Array(84)
+injected.js:27 Orders data: Array(803)
+injected.js:27 Customers data: Array(524)
+injected.js:27 Loading state: false
+injected.js:27 Error state: Error: Failed to fetch orders with payment status
+    at apiRequest (queryClient.ts:94:13)
+injected.js:27 OrdersList component rendering - with CSV export
+injected.js:27 🔍 DEBUG: AG640 order data: Object
+injected.js:27 🔍 DEBUG: AG640 isVerified: true
+injected.js:27 🔍 DEBUG: AG640 keys: Array(84)
+injected.js:27 Orders data: Array(803)
+injected.js:27 Customers data: Array(524)
+injected.js:27 Loading state: false
+injected.js:27 Error state: Error: Failed to fetch orders with payment status
+    at apiRequest (queryClient.ts:94:13)
+injected.js:27 OrdersList component rendering - with CSV export
+injected.js:27 🔍 DEBUG: AG640 order data: Object
+injected.js:27 🔍 DEBUG: AG640 isVerified: true
+injected.js:27 🔍 DEBUG: AG640 keys: Array(84)
+injected.js:27 Orders data: Array(803)
+injected.js:27 Customers data: Array(524)
+injected.js:27 Loading state: false
+injected.js:27 Error state: Error: Failed to fetch orders with payment status
+    at apiRequest (queryClient.ts:94:13)
+injected.js:27 OrdersList component rendering - with CSV export
+injected.js:27 🔍 DEBUG: AG640 order data: Object
+injected.js:27 🔍 DEBUG: AG640 isVerified: true
+injected.js:27 🔍 DEBUG: AG640 keys: Array(84)
+injected.js:27 Orders data: Array(803)
+injected.js:27 Customers data: Array(524)
+injected.js:27 Loading state: false
+injected.js:27 Error state: Error: Failed to fetch orders with payment status
+    at apiRequest (queryClient.ts:94:13)
+injected.js:27 ✅ API Response from /api/orders/with-payment-status: 500
+injected.js:27 🌐 API Request to /api/orders/with-payment-status (timeout: 30000ms, deployment: false)
+injected.js:27 ✅ API Response from /api/orders/with-payment-status: 500
+injected.js:27 OrdersList component rendering - with CSV export
+injected.js:27 🔍 DEBUG: AG640 order data: Object
+injected.js:27 🔍 DEBUG: AG640 isVerified: true
+injected.js:27 🔍 DEBUG: AG640 keys: Array(84)
+injected.js:27 Orders data: Array(803)
+injected.js:27 Customers data: Array(524)
+injected.js:27 Loading state: false
+injected.js:27 Error state: Error: Failed to fetch orders with payment status
+    at apiRequest (queryClient.ts:94:13)
+injected.js:27 OrdersList component rendering - with CSV export
+injected.js:27 🔍 DEBUG: AG640 order data: Object
+injected.js:27 🔍 DEBUG: AG640 isVerified: true
+injected.js:27 🔍 DEBUG: AG640 keys: Array(84)
+injected.js:27 Orders data: Array(803)
+injected.js:27 Customers data: Array(524)
+injected.js:27 Loading state: false
+injected.js:27 Error state: Error: Failed to fetch orders with payment status
+    at apiRequest (queryClient.ts:94:13)

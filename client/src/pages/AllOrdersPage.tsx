@@ -100,14 +100,14 @@ export default function AllOrdersPage() {
   } | null>(null);
   const [, setLocation] = useLocation();
 
-  // Department progression flow
+  // Department progression flow (Shipping is final department)
   const departments = [
     'P1 Production Queue',
     'Layup/Plugging',
     'Barcode',
     'CNC',
-    'Finish',
     'Gunsmith',
+    'Finish',
     'Finish QC',
     'Paint',
     'Shipping QC',
@@ -604,7 +604,7 @@ export default function AllOrdersPage() {
                   </TableCell>
                   <TableCell>
                     <Badge variant="secondary">
-                      {order.currentDepartment || 'Not Set'}
+                      {order.currentDepartment || 'Completed'}
                     </Badge>
                   </TableCell>
                   <TableCell>
@@ -704,21 +704,38 @@ export default function AllOrdersPage() {
                       {/* Progress Button */}
                       {(() => {
                         const nextDept = getNextDepartment(order.currentDepartment);
-                        const isComplete = order.currentDepartment === 'Shipping';
                         const isScrapped = order.status === 'SCRAPPED';
                         const isFulfilled = order.status === 'FULFILLED';
+                        const isInShipping = order.currentDepartment === 'Shipping';
 
-                        if (!isScrapped && !isComplete && !isFulfilled && nextDept) {
-                          return (
-                            <Button
-                              size="sm"
-                              onClick={() => handleProgressOrder(order.orderId, nextDept)}
-                              disabled={progressOrderMutation.isPending}
-                            >
-                              <ArrowRight className="w-4 h-4 mr-1" />
-                              {nextDept}
-                            </Button>
-                          );
+                        if (!isScrapped && !isFulfilled) {
+                          // Special case: Shipping is final department, show "Complete" button
+                          if (isInShipping && !nextDept) {
+                            return (
+                              <Button
+                                size="sm"
+                                onClick={() => handleProgressOrder(order.orderId)}
+                                disabled={progressOrderMutation.isPending}
+                                className="bg-green-600 hover:bg-green-700"
+                              >
+                                <ArrowRight className="w-4 h-4 mr-1" />
+                                Complete Shipping
+                              </Button>
+                            );
+                          }
+                          // Regular progression to next department
+                          else if (nextDept) {
+                            return (
+                              <Button
+                                size="sm"
+                                onClick={() => handleProgressOrder(order.orderId, nextDept)}
+                                disabled={progressOrderMutation.isPending}
+                              >
+                                <ArrowRight className="w-4 h-4 mr-1" />
+                                {nextDept}
+                              </Button>
+                            );
+                          }
                         }
                         return null;
                       })()}

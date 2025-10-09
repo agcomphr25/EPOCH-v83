@@ -732,7 +732,7 @@ export default function ProductionQueueManager() {
                               variant="outline"
                               size="sm"
                               className="text-blue-600 hover:text-blue-700"
-                              onClick={() => setLocation(`/order-entry?draft=${order.orderId}`)}
+                              onClick={() => setLocation(`/order-entry?edit=${order.orderId}`)}
                               data-testid={`button-edit-${order.orderId}`}
                             >
                               <ArrowRight className="w-4 h-4 mr-1" />

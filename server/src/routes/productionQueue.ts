@@ -900,7 +900,12 @@ router.get('/attention', async (req: Request, res: Response) => {
         o.created_at as createdAt,
         c.name as customerName
       FROM all_orders o
-      LEFT JOIN customers c ON CAST(o.customer_id AS INTEGER) = c.id
+      LEFT JOIN customers c ON (
+        CASE 
+          WHEN o.customer_id ~ '^[0-9]+$' THEN CAST(o.customer_id AS INTEGER) = c.id
+          ELSE FALSE
+        END
+      )
       WHERE o.current_department = 'P1 Production Queue'
         AND o.status IN ('FINALIZED', 'Active')
         AND (

@@ -612,7 +612,7 @@ export default function OemPrioritySettingsDialog({
                       return (
                         <div key={setting.id} className="mb-3 p-3 bg-white dark:bg-gray-800 rounded border ml-4">
                           <div className="flex justify-between items-start">
-                            <div>
+                            <div className="flex-1">
                               <div className="font-medium text-sm">PO #{setting.poNumber}</div>
                               <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
                                 Mode: {setting.selectionMode === 'entire_po' ? 'Entire PO' : 'Specific Items'}
@@ -624,9 +624,22 @@ export default function OemPrioritySettingsDialog({
                                 Items: {itemCount} {setting.selectionMode === 'entire_po' ? '(all items)' : 'selected'}
                               </div>
                             </div>
-                            <Badge className="bg-blue-100 text-blue-800 text-xs">
-                              Priority {setting.priorityLevel}
-                            </Badge>
+                            <div className="flex items-center gap-2">
+                              <Badge className="bg-blue-100 text-blue-800 text-xs">
+                                Priority {setting.priorityLevel}
+                              </Badge>
+                              <Button
+                                onClick={() => generateOrdersMutation.mutate(setting.poId)}
+                                disabled={generateOrdersMutation.isPending}
+                                size="sm"
+                                variant="default"
+                                className="text-xs"
+                                data-testid={`button-add-to-schedule-${setting.poId}`}
+                              >
+                                <PlayCircle className="w-3.5 h-3.5 mr-1" />
+                                Add to Schedule
+                              </Button>
+                            </div>
                           </div>
                         </div>
                       );

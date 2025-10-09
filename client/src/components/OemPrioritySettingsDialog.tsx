@@ -83,6 +83,12 @@ export default function OemPrioritySettingsDialog({
     enabled: open
   });
 
+  // Fetch all saved priority settings for Priority Summary tab
+  const { data: savedPrioritySettings = [], isLoading: prioritySettingsLoading } = useQuery({
+    queryKey: ['/api/oem-settings/priority-settings'],
+    enabled: open
+  });
+
   // Fetch vendor PO data when expanded - USES EXACT SAME LOGIC AS P1 PURCHASE ORDER QUEUE
   const fetchVendorPOData = async (vendorId: string) => {
     if (vendorPODataCache[vendorId]) return vendorPODataCache[vendorId];
@@ -248,14 +254,18 @@ export default function OemPrioritySettingsDialog({
       });
     },
     onSuccess: (_, variables) => {
+      // Invalidate queries to refresh data
       queryClient.invalidateQueries({ queryKey: [`/api/oem-settings/layup-scheduler/oem-priority/${variables.vendorId}`] });
       queryClient.invalidateQueries({ queryKey: ['/api/oem-settings/priority-settings'] });
-      // Clear cache to refetch
-      setVendorPODataCache(prev => {
-        const updated = { ...prev };
-        delete updated[variables.vendorId];
-        return updated;
+      
+      // Refetch vendor data to get updated prioritySettings from backend
+      fetchVendorPOData(variables.vendorId).then(updatedData => {
+        setVendorPODataCache(prev => ({
+          ...prev,
+          [variables.vendorId]: updatedData
+        }));
       });
+      
       toast({
         title: "Priority Settings Saved",
         description: "OEM priority settings have been saved successfully"

@@ -792,7 +792,7 @@ export default function ProductionQueueManager() {
                   Regular Production Queue ({productionQueue.length})
                 </CardTitle>
                 <p className="text-sm text-gray-500 text-left">
-                  Ready for layup orders - these will fill remaining schedule slots
+                  Inventory items ready to progress to Barcode
                 </p>
               </CardHeader>
             </AccordionTrigger>
@@ -816,7 +816,7 @@ export default function ProductionQueueManager() {
                         size="sm"
                       >
                         <ArrowRight className="h-4 w-4" />
-                        Progress to Layup/Plugging ({selectedQueueOrders.size})
+                        Progress to Barcode ({selectedQueueOrders.size})
                       </Button>
                     )}
                   </div>

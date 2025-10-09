@@ -763,6 +763,8 @@ export default function LayupScheduler() {
   // New state for selection mode (entire PO vs specific items)
   const [selectionMode, setSelectionMode] = useState<'entire_po' | 'specific_items'>('entire_po');
   const [selectedStockItemIds, setSelectedStockItemIds] = useState<string[]>([]);
+  // Manual quantity state: { [itemId]: quantity }
+  const [manualQuantities, setManualQuantities] = useState<Record<string, number>>({});
 
   // Query for PO vendors
   const { data: poVendors = [], isLoading: vendorsLoading } = useQuery<any[]>({
@@ -3732,6 +3734,7 @@ export default function LayupScheduler() {
                 setSelectedPOId(null);
                 setSelectedStockItemId(null);
                 setSelectedStockItemIds([]);
+                setManualQuantities({});
                 setSelectionMode('entire_po');
               }
             }}>
@@ -3906,8 +3909,16 @@ export default function LayupScheduler() {
                                   onCheckedChange={(checked) => {
                                     if (checked) {
                                       setSelectedStockItemIds([...selectedStockItemIds, item.id.toString()]);
+                                      // Initialize manual quantity with PO quantity when first selected
+                                      setManualQuantities(prev => ({ ...prev, [item.id.toString()]: item.quantity || 1 }));
                                     } else {
                                       setSelectedStockItemIds(selectedStockItemIds.filter(id => id !== item.id.toString()));
+                                      // Remove manual quantity when unchecked
+                                      setManualQuantities(prev => {
+                                        const updated = { ...prev };
+                                        delete updated[item.id.toString()];
+                                        return updated;
+                                      });
                                     }
                                   }}
                                   data-testid={`checkbox-stock-${item.id}`}
@@ -3917,9 +3928,31 @@ export default function LayupScheduler() {
                                     {item.itemName}
                                   </div>
                                   <div className="text-xs text-gray-600 dark:text-gray-400">
-                                    Qty: {item.quantity} • Type: {item.itemType}
+                                    PO Qty: {item.quantity} • Type: {item.itemType}
                                   </div>
                                 </label>
+                                {selectedStockItemIds.includes(item.id.toString()) && (
+                                  <div className="flex items-center gap-2">
+                                    <label className="text-xs text-gray-600 dark:text-gray-400">
+                                      Schedule Qty:
+                                    </label>
+                                    <Input
+                                      type="number"
+                                      min="1"
+                                      max={item.quantity}
+                                      value={manualQuantities[item.id.toString()] || item.quantity}
+                                      onChange={(e) => {
+                                        const value = parseInt(e.target.value) || 1;
+                                        setManualQuantities(prev => ({ 
+                                          ...prev, 
+                                          [item.id.toString()]: Math.min(Math.max(1, value), item.quantity)
+                                        }));
+                                      }}
+                                      className="w-20 h-8"
+                                      data-testid={`input-quantity-${item.id}`}
+                                    />
+                                  </div>
+                                )}
                               </div>
                             ))}
                           </div>
@@ -3997,6 +4030,7 @@ export default function LayupScheduler() {
                             setSelectedPOId(null);
                             setSelectedStockItemId(null);
                             setSelectedStockItemIds([]);
+                            setManualQuantities({});
                             setSelectionMode('entire_po');
                           }}
                           variant="outline"
@@ -4009,7 +4043,7 @@ export default function LayupScheduler() {
                         <Button
                           onClick={async () => {
                             try {
-                              // Enhanced save functionality for both modes
+                              // Enhanced save functionality for both modes with manual quantities
                               const priorityData = {
                                 vendorId: selectedVendorId,
                                 vendorName: poVendors.find(v => v.id === selectedVendorId)?.name,
@@ -4019,6 +4053,7 @@ export default function LayupScheduler() {
                                 stockItemIds: selectionMode === 'entire_po' 
                                   ? eligibleStockItems.map((item: any) => item.id.toString())
                                   : selectedStockItemIds,
+                                manualQuantities: selectionMode === 'specific_items' ? manualQuantities : {},
                                 priorityLevel: 1 // Default high priority
                               };
                               

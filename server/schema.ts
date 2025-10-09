@@ -2628,6 +2628,7 @@ export const oemPrioritySettings = pgTable("oem_priority_settings", {
   poNumber: text("po_number").notNull(), // PO number for reference
   selectionMode: text("selection_mode").notNull(), // 'entire_po' or 'specific_items'
   stockItemIds: json("stock_item_ids"), // Array of stock item IDs for specific_items mode
+  manualQuantities: json("manual_quantities"), // Manual quantity overrides { [itemId]: quantity }
   priorityLevel: integer("priority_level").default(1), // Priority level (1 = highest)
   isActive: boolean("is_active").default(true),
   createdBy: text("created_by"), // User who created this priority setting
@@ -2649,6 +2650,7 @@ export const insertOemPrioritySettingsSchema = createInsertSchema(oemPrioritySet
     required_error: "Selection mode is required"
   }),
   stockItemIds: z.array(z.string()).optional().nullable(),
+  manualQuantities: z.record(z.string(), z.number()).optional().nullable(), // { [itemId]: quantity }
   priorityLevel: z.number().min(1).max(10).default(1),
   isActive: z.boolean().default(true),
   createdBy: z.string().optional().nullable(),

@@ -546,7 +546,14 @@ export default function FinishQueuePage() {
                         >
                           <CardContent className="p-3">
                             <div className="flex items-center justify-between mb-2">
-                              <div className="font-semibold">{getDisplayOrderId(order)}</div>
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-semibold">{getDisplayOrderId(order)}</span>
+                                {order.fbOrderNumber && (
+                                  <Badge variant="outline" className="text-xs px-1 py-0 bg-blue-50 dark:bg-blue-900/20 border-blue-300">
+                                    FB: {order.fbOrderNumber}
+                                  </Badge>
+                                )}
+                              </div>
                               {order.dueDate && (
                                 <Badge variant="destructive" className="text-xs">
                                   Due: {format(new Date(order.dueDate), 'M/d')}
@@ -623,7 +630,14 @@ export default function FinishQueuePage() {
                         >
                           <CardContent className="p-3">
                             <div className="flex items-center justify-between mb-2">
-                              <div className="font-semibold">{getDisplayOrderId(order)}</div>
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-semibold">{getDisplayOrderId(order)}</span>
+                                {order.fbOrderNumber && (
+                                  <Badge variant="outline" className="text-xs px-1 py-0 bg-blue-50 dark:bg-blue-900/20 border-blue-300">
+                                    FB: {order.fbOrderNumber}
+                                  </Badge>
+                                )}
+                              </div>
                               {order.dueDate && (
                                 <Badge variant="destructive" className="text-xs">
                                   Due: {format(new Date(order.dueDate), 'M/d')}
@@ -700,7 +714,14 @@ export default function FinishQueuePage() {
                         >
                           <CardContent className="p-3">
                             <div className="flex items-center justify-between mb-2">
-                              <div className="font-semibold">{getDisplayOrderId(order)}</div>
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-semibold">{getDisplayOrderId(order)}</span>
+                                {order.fbOrderNumber && (
+                                  <Badge variant="outline" className="text-xs px-1 py-0 bg-blue-50 dark:bg-blue-900/20 border-blue-300">
+                                    FB: {order.fbOrderNumber}
+                                  </Badge>
+                                )}
+                              </div>
                               {order.dueDate && (
                                 <Badge variant="outline" className="text-xs">
                                   Due: {format(new Date(order.dueDate), 'M/d')}
@@ -777,7 +798,14 @@ export default function FinishQueuePage() {
                         >
                           <CardContent className="p-3">
                             <div className="flex items-center justify-between mb-2">
-                              <div className="font-semibold">{getDisplayOrderId(order)}</div>
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-semibold">{getDisplayOrderId(order)}</span>
+                                {order.fbOrderNumber && (
+                                  <Badge variant="outline" className="text-xs px-1 py-0 bg-blue-50 dark:bg-blue-900/20 border-blue-300">
+                                    FB: {order.fbOrderNumber}
+                                  </Badge>
+                                )}
+                              </div>
                               {order.dueDate && (
                                 <Badge variant="outline" className="text-xs">
                                   Due: {format(new Date(order.dueDate), 'M/d')}
@@ -854,7 +882,14 @@ export default function FinishQueuePage() {
                         >
                           <CardContent className="p-3">
                             <div className="flex items-center justify-between mb-2">
-                              <div className="font-semibold">{getDisplayOrderId(order)}</div>
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-semibold">{getDisplayOrderId(order)}</span>
+                                {order.fbOrderNumber && (
+                                  <Badge variant="outline" className="text-xs px-1 py-0 bg-blue-50 dark:bg-blue-900/20 border-blue-300">
+                                    FB: {order.fbOrderNumber}
+                                  </Badge>
+                                )}
+                              </div>
                               {order.dueDate && (
                                 <Badge variant="outline" className="text-xs">
                                   Due: {format(new Date(order.dueDate), 'M/d')}
@@ -931,7 +966,14 @@ export default function FinishQueuePage() {
                         >
                           <CardContent className="p-3">
                             <div className="flex items-center justify-between mb-2">
-                              <div className="font-semibold">{getDisplayOrderId(order)}</div>
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-semibold">{getDisplayOrderId(order)}</span>
+                                {order.fbOrderNumber && (
+                                  <Badge variant="outline" className="text-xs px-1 py-0 bg-blue-50 dark:bg-blue-900/20 border-blue-300">
+                                    FB: {order.fbOrderNumber}
+                                  </Badge>
+                                )}
+                              </div>
                               {order.dueDate && (
                                 <Badge variant="outline" className="text-xs">
                                   Due: {format(new Date(order.dueDate), 'M/d')}
@@ -1008,7 +1050,14 @@ export default function FinishQueuePage() {
                         >
                           <CardContent className="p-3">
                             <div className="flex items-center justify-between mb-2">
-                              <div className="font-semibold">{getDisplayOrderId(order)}</div>
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-semibold">{getDisplayOrderId(order)}</span>
+                                {order.fbOrderNumber && (
+                                  <Badge variant="outline" className="text-xs px-1 py-0 bg-blue-50 dark:bg-blue-900/20 border-blue-300">
+                                    FB: {order.fbOrderNumber}
+                                  </Badge>
+                                )}
+                              </div>
                               <Badge variant="secondary" className="text-xs">
                                 No Due Date
                               </Badge>

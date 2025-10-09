@@ -31,13 +31,13 @@ export async function apiRequest(url: string, options: ApiRequestOptions = {}) {
   const baseUrl = import.meta.env.VITE_API_URL || '';
   const fullUrl = `${baseUrl}${url}`;
 
-  // Check if we're on a deployment site for ultra-aggressive timeouts
+  // Check if we're on a deployment site
   const isDeployment = window.location.hostname.includes('.replit.app') || 
                       window.location.hostname.includes('.repl.co') ||
                       window.location.hostname.includes('agcompepoch.xyz');
   
-  // Use much shorter timeout for deployments with database issues
-  const timeoutDuration = isDeployment ? 6000 : 30000; // 6 seconds for deployment, 30 for dev
+  // Use reasonable timeout for deployments (allow for database latency with large datasets)
+  const timeoutDuration = isDeployment ? 15000 : 30000; // 15 seconds for deployment, 30 for dev
   
   console.log(`🌐 API Request to ${url} (timeout: ${timeoutDuration}ms, deployment: ${isDeployment})`);
 
@@ -135,7 +135,7 @@ export const getQueryFn: <T>(options: {
       window.location.hostname.includes('.repl.co') ||
       window.location.hostname.includes('agcompepoch.xyz')
     );
-    const timeoutDuration = isDeployment ? 6000 : 8000; // 6 seconds for deployment, 8 for dev
+    const timeoutDuration = isDeployment ? 15000 : 30000; // 15 seconds for deployment, 30 for dev
     
     const controller = new AbortController();
     const timeoutId = setTimeout(() => {

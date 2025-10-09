@@ -36,7 +36,7 @@ import APJournalPage from "./pages/APJournalPage";
 import ARJournalPage from "./pages/ARJournalPage";
 import COGSReportPage from "./pages/COGSReportPage";
 import FinanceDashboardPage from "./pages/FinanceDashboardPage";
-import SeptemberFulfilledReport from "./pages/SeptemberFulfilledReport";
+import MonthlyFulfilledReport from "./pages/MonthlyFulfilledReport";
 import EnhancedFormsPage from './pages/EnhancedFormsPage';
 import EnhancedReportsPage from './pages/EnhancedReportsPage';
 import FormRendererPage from "./pages/FormRendererPage";
@@ -277,7 +277,7 @@ function App() {
                   <Route path="/finance/ar-journal" component={ARJournalPage} />
                   <Route path="/finance/cogs-report" component={COGSReportPage} />
                   <Route path="/finance/dashboard" component={FinanceDashboardPage} />
-                  <Route path="/finance/september-fulfilled-2025" component={SeptemberFulfilledReport} />
+                  <Route path="/finance/monthly-fulfilled" component={MonthlyFulfilledReport} />
 
                   {/* Payment Processing Routes */}
                   <Route path="/payment-management" component={PaymentManagement} />

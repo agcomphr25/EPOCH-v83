@@ -450,10 +450,10 @@ export default function Navigation() {
       description: 'Cost of Goods Sold reporting'
     },
     {
-      path: '/finance/september-fulfilled-2025',
-      label: 'September 2025 FULFILLED',
+      path: '/finance/monthly-fulfilled',
+      label: 'Monthly FULFILLED Report',
       icon: FileText,
-      description: 'Orders changed to FULFILLED in September 2025'
+      description: 'Monthly report of orders changed to FULFILLED status'
     }
   ];
 

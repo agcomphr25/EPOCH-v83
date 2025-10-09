@@ -17,7 +17,7 @@ import { AlertTriangle, FileText, Eye, TrendingDown, Search } from 'lucide-react
 import { apiRequest } from '@/lib/queryClient';
 import { SalesOrderModal } from '@/components/SalesOrderModal';
 import { getDisplayOrderId } from '@/lib/orderUtils';
-import FBNumberSearch from '@/components/FBNumberSearch';
+import { OrderSearchBox } from '@/components/OrderSearchBox';
 
 export default function FinishQCPage() {
   const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
@@ -25,6 +25,7 @@ export default function FinishQCPage() {
   const [salesOrderModalOpen, setSalesOrderModalOpen] = useState(false);
   const [selectedOrderId, setSelectedOrderId] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [highlightedOrderId, setHighlightedOrderId] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
 
@@ -94,22 +95,21 @@ export default function FinishQCPage() {
     });
   }, [orders, searchQuery]);
 
-  // Handle order found via Facebook number search
-  const handleOrderFound = (orderId: string) => {
-    // Check if the order exists in the current Finish QC queue
-    const orderExists = filteredOrders.some((order: any) => order.orderId === orderId);
+  // Handle order search selection
+  const handleOrderSearchSelect = (order: any) => {
+    const orderExists = filteredOrders.some((o: any) => o.orderId === order.orderId);
     if (orderExists) {
-      // Select the found order
-      setSelectedOrders(prev => new Set([...prev, orderId]));
-      toast.success(`Order ${orderId} found and selected in Finish QC department`);
+      setHighlightedOrderId(order.orderId);
+      // Auto-scroll to the highlighted order
+      setTimeout(() => {
+        const element = document.getElementById(`order-${order.orderId}`);
+        if (element) {
+          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 100);
+      toast.success(`Order ${order.orderId} highlighted in the list`);
     } else {
-      // Find the order in all orders to show current department
-      const allOrder = orders.find((order: any) => order.orderId === orderId);
-      if (allOrder) {
-        toast.error(`Order ${orderId} is currently in Finish QC department but doesn't match current filters`);
-      } else {
-        toast.error(`Order ${orderId} not found in Finish QC department`);
-      }
+      toast.error(`Order ${order.orderId} is not in the Finish QC department`);
     }
   };
 
@@ -355,51 +355,24 @@ export default function FinishQCPage() {
       {/* Barcode Scanner */}
       <BarcodeScanner />
 
-      {/* Search Box */}
+      {/* Order Search Box */}
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Search className="h-5 w-5" />
-            Search Orders
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-2">
-            <Label htmlFor="search-input">Search by Order ID or FishBowl Number</Label>
-            <div className="flex gap-2">
-              <Input
-                id="search-input"
-                type="text"
-                placeholder="Enter Order ID (e.g., AG123) or FB Number (e.g., AK072)..."
-                value={searchQuery}
-                onChange={(e) => handleSearchWithSelection(e.target.value)}
-                className="flex-1"
-              />
+        <CardContent className="p-4">
+          <div className="flex items-center gap-4">
+            <OrderSearchBox 
+              orders={orders}
+              placeholder="Search orders by Order ID or FishBowl Number..."
+              onOrderSelect={handleOrderSearchSelect}
+            />
+            {highlightedOrderId && (
               <Button
                 variant="outline"
-                onClick={() => {
-                  if (searchQuery.trim()) {
-                    const matchingOrderIds = filteredOrders.map((order: any) => order.orderId);
-                    setSelectedOrders(new Set(matchingOrderIds));
-                    toast.success(`${matchingOrderIds.length} matching order(s) selected`);
-                  }
-                }}
-                disabled={!searchQuery.trim() || filteredOrders.length === 0}
+                size="sm"
+                onClick={() => setHighlightedOrderId(null)}
+                className="text-sm"
               >
-                Select Matches
+                Clear highlight
               </Button>
-            </div>
-            {searchQuery && (
-              <div className="flex gap-2 text-sm text-gray-600">
-                <Badge variant="secondary">
-                  {filteredOrders.length} of {orders.length} orders shown
-                </Badge>
-                {selectedOrders.size > 0 && (
-                  <Badge variant="default" className="bg-blue-600">
-                    {selectedOrders.size} Selected
-                  </Badge>
-                )}
-              </div>
             )}
           </div>
         </CardContent>

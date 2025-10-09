@@ -35,9 +35,10 @@ export const isOrderInDepartment = (
   const normalizedCurrent = normalizeDepartmentName(order?.currentDepartment);
   const normalizedLegacy = normalizeDepartmentName(order?.department);
   
-  // Check currentDepartment field
+  // Check currentDepartment field with status validation
   if (normalizedCurrent === normalizedTarget) {
-    return true;
+    // Only show orders that are FINALIZED or IN_PROGRESS
+    return order?.status === 'FINALIZED' || order?.status === 'IN_PROGRESS';
   }
   
   // Check legacy department field if enabled

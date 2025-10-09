@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
+import { useLocation } from 'wouter';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -305,6 +306,7 @@ function POHierarchicalSelector({ poItems, onMoveToLayup }: POHierarchicalSelect
 export default function ProductionQueueManager() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [, setLocation] = useLocation();
   
   // State for week selection dialog
   const [selectedPOItem, setSelectedPOItem] = useState<POItem | null>(null);
@@ -730,6 +732,8 @@ export default function ProductionQueueManager() {
                               variant="outline"
                               size="sm"
                               className="text-blue-600 hover:text-blue-700"
+                              onClick={() => setLocation(`/order-entry?draft=${order.orderId}`)}
+                              data-testid={`button-edit-${order.orderId}`}
                             >
                               <ArrowRight className="w-4 h-4 mr-1" />
                               Edit

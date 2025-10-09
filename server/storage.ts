@@ -4677,9 +4677,12 @@ export class DatabaseStorage implements IStorage {
 
     console.log(`📊 Order ${order.orderId}: ${daysUntilDue} days until due, needs ${remainingProcessingDays} days remaining, ${daysInDept} days in ${order.currentDepartment} (limit: ${currentDeptStandardTime}), isAdj: ${isAdjusted}`);
 
-    // Determine status priority: cannot-meet-due overrides all others
-    if (cannotMeetDueDate) {
-      console.log(`🟠 Order ${order.orderId}: CANNOT-MEET-DUE - Cannot meet due date (needs ${remainingProcessingDays} days, has ${daysUntilDue}) ${isDeptOverdue ? '[Also over dept time]' : ''}`);
+    // Determine status priority: critical (both conditions) overrides all others
+    if (isDeptOverdue && cannotMeetDueDate) {
+      console.log(`🔴 Order ${order.orderId}: CRITICAL - Over dept time AND cannot meet due date (${daysInDept} > ${currentDeptStandardTime} days in ${order.currentDepartment}, needs ${remainingProcessingDays} days, has ${daysUntilDue})`);
+      return 'critical';
+    } else if (cannotMeetDueDate) {
+      console.log(`🟠 Order ${order.orderId}: CANNOT-MEET-DUE - Cannot meet due date (needs ${remainingProcessingDays} days, has ${daysUntilDue})`);
       return 'cannot-meet-due';
     } else if (isDeptOverdue) {
       console.log(`🟡 Order ${order.orderId}: DEPT-OVERDUE - Over department time limit (${daysInDept} > ${currentDeptStandardTime} days in ${order.currentDepartment})`);

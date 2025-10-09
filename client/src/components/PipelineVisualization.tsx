@@ -15,8 +15,16 @@ const departments = [
   { name: 'Finish QC', color: 'bg-[#7BAFD4]' },
   { name: 'Paint', color: 'bg-[#7BAFD4]' },
   { name: 'Shipping QC', color: 'bg-[#7BAFD4]' },
-  { name: 'Shipping', color: 'bg-[#7BAFD4]' }
+  { name: 'Shipping', color: 'bg-[#7BAFD4]' },
+  { name: 'Fulfilled', color: 'bg-green-500' }
 ];
+
+const getDepartmentDisplayName = (department: string) => {
+  if (department === 'Fulfilled') {
+    return 'Shipping Management';
+  }
+  return department;
+};
 
 type ScheduleStatus = 'on-schedule' | 'dept-overdue' | 'cannot-meet-due' | 'critical';
 
@@ -190,7 +198,7 @@ export default function PipelineVisualization() {
                 >
                   {count}
                 </div>
-                <div className="text-sm font-medium">{dept.name}</div>
+                <div className="text-sm font-medium">{getDepartmentDisplayName(dept.name)}</div>
                 
                 {/* Schedule status visualization */}
                 <div className="min-h-[60px] p-2 bg-gray-50 rounded border overflow-hidden">
@@ -243,7 +251,7 @@ export default function PipelineVisualization() {
             <div className="flex items-center space-x-2 flex-wrap">
               {departments.map((dept, index) => (
                 <div key={dept.name} className="flex items-center space-x-2">
-                  <span className="text-xs">{dept.name}</span>
+                  <span className="text-xs">{getDepartmentDisplayName(dept.name)}</span>
                   {index < departments.length - 1 && <span>→</span>}
                 </div>
               ))}

@@ -41,7 +41,7 @@ import { getDisplayOrderId } from '@/lib/orderUtils';
 import CustomerDetailsTooltip from './CustomerDetailsTooltip';
 import CommunicationCompose from './CommunicationCompose';
 
-const departments = ['P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 'Finish', 'Paint', 'Finish QC', 'Gunsmith', 'Shipping QC', 'Shipping'];
+const departments = ['P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 'Gunsmith', 'Finish', 'Finish QC', 'Paint', 'Shipping QC', 'Shipping', 'Fulfilled'];
 
 export default function AllOrdersList() {
   const [selectedDepartment, setSelectedDepartment] = useState('all');
@@ -294,8 +294,15 @@ export default function AllOrdersList() {
   });
 
   const departments = [
-    'P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 'Finish', 'Paint', 'Finish QC', 'Gunsmith', 'Shipping QC', 'Shipping'
+    'P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 'Gunsmith', 'Finish', 'Finish QC', 'Paint', 'Shipping QC', 'Shipping', 'Fulfilled'
   ];
+
+  const getDepartmentDisplayName = (department: string) => {
+    if (department === 'Fulfilled') {
+      return 'Shipping Management';
+    }
+    return department;
+  };
 
   const getNextDepartment = (currentDepartment: string) => {
     // Handle alternative department names
@@ -475,7 +482,7 @@ export default function AllOrdersList() {
                     <SelectContent>
                       <SelectItem value="all">All Departments</SelectItem>
                       {departments.map(dept => (
-                        <SelectItem key={dept} value={dept}>{dept}</SelectItem>
+                        <SelectItem key={dept} value={dept}>{getDepartmentDisplayName(dept)}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -521,7 +528,7 @@ export default function AllOrdersList() {
                 // Use local update if available, otherwise server data
                 const displayDepartment = localOrderUpdates[order.orderId] || order.currentDepartment;
                 const nextDept = getNextDepartment(displayDepartment);
-                const isComplete = displayDepartment === 'Shipping';
+                const isComplete = displayDepartment === 'Fulfilled';
                 const isScrapped = order.status === 'SCRAPPED';
                 const isFulfilled = order.status === 'FULFILLED'; // Only exclude FULFILLED, not FINALIZED
 
@@ -582,7 +589,7 @@ export default function AllOrdersList() {
                     </TableCell>
                     <TableCell>
                       <Badge className={`${getDepartmentBadgeColor(displayDepartment)} text-white`}>
-                        {displayDepartment}
+                        {getDepartmentDisplayName(displayDepartment)}
                       </Badge>
                     </TableCell>
                     <TableCell>

@@ -912,18 +912,19 @@ router.post('/:orderId/progress', async (req: Request, res: Response) => {
       case 'Layup/Plugging': completionUpdates.layupPluggingCompletedAt = now; break;
       case 'Barcode': completionUpdates.barcodeCompletedAt = now; break;
       case 'CNC': completionUpdates.cncCompletedAt = now; break;
-      case 'Finish': completionUpdates.finishCompletedAt = now; break;
       case 'Gunsmith': completionUpdates.gunsmithCompletedAt = now; break;
+      case 'Finish': completionUpdates.finishCompletedAt = now; break;
+      case 'Finish QC': completionUpdates.finishQcCompletedAt = now; break;
       case 'Paint': completionUpdates.paintCompletedAt = now; break;
       case 'Shipping QC': completionUpdates.shippingQcCompletedAt = now; break;
       case 'Shipping': completionUpdates.shippingCompletedAt = now; break;
     }
 
     // Define the departments sequence for automatic progression
-    // Flow: CNC → Finish (surface prep) → Paint → Finish QC (verify paint) → Gunsmith (final assembly) → Shipping QC → Shipping → Fulfilled
+    // Flow: Layup/Plugging → Barcode → CNC → Gunsmith → Finish → Finish QC → Paint → Shipping QC → Shipping → Fulfilled (Shipping Management)
     const departments = [
       'P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 
-      'Finish', 'Paint', 'Finish QC', 'Gunsmith', 'Shipping QC', 'Shipping', 'Fulfilled'
+      'Gunsmith', 'Finish', 'Finish QC', 'Paint', 'Shipping QC', 'Shipping', 'Fulfilled'
     ];
 
     // CRITICAL SAFEGUARD: Prevent backwards department progression

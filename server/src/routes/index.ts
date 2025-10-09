@@ -479,10 +479,10 @@ export function registerRoutes(app: Express): Server {
             source: sourceType
           });
           
-          // DEBUG: Log Mesa Universal orders specifically
-          if (stockModelId === 'mesa_universal') {
-            console.log(`🏔️ MESA ORDER: ${order.orderId} → ${stockModelId} (source: ${sourceType})`);
-          }
+          // DEBUG: Log Mesa Universal orders specifically - COMMENTED OUT FOR PERFORMANCE
+          // if (stockModelId === 'mesa_universal') {
+          //   console.log(`🏔️ MESA ORDER: ${order.orderId} → ${stockModelId} (source: ${sourceType})`);
+          // }
           
           return {
             ...order,

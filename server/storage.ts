@@ -4652,7 +4652,7 @@ export class DatabaseStorage implements IStorage {
     };
 
     // Define department sequence
-    const departmentSequence = ['P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 'Finish', 'Paint', 'Finish QC', 'Gunsmith', 'Shipping QC', 'Shipping'];
+    const departmentSequence = ['P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 'Gunsmith', 'Finish', 'Finish QC', 'Paint', 'Shipping QC', 'Shipping'];
 
     // Check if order is overdue in current department
     const currentDeptStandardTime = departmentTimes[order.currentDepartment] || 7;

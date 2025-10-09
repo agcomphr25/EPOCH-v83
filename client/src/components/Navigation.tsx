@@ -672,12 +672,6 @@ export default function Navigation() {
       label: 'Shipping',
       icon: Package,
       description: 'Shipping department manager'
-    },
-    {
-      path: '/shipping-management',
-      label: 'Shipping Tracker',
-      icon: Truck,
-      description: 'Track fulfilled orders and manage shipping information'
     }
   ];
 

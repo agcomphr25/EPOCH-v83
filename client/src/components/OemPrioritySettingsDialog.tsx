@@ -660,8 +660,27 @@ export default function OemPrioritySettingsDialog({
                     onClick={async () => {
                       // Generate orders for all saved priority settings
                       for (const setting of savedPrioritySettings as any[]) {
-                        await generateOrdersMutation.mutateAsync(setting.poId);
+                        try {
+                          await generateOrdersMutation.mutateAsync(setting.poId);
+                        } catch (error) {
+                          // Error is already handled by mutation's onError handler
+                          // Just continue with next setting
+                        }
                       }
+                      
+                      // Close dialog and show success message
+                      toast({
+                        title: "OEM Orders Ready",
+                        description: `${(savedPrioritySettings as any[]).reduce((acc, s) => {
+                          const qty = s.manualQuantities ? Object.values(s.manualQuantities as any).reduce((sum: number, q: any) => sum + (Number(q) || 0), 0) : 0;
+                          return acc + qty;
+                        }, 0)} production orders are loaded. Click "Generate Schedule" in the scheduler to assign them to the calendar.`
+                      });
+                      
+                      // Close the dialog after a short delay
+                      setTimeout(() => {
+                        onOpenChange(false);
+                      }, 500);
                     }}
                     disabled={generateOrdersMutation.isPending}
                     size="lg"
@@ -669,7 +688,7 @@ export default function OemPrioritySettingsDialog({
                     data-testid="button-add-all-to-schedule"
                   >
                     <PlayCircle className="w-4 h-4 mr-2" />
-                    Add All to Schedule
+                    Load Orders to Scheduler
                   </Button>
                 </div>
               )}

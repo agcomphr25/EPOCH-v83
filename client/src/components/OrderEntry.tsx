@@ -1335,6 +1335,28 @@ export default function OrderEntry() {
         return;
       }
 
+      // VALIDATION: Bartlein #3B requires shank to be entered
+      if (features.barrel_inlet === 'bartlein_#3b') {
+        if (!features.add_shank) {
+          setErrors(prev => ({ ...prev, shank: 'Shank is required for Bartlein #3B' }));
+          toast({
+            title: "Shank Required",
+            description: "Bartlein #3B barrel inlet requires a shank to be added",
+            variant: "destructive"
+          });
+          return;
+        }
+        if (!features.shank_value || !features.shank_value.trim()) {
+          setErrors(prev => ({ ...prev, shank: 'Shank value must be entered for Bartlein #3B' }));
+          toast({
+            title: "Shank Value Required",
+            description: "Please enter a shank value for Bartlein #3B",
+            variant: "destructive"
+          });
+          return;
+        }
+      }
+
       // All features are now stored directly in the features object by form controls
       // No need to merge separate state variables since handedness, action_inlet, etc. 
       // are directly updated in features by their respective form controls
@@ -2151,7 +2173,14 @@ export default function OrderEntry() {
                     <Label>Barrel Inlet</Label>
                     <Select 
                       value={features.barrel_inlet || undefined} 
-                      onValueChange={(value) => setFeatures(prev => ({ ...prev, barrel_inlet: value }))}
+                      onValueChange={(value) => {
+                        // Auto-enable shank checkbox for Bartlein #3B
+                        if (value === 'bartlein_#3b') {
+                          setFeatures(prev => ({ ...prev, barrel_inlet: value, add_shank: true }));
+                        } else {
+                          setFeatures(prev => ({ ...prev, barrel_inlet: value }));
+                        }
+                      }}
                       disabled={isFlattop}
                     >
                       <SelectTrigger className={isFlattop ? "opacity-50 cursor-not-allowed" : ""}>
@@ -2168,6 +2197,57 @@ export default function OrderEntry() {
                           )) || []}
                       </SelectContent>
                     </Select>
+                  </div>
+
+                  {/* Shank - Checkbox with manual entry */}
+                  <div className="space-y-2">
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        id="shank-checkbox"
+                        data-testid="checkbox-shank"
+                        checked={!!features.add_shank}
+                        onChange={(e) => {
+                          const checked = e.target.checked;
+                          setFeatures(prev => ({ 
+                            ...prev, 
+                            add_shank: checked,
+                            shank_value: checked ? prev.shank_value : undefined
+                          }));
+                        }}
+                        disabled={isFlattop}
+                        className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                      />
+                      <Label htmlFor="shank-checkbox" className={isFlattop ? "opacity-50 cursor-not-allowed" : ""}>
+                        Add Shank
+                        {features.barrel_inlet === 'bartlein_#3b' && (
+                          <span className="text-red-500 ml-1">*</span>
+                        )}
+                      </Label>
+                    </div>
+                    {features.add_shank && (
+                      <input
+                        type="text"
+                        data-testid="input-shank-value"
+                        placeholder="Enter unique shank..."
+                        value={features.shank_value || ''}
+                        onChange={(e) => setFeatures(prev => ({ ...prev, shank_value: e.target.value }))}
+                        disabled={isFlattop}
+                        className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                          isFlattop ? "opacity-50 cursor-not-allowed bg-gray-100" : ""
+                        } ${
+                          features.barrel_inlet === 'bartlein_#3b' && !features.shank_value?.trim() 
+                            ? "border-red-500" 
+                            : "border-gray-300"
+                        }`}
+                      />
+                    )}
+                    {features.barrel_inlet === 'bartlein_#3b' && !features.add_shank && (
+                      <p className="text-sm text-red-500">Shank is required for Bartlein #3B</p>
+                    )}
+                    {features.barrel_inlet === 'bartlein_#3b' && features.add_shank && !features.shank_value?.trim() && (
+                      <p className="text-sm text-red-500">Please enter a shank value</p>
+                    )}
                   </div>
 
                   {/* LOP Length Of Pull - Show message for CAT and Visigoth models */}
@@ -3026,6 +3106,19 @@ export default function OrderEntry() {
                     })() : '0.00'}</span>
                   </div>
                 </div>
+
+                {/* Shank - Show if selected */}
+                {features.add_shank && (
+                  <div className="flex justify-between items-center">
+                    <span>Shank:</span>
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium" data-testid="text-shank-value">
+                        {features.shank_value || 'Not entered'}
+                      </span>
+                      <span className="text-blue-600 font-bold">$0.00</span>
+                    </div>
+                  </div>
+                )}
 
                 {/* QDs (Quick Detach Cups) */}
                 <div className="flex justify-between items-center">

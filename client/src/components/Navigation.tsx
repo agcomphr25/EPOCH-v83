@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link, useLocation } from 'wouter';
 
 import { Factory, User, FileText, TrendingDown, Plus, Settings, Package, FilePenLine, ClipboardList, BarChart, ChevronDown, ChevronRight, FormInput, PieChart, Scan, Warehouse, Shield, Wrench, Users, TestTube, DollarSign, Receipt, TrendingUp, List, BookOpen, Calendar, CheckSquare, Truck, Mail, MessageSquare, CreditCard, XCircle, Cog, ArrowRight, LogOut, Scissors, MapPin, Snowflake, ShoppingCart, GraduationCap } from "lucide-react";
@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import InstallPWAButton from "./InstallPWAButton";
 import { useQuery } from '@tanstack/react-query';
+import { hasFullAccess, hasRouteAccess } from '@/config/userPermissions';
 import {
   NavigationMenu,
   NavigationMenuItem,
@@ -79,6 +80,19 @@ export default function Navigation() {
       window.location.href = '/login';
     }
   };
+
+  // Filter navigation items based on user permissions
+  const filterNavItems = useCallback((items: typeof navItems) => {
+    if (!currentUser?.username) {
+      return []; // No user logged in = no nav items
+    }
+    
+    if (hasFullAccess(currentUser.username)) {
+      return items; // Admin users see everything
+    }
+    
+    return items.filter(item => hasRouteAccess(currentUser.username, item.path));
+  }, [currentUser]);
 
   const [verifiedModulesExpanded, setVerifiedModulesExpanded] = useState(false);
   const [formsReportsExpanded, setFormsReportsExpanded] = useState(false);
@@ -669,6 +683,20 @@ export default function Navigation() {
       description: 'Manage tracking numbers and customer notifications'
     }
   ];
+
+  // Apply permission filtering to all navigation arrays
+  const filteredNavItems = useMemo(() => filterNavItems(navItems), [filterNavItems, navItems]);
+  const filteredInventoryItems = useMemo(() => filterNavItems(inventoryItems), [filterNavItems, inventoryItems]);
+  const filteredFormsReportsItems = useMemo(() => filterNavItems(formsReportsItems), [filterNavItems, formsReportsItems]);
+  const filteredQcMaintenanceItems = useMemo(() => filterNavItems(qcMaintenanceItems), [filterNavItems, qcMaintenanceItems]);
+  const filteredTrainingItems = useMemo(() => filterNavItems(trainingItems), [filterNavItems, trainingItems]);
+  const filteredEmployeesItems = useMemo(() => filterNavItems(employeesItems), [filterNavItems, employeesItems]);
+  const filteredFinanceItems = useMemo(() => filterNavItems(financeItems), [filterNavItems, financeItems]);
+  const filteredUserDashboardsItems = useMemo(() => filterNavItems(userDashboardsItems), [filterNavItems, userDashboardsItems]);
+  const filteredPurchaseOrdersItems = useMemo(() => filterNavItems(purchaseOrdersItems), [filterNavItems, purchaseOrdersItems]);
+  const filteredVerifiedModulesItems = useMemo(() => filterNavItems(verifiedModulesItems), [filterNavItems, verifiedModulesItems]);
+  const filteredProductionSchedulingItems = useMemo(() => filterNavItems(productionSchedulingItems), [filterNavItems, productionSchedulingItems]);
+  const filteredDepartmentQueueItems = useMemo(() => filterNavItems(departmentQueueItems), [filterNavItems, departmentQueueItems]);
 
   const isVerifiedModulesActive = verifiedModulesItems.some(item => location === item.path);
   const isFormsReportsActive = formsReportsItems.some(item => location === item.path);

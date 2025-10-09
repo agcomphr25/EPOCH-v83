@@ -13,7 +13,7 @@ import { format, differenceInDays } from 'date-fns';
 import { getDisplayOrderId } from '@/lib/orderUtils';
 import { useToast } from '@/hooks/use-toast';
 import { useLocation } from 'wouter';
-import FBNumberSearch from '@/components/FBNumberSearch';
+import { OrderSearchBox } from '@/components/OrderSearchBox';
 
 export default function QCShippingQueuePage() {
   // State for selected orders and shipping functionality
@@ -27,6 +27,7 @@ export default function QCShippingQueuePage() {
   const [showBulkPrintModal, setShowBulkPrintModal] = useState(false);
   const [printQueue, setPrintQueue] = useState<{ orderId: string, type: 'sales' | 'qc' }[]>([]);
   const [currentPrintIndex, setCurrentPrintIndex] = useState(0);
+  const [highlightedOrderId, setHighlightedOrderId] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
@@ -73,32 +74,28 @@ export default function QCShippingQueuePage() {
     setLocation('/kickback-tracking');
   };
 
-  // Handle order found via Facebook number search
-  const handleOrderFound = (orderId: string) => {
-    // Check if the order exists in the current QC/Shipping queue
-    const orderExists = qcShippingOrders.some((order: any) => order.orderId === orderId);
+  // Handle order search selection
+  const handleOrderSearchSelect = (order: any) => {
+    const orderExists = qcShippingOrders.some((o: any) => o.orderId === order.orderId);
     if (orderExists) {
-      setSelectedOrders(prev => new Set([...prev, orderId]));
+      setHighlightedOrderId(order.orderId);
+      // Auto-scroll to the highlighted order
+      setTimeout(() => {
+        const element = document.getElementById(`order-${order.orderId}`);
+        if (element) {
+          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 100);
       toast({
         title: "Success",
-        description: `Order ${orderId} found and selected`,
+        description: `Order ${order.orderId} highlighted in the list`,
       });
     } else {
-      // Find the order in all orders to show current department
-      const allOrder = (allOrders as any[]).find((order: any) => order.orderId === orderId);
-      if (allOrder) {
-        toast({
-          title: "Error",
-          description: `Order ${orderId} is currently in ${allOrder.currentDepartment} department, not QC/Shipping`,
-          variant: "destructive",
-        });
-      } else {
-        toast({
-          title: "Error", 
-          description: `Order ${orderId} not found`,
-          variant: "destructive",
-        });
-      }
+      toast({
+        title: "Error",
+        description: `Order ${order.orderId} is not in the Shipping QC department`,
+        variant: "destructive",
+      });
     }
   };
 
@@ -633,8 +630,28 @@ export default function QCShippingQueuePage() {
       {/* Barcode Scanner at top */}
       <BarcodeScanner />
 
-      {/* Facebook Number Search */}
-      <FBNumberSearch onOrderFound={handleOrderFound} />
+      {/* Order Search Box */}
+      <Card>
+        <CardContent className="p-4">
+          <div className="flex items-center gap-4">
+            <OrderSearchBox 
+              orders={qcShippingOrders}
+              placeholder="Search orders by Order ID or FishBowl Number..."
+              onOrderSelect={handleOrderSearchSelect}
+            />
+            {highlightedOrderId && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setHighlightedOrderId(null)}
+                className="text-sm"
+              >
+                Clear highlight
+              </Button>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Department Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">

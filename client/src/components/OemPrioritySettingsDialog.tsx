@@ -87,7 +87,8 @@ export default function OemPrioritySettingsDialog({
   const fetchVendorPOData = async (vendorId: string) => {
     if (vendorPODataCache[vendorId]) return vendorPODataCache[vendorId];
     
-    const data = await apiRequest(`/api/oem-settings/layup-scheduler/oem-priority/${vendorId}`) as POWithStockItems[];
+    const response = await apiRequest(`/api/oem-settings/layup-scheduler/oem-priority/${vendorId}`) as { vendor: Vendor, pos: POWithStockItems[] };
+    const data = response.pos;
     setVendorPODataCache(prev => ({ ...prev, [vendorId]: data }));
     
     // Initialize selection state for new POs

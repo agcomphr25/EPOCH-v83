@@ -43,17 +43,49 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ error: 'Username and password are required' });
     }
 
-    // Find user
-    const user = USERS.get(username.toLowerCase());
+    // Try to find user in database first
+    const dbUserResult = await pool.query(
+      `SELECT id, username, password_hash, role, is_active 
+       FROM users 
+       WHERE username = $1`,
+      [username.toLowerCase()]
+    );
 
-    if (!user) {
-      return res.status(401).json({ error: 'Invalid username or password' });
+    let user: any;
+    let isValidPassword = false;
+
+    if (dbUserResult && dbUserResult.length > 0) {
+      // User exists in database
+      const dbUser = dbUserResult[0];
+      
+      // Check if user is active
+      if (!dbUser.is_active) {
+        return res.status(401).json({ error: 'Account is inactive' });
+      }
+
+      // Verify password against database hash
+      isValidPassword = await bcrypt.compare(password, dbUser.password_hash);
+      
+      if (isValidPassword) {
+        user = {
+          id: dbUser.id,
+          username: dbUser.username,
+          role: dbUser.role || 'user'
+        };
+      }
+    } else {
+      // Fall back to hardcoded users if not in database
+      const hardcodedUser = USERS.get(username.toLowerCase());
+      
+      if (hardcodedUser) {
+        isValidPassword = await bcrypt.compare(password, hardcodedUser.password);
+        if (isValidPassword) {
+          user = hardcodedUser;
+        }
+      }
     }
 
-    // Verify password (all test users use password 'test123')
-    const isValidPassword = await bcrypt.compare(password, user.password);
-
-    if (!isValidPassword) {
+    if (!user || !isValidPassword) {
       return res.status(401).json({ error: 'Invalid username or password' });
     }
 
@@ -153,8 +185,20 @@ router.get('/validate', async (req, res) => {
       return res.status(401).json({ valid: false });
     }
 
-    // Get user data from hardcoded users
-    const user = USERS.get(session.username.toLowerCase());
+    // Try to get user data from database first
+    const dbUserResult = await pool.query(
+      `SELECT id, username, role FROM users WHERE username = $1 AND is_active = true`,
+      [session.username.toLowerCase()]
+    );
+
+    let user: any;
+    
+    if (dbUserResult && dbUserResult.length > 0) {
+      user = dbUserResult[0];
+    } else {
+      // Fall back to hardcoded users
+      user = USERS.get(session.username.toLowerCase());
+    }
 
     if (!user) {
       await pool.query('DELETE FROM user_sessions WHERE session_token = $1', [sessionToken]);
@@ -202,8 +246,20 @@ router.get('/session', async (req, res) => {
       return res.status(401).json({ error: 'Session expired' });
     }
 
-    // Get user data from hardcoded users
-    const user = USERS.get(session.username.toLowerCase());
+    // Try to get user data from database first
+    const dbUserResult = await pool.query(
+      `SELECT id, username, role FROM users WHERE username = $1 AND is_active = true`,
+      [session.username.toLowerCase()]
+    );
+
+    let user: any;
+    
+    if (dbUserResult && dbUserResult.length > 0) {
+      user = dbUserResult[0];
+    } else {
+      // Fall back to hardcoded users
+      user = USERS.get(session.username.toLowerCase());
+    }
 
     if (!user) {
       await pool.query('DELETE FROM user_sessions WHERE session_token = $1', [sessionToken]);

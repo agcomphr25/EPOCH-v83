@@ -362,18 +362,6 @@ export default function AllOrdersPage() {
     });
   }, [allOrders, searchTerm, selectedDepartment]);
 
-  // Reset to page 1 when filters change
-  React.useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTerm, selectedDepartment, sortBy]);
-
-  // Calculate client-side pagination
-  const totalOrders = filteredOrders.length;
-  const totalPages = Math.ceil(totalOrders / pageSize);
-  const startIndex = (currentPage - 1) * pageSize;
-  const endIndex = startIndex + pageSize;
-  const orders = filteredOrders.slice(startIndex, endIndex);
-
   // Function to calculate search relevance score
   const getSearchRelevanceScore = (order: any, searchTerm: string) => {
     if (!searchTerm.trim()) return 0;
@@ -397,31 +385,51 @@ export default function AllOrdersPage() {
   };
 
   // Sort orders based on search relevance first, then selected sort option
-  const sortedOrders = [...filteredOrders].sort((a, b) => {
-    if (searchTerm.trim()) {
-      const scoreA = getSearchRelevanceScore(a, searchTerm);
-      const scoreB = getSearchRelevanceScore(b, searchTerm);
-      
-      if (scoreA !== scoreB) {
-        return scoreB - scoreA;
+  const sortedOrders = React.useMemo(() => {
+    return [...filteredOrders].sort((a, b) => {
+      if (searchTerm.trim()) {
+        const scoreA = getSearchRelevanceScore(a, searchTerm);
+        const scoreB = getSearchRelevanceScore(b, searchTerm);
+        
+        if (scoreA !== scoreB) {
+          return scoreB - scoreA;
+        }
       }
-    }
+      
+      switch (sortBy) {
+        case 'orderDate':
+          return new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime();
+        case 'dueDate':
+          return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+        case 'customer':
+          return (a.customer || '').localeCompare(b.customer || '');
+        case 'model':
+          return (a.modelId || '').localeCompare(b.modelId || '');
+        case 'enteredDate':
+          return new Date(b.createdAt || '').getTime() - new Date(a.createdAt || '').getTime();
+        default:
+          return 0;
+      }
+    });
+  }, [filteredOrders, searchTerm, sortBy]);
+
+  // Reset to page 1 when filters change
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, selectedDepartment, sortBy]);
+
+  // Calculate client-side pagination
+  const paginationData = React.useMemo(() => {
+    const totalOrders = sortedOrders.length;
+    const totalPages = Math.ceil(totalOrders / pageSize);
+    const startIndex = (currentPage - 1) * pageSize;
+    const endIndex = startIndex + pageSize;
+    const orders = sortedOrders.slice(startIndex, endIndex);
     
-    switch (sortBy) {
-      case 'orderDate':
-        return new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime();
-      case 'dueDate':
-        return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
-      case 'customer':
-        return (a.customer || '').localeCompare(b.customer || '');
-      case 'model':
-        return (a.modelId || '').localeCompare(b.modelId || '');
-      case 'enteredDate':
-        return new Date(b.createdAt || '').getTime() - new Date(a.createdAt || '').getTime();
-      default:
-        return 0;
-    }
-  });
+    return { totalOrders, totalPages, orders };
+  }, [sortedOrders, currentPage, pageSize]);
+
+  const { totalOrders, totalPages, orders } = paginationData;
 
   if (isLoading) {
     return (

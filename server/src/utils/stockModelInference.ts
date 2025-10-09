@@ -28,7 +28,8 @@ export function inferStockModelFromFeatures(order: any): { stockModelId: string;
   // PRIORITY: Respect existing valid stockModelId field first
   if (stockModelId && stockModelId !== 'universal' && stockModelId !== 'UNPROCESSED') {
     product = stockModelId;
-    console.log(`✅ EXISTING MODEL ID: ${order.orderId || order.order_id} → ${stockModelId} (preserved)`);
+    // COMMENTED OUT FOR PERFORMANCE - was logging 800+ times per API call
+    // console.log(`✅ EXISTING MODEL ID: ${order.orderId || order.order_id} → ${stockModelId} (preserved)`);
     return { stockModelId, product };
   }
   

@@ -310,7 +310,7 @@ export default function OrdersList() {
     console.log(`🔄 Progressing order ${orderId} from ${currentDepartment} to ${nextDepartment}`);
 
     // IMMEDIATELY update React Query cache - this prevents any reversion
-    queryClient.setQueryData(['/api/orders/with-payment-status', searchTerm], (old: any[]) => {
+    queryClient.setQueryData(['/api/orders/with-payment-status'], (old: any[]) => {
       if (!old) return old;
       const updated = old.map((order: any) => {
         if (order.orderId === orderId) {

@@ -588,6 +588,12 @@ export default function Navigation() {
       label: 'Order Department Transfer',
       icon: ArrowRight,
       description: 'Move orders between departments for corrections'
+    },
+    {
+      path: '/metal-accessories',
+      label: 'Metal Accessories Tracker',
+      icon: Package,
+      description: 'Track metal accessories inventory and production demands'
     }
   ];
 

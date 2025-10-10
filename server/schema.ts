@@ -2754,4 +2754,25 @@ export type InsertMessageRecipient = z.infer<typeof insertMessageRecipientSchema
 export type MessageAttachment = typeof messageAttachments.$inferSelect;
 export type InsertMessageAttachment = z.infer<typeof insertMessageAttachmentSchema>;
 
+// Metal Accessories Tracker
+export const metalAccessories = pgTable("metal_accessories", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  category: text("category").notNull(),
+  inventory: integer("inventory").notNull().default(0),
+  machined: integer("machined").notNull().default(0),
+  atAnodizer: integer("at_anodizer").notNull().default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertMetalAccessorySchema = createInsertSchema(metalAccessories).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type MetalAccessory = typeof metalAccessories.$inferSelect;
+export type InsertMetalAccessory = z.infer<typeof insertMetalAccessorySchema>;
+
 export * from './calendar.schema';

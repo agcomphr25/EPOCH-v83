@@ -12,8 +12,18 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Plus, Save, X, Check } from "lucide-react";
+import { Loader2, Plus, Pencil, Trash2, X, Check } from "lucide-react";
 
 const metalAccessorySchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -25,19 +35,10 @@ const metalAccessorySchema = z.object({
 
 type MetalAccessory = z.infer<typeof metalAccessorySchema> & { id: number };
 
-interface EditingQuantities {
-  inventory: number;
-  machined: number;
-  atAnodizer: number;
-}
-
 export default function MetalAccessoriesTracker() {
-  const [editingItemId, setEditingItemId] = useState<number | null>(null);
-  const [editingQuantities, setEditingQuantities] = useState<EditingQuantities>({
-    inventory: 0,
-    machined: 0,
-    atAnodizer: 0,
-  });
+  const [editingItem, setEditingItem] = useState<MetalAccessory | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState<MetalAccessory | null>(null);
   const { toast } = useToast();
 
   const { data: items = [], isLoading: itemsLoading } = useQuery<MetalAccessory[]>({
@@ -49,6 +50,17 @@ export default function MetalAccessoriesTracker() {
   });
 
   const form = useForm({
+    resolver: zodResolver(metalAccessorySchema),
+    defaultValues: {
+      name: "",
+      category: "Bottom Metals" as const,
+      inventory: 0,
+      machined: 0,
+      atAnodizer: 0,
+    },
+  });
+
+  const editForm = useForm({
     resolver: zodResolver(metalAccessorySchema),
     defaultValues: {
       name: "",
@@ -85,8 +97,25 @@ export default function MetalAccessoriesTracker() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/metal-accessories"] });
       queryClient.invalidateQueries({ queryKey: ["/api/metal-accessories/demands"] });
-      setEditingItemId(null);
-      toast({ title: "Success", description: "Quantities updated successfully" });
+      setEditingItem(null);
+      toast({ title: "Success", description: "Item updated successfully" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) =>
+      apiRequest(`/api/metal-accessories/${id}`, {
+        method: "DELETE",
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/metal-accessories"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/metal-accessories/demands"] });
+      setDeleteDialogOpen(false);
+      setItemToDelete(null);
+      toast({ title: "Success", description: "Item deleted successfully" });
     },
     onError: (error: Error) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -97,33 +126,36 @@ export default function MetalAccessoriesTracker() {
     createMutation.mutate(data);
   };
 
-  const handleEditQuantities = (item: MetalAccessory) => {
-    if (editingItemId !== null && editingItemId !== item.id) {
-      handleCancelEdit();
-    }
-    setEditingItemId(item.id);
-    setEditingQuantities({
+  const handleEdit = (item: MetalAccessory) => {
+    setEditingItem(item);
+    editForm.reset({
+      name: item.name,
+      category: item.category as any,
       inventory: item.inventory,
       machined: item.machined,
       atAnodizer: item.atAnodizer,
     });
   };
 
-  const handleSaveQuantities = (item: MetalAccessory) => {
-    updateMutation.mutate({
-      id: item.id,
-      data: {
-        name: item.name,
-        category: item.category as any,
-        inventory: editingQuantities.inventory,
-        machined: editingQuantities.machined,
-        atAnodizer: editingQuantities.atAnodizer,
-      },
-    });
+  const handleUpdate = (data: z.infer<typeof metalAccessorySchema>) => {
+    if (editingItem) {
+      updateMutation.mutate({ id: editingItem.id, data });
+    }
   };
 
   const handleCancelEdit = () => {
-    setEditingItemId(null);
+    setEditingItem(null);
+  };
+
+  const handleDeleteClick = (item: MetalAccessory) => {
+    setItemToDelete(item);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteConfirm = () => {
+    if (itemToDelete) {
+      deleteMutation.mutate(itemToDelete.id);
+    }
   };
 
   return (
@@ -146,10 +178,142 @@ export default function MetalAccessoriesTracker() {
             <CardHeader>
               <CardTitle>Current Inventory</CardTitle>
               <CardDescription>
-                View and update inventory levels. Click the row to edit quantities.
+                View and manage your metal accessories. Click Edit to modify or Delete to remove items.
               </CardDescription>
             </CardHeader>
             <CardContent>
+              {editingItem ? (
+                <div className="space-y-4 mb-6 p-4 border rounded-lg bg-muted/50">
+                  <h3 className="font-semibold">Editing: {editingItem.name}</h3>
+                  <Form {...editForm}>
+                    <form onSubmit={editForm.handleSubmit(handleUpdate)} className="space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <FormField
+                          control={editForm.control}
+                          name="name"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Name</FormLabel>
+                              <FormControl>
+                                <Input {...field} data-testid="edit-input-name" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={editForm.control}
+                          name="category"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Category</FormLabel>
+                              <Select onValueChange={field.onChange} value={field.value}>
+                                <FormControl>
+                                  <SelectTrigger data-testid="edit-select-category">
+                                    <SelectValue placeholder="Select category" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  <SelectItem value="Bottom Metals">Bottom Metals</SelectItem>
+                                  <SelectItem value="Rails">Rails</SelectItem>
+                                  <SelectItem value="Other">Other</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={editForm.control}
+                          name="inventory"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Current Inventory</FormLabel>
+                              <FormControl>
+                                <Input
+                                  type="number"
+                                  {...field}
+                                  onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
+                                  data-testid="edit-input-inventory"
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={editForm.control}
+                          name="machined"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Quantity Machined</FormLabel>
+                              <FormControl>
+                                <Input
+                                  type="number"
+                                  {...field}
+                                  onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
+                                  data-testid="edit-input-machined"
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={editForm.control}
+                          name="atAnodizer"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Quantity at Anodizer</FormLabel>
+                              <FormControl>
+                                <Input
+                                  type="number"
+                                  {...field}
+                                  onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
+                                  data-testid="edit-input-at-anodizer"
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+
+                      <div className="flex gap-2">
+                        <Button
+                          type="submit"
+                          disabled={updateMutation.isPending}
+                          data-testid="button-save-edit"
+                        >
+                          {updateMutation.isPending ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving...
+                            </>
+                          ) : (
+                            <>
+                              <Check className="mr-2 h-4 w-4" /> Save Changes
+                            </>
+                          )}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={handleCancelEdit}
+                          disabled={updateMutation.isPending}
+                          data-testid="button-cancel-edit"
+                        >
+                          <X className="mr-2 h-4 w-4" /> Cancel
+                        </Button>
+                      </div>
+                    </form>
+                  </Form>
+                </div>
+              ) : null}
+
               {itemsLoading ? (
                 <div className="flex items-center justify-center py-8">
                   <Loader2 className="h-8 w-8 animate-spin" />
@@ -179,96 +343,35 @@ export default function MetalAccessoriesTracker() {
                         <TableCell data-testid={`text-category-${item.id}`}>
                           {item.category}
                         </TableCell>
-                        <TableCell data-testid={`cell-inventory-${item.id}`}>
-                          {editingItemId === item.id ? (
-                            <Input
-                              type="number"
-                              value={editingQuantities.inventory}
-                              onChange={(e) =>
-                                setEditingQuantities({
-                                  ...editingQuantities,
-                                  inventory: parseInt(e.target.value) || 0,
-                                })
-                              }
-                              className="w-24"
-                              data-testid={`input-inventory-${item.id}`}
-                            />
-                          ) : (
-                            item.inventory
-                          )}
+                        <TableCell data-testid={`text-inventory-${item.id}`}>
+                          {item.inventory}
                         </TableCell>
-                        <TableCell data-testid={`cell-machined-${item.id}`}>
-                          {editingItemId === item.id ? (
-                            <Input
-                              type="number"
-                              value={editingQuantities.machined}
-                              onChange={(e) =>
-                                setEditingQuantities({
-                                  ...editingQuantities,
-                                  machined: parseInt(e.target.value) || 0,
-                                })
-                              }
-                              className="w-24"
-                              data-testid={`input-machined-${item.id}`}
-                            />
-                          ) : (
-                            item.machined
-                          )}
+                        <TableCell data-testid={`text-machined-${item.id}`}>
+                          {item.machined}
                         </TableCell>
-                        <TableCell data-testid={`cell-anodizer-${item.id}`}>
-                          {editingItemId === item.id ? (
-                            <Input
-                              type="number"
-                              value={editingQuantities.atAnodizer}
-                              onChange={(e) =>
-                                setEditingQuantities({
-                                  ...editingQuantities,
-                                  atAnodizer: parseInt(e.target.value) || 0,
-                                })
-                              }
-                              className="w-24"
-                              data-testid={`input-at-anodizer-${item.id}`}
-                            />
-                          ) : (
-                            item.atAnodizer
-                          )}
+                        <TableCell data-testid={`text-anodizer-${item.id}`}>
+                          {item.atAnodizer}
                         </TableCell>
                         <TableCell>
-                          {editingItemId === item.id ? (
-                            <div className="flex gap-2">
-                              <Button
-                                size="sm"
-                                onClick={() => handleSaveQuantities(item)}
-                                disabled={updateMutation.isPending}
-                                data-testid={`button-save-${item.id}`}
-                              >
-                                {updateMutation.isPending ? (
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                ) : (
-                                  <Check className="h-4 w-4" />
-                                )}
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={handleCancelEdit}
-                                disabled={updateMutation.isPending}
-                                data-testid={`button-cancel-${item.id}`}
-                              >
-                                <X className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          ) : (
+                          <div className="flex gap-2">
                             <Button
-                              size="sm"
                               variant="outline"
-                              onClick={() => handleEditQuantities(item)}
+                              size="sm"
+                              onClick={() => handleEdit(item)}
+                              disabled={editingItem !== null}
                               data-testid={`button-edit-${item.id}`}
                             >
-                              <Save className="h-4 w-4 mr-2" />
-                              Update
+                              <Pencil className="h-4 w-4" />
                             </Button>
-                          )}
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={() => handleDeleteClick(item)}
+                              data-testid={`button-delete-${item.id}`}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -498,6 +601,34 @@ export default function MetalAccessoriesTracker() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent data-testid="delete-dialog">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete <strong>{itemToDelete?.name}</strong> from the tracker.
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-delete">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteConfirm}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              data-testid="button-confirm-delete"
+            >
+              {deleteMutation.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Deleting...
+                </>
+              ) : (
+                "Delete"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

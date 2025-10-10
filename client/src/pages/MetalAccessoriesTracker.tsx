@@ -22,6 +22,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Plus, Pencil, Trash2, X, Check } from "lucide-react";
 
@@ -39,6 +46,17 @@ export default function MetalAccessoriesTracker() {
   const [editingItem, setEditingItem] = useState<MetalAccessory | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<MetalAccessory | null>(null);
+  const [weeklyOrdersModal, setWeeklyOrdersModal] = useState<{
+    open: boolean;
+    weekNumber: number;
+    itemName: string;
+    orders: any[];
+  }>({
+    open: false,
+    weekNumber: 0,
+    itemName: '',
+    orders: [],
+  });
   const { toast } = useToast();
 
   const { data: items = [], isLoading: itemsLoading } = useQuery<MetalAccessory[]>({
@@ -247,14 +265,30 @@ export default function MetalAccessoriesTracker() {
                             <p className="font-medium mb-2">Weekly Demand Breakdown:</p>
                             <div className="grid grid-cols-4 gap-2">
                               {demand.weeklyDemand.map((count: number, index: number) => (
-                                <div
+                                <button
                                   key={index}
-                                  className="text-center p-2 bg-muted rounded"
-                                  data-testid={`text-week-${index + 1}-${demand.itemId}`}
+                                  onClick={() => {
+                                    if (count > 0 && demand.weeklyOrders && demand.weeklyOrders[index]) {
+                                      setWeeklyOrdersModal({
+                                        open: true,
+                                        weekNumber: index + 1,
+                                        itemName: demand.name,
+                                        orders: demand.weeklyOrders[index],
+                                      });
+                                    }
+                                  }}
+                                  disabled={count === 0}
+                                  className={`text-center p-2 rounded transition-colors ${
+                                    count > 0 
+                                      ? 'bg-muted hover:bg-primary/10 cursor-pointer active:scale-95 border-2 border-transparent hover:border-primary/30' 
+                                      : 'bg-muted/50 cursor-not-allowed opacity-60'
+                                  }`}
+                                  data-testid={`button-week-${index + 1}-${demand.itemId}`}
                                 >
                                   <p className="text-xs text-muted-foreground">Week {index + 1}</p>
-                                  <p className="font-bold text-lg">{count}</p>
-                                </div>
+                                  <p className={`font-bold text-lg ${count > 0 ? 'text-blue-600' : 'text-gray-400'}`}>{count}</p>
+                                  {count > 0 && <p className="text-xs text-blue-500 mt-1">Click to view</p>}
+                                </button>
                               ))}
                             </div>
                           </div>
@@ -601,6 +635,62 @@ export default function MetalAccessoriesTracker() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      <Dialog open={weeklyOrdersModal.open} onOpenChange={(open) => setWeeklyOrdersModal({ ...weeklyOrdersModal, open })}>
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto" data-testid="weekly-orders-dialog">
+          <DialogHeader>
+            <DialogTitle>
+              Week {weeklyOrdersModal.weekNumber} Orders - {weeklyOrdersModal.itemName}
+            </DialogTitle>
+            <DialogDescription>
+              {weeklyOrdersModal.orders.length} order{weeklyOrdersModal.orders.length !== 1 ? 's' : ''} requiring this item
+            </DialogDescription>
+          </DialogHeader>
+          <div className="mt-4">
+            {weeklyOrdersModal.orders.length > 0 ? (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Order ID</TableHead>
+                    <TableHead>Due Date</TableHead>
+                    <TableHead>Quantity</TableHead>
+                    <TableHead>Customer ID</TableHead>
+                    <TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {weeklyOrdersModal.orders.map((order, idx) => (
+                    <TableRow key={idx} data-testid={`order-row-${order.orderId}`}>
+                      <TableCell className="font-medium">{order.orderId}</TableCell>
+                      <TableCell>
+                        {order.dueDate 
+                          ? new Date(order.dueDate).toLocaleDateString()
+                          : 'No due date'}
+                      </TableCell>
+                      <TableCell>{order.quantity}</TableCell>
+                      <TableCell>{order.customerId || 'N/A'}</TableCell>
+                      <TableCell>
+                        <span className={`px-2 py-1 rounded text-xs ${
+                          order.status === 'FINALIZED' 
+                            ? 'bg-green-100 text-green-800' 
+                            : 'bg-blue-100 text-blue-800'
+                        }`}>
+                          {order.status}
+                        </span>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            ) : (
+              <div className="text-center py-12">
+                <p className="text-muted-foreground text-lg mb-2">No orders scheduled this week</p>
+                <p className="text-sm text-muted-foreground">This week has no production demand for this item</p>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent data-testid="delete-dialog">

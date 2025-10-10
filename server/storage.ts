@@ -6972,6 +6972,8 @@ export class DatabaseStorage implements IStorage {
         )
       );
 
+    console.log('🔍 Metal Accessories Demands - Total orders:', ordersInProgress.length);
+
     const demands = items.map(item => {
       const weeklyDemand = [0, 0, 0, 0];
       const weeklyOrders: any[][] = [[], [], [], []]; // Track orders for each week

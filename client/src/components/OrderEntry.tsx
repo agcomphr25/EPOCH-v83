@@ -24,6 +24,7 @@ import { OrderAttachments } from '@/components/OrderAttachments';
 import type { Customer } from '@shared/schema';
 import { useFeatureValidation, useFeatureStateValidation } from '@/hooks/useFeatureValidation';
 import { useDataConsistencyValidation } from '@/hooks/useDataConsistencyValidation';
+import { useSmartSort } from '@/hooks/useSmartSort';
 import { FEATURE_IDS, findFeature, getFeatureOptionDisplay, getPaintFeatures } from '@/utils/featureMapping';
 
 interface StockModel {
@@ -145,6 +146,13 @@ export default function OrderEntry() {
     zipCode: '',
     country: 'United States'
   });
+
+  // Smart sorting for Action Inlet - AI-powered sorting by frequency + alphabetical
+  const actionInletOptions = featureDefs.find(f => f.name === 'action_inlet' || f.id === 'action_inlet')?.options;
+  const { sortedOptions: smartSortedActionInlet, trackSelection: trackActionInletSelection } = useSmartSort(
+    'action_inlet',
+    actionInletOptions
+  );
 
   // Calculate base due date based on stock model
   const calculateBaseDueDate = useCallback(() => {
@@ -2134,16 +2142,24 @@ export default function OrderEntry() {
                     <Select 
                       key={`action-inlet-${renderKey}-${features.action_inlet || 'empty'}`}
                       value={features.action_inlet || undefined} 
-                      onValueChange={(value) => setFeatures(prev => ({ ...prev, action_inlet: value }))}
+                      onValueChange={async (value) => {
+                        // Track the selection for AI-powered smart sorting
+                        const selectedOption = smartSortedActionInlet.find(opt => opt.value === value);
+                        if (selectedOption) {
+                          await trackActionInletSelection(selectedOption.value, selectedOption.label);
+                          // Invalidate the query to refresh the sorted list
+                          queryClient.invalidateQueries({ queryKey: ['/api/feature-selections/sorted', 'action_inlet'] });
+                        }
+                        setFeatures(prev => ({ ...prev, action_inlet: value }));
+                      }}
                       disabled={isFlattop}
                     >
                       <SelectTrigger className={isFlattop ? "opacity-50 cursor-not-allowed" : ""}>
                         <SelectValue placeholder={isFlattop ? "Not Available (Flattop)" : "Select..."} />
                       </SelectTrigger>
                       <SelectContent>
-                        {featureDefs
-                          .find(f => f.name === 'action_inlet' || f.id === 'action_inlet')
-                          ?.options?.filter(option => {
+                        {smartSortedActionInlet
+                          .filter(option => {
                             // Filter out empty options
                             if (!option.value || option.value.trim() === '') return false;
                             
@@ -2159,11 +2175,11 @@ export default function OrderEntry() {
                             
                             return true;
                           })
-                          ?.map((option) => (
+                          .map((option) => (
                             <SelectItem key={option.value} value={option.value}>
                               {option.label}
                             </SelectItem>
-                          )) || []}
+                          ))}
                       </SelectContent>
                     </Select>
                   </div>

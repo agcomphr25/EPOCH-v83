@@ -111,6 +111,7 @@ import SimplifiedLayupScheduler from "./components/SimplifiedLayupScheduler";
 import CustomerSatisfaction from "./pages/CustomerSatisfaction";
 import VendorsPage from "./pages/VendorsPage";
 import VendorPOPage from "./pages/VendorPOPage";
+import MetalAccessoriesTracker from "./pages/MetalAccessoriesTracker";
 
 import { Toaster as HotToaster } from 'react-hot-toast';
 import DeploymentAuthWrapper from './components/DeploymentAuthWrapper';
@@ -235,6 +236,7 @@ function App() {
                   
                   {/* Enhanced System Routes (Independent) */}
                   <Route path="/enhanced-inventory" component={EnhancedInventoryMRPPage} />
+                  <Route path="/metal-accessories" component={MetalAccessoriesTracker} />
 
                   {/* QC and Maintenance Routes */}
                   <Route path="/qc" component={QCPage} />

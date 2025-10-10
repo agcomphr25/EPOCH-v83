@@ -176,6 +176,99 @@ export default function MetalAccessoriesTracker() {
         <TabsContent value="inventory" className="space-y-6">
           <Card>
             <CardHeader>
+              <CardTitle>Production Demand (Next 4 Weeks)</CardTitle>
+              <CardDescription>
+                Automatically calculated from current IN_PROGRESS and FINALIZED orders
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {demandsLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-8 w-8 animate-spin" />
+                </div>
+              ) : demands.length === 0 ? (
+                <p className="text-center text-muted-foreground py-8">
+                  No demand data available. Add items and orders to see production needs.
+                </p>
+              ) : (
+                <Accordion type="single" collapsible className="w-full">
+                  {demands.map((demand: any) => (
+                    <AccordionItem
+                      key={demand.itemId}
+                      value={`item-${demand.itemId}`}
+                      data-testid={`accordion-item-${demand.itemId}`}
+                    >
+                      <AccordionTrigger>
+                        <div className="flex justify-between w-full pr-4">
+                          <span className="font-semibold" data-testid={`text-demand-name-${demand.itemId}`}>
+                            {demand.name}
+                          </span>
+                          <span
+                            className={`font-bold ${
+                              demand.productionNeeded > 0 ? "text-red-600" : "text-green-600"
+                            }`}
+                            data-testid={`text-production-needed-${demand.itemId}`}
+                          >
+                            {demand.productionNeeded > 0
+                              ? `⚠️ Produce: ${demand.productionNeeded}`
+                              : `✓ Sufficient Stock`}
+                          </span>
+                        </div>
+                      </AccordionTrigger>
+                      <AccordionContent>
+                        <div className="space-y-3 pt-2">
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <p className="text-sm text-muted-foreground">Category</p>
+                              <p className="font-medium">{demand.category}</p>
+                            </div>
+                            <div>
+                              <p className="text-sm text-muted-foreground">Total Demand (4 weeks)</p>
+                              <p className="font-medium">{demand.totalDemandNext4}</p>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-3 gap-4 pt-2 border-t">
+                            <div>
+                              <p className="text-sm text-muted-foreground">Inventory</p>
+                              <p className="font-medium">{demand.inventory}</p>
+                            </div>
+                            <div>
+                              <p className="text-sm text-muted-foreground">Machined</p>
+                              <p className="font-medium">{demand.machined}</p>
+                            </div>
+                            <div>
+                              <p className="text-sm text-muted-foreground">At Anodizer</p>
+                              <p className="font-medium">{demand.atAnodizer}</p>
+                            </div>
+                          </div>
+
+                          <div className="pt-2 border-t">
+                            <p className="font-medium mb-2">Weekly Demand Breakdown:</p>
+                            <div className="grid grid-cols-4 gap-2">
+                              {demand.weeklyDemand.map((count: number, index: number) => (
+                                <div
+                                  key={index}
+                                  className="text-center p-2 bg-muted rounded"
+                                  data-testid={`text-week-${index + 1}-${demand.itemId}`}
+                                >
+                                  <p className="text-xs text-muted-foreground">Week {index + 1}</p>
+                                  <p className="font-bold text-lg">{count}</p>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      </AccordionContent>
+                    </AccordionItem>
+                  ))}
+                </Accordion>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
               <CardTitle>Current Inventory</CardTitle>
               <CardDescription>
                 View and manage your metal accessories. Click Edit to modify or Delete to remove items.
@@ -377,99 +470,6 @@ export default function MetalAccessoriesTracker() {
                     ))}
                   </TableBody>
                 </Table>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Production Demand (Next 4 Weeks)</CardTitle>
-              <CardDescription>
-                Automatically calculated from current IN_PROGRESS and FINALIZED orders
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {demandsLoading ? (
-                <div className="flex items-center justify-center py-8">
-                  <Loader2 className="h-8 w-8 animate-spin" />
-                </div>
-              ) : demands.length === 0 ? (
-                <p className="text-center text-muted-foreground py-8">
-                  No demand data available. Add items and orders to see production needs.
-                </p>
-              ) : (
-                <Accordion type="single" collapsible className="w-full">
-                  {demands.map((demand: any) => (
-                    <AccordionItem
-                      key={demand.itemId}
-                      value={`item-${demand.itemId}`}
-                      data-testid={`accordion-item-${demand.itemId}`}
-                    >
-                      <AccordionTrigger>
-                        <div className="flex justify-between w-full pr-4">
-                          <span className="font-semibold" data-testid={`text-demand-name-${demand.itemId}`}>
-                            {demand.name}
-                          </span>
-                          <span
-                            className={`font-bold ${
-                              demand.productionNeeded > 0 ? "text-red-600" : "text-green-600"
-                            }`}
-                            data-testid={`text-production-needed-${demand.itemId}`}
-                          >
-                            {demand.productionNeeded > 0
-                              ? `⚠️ Produce: ${demand.productionNeeded}`
-                              : `✓ Sufficient Stock`}
-                          </span>
-                        </div>
-                      </AccordionTrigger>
-                      <AccordionContent>
-                        <div className="space-y-3 pt-2">
-                          <div className="grid grid-cols-2 gap-4">
-                            <div>
-                              <p className="text-sm text-muted-foreground">Category</p>
-                              <p className="font-medium">{demand.category}</p>
-                            </div>
-                            <div>
-                              <p className="text-sm text-muted-foreground">Total Demand (4 weeks)</p>
-                              <p className="font-medium">{demand.totalDemandNext4}</p>
-                            </div>
-                          </div>
-
-                          <div className="grid grid-cols-3 gap-4 pt-2 border-t">
-                            <div>
-                              <p className="text-sm text-muted-foreground">Inventory</p>
-                              <p className="font-medium">{demand.inventory}</p>
-                            </div>
-                            <div>
-                              <p className="text-sm text-muted-foreground">Machined</p>
-                              <p className="font-medium">{demand.machined}</p>
-                            </div>
-                            <div>
-                              <p className="text-sm text-muted-foreground">At Anodizer</p>
-                              <p className="font-medium">{demand.atAnodizer}</p>
-                            </div>
-                          </div>
-
-                          <div className="pt-2 border-t">
-                            <p className="font-medium mb-2">Weekly Demand Breakdown:</p>
-                            <div className="grid grid-cols-4 gap-2">
-                              {demand.weeklyDemand.map((count: number, index: number) => (
-                                <div
-                                  key={index}
-                                  className="text-center p-2 bg-muted rounded"
-                                  data-testid={`text-week-${index + 1}-${demand.itemId}`}
-                                >
-                                  <p className="text-xs text-muted-foreground">Week {index + 1}</p>
-                                  <p className="font-bold text-lg">{count}</p>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-                      </AccordionContent>
-                    </AccordionItem>
-                  ))}
-                </Accordion>
               )}
             </CardContent>
           </Card>

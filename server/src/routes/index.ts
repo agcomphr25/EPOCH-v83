@@ -33,6 +33,7 @@ import authRoutes from './auth';
 import usersRoutes from './users';
 import reportsRoutes from './reports';
 import oemSettingsRoutes from './oemSettings';
+import metalAccessoriesRoutes from './metalAccessories';
 import { getAccessToken } from '../utils/upsShipping';
 
 export function registerRoutes(app: Express): Server {
@@ -132,6 +133,9 @@ export function registerRoutes(app: Express): Server {
 
   // OEM Priority Settings routes
   app.use('/api/oem-settings', oemSettingsRoutes);
+
+  // Metal Accessories Tracker routes
+  app.use('/api/metal-accessories', metalAccessoriesRoutes);
   
   // UPS Test endpoint
   app.post('/api/test-ups-auth', async (req, res) => {

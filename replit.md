@@ -49,6 +49,7 @@ The application adopts a monorepo structure utilizing a full-stack TypeScript ap
     -   **Communications System**: Customer communication management with inbox, email (SendGrid) and SMS (Twilio) integration.
     -   **Personalized Dashboards**: Secure auto-redirect system where each user is routed to their specific dashboard upon login. Role-based navbar system for access control.
     -   **Training System**: Certification and quiz system for employee training modules with PDF viewer and automatic certificate generation.
+    -   **AI-Powered Smart Sorting**: Intelligent dropdown sorting system that learns from user behavior. Tracks selection frequency and dynamically reorders Action Inlet options to show most frequently selected items first, with alphabetical sorting as secondary criteria.
 
 ## External Dependencies
 

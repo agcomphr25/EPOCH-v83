@@ -112,6 +112,9 @@ import {
   type MessageRecipient, type InsertMessageRecipient,
   type MessageAttachment, type InsertMessageAttachment,
   type Department, type InsertDepartment,
+  // Metal accessories types
+  metalAccessories,
+  type MetalAccessory, type InsertMetalAccessory,
 
 } from "./schema";
 import { db } from "./db";
@@ -671,6 +674,14 @@ export interface IStorage {
   createMessageRecipient(data: InsertMessageRecipient): Promise<MessageRecipient>;
   markMessageAsRead(messageId: number, userId: number): Promise<void>;
   markMessageAsAccomplished(messageId: number, userId: number): Promise<void>;
+
+  // Metal Accessories CRUD
+  getAllMetalAccessories(): Promise<MetalAccessory[]>;
+  getMetalAccessory(id: number): Promise<MetalAccessory | undefined>;
+  createMetalAccessory(data: InsertMetalAccessory): Promise<MetalAccessory>;
+  updateMetalAccessory(id: number, data: Partial<InsertMetalAccessory>): Promise<MetalAccessory>;
+  deleteMetalAccessory(id: number): Promise<void>;
+  getMetalAccessoriesDemands(): Promise<any[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -2395,19 +2406,39 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  // Get order by ID (check both drafts and finalized)
+  // Get order by ID or FB Order Number (check both drafts and finalized)
   async getOrderById(orderId: string): Promise<OrderDraft | AllOrder | null> {
     try {
-      // Try finalized orders first
+      // Try finalized orders first by Order ID
       const finalizedOrder = await this.getFinalizedOrderById(orderId);
       if (finalizedOrder) {
-        return { ...finalizedOrder, isFinalized: true } as any; // Cast to any to satisfy the return type for now
+        return { ...finalizedOrder, isFinalized: true } as any;
       }
 
-      // If not found, try draft orders
+      // If not found, try draft orders by Order ID
       const draftOrder = await this.getOrderDraft(orderId);
       if (draftOrder) {
-        return { ...draftOrder, isFinalized: false } as any; // Cast to any to satisfy the return type for now
+        return { ...draftOrder, isFinalized: false } as any;
+      }
+
+      // If still not found, try searching by FB Order Number in finalized orders
+      const finalizedByFb = await db.select()
+        .from(allOrders)
+        .where(eq(allOrders.fbOrderNumber, orderId))
+        .limit(1);
+      
+      if (finalizedByFb.length > 0) {
+        return { ...finalizedByFb[0], isFinalized: true } as any;
+      }
+
+      // Try searching by FB Order Number in draft orders
+      const draftByFb = await db.select()
+        .from(orderDrafts)
+        .where(eq(orderDrafts.fbOrderNumber, orderId))
+        .limit(1);
+      
+      if (draftByFb.length > 0) {
+        return { ...draftByFb[0], isFinalized: false } as any;
       }
 
       return null;
@@ -6884,6 +6915,129 @@ export class DatabaseStorage implements IStorage {
           eq(messageRecipients.userId, userId)
         )
       );
+  }
+
+  async getAllMetalAccessories(): Promise<MetalAccessory[]> {
+    const items = await db
+      .select()
+      .from(metalAccessories)
+      .orderBy(asc(metalAccessories.name));
+    return items;
+  }
+
+  async getMetalAccessory(id: number): Promise<MetalAccessory | undefined> {
+    const [item] = await db
+      .select()
+      .from(metalAccessories)
+      .where(eq(metalAccessories.id, id));
+    return item || undefined;
+  }
+
+  async createMetalAccessory(data: InsertMetalAccessory): Promise<MetalAccessory> {
+    const [item] = await db
+      .insert(metalAccessories)
+      .values(data)
+      .returning();
+    return item;
+  }
+
+  async updateMetalAccessory(id: number, data: Partial<InsertMetalAccessory>): Promise<MetalAccessory> {
+    const [item] = await db
+      .update(metalAccessories)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(metalAccessories.id, id))
+      .returning();
+    return item;
+  }
+
+  async deleteMetalAccessory(id: number): Promise<void> {
+    await db
+      .delete(metalAccessories)
+      .where(eq(metalAccessories.id, id));
+  }
+
+  async getMetalAccessoriesDemands(): Promise<any[]> {
+    const items = await this.getAllMetalAccessories();
+    
+    const ordersInProgress = await db
+      .select()
+      .from(allOrders)
+      .where(
+        or(
+          eq(allOrders.status, 'IN_PROGRESS'),
+          eq(allOrders.status, 'FINALIZED')
+        )
+      );
+
+    const demands = items.map(item => {
+      const weeklyDemand = [0, 0, 0, 0];
+      const now = new Date();
+      
+      // Normalize item name for comparison (remove hyphens/underscores, lowercase)
+      const normalizedItemName = item.name.toLowerCase().replace(/[-_]/g, '');
+      
+      ordersInProgress.forEach(order => {
+        const features = order.features as any;
+        const featureQuantities = order.featureQuantities as any;
+        
+        let matchFound = false;
+        let quantity = 0;
+        
+        // Check featureQuantities for accessories with quantities
+        if (featureQuantities && typeof featureQuantities === 'object') {
+          Object.keys(featureQuantities).forEach(featureKey => {
+            const normalizedKey = featureKey.toLowerCase().replace(/[-_]/g, '');
+            if (normalizedKey.includes(normalizedItemName)) {
+              quantity = parseInt(featureQuantities[featureKey]) || 0;
+              if (quantity > 0) {
+                matchFound = true;
+              }
+            }
+          });
+        }
+        
+        // Check features.bottom_metal for bottom metal selections
+        if (!matchFound && features && features.bottom_metal) {
+          const normalizedBottomMetal = features.bottom_metal.toLowerCase().replace(/[-_]/g, '');
+          if (normalizedBottomMetal === normalizedItemName) {
+            quantity = 1; // Each order needs 1 bottom metal
+            matchFound = true;
+          }
+        }
+        
+        // If match found, add to weekly demand
+        if (matchFound && quantity > 0) {
+          const dueDate = order.dueDate ? new Date(order.dueDate) : null;
+          
+          if (dueDate) {
+            const daysUntilDue = Math.ceil((dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+            const weekIndex = Math.min(Math.max(Math.floor(daysUntilDue / 7), 0), 3);
+            
+            weeklyDemand[weekIndex] += quantity;
+          } else {
+            weeklyDemand[0] += quantity;
+          }
+        }
+      });
+
+      const totalDemandNext4 = weeklyDemand.reduce((a, b) => a + b, 0);
+      const available = item.inventory + item.machined + item.atAnodizer;
+      const need = totalDemandNext4 - available;
+
+      return {
+        itemId: item.id,
+        name: item.name,
+        category: item.category,
+        inventory: item.inventory,
+        machined: item.machined,
+        atAnodizer: item.atAnodizer,
+        weeklyDemand,
+        totalDemandNext4,
+        productionNeeded: need > 0 ? need : 0,
+      };
+    });
+
+    return demands;
   }
 
 }

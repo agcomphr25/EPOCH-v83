@@ -195,11 +195,11 @@ export default function OrderDepartmentTransfer() {
           {/* Order Search */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
             <div className="md:col-span-2">
-              <Label htmlFor="orderId">Order ID</Label>
+              <Label htmlFor="orderId">Order ID or FB Order Number</Label>
               <Input
                 id="orderId"
                 data-testid="input-order-id"
-                placeholder="Enter order ID (e.g., AG123)"
+                placeholder="Enter Order ID (e.g., AG123) or FB Order # (e.g., AK046)"
                 value={orderId}
                 onChange={(e) => setOrderId(e.target.value.toUpperCase())}
                 onKeyPress={(e) => e.key === 'Enter' && searchOrder()}

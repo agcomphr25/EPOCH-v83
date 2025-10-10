@@ -6973,28 +6973,50 @@ export class DatabaseStorage implements IStorage {
       const weeklyDemand = [0, 0, 0, 0];
       const now = new Date();
       
+      // Normalize item name for comparison (remove hyphens/underscores, lowercase)
+      const normalizedItemName = item.name.toLowerCase().replace(/[-_]/g, '');
+      
       ordersInProgress.forEach(order => {
+        const features = order.features as any;
         const featureQuantities = order.featureQuantities as any;
         
+        let matchFound = false;
+        let quantity = 0;
+        
+        // Check featureQuantities for accessories with quantities
         if (featureQuantities && typeof featureQuantities === 'object') {
           Object.keys(featureQuantities).forEach(featureKey => {
-            if (featureKey.toLowerCase().includes(item.name.toLowerCase())) {
-              const quantity = parseInt(featureQuantities[featureKey]) || 0;
-              
+            const normalizedKey = featureKey.toLowerCase().replace(/[-_]/g, '');
+            if (normalizedKey.includes(normalizedItemName)) {
+              quantity = parseInt(featureQuantities[featureKey]) || 0;
               if (quantity > 0) {
-                const dueDate = order.dueDate ? new Date(order.dueDate) : null;
-                
-                if (dueDate) {
-                  const daysUntilDue = Math.ceil((dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-                  const weekIndex = Math.min(Math.max(Math.floor(daysUntilDue / 7), 0), 3);
-                  
-                  weeklyDemand[weekIndex] += quantity;
-                } else {
-                  weeklyDemand[0] += quantity;
-                }
+                matchFound = true;
               }
             }
           });
+        }
+        
+        // Check features.bottom_metal for bottom metal selections
+        if (!matchFound && features && features.bottom_metal) {
+          const normalizedBottomMetal = features.bottom_metal.toLowerCase().replace(/[-_]/g, '');
+          if (normalizedBottomMetal === normalizedItemName) {
+            quantity = 1; // Each order needs 1 bottom metal
+            matchFound = true;
+          }
+        }
+        
+        // If match found, add to weekly demand
+        if (matchFound && quantity > 0) {
+          const dueDate = order.dueDate ? new Date(order.dueDate) : null;
+          
+          if (dueDate) {
+            const daysUntilDue = Math.ceil((dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+            const weekIndex = Math.min(Math.max(Math.floor(daysUntilDue / 7), 0), 3);
+            
+            weeklyDemand[weekIndex] += quantity;
+          } else {
+            weeklyDemand[0] += quantity;
+          }
         }
       });
 

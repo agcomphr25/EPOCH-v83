@@ -6971,6 +6971,7 @@ export class DatabaseStorage implements IStorage {
 
     const demands = items.map(item => {
       const weeklyDemand = [0, 0, 0, 0];
+      const weeklyOrders: any[][] = [[], [], [], []]; // Track orders for each week
       const now = new Date();
       
       // Normalize item name for comparison (remove hyphens/underscores, lowercase)
@@ -7014,8 +7015,22 @@ export class DatabaseStorage implements IStorage {
             const weekIndex = Math.min(Math.max(Math.floor(daysUntilDue / 7), 0), 3);
             
             weeklyDemand[weekIndex] += quantity;
+            weeklyOrders[weekIndex].push({
+              orderId: order.orderId,
+              dueDate: order.dueDate,
+              quantity,
+              customerId: order.customerId,
+              status: order.status,
+            });
           } else {
             weeklyDemand[0] += quantity;
+            weeklyOrders[0].push({
+              orderId: order.orderId,
+              dueDate: order.dueDate,
+              quantity,
+              customerId: order.customerId,
+              status: order.status,
+            });
           }
         }
       });
@@ -7032,6 +7047,7 @@ export class DatabaseStorage implements IStorage {
         machined: item.machined,
         atAnodizer: item.atAnodizer,
         weeklyDemand,
+        weeklyOrders, // Include order details for each week
         totalDemandNext4,
         productionNeeded: need > 0 ? need : 0,
       };

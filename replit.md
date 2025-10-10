@@ -38,6 +38,7 @@ The application adopts a monorepo structure utilizing a full-stack TypeScript ap
     -   **Department Manager**: Department-specific views, comprehensive order details, and critical workflow progression (**CORRECT ORDER**: Orders Entered → P1 Production Queue → Layup/Plugging → Barcode → CNC → **Gunsmith** → **Finish** → **Finish QC** → **Paint** → Shipping QC → Shipping). **FULFILLED orders are automatically excluded from all department filters** - they only appear in the Shipping Tracker.
     -   **Customer Management**: CRM with CSV import/update and address validation.
     -   **Inventory Management**: Search, BOM integration, and part number display.
+    -   **Metal Accessories Tracker**: Production demand forecasting with weekly breakdown, clickable demand details showing order lists, and special logic for cheek riser items (calculated based on adjustable stock models).
     -   **P1 & P2 Systems**: Distinct modules for regular (P1) and OEM/supplier (P2) orders.
     -   **Barcode System**: P1 order barcode generation (Code 39) with scanner integration, categorized queue management, and Avery 5160 label printing.
     -   **Employee Management**: Full CRUD API for profiles, certifications, performance evaluations, and secure employee portal with time clock.

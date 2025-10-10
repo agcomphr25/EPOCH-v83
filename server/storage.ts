@@ -6963,9 +6963,12 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(allOrders)
       .where(
-        or(
-          eq(allOrders.status, 'IN_PROGRESS'),
-          eq(allOrders.status, 'FINALIZED')
+        and(
+          or(
+            eq(allOrders.status, 'IN_PROGRESS'),
+            eq(allOrders.status, 'FINALIZED')
+          ),
+          eq(allOrders.isCancelled, false)
         )
       );
 
@@ -6984,25 +6987,33 @@ export class DatabaseStorage implements IStorage {
         let matchFound = false;
         let quantity = 0;
         
-        // Check featureQuantities for accessories with quantities
-        if (featureQuantities && typeof featureQuantities === 'object') {
-          Object.keys(featureQuantities).forEach(featureKey => {
-            const normalizedKey = featureKey.toLowerCase().replace(/[-_]/g, '');
-            if (normalizedKey.includes(normalizedItemName)) {
-              quantity = parseInt(featureQuantities[featureKey]) || 0;
-              if (quantity > 0) {
-                matchFound = true;
-              }
-            }
-          });
-        }
-        
-        // Check features.bottom_metal for bottom metal selections
-        if (!matchFound && features && features.bottom_metal) {
-          const normalizedBottomMetal = features.bottom_metal.toLowerCase().replace(/[-_]/g, '');
-          if (normalizedBottomMetal === normalizedItemName) {
-            quantity = 1; // Each order needs 1 bottom metal
+        // Special logic for Cheek Riser items - check for "Adj" in model ID
+        if (item.name === 'Cheek Riser - Stock Inserts' || item.name === 'Cheek Riser - Riser Inserts') {
+          if (order.modelId && order.modelId.toLowerCase().includes('adj')) {
+            quantity = 1; // Each order with adjustable stock needs these inserts
             matchFound = true;
+          }
+        } else {
+          // Check featureQuantities for accessories with quantities
+          if (featureQuantities && typeof featureQuantities === 'object') {
+            Object.keys(featureQuantities).forEach(featureKey => {
+              const normalizedKey = featureKey.toLowerCase().replace(/[-_]/g, '');
+              if (normalizedKey.includes(normalizedItemName)) {
+                quantity = parseInt(featureQuantities[featureKey]) || 0;
+                if (quantity > 0) {
+                  matchFound = true;
+                }
+              }
+            });
+          }
+          
+          // Check features.bottom_metal for bottom metal selections
+          if (!matchFound && features && features.bottom_metal) {
+            const normalizedBottomMetal = features.bottom_metal.toLowerCase().replace(/[-_]/g, '');
+            if (normalizedBottomMetal === normalizedItemName) {
+              quantity = 1; // Each order needs 1 bottom metal
+              matchFound = true;
+            }
           }
         }
         

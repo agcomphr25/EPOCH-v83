@@ -2775,4 +2775,25 @@ export const insertMetalAccessorySchema = createInsertSchema(metalAccessories).o
 export type MetalAccessory = typeof metalAccessories.$inferSelect;
 export type InsertMetalAccessory = z.infer<typeof insertMetalAccessorySchema>;
 
+// Feature Selection Tracking - AI-powered smart sorting
+export const featureSelections = pgTable("feature_selections", {
+  id: serial("id").primaryKey(),
+  featureName: text("feature_name").notNull(), // e.g., 'action_inlet'
+  optionValue: text("option_value").notNull(), // e.g., 'impact'
+  optionLabel: text("option_label").notNull(), // e.g., 'Impact'
+  selectionCount: integer("selection_count").notNull().default(0),
+  lastSelectedAt: timestamp("last_selected_at").defaultNow(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertFeatureSelectionSchema = createInsertSchema(featureSelections).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type FeatureSelection = typeof featureSelections.$inferSelect;
+export type InsertFeatureSelection = z.infer<typeof insertFeatureSelectionSchema>;
+
 export * from './calendar.schema';

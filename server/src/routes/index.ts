@@ -34,6 +34,7 @@ import usersRoutes from './users';
 import reportsRoutes from './reports';
 import oemSettingsRoutes from './oemSettings';
 import metalAccessoriesRoutes from './metalAccessories';
+import featureSelectionsRoutes from './featureSelections';
 import { getAccessToken } from '../utils/upsShipping';
 
 export function registerRoutes(app: Express): Server {
@@ -136,6 +137,9 @@ export function registerRoutes(app: Express): Server {
 
   // Metal Accessories Tracker routes
   app.use('/api/metal-accessories', metalAccessoriesRoutes);
+
+  // Feature Selection Tracking routes (AI-powered smart sorting)
+  app.use('/api/feature-selections', featureSelectionsRoutes);
   
   // UPS Test endpoint
   app.post('/api/test-ups-auth', async (req, res) => {

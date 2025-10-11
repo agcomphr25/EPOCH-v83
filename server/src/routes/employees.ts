@@ -28,6 +28,74 @@ router.get('/', async (req: Request, res: Response) => {
   }
 });
 
+// Capability Management Routes (MUST be before /:id to avoid route collision)
+router.get("/capabilities", async (req: Request, res: Response) => {
+  try {
+    const capabilities = await storage.getAllCapabilities();
+    res.json(capabilities);
+  } catch (error) {
+    console.error("Get capabilities error:", error);
+    res.status(500).json({ error: "Failed to fetch capabilities" });
+  }
+});
+
+router.post("/capabilities", async (req: Request, res: Response) => {
+  try {
+    const capabilityData = req.body;
+    const newCapability = await storage.createCapability(capabilityData);
+    res.status(201).json(newCapability);
+  } catch (error) {
+    console.error("Create capability error:", error);
+    res.status(500).json({ error: "Failed to create capability" });
+  }
+});
+
+router.put("/capabilities/:id", async (req: Request, res: Response) => {
+  try {
+    const capabilityId = parseInt(req.params.id);
+    const updates = req.body;
+    const updatedCapability = await storage.updateCapability(capabilityId, updates);
+    res.json(updatedCapability);
+  } catch (error) {
+    console.error("Update capability error:", error);
+    res.status(500).json({ error: "Failed to update capability" });
+  }
+});
+
+router.delete("/capabilities/:id", async (req: Request, res: Response) => {
+  try {
+    const capabilityId = parseInt(req.params.id);
+    await storage.deleteCapability(capabilityId);
+    res.status(204).end();
+  } catch (error) {
+    console.error("Delete capability error:", error);
+    res.status(500).json({ error: "Failed to delete capability" });
+  }
+});
+
+router.delete("/employee-capabilities/:id", async (req: Request, res: Response) => {
+  try {
+    const employeeCapabilityId = parseInt(req.params.id);
+    await storage.revokeCapability(employeeCapabilityId);
+    res.status(204).end();
+  } catch (error) {
+    console.error("Revoke capability error:", error);
+    res.status(500).json({ error: "Failed to revoke capability" });
+  }
+});
+
+router.patch("/employee-capabilities/:id/toggle", async (req: Request, res: Response) => {
+  try {
+    const employeeCapabilityId = parseInt(req.params.id);
+    const { useHardcoded } = req.body;
+    const updatedAssignment = await storage.toggleHardcodedCapability(employeeCapabilityId, useHardcoded);
+    res.json(updatedAssignment);
+  } catch (error) {
+    console.error("Toggle hardcoded capability error:", error);
+    res.status(500).json({ error: "Failed to toggle hardcoded capability" });
+  }
+});
+
 router.get('/:id', async (req: Request, res: Response) => {
   try {
     const employee = await storage.getEmployee(parseInt(req.params.id));
@@ -313,6 +381,35 @@ router.delete("/layup-settings/:employeeId", async (req: Request, res: Response)
   } catch (error) {
     console.error("Employee layup settings deletion error:", error);
     res.status(500).json({ error: "Failed to delete employee layup settings" });
+  }
+});
+
+// Employee Capability Assignment Routes (MUST be after /capabilities but before /:id/*)
+router.get("/:id/capabilities", async (req: Request, res: Response) => {
+  try {
+    const employeeId = parseInt(req.params.id);
+    const capabilities = await storage.getEmployeeCapabilities(employeeId);
+    res.json(capabilities);
+  } catch (error) {
+    console.error("Get employee capabilities error:", error);
+    res.status(500).json({ error: "Failed to fetch employee capabilities" });
+  }
+});
+
+router.post("/:id/capabilities", async (req: Request, res: Response) => {
+  try {
+    const employeeId = parseInt(req.params.id);
+    const { capabilityId, useHardcoded } = req.body;
+    const assignmentData = {
+      employeeId,
+      capabilityId,
+      useHardcoded: useHardcoded ?? true
+    };
+    const newAssignment = await storage.grantCapability(assignmentData);
+    res.status(201).json(newAssignment);
+  } catch (error) {
+    console.error("Grant capability error:", error);
+    res.status(500).json({ error: "Failed to grant capability" });
   }
 });
 

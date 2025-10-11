@@ -1,8 +1,61 @@
 import express from 'express';
 import { pool } from '../../db';
 import bcrypt from 'bcrypt';
+import { storage } from '../../storage';
 
 const router = express.Router();
+
+// User Capability Management Routes (MUST be before /:id to avoid route collision)
+router.get("/:id/capabilities", async (req, res) => {
+  try {
+    const userId = parseInt(req.params.id);
+    const capabilities = await storage.getUserCapabilities(userId);
+    res.json(capabilities);
+  } catch (error) {
+    console.error("Get user capabilities error:", error);
+    res.status(500).json({ error: "Failed to fetch user capabilities" });
+  }
+});
+
+router.post("/:id/capabilities", async (req, res) => {
+  try {
+    const userId = parseInt(req.params.id);
+    const { capabilityId, useHardcoded } = req.body;
+    const assignmentData = {
+      userId,
+      capabilityId,
+      useHardcodedValue: useHardcoded ?? true
+    };
+    const newAssignment = await storage.grantUserCapability(assignmentData);
+    res.status(201).json(newAssignment);
+  } catch (error) {
+    console.error("Grant user capability error:", error);
+    res.status(500).json({ error: "Failed to grant capability" });
+  }
+});
+
+router.delete("/user-capabilities/:id", async (req, res) => {
+  try {
+    const userCapabilityId = parseInt(req.params.id);
+    await storage.revokeUserCapability(userCapabilityId);
+    res.status(204).end();
+  } catch (error) {
+    console.error("Revoke user capability error:", error);
+    res.status(500).json({ error: "Failed to revoke capability" });
+  }
+});
+
+router.patch("/user-capabilities/:id/toggle", async (req, res) => {
+  try {
+    const userCapabilityId = parseInt(req.params.id);
+    const { useHardcoded } = req.body;
+    const updatedAssignment = await storage.toggleUserHardcodedCapability(userCapabilityId, useHardcoded);
+    res.json(updatedAssignment);
+  } catch (error) {
+    console.error("Toggle user hardcoded capability error:", error);
+    res.status(500).json({ error: "Failed to toggle hardcoded capability" });
+  }
+});
 
 // GET all users
 router.get('/', async (req, res) => {

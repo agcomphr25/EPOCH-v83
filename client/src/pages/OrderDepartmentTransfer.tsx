@@ -24,6 +24,7 @@ const DEPARTMENTS = [
 
 export default function OrderDepartmentTransfer() {
   const [orderId, setOrderId] = useState('');
+  const [actualOrderId, setActualOrderId] = useState(''); // Store the actual Order ID from response
   const [currentDepartment, setCurrentDepartment] = useState('');
   const [targetDepartment, setTargetDepartment] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -62,11 +63,14 @@ export default function OrderDepartmentTransfer() {
         }
         
         const department = order.currentDepartment || order.department || 'Unknown';
+        const realOrderId = order.orderId || order.id || orderId.trim(); // Store actual Order ID
+        
+        setActualOrderId(realOrderId); // Save the actual Order ID for transfer
         setCurrentDepartment(department);
         setOrderFound(true);
         toast({
           title: 'Order Found',
-          description: `Order ${orderId} is currently in ${department} department`,
+          description: `Order ${realOrderId} is currently in ${department} department`,
         });
       } else if (response.status === 404) {
         toast({
@@ -97,7 +101,7 @@ export default function OrderDepartmentTransfer() {
   };
 
   const transferOrder = async () => {
-    if (!orderId.trim() || !targetDepartment) {
+    if (!actualOrderId || !targetDepartment) {
       toast({
         title: 'Error',
         description: 'Please select a target department',
@@ -118,7 +122,7 @@ export default function OrderDepartmentTransfer() {
     setIsLoading(true);
 
     try {
-      const response = await fetch(`/api/orders/${orderId.trim()}/department`, {
+      const response = await fetch(`/api/orders/${actualOrderId}/department`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -139,7 +143,7 @@ export default function OrderDepartmentTransfer() {
         setTargetDepartment('');
         toast({
           title: 'Transfer Successful',
-          description: `Order ${orderId} has been moved to ${targetDepartment}`,
+          description: `Order ${actualOrderId} has been moved to ${targetDepartment}`,
         });
       } else {
         let errorMessage = 'Failed to transfer order';
@@ -170,6 +174,7 @@ export default function OrderDepartmentTransfer() {
 
   const resetForm = () => {
     setOrderId('');
+    setActualOrderId('');
     setCurrentDepartment('');
     setTargetDepartment('');
     setOrderFound(false);

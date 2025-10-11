@@ -10,14 +10,14 @@ import {
   taskItems,
   // Kickback tracking table
   kickbacks,
-  // Calendar system tables
-  calendarEvents, calendarEventAttendees,
   // Document management tables
   documents, documentTags, documentTagRelations, documentCollections, documentCollectionRelations,
   // New employee management tables
   certifications, employeeCertifications, evaluations, employeeDocuments, employeeAuditLog,
   // Capability-based permission system tables
   capabilities, employeeCapabilities, userCapabilities,
+  // User authentication tables
+  users, userSessions,
   // allOrders table as the finalized orders table
   allOrders,
   // Order reference tables
@@ -52,6 +52,9 @@ import {
   type InventoryScan, type InsertInventoryScan,
   type PartsRequest, type InsertPartsRequest,
   type Employee, type InsertEmployee,
+  // User authentication types
+  type User, type InsertUser,
+  type UserSession, type InsertUserSession,
   // New employee management types
   type Certification, type InsertCertification,
   type EmployeeCertification, type InsertEmployeeCertification,
@@ -96,8 +99,6 @@ import {
   type TaskItem, type InsertTaskItem,
   // Kickback tracking types
   type Kickback, type InsertKickback,
-  // Calendar system types
-  type CalendarEvent, type InsertCalendarEvent, type CalendarEventAttendee, type InsertCalendarEventAttendee,
   // Document management types
   type Document, type InsertDocument,
   type DocumentTag, type InsertDocumentTag,
@@ -599,21 +600,6 @@ export interface IStorage {
   updateKickback(id: number, data: Partial<InsertKickback>): Promise<Kickback>;
   deleteKickback(id: number): Promise<void>;
 
-  // Calendar Event CRUD
-  getAllCalendarEvents(): Promise<CalendarEvent[]>;
-  getCalendarEventsByDateRange(startDate: Date, endDate: Date): Promise<CalendarEvent[]>;
-  getCalendarEvent(id: number): Promise<CalendarEvent | undefined>;
-  createCalendarEvent(data: InsertCalendarEvent): Promise<CalendarEvent>;
-  updateCalendarEvent(id: number, data: Partial<InsertCalendarEvent>): Promise<CalendarEvent>;
-  deleteCalendarEvent(id: number): Promise<void>;
-  
-  // Calendar Event Attendees CRUD
-  getEventAttendees(eventId: number): Promise<CalendarEventAttendee[]>;
-  addEventAttendee(data: InsertCalendarEventAttendee): Promise<CalendarEventAttendee>;
-  updateAttendeeStatus(eventId: number, userId: string, status: 'invited' | 'accepted' | 'declined' | 'tentative'): Promise<CalendarEventAttendee>;
-  removeEventAttendee(eventId: number, userId: string): Promise<void>;
-  getUserCalendarEvents(userId: string): Promise<CalendarEvent[]>;
-
   // Kickback Analytics Methods
   getKickbackAnalytics(dateRange?: { start: Date; end: Date }): Promise<{
     totalKickbacks: number;
@@ -722,17 +708,19 @@ export class DatabaseStorage implements IStorage {
 
   async createUser(insertUser: InsertUser): Promise<User> {
     // Hash the password before inserting
-    const passwordHash = await bcrypt.hash(insertUser.password, 12);
+    const passwordHash = await bcrypt.hash(insertUser.password || '', 12);
 
-    // Create user data with both original password and hashed password
+    // Create user data with hashed password
     const userData = {
       username: insertUser.username,
-      password: insertUser.password, // Include original password for database requirement
       passwordHash,
       role: insertUser.role,
       canOverridePrices: insertUser.canOverridePrices,
       employeeId: insertUser.employeeId,
       isActive: insertUser.isActive,
+      firstName: insertUser.firstName,
+      lastName: insertUser.lastName,
+      email: insertUser.email,
     };
 
     const [user] = await db
@@ -1710,7 +1698,7 @@ export class DatabaseStorage implements IStorage {
             const selectedModel = stockModels.find(model => model.id === order.modelId);
             if (selectedModel) {
               const basePrice = Number(order.priceOverride || selectedModel.price || 0);
-              const discountAmount = discount.percent > 0 
+              const discountAmount = (discount.percent !== null && discount.percent > 0)
                 ? (basePrice * discount.percent / 100)
                 : Number(discount.fixedAmount || 0);
               total -= discountAmount;
@@ -1718,7 +1706,7 @@ export class DatabaseStorage implements IStorage {
           }
         } else if (discount.appliesTo === 'total_order') {
           // Apply discount to entire order total
-          const discountAmount = discount.percent > 0 
+          const discountAmount = (discount.percent !== null && discount.percent > 0)
             ? (total * discount.percent / 100)
             : Number(discount.fixedAmount || 0);
           total -= discountAmount;
@@ -1859,7 +1847,7 @@ export class DatabaseStorage implements IStorage {
             const selectedModel = stockModels.find(model => model.id === order.modelId);
             if (selectedModel) {
               const basePrice = Number(order.priceOverride || selectedModel.price || 0);
-              const discountAmount = discount.percent > 0 
+              const discountAmount = (discount.percent !== null && discount.percent > 0)
                 ? (basePrice * discount.percent / 100)
                 : Number(discount.fixedAmount || 0);
               totalPrice -= discountAmount;
@@ -1867,7 +1855,7 @@ export class DatabaseStorage implements IStorage {
           }
         } else if (discount.appliesTo === 'total_order') {
           // Apply discount to entire subtotal
-          const discountAmount = discount.percent > 0 
+          const discountAmount = (discount.percent !== null && discount.percent > 0)
             ? (subtotal * discount.percent / 100)
             : Number(discount.fixedAmount || 0);
           totalPrice -= discountAmount;
@@ -3699,6 +3687,7 @@ export class DatabaseStorage implements IStorage {
         email: customers.email,
         phone: customers.phone,
         company: customers.company,
+        contact: customers.contact,
         customerType: customers.customerType,
         notes: customers.notes,
         isActive: customers.isActive,
@@ -3722,6 +3711,7 @@ export class DatabaseStorage implements IStorage {
         email: customers.email,
         phone: customers.phone,
         company: customers.company,
+        contact: customers.contact,
         customerType: customers.customerType,
         notes: customers.notes,
         isActive: customers.isActive,
@@ -5983,95 +5973,6 @@ export class DatabaseStorage implements IStorage {
 
   async deleteKickback(id: number): Promise<void> {
     await db.delete(kickbacks).where(eq(kickbacks.id, id));
-  }
-
-  // Calendar Event CRUD Implementation
-  async getAllCalendarEvents(): Promise<CalendarEvent[]> {
-    return await db.select().from(calendarEvents).orderBy(asc(calendarEvents.startDate));
-  }
-
-  async getCalendarEventsByDateRange(startDate: Date, endDate: Date): Promise<CalendarEvent[]> {
-    return await db.select()
-      .from(calendarEvents)
-      .where(
-        and(
-          gte(calendarEvents.startDate, startDate),
-          lte(calendarEvents.endDate, endDate)
-        )
-      )
-      .orderBy(asc(calendarEvents.startDate));
-  }
-
-  async getCalendarEvent(id: number): Promise<CalendarEvent | undefined> {
-    const results = await db.select().from(calendarEvents).where(eq(calendarEvents.id, id));
-    return results[0];
-  }
-
-  async createCalendarEvent(data: InsertCalendarEvent): Promise<CalendarEvent> {
-    const [newEvent] = await db.insert(calendarEvents).values(data).returning();
-    return newEvent;
-  }
-
-  async updateCalendarEvent(id: number, data: Partial<InsertCalendarEvent>): Promise<CalendarEvent> {
-    const [updatedEvent] = await db.update(calendarEvents)
-      .set({ ...data, updatedAt: new Date() })
-      .where(eq(calendarEvents.id, id))
-      .returning();
-    return updatedEvent;
-  }
-
-  async deleteCalendarEvent(id: number): Promise<void> {
-    await db.delete(calendarEvents).where(eq(calendarEvents.id, id));
-  }
-
-  // Calendar Event Attendees CRUD Implementation
-  async getEventAttendees(eventId: number): Promise<CalendarEventAttendee[]> {
-    return await db.select()
-      .from(calendarEventAttendees)
-      .where(eq(calendarEventAttendees.eventId, eventId))
-      .orderBy(asc(calendarEventAttendees.userId));
-  }
-
-  async addEventAttendee(data: InsertCalendarEventAttendee): Promise<CalendarEventAttendee> {
-    const [newAttendee] = await db.insert(calendarEventAttendees).values(data).returning();
-    return newAttendee;
-  }
-
-  async updateAttendeeStatus(eventId: number, userId: string, status: 'invited' | 'accepted' | 'declined' | 'tentative'): Promise<CalendarEventAttendee> {
-    const [updatedAttendee] = await db.update(calendarEventAttendees)
-      .set({ status })
-      .where(
-        and(
-          eq(calendarEventAttendees.eventId, eventId),
-          eq(calendarEventAttendees.userId, userId)
-        )
-      )
-      .returning();
-    return updatedAttendee;
-  }
-
-  async removeEventAttendee(eventId: number, userId: string): Promise<void> {
-    await db.delete(calendarEventAttendees)
-      .where(
-        and(
-          eq(calendarEventAttendees.eventId, eventId),
-          eq(calendarEventAttendees.userId, userId)
-        )
-      );
-  }
-
-  async getUserCalendarEvents(userId: string): Promise<CalendarEvent[]> {
-    return await db.select()
-      .from(calendarEvents)
-      .leftJoin(calendarEventAttendees, eq(calendarEvents.id, calendarEventAttendees.eventId))
-      .where(
-        or(
-          eq(calendarEvents.createdBy, userId),
-          eq(calendarEventAttendees.userId, userId),
-          eq(calendarEvents.isPublic, true)
-        )
-      )
-      .orderBy(asc(calendarEvents.startDate));
   }
 
   // Kickback Analytics Methods

@@ -669,6 +669,37 @@ export const employeeAuditLog = pgTable("employee_audit_log", {
   timestamp: timestamp("timestamp").defaultNow().notNull(),
 });
 
+// User Authentication Table
+export const users = pgTable("users", {
+  id: serial("id").primaryKey(),
+  username: text("username").notNull().unique(),
+  passwordHash: text("password_hash").notNull(),
+  role: text("role").notNull().default("EMPLOYEE"), // ADMIN, EMPLOYEE, OWNER
+  employeeId: integer("employee_id").references(() => employees.id),
+  firstName: text("first_name"),
+  lastName: text("last_name"),
+  email: text("email"),
+  canOverridePrices: boolean("can_override_prices").default(false),
+  isActive: boolean("is_active").default(true),
+  lastLogin: timestamp("last_login"),
+  failedLoginAttempts: integer("failed_login_attempts").default(0),
+  accountLockedUntil: timestamp("account_locked_until"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// User Sessions Table
+export const userSessions = pgTable("user_sessions", {
+  id: serial("id").primaryKey(),
+  sessionToken: text("session_token").notNull().unique(),
+  userId: integer("user_id").references(() => users.id).notNull(),
+  username: text("username").notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
+  lastActivityAt: timestamp("last_activity_at").defaultNow().notNull(),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // Capability-Based Permission System
 export const capabilities = pgTable("capabilities", {
   id: serial("id").primaryKey(),
@@ -1404,6 +1435,25 @@ export type InsertInventoryScan = z.infer<typeof insertInventoryScanSchema>;
 export type InventoryScan = typeof inventoryScans.$inferSelect;
 export type InsertEmployee = z.infer<typeof insertEmployeeSchema>;
 export type Employee = typeof employees.$inferSelect;
+
+// User authentication types
+export const insertUserSchema = createInsertSchema(users).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  password: z.string().optional(),
+}).omit({ passwordHash: true });
+export type InsertUser = z.infer<typeof insertUserSchema>;
+export type User = typeof users.$inferSelect;
+
+// User session types
+export const insertUserSessionSchema = createInsertSchema(userSessions).omit({
+  id: true,
+  createdAt: true,
+});
+export type InsertUserSession = z.infer<typeof insertUserSessionSchema>;
+export type UserSession = typeof userSessions.$inferSelect;
 
 // New employee-related types
 export type InsertCertification = z.infer<typeof insertCertificationSchema>;

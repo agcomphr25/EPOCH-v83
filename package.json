@@ -8,7 +8,11 @@
     "build": "vite build && esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist && mkdir -p dist/attached_assets dist/assets dist/public && ( [ -d attached_assets ] && cp -r attached_assets dist/attached_assets || true ) && ( [ -d server/src/assets ] && cp -r server/src/assets/* dist/assets || [ -d server/assets ] && cp -r server/assets/* dist/assets || true ) && ( [ -f client/public/logo_updated.png ] && cp client/public/logo_updated.png dist/public/logo_updated.png || [ -f server/src/assets/logo_updated.png ] && cp server/src/assets/logo_updated.png dist/public/logo_updated.png || true )",
     "start": "NODE_ENV=production node dist/index.js",
     "check": "tsc",
-    "db:push": "drizzle-kit push"
+    "lint": "eslint . --ext .js,.jsx,.ts,.tsx --max-warnings 0",
+    "lint:fix": "eslint . --ext .js,.jsx,.ts,.tsx --fix",
+    "format": "prettier --write \"**/*.{js,jsx,ts,tsx,json,css,md}\"",
+    "db:push": "drizzle-kit push",
+    "prepare": "husky"
   },
   "dependencies": {
     "@capacitor/cli": "^7.4.2",
@@ -170,5 +174,14 @@
   },
   "optionalDependencies": {
     "bufferutil": "^4.0.8"
+  },
+  "lint-staged": {
+    "*.{ts,tsx}": [
+      "eslint --fix --max-warnings 0",
+      "prettier --write"
+    ],
+    "*.{js,jsx,json,css,md}": [
+      "prettier --write"
+    ]
   }
 }

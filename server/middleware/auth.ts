@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
-import { AuthService } from '../auth';
+import { pool } from '../db';
+import { HARDCODED_USERS } from '../hardcoded-users';
 
 // Extend Express Request type to include user session data
 declare global {
@@ -58,37 +59,85 @@ export async function authenticateToken(req: Request, res: Response, next: NextF
     const bearerToken = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
     const cookieToken = req.cookies?.sessionToken;
 
-    const token = bearerToken || cookieToken;
+    const token = cookieToken || bearerToken;
 
     if (!token) {
       return res.status(401).json({ error: 'No session token' });
     }
 
-    let user = null;
+    // Get session from database
+    const sessionResult = await pool.query(
+      `SELECT us.user_id, us.username, us.last_activity_at, u.role, u.employee_id, u.can_override_prices, u.is_active
+       FROM user_sessions us
+       LEFT JOIN users u ON us.user_id = u.id
+       WHERE us.session_token = $1 AND us.is_active = true`,
+      [token]
+    );
 
-    // Try JWT authentication first (for Bearer tokens)
-    if (bearerToken) {
-      const jwtPayload = AuthService.verifyJWT(bearerToken);
-      if (jwtPayload) {
-        // Get user from database using JWT payload
-        const dbUser = await AuthService.getUserById(jwtPayload.userId);
-        if (dbUser && dbUser.isActive) {
-          user = dbUser;
-        }
+    if (!sessionResult || sessionResult.length === 0) {
+      return res.status(403).json({ error: 'Invalid or expired session' });
+    }
+
+    const session = sessionResult[0];
+    
+    // Get user data from session
+    let userRole = session.role;
+    let isActive = session.is_active;
+    let employeeId = session.employee_id;
+    let canOverridePrices = session.can_override_prices || false;
+
+    // If no role found in database, check if it's a hardcoded user
+    if (!userRole) {
+      const hardcodedUser = HARDCODED_USERS.get(session.username.toLowerCase());
+      if (hardcodedUser) {
+        userRole = hardcodedUser.role;
+        isActive = true; // Hardcoded users are always active
+        employeeId = null;
+        canOverridePrices = false;
+      } else {
+        // Unknown user - reject
+        await pool.query('DELETE FROM user_sessions WHERE session_token = $1', [token]);
+        return res.status(403).json({ error: 'Invalid session - user not found' });
       }
     }
 
-    // Fallback to session-based authentication (for cookies)
-    if (!user && cookieToken) {
-      user = await AuthService.getUserBySession(cookieToken);
+    // Check if user is active
+    if (!isActive) {
+      return res.status(403).json({ error: 'Account is inactive' });
     }
 
-    if (!user) {
-      return res.status(403).json({ error: 'Invalid or expired token' });
+    // Calculate idle timeout based on role
+    // ADMIN and OWNER: 30 minutes, EMPLOYEE: 15 minutes
+    const timeoutMinutes = (userRole === 'ADMIN' || userRole === 'OWNER') ? 30 : 15;
+    const timeoutMs = timeoutMinutes * 60 * 1000;
+    
+    // Handle NULL last_activity_at (legacy sessions) by treating as current time
+    const lastActivity = session.last_activity_at ? new Date(session.last_activity_at).getTime() : Date.now();
+    const now = Date.now();
+
+    // Check if session has been idle too long
+    if (now - lastActivity > timeoutMs) {
+      // Session expired due to inactivity
+      await pool.query('DELETE FROM user_sessions WHERE session_token = $1', [token]);
+      return res.status(401).json({ error: 'Session expired due to inactivity' });
     }
+
+    // Update last activity timestamp
+    await pool.query(
+      'UPDATE user_sessions SET last_activity_at = NOW() WHERE session_token = $1',
+      [token]
+    );
 
     // Attach user data to request
-    req.user = user;
+    req.user = {
+      id: session.user_id,
+      username: session.username,
+      role: userRole,
+      employeeId: employeeId,
+      canOverridePrices: canOverridePrices,
+      isActive: isActive
+    };
+    
     next();
   } catch (error) {
     console.error('Authentication error:', error);
@@ -148,13 +197,26 @@ export async function authenticatePortalToken(req: Request, res: Response, next:
       return res.status(401).json({ error: 'Portal token required' });
     }
 
-    const validation = await AuthService.validatePortalToken(token);
-    if (!validation.isValid) {
+    // Query for portal token in database
+    const result = await pool.query(
+      `SELECT employee_id, expires_at FROM employee_portal_tokens 
+       WHERE token = $1 AND is_active = true`,
+      [token]
+    );
+
+    if (!result || result.length === 0) {
+      return res.status(403).json({ error: 'Invalid or expired portal token' });
+    }
+
+    const portalToken = result[0];
+
+    // Check if token is expired
+    if (new Date(portalToken.expires_at) < new Date()) {
       return res.status(403).json({ error: 'Invalid or expired portal token' });
     }
 
     // Attach employee data to request for portal access
-    req.portalEmployeeId = validation.employeeId;
+    req.portalEmployeeId = portalToken.employee_id;
     next();
   } catch (error) {
     console.error('Portal authentication error:', error);
@@ -196,9 +258,12 @@ export function requireRecentAuth(maxAge: number = 15 * 60 * 1000) {
  */
 export async function cleanupExpiredSessions() {
   try {
-    const { AuthService } = await import('../auth');
-    // Clean up expired sessions from database
-    await AuthService.cleanupExpiredSessions();
+    // Delete sessions that have been idle for longer than their role-based timeout
+    // We'll use a conservative approach and delete sessions older than 30 minutes (max timeout)
+    await pool.query(
+      `DELETE FROM user_sessions 
+       WHERE last_activity_at < NOW() - INTERVAL '30 minutes'`
+    );
     console.log('Session cleanup completed');
   } catch (error) {
     console.error('Session cleanup error:', error);

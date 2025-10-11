@@ -232,13 +232,13 @@ export default function UserManagement() {
 
   function UserCapabilitiesManager({ userId, userName }: UserCapabilitiesManagerProps) {
     // Fetch user capabilities
-    const { data: userCapabilities = [], isLoading: loadingUserCaps, refetch: refetchUserCaps } = useQuery({
+    const { data: userCapabilities = [], isLoading: loadingUserCaps, refetch: refetchUserCaps } = useQuery<any[]>({
       queryKey: [`/api/users/${userId}/capabilities`],
       enabled: !!userId
     });
 
     // Fetch all available capabilities
-    const { data: allCapabilities = [], isLoading: loadingAllCaps } = useQuery({
+    const { data: allCapabilities = [], isLoading: loadingAllCaps } = useQuery<any[]>({
       queryKey: ['/api/employees/capabilities'],
     });
 

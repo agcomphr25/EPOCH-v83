@@ -3,6 +3,18 @@
 ## Overview
 EPOCH v8 is a comprehensive Manufacturing ERP system designed for small manufacturing companies specializing in customizable products. It aims to streamline operations, enhance efficiency, and improve scalability by providing end-to-end order management, inventory tracking, employee portal functionality, and quality control workflows. The project's vision is to become the leading ERP solution for small-to-medium customizable product manufacturers. It is a full-stack TypeScript application with a React frontend and Express backend, featuring Progressive Web App (PWA) capabilities for deployment to web and mobile platforms via Capacitor.
 
+## Recent Changes
+**October 11, 2025 - Capability-Based Permission System (Infrastructure Complete)**
+- Restructured from role-based to capability-based permissions system
+- Simplified from 4 roles (ADMIN, HR, MANAGER, EMPLOYEE) to 3 roles (ADMIN, EMPLOYEE, OWNER)
+- Separated employee display (jobTitle) from system access (userRole)
+- **Migrated capabilities from Employees to Users table** - Capabilities now assigned to login accounts (users) instead of employee records
+- Created user_capabilities table with full CRUD operations (getUserCapabilities, grantUserCapability, revokeUserCapability, toggleUserHardcodedCapability)
+- Added capability management UI in User Management page with "Permissions" button on each user card
+- Implemented UserCapabilitiesManager component with TanStack Query for real-time grant/revoke operations
+- Fixed critical route ordering issue: capability routes registered before /:id to prevent route shadowing
+- **Next Step**: Populate capabilities table with system permissions before assigning to users
+
 ## User Preferences
 Preferred communication style: Simple, everyday language.
 Production constraints: Do not modify mold capacities or employee settings to unrealistic values. Use actual production capacity constraints for accurate scheduling.
@@ -22,7 +34,8 @@ The application adopts a monorepo structure utilizing a full-stack TypeScript ap
 -   **Type Safety**: Achieved through shared TypeScript schemas using Drizzle and Zod.
 -   **Cross-Platform Deployment**: PWA capabilities with Capacitor for web and mobile (iOS/Android).
 -   **Dynamic Form Generation**: A dynamic form builder with signature capture.
--   **Authentication**: Hybrid JWT + Session authentication with role-based access control and account lockout.
+-   **Authentication**: Hybrid JWT + Session authentication with capability-based access control and account lockout.
+-   **Capability-Based Permissions**: Simplified 3-role system (ADMIN, EMPLOYEE, OWNER) with individual capability assignments. Employees have separate jobTitle (display) and userRole (system access) fields, allowing specific permissions to be granted/revoked on a per-employee basis independently of their job title.
 -   **Data Consistency**: The `features` object is the single source of truth for all feature data in order entry.
 -   **Modular Routing**: Backend routes are split into specialized modules.
 -   **Atomic Order ID Reservation**: Database-based atomic reservation system for unique, sequential Order ID generation.

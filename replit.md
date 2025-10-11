@@ -13,6 +13,7 @@ UI Performance: Department progression buttons use cache-first approach with dis
 Default shipping charge: Should be 36.95 for new orders.
 Critical requirement: All completed functionality must be hard-coded to prevent loss of features and data.
 Search standardization: All department queue pages use unified OrderSearchBox component with "Search orders by Order ID or FishBowl Number..." placeholder for consistent user experience.
+Navigation dropdown behavior: All navbar dropdown menus close automatically after selection. Fixed by removing conflicting auto-expand useEffect that was re-opening dropdowns 100ms after closing. Dropdowns now use direct button elements with onClick handlers that call closeAllDropdowns() then navigate programmatically.
 
 ## System Architecture
 The application adopts a monorepo structure utilizing a full-stack TypeScript approach.

@@ -16,6 +16,8 @@ import {
   documents, documentTags, documentTagRelations, documentCollections, documentCollectionRelations,
   // New employee management tables
   certifications, employeeCertifications, evaluations, employeeDocuments, employeeAuditLog,
+  // Capability-based permission system tables
+  capabilities, employeeCapabilities, userCapabilities,
   // allOrders table as the finalized orders table
   allOrders,
   // Order reference tables
@@ -56,6 +58,10 @@ import {
   type Evaluation, type InsertEvaluation,
   type EmployeeDocument, type InsertEmployeeDocument,
   type EmployeeAuditLog, type InsertEmployeeAuditLog,
+  // Capability types
+  type Capability, type InsertCapability,
+  type EmployeeCapability, type InsertEmployeeCapability,
+  type UserCapability, type InsertUserCapability,
   type QcDefinition, type InsertQcDefinition,
   type QcSubmission, InsertQcSubmission,
   type MaintenanceSchedule, type InsertMaintenanceSchedule,
@@ -283,13 +289,32 @@ export interface IStorage {
   // Employees CRUD
   getAllEmployees(): Promise<Employee[]>;
   getEmployee(id: number): Promise<Employee | undefined>;
-  getEmployeesByRole(role: string): Promise<Employee[]>;
+  getEmployeesByUserRole(userRole: string): Promise<Employee[]>; // Updated to use userRole
+  getEmployeesByJobTitle(jobTitle: string): Promise<Employee[]>; // New method for job title filtering
   createEmployee(data: InsertEmployee): Promise<Employee>;
   updateEmployee(id: number, data: Partial<InsertEmployee>): Promise<Employee>;
   deleteEmployee(id: number): Promise<void>;
   getEmployeeByToken(token: string): Promise<Employee | undefined>;
   generateEmployeePortalToken(employeeId: number): Promise<string>;
   updateEmployeePortalToken(employeeId: number, token: string, expiry: Date): Promise<void>;
+  
+  // Capability Management
+  getAllCapabilities(): Promise<Capability[]>;
+  getCapability(id: number): Promise<Capability | undefined>;
+  createCapability(data: InsertCapability): Promise<Capability>;
+  updateCapability(id: number, data: Partial<InsertCapability>): Promise<Capability>;
+  deleteCapability(id: number): Promise<void>;
+  
+  getEmployeeCapabilities(employeeId: number): Promise<EmployeeCapability[]>;
+  grantCapability(data: InsertEmployeeCapability): Promise<EmployeeCapability>;
+  revokeCapability(id: number): Promise<void>;
+  toggleHardcodedCapability(id: number, useHardcoded: boolean): Promise<EmployeeCapability>;
+  
+  // User Capability Management
+  getUserCapabilities(userId: number): Promise<UserCapability[]>;
+  grantUserCapability(data: InsertUserCapability): Promise<UserCapability>;
+  revokeUserCapability(id: number): Promise<void>;
+  toggleUserHardcodedCapability(id: number, useHardcoded: boolean): Promise<UserCapability>;
 
   // Certifications CRUD
   getAllCertifications(): Promise<Certification[]>;
@@ -2749,9 +2774,15 @@ export class DatabaseStorage implements IStorage {
     return employee || undefined;
   }
 
-  async getEmployeesByRole(role: string): Promise<Employee[] > {
+  async getEmployeesByUserRole(userRole: string): Promise<Employee[]> {
     return await db.select().from(employees)
-      .where(eq(employees.role, role))
+      .where(eq(employees.userRole, userRole))
+      .orderBy(employees.name);
+  }
+
+  async getEmployeesByJobTitle(jobTitle: string): Promise<Employee[]> {
+    return await db.select().from(employees)
+      .where(eq(employees.jobTitle, jobTitle))
       .orderBy(employees.name);
   }
 
@@ -2820,6 +2851,107 @@ export class DatabaseStorage implements IStorage {
         updatedAt: new Date()
       })
       .where(eq(employees.id, employeeId));
+  }
+
+  // Capability Management
+  async getAllCapabilities(): Promise<Capability[]> {
+    return await db.select().from(capabilities)
+      .where(eq(capabilities.isActive, true))
+      .orderBy(capabilities.category, capabilities.name);
+  }
+
+  async getCapability(id: number): Promise<Capability | undefined> {
+    const [capability] = await db.select().from(capabilities)
+      .where(eq(capabilities.id, id));
+    return capability || undefined;
+  }
+
+  async createCapability(data: InsertCapability): Promise<Capability> {
+    const [capability] = await db.insert(capabilities).values(data).returning();
+    return capability;
+  }
+
+  async updateCapability(id: number, data: Partial<InsertCapability>): Promise<Capability> {
+    const [capability] = await db.update(capabilities)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(capabilities.id, id))
+      .returning();
+    return capability;
+  }
+
+  async deleteCapability(id: number): Promise<void> {
+    await db.update(capabilities)
+      .set({ isActive: false, updatedAt: new Date() })
+      .where(eq(capabilities.id, id));
+  }
+
+  async getEmployeeCapabilities(employeeId: number): Promise<EmployeeCapability[]> {
+    return await db.select().from(employeeCapabilities)
+      .where(eq(employeeCapabilities.employeeId, employeeId));
+  }
+
+  async grantCapability(data: InsertEmployeeCapability): Promise<EmployeeCapability> {
+    // Check if capability already exists for this employee
+    const existing = await db.select().from(employeeCapabilities)
+      .where(and(
+        eq(employeeCapabilities.employeeId, data.employeeId),
+        eq(employeeCapabilities.capabilityId, data.capabilityId)
+      ));
+    
+    if (existing.length > 0) {
+      throw new Error('Employee already has this capability');
+    }
+    
+    const [capability] = await db.insert(employeeCapabilities).values(data).returning();
+    return capability;
+  }
+
+  async revokeCapability(id: number): Promise<void> {
+    await db.delete(employeeCapabilities)
+      .where(eq(employeeCapabilities.id, id));
+  }
+
+  async toggleHardcodedCapability(id: number, useHardcoded: boolean): Promise<EmployeeCapability> {
+    const [capability] = await db.update(employeeCapabilities)
+      .set({ useHardcodedValue: useHardcoded, updatedAt: new Date() })
+      .where(eq(employeeCapabilities.id, id))
+      .returning();
+    return capability;
+  }
+
+  // User Capability Management
+  async getUserCapabilities(userId: number): Promise<UserCapability[]> {
+    return await db.select().from(userCapabilities)
+      .where(eq(userCapabilities.userId, userId));
+  }
+
+  async grantUserCapability(data: InsertUserCapability): Promise<UserCapability> {
+    // Check if capability already exists for this user
+    const existing = await db.select().from(userCapabilities)
+      .where(and(
+        eq(userCapabilities.userId, data.userId),
+        eq(userCapabilities.capabilityId, data.capabilityId)
+      ));
+    
+    if (existing.length > 0) {
+      throw new Error('User already has this capability');
+    }
+    
+    const [capability] = await db.insert(userCapabilities).values(data).returning();
+    return capability;
+  }
+
+  async revokeUserCapability(id: number): Promise<void> {
+    await db.delete(userCapabilities)
+      .where(eq(userCapabilities.id, id));
+  }
+
+  async toggleUserHardcodedCapability(id: number, useHardcoded: boolean): Promise<UserCapability> {
+    const [capability] = await db.update(userCapabilities)
+      .set({ useHardcodedValue: useHardcoded, updatedAt: new Date() })
+      .where(eq(userCapabilities.id, id))
+      .returning();
+    return capability;
   }
 
   // Certifications CRUD

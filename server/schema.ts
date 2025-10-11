@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, timestamp, jsonb, boolean, json, real, date, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, timestamp, jsonb, boolean, json, real, date, pgEnum, unique } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { relations } from "drizzle-orm";
@@ -564,7 +564,8 @@ export const employees = pgTable("employees", {
   name: text("name").notNull(),
   email: text("email").unique(),
   phone: text("phone"),
-  role: text("role").notNull(),
+  jobTitle: text("job_title"), // Informational only - e.g., "Department Manager", "HR Specialist"
+  userRole: text("user_role").notNull().default("EMPLOYEE"), // ADMIN, EMPLOYEE, OWNER - system access level
   department: text("department"),
   hireDate: date("hire_date"),
   dateOfBirth: date("date_of_birth"),
@@ -667,6 +668,50 @@ export const employeeAuditLog = pgTable("employee_audit_log", {
   userAgent: text("user_agent"),
   timestamp: timestamp("timestamp").defaultNow().notNull(),
 });
+
+// Capability-Based Permission System
+export const capabilities = pgTable("capabilities", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull().unique(), // e.g., "VIEW_ORDERS", "EDIT_INVENTORY", "APPROVE_PARTS_REQUESTS"
+  displayName: text("display_name").notNull(), // e.g., "View Orders", "Edit Inventory"
+  category: text("category").notNull(), // e.g., "ORDERS", "INVENTORY", "EMPLOYEES", "REPORTS"
+  description: text("description"),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Employee-Capability Junction Table with toggle for hardcoded capabilities
+export const employeeCapabilities = pgTable("employee_capabilities", {
+  id: serial("id").primaryKey(),
+  employeeId: integer("employee_id").references(() => employees.id).notNull(),
+  capabilityId: integer("capability_id").references(() => capabilities.id).notNull(),
+  grantedBy: text("granted_by"), // Username or system that granted this capability
+  isHardcoded: boolean("is_hardcoded").default(false), // True if this is a hardcoded capability
+  useHardcodedValue: boolean("use_hardcoded_value").default(true), // Toggle to enable/disable hardcoded capabilities
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  // Unique constraint to prevent duplicate capability grants
+  uniqueEmployeeCapability: unique().on(table.employeeId, table.capabilityId),
+}));
+
+// User-Capability Junction Table with toggle for hardcoded capabilities
+export const userCapabilities = pgTable("user_capabilities", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id).notNull(),
+  capabilityId: integer("capability_id").references(() => capabilities.id).notNull(),
+  grantedBy: text("granted_by"), // Username or system that granted this capability
+  isHardcoded: boolean("is_hardcoded").default(false), // True if this is a hardcoded capability
+  useHardcodedValue: boolean("use_hardcoded_value").default(true), // Toggle to enable/disable hardcoded capabilities
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  // Unique constraint to prevent duplicate capability grants
+  uniqueUserCapability: unique().on(table.userId, table.capabilityId),
+}));
 
 // QC and Preventive Maintenance Tables
 export const qcDefinitions = pgTable("qc_definitions", {
@@ -1066,7 +1111,8 @@ export const insertEmployeeSchema = createInsertSchema(employees).omit({
   name: z.string().min(1, "Employee name is required"),
   email: z.string().email("Valid email is required").optional().nullable(),
   phone: z.string().optional().nullable(),
-  role: z.string().min(1, "Employee role is required"),
+  jobTitle: z.string().optional().nullable(), // Informational job title
+  userRole: z.enum(['ADMIN', 'EMPLOYEE', 'OWNER']).default('EMPLOYEE'), // System role
   department: z.string().optional().nullable(),
   hireDate: z.coerce.date().optional().nullable(),
   dateOfBirth: z.coerce.date().optional().nullable(),
@@ -1166,6 +1212,45 @@ export const insertEmployeeAuditLogSchema = createInsertSchema(employeeAuditLog)
   details: z.record(z.any()).optional().nullable(),
   ipAddress: z.string().optional().nullable(),
   userAgent: z.string().optional().nullable(),
+});
+
+// Capability schemas
+export const insertCapabilitySchema = createInsertSchema(capabilities).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  name: z.string().min(1, "Capability name is required"),
+  displayName: z.string().min(1, "Display name is required"),
+  category: z.string().min(1, "Category is required"),
+  description: z.string().optional().nullable(),
+  isActive: z.boolean().default(true),
+});
+
+export const insertEmployeeCapabilitySchema = createInsertSchema(employeeCapabilities).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  employeeId: z.number().min(1, "Employee ID is required"),
+  capabilityId: z.number().min(1, "Capability ID is required"),
+  grantedBy: z.string().optional().nullable(),
+  isHardcoded: z.boolean().default(false),
+  useHardcodedValue: z.boolean().default(true),
+  notes: z.string().optional().nullable(),
+});
+
+export const insertUserCapabilitySchema = createInsertSchema(userCapabilities).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  userId: z.number().min(1, "User ID is required"),
+  capabilityId: z.number().min(1, "Capability ID is required"),
+  grantedBy: z.string().optional().nullable(),
+  isHardcoded: z.boolean().default(false),
+  useHardcodedValue: z.boolean().default(true),
+  notes: z.string().optional().nullable(),
 });
 
 export const insertQcDefinitionSchema = createInsertSchema(qcDefinitions).omit({
@@ -1332,6 +1417,13 @@ export type InsertEmployeeDocument = z.infer<typeof insertEmployeeDocumentSchema
 export type EmployeeDocument = typeof employeeDocuments.$inferSelect;
 export type InsertEmployeeAuditLog = z.infer<typeof insertEmployeeAuditLogSchema>;
 export type EmployeeAuditLog = typeof employeeAuditLog.$inferSelect;
+
+export type InsertCapability = z.infer<typeof insertCapabilitySchema>;
+export type Capability = typeof capabilities.$inferSelect;
+export type InsertEmployeeCapability = z.infer<typeof insertEmployeeCapabilitySchema>;
+export type EmployeeCapability = typeof employeeCapabilities.$inferSelect;
+export type InsertUserCapability = z.infer<typeof insertUserCapabilitySchema>;
+export type UserCapability = typeof userCapabilities.$inferSelect;
 export type InsertQcDefinition = z.infer<typeof insertQcDefinitionSchema>;
 export type QcDefinition = typeof qcDefinitions.$inferSelect;
 export type InsertQcSubmission = z.infer<typeof insertQcSubmissionSchema>;

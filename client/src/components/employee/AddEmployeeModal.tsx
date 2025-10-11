@@ -16,7 +16,8 @@ export default function AddEmployeeModal({ onClose }: AddEmployeeModalProps) {
     name: '',
     email: '',
     phone: '',
-    role: '',
+    jobTitle: '',
+    userRole: 'EMPLOYEE',
     department: '',
     employmentType: 'FULL_TIME',
     hireDate: '',
@@ -76,10 +77,10 @@ export default function AddEmployeeModal({ onClose }: AddEmployeeModalProps) {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.name || !formData.role) {
+    if (!formData.name || !formData.jobTitle) {
       toast({
         title: "Validation Error",
-        description: "Name and role are required fields",
+        description: "Name and job title are required fields",
         variant: "destructive",
       });
       return;
@@ -137,10 +138,10 @@ export default function AddEmployeeModal({ onClose }: AddEmployeeModalProps) {
         </div>
 
         <div>
-          <Label htmlFor="role">Role *</Label>
-          <Select value={formData.role} onValueChange={(value) => handleInputChange('role', value)}>
+          <Label htmlFor="jobTitle">Job Title *</Label>
+          <Select value={formData.jobTitle} onValueChange={(value) => handleInputChange('jobTitle', value)}>
             <SelectTrigger>
-              <SelectValue placeholder="Select role" />
+              <SelectValue placeholder="Select job title" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="HR Manager">HR Manager</SelectItem>
@@ -153,6 +154,21 @@ export default function AddEmployeeModal({ onClose }: AddEmployeeModalProps) {
               <SelectItem value="Administrator">Administrator</SelectItem>
             </SelectContent>
           </Select>
+        </div>
+
+        <div>
+          <Label htmlFor="userRole">System Access Level</Label>
+          <Select value={formData.userRole} onValueChange={(value) => handleInputChange('userRole', value)}>
+            <SelectTrigger>
+              <SelectValue placeholder="Select system role" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="EMPLOYEE">Employee</SelectItem>
+              <SelectItem value="ADMIN">Administrator</SelectItem>
+              <SelectItem value="OWNER">Owner</SelectItem>
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-gray-500 mt-1">System access level determines basic permissions</p>
         </div>
 
         <div>

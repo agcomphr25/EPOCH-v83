@@ -15,7 +15,8 @@ interface Employee {
   name: string;
   email: string;
   phone: string;
-  role: string;
+  jobTitle: string;
+  userRole: string;
   department: string;
   employmentType: string;
   isActive: boolean;
@@ -41,7 +42,7 @@ export default function EmployeeDashboard() {
     employee.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     employee.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     employee.department?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    employee.role.toLowerCase().includes(searchTerm.toLowerCase())
+    employee.jobTitle?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const activeEmployees = employees.filter((emp: Employee) => emp.isActive);
@@ -201,7 +202,7 @@ export default function EmployeeDashboard() {
                       <div>
                         <h3 className="font-medium text-gray-900">{employee.name}</h3>
                         <div className="flex items-center space-x-2 text-sm text-gray-500">
-                          <span>{employee.role}</span>
+                          <span>{employee.jobTitle || 'No Title'}</span>
                           {employee.department && (
                             <>
                               <span>•</span>
@@ -224,6 +225,18 @@ export default function EmployeeDashboard() {
                       >
                         {employee.isActive ? 'Active' : 'Inactive'}
                       </Badge>
+                      {employee.userRole && (
+                        <Badge 
+                          variant="outline"
+                          className={
+                            employee.userRole === 'ADMIN' ? 'bg-red-50 text-red-700 border-red-200' :
+                            employee.userRole === 'OWNER' ? 'bg-purple-50 text-purple-700 border-purple-200' :
+                            'bg-blue-50 text-blue-700 border-blue-200'
+                          }
+                        >
+                          {employee.userRole}
+                        </Badge>
+                      )}
                       <Badge variant="outline">
                         {employee.employmentType || 'Full-time'}
                       </Badge>

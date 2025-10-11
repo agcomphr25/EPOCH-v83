@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Trash2, Edit, Plus, Users, Key, UserCheck, UserX } from "lucide-react";
+import { Trash2, Edit, Plus, Users, Key, UserCheck, UserX, Shield } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
@@ -48,6 +48,8 @@ export default function UserManagement() {
   const queryClient = useQueryClient();
   
   const [showUserModal, setShowUserModal] = useState(false);
+  const [showPermissionsModal, setShowPermissionsModal] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [formData, setFormData] = useState<InsertUser>({
     username: '',
@@ -222,6 +224,129 @@ export default function UserManagement() {
     }
   };
 
+  // User Capabilities Manager Component
+  interface UserCapabilitiesManagerProps {
+    userId: number;
+    userName: string;
+  }
+
+  function UserCapabilitiesManager({ userId, userName }: UserCapabilitiesManagerProps) {
+    // Fetch user capabilities
+    const { data: userCapabilities = [], isLoading: loadingUserCaps, refetch: refetchUserCaps } = useQuery({
+      queryKey: [`/api/users/${userId}/capabilities`],
+      enabled: !!userId
+    });
+
+    // Fetch all available capabilities
+    const { data: allCapabilities = [], isLoading: loadingAllCaps } = useQuery({
+      queryKey: ['/api/employees/capabilities'],
+    });
+
+    // Grant capability mutation
+    const grantMutation = useMutation({
+      mutationFn: (capabilityId: number) => 
+        apiRequest(`/api/users/${userId}/capabilities`, {
+          method: 'POST',
+          body: { capabilityId, useHardcoded: true }
+        }),
+      onSuccess: () => {
+        toast({ title: "Capability Granted", description: "Capability has been successfully granted." });
+        refetchUserCaps();
+      },
+      onError: (error: any) => {
+        toast({ title: "Error", description: error.message || "Failed to grant capability.", variant: "destructive" });
+      }
+    });
+
+    // Revoke capability mutation
+    const revokeMutation = useMutation({
+      mutationFn: (userCapId: number) => 
+        apiRequest(`/api/users/user-capabilities/${userCapId}`, { method: 'DELETE' }),
+      onSuccess: () => {
+        toast({ title: "Capability Revoked", description: "Capability has been successfully revoked." });
+        refetchUserCaps();
+      },
+      onError: (error: any) => {
+        toast({ title: "Error", description: error.message || "Failed to revoke capability.", variant: "destructive" });
+      }
+    });
+
+    const grantedCapabilityIds = userCapabilities.map((uc: any) => uc.capabilityId);
+    const availableToGrant = allCapabilities.filter((cap: any) => !grantedCapabilityIds.includes(cap.id));
+
+    if (loadingUserCaps || loadingAllCaps) {
+      return <div className="text-center py-4">Loading capabilities...</div>;
+    }
+
+    return (
+      <div className="py-4 space-y-6">
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+          <p className="text-sm text-blue-800">
+            Managing capabilities for: <strong>{userName}</strong>
+          </p>
+        </div>
+
+        {/* Granted Capabilities */}
+        <div>
+          <h3 className="font-semibold text-sm mb-3">Granted Capabilities ({userCapabilities.length})</h3>
+          {userCapabilities.length === 0 ? (
+            <p className="text-sm text-gray-500">No capabilities granted yet.</p>
+          ) : (
+            <div className="space-y-2">
+              {userCapabilities.map((uc: any) => {
+                const capability = allCapabilities.find((c: any) => c.id === uc.capabilityId);
+                return (
+                  <div key={uc.id} className="flex items-center justify-between p-2 bg-green-50 border border-green-200 rounded">
+                    <div>
+                      <p className="text-sm font-medium">{capability?.displayName || 'Unknown'}</p>
+                      <p className="text-xs text-gray-600">{capability?.description}</p>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => revokeMutation.mutate(uc.id)}
+                      disabled={revokeMutation.isPending}
+                      className="text-red-600 hover:text-red-700"
+                    >
+                      Revoke
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Available to Grant */}
+        <div>
+          <h3 className="font-semibold text-sm mb-3">Available Capabilities ({availableToGrant.length})</h3>
+          {availableToGrant.length === 0 ? (
+            <p className="text-sm text-gray-500">All capabilities have been granted.</p>
+          ) : (
+            <div className="space-y-2 max-h-60 overflow-y-auto">
+              {availableToGrant.map((cap: any) => (
+                <div key={cap.id} className="flex items-center justify-between p-2 bg-gray-50 border border-gray-200 rounded">
+                  <div>
+                    <p className="text-sm font-medium">{cap.displayName}</p>
+                    <p className="text-xs text-gray-600">{cap.description}</p>
+                    <p className="text-xs text-gray-500 mt-1">Category: {cap.category}</p>
+                  </div>
+                  <Button
+                    size="sm"
+                    onClick={() => grantMutation.mutate(cap.id)}
+                    disabled={grantMutation.isPending}
+                  >
+                    Grant
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   const formatDate = (dateString?: string) => {
     if (!dateString) return 'Never';
     return new Date(dateString).toLocaleString();
@@ -327,10 +452,22 @@ export default function UserManagement() {
                     variant="outline"
                     size="sm"
                     onClick={() => handleEditUser(user)}
-                    className="flex items-center gap-1 flex-1"
+                    className="flex items-center gap-1"
                   >
                     <Edit className="h-3 w-3" />
                     Edit
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setSelectedUser(user);
+                      setShowPermissionsModal(true);
+                    }}
+                    className="flex items-center gap-1"
+                  >
+                    <Shield className="h-3 w-3" />
+                    Permissions
                   </Button>
                   <Button
                     variant="outline"
@@ -500,6 +637,19 @@ export default function UserManagement() {
               </Button>
             </div>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Permissions Management Dialog */}
+      <Dialog open={showPermissionsModal} onOpenChange={setShowPermissionsModal}>
+        <DialogContent className="sm:max-w-[700px] max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              Manage Permissions - {selectedUser?.firstName} {selectedUser?.lastName}
+            </DialogTitle>
+          </DialogHeader>
+          
+          {selectedUser && <UserCapabilitiesManager userId={selectedUser.id} userName={`${selectedUser.firstName} ${selectedUser.lastName}`} />}
         </DialogContent>
       </Dialog>
     </div>

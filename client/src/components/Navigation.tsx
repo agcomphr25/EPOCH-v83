@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Link, useLocation } from 'wouter';
+import { Link, useLocation, useRoute } from 'wouter';
 
 import { Factory, User, FileText, TrendingDown, Plus, Settings, Package, FilePenLine, ClipboardList, BarChart, ChevronDown, ChevronRight, FormInput, PieChart, Scan, Warehouse, Shield, Wrench, Users, TestTube, DollarSign, Receipt, TrendingUp, List, BookOpen, Calendar, CheckSquare, Truck, Mail, MessageSquare, CreditCard, XCircle, Cog, ArrowRight, LogOut, Scissors, MapPin, Snowflake, ShoppingCart, GraduationCap, Home } from "lucide-react";
 
@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/navigation-menu"
 
 export default function Navigation() {
-  const [location] = useLocation();
+  const [location, setLocation] = useLocation();
   
   // Check if we're in deployment environment to show logout button
   const isDeploymentEnvironment = () => {
@@ -725,47 +725,6 @@ export default function Navigation() {
     closeAllDropdowns();
   }, [location, closeAllDropdowns]);
 
-  // Auto-expand dropdowns when on those pages (with delay to prevent interference with manual closing)
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (isVerifiedModulesActive) {
-        setVerifiedModulesExpanded(true);
-      }
-      if (isFormsReportsActive) {
-        setFormsReportsExpanded(true);
-      }
-      if (isTrainingActive) {
-        setTrainingExpanded(true);
-      }
-      if (isInventoryActive) {
-        setInventoryExpanded(true);
-      }
-      if (isQcMaintenanceActive) {
-        setQcMaintenanceExpanded(true);
-      }
-      if (isEmployeesActive) {
-        setEmployeesExpanded(true);
-      }
-      if (isFinanceActive) {
-        setFinanceExpanded(true);
-      }
-      if (isUserDashboardsActive) {
-        setUserDashboardsExpanded(true);
-      }
-      if (isPurchaseOrdersActive) {
-        setPurchaseOrdersExpanded(true);
-      }
-      if (isProductionSchedulingActive) {
-        setProductionSchedulingExpanded(true);
-      }
-      if (isDepartmentQueueActive) {
-        setDepartmentQueueExpanded(true);
-      }
-    }, 100); // Small delay to prevent conflicts with manual dropdown closing
-
-    return () => clearTimeout(timer);
-  }, [isVerifiedModulesActive, isFormsReportsActive, isTrainingActive, isInventoryActive, isQcMaintenanceActive, isEmployeesActive, isFinanceActive, isUserDashboardsActive, isPurchaseOrdersActive, isProductionSchedulingActive, isDepartmentQueueActive]);
-
   return (
     <header className="bg-white shadow-sm border-b border-gray-200">
       <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8">
@@ -849,18 +808,20 @@ export default function Navigation() {
                     const isActive = location === item.path;
 
                     return (
-                      <Link key={item.path} href={item.path}>
-                        <button
-                          className={cn(
-                            "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
-                            isActive && "bg-primary text-white hover:bg-primary"
-                          )}
-                          onClick={closeAllDropdowns}
-                        >
-                          <Icon className="h-4 w-4" />
-                          {item.label}
-                        </button>
-                      </Link>
+                      <button
+                        key={item.path}
+                        className={cn(
+                          "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
+                          isActive && "bg-primary text-white hover:bg-primary"
+                        )}
+                        onClick={() => {
+                          closeAllDropdowns();
+                          setLocation(item.path);
+                        }}
+                      >
+                        <Icon className="h-4 w-4" />
+                        {item.label}
+                      </button>
                     );
                   })}
                 </div>
@@ -895,18 +856,20 @@ export default function Navigation() {
                     const isActive = location === item.path;
 
                     return (
-                      <Link key={item.path} href={item.path}>
-                        <button
-                          className={cn(
-                            "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
-                            isActive && "bg-primary text-white hover:bg-primary"
-                          )}
-                          onClick={closeAllDropdowns}
-                        >
-                          <Icon className="h-4 w-4" />
-                          {item.label}
-                        </button>
-                      </Link>
+                      <button
+                        key={item.path}
+                        className={cn(
+                          "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
+                          isActive && "bg-primary text-white hover:bg-primary"
+                        )}
+                        onClick={() => {
+                          closeAllDropdowns();
+                          setLocation(item.path);
+                        }}
+                      >
+                        <Icon className="h-4 w-4" />
+                        {item.label}
+                      </button>
                     );
                   })}
                 </div>
@@ -941,18 +904,20 @@ export default function Navigation() {
                     const isActive = location === item.path;
 
                     return (
-                      <Link key={item.path} href={item.path}>
-                        <button
-                          className={cn(
-                            "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
-                            isActive && "bg-primary text-white hover:bg-primary"
-                          )}
-                          onClick={closeAllDropdowns}
-                        >
-                          <Icon className="h-4 w-4" />
-                          {item.label}
-                        </button>
-                      </Link>
+                      <button
+                        key={item.path}
+                        className={cn(
+                          "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
+                          isActive && "bg-primary text-white hover:bg-primary"
+                        )}
+                        onClick={() => {
+                          closeAllDropdowns();
+                          setLocation(item.path);
+                        }}
+                      >
+                        <Icon className="h-4 w-4" />
+                        {item.label}
+                      </button>
                     );
                   })}
                 </div>
@@ -987,18 +952,20 @@ export default function Navigation() {
                     const isActive = location === item.path;
 
                     return (
-                      <Link key={item.path} href={item.path}>
-                        <button
-                          className={cn(
-                            "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
-                            isActive && "bg-primary text-white hover:bg-primary"
-                          )}
-                          onClick={closeAllDropdowns}
-                        >
-                          <Icon className="h-4 w-4" />
-                          {item.label}
-                        </button>
-                      </Link>
+                      <button
+                        key={item.path}
+                        className={cn(
+                          "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
+                          isActive && "bg-primary text-white hover:bg-primary"
+                        )}
+                        onClick={() => {
+                          closeAllDropdowns();
+                          setLocation(item.path);
+                        }}
+                      >
+                        <Icon className="h-4 w-4" />
+                        {item.label}
+                      </button>
                     );
                   })}
                 </div>
@@ -1033,18 +1000,20 @@ export default function Navigation() {
                     const isActive = location === item.path;
 
                     return (
-                      <Link key={item.path} href={item.path}>
-                        <button
-                          className={cn(
-                            "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
-                            isActive && "bg-primary text-white hover:bg-primary"
-                          )}
-                          onClick={closeAllDropdowns}
-                        >
-                          <Icon className="h-4 w-4" />
-                          {item.label}
-                        </button>
-                      </Link>
+                      <button
+                        key={item.path}
+                        className={cn(
+                          "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
+                          isActive && "bg-primary text-white hover:bg-primary"
+                        )}
+                        onClick={() => {
+                          closeAllDropdowns();
+                          setLocation(item.path);
+                        }}
+                      >
+                        <Icon className="h-4 w-4" />
+                        {item.label}
+                      </button>
                     );
                   })}
                 </div>
@@ -1079,18 +1048,20 @@ export default function Navigation() {
                     const isActive = location === item.path;
 
                     return (
-                      <Link key={item.path} href={item.path}>
-                        <button
-                          className={cn(
-                            "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
-                            isActive && "bg-primary text-white hover:bg-primary"
-                          )}
-                          onClick={closeAllDropdowns}
-                        >
-                          <Icon className="h-4 w-4" />
-                          {item.label}
-                        </button>
-                      </Link>
+                      <button
+                        key={item.path}
+                        className={cn(
+                          "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
+                          isActive && "bg-primary text-white hover:bg-primary"
+                        )}
+                        onClick={() => {
+                          closeAllDropdowns();
+                          setLocation(item.path);
+                        }}
+                      >
+                        <Icon className="h-4 w-4" />
+                        {item.label}
+                      </button>
                     );
                   })}
                 </div>
@@ -1125,18 +1096,20 @@ export default function Navigation() {
                     const isActive = location === item.path;
 
                     return (
-                      <Link key={item.path} href={item.path}>
-                        <button
-                          className={cn(
-                            "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
-                            isActive && "bg-primary text-white hover:bg-primary"
-                          )}
-                          onClick={closeAllDropdowns}
-                        >
-                          <Icon className="h-4 w-4" />
-                          {item.label}
-                        </button>
-                      </Link>
+                      <button
+                        key={item.path}
+                        className={cn(
+                          "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
+                          isActive && "bg-primary text-white hover:bg-primary"
+                        )}
+                        onClick={() => {
+                          closeAllDropdowns();
+                          setLocation(item.path);
+                        }}
+                      >
+                        <Icon className="h-4 w-4" />
+                        {item.label}
+                      </button>
                     );
                   })}
                 </div>
@@ -1171,18 +1144,20 @@ export default function Navigation() {
                     const isActive = location === item.path;
 
                     return (
-                      <Link key={item.path} href={item.path}>
-                        <button
-                          className={cn(
-                            "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
-                            isActive && "bg-primary text-white hover:bg-primary"
-                          )}
-                          onClick={closeAllDropdowns}
-                        >
-                          <Icon className="h-4 w-4" />
-                          {item.label}
-                        </button>
-                      </Link>
+                      <button
+                        key={item.path}
+                        className={cn(
+                          "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
+                          isActive && "bg-primary text-white hover:bg-primary"
+                        )}
+                        onClick={() => {
+                          closeAllDropdowns();
+                          setLocation(item.path);
+                        }}
+                      >
+                        <Icon className="h-4 w-4" />
+                        {item.label}
+                      </button>
                     );
                   })}
                 </div>
@@ -1217,18 +1192,20 @@ export default function Navigation() {
                     const isActive = location === item.path;
 
                     return (
-                      <Link key={item.path} href={item.path}>
-                        <button
-                          className={cn(
-                            "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
-                            isActive && "bg-primary text-white hover:bg-primary"
-                          )}
-                          onClick={closeAllDropdowns}
-                        >
-                          <Icon className="h-4 w-4" />
-                          {item.label}
-                        </button>
-                      </Link>
+                      <button
+                        key={item.path}
+                        className={cn(
+                          "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
+                          isActive && "bg-primary text-white hover:bg-primary"
+                        )}
+                        onClick={() => {
+                          closeAllDropdowns();
+                          setLocation(item.path);
+                        }}
+                      >
+                        <Icon className="h-4 w-4" />
+                        {item.label}
+                      </button>
                     );
                   })}
                 </div>
@@ -1263,18 +1240,20 @@ export default function Navigation() {
                     const isActive = location === item.path;
 
                     return (
-                      <Link key={item.path} href={item.path}>
-                        <button
-                          className={cn(
-                            "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
-                            isActive && "bg-primary text-white hover:bg-primary"
-                          )}
-                          onClick={closeAllDropdowns}
-                        >
-                          <Icon className="h-4 w-4" />
-                          {item.label}
-                        </button>
-                      </Link>
+                      <button
+                        key={item.path}
+                        className={cn(
+                          "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
+                          isActive && "bg-primary text-white hover:bg-primary"
+                        )}
+                        onClick={() => {
+                          closeAllDropdowns();
+                          setLocation(item.path);
+                        }}
+                      >
+                        <Icon className="h-4 w-4" />
+                        {item.label}
+                      </button>
                     );
                   })}
                 </div>
@@ -1290,7 +1269,7 @@ export default function Navigation() {
             <span className="text-sm text-gray-600">Manufacturing ERP System</span>
             {isDeploymentEnvironment() && currentUser?.username && (
               <span className="text-sm font-medium text-gray-700" data-testid="text-username">
-                {currentUser.username}
+                {currentUser.firstName || currentUser.username}
               </span>
             )}
             {isDeploymentEnvironment() && (

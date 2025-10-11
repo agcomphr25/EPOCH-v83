@@ -248,7 +248,7 @@ router.get('/session', async (req, res) => {
 
     // Try to get user data from database first
     const dbUserResult = await pool.query(
-      `SELECT id, username, role FROM users WHERE username = $1 AND is_active = true`,
+      `SELECT id, username, first_name, last_name, role FROM users WHERE username = $1 AND is_active = true`,
       [session.username.toLowerCase()]
     );
 
@@ -269,6 +269,8 @@ router.get('/session', async (req, res) => {
     res.json({
       id: user.id,
       username: user.username,
+      firstName: user.first_name,
+      lastName: user.last_name,
       role: user.role
     });
   } catch (error) {

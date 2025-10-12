@@ -1,12 +1,27 @@
 import React, { useState, useEffect } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { createRecord, updateRecord, fetchOne } from '../utils/nonconformanceUtils';
+import {
+  createRecord,
+  updateRecord,
+  fetchOne,
+} from '../utils/nonconformanceUtils';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '../lib/queryClient';
 
@@ -17,11 +32,24 @@ const issueOptions = [
   'Material Defect',
   'Process Error',
   'Design Issue',
-  'Other'
+  'Other',
 ];
 
-const dispositionOptions = ['Scrap', 'Repair', 'Use As Is', 'Use for Reference', 'Return to Vendor'];
-const authorizationOptions = ['Customer', 'Glenn', 'AG', 'Matt', 'Laurie', 'Quality Manager'];
+const dispositionOptions = [
+  'Scrap',
+  'Repair',
+  'Use As Is',
+  'Use for Reference',
+  'Return to Vendor',
+];
+const authorizationOptions = [
+  'Customer',
+  'Glenn',
+  'AG',
+  'Matt',
+  'Laurie',
+  'Quality Manager',
+];
 
 interface NonconformanceFormModalProps {
   open: boolean;
@@ -30,11 +58,11 @@ interface NonconformanceFormModalProps {
   recordToEdit?: any;
 }
 
-export default function NonconformanceFormModal({ 
-  open, 
-  onClose, 
-  onSaved, 
-  recordToEdit 
+export default function NonconformanceFormModal({
+  open,
+  onClose,
+  onSaved,
+  recordToEdit,
 }: NonconformanceFormModalProps) {
   const isEdit = Boolean(recordToEdit);
   const { toast } = useToast();
@@ -72,7 +100,9 @@ export default function NonconformanceFormModal({
         manufacturerDefect: recordToEdit.manufacturerDefect || false,
         disposition: recordToEdit.disposition || dispositionOptions[0],
         authorization: recordToEdit.authorization || authorizationOptions[0],
-        dispositionDate: recordToEdit.dispositionDate?.split('T')[0] || new Date().toISOString().split('T')[0],
+        dispositionDate:
+          recordToEdit.dispositionDate?.split('T')[0] ||
+          new Date().toISOString().split('T')[0],
         notes: recordToEdit.notes || '',
         status: recordToEdit.status || 'Open',
       });
@@ -90,12 +120,27 @@ export default function NonconformanceFormModal({
         } else if (orderQuery.length >= 2) {
           // Search with filter
           const data = await apiRequest('/api/orders');
-          const filtered = (data || []).filter((order: any) => 
-            (order.orderId && order.orderId.toLowerCase().includes(orderQuery.toLowerCase())) ||
-            (order.serialNumber && order.serialNumber.toLowerCase().includes(orderQuery.toLowerCase())) ||
-            (order.customer && order.customer.toLowerCase().includes(orderQuery.toLowerCase())) ||
-            (order.customerName && order.customerName.toLowerCase().includes(orderQuery.toLowerCase()))
-          ).slice(0, 20); // Limit results for performance
+          const filtered = (data || [])
+            .filter(
+              (order: any) =>
+                (order.orderId &&
+                  order.orderId
+                    .toLowerCase()
+                    .includes(orderQuery.toLowerCase())) ||
+                (order.serialNumber &&
+                  order.serialNumber
+                    .toLowerCase()
+                    .includes(orderQuery.toLowerCase())) ||
+                (order.customer &&
+                  order.customer
+                    .toLowerCase()
+                    .includes(orderQuery.toLowerCase())) ||
+                (order.customerName &&
+                  order.customerName
+                    .toLowerCase()
+                    .includes(orderQuery.toLowerCase()))
+            )
+            .slice(0, 20); // Limit results for performance
           setOrderResults(filtered);
         } else {
           setOrderResults([]);
@@ -117,8 +162,17 @@ export default function NonconformanceFormModal({
       orderId: selectedOrder.orderId || selectedOrder.id || '',
       serialNumber: selectedOrder.serialNumber || '',
       customerName: selectedOrder.customerName || selectedOrder.customer || '',
-      poNumber: selectedOrder.poNumber || selectedOrder.po || selectedOrder.customerPO || '',
-      stockModel: selectedOrder.modelId || selectedOrder.stockModel || selectedOrder.model || selectedOrder.product || '',
+      poNumber:
+        selectedOrder.poNumber ||
+        selectedOrder.po ||
+        selectedOrder.customerPO ||
+        '',
+      stockModel:
+        selectedOrder.modelId ||
+        selectedOrder.stockModel ||
+        selectedOrder.model ||
+        selectedOrder.product ||
+        '',
     });
     setOrderQuery('');
     setOrderResults([]);
@@ -127,9 +181,9 @@ export default function NonconformanceFormModal({
   const handleSave = async () => {
     if (!form.orderId && !form.serialNumber) {
       toast({
-        title: "Validation Error",
-        description: "Please provide either an Order ID or Serial Number",
-        variant: "destructive",
+        title: 'Validation Error',
+        description: 'Please provide either an Order ID or Serial Number',
+        variant: 'destructive',
       });
       return;
     }
@@ -139,25 +193,25 @@ export default function NonconformanceFormModal({
       if (isEdit) {
         await updateRecord(recordToEdit.id, form);
         toast({
-          title: "Success",
-          description: "Nonconformance record updated successfully",
+          title: 'Success',
+          description: 'Nonconformance record updated successfully',
         });
       } else {
         await createRecord(form);
         toast({
-          title: "Success", 
-          description: "Nonconformance record created successfully",
+          title: 'Success',
+          description: 'Nonconformance record created successfully',
         });
       }
-      
+
       onSaved();
       onClose();
     } catch (error) {
       console.error('Save error:', error);
       toast({
-        title: "Error",
-        description: "Failed to save record. Please try again.",
-        variant: "destructive",
+        title: 'Error',
+        description: 'Failed to save record. Please try again.',
+        variant: 'destructive',
       });
     } finally {
       setLoading(false);
@@ -177,10 +231,12 @@ export default function NonconformanceFormModal({
           {/* Order Search Dropdown */}
           <div className="space-y-2">
             <Label>Search Order</Label>
-            <Select 
-              value={form.orderId} 
+            <Select
+              value={form.orderId}
               onValueChange={(selectedOrderId) => {
-                const selectedOrder = orderResults.find(order => order.orderId === selectedOrderId);
+                const selectedOrder = orderResults.find(
+                  (order) => order.orderId === selectedOrderId
+                );
                 if (selectedOrder) {
                   handleOrderSelect(selectedOrder);
                 }
@@ -194,7 +250,9 @@ export default function NonconformanceFormModal({
             >
               <SelectTrigger>
                 <SelectValue placeholder="Search and select an order...">
-                  {form.orderId ? `${form.orderId} - ${form.customerName}` : "Search and select an order..."}
+                  {form.orderId
+                    ? `${form.orderId} - ${form.customerName}`
+                    : 'Search and select an order...'}
                 </SelectValue>
               </SelectTrigger>
               <SelectContent>
@@ -208,19 +266,27 @@ export default function NonconformanceFormModal({
                 </div>
                 {orderResults.length > 0 ? (
                   orderResults.map((order: any) => (
-                    <SelectItem key={order.id} value={order.orderId || order.id}>
+                    <SelectItem
+                      key={order.id}
+                      value={order.orderId || order.id}
+                    >
                       <div className="flex flex-col">
                         <div className="font-medium">{order.orderId}</div>
                         <div className="text-sm text-gray-600">
-                          {order.serialNumber && `${order.serialNumber} • `}{order.customerName}
+                          {order.serialNumber && `${order.serialNumber} • `}
+                          {order.customerName}
                         </div>
                       </div>
                     </SelectItem>
                   ))
                 ) : orderQuery.length >= 2 ? (
-                  <div className="p-2 text-sm text-gray-500">No orders found</div>
+                  <div className="p-2 text-sm text-gray-500">
+                    No orders found
+                  </div>
                 ) : (
-                  <div className="p-2 text-sm text-gray-500">Type to search orders...</div>
+                  <div className="p-2 text-sm text-gray-500">
+                    Type to search orders...
+                  </div>
                 )}
               </SelectContent>
             </Select>
@@ -240,7 +306,9 @@ export default function NonconformanceFormModal({
               <Label>Serial Number</Label>
               <Input
                 value={form.serialNumber}
-                onChange={(e) => setForm({ ...form, serialNumber: e.target.value })}
+                onChange={(e) =>
+                  setForm({ ...form, serialNumber: e.target.value })
+                }
                 placeholder="Enter Serial Number"
               />
             </div>
@@ -251,7 +319,9 @@ export default function NonconformanceFormModal({
               <Label>Customer Name</Label>
               <Input
                 value={form.customerName}
-                onChange={(e) => setForm({ ...form, customerName: e.target.value })}
+                onChange={(e) =>
+                  setForm({ ...form, customerName: e.target.value })
+                }
                 placeholder="Customer Name"
               />
             </div>
@@ -270,7 +340,9 @@ export default function NonconformanceFormModal({
               <Label>Stock Model</Label>
               <Input
                 value={form.stockModel}
-                onChange={(e) => setForm({ ...form, stockModel: e.target.value })}
+                onChange={(e) =>
+                  setForm({ ...form, stockModel: e.target.value })
+                }
                 placeholder="Stock Model"
               />
             </div>
@@ -280,7 +352,9 @@ export default function NonconformanceFormModal({
                 type="number"
                 min="1"
                 value={form.quantity}
-                onChange={(e) => setForm({ ...form, quantity: parseInt(e.target.value) || 1 })}
+                onChange={(e) =>
+                  setForm({ ...form, quantity: parseInt(e.target.value) || 1 })
+                }
               />
             </div>
           </div>
@@ -288,7 +362,10 @@ export default function NonconformanceFormModal({
           {/* Issue Details */}
           <div className="space-y-2">
             <Label>Issue/Cause</Label>
-            <Select value={form.issueCause} onValueChange={(value) => setForm({ ...form, issueCause: value })}>
+            <Select
+              value={form.issueCause}
+              onValueChange={(value) => setForm({ ...form, issueCause: value })}
+            >
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
@@ -307,7 +384,9 @@ export default function NonconformanceFormModal({
             <Label>Manufacturer Defect?</Label>
             <RadioGroup
               value={form.manufacturerDefect ? 'yes' : 'no'}
-              onValueChange={(value) => setForm({ ...form, manufacturerDefect: value === 'yes' })}
+              onValueChange={(value) =>
+                setForm({ ...form, manufacturerDefect: value === 'yes' })
+              }
               className="flex space-x-6"
             >
               <div className="flex items-center space-x-2">
@@ -325,7 +404,12 @@ export default function NonconformanceFormModal({
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Disposition</Label>
-              <Select value={form.disposition} onValueChange={(value) => setForm({ ...form, disposition: value })}>
+              <Select
+                value={form.disposition}
+                onValueChange={(value) =>
+                  setForm({ ...form, disposition: value })
+                }
+              >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -340,7 +424,12 @@ export default function NonconformanceFormModal({
             </div>
             <div className="space-y-2">
               <Label>Authorization</Label>
-              <Select value={form.authorization} onValueChange={(value) => setForm({ ...form, authorization: value })}>
+              <Select
+                value={form.authorization}
+                onValueChange={(value) =>
+                  setForm({ ...form, authorization: value })
+                }
+              >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -360,7 +449,9 @@ export default function NonconformanceFormModal({
             <Input
               type="date"
               value={form.dispositionDate}
-              onChange={(e) => setForm({ ...form, dispositionDate: e.target.value })}
+              onChange={(e) =>
+                setForm({ ...form, dispositionDate: e.target.value })
+              }
             />
           </div>
 
@@ -368,7 +459,10 @@ export default function NonconformanceFormModal({
           {isEdit && (
             <div className="space-y-2">
               <Label>Status</Label>
-              <Select value={form.status} onValueChange={(value) => setForm({ ...form, status: value })}>
+              <Select
+                value={form.status}
+                onValueChange={(value) => setForm({ ...form, status: value })}
+              >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>

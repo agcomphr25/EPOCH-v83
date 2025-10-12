@@ -4,15 +4,43 @@ import { apiRequest } from '@/lib/queryClient';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Settings, Plus, Edit, Trash2, Save, X, ChevronUp, ChevronDown } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+import {
+  Settings,
+  Plus,
+  Edit,
+  Trash2,
+  Save,
+  X,
+  ChevronUp,
+  ChevronDown,
+} from 'lucide-react';
 
 interface FeatureOption {
   value: string;
@@ -25,7 +53,13 @@ interface Feature {
   id: string;
   name: string;
   displayName: string;
-  type: 'dropdown' | 'text' | 'number' | 'checkbox' | 'textarea' | 'multiselect';
+  type:
+    | 'dropdown'
+    | 'text'
+    | 'number'
+    | 'checkbox'
+    | 'textarea'
+    | 'multiselect';
   required: boolean;
   placeholder?: string;
   options?: FeatureOption[];
@@ -63,12 +97,16 @@ export default function FeatureManager() {
   const queryClient = useQueryClient();
 
   const [selectedFeature, setSelectedFeature] = useState<Feature | null>(null);
-  const [selectedCategory, setSelectedCategory] = useState<FeatureCategory | null>(null);
+  const [selectedCategory, setSelectedCategory] =
+    useState<FeatureCategory | null>(null);
   const [isFeatureDialogOpen, setIsFeatureDialogOpen] = useState(false);
   const [isCategoryDialogOpen, setIsCategoryDialogOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [itemToDelete, setItemToDelete] = useState<{ type: string; id: string } | null>(null);
+  const [itemToDelete, setItemToDelete] = useState<{
+    type: string;
+    id: string;
+  } | null>(null);
 
   // Form states
   const [featureForm, setFeatureForm] = useState<Partial<Feature>>({
@@ -78,185 +116,215 @@ export default function FeatureManager() {
     price: 0,
     sortOrder: 0,
     isActive: true,
-    options: []
+    options: [],
   });
 
   const [categoryForm, setCategoryForm] = useState<Partial<FeatureCategory>>({
     name: '',
     displayName: '',
     sortOrder: 0,
-    isActive: true
+    isActive: true,
   });
 
-  const [subCategoryForm, setSubCategoryForm] = useState<Partial<FeatureSubCategory>>({
+  const [subCategoryForm, setSubCategoryForm] = useState<
+    Partial<FeatureSubCategory>
+  >({
     name: '',
     displayName: '',
     categoryId: '',
     price: 0,
     sortOrder: 0,
-    isActive: true
+    isActive: true,
   });
 
   const [isSubCategoryDialogOpen, setIsSubCategoryDialogOpen] = useState(false);
-  const [selectedSubCategory, setSelectedSubCategory] = useState<FeatureSubCategory | null>(null);
+  const [selectedSubCategory, setSelectedSubCategory] =
+    useState<FeatureSubCategory | null>(null);
   const [isEditingSubCategory, setIsEditingSubCategory] = useState(false);
   const [isPaintOptionsModalOpen, setIsPaintOptionsModalOpen] = useState(false);
-  const [selectedPaintSubCategory, setSelectedPaintSubCategory] = useState<string>('');
+  const [selectedPaintSubCategory, setSelectedPaintSubCategory] =
+    useState<string>('');
 
   // Fetch features and categories
   const { data: features = [], isLoading: featuresLoading } = useQuery({
     queryKey: ['/api/features'],
-    queryFn: () => apiRequest('/api/features')
+    queryFn: () => apiRequest('/api/features'),
   });
 
   const { data: categories = [], isLoading: categoriesLoading } = useQuery({
     queryKey: ['/api/feature-categories'],
-    queryFn: () => apiRequest('/api/feature-categories')
+    queryFn: () => apiRequest('/api/feature-categories'),
   });
 
-  const { data: subCategories = [], isLoading: subCategoriesLoading } = useQuery({
-    queryKey: ['/api/feature-sub-categories'],
-    queryFn: () => apiRequest('/api/feature-sub-categories')
-  });
+  const { data: subCategories = [], isLoading: subCategoriesLoading } =
+    useQuery({
+      queryKey: ['/api/feature-sub-categories'],
+      queryFn: () => apiRequest('/api/feature-sub-categories'),
+    });
 
   // Feature mutations
   const createFeatureMutation = useMutation({
-    mutationFn: (data: Partial<Feature>) => apiRequest('/api/features', {
-      method: 'POST',
-      body: data
-    }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/features'] });
-      setIsFeatureDialogOpen(false);
-      resetFeatureForm();
-      toast({ title: "Feature created successfully" });
-    },
-    onError: () => {
-      toast({ title: "Failed to create feature", variant: "destructive" });
-    }
-  });
-
-  const updateFeatureMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Partial<Feature> }) => 
-      apiRequest(`/api/features/${id}`, {
-        method: 'PUT',
-        body: data
+    mutationFn: (data: Partial<Feature>) =>
+      apiRequest('/api/features', {
+        method: 'POST',
+        body: data,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/features'] });
       setIsFeatureDialogOpen(false);
       resetFeatureForm();
-      toast({ title: "Feature updated successfully" });
+      toast({ title: 'Feature created successfully' });
     },
     onError: () => {
-      toast({ title: "Failed to update feature", variant: "destructive" });
-    }
+      toast({ title: 'Failed to create feature', variant: 'destructive' });
+    },
+  });
+
+  const updateFeatureMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Partial<Feature> }) =>
+      apiRequest(`/api/features/${id}`, {
+        method: 'PUT',
+        body: data,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/features'] });
+      setIsFeatureDialogOpen(false);
+      resetFeatureForm();
+      toast({ title: 'Feature updated successfully' });
+    },
+    onError: () => {
+      toast({ title: 'Failed to update feature', variant: 'destructive' });
+    },
   });
 
   const deleteFeatureMutation = useMutation({
-    mutationFn: (id: string) => apiRequest(`/api/features/${id}`, { method: 'DELETE' }),
+    mutationFn: (id: string) =>
+      apiRequest(`/api/features/${id}`, { method: 'DELETE' }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/features'] });
-      toast({ title: "Feature deleted successfully" });
+      toast({ title: 'Feature deleted successfully' });
     },
     onError: () => {
-      toast({ title: "Failed to delete feature", variant: "destructive" });
-    }
+      toast({ title: 'Failed to delete feature', variant: 'destructive' });
+    },
   });
 
   // Category mutations
   const createCategoryMutation = useMutation({
-    mutationFn: (data: Partial<FeatureCategory>) => apiRequest('/api/feature-categories', {
-      method: 'POST',
-      body: data
-    }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/feature-categories'] });
-      setIsCategoryDialogOpen(false);
-      resetCategoryForm();
-      toast({ title: "Category created successfully" });
-    },
-    onError: () => {
-      toast({ title: "Failed to create category", variant: "destructive" });
-    }
-  });
-
-  const updateCategoryMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Partial<FeatureCategory> }) => 
-      apiRequest(`/api/feature-categories/${id}`, {
-        method: 'PUT',
-        body: data
+    mutationFn: (data: Partial<FeatureCategory>) =>
+      apiRequest('/api/feature-categories', {
+        method: 'POST',
+        body: data,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/feature-categories'] });
       setIsCategoryDialogOpen(false);
       resetCategoryForm();
-      toast({ title: "Category updated successfully" });
+      toast({ title: 'Category created successfully' });
     },
     onError: () => {
-      toast({ title: "Failed to update category", variant: "destructive" });
-    }
+      toast({ title: 'Failed to create category', variant: 'destructive' });
+    },
+  });
+
+  const updateCategoryMutation = useMutation({
+    mutationFn: ({
+      id,
+      data,
+    }: {
+      id: string;
+      data: Partial<FeatureCategory>;
+    }) =>
+      apiRequest(`/api/feature-categories/${id}`, {
+        method: 'PUT',
+        body: data,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/feature-categories'] });
+      setIsCategoryDialogOpen(false);
+      resetCategoryForm();
+      toast({ title: 'Category updated successfully' });
+    },
+    onError: () => {
+      toast({ title: 'Failed to update category', variant: 'destructive' });
+    },
   });
 
   const deleteCategoryMutation = useMutation({
-    mutationFn: (id: string) => apiRequest(`/api/feature-categories/${id}`, { method: 'DELETE' }),
+    mutationFn: (id: string) =>
+      apiRequest(`/api/feature-categories/${id}`, { method: 'DELETE' }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/feature-categories'] });
-      toast({ title: "Category deleted successfully" });
+      toast({ title: 'Category deleted successfully' });
     },
     onError: (error: any) => {
-      const errorMessage = error.response?.data?.error || "Failed to delete category";
-      toast({ 
-        title: "Cannot delete category", 
+      const errorMessage =
+        error.response?.data?.error || 'Failed to delete category';
+      toast({
+        title: 'Cannot delete category',
         description: errorMessage,
-        variant: "destructive" 
+        variant: 'destructive',
       });
-    }
+    },
   });
 
   // Sub-Category mutations
   const createSubCategoryMutation = useMutation({
-    mutationFn: (data: Partial<FeatureSubCategory>) => apiRequest('/api/feature-sub-categories', {
-      method: 'POST',
-      body: JSON.stringify(data)
-    }),
+    mutationFn: (data: Partial<FeatureSubCategory>) =>
+      apiRequest('/api/feature-sub-categories', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/feature-sub-categories'] });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/feature-sub-categories'],
+      });
       setIsSubCategoryDialogOpen(false);
       resetSubCategoryForm();
-      toast({ title: "Sub-category created successfully" });
+      toast({ title: 'Sub-category created successfully' });
     },
     onError: () => {
-      toast({ title: "Failed to create sub-category", variant: "destructive" });
-    }
+      toast({ title: 'Failed to create sub-category', variant: 'destructive' });
+    },
   });
 
   const updateSubCategoryMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Partial<FeatureSubCategory> }) => 
+    mutationFn: ({
+      id,
+      data,
+    }: {
+      id: string;
+      data: Partial<FeatureSubCategory>;
+    }) =>
       apiRequest(`/api/feature-sub-categories/${id}`, {
         method: 'PUT',
-        body: JSON.stringify(data)
+        body: JSON.stringify(data),
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/feature-sub-categories'] });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/feature-sub-categories'],
+      });
       setIsSubCategoryDialogOpen(false);
       resetSubCategoryForm();
-      toast({ title: "Sub-category updated successfully" });
+      toast({ title: 'Sub-category updated successfully' });
     },
     onError: () => {
-      toast({ title: "Failed to update sub-category", variant: "destructive" });
-    }
+      toast({ title: 'Failed to update sub-category', variant: 'destructive' });
+    },
   });
 
   const deleteSubCategoryMutation = useMutation({
-    mutationFn: (id: string) => apiRequest(`/api/feature-sub-categories/${id}`, { method: 'DELETE' }),
+    mutationFn: (id: string) =>
+      apiRequest(`/api/feature-sub-categories/${id}`, { method: 'DELETE' }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/feature-sub-categories'] });
-      toast({ title: "Sub-category deleted successfully" });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/feature-sub-categories'],
+      });
+      toast({ title: 'Sub-category deleted successfully' });
     },
     onError: () => {
-      toast({ title: "Failed to delete sub-category", variant: "destructive" });
-    }
+      toast({ title: 'Failed to delete sub-category', variant: 'destructive' });
+    },
   });
 
   const resetFeatureForm = () => {
@@ -267,7 +335,7 @@ export default function FeatureManager() {
       price: 0,
       sortOrder: 0,
       isActive: true,
-      options: []
+      options: [],
     });
     setSelectedFeature(null);
     setIsEditing(false);
@@ -278,7 +346,7 @@ export default function FeatureManager() {
       name: '',
       displayName: '',
       sortOrder: 0,
-      isActive: true
+      isActive: true,
     });
     setSelectedCategory(null);
     setIsEditing(false);
@@ -290,7 +358,7 @@ export default function FeatureManager() {
       displayName: '',
       categoryId: '',
       sortOrder: 0,
-      isActive: true
+      isActive: true,
     });
     setSelectedSubCategory(null);
     setIsEditingSubCategory(false);
@@ -310,7 +378,7 @@ export default function FeatureManager() {
       category: feature.category,
       price: feature.price,
       sortOrder: feature.sortOrder,
-      isActive: feature.isActive
+      isActive: feature.isActive,
     });
     setIsEditing(true);
     setIsFeatureDialogOpen(true);
@@ -322,7 +390,7 @@ export default function FeatureManager() {
       name: category.name,
       displayName: category.displayName,
       sortOrder: category.sortOrder,
-      isActive: category.isActive
+      isActive: category.isActive,
     });
     setIsEditing(true);
     setIsCategoryDialogOpen(true);
@@ -336,7 +404,7 @@ export default function FeatureManager() {
       categoryId: subCategory.categoryId,
       price: subCategory.price || 0,
       sortOrder: subCategory.sortOrder,
-      isActive: subCategory.isActive
+      isActive: subCategory.isActive,
     });
     setIsEditingSubCategory(true);
     setIsSubCategoryDialogOpen(true);
@@ -347,7 +415,7 @@ export default function FeatureManager() {
     const formData = {
       ...featureForm,
       sortOrder: featureForm.sortOrder || 0,
-      price: featureForm.price || 0
+      price: featureForm.price || 0,
     };
 
     if (isEditing && selectedFeature) {
@@ -359,7 +427,10 @@ export default function FeatureManager() {
 
   const handleCategorySubmit = () => {
     if (isEditing && selectedCategory) {
-      updateCategoryMutation.mutate({ id: selectedCategory.id, data: categoryForm });
+      updateCategoryMutation.mutate({
+        id: selectedCategory.id,
+        data: categoryForm,
+      });
     } else {
       createCategoryMutation.mutate(categoryForm);
     }
@@ -367,66 +438,77 @@ export default function FeatureManager() {
 
   const handleSubCategorySubmit = () => {
     if (isEditingSubCategory && selectedSubCategory) {
-      updateSubCategoryMutation.mutate({ id: selectedSubCategory.id, data: subCategoryForm });
+      updateSubCategoryMutation.mutate({
+        id: selectedSubCategory.id,
+        data: subCategoryForm,
+      });
     } else {
       createSubCategoryMutation.mutate(subCategoryForm);
     }
   };
 
   const addOption = () => {
-    setFeatureForm(prev => ({
+    setFeatureForm((prev) => ({
       ...prev,
-      options: [{ value: '', label: '', price: 0 }, ...(prev.options || [])]
+      options: [{ value: '', label: '', price: 0 }, ...(prev.options || [])],
     }));
   };
 
-  const updateOption = (index: number, field: 'value' | 'label' | 'description' | 'price', value: string | number) => {
-    setFeatureForm(prev => ({
+  const updateOption = (
+    index: number,
+    field: 'value' | 'label' | 'description' | 'price',
+    value: string | number
+  ) => {
+    setFeatureForm((prev) => ({
       ...prev,
-      options: prev.options?.map((option, i) => 
+      options: prev.options?.map((option, i) =>
         i === index ? { ...option, [field]: value } : option
-      )
+      ),
     }));
   };
 
   const removeOption = (index: number) => {
-    setFeatureForm(prev => ({
+    setFeatureForm((prev) => ({
       ...prev,
-      options: prev.options?.filter((_, i) => i !== index)
+      options: prev.options?.filter((_, i) => i !== index),
     }));
   };
 
   const moveOptionUp = (index: number) => {
     if (index === 0) return;
-    setFeatureForm(prev => ({
+    setFeatureForm((prev) => ({
       ...prev,
       options: prev.options?.map((option, i) => {
         if (i === index) return prev.options![i - 1];
         if (i === index - 1) return prev.options![i + 1];
         return option;
-      })
+      }),
     }));
   };
 
   const moveOptionDown = (index: number) => {
-    if (!featureForm.options || index === featureForm.options.length - 1) return;
-    setFeatureForm(prev => ({
+    if (!featureForm.options || index === featureForm.options.length - 1)
+      return;
+    setFeatureForm((prev) => ({
       ...prev,
       options: prev.options?.map((option, i) => {
         if (i === index) return prev.options![i + 1];
         if (i === index + 1) return prev.options![i - 1];
         return option;
-      })
+      }),
     }));
   };
 
-  const categorizedFeatures = features.reduce((acc: Record<string, Feature[]>, feature: Feature) => {
-    if (!acc[feature.category]) {
-      acc[feature.category] = [];
-    }
-    acc[feature.category].push(feature);
-    return acc;
-  }, {});
+  const categorizedFeatures = features.reduce(
+    (acc: Record<string, Feature[]>, feature: Feature) => {
+      if (!acc[feature.category]) {
+        acc[feature.category] = [];
+      }
+      acc[feature.category].push(feature);
+      return acc;
+    },
+    {}
+  );
 
   const handleSecureFeatureDelete = (feature: Feature) => {
     setItemToDelete({ type: 'feature', id: feature.id });
@@ -472,20 +554,39 @@ export default function FeatureManager() {
             <Settings className="h-8 w-8 text-primary" />
             Feature Manager
           </h1>
-          <p className="text-gray-600 mt-2">Manage dynamic features for order entry</p>
+          <p className="text-gray-600 mt-2">
+            Manage dynamic features for order entry
+          </p>
         </div>
         <div className="flex gap-2">
-          <Dialog open={isCategoryDialogOpen} onOpenChange={setIsCategoryDialogOpen}>
+          <Dialog
+            open={isCategoryDialogOpen}
+            onOpenChange={setIsCategoryDialogOpen}
+          >
             <DialogTrigger asChild>
-              <Button variant="outline" onClick={() => { resetCategoryForm(); setIsCategoryDialogOpen(true); }}>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  resetCategoryForm();
+                  setIsCategoryDialogOpen(true);
+                }}
+              >
                 <Plus className="h-4 w-4 mr-2" />
                 Add Category
               </Button>
             </DialogTrigger>
           </Dialog>
-          <Dialog open={isFeatureDialogOpen} onOpenChange={setIsFeatureDialogOpen}>
+          <Dialog
+            open={isFeatureDialogOpen}
+            onOpenChange={setIsFeatureDialogOpen}
+          >
             <DialogTrigger asChild>
-              <Button onClick={() => { resetFeatureForm(); setIsFeatureDialogOpen(true); }}>
+              <Button
+                onClick={() => {
+                  resetFeatureForm();
+                  setIsFeatureDialogOpen(true);
+                }}
+              >
                 <Plus className="h-4 w-4 mr-2" />
                 Add Feature
               </Button>
@@ -517,21 +618,23 @@ export default function FeatureManager() {
                   <TableCell>{category.displayName}</TableCell>
                   <TableCell>{category.sortOrder}</TableCell>
                   <TableCell>
-                    <Badge variant={category.isActive ? "default" : "secondary"}>
+                    <Badge
+                      variant={category.isActive ? 'default' : 'secondary'}
+                    >
                       {category.isActive ? 'Active' : 'Inactive'}
                     </Badge>
                   </TableCell>
                   <TableCell>
                     <div className="flex gap-2">
-                      <Button 
-                        variant="ghost" 
+                      <Button
+                        variant="ghost"
                         size="sm"
                         onClick={() => handleEditCategory(category)}
                       >
                         <Edit className="h-4 w-4" />
                       </Button>
-                      <Button 
-                        variant="ghost" 
+                      <Button
+                        variant="ghost"
                         size="sm"
                         onClick={() => handleSecureCategoryDelete(category)}
                       >
@@ -552,67 +655,81 @@ export default function FeatureManager() {
           <CardTitle>Features</CardTitle>
         </CardHeader>
         <CardContent>
-          {Object.entries(categorizedFeatures).map(([categoryId, categoryFeatures]) => {
-            const category = categories.find((c: FeatureCategory) => c.id === categoryId);
-            return (
-              <div key={categoryId} className="mb-6">
-                <h3 className="text-lg font-semibold mb-3">
-                  {category?.displayName || 'Uncategorized'}
-                </h3>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Type</TableHead>
-                      <TableHead>Required</TableHead>
-                      <TableHead>Sort Order</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {categoryFeatures.map((feature: Feature) => (
-                      <TableRow key={feature.id}>
-                        <TableCell>{feature.displayName}</TableCell>
-                        <TableCell>
-                          <Badge variant="outline">{feature.type}</Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={feature.required ? "destructive" : "secondary"}>
-                            {feature.required ? 'Required' : 'Optional'}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>{feature.sortOrder}</TableCell>
-                        <TableCell>
-                          <Badge variant={feature.isActive ? "default" : "secondary"}>
-                            {feature.isActive ? 'Active' : 'Inactive'}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex gap-2">
-                            <Button 
-                              variant="ghost" 
-                              size="sm"
-                              onClick={() => handleEditFeature(feature)}
-                            >
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button 
-                              variant="ghost" 
-                              size="sm"
-                              onClick={() => handleSecureFeatureDelete(feature)}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
+          {Object.entries(categorizedFeatures).map(
+            ([categoryId, categoryFeatures]) => {
+              const category = categories.find(
+                (c: FeatureCategory) => c.id === categoryId
+              );
+              return (
+                <div key={categoryId} className="mb-6">
+                  <h3 className="text-lg font-semibold mb-3">
+                    {category?.displayName || 'Uncategorized'}
+                  </h3>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Name</TableHead>
+                        <TableHead>Type</TableHead>
+                        <TableHead>Required</TableHead>
+                        <TableHead>Sort Order</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Actions</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            );
-          })}
+                    </TableHeader>
+                    <TableBody>
+                      {categoryFeatures.map((feature: Feature) => (
+                        <TableRow key={feature.id}>
+                          <TableCell>{feature.displayName}</TableCell>
+                          <TableCell>
+                            <Badge variant="outline">{feature.type}</Badge>
+                          </TableCell>
+                          <TableCell>
+                            <Badge
+                              variant={
+                                feature.required ? 'destructive' : 'secondary'
+                              }
+                            >
+                              {feature.required ? 'Required' : 'Optional'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>{feature.sortOrder}</TableCell>
+                          <TableCell>
+                            <Badge
+                              variant={
+                                feature.isActive ? 'default' : 'secondary'
+                              }
+                            >
+                              {feature.isActive ? 'Active' : 'Inactive'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex gap-2">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleEditFeature(feature)}
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() =>
+                                  handleSecureFeatureDelete(feature)
+                                }
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              );
+            }
+          )}
         </CardContent>
       </Card>
 
@@ -630,7 +747,12 @@ export default function FeatureManager() {
                 <Label>Name (ID)</Label>
                 <Input
                   value={featureForm.name || ''}
-                  onChange={(e) => setFeatureForm(prev => ({ ...prev, name: e.target.value }))}
+                  onChange={(e) =>
+                    setFeatureForm((prev) => ({
+                      ...prev,
+                      name: e.target.value,
+                    }))
+                  }
                   placeholder="barrel_length"
                 />
               </div>
@@ -638,7 +760,12 @@ export default function FeatureManager() {
                 <Label>Display Name</Label>
                 <Input
                   value={featureForm.displayName || ''}
-                  onChange={(e) => setFeatureForm(prev => ({ ...prev, displayName: e.target.value }))}
+                  onChange={(e) =>
+                    setFeatureForm((prev) => ({
+                      ...prev,
+                      displayName: e.target.value,
+                    }))
+                  }
                   placeholder="Barrel Length"
                 />
               </div>
@@ -649,7 +776,9 @@ export default function FeatureManager() {
                 <Label>Type</Label>
                 <Select
                   value={featureForm.type || 'dropdown'}
-                  onValueChange={(value) => setFeatureForm(prev => ({ ...prev, type: value as any }))}
+                  onValueChange={(value) =>
+                    setFeatureForm((prev) => ({ ...prev, type: value as any }))
+                  }
                 >
                   <SelectTrigger>
                     <SelectValue />
@@ -672,7 +801,7 @@ export default function FeatureManager() {
                     if (value === 'paint_options') {
                       setIsPaintOptionsModalOpen(true);
                     } else {
-                      setFeatureForm(prev => ({ ...prev, category: value }));
+                      setFeatureForm((prev) => ({ ...prev, category: value }));
                     }
                   }}
                 >
@@ -696,14 +825,24 @@ export default function FeatureManager() {
                 <Input
                   type="number"
                   value={featureForm.sortOrder || 0}
-                  onChange={(e) => setFeatureForm(prev => ({ ...prev, sortOrder: parseInt(e.target.value) || 0 }))}
+                  onChange={(e) =>
+                    setFeatureForm((prev) => ({
+                      ...prev,
+                      sortOrder: parseInt(e.target.value) || 0,
+                    }))
+                  }
                 />
               </div>
               <div>
                 <Label>Placeholder</Label>
                 <Input
                   value={featureForm.placeholder || ''}
-                  onChange={(e) => setFeatureForm(prev => ({ ...prev, placeholder: e.target.value }))}
+                  onChange={(e) =>
+                    setFeatureForm((prev) => ({
+                      ...prev,
+                      placeholder: e.target.value,
+                    }))
+                  }
                 />
               </div>
             </div>
@@ -713,7 +852,12 @@ export default function FeatureManager() {
                 <Checkbox
                   id="required"
                   checked={featureForm.required || false}
-                  onCheckedChange={(checked) => setFeatureForm(prev => ({ ...prev, required: checked as boolean }))}
+                  onCheckedChange={(checked) =>
+                    setFeatureForm((prev) => ({
+                      ...prev,
+                      required: checked as boolean,
+                    }))
+                  }
                 />
                 <Label htmlFor="required">Required</Label>
               </div>
@@ -721,14 +865,21 @@ export default function FeatureManager() {
                 <Checkbox
                   id="active"
                   checked={featureForm.isActive !== false}
-                  onCheckedChange={(checked) => setFeatureForm(prev => ({ ...prev, isActive: checked as boolean }))}
+                  onCheckedChange={(checked) =>
+                    setFeatureForm((prev) => ({
+                      ...prev,
+                      isActive: checked as boolean,
+                    }))
+                  }
                 />
                 <Label htmlFor="active">Active</Label>
               </div>
             </div>
 
             {/* Options for dropdown and checkbox */}
-            {(featureForm.type === 'dropdown' || featureForm.type === 'checkbox' || featureForm.type === 'multiselect') && (
+            {(featureForm.type === 'dropdown' ||
+              featureForm.type === 'checkbox' ||
+              featureForm.type === 'multiselect') && (
               <div>
                 <div className="flex justify-between items-center mb-2">
                   <Label>Options</Label>
@@ -742,19 +893,29 @@ export default function FeatureManager() {
                     <Input
                       placeholder="Value"
                       value={option.value}
-                      onChange={(e) => updateOption(index, 'value', e.target.value)}
+                      onChange={(e) =>
+                        updateOption(index, 'value', e.target.value)
+                      }
                     />
                     <Input
                       placeholder="Label"
                       value={option.label}
-                      onChange={(e) => updateOption(index, 'label', e.target.value)}
+                      onChange={(e) =>
+                        updateOption(index, 'label', e.target.value)
+                      }
                     />
                     <Input
                       type="number"
                       step="0.01"
                       placeholder="Price"
                       value={option.price || 0}
-                      onChange={(e) => updateOption(index, 'price', parseFloat(e.target.value) || 0)}
+                      onChange={(e) =>
+                        updateOption(
+                          index,
+                          'price',
+                          parseFloat(e.target.value) || 0
+                        )
+                      }
                     />
                     <div className="flex gap-1">
                       <Button
@@ -769,7 +930,10 @@ export default function FeatureManager() {
                         variant="ghost"
                         size="sm"
                         onClick={() => moveOptionDown(index)}
-                        disabled={!featureForm.options || index === featureForm.options.length - 1}
+                        disabled={
+                          !featureForm.options ||
+                          index === featureForm.options.length - 1
+                        }
                       >
                         <ChevronDown className="h-4 w-4" />
                       </Button>
@@ -787,7 +951,10 @@ export default function FeatureManager() {
             )}
 
             <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setIsFeatureDialogOpen(false)}>
+              <Button
+                variant="outline"
+                onClick={() => setIsFeatureDialogOpen(false)}
+              >
                 Cancel
               </Button>
               <Button onClick={handleFeatureSubmit}>
@@ -800,7 +967,10 @@ export default function FeatureManager() {
       </Dialog>
 
       {/* Category Dialog */}
-      <Dialog open={isCategoryDialogOpen} onOpenChange={setIsCategoryDialogOpen}>
+      <Dialog
+        open={isCategoryDialogOpen}
+        onOpenChange={setIsCategoryDialogOpen}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
@@ -813,7 +983,12 @@ export default function FeatureManager() {
                 <Label>Name (ID)</Label>
                 <Input
                   value={categoryForm.name || ''}
-                  onChange={(e) => setCategoryForm(prev => ({ ...prev, name: e.target.value }))}
+                  onChange={(e) =>
+                    setCategoryForm((prev) => ({
+                      ...prev,
+                      name: e.target.value,
+                    }))
+                  }
                   placeholder="barrel_options"
                 />
               </div>
@@ -821,7 +996,12 @@ export default function FeatureManager() {
                 <Label>Display Name</Label>
                 <Input
                   value={categoryForm.displayName || ''}
-                  onChange={(e) => setCategoryForm(prev => ({ ...prev, displayName: e.target.value }))}
+                  onChange={(e) =>
+                    setCategoryForm((prev) => ({
+                      ...prev,
+                      displayName: e.target.value,
+                    }))
+                  }
                   placeholder="Barrel Options"
                 />
               </div>
@@ -832,7 +1012,12 @@ export default function FeatureManager() {
               <Input
                 type="number"
                 value={categoryForm.sortOrder || 0}
-                onChange={(e) => setCategoryForm(prev => ({ ...prev, sortOrder: parseInt(e.target.value) }))}
+                onChange={(e) =>
+                  setCategoryForm((prev) => ({
+                    ...prev,
+                    sortOrder: parseInt(e.target.value),
+                  }))
+                }
               />
             </div>
 
@@ -840,7 +1025,12 @@ export default function FeatureManager() {
               <Checkbox
                 id="category-active"
                 checked={categoryForm.isActive !== false}
-                onCheckedChange={(checked) => setCategoryForm(prev => ({ ...prev, isActive: checked as boolean }))}
+                onCheckedChange={(checked) =>
+                  setCategoryForm((prev) => ({
+                    ...prev,
+                    isActive: checked as boolean,
+                  }))
+                }
               />
               <Label htmlFor="category-active">Active</Label>
             </div>
@@ -850,16 +1040,19 @@ export default function FeatureManager() {
               <div className="space-y-4 border-t pt-4">
                 <div className="flex items-center justify-between">
                   <h3 className="text-lg font-semibold">Sub-Categories</h3>
-                  <Button 
+                  <Button
                     size="sm"
                     onClick={() => {
-                      setSubCategoryForm({ 
-                        name: '', 
-                        displayName: '', 
-                        categoryId: 'paint_options', 
+                      setSubCategoryForm({
+                        name: '',
+                        displayName: '',
+                        categoryId: 'paint_options',
                         price: 0,
-                        sortOrder: (subCategories.filter(sc => sc.categoryId === 'paint_options').length + 1), 
-                        isActive: true 
+                        sortOrder:
+                          subCategories.filter(
+                            (sc) => sc.categoryId === 'paint_options'
+                          ).length + 1,
+                        isActive: true,
                       });
                       setIsEditingSubCategory(false);
                       setIsSubCategoryDialogOpen(true);
@@ -872,15 +1065,24 @@ export default function FeatureManager() {
 
                 <div className="space-y-2">
                   {subCategories
-                    .filter(sc => sc.categoryId === 'paint_options')
+                    .filter((sc) => sc.categoryId === 'paint_options')
                     .sort((a, b) => a.sortOrder - b.sortOrder)
                     .map((subCategory) => (
-                      <div key={subCategory.id} className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                      <div
+                        key={subCategory.id}
+                        className="flex items-center justify-between p-2 bg-gray-50 rounded"
+                      >
                         <div className="flex items-center space-x-2">
-                          <span className="text-sm font-medium">{subCategory.displayName}</span>
-                          <span className="text-xs text-gray-500">({subCategory.name})</span>
+                          <span className="text-sm font-medium">
+                            {subCategory.displayName}
+                          </span>
+                          <span className="text-xs text-gray-500">
+                            ({subCategory.name})
+                          </span>
                           {!subCategory.isActive && (
-                            <Badge variant="secondary" className="text-xs">Inactive</Badge>
+                            <Badge variant="secondary" className="text-xs">
+                              Inactive
+                            </Badge>
                           )}
                         </div>
                         <div className="flex items-center space-x-1">
@@ -894,7 +1096,9 @@ export default function FeatureManager() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => handleSecureSubCategoryDelete(subCategory)}
+                            onClick={() =>
+                              handleSecureSubCategoryDelete(subCategory)
+                            }
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
@@ -906,7 +1110,10 @@ export default function FeatureManager() {
             )}
 
             <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setIsCategoryDialogOpen(false)}>
+              <Button
+                variant="outline"
+                onClick={() => setIsCategoryDialogOpen(false)}
+              >
                 Cancel
               </Button>
               <Button onClick={handleCategorySubmit}>
@@ -919,11 +1126,16 @@ export default function FeatureManager() {
       </Dialog>
 
       {/* Sub-Category Dialog */}
-      <Dialog open={isSubCategoryDialogOpen} onOpenChange={setIsSubCategoryDialogOpen}>
+      <Dialog
+        open={isSubCategoryDialogOpen}
+        onOpenChange={setIsSubCategoryDialogOpen}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {isEditingSubCategory ? 'Edit Sub-Category' : 'Add New Sub-Category'}
+              {isEditingSubCategory
+                ? 'Edit Sub-Category'
+                : 'Add New Sub-Category'}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
@@ -932,7 +1144,12 @@ export default function FeatureManager() {
                 <Label>Name (ID)</Label>
                 <Input
                   value={subCategoryForm.name || ''}
-                  onChange={(e) => setSubCategoryForm(prev => ({ ...prev, name: e.target.value }))}
+                  onChange={(e) =>
+                    setSubCategoryForm((prev) => ({
+                      ...prev,
+                      name: e.target.value,
+                    }))
+                  }
                   placeholder="base_colors"
                 />
               </div>
@@ -940,7 +1157,12 @@ export default function FeatureManager() {
                 <Label>Display Name</Label>
                 <Input
                   value={subCategoryForm.displayName || ''}
-                  onChange={(e) => setSubCategoryForm(prev => ({ ...prev, displayName: e.target.value }))}
+                  onChange={(e) =>
+                    setSubCategoryForm((prev) => ({
+                      ...prev,
+                      displayName: e.target.value,
+                    }))
+                  }
                   placeholder="Base Colors"
                 />
               </div>
@@ -953,7 +1175,12 @@ export default function FeatureManager() {
                   type="number"
                   step="0.01"
                   value={subCategoryForm.price || 0}
-                  onChange={(e) => setSubCategoryForm(prev => ({ ...prev, price: parseFloat(e.target.value) || 0 }))}
+                  onChange={(e) =>
+                    setSubCategoryForm((prev) => ({
+                      ...prev,
+                      price: parseFloat(e.target.value) || 0,
+                    }))
+                  }
                   placeholder="0.00"
                 />
               </div>
@@ -962,7 +1189,12 @@ export default function FeatureManager() {
                 <Input
                   type="number"
                   value={subCategoryForm.sortOrder || 0}
-                  onChange={(e) => setSubCategoryForm(prev => ({ ...prev, sortOrder: parseInt(e.target.value) }))}
+                  onChange={(e) =>
+                    setSubCategoryForm((prev) => ({
+                      ...prev,
+                      sortOrder: parseInt(e.target.value),
+                    }))
+                  }
                 />
               </div>
             </div>
@@ -971,13 +1203,21 @@ export default function FeatureManager() {
               <Checkbox
                 id="sub-category-active"
                 checked={subCategoryForm.isActive !== false}
-                onCheckedChange={(checked) => setSubCategoryForm(prev => ({ ...prev, isActive: checked as boolean }))}
+                onCheckedChange={(checked) =>
+                  setSubCategoryForm((prev) => ({
+                    ...prev,
+                    isActive: checked as boolean,
+                  }))
+                }
               />
               <Label htmlFor="sub-category-active">Active</Label>
             </div>
 
             <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setIsSubCategoryDialogOpen(false)}>
+              <Button
+                variant="outline"
+                onClick={() => setIsSubCategoryDialogOpen(false)}
+              >
                 Cancel
               </Button>
               <Button onClick={handleSubCategorySubmit}>
@@ -990,7 +1230,10 @@ export default function FeatureManager() {
       </Dialog>
 
       {/* Paint Options Sub-Category Selection Modal */}
-      <Dialog open={isPaintOptionsModalOpen} onOpenChange={setIsPaintOptionsModalOpen}>
+      <Dialog
+        open={isPaintOptionsModalOpen}
+        onOpenChange={setIsPaintOptionsModalOpen}
+      >
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Paint Options - Select Sub-Category</DialogTitle>
@@ -1007,7 +1250,7 @@ export default function FeatureManager() {
                 </SelectTrigger>
                 <SelectContent>
                   {subCategories
-                    .filter(sc => sc.categoryId === 'paint_options')
+                    .filter((sc) => sc.categoryId === 'paint_options')
                     .sort((a, b) => a.sortOrder - b.sortOrder)
                     .map((subCategory) => (
                       <SelectItem key={subCategory.id} value={subCategory.id}>
@@ -1036,12 +1279,16 @@ export default function FeatureManager() {
                         <Input
                           placeholder="Value"
                           value={option.value}
-                          onChange={(e) => updateOption(index, 'value', e.target.value)}
+                          onChange={(e) =>
+                            updateOption(index, 'value', e.target.value)
+                          }
                         />
                         <Input
                           placeholder="Label"
                           value={option.label}
-                          onChange={(e) => updateOption(index, 'label', e.target.value)}
+                          onChange={(e) =>
+                            updateOption(index, 'label', e.target.value)
+                          }
                         />
                         <div className="flex gap-1">
                           <Button
@@ -1056,7 +1303,10 @@ export default function FeatureManager() {
                             variant="ghost"
                             size="sm"
                             onClick={() => moveOptionDown(index)}
-                            disabled={!featureForm.options || index === featureForm.options.length - 1}
+                            disabled={
+                              !featureForm.options ||
+                              index === featureForm.options.length - 1
+                            }
                           >
                             <ChevronDown className="h-4 w-4" />
                           </Button>
@@ -1076,17 +1326,17 @@ export default function FeatureManager() {
             )}
 
             <div className="flex justify-end gap-2">
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 onClick={() => {
                   setIsPaintOptionsModalOpen(false);
                   setSelectedPaintSubCategory('');
-                  setFeatureForm(prev => ({ ...prev, options: [] }));
+                  setFeatureForm((prev) => ({ ...prev, options: [] }));
                 }}
               >
                 Cancel
               </Button>
-              <Button 
+              <Button
                 onClick={() => {
                   // Set the feature form with paint options category and create the feature
                   const featureData = {
@@ -1094,7 +1344,12 @@ export default function FeatureManager() {
                     category: 'paint_options',
                     type: 'dropdown' as const,
                     name: featureForm.name || selectedPaintSubCategory,
-                    displayName: featureForm.displayName || subCategories.find(sc => sc.id === selectedPaintSubCategory)?.displayName || selectedPaintSubCategory
+                    displayName:
+                      featureForm.displayName ||
+                      subCategories.find(
+                        (sc) => sc.id === selectedPaintSubCategory
+                      )?.displayName ||
+                      selectedPaintSubCategory,
                   };
                   createFeatureMutation.mutate(featureData);
                   setIsPaintOptionsModalOpen(false);
@@ -1115,9 +1370,15 @@ export default function FeatureManager() {
           <DialogHeader>
             <DialogTitle>Confirm Delete</DialogTitle>
           </DialogHeader>
-          <p className="mb-4">Are you sure you want to delete this item? This action cannot be undone.</p>
+          <p className="mb-4">
+            Are you sure you want to delete this item? This action cannot be
+            undone.
+          </p>
           <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>
+            <Button
+              variant="outline"
+              onClick={() => setIsDeleteDialogOpen(false)}
+            >
               Cancel
             </Button>
             <Button variant="destructive" onClick={confirmDelete}>

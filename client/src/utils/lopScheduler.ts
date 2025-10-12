@@ -15,7 +15,7 @@ function todayIsMonday(date: Date = new Date()): boolean {
 
 function nextMonday(fromDate: Date = new Date()): Date {
   const day = fromDate.getDay();
-  // Days until next Monday: if today is Sunday (0), next Monday is 1 day. 
+  // Days until next Monday: if today is Sunday (0), next Monday is 1 day.
   // If today is Monday (1), next Monday is 7 days, etc.
   const daysUntilMonday = day === 0 ? 1 : 8 - day;
   const result = new Date(fromDate);
@@ -32,7 +32,7 @@ export function scheduleLOPAdjustments(orders: LOPOrder[]): LOPOrder[] {
     today: today.toDateString(),
     isMonday: todayIsMonday(today),
     dayOfWeek: today.getDay(),
-    nextMondayWouldBe: nextMonday(today).toDateString()
+    nextMondayWouldBe: nextMonday(today).toDateString(),
   });
 
   for (const order of updatedOrders) {
@@ -41,18 +41,19 @@ export function scheduleLOPAdjustments(orders: LOPOrder[]): LOPOrder[] {
     let priorityEscalated = false;
     if (order.priorityChangedAt) {
       // Priority has changed since last LOP scheduling
-      priorityEscalated = !order.lastScheduledLOPAdjustmentDate ||
+      priorityEscalated =
+        !order.lastScheduledLOPAdjustmentDate ||
         order.priorityChangedAt > order.lastScheduledLOPAdjustmentDate;
     }
 
     if (todayIsMonday(today) || priorityEscalated) {
       order.scheduledLOPAdjustmentDate = today;
       order.lopAdjustmentOverrideReason = todayIsMonday(today)
-        ? "Scheduled for Monday"
-        : "Priority escalation";
+        ? 'Scheduled for Monday'
+        : 'Priority escalation';
     } else {
       order.scheduledLOPAdjustmentDate = nextMonday(today);
-      order.lopAdjustmentOverrideReason = "Deferred for Monday";
+      order.lopAdjustmentOverrideReason = 'Deferred for Monday';
     }
 
     // Update last scheduled date for future comparisons
@@ -68,30 +69,32 @@ export function scheduleLOPAdjustments(orders: LOPOrder[]): LOPOrder[] {
 
 // Helper function to identify orders needing LOP adjustment
 export function identifyLOPOrders(orders: LayupOrder[]): LOPOrder[] {
-  return orders.map(order => {
+  return orders.map((order) => {
     // Check if order has any LOP-related features that aren't standard
-    const hasLOPFeatures = (order as any).features?.length_of_pull && 
-                          (order as any).features.length_of_pull !== 'no_lop_change' && 
-                          (order as any).features.length_of_pull !== 'standard';
-    
+    const hasLOPFeatures =
+      (order as any).features?.length_of_pull &&
+      (order as any).features.length_of_pull !== 'no_lop_change' &&
+      (order as any).features.length_of_pull !== 'standard';
+
     // Only flag orders that actually have LOP features requiring adjustment
     const needsLOPTest = hasLOPFeatures;
-    
+
     // Debug logging for LOP identification
     if (needsLOPTest) {
       console.log(`🔧 Order ${order.orderId} needs LOP adjustment:`, {
         lopValue: (order as any).features?.length_of_pull,
         hasLOPFeatures,
-        needsLOPTest
+        needsLOPTest,
       });
     }
-    
+
     return {
       ...order,
       needsLOPAdjustment: order.needsLOPAdjustment ?? needsLOPTest ?? false,
       priority: order.priority ?? 50,
       priorityChangedAt: order.priorityChangedAt || null,
-      lastScheduledLOPAdjustmentDate: order.lastScheduledLOPAdjustmentDate || null,
+      lastScheduledLOPAdjustmentDate:
+        order.lastScheduledLOPAdjustmentDate || null,
       scheduledLOPAdjustmentDate: order.scheduledLOPAdjustmentDate || null,
       lopAdjustmentOverrideReason: order.lopAdjustmentOverrideReason || null,
     };
@@ -100,17 +103,17 @@ export function identifyLOPOrders(orders: LayupOrder[]): LOPOrder[] {
 
 // Function to update order priority and trigger LOP rescheduling
 export function updateOrderPriority(
-  orders: LOPOrder[], 
-  orderId: string, 
+  orders: LOPOrder[],
+  orderId: string,
   newPriority: number
 ): LOPOrder[] {
-  const updatedOrders = orders.map(order => {
+  const updatedOrders = orders.map((order) => {
     if (order.orderId === orderId) {
       return {
         ...order,
         priority: newPriority,
         priorityChangedAt: new Date(),
-        needsLOPAdjustment: true // Mark for LOP adjustment
+        needsLOPAdjustment: true, // Mark for LOP adjustment
       };
     }
     return order;
@@ -136,7 +139,7 @@ export function getLOPStatus(order: LOPOrder): {
     return {
       status: 'none',
       message: 'No LOP adjustment needed',
-      color: 'text-gray-500'
+      color: 'text-gray-500',
     };
   }
 
@@ -145,13 +148,13 @@ export function getLOPStatus(order: LOPOrder): {
     return {
       status: 'scheduled',
       message: `LOP scheduled for ${scheduleDate}`,
-      color: 'text-orange-600'
+      color: 'text-orange-600',
     };
   }
 
   return {
     status: 'deferred',
     message: 'LOP adjustment deferred',
-    color: 'text-yellow-600'
+    color: 'text-yellow-600',
   };
 }

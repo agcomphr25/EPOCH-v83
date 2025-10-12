@@ -1,11 +1,22 @@
 import React, { useMemo, useState, useCallback } from 'react';
 import { BarcodeScanner } from '@/components/BarcodeScanner';
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { OrderTooltip } from '@/components/OrderTooltip';
-import { Settings, ArrowLeft, ArrowRight, ArrowUp, Target, Wrench, CheckCircle, AlertTriangle, FileText, TrendingDown } from 'lucide-react';
+import {
+  Settings,
+  ArrowLeft,
+  ArrowRight,
+  ArrowUp,
+  Target,
+  Wrench,
+  CheckCircle,
+  AlertTriangle,
+  FileText,
+  TrendingDown,
+} from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format, isAfter } from 'date-fns';
 import { getDisplayOrderId } from '@/lib/orderUtils';
@@ -16,15 +27,21 @@ import { useLocation } from 'wouter';
 import { SalesOrderModal } from '@/components/SalesOrderModal';
 
 export default function CNCQueuePage() {
-  const [selectedGunsimthOrders, setSelectedGunsimthOrders] = useState<Set<string>>(new Set());
-  const [selectedFinishOrders, setSelectedFinishOrders] = useState<Set<string>>(new Set());
+  const [selectedGunsimthOrders, setSelectedGunsimthOrders] = useState<
+    Set<string>
+  >(new Set());
+  const [selectedFinishOrders, setSelectedFinishOrders] = useState<Set<string>>(
+    new Set()
+  );
   const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
   const [selectAllGunsmith, setSelectAllGunsmith] = useState(false);
   const [selectAllFinish, setSelectAllFinish] = useState(false);
   const [selectAll, setSelectAll] = useState(false);
   const [salesOrderModalOpen, setSalesOrderModalOpen] = useState(false);
   const [selectedOrderId, setSelectedOrderId] = useState<string>('');
-  const [highlightedOrderId, setHighlightedOrderId] = useState<string | null>(null);
+  const [highlightedOrderId, setHighlightedOrderId] = useState<string | null>(
+    null
+  );
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
@@ -50,26 +67,33 @@ export default function CNCQueuePage() {
   // Fetch all kickbacks to determine which orders have kickbacks
   const { data: allKickbacks = [] } = useQuery({
     queryKey: ['/api/kickbacks'],
-    refetchInterval: 30000 // Refresh every 30 seconds
+    refetchInterval: 30000, // Refresh every 30 seconds
   });
 
   // Helper function to check if an order has kickbacks
   const hasKickbacks = (orderId: string) => {
-    return (allKickbacks as any[]).some((kickback: any) => kickback.orderId === orderId);
+    return (allKickbacks as any[]).some(
+      (kickback: any) => kickback.orderId === orderId
+    );
   };
 
   // Helper function to get the most severe kickback status for an order
   const getKickbackStatus = (orderId: string) => {
-    const orderKickbacks = (allKickbacks as any[]).filter((kickback: any) => kickback.orderId === orderId);
+    const orderKickbacks = (allKickbacks as any[]).filter(
+      (kickback: any) => kickback.orderId === orderId
+    );
     if (orderKickbacks.length === 0) return null;
 
     // Priority order: CRITICAL > HIGH > MEDIUM > LOW
     const priorities = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'];
-    const highestPriority = orderKickbacks.reduce((highest: string, kickback: any) => {
-      const currentIndex = priorities.indexOf(kickback.priority);
-      const highestIndex = priorities.indexOf(highest);
-      return currentIndex < highestIndex ? kickback.priority : highest;
-    }, 'LOW');
+    const highestPriority = orderKickbacks.reduce(
+      (highest: string, kickback: any) => {
+        const currentIndex = priorities.indexOf(kickback.priority);
+        const highestIndex = priorities.indexOf(highest);
+        return currentIndex < highestIndex ? kickback.priority : highest;
+      },
+      'LOW'
+    );
 
     return highestPriority;
   };
@@ -81,19 +105,19 @@ export default function CNCQueuePage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(kickbackData),
-      }).then(res => res.json()),
+      }).then((res) => res.json()),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/kickbacks'] });
       toast({
-        title: "Kickback reported",
-        description: "Kickback report has been created successfully"
+        title: 'Kickback reported',
+        description: 'Kickback report has been created successfully',
       });
     },
     onError: () => {
       toast({
-        title: "Error",
-        description: "Failed to create kickback report",
-        variant: "destructive"
+        title: 'Error',
+        description: 'Failed to create kickback report',
+        variant: 'destructive',
       });
     },
   });
@@ -102,15 +126,15 @@ export default function CNCQueuePage() {
   const handleKickbackClick = (orderId: string) => {
     const kickbackData = {
       orderId: orderId,
-      kickbackDept: "CNC", // Current department
-      reasonCode: "QUALITY_ISSUE", // Default reason
-      priority: "MEDIUM", // Default priority
+      kickbackDept: 'CNC', // Current department
+      reasonCode: 'QUALITY_ISSUE', // Default reason
+      priority: 'MEDIUM', // Default priority
       kickbackDate: new Date().toISOString(),
-      reportedBy: "Production Floor", // Default reporter
+      reportedBy: 'Production Floor', // Default reporter
       reasonText: `Issue reported from CNC department for order ${orderId}`,
-      status: "OPEN"
+      status: 'OPEN',
     };
-    
+
     createKickbackMutation.mutate(kickbackData);
   };
 
@@ -134,44 +158,54 @@ export default function CNCQueuePage() {
   // Helper function to convert feature values to display names
   const getFeatureDisplayValue = (featureType: string, value: string) => {
     if (!value) return '';
-    
+
     switch (featureType) {
       case 'action_length':
         if (value.includes('short')) return 'Short Action';
         if (value.includes('long')) return 'Long Action';
         if (value.includes('medium')) return 'Medium Action';
-        return value.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-        
+        return value
+          .replace(/_/g, ' ')
+          .replace(/\b\w/g, (l) => l.toUpperCase());
+
       case 'action_inlet':
-        return value.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-        
+        return value
+          .replace(/_/g, ' ')
+          .replace(/\b\w/g, (l) => l.toUpperCase());
+
       case 'handedness':
         if (value === 'left') return 'Left Hand';
         if (value === 'right') return 'Right Hand';
-        return value.replace(/\b\w/g, l => l.toUpperCase());
-        
+        return value.replace(/\b\w/g, (l) => l.toUpperCase());
+
       case 'bottom_metal':
-        return value.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-        
+        return value
+          .replace(/_/g, ' ')
+          .replace(/\b\w/g, (l) => l.toUpperCase());
+
       case 'barrel_inlet':
-        return value.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-        
+        return value
+          .replace(/_/g, ' ')
+          .replace(/\b\w/g, (l) => l.toUpperCase());
+
       default:
-        return value.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        return value
+          .replace(/_/g, ' ')
+          .replace(/\b\w/g, (l) => l.toUpperCase());
     }
   };
 
   // Features that go to Gunsmith department (using actual feature names from database)
   const gunsimthFeatures = [
-    'rail_accessory',    // Rails
-    'qd_accessory',      // QD Quick Detach Cups  
-    'tripod_tap',        // Tripod tap
-    'tripod_mount',      // Tripod tap and mount
-    'bipod_accessory',   // Spartan bipod and other bipods
-    'spartan_bipod',     // Spartan bipod specifically
-    'adjustable_stock'   // Adjustable stock models require gunsmith work
+    'rail_accessory', // Rails
+    'qd_accessory', // QD Quick Detach Cups
+    'tripod_tap', // Tripod tap
+    'tripod_mount', // Tripod tap and mount
+    'bipod_accessory', // Spartan bipod and other bipods
+    'spartan_bipod', // Spartan bipod specifically
+    'adjustable_stock', // Adjustable stock models require gunsmith work
   ];
-  
+
   // Helper function to normalize feature values (handles arrays and strings)
   const normalizeFeatureValue = (value: any): string => {
     if (Array.isArray(value)) {
@@ -184,54 +218,66 @@ export default function CNCQueuePage() {
   const requiresGunsmith = (order: any) => {
     // Check if it's an adjustable stock model based on modelId/stockModelId
     const modelId = order.modelId || order.stockModelId || '';
-    
+
     // Check both the modelId and the actual stock model display name
     const modelDisplayName = getModelDisplayName(modelId);
-    
+
     // Check for adjustable stock models
-    const isAdjustableModel = modelId.toLowerCase().includes('adjustable') || 
-        modelId.toLowerCase().includes('adj') ||
-        modelDisplayName.toLowerCase().includes('adjustable') ||
-        modelDisplayName.toLowerCase().includes('adj');
-    
+    const isAdjustableModel =
+      modelId.toLowerCase().includes('adjustable') ||
+      modelId.toLowerCase().includes('adj') ||
+      modelDisplayName.toLowerCase().includes('adjustable') ||
+      modelDisplayName.toLowerCase().includes('adj');
+
     if (isAdjustableModel) {
       return true;
     }
-    
+
     if (!order.features) return false;
-    
+
     // Check specific gunsmith features with proper array handling
     const railValue = normalizeFeatureValue(order.features.rail_accessory);
     const qdValue = normalizeFeatureValue(order.features.qd_accessory);
-    
+
     // Rail accessory check - anything other than 'no_rail' or 'none' requires gunsmith
-    if (railValue && railValue !== 'no_rail' && railValue !== 'none' && railValue !== '') {
+    if (
+      railValue &&
+      railValue !== 'no_rail' &&
+      railValue !== 'none' &&
+      railValue !== ''
+    ) {
       return true;
     }
-    
-    // QD accessory check - anything other than 'no_qds' or 'none' requires gunsmith  
-    if (qdValue && qdValue !== 'no_qds' && qdValue !== 'none' && qdValue !== '') {
+
+    // QD accessory check - anything other than 'no_qds' or 'none' requires gunsmith
+    if (
+      qdValue &&
+      qdValue !== 'no_qds' &&
+      qdValue !== 'none' &&
+      qdValue !== ''
+    ) {
       return true;
     }
-    
+
     // Check other gunsmith features
     for (const feature of gunsimthFeatures) {
       if (feature === 'rail_accessory' || feature === 'qd_accessory') {
         continue; // Already checked above
       }
-      
+
       const featureValue = normalizeFeatureValue(order.features[feature]);
-      
+
       // Consider it a gunsmith feature if:
       // - It's true/yes
       // - It's a non-empty string that's not 'none' or 'no'
-      if (featureValue === 'true' || 
-          featureValue === 'yes' ||
-          (featureValue !== 'none' && 
-           featureValue !== 'no' && 
-           featureValue !== '' && 
-           featureValue !== 'false' &&
-           (featureValue.toLowerCase().includes('yes') ||
+      if (
+        featureValue === 'true' ||
+        featureValue === 'yes' ||
+        (featureValue !== 'none' &&
+          featureValue !== 'no' &&
+          featureValue !== '' &&
+          featureValue !== 'false' &&
+          (featureValue.toLowerCase().includes('yes') ||
             featureValue.toLowerCase().includes('rail') ||
             featureValue.toLowerCase().includes('qd') ||
             featureValue.toLowerCase().includes('tripod') ||
@@ -242,58 +288,68 @@ export default function CNCQueuePage() {
         return true;
       }
     }
-    
+
     return false;
   };
 
   // Get all CNC orders with department type for unified queue
   const cncOrders = useMemo(() => {
-    const allCncOrders = (allOrders as any[]).filter(order => {
+    const allCncOrders = (allOrders as any[]).filter((order) => {
       const normalizedDept = order.currentDepartment?.trim().toLowerCase();
       return normalizedDept === 'cnc';
     });
-    
+
     // Debug logging to help identify mismatches in production
     console.log('🔍 CNC Queue - Total orders:', allOrders.length);
     console.log('🔍 CNC Queue - Filtered orders:', allCncOrders.length);
-    
-    const uniqueOrders = allCncOrders.filter((order, index, self) => 
-      index === self.findIndex(o => o.orderId === order.orderId)
+
+    const uniqueOrders = allCncOrders.filter(
+      (order, index, self) =>
+        index === self.findIndex((o) => o.orderId === order.orderId)
     );
-    
+
     return uniqueOrders
-      .map(order => ({
+      .map((order) => ({
         ...order,
-        departmentType: requiresGunsmith(order) ? 'gunsmith' : 'finish'
+        departmentType: requiresGunsmith(order) ? 'gunsmith' : 'finish',
       }))
-      .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
+      .sort(
+        (a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()
+      );
   }, [allOrders]);
 
-  // Legacy queues for count calculations  
-  const gunsimthQueue = cncOrders.filter(order => order.departmentType === 'gunsmith');
-  const finishQueue = cncOrders.filter(order => order.departmentType === 'finish');
+  // Legacy queues for count calculations
+  const gunsimthQueue = cncOrders.filter(
+    (order) => order.departmentType === 'gunsmith'
+  );
+  const finishQueue = cncOrders.filter(
+    (order) => order.departmentType === 'finish'
+  );
 
   // Count orders in previous department (Barcode)
   const barcodeCount = useMemo(() => {
-    return (allOrders as any[]).filter((order: any) => 
-      order.currentDepartment === 'Barcode' || 
-      (order.department === 'Barcode' && order.status === 'IN_PROGRESS')
+    return (allOrders as any[]).filter(
+      (order: any) =>
+        order.currentDepartment === 'Barcode' ||
+        (order.department === 'Barcode' && order.status === 'IN_PROGRESS')
     ).length;
   }, [allOrders]);
 
   // Count orders in next departments
   const gunsimthCount = useMemo(() => {
-    return (allOrders as any[]).filter((order: any) => 
-      order.currentDepartment === 'Gunsmith' || 
-      (order.department === 'Gunsmith' && order.status === 'IN_PROGRESS')
+    return (allOrders as any[]).filter(
+      (order: any) =>
+        order.currentDepartment === 'Gunsmith' ||
+        (order.department === 'Gunsmith' && order.status === 'IN_PROGRESS')
     ).length;
   }, [allOrders]);
 
   const finishQCCount = useMemo(() => {
-    return (allOrders as any[]).filter((order: any) => 
-      order.currentDepartment === 'Finish' || 
-      order.currentDepartment === 'FinishQC' ||
-      (order.department === 'Finish' && order.status === 'IN_PROGRESS')
+    return (allOrders as any[]).filter(
+      (order: any) =>
+        order.currentDepartment === 'Finish' ||
+        order.currentDepartment === 'FinishQC' ||
+        (order.department === 'Finish' && order.status === 'IN_PROGRESS')
     ).length;
   }, [allOrders]);
 
@@ -323,8 +379,12 @@ export default function CNCQueuePage() {
       setSelectedGunsimthOrders(new Set());
       setSelectedFinishOrders(new Set());
     } else {
-      setSelectedGunsimthOrders(new Set(gunsimthQueue.map(order => order.orderId)));
-      setSelectedFinishOrders(new Set(finishQueue.map(order => order.orderId)));
+      setSelectedGunsimthOrders(
+        new Set(gunsimthQueue.map((order) => order.orderId))
+      );
+      setSelectedFinishOrders(
+        new Set(finishQueue.map((order) => order.orderId))
+      );
     }
     setSelectAll(!selectAll);
   };
@@ -334,16 +394,16 @@ export default function CNCQueuePage() {
     mutationFn: async (orderIds: string[]) => {
       return await apiRequest('/api/orders/progress-department', {
         method: 'POST',
-        body: JSON.stringify({ 
-          orderIds, 
-          toDepartment: 'Gunsmith' 
-        })
+        body: JSON.stringify({
+          orderIds,
+          toDepartment: 'Gunsmith',
+        }),
       });
     },
     onSuccess: () => {
       toast({
-        title: "Success",
-        description: `Progressed ${selectedGunsimthOrders.size} orders to Gunsmith`
+        title: 'Success',
+        description: `Progressed ${selectedGunsimthOrders.size} orders to Gunsmith`,
       });
       setSelectedGunsimthOrders(new Set());
       setSelectAllGunsmith(false);
@@ -351,11 +411,11 @@ export default function CNCQueuePage() {
     },
     onError: (error: any) => {
       toast({
-        title: "Error",
+        title: 'Error',
         description: `Failed to progress orders: ${error.message || error}`,
-        variant: "destructive"
+        variant: 'destructive',
       });
-    }
+    },
   });
 
   // Progress to Finish mutation
@@ -363,16 +423,16 @@ export default function CNCQueuePage() {
     mutationFn: async (orderIds: string[]) => {
       return await apiRequest('/api/orders/progress-department', {
         method: 'POST',
-        body: JSON.stringify({ 
-          orderIds, 
-          toDepartment: 'Finish' 
-        })
+        body: JSON.stringify({
+          orderIds,
+          toDepartment: 'Finish',
+        }),
       });
     },
     onSuccess: () => {
       toast({
-        title: "Success",
-        description: `Progressed ${selectedFinishOrders.size} orders to Finish`
+        title: 'Success',
+        description: `Progressed ${selectedFinishOrders.size} orders to Finish`,
       });
       setSelectedFinishOrders(new Set());
       setSelectAllFinish(false);
@@ -380,19 +440,19 @@ export default function CNCQueuePage() {
     },
     onError: (error: any) => {
       toast({
-        title: "Error",
+        title: 'Error',
         description: `Failed to progress orders: ${error.message || error}`,
-        variant: "destructive"
+        variant: 'destructive',
       });
-    }
+    },
   });
 
   const handleProgressToGunsmith = () => {
     if (selectedGunsimthOrders.size === 0) {
       toast({
-        title: "Error",
+        title: 'Error',
         description: 'Please select at least one order',
-        variant: "destructive"
+        variant: 'destructive',
       });
       return;
     }
@@ -402,9 +462,9 @@ export default function CNCQueuePage() {
   const handleProgressToFinish = () => {
     if (selectedFinishOrders.size === 0) {
       toast({
-        title: "Error",
+        title: 'Error',
         description: 'Please select at least one order',
-        variant: "destructive"
+        variant: 'destructive',
       });
       return;
     }
@@ -412,36 +472,41 @@ export default function CNCQueuePage() {
   };
 
   // Auto-select order when scanned - Select the order card
-  const handleOrderScanned = useCallback((orderId: string) => {
-    // Prevent any navigation by maintaining current URL
-    window.history.pushState(null, '', window.location.href);
-    
-    // Check if the order exists in the current CNC queue
-    const orderExists = cncOrders.some((order: any) => order.orderId === orderId);
-    
-    if (orderExists) {
-      // Find the order and determine which queue it's in (gunsmith or finish)
-      const orderInQueue = cncOrders.find((o: any) => o.orderId === orderId);
-      if (orderInQueue) {
-        // Select the order card instead of showing modal
-        toggleOrderSelection(orderInQueue.orderId, orderInQueue.departmentType);
-        
+  const handleOrderScanned = useCallback(
+    (orderId: string) => {
+      // Prevent any navigation by maintaining current URL
+      window.history.pushState(null, '', window.location.href);
+
+      // Check if the order exists in the current CNC queue
+      const orderExists = cncOrders.some(
+        (order: any) => order.orderId === orderId
+      );
+
+      if (orderExists) {
+        // Find the order and determine which queue it's in (gunsmith or finish)
+        const orderInQueue = cncOrders.find((o: any) => o.orderId === orderId);
+        if (orderInQueue) {
+          // Select the order card instead of showing modal
+          toggleOrderSelection(
+            orderInQueue.orderId,
+            orderInQueue.departmentType
+          );
+
+          toast({
+            title: 'Order Selected',
+            description: `Order ${orderId} has been selected and ready for progression`,
+          });
+        }
+      } else {
         toast({
-          title: "Order Selected",
-          description: `Order ${orderId} has been selected and ready for progression`,
+          title: 'Order Not Found',
+          description: `Order ${orderId} is not in the CNC department`,
+          variant: 'destructive',
         });
       }
-    } else {
-      toast({
-        title: "Order Not Found",
-        description: `Order ${orderId} is not in the CNC department`,
-        variant: "destructive"
-      });
-    }
-  }, [cncOrders, toast]);
-
-
-
+    },
+    [cncOrders, toast]
+  );
 
   return (
     <div className="container mx-auto p-6 space-y-6">
@@ -451,41 +516,53 @@ export default function CNCQueuePage() {
       </div>
 
       {/* Barcode Scanner at top - With navigation prevention */}
-      <div className="mb-4" onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}>
+      <div
+        className="mb-4"
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+        }}
+      >
         <BarcodeScanner onOrderScanned={handleOrderScanned} />
       </div>
-
 
       {/* Order Search Box */}
       <Card>
         <CardContent className="p-4">
           <div className="flex items-center gap-4">
-            <OrderSearchBox 
+            <OrderSearchBox
               orders={[...gunsimthQueue, ...finishQueue]}
               placeholder="Search orders by Order ID or FishBowl Number..."
               onOrderSelect={(order) => {
                 const allOrders = [...gunsimthQueue, ...finishQueue];
-                const orderExists = allOrders.some((o: any) => o.orderId === order.orderId);
+                const orderExists = allOrders.some(
+                  (o: any) => o.orderId === order.orderId
+                );
                 if (orderExists) {
                   // Select the order card and show order summary modal
-                  const orderInQueue = cncOrders.find((o: any) => o.orderId === order.orderId);
+                  const orderInQueue = cncOrders.find(
+                    (o: any) => o.orderId === order.orderId
+                  );
                   if (orderInQueue) {
-                    toggleOrderSelection(orderInQueue.orderId, orderInQueue.departmentType);
+                    toggleOrderSelection(
+                      orderInQueue.orderId,
+                      orderInQueue.departmentType
+                    );
                   }
-                  
+
                   // Show order summary modal
                   setSelectedOrderId(order.orderId);
                   setSalesOrderModalOpen(true);
-                  
+
                   toast({
-                    title: "Order found",
-                    description: `Order ${order.orderId} selected and details displayed`
+                    title: 'Order found',
+                    description: `Order ${order.orderId} selected and details displayed`,
                   });
                 } else {
                   toast({
-                    title: "Order not in this department",
+                    title: 'Order not in this department',
                     description: `Order ${order.orderId} is not in the CNC department`,
-                    variant: "destructive"
+                    variant: 'destructive',
                   });
                 }
               }}
@@ -571,10 +648,16 @@ export default function CNCQueuePage() {
               <Badge variant="outline" className="ml-2 border-gray-300">
                 {cncOrders.length} Orders
               </Badge>
-              <Badge variant="outline" className="ml-2 border-purple-300 text-purple-700">
+              <Badge
+                variant="outline"
+                className="ml-2 border-purple-300 text-purple-700"
+              >
                 {gunsimthQueue.length} Gunsmith
               </Badge>
-              <Badge variant="outline" className="ml-2 border-green-300 text-green-700">
+              <Badge
+                variant="outline"
+                className="ml-2 border-green-300 text-green-700"
+              >
                 {finishQueue.length} Finish
               </Badge>
             </div>
@@ -583,8 +666,8 @@ export default function CNCQueuePage() {
                 variant="destructive"
                 onClick={() => {
                   toast({
-                    title: "Test Button",
-                    description: "Red test button clicked!",
+                    title: 'Test Button',
+                    description: 'Red test button clicked!',
                   });
                 }}
                 data-testid="red-test-button"
@@ -593,7 +676,10 @@ export default function CNCQueuePage() {
               </Button>
               <Button
                 onClick={handleProgressToGunsmith}
-                disabled={selectedGunsimthOrders.size === 0 || progressToGunsmith.isPending}
+                disabled={
+                  selectedGunsimthOrders.size === 0 ||
+                  progressToGunsmith.isPending
+                }
                 className="bg-purple-600 hover:bg-purple-700"
                 size="sm"
               >
@@ -602,7 +688,9 @@ export default function CNCQueuePage() {
               </Button>
               <Button
                 onClick={handleProgressToFinish}
-                disabled={selectedFinishOrders.size === 0 || progressToFinish.isPending}
+                disabled={
+                  selectedFinishOrders.size === 0 || progressToFinish.isPending
+                }
                 className="bg-green-600 hover:bg-green-700"
                 size="sm"
               >
@@ -624,39 +712,51 @@ export default function CNCQueuePage() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 2xl:grid-cols-6 gap-2">
               {cncOrders.map((order: any) => {
                 const isGunsmith = order.departmentType === 'gunsmith';
-                const isSelected = isGunsmith ? selectedGunsimthOrders.has(order.orderId) : selectedFinishOrders.has(order.orderId);
+                const isSelected = isGunsmith
+                  ? selectedGunsimthOrders.has(order.orderId)
+                  : selectedFinishOrders.has(order.orderId);
                 const isOverdue = isAfter(new Date(), new Date(order.dueDate));
-                
+
                 return (
-                  <div 
+                  <div
                     key={order.orderId}
                     className={`p-2 border-l-4 rounded cursor-pointer transition-all duration-200 ${
                       isOverdue
                         ? 'border-l-red-500 bg-red-50 dark:bg-red-900/20'
                         : isSelected
-                        ? isGunsmith 
-                          ? 'border-l-purple-500 bg-purple-50 dark:bg-purple-900/20'
-                          : 'border-l-green-500 bg-green-50 dark:bg-green-900/20'
-                        : isGunsmith
-                        ? 'border-l-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/10'
-                        : 'border-l-green-400 hover:bg-green-50 dark:hover:bg-green-900/10'
+                          ? isGunsmith
+                            ? 'border-l-purple-500 bg-purple-50 dark:bg-purple-900/20'
+                            : 'border-l-green-500 bg-green-50 dark:bg-green-900/20'
+                          : isGunsmith
+                            ? 'border-l-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/10'
+                            : 'border-l-green-400 hover:bg-green-50 dark:hover:bg-green-900/10'
                     }`}
-                    onClick={() => toggleOrderSelection(order.orderId, order.departmentType)}
+                    onClick={() =>
+                      toggleOrderSelection(order.orderId, order.departmentType)
+                    }
                   >
                     <div className="flex items-center gap-2">
                       <Checkbox
                         checked={isSelected}
-                        onCheckedChange={() => toggleOrderSelection(order.orderId, order.departmentType)}
+                        onCheckedChange={() =>
+                          toggleOrderSelection(
+                            order.orderId,
+                            order.departmentType
+                          )
+                        }
                         className="flex-shrink-0"
                       />
-                      
+
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between mb-1">
                           <span className="font-semibold text-sm truncate">
                             {getDisplayOrderId(order)}
                           </span>
                           {isOverdue && (
-                            <Badge variant="destructive" className="text-xs ml-1">
+                            <Badge
+                              variant="destructive"
+                              className="text-xs ml-1"
+                            >
                               OVERDUE
                             </Badge>
                           )}
@@ -670,8 +770,8 @@ export default function CNCQueuePage() {
                           >
                             <FileText className="w-3 h-3" />
                           </Badge>
-                          <Button 
-                            variant="outline" 
+                          <Button
+                            variant="outline"
                             size="sm"
                             onClick={(e) => {
                               e.stopPropagation();
@@ -686,10 +786,14 @@ export default function CNCQueuePage() {
                             <Badge
                               variant="destructive"
                               className={`cursor-pointer hover:opacity-80 transition-opacity text-xs ml-1 ${
-                                getKickbackStatus(order.orderId) === 'CRITICAL' ? 'bg-red-600 hover:bg-red-700' :
-                                getKickbackStatus(order.orderId) === 'HIGH' ? 'bg-orange-600 hover:bg-orange-700' :
-                                getKickbackStatus(order.orderId) === 'MEDIUM' ? 'bg-yellow-600 hover:bg-yellow-700' :
-                                'bg-gray-600 hover:bg-gray-700'
+                                getKickbackStatus(order.orderId) === 'CRITICAL'
+                                  ? 'bg-red-600 hover:bg-red-700'
+                                  : getKickbackStatus(order.orderId) === 'HIGH'
+                                    ? 'bg-orange-600 hover:bg-orange-700'
+                                    : getKickbackStatus(order.orderId) ===
+                                        'MEDIUM'
+                                      ? 'bg-yellow-600 hover:bg-yellow-700'
+                                      : 'bg-gray-600 hover:bg-gray-700'
                               }`}
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -701,40 +805,96 @@ export default function CNCQueuePage() {
                             </Badge>
                           )}
                         </div>
-                        
+
                         <div className="text-xs text-gray-600 space-y-1">
-                          <div>Due: {format(new Date(order.dueDate), 'M/d/yy')}</div>
-                          <div className="text-gray-700 dark:text-gray-300 font-medium">
-                            {getModelDisplayName(order.modelId || order.stockModelId)}
+                          <div>
+                            Due: {format(new Date(order.dueDate), 'M/d/yy')}
                           </div>
-                          
+                          <div className="text-gray-700 dark:text-gray-300 font-medium">
+                            {getModelDisplayName(
+                              order.modelId || order.stockModelId
+                            )}
+                          </div>
+
                           {/* Order Details */}
                           <div className="space-y-1 text-xs text-gray-600 dark:text-gray-400">
                             {(() => {
-                              const modelName = getModelDisplayName(order.modelId || order.stockModelId);
-                              const isTikka = modelName.toLowerCase().includes('tikka');
-                              
+                              const modelName = getModelDisplayName(
+                                order.modelId || order.stockModelId
+                              );
+                              const isTikka = modelName
+                                .toLowerCase()
+                                .includes('tikka');
+
                               if (isTikka) {
                                 // For Tikka orders, only show what's available in the requested order
                                 return (
                                   <>
                                     {order.handedness && (
-                                      <div><span className="font-medium">Handedness:</span> {getFeatureDisplayValue('handedness', order.handedness)}</div>
+                                      <div>
+                                        <span className="font-medium">
+                                          Handedness:
+                                        </span>{' '}
+                                        {getFeatureDisplayValue(
+                                          'handedness',
+                                          order.handedness
+                                        )}
+                                      </div>
                                     )}
                                     {order.features?.barrel_inlet && (
-                                      <div><span className="font-medium">Barrel Inlet:</span> {getFeatureDisplayValue('barrel_inlet', order.features.barrel_inlet)}</div>
+                                      <div>
+                                        <span className="font-medium">
+                                          Barrel Inlet:
+                                        </span>{' '}
+                                        {getFeatureDisplayValue(
+                                          'barrel_inlet',
+                                          order.features.barrel_inlet
+                                        )}
+                                      </div>
                                     )}
                                     {order.features?.action_length && (
-                                      <div><span className="font-medium">Action Length:</span> {getFeatureDisplayValue('action_length', order.features.action_length)}</div>
+                                      <div>
+                                        <span className="font-medium">
+                                          Action Length:
+                                        </span>{' '}
+                                        {getFeatureDisplayValue(
+                                          'action_length',
+                                          order.features.action_length
+                                        )}
+                                      </div>
                                     )}
                                     {order.features?.action_inlet && (
-                                      <div><span className="font-medium">Action Inlet:</span> {getFeatureDisplayValue('action_inlet', order.features.action_inlet)}</div>
+                                      <div>
+                                        <span className="font-medium">
+                                          Action Inlet:
+                                        </span>{' '}
+                                        {getFeatureDisplayValue(
+                                          'action_inlet',
+                                          order.features.action_inlet
+                                        )}
+                                      </div>
                                     )}
                                     {order.features?.bottom_metal && (
-                                      <div><span className="font-medium">Bottom Metal:</span> {getFeatureDisplayValue('bottom_metal', order.features.bottom_metal)}</div>
+                                      <div>
+                                        <span className="font-medium">
+                                          Bottom Metal:
+                                        </span>{' '}
+                                        {getFeatureDisplayValue(
+                                          'bottom_metal',
+                                          order.features.bottom_metal
+                                        )}
+                                      </div>
                                     )}
                                     {order.features?.custom_bolt_notch && (
-                                      <div><span className="font-medium">Custom Bolt Notch:</span> {getFeatureDisplayValue('custom_bolt_notch', order.features.custom_bolt_notch)}</div>
+                                      <div>
+                                        <span className="font-medium">
+                                          Custom Bolt Notch:
+                                        </span>{' '}
+                                        {getFeatureDisplayValue(
+                                          'custom_bolt_notch',
+                                          order.features.custom_bolt_notch
+                                        )}
+                                      </div>
                                     )}
                                   </>
                                 );
@@ -742,55 +902,147 @@ export default function CNCQueuePage() {
                                 // For all non-Tikka orders, always show all fields in the requested order
                                 return (
                                   <>
-                                    <div><span className="font-medium">Handedness:</span> {order.handedness ? getFeatureDisplayValue('handedness', order.handedness) : 'Not specified'}</div>
-                                    <div><span className="font-medium">Barrel Inlet:</span> {order.features?.barrel_inlet ? getFeatureDisplayValue('barrel_inlet', order.features.barrel_inlet) : 'Not specified'}</div>
-                                    <div><span className="font-medium">Action Length:</span> {order.features?.action_length ? getFeatureDisplayValue('action_length', order.features.action_length) : 'Not specified'}</div>
-                                    <div><span className="font-medium">Action Inlet:</span> {order.features?.action_inlet ? getFeatureDisplayValue('action_inlet', order.features.action_inlet) : 'Not specified'}</div>
-                                    <div><span className="font-medium">Bottom Metal:</span> {order.features?.bottom_metal ? getFeatureDisplayValue('bottom_metal', order.features.bottom_metal) : 'Not specified'}</div>
+                                    <div>
+                                      <span className="font-medium">
+                                        Handedness:
+                                      </span>{' '}
+                                      {order.handedness
+                                        ? getFeatureDisplayValue(
+                                            'handedness',
+                                            order.handedness
+                                          )
+                                        : 'Not specified'}
+                                    </div>
+                                    <div>
+                                      <span className="font-medium">
+                                        Barrel Inlet:
+                                      </span>{' '}
+                                      {order.features?.barrel_inlet
+                                        ? getFeatureDisplayValue(
+                                            'barrel_inlet',
+                                            order.features.barrel_inlet
+                                          )
+                                        : 'Not specified'}
+                                    </div>
+                                    <div>
+                                      <span className="font-medium">
+                                        Action Length:
+                                      </span>{' '}
+                                      {order.features?.action_length
+                                        ? getFeatureDisplayValue(
+                                            'action_length',
+                                            order.features.action_length
+                                          )
+                                        : 'Not specified'}
+                                    </div>
+                                    <div>
+                                      <span className="font-medium">
+                                        Action Inlet:
+                                      </span>{' '}
+                                      {order.features?.action_inlet
+                                        ? getFeatureDisplayValue(
+                                            'action_inlet',
+                                            order.features.action_inlet
+                                          )
+                                        : 'Not specified'}
+                                    </div>
+                                    <div>
+                                      <span className="font-medium">
+                                        Bottom Metal:
+                                      </span>{' '}
+                                      {order.features?.bottom_metal
+                                        ? getFeatureDisplayValue(
+                                            'bottom_metal',
+                                            order.features.bottom_metal
+                                          )
+                                        : 'Not specified'}
+                                    </div>
                                     {order.features?.custom_bolt_notch && (
-                                      <div><span className="font-medium">Custom Bolt Notch:</span> {getFeatureDisplayValue('custom_bolt_notch', order.features.custom_bolt_notch)}</div>
+                                      <div>
+                                        <span className="font-medium">
+                                          Custom Bolt Notch:
+                                        </span>{' '}
+                                        {getFeatureDisplayValue(
+                                          'custom_bolt_notch',
+                                          order.features.custom_bolt_notch
+                                        )}
+                                      </div>
                                     )}
                                   </>
                                 );
                               }
                             })()}
                           </div>
-                          
-                          <div className={`font-medium ${isGunsmith ? 'text-purple-600' : 'text-green-600'}`}>
-                            {isGunsmith ? (
-                              (() => {
-                                const activeFeatures = [];
-                                
-                                const railVal = normalizeFeatureValue(order.features?.rail_accessory);
-                                if (railVal && railVal !== 'no_rail' && railVal !== 'none' && railVal !== '') {
-                                  activeFeatures.push('RAILS');
-                                }
-                                
-                                const qdVal = normalizeFeatureValue(order.features?.qd_accessory);
-                                if (qdVal && qdVal !== 'no_qds' && qdVal !== 'none' && qdVal !== '') {
-                                  activeFeatures.push('QDS');
-                                }
-                                
-                                gunsimthFeatures.forEach(feature => {
-                                  if (feature === 'rail_accessory' || feature === 'qd_accessory') return;
-                                  
-                                  const value = normalizeFeatureValue(order.features?.[feature]);
-                                  if (value === 'true' || value === 'yes' ||
-                                      (value !== 'none' && value !== 'no' && value !== '' && value !== 'false')) {
-                                    
-                                    if (feature === 'tripod_tap') activeFeatures.push('TRIPOD');
-                                    else if (feature === 'tripod_mount') activeFeatures.push('TRIPOD');
-                                    else if (feature === 'bipod_accessory') activeFeatures.push('BIPOD');
-                                    else if (feature === 'spartan_bipod') activeFeatures.push('BIPOD');
-                                    else if (feature === 'adjustable_stock') activeFeatures.push('ADJ STOCK');
+
+                          <div
+                            className={`font-medium ${isGunsmith ? 'text-purple-600' : 'text-green-600'}`}
+                          >
+                            {isGunsmith
+                              ? (() => {
+                                  const activeFeatures = [];
+
+                                  const railVal = normalizeFeatureValue(
+                                    order.features?.rail_accessory
+                                  );
+                                  if (
+                                    railVal &&
+                                    railVal !== 'no_rail' &&
+                                    railVal !== 'none' &&
+                                    railVal !== ''
+                                  ) {
+                                    activeFeatures.push('RAILS');
                                   }
-                                });
-                                
-                                return Array.from(new Set(activeFeatures)).join(', ') || 'GUNSMITH';
-                              })()
-                            ) : (
-                              'READY FOR FINISH'
-                            )}
+
+                                  const qdVal = normalizeFeatureValue(
+                                    order.features?.qd_accessory
+                                  );
+                                  if (
+                                    qdVal &&
+                                    qdVal !== 'no_qds' &&
+                                    qdVal !== 'none' &&
+                                    qdVal !== ''
+                                  ) {
+                                    activeFeatures.push('QDS');
+                                  }
+
+                                  gunsimthFeatures.forEach((feature) => {
+                                    if (
+                                      feature === 'rail_accessory' ||
+                                      feature === 'qd_accessory'
+                                    )
+                                      return;
+
+                                    const value = normalizeFeatureValue(
+                                      order.features?.[feature]
+                                    );
+                                    if (
+                                      value === 'true' ||
+                                      value === 'yes' ||
+                                      (value !== 'none' &&
+                                        value !== 'no' &&
+                                        value !== '' &&
+                                        value !== 'false')
+                                    ) {
+                                      if (feature === 'tripod_tap')
+                                        activeFeatures.push('TRIPOD');
+                                      else if (feature === 'tripod_mount')
+                                        activeFeatures.push('TRIPOD');
+                                      else if (feature === 'bipod_accessory')
+                                        activeFeatures.push('BIPOD');
+                                      else if (feature === 'spartan_bipod')
+                                        activeFeatures.push('BIPOD');
+                                      else if (feature === 'adjustable_stock')
+                                        activeFeatures.push('ADJ STOCK');
+                                    }
+                                  });
+
+                                  return (
+                                    Array.from(new Set(activeFeatures)).join(
+                                      ', '
+                                    ) || 'GUNSMITH'
+                                  );
+                                })()
+                              : 'READY FOR FINISH'}
                           </div>
                         </div>
                       </div>
@@ -803,7 +1055,6 @@ export default function CNCQueuePage() {
         </CardContent>
       </Card>
 
-
       {/* Floating Gunsmith Progression Button */}
       {selectedGunsimthOrders.size > 0 && (
         <div className="fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 shadow-lg">
@@ -812,7 +1063,9 @@ export default function CNCQueuePage() {
               <div className="flex items-center gap-2">
                 <CheckCircle className="h-5 w-5 text-purple-600 dark:text-purple-400" />
                 <span className="font-medium text-purple-800 dark:text-purple-200">
-                  {selectedGunsimthOrders.size} order{selectedGunsimthOrders.size > 1 ? 's' : ''} selected for Gunsmith
+                  {selectedGunsimthOrders.size} order
+                  {selectedGunsimthOrders.size > 1 ? 's' : ''} selected for
+                  Gunsmith
                 </span>
               </div>
               <div className="flex items-center gap-2">
@@ -825,12 +1078,15 @@ export default function CNCQueuePage() {
                 </Button>
                 <Button
                   onClick={handleProgressToGunsmith}
-                  disabled={selectedGunsimthOrders.size === 0 || progressToGunsmith.isPending}
+                  disabled={
+                    selectedGunsimthOrders.size === 0 ||
+                    progressToGunsmith.isPending
+                  }
                   className="bg-purple-600 hover:bg-purple-700 text-white"
                 >
                   <ArrowRight className="h-4 w-4 mr-2" />
-                  {progressToGunsmith.isPending 
-                    ? 'Progressing...' 
+                  {progressToGunsmith.isPending
+                    ? 'Progressing...'
                     : `Progress to Gunsmith (${selectedGunsimthOrders.size})`}
                 </Button>
               </div>
@@ -847,7 +1103,8 @@ export default function CNCQueuePage() {
               <div className="flex items-center gap-2">
                 <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400" />
                 <span className="font-medium text-green-800 dark:text-green-200">
-                  {selectedFinishOrders.size} order{selectedFinishOrders.size > 1 ? 's' : ''} selected for Finish
+                  {selectedFinishOrders.size} order
+                  {selectedFinishOrders.size > 1 ? 's' : ''} selected for Finish
                 </span>
               </div>
               <div className="flex items-center gap-2">
@@ -860,12 +1117,15 @@ export default function CNCQueuePage() {
                 </Button>
                 <Button
                   onClick={handleProgressToFinish}
-                  disabled={selectedFinishOrders.size === 0 || progressToFinish.isPending}
+                  disabled={
+                    selectedFinishOrders.size === 0 ||
+                    progressToFinish.isPending
+                  }
                   className="bg-green-600 hover:bg-green-700 text-white"
                 >
                   <ArrowRight className="h-4 w-4 mr-2" />
-                  {progressToFinish.isPending 
-                    ? 'Progressing...' 
+                  {progressToFinish.isPending
+                    ? 'Progressing...'
                     : `Progress to Finish (${selectedFinishOrders.size})`}
                 </Button>
               </div>
@@ -875,7 +1135,7 @@ export default function CNCQueuePage() {
       )}
 
       {/* Sales Order Modal */}
-      <SalesOrderModal 
+      <SalesOrderModal
         isOpen={salesOrderModalOpen}
         onClose={() => setSalesOrderModalOpen(false)}
         orderId={selectedOrderId}

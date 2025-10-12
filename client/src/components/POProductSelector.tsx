@@ -1,13 +1,25 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
-import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { Package, Plus, ShoppingCart } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
@@ -56,12 +68,22 @@ interface SelectedProduct {
   quantity: number;
 }
 
-export default function POProductSelector({ poId, customerName, isOpen, onClose, onSuccess }: POProductSelectorProps) {
-  const [selectedProducts, setSelectedProducts] = useState<SelectedProduct[]>([]);
+export default function POProductSelector({
+  poId,
+  customerName,
+  isOpen,
+  onClose,
+  onSuccess,
+}: POProductSelectorProps) {
+  const [selectedProducts, setSelectedProducts] = useState<SelectedProduct[]>(
+    []
+  );
   const { toast } = useToast();
 
   // Fetch customer-associated PO products
-  const { data: allPOProducts = [], isLoading: productsLoading } = useQuery<POProduct[]>({
+  const { data: allPOProducts = [], isLoading: productsLoading } = useQuery<
+    POProduct[]
+  >({
     queryKey: ['/api/po-products'],
     queryFn: async () => {
       const result = await apiRequest('/api/po-products');
@@ -70,7 +92,9 @@ export default function POProductSelector({ poId, customerName, isOpen, onClose,
   });
 
   // Fetch stock models for display names
-  const { data: stockModels = [], isLoading: stockModelsLoading } = useQuery<StockModel[]>({
+  const { data: stockModels = [], isLoading: stockModelsLoading } = useQuery<
+    StockModel[]
+  >({
     queryKey: ['/api/stock-models'],
     queryFn: async () => {
       const result = await apiRequest('/api/stock-models');
@@ -79,17 +103,21 @@ export default function POProductSelector({ poId, customerName, isOpen, onClose,
   });
 
   // Filter products by customer name
-  const customerProducts = allPOProducts.filter(product => 
-    product.customerName.toLowerCase().trim() === customerName.toLowerCase().trim()
+  const customerProducts = allPOProducts.filter(
+    (product) =>
+      product.customerName.toLowerCase().trim() ===
+      customerName.toLowerCase().trim()
   );
 
   const getStockModelDisplayName = (stockModelId: string) => {
-    const stockModel = stockModels.find(sm => sm.id === stockModelId);
+    const stockModel = stockModels.find((sm) => sm.id === stockModelId);
     return stockModel?.displayName || stockModelId || 'Unknown Model';
   };
 
   const addProductToSelection = (product: POProduct) => {
-    const existingIndex = selectedProducts.findIndex(sp => sp.product.id === product.id);
+    const existingIndex = selectedProducts.findIndex(
+      (sp) => sp.product.id === product.id
+    );
     if (existingIndex >= 0) {
       // Increase quantity if already selected
       const updated = [...selectedProducts];
@@ -104,10 +132,12 @@ export default function POProductSelector({ poId, customerName, isOpen, onClose,
   const updateProductQuantity = (productId: number, quantity: number) => {
     if (quantity <= 0) {
       // Remove product if quantity is 0 or negative
-      setSelectedProducts(selectedProducts.filter(sp => sp.product.id !== productId));
+      setSelectedProducts(
+        selectedProducts.filter((sp) => sp.product.id !== productId)
+      );
     } else {
       // Update quantity
-      const updated = selectedProducts.map(sp => 
+      const updated = selectedProducts.map((sp) =>
         sp.product.id === productId ? { ...sp, quantity } : sp
       );
       setSelectedProducts(updated);
@@ -115,15 +145,17 @@ export default function POProductSelector({ poId, customerName, isOpen, onClose,
   };
 
   const removeProductFromSelection = (productId: number) => {
-    setSelectedProducts(selectedProducts.filter(sp => sp.product.id !== productId));
+    setSelectedProducts(
+      selectedProducts.filter((sp) => sp.product.id !== productId)
+    );
   };
 
   const handleAddToOrder = async () => {
     if (selectedProducts.length === 0) {
       toast({
-        title: "No products selected",
-        description: "Please select at least one product to add to the order",
-        variant: "destructive",
+        title: 'No products selected',
+        description: 'Please select at least one product to add to the order',
+        variant: 'destructive',
       });
       return;
     }
@@ -153,31 +185,31 @@ export default function POProductSelector({ poId, customerName, isOpen, onClose,
             swivelStuds: sp.product.swivelStuds,
             paintOptions: sp.product.paintOptions,
             texture: sp.product.texture,
-            flatTop: sp.product.flatTop
+            flatTop: sp.product.flatTop,
           },
           notes: `Product from PO Products: ${sp.product.customerName}`,
-          orderCount: 0
+          orderCount: 0,
         };
 
         await apiRequest(`/api/pos/${poId}/items`, {
           method: 'POST',
-          body: poItemData
+          body: poItemData,
         });
       }
 
       toast({
-        title: "Products Added",
+        title: 'Products Added',
         description: `Added ${selectedProducts.length} product(s) to the purchase order`,
       });
-      
+
       // Reset selection and close
       setSelectedProducts([]);
       onSuccess();
     } catch (error: any) {
       toast({
-        title: "Error",
-        description: error.message || "Failed to add products to order",
-        variant: "destructive",
+        title: 'Error',
+        description: error.message || 'Failed to add products to order',
+        variant: 'destructive',
       });
     }
   };
@@ -188,7 +220,10 @@ export default function POProductSelector({ poId, customerName, isOpen, onClose,
   };
 
   const getTotalValue = () => {
-    return selectedProducts.reduce((total, sp) => total + (sp.product.price * sp.quantity), 0);
+    return selectedProducts.reduce(
+      (total, sp) => total + sp.product.price * sp.quantity,
+      0
+    );
   };
 
   if (productsLoading || stockModelsLoading) {
@@ -215,17 +250,20 @@ export default function POProductSelector({ poId, customerName, isOpen, onClose,
         <DialogHeader>
           <DialogTitle>Select Products for {customerName}</DialogTitle>
         </DialogHeader>
-        
+
         <div className="space-y-6">
           {customerProducts.length === 0 ? (
             <Card>
               <CardContent className="py-8">
                 <div className="text-center">
                   <Package className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">No Products Available</h3>
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">
+                    No Products Available
+                  </h3>
                   <p className="text-gray-500">
-                    No PO products have been created for customer "{customerName}".
-                    Products must be created on the PO Products page first.
+                    No PO products have been created for customer "
+                    {customerName}". Products must be created on the PO Products
+                    page first.
                   </p>
                 </div>
               </CardContent>
@@ -253,7 +291,9 @@ export default function POProductSelector({ poId, customerName, isOpen, onClose,
                         <TableRow key={product.id}>
                           <TableCell>
                             <div>
-                              <div className="font-medium">{product.productName}</div>
+                              <div className="font-medium">
+                                {product.productName}
+                              </div>
                               {product.flatTop && (
                                 <Badge variant="secondary" className="mt-1">
                                   Flat Top
@@ -266,11 +306,14 @@ export default function POProductSelector({ poId, customerName, isOpen, onClose,
                           </TableCell>
                           <TableCell>
                             <Badge variant="outline" className="capitalize">
-                              {product.material.replace('_', ' ') || 'Not specified'}
+                              {product.material.replace('_', ' ') ||
+                                'Not specified'}
                             </Badge>
                           </TableCell>
                           <TableCell>
-                            <span className="font-medium">${product.price.toFixed(2)}</span>
+                            <span className="font-medium">
+                              ${product.price.toFixed(2)}
+                            </span>
                           </TableCell>
                           <TableCell>
                             <Button
@@ -306,13 +349,19 @@ export default function POProductSelector({ poId, customerName, isOpen, onClose,
                           className="flex items-center justify-between p-4 border rounded-lg"
                         >
                           <div className="flex-1">
-                            <div className="font-medium">{sp.product.productName}</div>
+                            <div className="font-medium">
+                              {sp.product.productName}
+                            </div>
                             <div className="text-sm text-gray-600">
-                              {getStockModelDisplayName(sp.product.stockModel)} • ${sp.product.price.toFixed(2)} each
+                              {getStockModelDisplayName(sp.product.stockModel)}{' '}
+                              • ${sp.product.price.toFixed(2)} each
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
-                            <Label htmlFor={`quantity-${sp.product.id}`} className="text-sm">
+                            <Label
+                              htmlFor={`quantity-${sp.product.id}`}
+                              className="text-sm"
+                            >
                               Qty:
                             </Label>
                             <Input
@@ -320,7 +369,12 @@ export default function POProductSelector({ poId, customerName, isOpen, onClose,
                               type="number"
                               min="1"
                               value={sp.quantity}
-                              onChange={(e) => updateProductQuantity(sp.product.id, parseInt(e.target.value) || 0)}
+                              onChange={(e) =>
+                                updateProductQuantity(
+                                  sp.product.id,
+                                  parseInt(e.target.value) || 0
+                                )
+                              }
                               className="w-20"
                               data-testid={`input-quantity-${sp.product.id}`}
                             />
@@ -330,7 +384,9 @@ export default function POProductSelector({ poId, customerName, isOpen, onClose,
                             <Button
                               size="sm"
                               variant="destructive"
-                              onClick={() => removeProductFromSelection(sp.product.id)}
+                              onClick={() =>
+                                removeProductFromSelection(sp.product.id)
+                              }
                               data-testid={`button-remove-${sp.product.id}`}
                             >
                               Remove
@@ -338,7 +394,7 @@ export default function POProductSelector({ poId, customerName, isOpen, onClose,
                           </div>
                         </div>
                       ))}
-                      
+
                       <div className="flex justify-between items-center pt-4 border-t">
                         <div className="text-lg font-semibold">
                           Total: ${getTotalValue().toFixed(2)}
@@ -347,7 +403,10 @@ export default function POProductSelector({ poId, customerName, isOpen, onClose,
                           <Button variant="outline" onClick={handleClose}>
                             Cancel
                           </Button>
-                          <Button onClick={handleAddToOrder} data-testid="button-add-to-order">
+                          <Button
+                            onClick={handleAddToOrder}
+                            data-testid="button-add-to-order"
+                          >
                             Add to Order
                           </Button>
                         </div>

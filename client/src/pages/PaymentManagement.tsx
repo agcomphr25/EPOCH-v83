@@ -5,18 +5,24 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { 
-  CreditCard, 
-  Search, 
-  DollarSign, 
-  Clock, 
-  CheckCircle, 
-  XCircle, 
+import {
+  CreditCard,
+  Search,
+  DollarSign,
+  Clock,
+  CheckCircle,
+  XCircle,
   AlertTriangle,
   RefreshCw,
-  Eye
+  Eye,
 } from 'lucide-react';
 import CreditCardPayment from '@/components/CreditCardPayment';
 import BatchPayment from '@/components/BatchPayment';
@@ -60,7 +66,11 @@ export default function PaymentManagement() {
   const [paymentAmount, setPaymentAmount] = useState<number>(0);
 
   // Fetch all payments
-  const { data: paymentsData, isLoading: paymentsLoading, refetch: refetchPayments } = useQuery({
+  const {
+    data: paymentsData,
+    isLoading: paymentsLoading,
+    refetch: refetchPayments,
+  } = useQuery({
     queryKey: ['/api/payments'],
     queryFn: async () => {
       const response = await fetch('/api/payments');
@@ -70,7 +80,11 @@ export default function PaymentManagement() {
   });
 
   // Fetch payments for specific order
-  const { data: orderPaymentsData, isLoading: orderPaymentsLoading, refetch: refetchOrderPayments } = useQuery({
+  const {
+    data: orderPaymentsData,
+    isLoading: orderPaymentsLoading,
+    refetch: refetchOrderPayments,
+  } = useQuery({
     queryKey: ['/api/payments/order', searchOrderId],
     queryFn: async () => {
       if (!searchOrderId) return null;
@@ -99,7 +113,9 @@ export default function PaymentManagement() {
     } else if (status === 'refunded') {
       return <Badge className="bg-orange-100 text-orange-800">Refunded</Badge>;
     } else if (responseCode === '4') {
-      return <Badge className="bg-yellow-100 text-yellow-800">Held for Review</Badge>;
+      return (
+        <Badge className="bg-yellow-100 text-yellow-800">Held for Review</Badge>
+      );
     } else {
       return <Badge variant="outline">Pending</Badge>;
     }
@@ -121,14 +137,24 @@ export default function PaymentManagement() {
       <CardContent className="p-4">
         <div className="flex justify-between items-start mb-3">
           <div>
-            <h3 className="font-semibold text-lg">Order: {payment.payment.orderId}</h3>
+            <h3 className="font-semibold text-lg">
+              Order: {payment.payment.orderId}
+            </h3>
             <p className="text-sm text-gray-600">
-              {payment.payment.paymentType === 'credit_card' ? 'Credit Card' : payment.payment.paymentType}
+              {payment.payment.paymentType === 'credit_card'
+                ? 'Credit Card'
+                : payment.payment.paymentType}
             </p>
           </div>
           <div className="text-right">
-            <p className="font-bold text-lg">{formatCurrency(payment.payment.paymentAmount)}</p>
-            {payment.transaction && getStatusBadge(payment.transaction.status, payment.transaction.responseCode)}
+            <p className="font-bold text-lg">
+              {formatCurrency(payment.payment.paymentAmount)}
+            </p>
+            {payment.transaction &&
+              getStatusBadge(
+                payment.transaction.status,
+                payment.transaction.responseCode
+              )}
           </div>
         </div>
 
@@ -137,50 +163,65 @@ export default function PaymentManagement() {
             <div className="space-y-2">
               <div className="flex justify-between">
                 <span className="text-sm font-medium">Transaction ID:</span>
-                <span className="text-sm">{payment.transaction.transactionId}</span>
+                <span className="text-sm">
+                  {payment.transaction.transactionId}
+                </span>
               </div>
               {payment.transaction.authCode && (
                 <div className="flex justify-between">
                   <span className="text-sm font-medium">Auth Code:</span>
-                  <span className="text-sm">{payment.transaction.authCode}</span>
+                  <span className="text-sm">
+                    {payment.transaction.authCode}
+                  </span>
                 </div>
               )}
               {payment.transaction.lastFourDigits && (
                 <div className="flex justify-between">
                   <span className="text-sm font-medium">Card:</span>
                   <span className="text-sm">
-                    {payment.transaction.cardType} ending in {payment.transaction.lastFourDigits}
+                    {payment.transaction.cardType} ending in{' '}
+                    {payment.transaction.lastFourDigits}
                   </span>
                 </div>
               )}
               {payment.transaction.avsResult && (
                 <div className="flex justify-between">
                   <span className="text-sm font-medium">AVS:</span>
-                  <span className="text-sm">{payment.transaction.avsResult}</span>
+                  <span className="text-sm">
+                    {payment.transaction.avsResult}
+                  </span>
                 </div>
               )}
             </div>
             <div className="space-y-2">
               <div className="flex justify-between">
                 <span className="text-sm font-medium">Processed:</span>
-                <span className="text-sm">{formatDate(payment.transaction.processedAt)}</span>
+                <span className="text-sm">
+                  {formatDate(payment.transaction.processedAt)}
+                </span>
               </div>
               {payment.transaction.billingFirstName && (
                 <div className="flex justify-between">
                   <span className="text-sm font-medium">Billing Name:</span>
                   <span className="text-sm">
-                    {payment.transaction.billingFirstName} {payment.transaction.billingLastName}
+                    {payment.transaction.billingFirstName}{' '}
+                    {payment.transaction.billingLastName}
                   </span>
                 </div>
               )}
               {payment.transaction.customerEmail && (
                 <div className="flex justify-between">
                   <span className="text-sm font-medium">Email:</span>
-                  <span className="text-sm">{payment.transaction.customerEmail}</span>
+                  <span className="text-sm">
+                    {payment.transaction.customerEmail}
+                  </span>
                 </div>
               )}
               {payment.transaction.isTest && (
-                <Badge variant="outline" className="bg-yellow-50 text-yellow-700">
+                <Badge
+                  variant="outline"
+                  className="bg-yellow-50 text-yellow-700"
+                >
                   Test Transaction
                 </Badge>
               )}
@@ -201,7 +242,9 @@ export default function PaymentManagement() {
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-7xl mx-auto">
         <div className="flex justify-between items-center mb-6">
-          <h1 className="text-3xl font-bold text-gray-900">Payment Management</h1>
+          <h1 className="text-3xl font-bold text-gray-900">
+            Payment Management
+          </h1>
           <Dialog open={showPaymentDialog} onOpenChange={setShowPaymentDialog}>
             <DialogTrigger asChild>
               <Button>
@@ -233,7 +276,9 @@ export default function PaymentManagement() {
                       min="0"
                       placeholder="0.00"
                       value={paymentAmount || ''}
-                      onChange={(e) => setPaymentAmount(parseFloat(e.target.value) || 0)}
+                      onChange={(e) =>
+                        setPaymentAmount(parseFloat(e.target.value) || 0)
+                      }
                     />
                   </div>
                 </div>
@@ -262,7 +307,11 @@ export default function PaymentManagement() {
               <CardHeader>
                 <div className="flex justify-between items-center">
                   <CardTitle>Recent Payments</CardTitle>
-                  <Button variant="outline" size="sm" onClick={() => refetchPayments()}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => refetchPayments()}
+                  >
                     <RefreshCw className="h-4 w-4 mr-2" />
                     Refresh
                   </Button>
@@ -283,8 +332,12 @@ export default function PaymentManagement() {
                 ) : (
                   <div className="text-center py-8">
                     <DollarSign className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                    <h3 className="text-lg font-medium text-gray-900 mb-2">No payments found</h3>
-                    <p className="text-gray-500">No payment transactions have been processed yet.</p>
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">
+                      No payments found
+                    </h3>
+                    <p className="text-gray-500">
+                      No payment transactions have been processed yet.
+                    </p>
                   </div>
                 )}
               </CardContent>
@@ -332,8 +385,12 @@ export default function PaymentManagement() {
                 ) : searchOrderId && orderPaymentsData ? (
                   <div className="text-center py-8">
                     <Search className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                    <h3 className="text-lg font-medium text-gray-900 mb-2">No payments found</h3>
-                    <p className="text-gray-500">No payment transactions found for order {searchOrderId}.</p>
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">
+                      No payments found
+                    </h3>
+                    <p className="text-gray-500">
+                      No payment transactions found for order {searchOrderId}.
+                    </p>
                   </div>
                 ) : null}
               </CardContent>

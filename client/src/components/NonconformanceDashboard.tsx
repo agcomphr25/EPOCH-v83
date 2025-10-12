@@ -2,7 +2,13 @@ import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Plus, Search, RefreshCw, FileText, Edit } from 'lucide-react';
 import useNonconformance from '../hooks/useNonconformance';
@@ -10,27 +16,27 @@ import NonconformanceFormModal from './NonconformanceFormModal';
 import { format, addDays, parseISO } from 'date-fns';
 
 export default function NonconformanceDashboard() {
-  const [filters, setFilters] = useState({ 
-    dateFrom: '', 
-    dateTo: '', 
-    stockModel: '', 
-    issueCause: '', 
-    status: '', 
-    search: '' 
+  const [filters, setFilters] = useState({
+    dateFrom: '',
+    dateTo: '',
+    stockModel: '',
+    issueCause: '',
+    status: '',
+    search: '',
   });
-  
+
   const { records, loading, error, setRecords } = useNonconformance(filters);
   const [modalOpen, setModalOpen] = useState(false);
   const [editRecord, setEditRecord] = useState(null);
 
   const resetFilters = () => {
-    setFilters({ 
-      dateFrom: '', 
-      dateTo: '', 
-      stockModel: '', 
-      issueCause: '', 
-      status: '', 
-      search: '' 
+    setFilters({
+      dateFrom: '',
+      dateTo: '',
+      stockModel: '',
+      issueCause: '',
+      status: '',
+      search: '',
     });
   };
 
@@ -46,17 +52,18 @@ export default function NonconformanceDashboard() {
 
   const onRecordSaved = () => {
     // Trigger refetch by resetting filters state
-    setFilters(prev => ({ ...prev }));
+    setFilters((prev) => ({ ...prev }));
   };
 
   const getStatusBadge = (record: any) => {
-    if (!record.dispositionDate) return { variant: 'secondary' as const, label: 'No Date Set' };
-    
+    if (!record.dispositionDate)
+      return { variant: 'secondary' as const, label: 'No Date Set' };
+
     const dueDate = addDays(parseISO(record.dispositionDate), 2);
     const isPastDue = new Date() > dueDate && record.status === 'Open';
     const isResolved = record.status === 'Resolved';
-    const resolvedQuickly = isResolved && record.resolvedAt && 
-      parseISO(record.resolvedAt) <= dueDate;
+    const resolvedQuickly =
+      isResolved && record.resolvedAt && parseISO(record.resolvedAt) <= dueDate;
 
     if (resolvedQuickly) {
       return { variant: 'default' as const, label: 'Resolved On-Time' };
@@ -71,12 +78,12 @@ export default function NonconformanceDashboard() {
 
   const issueOptions = [
     'Customer Request for Additional Work',
-    'Wrong Inlet/CNC Error', 
+    'Wrong Inlet/CNC Error',
     'Does Not Meet Customer QC Requirements',
     'Material Defect',
     'Process Error',
     'Design Issue',
-    'Other'
+    'Other',
   ];
 
   return (
@@ -84,10 +91,17 @@ export default function NonconformanceDashboard() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Nonconforming Item Tracking</h1>
-          <p className="text-gray-600">Track and manage quality issues and dispositions</p>
+          <h1 className="text-3xl font-bold text-gray-900">
+            Nonconforming Item Tracking
+          </h1>
+          <p className="text-gray-600">
+            Track and manage quality issues and dispositions
+          </p>
         </div>
-        <Button onClick={() => setModalOpen(true)} className="flex items-center gap-2">
+        <Button
+          onClick={() => setModalOpen(true)}
+          className="flex items-center gap-2"
+        >
           <Plus className="w-4 h-4" />
           New Record
         </Button>
@@ -98,7 +112,7 @@ export default function NonconformanceDashboard() {
         <Card>
           <CardContent className="p-4">
             <div className="text-2xl font-bold text-blue-600">
-              {records.filter(r => r.status === 'Open').length}
+              {records.filter((r) => r.status === 'Open').length}
             </div>
             <div className="text-sm text-gray-600">Open Issues</div>
           </CardContent>
@@ -106,7 +120,7 @@ export default function NonconformanceDashboard() {
         <Card>
           <CardContent className="p-4">
             <div className="text-2xl font-bold text-green-600">
-              {records.filter(r => r.status === 'Resolved').length}
+              {records.filter((r) => r.status === 'Resolved').length}
             </div>
             <div className="text-sm text-gray-600">Resolved</div>
           </CardContent>
@@ -114,11 +128,13 @@ export default function NonconformanceDashboard() {
         <Card>
           <CardContent className="p-4">
             <div className="text-2xl font-bold text-orange-600">
-              {records.filter(r => {
-                if (!r.dispositionDate || r.status !== 'Open') return false;
-                const dueDate = addDays(parseISO(r.dispositionDate), 2);
-                return new Date() > dueDate;
-              }).length}
+              {
+                records.filter((r) => {
+                  if (!r.dispositionDate || r.status !== 'Open') return false;
+                  const dueDate = addDays(parseISO(r.dispositionDate), 2);
+                  return new Date() > dueDate;
+                }).length
+              }
             </div>
             <div className="text-sm text-gray-600">Overdue</div>
           </CardContent>
@@ -148,7 +164,9 @@ export default function NonconformanceDashboard() {
               <Input
                 type="date"
                 value={filters.dateFrom}
-                onChange={(e) => setFilters(f => ({ ...f, dateFrom: e.target.value }))}
+                onChange={(e) =>
+                  setFilters((f) => ({ ...f, dateFrom: e.target.value }))
+                }
               />
             </div>
             <div className="space-y-2">
@@ -156,31 +174,55 @@ export default function NonconformanceDashboard() {
               <Input
                 type="date"
                 value={filters.dateTo}
-                onChange={(e) => setFilters(f => ({ ...f, dateTo: e.target.value }))}
+                onChange={(e) =>
+                  setFilters((f) => ({ ...f, dateTo: e.target.value }))
+                }
               />
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">Issue Cause</label>
-              <Select value={filters.issueCause || "all"} onValueChange={(value) => setFilters(f => ({ ...f, issueCause: value === "all" ? "" : value }))}>
+              <Select
+                value={filters.issueCause || 'all'}
+                onValueChange={(value) =>
+                  setFilters((f) => ({
+                    ...f,
+                    issueCause: value === 'all' ? '' : value,
+                  }))
+                }
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="All Causes" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all" key="all-causes">All Causes</SelectItem>
-                  {issueOptions.map(option => (
-                    <SelectItem key={option} value={option}>{option}</SelectItem>
+                  <SelectItem value="all" key="all-causes">
+                    All Causes
+                  </SelectItem>
+                  {issueOptions.map((option) => (
+                    <SelectItem key={option} value={option}>
+                      {option}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">Status</label>
-              <Select value={filters.status || "all"} onValueChange={(value) => setFilters(f => ({ ...f, status: value === "all" ? "" : value }))}>
+              <Select
+                value={filters.status || 'all'}
+                onValueChange={(value) =>
+                  setFilters((f) => ({
+                    ...f,
+                    status: value === 'all' ? '' : value,
+                  }))
+                }
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="All Statuses" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all" key="all-statuses">All Statuses</SelectItem>
+                  <SelectItem value="all" key="all-statuses">
+                    All Statuses
+                  </SelectItem>
                   <SelectItem value="Open">Open</SelectItem>
                   <SelectItem value="Resolved">Resolved</SelectItem>
                 </SelectContent>
@@ -191,12 +233,14 @@ export default function NonconformanceDashboard() {
               <Input
                 placeholder="Order ID, Serial, Customer..."
                 value={filters.search}
-                onChange={(e) => setFilters(f => ({ ...f, search: e.target.value }))}
+                onChange={(e) =>
+                  setFilters((f) => ({ ...f, search: e.target.value }))
+                }
               />
             </div>
             <div className="flex items-end">
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 onClick={resetFilters}
                 className="flex items-center gap-2"
               >
@@ -252,7 +296,9 @@ export default function NonconformanceDashboard() {
                     const statusBadge = getStatusBadge(record);
                     return (
                       <tr key={record.id} className="border-b hover:bg-gray-50">
-                        <td className="p-2 font-medium text-blue-600">{record.orderId}</td>
+                        <td className="p-2 font-medium text-blue-600">
+                          {record.orderId}
+                        </td>
                         <td className="p-2">{record.serialNumber}</td>
                         <td className="p-2">{record.customerName}</td>
                         <td className="p-2">{record.poNumber}</td>
@@ -261,7 +307,13 @@ export default function NonconformanceDashboard() {
                         <td className="p-2 text-sm">{record.issueCause}</td>
                         <td className="p-2">{record.disposition}</td>
                         <td className="p-2">
-                          <Badge variant={record.status === 'Open' ? 'destructive' : 'default'}>
+                          <Badge
+                            variant={
+                              record.status === 'Open'
+                                ? 'destructive'
+                                : 'default'
+                            }
+                          >
                             {record.status}
                           </Badge>
                         </td>

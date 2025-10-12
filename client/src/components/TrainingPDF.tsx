@@ -1,6 +1,12 @@
-import { Document, Page, Text, View, StyleSheet, pdf, Image } from '@react-pdf/renderer';
+import {
+  Document,
+  Page,
+  Text,
+  View,
+  StyleSheet,
+  pdf,
+} from '@react-pdf/renderer';
 import { saveAs } from 'file-saver';
-import logoImage from '@assets/logo_updated.png';
 
 // Create styles
 const styles = StyleSheet.create({
@@ -150,20 +156,25 @@ interface TrainingPDFProps {
 }
 
 // Quiz PDF Document Component (without answer key, with signature)
-const QuizPDFDocument = ({ title, companyName, questions = [] }: TrainingPDFProps) => (
+const QuizPDFDocument = ({
+  title,
+  companyName,
+  questions = [],
+}: TrainingPDFProps) => (
   <Document>
     <Page size="A4" style={styles.page}>
       <View style={styles.header}>
-        <Image style={styles.logo} src={logoImage} />
+        <Text style={styles.companyName}>EPOCH v8 Manufacturing ERP</Text>
         <Text style={styles.title}>{title}</Text>
       </View>
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Training Assessment</Text>
         <Text style={{ fontSize: 10, marginBottom: 15, color: '#6B7280' }}>
-          Please complete this assessment to demonstrate understanding. Circle the correct answer for each question.
+          Please complete this assessment to demonstrate understanding. Circle
+          the correct answer for each question.
         </Text>
-        
+
         {questions.map((question, index) => (
           <View key={question.id} style={styles.question}>
             <Text style={styles.questionText}>
@@ -179,36 +190,101 @@ const QuizPDFDocument = ({ title, companyName, questions = [] }: TrainingPDFProp
       </View>
 
       {/* Signature Section */}
-      <View style={{ marginTop: 30, paddingTop: 15, borderTopWidth: 1, borderTopStyle: 'solid', borderTopColor: '#9CA3AF' }}>
-        <Text style={{ fontSize: 12, fontWeight: 'bold', marginBottom: 15, color: '#1F2937' }}>
+      <View
+        style={{
+          marginTop: 30,
+          paddingTop: 15,
+          borderTopWidth: 1,
+          borderTopStyle: 'solid',
+          borderTopColor: '#9CA3AF',
+        }}
+      >
+        <Text
+          style={{
+            fontSize: 12,
+            fontWeight: 'bold',
+            marginBottom: 15,
+            color: '#1F2937',
+          }}
+        >
           Training Completion Certification
         </Text>
-        
+
         <View style={{ flexDirection: 'row', marginBottom: 15 }}>
           <View style={{ flex: 1, marginRight: 20 }}>
-            <Text style={{ fontSize: 10, marginBottom: 20, color: '#374151' }}>Employee Name (Print):</Text>
-            <View style={{ borderBottomWidth: 1, borderBottomStyle: 'solid', borderBottomColor: '#000', minHeight: 15, marginBottom: 5 }}></View>
+            <Text style={{ fontSize: 10, marginBottom: 20, color: '#374151' }}>
+              Employee Name (Print):
+            </Text>
+            <View
+              style={{
+                borderBottomWidth: 1,
+                borderBottomStyle: 'solid',
+                borderBottomColor: '#000',
+                minHeight: 15,
+                marginBottom: 5,
+              }}
+            ></View>
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={{ fontSize: 10, marginBottom: 20, color: '#374151' }}>Date:</Text>
-            <View style={{ borderBottomWidth: 1, borderBottomStyle: 'solid', borderBottomColor: '#000', minHeight: 15, marginBottom: 5 }}></View>
+            <Text style={{ fontSize: 10, marginBottom: 20, color: '#374151' }}>
+              Date:
+            </Text>
+            <View
+              style={{
+                borderBottomWidth: 1,
+                borderBottomStyle: 'solid',
+                borderBottomColor: '#000',
+                minHeight: 15,
+                marginBottom: 5,
+              }}
+            ></View>
           </View>
         </View>
 
         <View style={{ flexDirection: 'row', marginBottom: 15 }}>
           <View style={{ flex: 1, marginRight: 20 }}>
-            <Text style={{ fontSize: 10, marginBottom: 20, color: '#374151' }}>Employee Signature:</Text>
-            <View style={{ borderBottomWidth: 1, borderBottomStyle: 'solid', borderBottomColor: '#000', minHeight: 15, marginBottom: 5 }}></View>
+            <Text style={{ fontSize: 10, marginBottom: 20, color: '#374151' }}>
+              Employee Signature:
+            </Text>
+            <View
+              style={{
+                borderBottomWidth: 1,
+                borderBottomStyle: 'solid',
+                borderBottomColor: '#000',
+                minHeight: 15,
+                marginBottom: 5,
+              }}
+            ></View>
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={{ fontSize: 10, marginBottom: 20, color: '#374151' }}>Score: _____ / {questions.length}</Text>
-            <View style={{ borderBottomWidth: 1, borderBottomStyle: 'solid', borderBottomColor: '#000', minHeight: 15, marginBottom: 5 }}></View>
+            <Text style={{ fontSize: 10, marginBottom: 20, color: '#374151' }}>
+              Score: _____ / {questions.length}
+            </Text>
+            <View
+              style={{
+                borderBottomWidth: 1,
+                borderBottomStyle: 'solid',
+                borderBottomColor: '#000',
+                minHeight: 15,
+                marginBottom: 5,
+              }}
+            ></View>
           </View>
         </View>
 
         <View style={{ marginTop: 15 }}>
-          <Text style={{ fontSize: 10, marginBottom: 20, color: '#374151' }}>Instructor Signature:</Text>
-          <View style={{ borderBottomWidth: 1, borderBottomStyle: 'solid', borderBottomColor: '#000', minHeight: 15, marginBottom: 5 }}></View>
+          <Text style={{ fontSize: 10, marginBottom: 20, color: '#374151' }}>
+            Instructor Signature:
+          </Text>
+          <View
+            style={{
+              borderBottomWidth: 1,
+              borderBottomStyle: 'solid',
+              borderBottomColor: '#000',
+              minHeight: 15,
+              marginBottom: 5,
+            }}
+          ></View>
         </View>
       </View>
     </Page>
@@ -216,28 +292,48 @@ const QuizPDFDocument = ({ title, companyName, questions = [] }: TrainingPDFProp
 );
 
 // Answer Key PDF Document Component
-const AnswerKeyPDFDocument = ({ title, companyName, questions = [] }: TrainingPDFProps) => (
+const AnswerKeyPDFDocument = ({
+  title,
+  companyName,
+  questions = [],
+}: TrainingPDFProps) => (
   <Document>
     <Page size="A4" style={styles.page}>
       <View style={styles.header}>
-        <Image style={styles.logo} src={logoImage} />
-        <Text style={styles.title}>{title.replace(' - Assessment', ' - Answer Key')}</Text>
+        <Text style={styles.companyName}>EPOCH v8 Manufacturing ERP</Text>
+        <Text style={styles.title}>
+          {title.replace(' - Assessment', ' - Answer Key')}
+        </Text>
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Answer Key (For Instructor Use Only)</Text>
+        <Text style={styles.sectionTitle}>
+          Answer Key (For Instructor Use Only)
+        </Text>
         <Text style={{ fontSize: 10, marginBottom: 15, color: '#6B7280' }}>
           Correct answers for the training assessment questions.
         </Text>
-        
+
         <View style={styles.answerGrid}>
           {questions.map((question, index) => (
             <View key={question.id} style={{ marginBottom: 15 }}>
-              <Text style={{ fontSize: 11, fontWeight: 'bold', marginBottom: 5, color: '#374151' }}>
+              <Text
+                style={{
+                  fontSize: 11,
+                  fontWeight: 'bold',
+                  marginBottom: 5,
+                  color: '#374151',
+                }}
+              >
                 {index + 1}. {question.question}
               </Text>
-              <Text style={{ fontSize: 10, color: '#059669', fontWeight: 'bold' }}>
-                Answer: {question.correctAnswer}) {question.options.find(opt => opt.charAt(0) === question.correctAnswer)?.substring(3)}
+              <Text
+                style={{ fontSize: 10, color: '#059669', fontWeight: 'bold' }}
+              >
+                Answer: {question.correctAnswer}){' '}
+                {question.options
+                  .find((opt) => opt.charAt(0) === question.correctAnswer)
+                  ?.substring(3)}
               </Text>
             </View>
           ))}
@@ -248,18 +344,25 @@ const AnswerKeyPDFDocument = ({ title, companyName, questions = [] }: TrainingPD
 );
 
 // Content PDF Document Component
-const ContentPDFDocument = ({ title, companyName, content = [] }: TrainingPDFProps) => (
+const ContentPDFDocument = ({
+  title,
+  companyName,
+  content = [],
+}: TrainingPDFProps) => (
   <Document>
     <Page size="A4" style={styles.page}>
       <View style={styles.header}>
-        <Image style={styles.logo} src={logoImage} />
+        <Text style={styles.companyName}>EPOCH v8 Manufacturing ERP</Text>
         <Text style={styles.title}>{title}</Text>
       </View>
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Training Content</Text>
         {content.map((paragraph, index) => (
-          <Text key={index} style={{ fontSize: 10, marginBottom: 8, color: '#374151' }}>
+          <Text
+            key={index}
+            style={{ fontSize: 10, marginBottom: 8, color: '#374151' }}
+          >
             {paragraph}
           </Text>
         ))}
@@ -269,37 +372,63 @@ const ContentPDFDocument = ({ title, companyName, content = [] }: TrainingPDFPro
 );
 
 // Attendance PDF Document Component
-const AttendancePDFDocument = ({ title, companyName, attendeeCount = 15 }: TrainingPDFProps) => (
+const AttendancePDFDocument = ({
+  title,
+  companyName,
+  attendeeCount = 15,
+}: TrainingPDFProps) => (
   <Document>
     <Page size="A4" style={styles.page}>
       <View style={styles.header}>
-        <Image style={styles.logo} src={logoImage} />
+        <Text style={styles.companyName}>EPOCH v8 Manufacturing ERP</Text>
         <Text style={styles.title}>{title}</Text>
       </View>
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Training Attendance Record</Text>
         <Text style={{ fontSize: 10, marginBottom: 15, color: '#6B7280' }}>
-          All attendees must sign below to confirm participation in the training session.
+          All attendees must sign below to confirm participation in the training
+          session.
         </Text>
-        
+
         <View style={styles.attendanceInfo}>
-          <Text style={styles.infoLine}><Text style={{ fontWeight: 'bold' }}>Training Topic:</Text> {title.replace(' - Attendance', '')}</Text>
-          <Text style={styles.infoLine}><Text style={{ fontWeight: 'bold' }}>Training Date:</Text> ___________________</Text>
-          <Text style={styles.infoLine}><Text style={{ fontWeight: 'bold' }}>Training Duration:</Text> ___________________</Text>
-          <Text style={styles.infoLine}><Text style={{ fontWeight: 'bold' }}>Training Location:</Text> ___________________</Text>
-          <Text style={styles.infoLine}><Text style={{ fontWeight: 'bold' }}>Instructor:</Text> ___________________</Text>
+          <Text style={styles.infoLine}>
+            <Text style={{ fontWeight: 'bold' }}>Training Topic:</Text>{' '}
+            {title.replace(' - Attendance', '')}
+          </Text>
+          <Text style={styles.infoLine}>
+            <Text style={{ fontWeight: 'bold' }}>Training Date:</Text>{' '}
+            ___________________
+          </Text>
+          <Text style={styles.infoLine}>
+            <Text style={{ fontWeight: 'bold' }}>Training Duration:</Text>{' '}
+            ___________________
+          </Text>
+          <Text style={styles.infoLine}>
+            <Text style={{ fontWeight: 'bold' }}>Training Location:</Text>{' '}
+            ___________________
+          </Text>
+          <Text style={styles.infoLine}>
+            <Text style={{ fontWeight: 'bold' }}>Instructor:</Text>{' '}
+            ___________________
+          </Text>
         </View>
 
         <View style={styles.signatureTable}>
           <View style={styles.tableHeader}>
             <Text style={styles.tableHeaderCell}>#</Text>
-            <Text style={[styles.tableHeaderCell, { flex: 3 }]}>Employee Name (Print)</Text>
-            <Text style={[styles.tableHeaderCell, { flex: 3 }]}>Employee Signature</Text>
-            <Text style={[styles.tableHeaderCell, { flex: 2 }]}>Department</Text>
+            <Text style={[styles.tableHeaderCell, { flex: 3 }]}>
+              Employee Name (Print)
+            </Text>
+            <Text style={[styles.tableHeaderCell, { flex: 3 }]}>
+              Employee Signature
+            </Text>
+            <Text style={[styles.tableHeaderCell, { flex: 2 }]}>
+              Department
+            </Text>
             <Text style={[styles.tableHeaderCell, { flex: 2 }]}>Date</Text>
           </View>
-          
+
           {Array.from({ length: attendeeCount }, (_, index) => (
             <View key={index} style={styles.tableRow}>
               <Text style={styles.tableCell}>{index + 1}</Text>
@@ -341,20 +470,30 @@ export const generateContentPDF = async (props: TrainingPDFProps) => {
 };
 
 // Combined PDF Document Component (Content + Quiz + Attendance)
-const CombinedPDFDocument = ({ title, companyName, questions = [], content = [], includeAnswerKey = true, attendeeCount = 15 }: TrainingPDFProps) => (
+const CombinedPDFDocument = ({
+  title,
+  companyName,
+  questions = [],
+  content = [],
+  includeAnswerKey = true,
+  attendeeCount = 15,
+}: TrainingPDFProps) => (
   <Document>
     {/* First Pages - Training Content */}
     {content.length > 0 && (
       <Page size="A4" style={styles.page}>
         <View style={styles.header}>
-          <Image style={styles.logo} src={logoImage} />
+          <Text style={styles.companyName}>EPOCH v8 Manufacturing ERP</Text>
           <Text style={styles.title}>{title}</Text>
         </View>
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Training Content</Text>
           {content.map((paragraph, index) => (
-            <Text key={index} style={{ fontSize: 10, marginBottom: 8, color: '#374151' }}>
+            <Text
+              key={index}
+              style={{ fontSize: 10, marginBottom: 8, color: '#374151' }}
+            >
               {paragraph}
             </Text>
           ))}
@@ -366,16 +505,19 @@ const CombinedPDFDocument = ({ title, companyName, questions = [], content = [],
     {questions.length > 0 && (
       <Page size="A4" style={styles.page}>
         <View style={styles.header}>
-          <Image style={styles.logo} src={logoImage} />
-          <Text style={styles.title}>{title.replace(' - Complete', ' - Assessment')}</Text>
+          <Text style={styles.companyName}>EPOCH v8 Manufacturing ERP</Text>
+          <Text style={styles.title}>
+            {title.replace(' - Complete', ' - Assessment')}
+          </Text>
         </View>
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Training Assessment</Text>
           <Text style={{ fontSize: 10, marginBottom: 15, color: '#6B7280' }}>
-            Please complete this assessment to demonstrate understanding. Circle the correct answer for each question.
+            Please complete this assessment to demonstrate understanding. Circle
+            the correct answer for each question.
           </Text>
-          
+
           {questions.map((question, index) => (
             <View key={question.id} style={styles.question}>
               <Text style={styles.questionText}>
@@ -391,36 +533,109 @@ const CombinedPDFDocument = ({ title, companyName, questions = [], content = [],
         </View>
 
         {/* Signature Section */}
-        <View style={{ marginTop: 30, paddingTop: 15, borderTopWidth: 1, borderTopStyle: 'solid', borderTopColor: '#9CA3AF' }}>
-          <Text style={{ fontSize: 12, fontWeight: 'bold', marginBottom: 15, color: '#1F2937' }}>
+        <View
+          style={{
+            marginTop: 30,
+            paddingTop: 15,
+            borderTopWidth: 1,
+            borderTopStyle: 'solid',
+            borderTopColor: '#9CA3AF',
+          }}
+        >
+          <Text
+            style={{
+              fontSize: 12,
+              fontWeight: 'bold',
+              marginBottom: 15,
+              color: '#1F2937',
+            }}
+          >
             Training Completion Certification
           </Text>
-          
+
           <View style={{ flexDirection: 'row', marginBottom: 15 }}>
             <View style={{ flex: 1, marginRight: 20 }}>
-              <Text style={{ fontSize: 10, marginBottom: 20, color: '#374151' }}>Employee Name (Print):</Text>
-              <View style={{ borderBottomWidth: 1, borderBottomStyle: 'solid', borderBottomColor: '#000', minHeight: 15, marginBottom: 5 }}></View>
+              <Text
+                style={{ fontSize: 10, marginBottom: 20, color: '#374151' }}
+              >
+                Employee Name (Print):
+              </Text>
+              <View
+                style={{
+                  borderBottomWidth: 1,
+                  borderBottomStyle: 'solid',
+                  borderBottomColor: '#000',
+                  minHeight: 15,
+                  marginBottom: 5,
+                }}
+              ></View>
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 10, marginBottom: 20, color: '#374151' }}>Date:</Text>
-              <View style={{ borderBottomWidth: 1, borderBottomStyle: 'solid', borderBottomColor: '#000', minHeight: 15, marginBottom: 5 }}></View>
+              <Text
+                style={{ fontSize: 10, marginBottom: 20, color: '#374151' }}
+              >
+                Date:
+              </Text>
+              <View
+                style={{
+                  borderBottomWidth: 1,
+                  borderBottomStyle: 'solid',
+                  borderBottomColor: '#000',
+                  minHeight: 15,
+                  marginBottom: 5,
+                }}
+              ></View>
             </View>
           </View>
 
           <View style={{ flexDirection: 'row', marginBottom: 15 }}>
             <View style={{ flex: 1, marginRight: 20 }}>
-              <Text style={{ fontSize: 10, marginBottom: 20, color: '#374151' }}>Employee Signature:</Text>
-              <View style={{ borderBottomWidth: 1, borderBottomStyle: 'solid', borderBottomColor: '#000', minHeight: 15, marginBottom: 5 }}></View>
+              <Text
+                style={{ fontSize: 10, marginBottom: 20, color: '#374151' }}
+              >
+                Employee Signature:
+              </Text>
+              <View
+                style={{
+                  borderBottomWidth: 1,
+                  borderBottomStyle: 'solid',
+                  borderBottomColor: '#000',
+                  minHeight: 15,
+                  marginBottom: 5,
+                }}
+              ></View>
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 10, marginBottom: 20, color: '#374151' }}>Score: _____ / {questions.length}</Text>
-              <View style={{ borderBottomWidth: 1, borderBottomStyle: 'solid', borderBottomColor: '#000', minHeight: 15, marginBottom: 5 }}></View>
+              <Text
+                style={{ fontSize: 10, marginBottom: 20, color: '#374151' }}
+              >
+                Score: _____ / {questions.length}
+              </Text>
+              <View
+                style={{
+                  borderBottomWidth: 1,
+                  borderBottomStyle: 'solid',
+                  borderBottomColor: '#000',
+                  minHeight: 15,
+                  marginBottom: 5,
+                }}
+              ></View>
             </View>
           </View>
 
           <View style={{ marginTop: 15 }}>
-            <Text style={{ fontSize: 10, marginBottom: 20, color: '#374151' }}>Instructor Signature:</Text>
-            <View style={{ borderBottomWidth: 1, borderBottomStyle: 'solid', borderBottomColor: '#000', minHeight: 15, marginBottom: 5 }}></View>
+            <Text style={{ fontSize: 10, marginBottom: 20, color: '#374151' }}>
+              Instructor Signature:
+            </Text>
+            <View
+              style={{
+                borderBottomWidth: 1,
+                borderBottomStyle: 'solid',
+                borderBottomColor: '#000',
+                minHeight: 15,
+                marginBottom: 5,
+              }}
+            ></View>
           </View>
         </View>
       </Page>
@@ -429,33 +644,62 @@ const CombinedPDFDocument = ({ title, companyName, questions = [], content = [],
     {/* Second Page - Attendance */}
     <Page size="A4" style={styles.page}>
       <View style={styles.header}>
-        <Image style={styles.logo} src={logoImage} />
-        <Text style={styles.title}>{title.replace(' - Assessment', ' - Attendance').replace(' - Content', ' - Attendance')}</Text>
+        <Text style={styles.companyName}>EPOCH v8 Manufacturing ERP</Text>
+        <Text style={styles.title}>
+          {title
+            .replace(' - Assessment', ' - Attendance')
+            .replace(' - Content', ' - Attendance')}
+        </Text>
       </View>
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Training Attendance Record</Text>
         <Text style={{ fontSize: 10, marginBottom: 15, color: '#6B7280' }}>
-          All attendees must sign below to confirm participation in the training session.
+          All attendees must sign below to confirm participation in the training
+          session.
         </Text>
-        
+
         <View style={styles.attendanceInfo}>
-          <Text style={styles.infoLine}><Text style={{ fontWeight: 'bold' }}>Training Topic:</Text> {title.replace(' - Assessment', '').replace(' - Content', '').replace(' - Attendance', '')}</Text>
-          <Text style={styles.infoLine}><Text style={{ fontWeight: 'bold' }}>Training Date:</Text> ___________________</Text>
-          <Text style={styles.infoLine}><Text style={{ fontWeight: 'bold' }}>Training Duration:</Text> ___________________</Text>
-          <Text style={styles.infoLine}><Text style={{ fontWeight: 'bold' }}>Training Location:</Text> ___________________</Text>
-          <Text style={styles.infoLine}><Text style={{ fontWeight: 'bold' }}>Instructor:</Text> ___________________</Text>
+          <Text style={styles.infoLine}>
+            <Text style={{ fontWeight: 'bold' }}>Training Topic:</Text>{' '}
+            {title
+              .replace(' - Assessment', '')
+              .replace(' - Content', '')
+              .replace(' - Attendance', '')}
+          </Text>
+          <Text style={styles.infoLine}>
+            <Text style={{ fontWeight: 'bold' }}>Training Date:</Text>{' '}
+            ___________________
+          </Text>
+          <Text style={styles.infoLine}>
+            <Text style={{ fontWeight: 'bold' }}>Training Duration:</Text>{' '}
+            ___________________
+          </Text>
+          <Text style={styles.infoLine}>
+            <Text style={{ fontWeight: 'bold' }}>Training Location:</Text>{' '}
+            ___________________
+          </Text>
+          <Text style={styles.infoLine}>
+            <Text style={{ fontWeight: 'bold' }}>Instructor:</Text>{' '}
+            ___________________
+          </Text>
         </View>
 
         <View style={styles.signatureTable}>
           <View style={styles.tableHeader}>
             <Text style={styles.tableHeaderCell}>#</Text>
-            <Text style={[styles.tableHeaderCell, { flex: 3 }]}>Employee Name (Print)</Text>
-            <Text style={[styles.tableHeaderCell, { flex: 3 }]}>Employee Signature</Text>
-            <Text style={[styles.tableHeaderCell, { flex: 2 }]}>Department</Text>
+            <Text style={[styles.tableHeaderCell, { flex: 3 }]}>
+              Employee Name (Print)
+            </Text>
+            <Text style={[styles.tableHeaderCell, { flex: 3 }]}>
+              Employee Signature
+            </Text>
+            <Text style={[styles.tableHeaderCell, { flex: 2 }]}>
+              Department
+            </Text>
             <Text style={[styles.tableHeaderCell, { flex: 2 }]}>Date</Text>
           </View>
-          
+
           {Array.from({ length: attendeeCount }, (_, index) => (
             <View key={index} style={styles.tableRow}>
               <Text style={styles.tableCell}>{index + 1}</Text>

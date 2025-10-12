@@ -2,7 +2,11 @@ import express from 'express';
 import multer from 'multer';
 import { z } from 'zod';
 import { storage } from '../../storage';
-import { insertDocumentSchema, insertDocumentTagSchema, insertDocumentCollectionSchema } from '../../schema';
+import {
+  insertDocumentSchema,
+  insertDocumentTagSchema,
+  insertDocumentCollectionSchema,
+} from '../../schema';
 import path from 'path';
 import fs from 'fs';
 
@@ -33,15 +37,15 @@ const upload = multer({
       'image/png',
       'image/gif',
       'image/bmp',
-      'image/tiff'
+      'image/tiff',
     ];
-    
+
     if (allowedTypes.includes(file.mimetype)) {
       cb(null, true);
     } else {
       cb(new Error(`File type ${file.mimetype} not allowed`));
     }
-  }
+  },
 });
 
 // Documents Routes
@@ -64,7 +68,7 @@ router.get('/search', async (req, res) => {
     if (!q || typeof q !== 'string') {
       return res.status(400).json({ error: 'Search query is required' });
     }
-    
+
     const documents = await storage.searchDocuments(q);
     res.json(documents);
   } catch (error) {
@@ -118,12 +122,12 @@ router.get('/:id', async (req, res) => {
     if (isNaN(id)) {
       return res.status(400).json({ error: 'Invalid document ID' });
     }
-    
+
     const document = await storage.getManagedDocument(id);
     if (!document) {
       return res.status(404).json({ error: 'Document not found' });
     }
-    
+
     res.json(document);
   } catch (error) {
     console.error('Error fetching document:', error);
@@ -135,31 +139,38 @@ router.get('/:id', async (req, res) => {
 router.post('/upload', upload.single('file'), async (req, res) => {
   try {
     console.log('📁 Document upload request received');
-    console.log('📁 File info:', req.file ? {
-      originalname: req.file.originalname,
-      mimetype: req.file.mimetype,
-      size: req.file.size
-    } : 'No file');
+    console.log(
+      '📁 File info:',
+      req.file
+        ? {
+            originalname: req.file.originalname,
+            mimetype: req.file.mimetype,
+            size: req.file.size,
+          }
+        : 'No file'
+    );
     console.log('📁 Body data:', req.body);
-    
+
     if (!req.file) {
       console.log('❌ No file uploaded');
       return res.status(400).json({ error: 'No file uploaded' });
     }
 
     const { title, description, documentType, uploadedBy } = req.body;
-    
+
     // Validate required fields
     if (!title || !documentType) {
       console.log('❌ Missing required fields:', { title, documentType });
-      return res.status(400).json({ error: 'Title and document type are required' });
+      return res
+        .status(400)
+        .json({ error: 'Title and document type are required' });
     }
 
     // Generate unique filename to prevent conflicts
     const fileExtension = path.extname(req.file.originalname);
     const uniqueFileName = `${Date.now()}-${Math.random().toString(36).substring(2)}${fileExtension}`;
     const newFilePath = path.join(uploadDir, uniqueFileName);
-    
+
     // Move file to final location with unique name
     fs.renameSync(req.file.path, newFilePath);
 
@@ -172,28 +183,30 @@ router.post('/upload', upload.single('file'), async (req, res) => {
       fileSize: req.file.size,
       mimeType: req.file.mimetype,
       documentType,
-      uploadedBy: uploadedBy ? parseInt(uploadedBy) : null
+      uploadedBy: uploadedBy ? parseInt(uploadedBy) : null,
     };
 
     // Validate data with schema
     const validatedData = insertDocumentSchema.parse(documentData);
-    
+
     console.log('📁 Creating document in database...');
     const document = await storage.createManagedDocument(validatedData);
     console.log('✅ Document created successfully:', document.id);
     res.status(201).json(document);
   } catch (error) {
     console.error('Error uploading document:', error);
-    
+
     // Clean up file if document creation failed
     if (req.file && fs.existsSync(req.file.path)) {
       fs.unlinkSync(req.file.path);
     }
-    
+
     if (error instanceof z.ZodError) {
-      return res.status(400).json({ error: 'Invalid document data', details: error.errors });
+      return res
+        .status(400)
+        .json({ error: 'Invalid document data', details: error.errors });
     }
-    
+
     res.status(500).json({ error: 'Failed to upload document' });
   }
 });
@@ -208,16 +221,18 @@ router.put('/:id', async (req, res) => {
 
     // Validate update data (partial schema)
     const updateData = insertDocumentSchema.partial().parse(req.body);
-    
+
     const document = await storage.updateManagedDocument(id, updateData);
     res.json(document);
   } catch (error) {
     console.error('Error updating document:', error);
-    
+
     if (error instanceof z.ZodError) {
-      return res.status(400).json({ error: 'Invalid document data', details: error.errors });
+      return res
+        .status(400)
+        .json({ error: 'Invalid document data', details: error.errors });
     }
-    
+
     res.status(500).json({ error: 'Failed to update document' });
   }
 });
@@ -258,8 +273,11 @@ router.get('/:id/download', async (req, res) => {
 
     // Set appropriate headers
     res.setHeader('Content-Type', document.mimeType);
-    res.setHeader('Content-Disposition', `attachment; filename="${document.originalFileName}"`);
-    
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${document.originalFileName}"`
+    );
+
     // Stream the file
     const fileStream = fs.createReadStream(document.filePath);
     fileStream.pipe(res);
@@ -291,11 +309,13 @@ router.post('/tags', async (req, res) => {
     res.status(201).json(tag);
   } catch (error) {
     console.error('Error creating tag:', error);
-    
+
     if (error instanceof z.ZodError) {
-      return res.status(400).json({ error: 'Invalid tag data', details: error.errors });
+      return res
+        .status(400)
+        .json({ error: 'Invalid tag data', details: error.errors });
     }
-    
+
     res.status(500).json({ error: 'Failed to create tag' });
   }
 });
@@ -313,11 +333,13 @@ router.put('/tags/:id', async (req, res) => {
     res.json(tag);
   } catch (error) {
     console.error('Error updating tag:', error);
-    
+
     if (error instanceof z.ZodError) {
-      return res.status(400).json({ error: 'Invalid tag data', details: error.errors });
+      return res
+        .status(400)
+        .json({ error: 'Invalid tag data', details: error.errors });
     }
-    
+
     res.status(500).json({ error: 'Failed to update tag' });
   }
 });
@@ -359,7 +381,7 @@ router.post('/:id/tags/:tagId', async (req, res) => {
   try {
     const documentId = parseInt(req.params.id);
     const tagId = parseInt(req.params.tagId);
-    
+
     if (isNaN(documentId) || isNaN(tagId)) {
       return res.status(400).json({ error: 'Invalid document or tag ID' });
     }
@@ -377,7 +399,7 @@ router.delete('/:id/tags/:tagId', async (req, res) => {
   try {
     const documentId = parseInt(req.params.id);
     const tagId = parseInt(req.params.tagId);
-    
+
     if (isNaN(documentId) || isNaN(tagId)) {
       return res.status(400).json({ error: 'Invalid document or tag ID' });
     }
@@ -432,11 +454,13 @@ router.post('/collections', async (req, res) => {
     res.status(201).json(collection);
   } catch (error) {
     console.error('Error creating collection:', error);
-    
+
     if (error instanceof z.ZodError) {
-      return res.status(400).json({ error: 'Invalid collection data', details: error.errors });
+      return res
+        .status(400)
+        .json({ error: 'Invalid collection data', details: error.errors });
     }
-    
+
     res.status(500).json({ error: 'Failed to create collection' });
   }
 });
@@ -454,11 +478,13 @@ router.put('/collections/:id', async (req, res) => {
     res.json(collection);
   } catch (error) {
     console.error('Error updating collection:', error);
-    
+
     if (error instanceof z.ZodError) {
-      return res.status(400).json({ error: 'Invalid collection data', details: error.errors });
+      return res
+        .status(400)
+        .json({ error: 'Invalid collection data', details: error.errors });
     }
-    
+
     res.status(500).json({ error: 'Failed to update collection' });
   }
 });
@@ -500,21 +526,27 @@ router.post('/collections/:id/documents/:documentId', async (req, res) => {
   try {
     const collectionId = parseInt(req.params.id);
     const documentId = parseInt(req.params.documentId);
-    
+
     if (isNaN(collectionId) || isNaN(documentId)) {
-      return res.status(400).json({ error: 'Invalid collection or document ID' });
+      return res
+        .status(400)
+        .json({ error: 'Invalid collection or document ID' });
     }
 
-    const { relationshipType = 'primary', displayOrder = 0, addedBy } = req.body;
+    const {
+      relationshipType = 'primary',
+      displayOrder = 0,
+      addedBy,
+    } = req.body;
 
     await storage.addDocumentToCollection(
-      collectionId, 
-      documentId, 
-      relationshipType, 
-      displayOrder, 
+      collectionId,
+      documentId,
+      relationshipType,
+      displayOrder,
       addedBy ? parseInt(addedBy) : undefined
     );
-    
+
     res.json({ message: 'Document added to collection successfully' });
   } catch (error) {
     console.error('Error adding document to collection:', error);
@@ -527,16 +559,20 @@ router.delete('/collections/:id/documents/:documentId', async (req, res) => {
   try {
     const collectionId = parseInt(req.params.id);
     const documentId = parseInt(req.params.documentId);
-    
+
     if (isNaN(collectionId) || isNaN(documentId)) {
-      return res.status(400).json({ error: 'Invalid collection or document ID' });
+      return res
+        .status(400)
+        .json({ error: 'Invalid collection or document ID' });
     }
 
     await storage.removeDocumentFromCollection(collectionId, documentId);
     res.json({ message: 'Document removed from collection successfully' });
   } catch (error) {
     console.error('Error removing document from collection:', error);
-    res.status(500).json({ error: 'Failed to remove document from collection' });
+    res
+      .status(500)
+      .json({ error: 'Failed to remove document from collection' });
   }
 });
 

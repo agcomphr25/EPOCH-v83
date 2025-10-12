@@ -1,18 +1,38 @@
 import React, { useMemo, useState } from 'react';
 import { BarcodeScanner } from '@/components/BarcodeScanner';
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Factory, Calendar, ArrowRight, Package, CheckCircle, AlertTriangle, FileText, Eye } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+  Factory,
+  Calendar,
+  ArrowRight,
+  Package,
+  CheckCircle,
+  AlertTriangle,
+  FileText,
+  Eye,
+} from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { format, addDays, startOfWeek, eachDayOfInterval, isToday, isPast } from 'date-fns';
+import {
+  format,
+  addDays,
+  startOfWeek,
+  eachDayOfInterval,
+  isToday,
+  isPast,
+} from 'date-fns';
 import { getDisplayOrderId } from '@/lib/orderUtils';
 import { useToast } from '@/hooks/use-toast';
 import { useLocation } from 'wouter';
 import { apiRequest } from '@/lib/queryClient';
 import { useUnifiedLayupOrders } from '@/hooks/useUnifiedLayupOrders';
-import { identifyLOPOrders, scheduleLOPAdjustments, getLOPStatus } from '@/utils/lopScheduler';
+import {
+  identifyLOPOrders,
+  scheduleLOPAdjustments,
+  getLOPStatus,
+} from '@/utils/lopScheduler';
 
 // Props interface for QueueOrderItem component
 interface QueueOrderItemProps {
@@ -33,7 +53,7 @@ function QueueOrderItem({
   hasKickbacks,
   getKickbackStatus,
   handleKickbackClick,
-  handleSalesOrderDownload
+  handleSalesOrderDownload,
 }: QueueOrderItemProps) {
   // Determine material type for styling
   const getMaterialType = (modelId: string) => {
@@ -52,22 +72,22 @@ function QueueOrderItem({
     if (order.source === 'p1_purchase_order') {
       return {
         bg: 'bg-green-100 dark:bg-green-800/50 hover:bg-green-200 dark:hover:bg-green-800/70 border-2 border-green-300 dark:border-green-600',
-        text: 'text-green-800 dark:text-green-200'
+        text: 'text-green-800 dark:text-green-200',
       };
     } else if (order.source === 'production_order') {
       return {
         bg: 'bg-orange-100 dark:bg-orange-800/50 hover:bg-orange-200 dark:hover:bg-orange-800/70 border-2 border-orange-300 dark:border-orange-600',
-        text: 'text-orange-800 dark:text-orange-200'
+        text: 'text-orange-800 dark:text-orange-200',
       };
     } else if (materialType === 'FG') {
       return {
         bg: 'bg-blue-600 dark:bg-blue-900/70 hover:bg-blue-700 dark:hover:bg-blue-900/90 border-2 border-blue-700 dark:border-blue-800',
-        text: 'text-white dark:text-blue-100'
+        text: 'text-white dark:text-blue-100',
       };
     } else {
       return {
         bg: 'bg-blue-100 dark:bg-blue-800/50 hover:bg-blue-200 dark:hover:bg-blue-800/70 border-2 border-blue-300 dark:border-blue-600',
-        text: 'text-blue-800 dark:text-blue-200'
+        text: 'text-blue-800 dark:text-blue-200',
       };
     }
   };
@@ -75,12 +95,24 @@ function QueueOrderItem({
   const cardStyling = getCardStyling();
 
   return (
-    <div className={`p-3 mb-2 min-h-[3rem] ${cardStyling.bg} rounded-lg shadow-md transition-all duration-200`}>
-      <div className={`${cardStyling.text} text-base font-bold text-center flex flex-col items-center justify-center h-full`}>
+    <div
+      className={`p-3 mb-2 min-h-[3rem] ${cardStyling.bg} rounded-lg shadow-md transition-all duration-200`}
+    >
+      <div
+        className={`${cardStyling.text} text-base font-bold text-center flex flex-col items-center justify-center h-full`}
+      >
         <div className="flex items-center font-bold">
           {getDisplayOrderId(order) || 'No ID'}
-          {order.source === 'p1_purchase_order' && <span className="text-xs ml-1 bg-green-200 dark:bg-green-700 px-1 rounded">P1</span>}
-          {order.source === 'production_order' && <span className="text-xs ml-1 bg-orange-200 dark:bg-orange-700 px-1 rounded">PO</span>}
+          {order.source === 'p1_purchase_order' && (
+            <span className="text-xs ml-1 bg-green-200 dark:bg-green-700 px-1 rounded">
+              P1
+            </span>
+          )}
+          {order.source === 'production_order' && (
+            <span className="text-xs ml-1 bg-orange-200 dark:bg-orange-700 px-1 rounded">
+              PO
+            </span>
+          )}
         </div>
 
         {/* Show stock model display name with material type */}
@@ -91,7 +123,11 @@ function QueueOrderItem({
 
           return (
             <div className="text-xs opacity-80 mt-0.5 font-medium">
-              {materialType && <span className="bg-gray-200 dark:bg-gray-600 px-1 rounded mr-1 text-xs font-bold">{materialType}</span>}
+              {materialType && (
+                <span className="bg-gray-200 dark:bg-gray-600 px-1 rounded mr-1 text-xs font-bold">
+                  {materialType}
+                </span>
+              )}
               {displayName}
             </div>
           );
@@ -114,15 +150,23 @@ function QueueOrderItem({
 
               let actionLength = orderFeatures.action_length;
               if (!actionLength || actionLength === 'none') {
-                if (actionType && actionType.includes('short')) actionLength = 'SA';
-                else if (actionType && actionType.includes('long')) actionLength = 'LA';
+                if (actionType && actionType.includes('short'))
+                  actionLength = 'SA';
+                else if (actionType && actionType.includes('long'))
+                  actionLength = 'LA';
                 else actionLength = 'SA';
               }
 
-              const lengthMap: {[key: string]: string} = {
-                'Long': 'LA', 'Medium': 'MA', 'Short': 'SA',
-                'long': 'LA', 'medium': 'MA', 'short': 'SA',
-                'LA': 'LA', 'MA': 'MA', 'SA': 'SA'
+              const lengthMap: { [key: string]: string } = {
+                Long: 'LA',
+                Medium: 'MA',
+                Short: 'SA',
+                long: 'LA',
+                medium: 'MA',
+                short: 'SA',
+                LA: 'LA',
+                MA: 'MA',
+                SA: 'SA',
               };
 
               const actionLengthAbbr = lengthMap[actionLength] || actionLength;
@@ -131,15 +175,17 @@ function QueueOrderItem({
                 return actionLengthAbbr;
               }
 
-              const actionMap: {[key: string]: string} = {
-                'anti_ten_hunter_def': 'Anti-X Hunter',
-                'apr': 'APR',
-                'rem_700': 'Rem 700',
-                'tikka': 'Tikka',
-                'savage': 'Savage'
+              const actionMap: { [key: string]: string } = {
+                anti_ten_hunter_def: 'Anti-X Hunter',
+                apr: 'APR',
+                rem_700: 'Rem 700',
+                tikka: 'Tikka',
+                savage: 'Savage',
               };
 
-              const actionDisplay = actionMap[actionType] || actionType.replace(/_/g, ' ').toUpperCase();
+              const actionDisplay =
+                actionMap[actionType] ||
+                actionType.replace(/_/g, ' ').toUpperCase();
 
               return `${actionLengthAbbr} ${actionDisplay}`;
             };
@@ -159,26 +205,29 @@ function QueueOrderItem({
 
             let actionLengthValue = orderFeatures.action_length;
 
-            if ((!actionLengthValue || actionLengthValue === 'none') && orderFeatures.action_inlet) {
+            if (
+              (!actionLengthValue || actionLengthValue === 'none') &&
+              orderFeatures.action_inlet
+            ) {
               const actionInlet = orderFeatures.action_inlet;
 
-              const inletToLengthMap: {[key: string]: string} = {
-                'anti_ten_hunter_def': 'SA',
-                'remington_700': 'SA',
-                'remington_700_long': 'LA',
-                'rem_700': 'SA',
-                'rem_700_short': 'SA',
-                'rem_700_long': 'LA',
-                'tikka_t3': 'SA',
-                'tikka_short': 'SA',
-                'tikka_long': 'LA',
-                'savage_short': 'SA',
-                'savage_long': 'LA',
-                'savage_110': 'LA',
-                'winchester_70': 'LA',
-                'howa_1500': 'SA',
-                'bergara_b14': 'SA',
-                'carbon_six_medium': 'MA'
+              const inletToLengthMap: { [key: string]: string } = {
+                anti_ten_hunter_def: 'SA',
+                remington_700: 'SA',
+                remington_700_long: 'LA',
+                rem_700: 'SA',
+                rem_700_short: 'SA',
+                rem_700_long: 'LA',
+                tikka_t3: 'SA',
+                tikka_short: 'SA',
+                tikka_long: 'LA',
+                savage_short: 'SA',
+                savage_long: 'LA',
+                savage_110: 'LA',
+                winchester_70: 'LA',
+                howa_1500: 'SA',
+                bergara_b14: 'SA',
+                carbon_six_medium: 'MA',
               };
 
               actionLengthValue = inletToLengthMap[actionInlet] || 'SA';
@@ -186,16 +235,24 @@ function QueueOrderItem({
 
             if (!actionLengthValue || actionLengthValue === 'none') return null;
 
-            const displayMap: {[key: string]: string} = {
-              'Long': 'LA', 'Medium': 'MA', 'Short': 'SA',
-              'long': 'LA', 'medium': 'MA', 'short': 'SA',
-              'LA': 'LA', 'MA': 'MA', 'SA': 'SA'
+            const displayMap: { [key: string]: string } = {
+              Long: 'LA',
+              Medium: 'MA',
+              Short: 'SA',
+              long: 'LA',
+              medium: 'MA',
+              short: 'SA',
+              LA: 'LA',
+              MA: 'MA',
+              SA: 'SA',
             };
 
             return displayMap[actionLengthValue] || actionLengthValue;
           };
 
-          const actionInletDisplayNonAPR = getActionInletDisplayNonAPR(order.features);
+          const actionInletDisplayNonAPR = getActionInletDisplayNonAPR(
+            order.features
+          );
 
           return actionInletDisplayNonAPR ? (
             <div className="text-xs opacity-80 mt-0.5 font-medium">
@@ -206,20 +263,24 @@ function QueueOrderItem({
 
         {/* Show LOP Adjustment Status */}
         {(() => {
-          const lopOrder = processedOrders?.find(o => o.orderId === order.orderId) || identifyLOPOrders([order])[0];
+          const lopOrder =
+            processedOrders?.find((o) => o.orderId === order.orderId) ||
+            identifyLOPOrders([order])[0];
           const lopStatus = getLOPStatus(lopOrder);
 
           if (lopStatus.status === 'none') return null;
 
           return (
             <div className="text-xs mt-1">
-              <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${
-                lopStatus.status === 'scheduled'
-                  ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800'
-                  : lopStatus.status === 'scheduled'
-                  ? 'bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300 border border-orange-200 dark:border-orange-800'
-                  : 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300 border border-yellow-200 dark:border-yellow-800'
-              }`}>
+              <span
+                className={`px-1.5 py-0.5 rounded text-xs font-medium ${
+                  lopStatus.status === 'scheduled'
+                    ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800'
+                    : lopStatus.status === 'scheduled'
+                      ? 'bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300 border border-orange-200 dark:border-orange-800'
+                      : 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300 border border-yellow-200 dark:border-yellow-800'
+                }`}
+              >
                 {lopStatus.status === 'scheduled' && '📅 '}
                 {lopStatus.status === 'deferred' && '⏰ '}
                 LOP {lopStatus.status.toUpperCase()}
@@ -234,19 +295,25 @@ function QueueOrderItem({
             if (!orderFeatures) return null;
 
             const otherOptions = orderFeatures.other_options;
-            if (Array.isArray(otherOptions) && otherOptions.includes('heavy_fill')) {
+            if (
+              Array.isArray(otherOptions) &&
+              otherOptions.includes('heavy_fill')
+            ) {
               return 'Heavy Fill';
             }
 
-            const heavyFillValue = orderFeatures.heavy_fill ||
-                                   orderFeatures.heavyFill ||
-                                   orderFeatures.heavy_fill_option ||
-                                   orderFeatures['heavy-fill'];
+            const heavyFillValue =
+              orderFeatures.heavy_fill ||
+              orderFeatures.heavyFill ||
+              orderFeatures.heavy_fill_option ||
+              orderFeatures['heavy-fill'];
 
-            if (heavyFillValue === 'true' ||
-                heavyFillValue === true ||
-                heavyFillValue === 'yes' ||
-                heavyFillValue === 'heavy_fill') {
+            if (
+              heavyFillValue === 'true' ||
+              heavyFillValue === true ||
+              heavyFillValue === 'yes' ||
+              heavyFillValue === 'heavy_fill'
+            ) {
               return 'Heavy Fill';
             }
 
@@ -266,21 +333,27 @@ function QueueOrderItem({
 
         {/* Show Kickback Badge */}
         <div className="text-xs mt-0.5 flex gap-1 flex-wrap">
-          {hasKickbacks && getKickbackStatus && handleKickbackClick && hasKickbacks(order.orderId) && (
-            <Badge
-              variant="destructive"
-              className={`cursor-pointer hover:opacity-80 transition-opacity text-xs ${
-                getKickbackStatus(order.orderId) === 'CRITICAL' ? 'bg-red-600 hover:bg-red-700' :
-                getKickbackStatus(order.orderId) === 'HIGH' ? 'bg-orange-600 hover:bg-orange-700' :
-                getKickbackStatus(order.orderId) === 'MEDIUM' ? 'bg-yellow-600 hover:bg-yellow-700' :
-                'bg-gray-600 hover:bg-gray-700'
-              }`}
-              onClick={() => handleKickbackClick(order.orderId)}
-            >
-              <AlertTriangle className="w-3 h-3 mr-1" />
-              Kickback
-            </Badge>
-          )}
+          {hasKickbacks &&
+            getKickbackStatus &&
+            handleKickbackClick &&
+            hasKickbacks(order.orderId) && (
+              <Badge
+                variant="destructive"
+                className={`cursor-pointer hover:opacity-80 transition-opacity text-xs ${
+                  getKickbackStatus(order.orderId) === 'CRITICAL'
+                    ? 'bg-red-600 hover:bg-red-700'
+                    : getKickbackStatus(order.orderId) === 'HIGH'
+                      ? 'bg-orange-600 hover:bg-orange-700'
+                      : getKickbackStatus(order.orderId) === 'MEDIUM'
+                        ? 'bg-yellow-600 hover:bg-yellow-700'
+                        : 'bg-gray-600 hover:bg-gray-700'
+                }`}
+                onClick={() => handleKickbackClick(order.orderId)}
+              >
+                <AlertTriangle className="w-3 h-3 mr-1" />
+                Kickback
+              </Badge>
+            )}
         </div>
       </div>
     </div>
@@ -296,26 +369,33 @@ export default function LayupPluggingQueuePage() {
   // Fetch all kickbacks to determine which orders have kickbacks
   const { data: allKickbacks = [] } = useQuery({
     queryKey: ['/api/kickbacks'],
-    refetchInterval: 30000 // Refresh every 30 seconds
+    refetchInterval: 30000, // Refresh every 30 seconds
   });
 
   // Helper function to check if an order has kickbacks
   const hasKickbacks = (orderId: string) => {
-    return (allKickbacks as any[]).some((kickback: any) => kickback.orderId === orderId);
+    return (allKickbacks as any[]).some(
+      (kickback: any) => kickback.orderId === orderId
+    );
   };
 
   // Helper function to get the most severe kickback status for an order
   const getKickbackStatus = (orderId: string) => {
-    const orderKickbacks = (allKickbacks as any[]).filter((kickback: any) => kickback.orderId === orderId);
+    const orderKickbacks = (allKickbacks as any[]).filter(
+      (kickback: any) => kickback.orderId === orderId
+    );
     if (orderKickbacks.length === 0) return null;
 
     // Priority order: CRITICAL > HIGH > MEDIUM > LOW
     const priorities = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'];
-    const highestPriority = orderKickbacks.reduce((highest: string, kickback: any) => {
-      const currentIndex = priorities.indexOf(kickback.priority);
-      const highestIndex = priorities.indexOf(highest);
-      return currentIndex < highestIndex ? kickback.priority : highest;
-    }, 'LOW');
+    const highestPriority = orderKickbacks.reduce(
+      (highest: string, kickback: any) => {
+        const currentIndex = priorities.indexOf(kickback.priority);
+        const highestIndex = priorities.indexOf(highest);
+        return currentIndex < highestIndex ? kickback.priority : highest;
+      },
+      'LOW'
+    );
 
     return highestPriority;
   };
@@ -330,8 +410,8 @@ export default function LayupPluggingQueuePage() {
   const handleSalesOrderDownload = (orderId: string) => {
     window.open(`/api/shipping-pdf/sales-order/${orderId}`, '_blank');
     toast({
-      title: "Sales order opened",
-      description: `Sales order for ${orderId} opened in new tab for viewing`
+      title: 'Sales order opened',
+      description: `Sales order for ${orderId} opened in new tab for viewing`,
     });
   };
 
@@ -353,7 +433,7 @@ export default function LayupPluggingQueuePage() {
       label: getWeekLabel(),
       start: weekStart,
       end: weekEnd,
-      dateRange: `${format(weekStart, 'MMM dd')} - ${format(weekEnd, 'MMM dd, yyyy')}`
+      dateRange: `${format(weekStart, 'MMM dd')} - ${format(weekEnd, 'MMM dd, yyyy')}`,
     };
   }, [currentWeekOffset]);
 
@@ -361,7 +441,9 @@ export default function LayupPluggingQueuePage() {
   const { data: currentSchedule = [], isLoading: scheduleLoading } = useQuery({
     queryKey: ['layup-schedule', currentWeekOffset],
     queryFn: async () => {
-      const response = await fetch(`/api/layup-schedule?weekStart=${weekInfo.start.toISOString()}&weekEnd=${weekInfo.end.toISOString()}`);
+      const response = await fetch(
+        `/api/layup-schedule?weekStart=${weekInfo.start.toISOString()}&weekEnd=${weekInfo.end.toISOString()}`
+      );
       if (!response.ok) {
         throw new Error('Failed to fetch layup schedule');
       }
@@ -371,58 +453,81 @@ export default function LayupPluggingQueuePage() {
   });
 
   // Get ALL orders to find details for scheduled orders
-  const { orders: availableOrders, loading: ordersLoading } = useUnifiedLayupOrders();
+  const { orders: availableOrders, loading: ordersLoading } =
+    useUnifiedLayupOrders();
 
   // Build processed orders from BOTH schedule AND department filtering
   const processedOrders = useMemo(() => {
-    if (!currentSchedule || currentSchedule.length === 0 || availableOrders.length === 0) {
-      console.log(`📅 LayupPluggingQueuePage: No data available - schedule: ${currentSchedule?.length || 0}, orders: ${availableOrders.length}`);
+    if (
+      !currentSchedule ||
+      currentSchedule.length === 0 ||
+      availableOrders.length === 0
+    ) {
+      console.log(
+        `📅 LayupPluggingQueuePage: No data available - schedule: ${currentSchedule?.length || 0}, orders: ${availableOrders.length}`
+      );
       return [];
     }
 
-    console.log(`📅 LayupPluggingQueuePage: Processing ${currentSchedule.length} scheduled entries with ${availableOrders.length} available orders`);
+    console.log(
+      `📅 LayupPluggingQueuePage: Processing ${currentSchedule.length} scheduled entries with ${availableOrders.length} available orders`
+    );
 
     // Map scheduled orders to their full order details - include ALL scheduled orders for this week
-    const scheduledOrdersWithDetails = currentSchedule.map((scheduleEntry: any) => {
-      const orderDetails = availableOrders.find((order: any) => order.orderId === scheduleEntry.orderId);
-      if (!orderDetails) {
-        console.warn(`⚠️ Scheduled order ${scheduleEntry.orderId} not found in available orders - creating placeholder`);
-        // Create a placeholder for scheduled orders not found in queue
+    const scheduledOrdersWithDetails = currentSchedule.map(
+      (scheduleEntry: any) => {
+        const orderDetails = availableOrders.find(
+          (order: any) => order.orderId === scheduleEntry.orderId
+        );
+        if (!orderDetails) {
+          console.warn(
+            `⚠️ Scheduled order ${scheduleEntry.orderId} not found in available orders - creating placeholder`
+          );
+          // Create a placeholder for scheduled orders not found in queue
+          return {
+            orderId: scheduleEntry.orderId,
+            scheduledDate: scheduleEntry.scheduledDate,
+            moldId: scheduleEntry.moldId,
+            employeeAssignments: scheduleEntry.employeeAssignments || [],
+            currentDepartment: 'Scheduled (Missing from Queue)',
+            product: `Scheduled Order: ${scheduleEntry.orderId}`,
+            status: 'scheduled',
+            priorityScore: 1,
+            source: 'layup_schedule',
+          };
+        }
+
+        // Include ALL scheduled orders regardless of current department
+        // The fact that they are scheduled means they should appear in the layup/plugging view
+        console.log(
+          `✅ Including scheduled order: ${scheduleEntry.orderId} (dept: ${orderDetails.currentDepartment})`
+        );
+
         return {
-          orderId: scheduleEntry.orderId,
+          ...orderDetails,
           scheduledDate: scheduleEntry.scheduledDate,
           moldId: scheduleEntry.moldId,
           employeeAssignments: scheduleEntry.employeeAssignments || [],
-          currentDepartment: 'Scheduled (Missing from Queue)',
-          product: `Scheduled Order: ${scheduleEntry.orderId}`,
-          status: 'scheduled',
-          priorityScore: 1,
-          source: 'layup_schedule'
         };
       }
+    );
 
-      // Include ALL scheduled orders regardless of current department
-      // The fact that they are scheduled means they should appear in the layup/plugging view
-      console.log(`✅ Including scheduled order: ${scheduleEntry.orderId} (dept: ${orderDetails.currentDepartment})`);
-
-      return {
-        ...orderDetails,
-        scheduledDate: scheduleEntry.scheduledDate,
-        moldId: scheduleEntry.moldId,
-        employeeAssignments: scheduleEntry.employeeAssignments || []
-      };
-    });
-
-    console.log(`📅 LayupPluggingQueuePage: Processed ${scheduledOrdersWithDetails.length} scheduled orders with details`);
+    console.log(
+      `📅 LayupPluggingQueuePage: Processed ${scheduledOrdersWithDetails.length} scheduled orders with details`
+    );
 
     // Log Monday orders specifically to debug the issue
-    const mondayOrders = scheduledOrdersWithDetails.filter(order => {
+    const mondayOrders = scheduledOrdersWithDetails.filter((order) => {
       const schedDate = new Date(order.scheduledDate);
       return schedDate.getDay() === 1; // Monday
     });
-    console.log(`📅 MONDAY DEBUG: Found ${mondayOrders.length} orders scheduled for Monday`);
+    console.log(
+      `📅 MONDAY DEBUG: Found ${mondayOrders.length} orders scheduled for Monday`
+    );
     mondayOrders.forEach((order, index) => {
-      console.log(`   ${index + 1}. ${order.orderId} on ${new Date(order.scheduledDate).toDateString()}`);
+      console.log(
+        `   ${index + 1}. ${order.orderId} on ${new Date(order.scheduledDate).toDateString()}`
+      );
     });
 
     return scheduledOrdersWithDetails;
@@ -452,105 +557,134 @@ export default function LayupPluggingQueuePage() {
     return eachDayOfInterval({ start, end: addDays(start, 4) }); // Mon-Fri
   }, [currentWeekOffset]);
 
-
-
   // Display orders exactly as scheduled in the layup scheduler
   const currentWeekOrdersByDate = useMemo(() => {
-    if (!Array.isArray(currentSchedule) || currentSchedule.length === 0 || !currentWeekDates.length) {
-      console.log('🔍 No schedule data available - showing unscheduled orders. Schedule length:', (currentSchedule as any[]).length);
+    if (
+      !Array.isArray(currentSchedule) ||
+      currentSchedule.length === 0 ||
+      !currentWeekDates.length
+    ) {
+      console.log(
+        '🔍 No schedule data available - showing unscheduled orders. Schedule length:',
+        (currentSchedule as any[]).length
+      );
 
       // If no schedule data, return empty - Department Manager only shows SCHEDULED orders
-      console.log('📋 No orders scheduled yet. Use Layup Scheduler to schedule orders first.');
+      console.log(
+        '📋 No orders scheduled yet. Use Layup Scheduler to schedule orders first.'
+      );
       return {};
     }
 
     try {
-      const weekDateStrings = currentWeekDates.map(date => date.toISOString().split('T')[0]);
+      const weekDateStrings = currentWeekDates.map(
+        (date) => date.toISOString().split('T')[0]
+      );
       console.log('🔍 Week date strings for filtering:', weekDateStrings);
-      console.log('🔍 Total schedule entries to process:', currentSchedule.length);
+      console.log(
+        '🔍 Total schedule entries to process:',
+        currentSchedule.length
+      );
 
       // Process all schedule entries for current week - use actual scheduled dates
-      const weekOrders = currentSchedule.map((scheduleItem: any) => {
-        if (!scheduleItem?.scheduledDate || !scheduleItem?.orderId) {
-          console.log('🔍 Invalid schedule item:', scheduleItem);
-          return null;
-        }
-
-        try {
-          const scheduledDate = new Date(scheduleItem.scheduledDate).toISOString().split('T')[0];
-          const isInWeek = weekDateStrings.includes(scheduledDate);
-
-          if (!isInWeek) {
-            return null; // Not in current week
+      const weekOrders = currentSchedule
+        .map((scheduleItem: any) => {
+          if (!scheduleItem?.scheduledDate || !scheduleItem?.orderId) {
+            console.log('🔍 Invalid schedule item:', scheduleItem);
+            return null;
           }
 
-          console.log('🔍 Processing schedule item for current week:', {
-            orderId: scheduleItem.orderId,
-            scheduledDate: scheduledDate,
-            originalDate: scheduleItem.scheduledDate
-          });
+          try {
+            const scheduledDate = new Date(scheduleItem.scheduledDate)
+              .toISOString()
+              .split('T')[0];
+            const isInWeek = weekDateStrings.includes(scheduledDate);
 
-          // Find matching order from processed orders (includes LOP processing)
-          const matchingOrder = processedOrders.find((o: any) => o.orderId === scheduleItem.orderId);
-
-          if (matchingOrder) {
-            // Use the full processed order data with exact schedule date
-            const mergedOrder = {
-              ...matchingOrder,
-              scheduledDate: scheduleItem.scheduledDate,
-              source: matchingOrder.source || 'main_orders'
-            };
-            console.log('🔍 Found matching processed order:', {
-              orderId: mergedOrder.orderId,
-              hasFeatures: !!mergedOrder.features,
-              stockModelId: mergedOrder.stockModelId,
-              source: mergedOrder.source,
-              hasLOPProcessing: !!mergedOrder.needsLOPAdjustment
-            });
-            return mergedOrder;
-          } else {
-            // Fallback to original available orders
-            const fallbackOrder = availableOrders.find((o: any) => o.orderId === scheduleItem.orderId);
-            if (fallbackOrder) {
-              return {
-                ...fallbackOrder,
-                scheduledDate: scheduleItem.scheduledDate,
-                source: fallbackOrder.source || 'main_orders'
-              };
+            if (!isInWeek) {
+              return null; // Not in current week
             }
 
-            // Create a minimal order from schedule data if no match found
-            console.log('🔍 No matching order found, creating minimal order for:', scheduleItem.orderId);
-            return {
+            console.log('🔍 Processing schedule item for current week:', {
               orderId: scheduleItem.orderId,
-              scheduledDate: scheduleItem.scheduledDate,
-              customer: 'Unknown Customer',
-              stockModelId: 'unknown',
-              modelId: 'unknown',
-              features: {},
-              source: 'scheduled_order',
-              dueDate: null
-            };
+              scheduledDate: scheduledDate,
+              originalDate: scheduleItem.scheduledDate,
+            });
+
+            // Find matching order from processed orders (includes LOP processing)
+            const matchingOrder = processedOrders.find(
+              (o: any) => o.orderId === scheduleItem.orderId
+            );
+
+            if (matchingOrder) {
+              // Use the full processed order data with exact schedule date
+              const mergedOrder = {
+                ...matchingOrder,
+                scheduledDate: scheduleItem.scheduledDate,
+                source: matchingOrder.source || 'main_orders',
+              };
+              console.log('🔍 Found matching processed order:', {
+                orderId: mergedOrder.orderId,
+                hasFeatures: !!mergedOrder.features,
+                stockModelId: mergedOrder.stockModelId,
+                source: mergedOrder.source,
+                hasLOPProcessing: !!mergedOrder.needsLOPAdjustment,
+              });
+              return mergedOrder;
+            } else {
+              // Fallback to original available orders
+              const fallbackOrder = availableOrders.find(
+                (o: any) => o.orderId === scheduleItem.orderId
+              );
+              if (fallbackOrder) {
+                return {
+                  ...fallbackOrder,
+                  scheduledDate: scheduleItem.scheduledDate,
+                  source: fallbackOrder.source || 'main_orders',
+                };
+              }
+
+              // Create a minimal order from schedule data if no match found
+              console.log(
+                '🔍 No matching order found, creating minimal order for:',
+                scheduleItem.orderId
+              );
+              return {
+                orderId: scheduleItem.orderId,
+                scheduledDate: scheduleItem.scheduledDate,
+                customer: 'Unknown Customer',
+                stockModelId: 'unknown',
+                modelId: 'unknown',
+                features: {},
+                source: 'scheduled_order',
+                dueDate: null,
+              };
+            }
+          } catch (dateError) {
+            console.warn(
+              '🔍 Date parsing error for schedule item:',
+              scheduleItem,
+              dateError
+            );
+            return null;
           }
-        } catch (dateError) {
-          console.warn('🔍 Date parsing error for schedule item:', scheduleItem, dateError);
-          return null;
-        }
-      }).filter((order: any) => order !== null);
+        })
+        .filter((order: any) => order !== null);
 
       console.log('🔍 Processed week orders:', weekOrders.length);
 
       // Group orders by date
-      const grouped: {[key: string]: any[]} = {};
-      currentWeekDates.forEach(date => {
+      const grouped: { [key: string]: any[] } = {};
+      currentWeekDates.forEach((date) => {
         const dateStr = date.toISOString().split('T')[0];
         grouped[dateStr] = [];
       });
 
       // Distribute orders into date groups
-      weekOrders.forEach(order => {
+      weekOrders.forEach((order) => {
         try {
-          const orderDate = new Date(order.scheduledDate).toISOString().split('T')[0];
+          const orderDate = new Date(order.scheduledDate)
+            .toISOString()
+            .split('T')[0];
           if (grouped[orderDate]) {
             grouped[orderDate].push(order);
           }
@@ -559,11 +693,14 @@ export default function LayupPluggingQueuePage() {
         }
       });
 
-      console.log('🔍 Final grouped orders by date:', Object.entries(grouped).map(([date, orders]) => ({
-        date,
-        count: orders.length,
-        orderIds: orders.map(o => o.orderId)
-      })));
+      console.log(
+        '🔍 Final grouped orders by date:',
+        Object.entries(grouped).map(([date, orders]) => ({
+          date,
+          count: orders.length,
+          orderIds: orders.map((o) => o.orderId),
+        }))
+      );
 
       return grouped;
     } catch (error) {
@@ -580,7 +717,10 @@ export default function LayupPluggingQueuePage() {
   // Enhanced debugging
   React.useEffect(() => {
     console.log('🔍 LAYUP QUEUE TRANSFER DEBUG:');
-    console.log('- Schedule entries:', Array.isArray(currentSchedule) ? currentSchedule.length : 0);
+    console.log(
+      '- Schedule entries:',
+      Array.isArray(currentSchedule) ? currentSchedule.length : 0
+    );
     console.log('- Current week dates:', currentWeekDates.length);
     console.log('- Available orders (raw):', availableOrders.length);
     console.log('- Processed orders (with LOP):', processedOrders.length);
@@ -589,44 +729,73 @@ export default function LayupPluggingQueuePage() {
     console.log('- Current week orders calculated:', currentWeekOrders.length);
 
     if (Array.isArray(currentSchedule) && currentSchedule.length > 0) {
-      console.log('- Schedule entries sample:', currentSchedule.slice(0, 5).map((s: any) => ({
-        orderId: s.orderId,
-        scheduledDate: s.scheduledDate,
-        dateString: new Date(s.scheduledDate).toISOString().split('T')[0]
-      })));
+      console.log(
+        '- Schedule entries sample:',
+        currentSchedule.slice(0, 5).map((s: any) => ({
+          orderId: s.orderId,
+          scheduledDate: s.scheduledDate,
+          dateString: new Date(s.scheduledDate).toISOString().split('T')[0],
+        }))
+      );
 
-      console.log('- All scheduled order IDs:', currentSchedule.map((s: any) => s.orderId));
+      console.log(
+        '- All scheduled order IDs:',
+        currentSchedule.map((s: any) => s.orderId)
+      );
     } else {
-      console.log('- No schedule entries found - users need to assign orders in Layup Scheduler first');
+      console.log(
+        '- No schedule entries found - users need to assign orders in Layup Scheduler first'
+      );
       console.log('- Current schedule data type:', typeof currentSchedule);
       console.log('- Current schedule value:', currentSchedule);
     }
 
-    console.log('- Current week date strings:', currentWeekDates.map(d => d.toISOString().split('T')[0]));
+    console.log(
+      '- Current week date strings:',
+      currentWeekDates.map((d) => d.toISOString().split('T')[0])
+    );
 
     if (availableOrders.length > 0) {
-      console.log('- Available orders sample:', availableOrders.slice(0, 3).map((o: any) => ({
-        orderId: o.orderId,
-        source: o.source,
-        stockModelId: o.stockModelId
-      })));
+      console.log(
+        '- Available orders sample:',
+        availableOrders.slice(0, 3).map((o: any) => ({
+          orderId: o.orderId,
+          source: o.source,
+          stockModelId: o.stockModelId,
+        }))
+      );
     }
 
     if (processedOrders.length > 0) {
-      console.log('- Processed orders sample:', processedOrders.slice(0, 3).map((o: any) => ({
-        orderId: o.orderId,
-        source: o.source,
-        stockModelId: o.stockModelId,
-        needsLOPAdjustment: o.needsLOPAdjustment
-      })));
+      console.log(
+        '- Processed orders sample:',
+        processedOrders.slice(0, 3).map((o: any) => ({
+          orderId: o.orderId,
+          source: o.source,
+          stockModelId: o.stockModelId,
+          needsLOPAdjustment: o.needsLOPAdjustment,
+        }))
+      );
     }
 
-    console.log('- Orders by date breakdown:', Object.entries(currentWeekOrdersByDate).map(([date, orders]) => ({
-      date,
-      count: orders.length,
-      orderIds: orders.map(o => o.orderId)
-    })));
-  }, [currentSchedule, currentWeekDates, availableOrders, processedOrders, scheduleLoading, ordersLoading, currentWeekOrders, currentWeekOrdersByDate]);
+    console.log(
+      '- Orders by date breakdown:',
+      Object.entries(currentWeekOrdersByDate).map(([date, orders]) => ({
+        date,
+        count: orders.length,
+        orderIds: orders.map((o) => o.orderId),
+      }))
+    );
+  }, [
+    currentSchedule,
+    currentWeekDates,
+    availableOrders,
+    processedOrders,
+    scheduleLoading,
+    ordersLoading,
+    currentWeekOrders,
+    currentWeekOrdersByDate,
+  ]);
 
   // Calculate next week layup count (relative to currently viewed week)
   const nextWeekLayupCount = useMemo(() => {
@@ -638,13 +807,20 @@ export default function LayupPluggingQueuePage() {
       const today = new Date();
       const baseStart = startOfWeek(today, { weekStartsOn: 1 });
       const nextWeekStart = addDays(baseStart, (currentWeekOffset + 1) * 7);
-      const nextWeekDates = eachDayOfInterval({ start: nextWeekStart, end: addDays(nextWeekStart, 4) });
-      const nextWeekDateStrings = nextWeekDates.map(date => date.toISOString().split('T')[0]);
+      const nextWeekDates = eachDayOfInterval({
+        start: nextWeekStart,
+        end: addDays(nextWeekStart, 4),
+      });
+      const nextWeekDateStrings = nextWeekDates.map(
+        (date) => date.toISOString().split('T')[0]
+      );
 
       const nextWeekOrders = currentSchedule.filter((scheduleItem: any) => {
         if (!scheduleItem?.scheduledDate) return false;
         try {
-          const scheduledDate = new Date(scheduleItem.scheduledDate).toISOString().split('T')[0];
+          const scheduledDate = new Date(scheduleItem.scheduledDate)
+            .toISOString()
+            .split('T')[0];
           return nextWeekDateStrings.includes(scheduledDate);
         } catch (dateError) {
           return false;
@@ -664,9 +840,10 @@ export default function LayupPluggingQueuePage() {
       return 0;
     }
     try {
-      return allOrders.filter((order: any) =>
-        order?.currentDepartment === 'Barcode' ||
-        (order?.department === 'Barcode' && order?.status === 'IN_PROGRESS')
+      return allOrders.filter(
+        (order: any) =>
+          order?.currentDepartment === 'Barcode' ||
+          (order?.department === 'Barcode' && order?.status === 'IN_PROGRESS')
       ).length;
     } catch (error) {
       console.error('🔍 Error calculating barcode queue count:', error);
@@ -691,9 +868,9 @@ export default function LayupPluggingQueuePage() {
   // Handle order selection
   const handleOrderSelect = (orderId: string, checked: boolean) => {
     if (checked) {
-      setSelectedOrders(prev => [...prev, orderId]);
+      setSelectedOrders((prev) => [...prev, orderId]);
     } else {
-      setSelectedOrders(prev => prev.filter(id => id !== orderId));
+      setSelectedOrders((prev) => prev.filter((id) => id !== orderId));
     }
   };
 
@@ -705,12 +882,14 @@ export default function LayupPluggingQueuePage() {
         body: {
           orderIds,
           department: 'Barcode',
-          status: 'IN_PROGRESS'
-        }
+          status: 'IN_PROGRESS',
+        },
       });
     },
     onSuccess: () => {
-      toast.success(`Successfully moved ${selectedOrders.length} orders to Barcode Department`);
+      toast.success(
+        `Successfully moved ${selectedOrders.length} orders to Barcode Department`
+      );
       setSelectedOrders([]);
       queryClient.invalidateQueries({ queryKey: ['layup-schedule'] });
       queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
@@ -718,7 +897,7 @@ export default function LayupPluggingQueuePage() {
     onError: (error) => {
       console.error('Error moving orders:', error);
       toast.error('Failed to move orders to next department');
-    }
+    },
   });
 
   const handleMoveToNextDepartment = () => {
@@ -732,9 +911,11 @@ export default function LayupPluggingQueuePage() {
   // Auto-select order when scanned
   const handleOrderScanned = (orderId: string) => {
     // Check if the order exists in the current queue
-    const orderExists = currentWeekOrders.some((order: any) => order.orderId === orderId);
+    const orderExists = currentWeekOrders.some(
+      (order: any) => order.orderId === orderId
+    );
     if (orderExists) {
-      setSelectedOrders(prev => [...prev, orderId]);
+      setSelectedOrders((prev) => [...prev, orderId]);
       toast.success(`Order ${orderId} selected automatically`);
     } else {
       toast.error(`Order ${orderId} is not in the Layup/Plugging department`);
@@ -745,7 +926,9 @@ export default function LayupPluggingQueuePage() {
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex items-center gap-2 mb-6">
         <Factory className="h-6 w-6" />
-        <h1 className="text-3xl font-bold">Layup/Plugging Department Manager</h1>
+        <h1 className="text-3xl font-bold">
+          Layup/Plugging Department Manager
+        </h1>
       </div>
 
       {/* Barcode Scanner at top */}
@@ -758,9 +941,11 @@ export default function LayupPluggingQueuePage() {
           <CardHeader className="pb-3">
             <CardTitle className="text-blue-700 dark:text-blue-300 flex items-center gap-2">
               <Calendar className="h-5 w-5" />
-              {currentWeekOffset === 0 ? 'Current Week Schedule' :
-               currentWeekOffset === 1 ? 'Next Week Schedule' :
-               `Week ${currentWeekOffset > 0 ? '+' : ''}${currentWeekOffset}`}
+              {currentWeekOffset === 0
+                ? 'Current Week Schedule'
+                : currentWeekOffset === 1
+                  ? 'Next Week Schedule'
+                  : `Week ${currentWeekOffset > 0 ? '+' : ''}${currentWeekOffset}`}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -775,8 +960,6 @@ export default function LayupPluggingQueuePage() {
             </div>
           </CardContent>
         </Card>
-
-
 
         {/* Barcode Queue Count */}
         <Card className="bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800">
@@ -807,7 +990,9 @@ export default function LayupPluggingQueuePage() {
                   <div className="flex items-center gap-2">
                     <CheckCircle className="h-5 w-5 text-blue-600 dark:text-blue-400" />
                     <span className="font-medium text-blue-800 dark:text-blue-200">
-                      {selectedOrders.length} order{selectedOrders.length > 1 ? 's' : ''} selected for progression
+                      {selectedOrders.length} order
+                      {selectedOrders.length > 1 ? 's' : ''} selected for
+                      progression
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
@@ -825,7 +1010,9 @@ export default function LayupPluggingQueuePage() {
                       disabled={moveToDepartmentMutation.isPending}
                       className="bg-green-600 hover:bg-green-700 dark:bg-green-700 dark:hover:bg-green-600"
                     >
-                      {moveToDepartmentMutation.isPending ? 'Moving...' : 'Progress to Barcode Department →'}
+                      {moveToDepartmentMutation.isPending
+                        ? 'Moving...'
+                        : 'Progress to Barcode Department →'}
                     </Button>
                   </div>
                 </div>
@@ -889,7 +1076,9 @@ export default function LayupPluggingQueuePage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setSelectedOrders(currentWeekOrders.map(o => o.orderId))}
+                  onClick={() =>
+                    setSelectedOrders(currentWeekOrders.map((o) => o.orderId))
+                  }
                   disabled={selectedOrders.length === currentWeekOrders.length}
                 >
                   Select All ({currentWeekOrders.length})
@@ -904,7 +1093,10 @@ export default function LayupPluggingQueuePage() {
                 </Button>
               </div>
               {selectedOrders.length > 0 && (
-                <Badge variant="secondary" className="bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200">
+                <Badge
+                  variant="secondary"
+                  className="bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200"
+                >
                   {selectedOrders.length} Selected
                 </Badge>
               )}
@@ -914,10 +1106,16 @@ export default function LayupPluggingQueuePage() {
             <div className="text-center py-12 text-gray-500">
               <Package className="h-16 w-16 mx-auto mb-4 text-gray-300" />
               <h3 className="text-xl font-medium mb-2">No Orders in Queue</h3>
-              <p className="text-sm">Orders from the Layup Scheduler will appear here automatically</p>
-              <p className="text-xs text-gray-400 mt-2">Go to Production Scheduling → Layup Scheduler to assign orders</p>
+              <p className="text-sm">
+                Orders from the Layup Scheduler will appear here automatically
+              </p>
+              <p className="text-xs text-gray-400 mt-2">
+                Go to Production Scheduling → Layup Scheduler to assign orders
+              </p>
               {(scheduleLoading || ordersLoading) && (
-                <p className="text-xs text-blue-500 mt-2">Loading schedule data...</p>
+                <p className="text-xs text-blue-500 mt-2">
+                  Loading schedule data...
+                </p>
               )}
               <div className="text-xs text-gray-400 mt-4 space-y-1">
                 <p>Debug Info:</p>
@@ -931,7 +1129,7 @@ export default function LayupPluggingQueuePage() {
             </div>
           ) : (
             <div className="space-y-6">
-              {currentWeekDates.map(date => {
+              {currentWeekDates.map((date) => {
                 const dateStr = date.toISOString().split('T')[0];
                 const dayOrders = currentWeekOrdersByDate[dateStr] || [];
                 const dayName = format(date, 'EEEE');
@@ -940,17 +1138,32 @@ export default function LayupPluggingQueuePage() {
                 const isPastDay = isPast(date) && !isToday(date);
 
                 return (
-                  <div key={dateStr} className={`border rounded-lg p-4 ${
-                    isCurrentDay ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200' :
-                    isPastDay ? 'bg-gray-50 dark:bg-gray-800/50 border-gray-200' :
-                    'bg-white dark:bg-gray-900 border-gray-200'
-                  }`}>
+                  <div
+                    key={dateStr}
+                    className={`border rounded-lg p-4 ${
+                      isCurrentDay
+                        ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200'
+                        : isPastDay
+                          ? 'bg-gray-50 dark:bg-gray-800/50 border-gray-200'
+                          : 'bg-white dark:bg-gray-900 border-gray-200'
+                    }`}
+                  >
                     <div className="flex items-center justify-between mb-3">
-                      <h3 className={`font-semibold text-lg ${
-                        isCurrentDay ? 'text-blue-700' : isPastDay ? 'text-gray-500' : 'text-gray-900'
-                      }`}>
+                      <h3
+                        className={`font-semibold text-lg ${
+                          isCurrentDay
+                            ? 'text-blue-700'
+                            : isPastDay
+                              ? 'text-gray-500'
+                              : 'text-gray-900'
+                        }`}
+                      >
                         {dayName}, {dateDisplay}
-                        {isCurrentDay && <span className="ml-2 text-sm font-normal">(Today)</span>}
+                        {isCurrentDay && (
+                          <span className="ml-2 text-sm font-normal">
+                            (Today)
+                          </span>
+                        )}
                       </h3>
                       <div className="flex items-center gap-2">
                         {dayOrders.length > 0 && (
@@ -958,20 +1171,38 @@ export default function LayupPluggingQueuePage() {
                             variant="outline"
                             size="sm"
                             onClick={() => {
-                              const dayOrderIds = dayOrders.map(o => o.orderId);
-                              const allSelected = dayOrderIds.every(id => selectedOrders.includes(id));
+                              const dayOrderIds = dayOrders.map(
+                                (o) => o.orderId
+                              );
+                              const allSelected = dayOrderIds.every((id) =>
+                                selectedOrders.includes(id)
+                              );
                               if (allSelected) {
-                                setSelectedOrders(prev => prev.filter(id => !dayOrderIds.includes(id)));
+                                setSelectedOrders((prev) =>
+                                  prev.filter((id) => !dayOrderIds.includes(id))
+                                );
                               } else {
-                                setSelectedOrders(prev => [...Array.from(new Set([...prev, ...dayOrderIds]))]);
+                                setSelectedOrders((prev) => [
+                                  ...Array.from(
+                                    new Set([...prev, ...dayOrderIds])
+                                  ),
+                                ]);
                               }
                             }}
                             className="text-xs h-6"
                           >
-                            {dayOrders.every(o => selectedOrders.includes(o.orderId)) ? 'Deselect Day' : 'Select Day'}
+                            {dayOrders.every((o) =>
+                              selectedOrders.includes(o.orderId)
+                            )
+                              ? 'Deselect Day'
+                              : 'Select Day'}
                           </Button>
                         )}
-                        <Badge variant={dayOrders.length > 0 ? 'default' : 'secondary'}>
+                        <Badge
+                          variant={
+                            dayOrders.length > 0 ? 'default' : 'secondary'
+                          }
+                        >
                           {dayOrders.length} orders
                         </Badge>
                       </div>
@@ -984,20 +1215,31 @@ export default function LayupPluggingQueuePage() {
                     ) : (
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
                         {dayOrders.map((order: any) => {
-                          const isSelected = selectedOrders.includes(order.orderId);
+                          const isSelected = selectedOrders.includes(
+                            order.orderId
+                          );
 
                           return (
-                            <Card key={order.orderId} className={`relative border-l-4 transition-all cursor-pointer ${
-                              order.source === 'p1_purchase_order' ? 'border-l-green-500' :
-                              order.source === 'production_order' ? 'border-l-orange-500' :
-                              'border-l-blue-500'
-                            } ${isSelected ? 'ring-2 ring-blue-400 bg-blue-50 dark:bg-blue-900/20' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'}`}
-                            onClick={() => handleOrderSelect(order.orderId, !isSelected)}>
+                            <Card
+                              key={order.orderId}
+                              className={`relative border-l-4 transition-all cursor-pointer ${
+                                order.source === 'p1_purchase_order'
+                                  ? 'border-l-green-500'
+                                  : order.source === 'production_order'
+                                    ? 'border-l-orange-500'
+                                    : 'border-l-blue-500'
+                              } ${isSelected ? 'ring-2 ring-blue-400 bg-blue-50 dark:bg-blue-900/20' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'}`}
+                              onClick={() =>
+                                handleOrderSelect(order.orderId, !isSelected)
+                              }
+                            >
                               {/* Checkbox in top-right corner */}
                               <div className="absolute top-2 right-2 z-10">
                                 <Checkbox
                                   checked={isSelected}
-                                  onCheckedChange={(checked) => handleOrderSelect(order.orderId, !!checked)}
+                                  onCheckedChange={(checked) =>
+                                    handleOrderSelect(order.orderId, !!checked)
+                                  }
                                   className="bg-white dark:bg-gray-800 border-2 shadow-sm"
                                   onClick={(e) => e.stopPropagation()}
                                 />
@@ -1011,7 +1253,9 @@ export default function LayupPluggingQueuePage() {
                                   hasKickbacks={hasKickbacks}
                                   getKickbackStatus={getKickbackStatus}
                                   handleKickbackClick={handleKickbackClick}
-                                  handleSalesOrderDownload={handleSalesOrderDownload}
+                                  handleSalesOrderDownload={
+                                    handleSalesOrderDownload
+                                  }
                                 />
 
                                 {/* Additional queue-specific info */}
@@ -1026,7 +1270,13 @@ export default function LayupPluggingQueuePage() {
                                     )}
 
                                     {order.dueDate && (
-                                      <div>Due: {format(new Date(order.dueDate), 'MMM d, yyyy')}</div>
+                                      <div>
+                                        Due:{' '}
+                                        {format(
+                                          new Date(order.dueDate),
+                                          'MMM d, yyyy'
+                                        )}
+                                      </div>
                                     )}
                                   </div>
                                 </div>

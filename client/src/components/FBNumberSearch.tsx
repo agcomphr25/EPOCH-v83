@@ -13,7 +13,7 @@ interface FBNumberSearchProps {
 
 export default function FBNumberSearch({
   onOrderFound,
-  className = ''
+  className = '',
 }: FBNumberSearchProps) {
   const [searchValue, setSearchValue] = useState('');
 
@@ -25,7 +25,7 @@ export default function FBNumberSearch({
   // Filter orders by FishBowl number
   const searchResults = useMemo(() => {
     if (!searchValue.trim()) return [];
-    
+
     const query = searchValue.toLowerCase().trim();
     return (allOrders as any[]).filter((order: any) => {
       const fbNumber = order.fbOrderNumber?.toLowerCase();
@@ -52,7 +52,7 @@ export default function FBNumberSearch({
           Search by FishBowl Number
         </Label>
       </div>
-      
+
       <div className="relative">
         <Input
           id="fb-search"
@@ -62,7 +62,7 @@ export default function FBNumberSearch({
           onChange={(e) => setSearchValue(e.target.value)}
           className="pr-8"
         />
-        
+
         {searchValue && (
           <Button
             variant="ghost"
@@ -81,7 +81,8 @@ export default function FBNumberSearch({
           {searchResults.length > 0 ? (
             <div className="border rounded-md bg-white dark:bg-gray-800 shadow-sm">
               <div className="p-2 text-xs text-gray-500 dark:text-gray-400 border-b">
-                Found {searchResults.length} order{searchResults.length !== 1 ? 's' : ''}
+                Found {searchResults.length} order
+                {searchResults.length !== 1 ? 's' : ''}
               </div>
               <div className="max-h-48 overflow-y-auto">
                 {searchResults.map((order: any) => (
@@ -103,7 +104,9 @@ export default function FBNumberSearch({
                         </div>
                       </div>
                       <div className="text-xs text-gray-500 dark:text-gray-400">
-                        {order.dueDate ? new Date(order.dueDate).toLocaleDateString() : 'No due date'}
+                        {order.dueDate
+                          ? new Date(order.dueDate).toLocaleDateString()
+                          : 'No due date'}
                       </div>
                     </div>
                   </div>

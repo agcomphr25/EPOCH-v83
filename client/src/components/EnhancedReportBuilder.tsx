@@ -61,7 +61,7 @@ export default function EnhancedReportBuilder() {
     queryKey: ['/api/enhanced-forms/submissions', selectedFormId],
     queryFn: async () => {
       try {
-        const response = await apiRequest('/api/enhanced-forms/submissions', { params: { formId: selectedFormId } });
+        const response = await apiRequest(`/api/enhanced-forms/submissions?formId=${selectedFormId}`);
         return response;
       } catch (error) {
         console.error('Error fetching submissions:', error);
@@ -83,11 +83,7 @@ export default function EnhancedReportBuilder() {
       }
     },
     retry: 1,
-    retryDelay: 1000,
-    onError: (error) => {
-      console.error('Submissions query error:', error);
-      toast.error('Failed to fetch submissions data');
-    }
+    retryDelay: 1000
   });
 
   // Filter submissions based on date range and search term

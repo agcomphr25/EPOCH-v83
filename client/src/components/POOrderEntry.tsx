@@ -1,28 +1,55 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { 
+import {
   fetchStockModels,
   fetchFeatures,
   createPOItem,
   type CreatePurchaseOrderItemData,
   type StockModel,
-  type Feature
+  type Feature,
 } from '@/lib/poUtils';
 import { apiRequest } from '@/lib/queryClient';
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+import { Checkbox } from '@/components/ui/checkbox';
 import { ChevronsUpDown, Check } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { FEATURE_IDS, findFeature, getFeatureOptionDisplay, getPaintFeatures } from '@/utils/featureMapping';
+import {
+  FEATURE_IDS,
+  findFeature,
+  getFeatureOptionDisplay,
+  getPaintFeatures,
+} from '@/utils/featureMapping';
 
 interface FeatureDefinition {
   id: string;
@@ -41,7 +68,12 @@ interface POOrderEntryProps {
   onSuccess: () => void;
 }
 
-export default function POOrderEntry({ poId, isOpen, onClose, onSuccess }: POOrderEntryProps) {
+export default function POOrderEntry({
+  poId,
+  isOpen,
+  onClose,
+  onSuccess,
+}: POOrderEntryProps) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -54,7 +86,9 @@ export default function POOrderEntry({ poId, isOpen, onClose, onSuccess }: POOrd
   const [priceOverride, setPriceOverride] = useState<number | null>(null);
   const [showPriceOverride, setShowPriceOverride] = useState(false);
   const [notes, setNotes] = useState('');
-  const [discountOptions, setDiscountOptions] = useState<{value: string; label: string}[]>([]);
+  const [discountOptions, setDiscountOptions] = useState<
+    { value: string; label: string }[]
+  >([]);
   const [discountCode, setDiscountCode] = useState('');
   const [discountDetails, setDiscountDetails] = useState<any>(null);
   const [isFlattop, setIsFlattop] = useState(false);
@@ -62,12 +96,12 @@ export default function POOrderEntry({ poId, isOpen, onClose, onSuccess }: POOrd
   // Data queries
   const { data: stockModels = [], isLoading: stockModelsLoading } = useQuery({
     queryKey: ['/api/stock-models'],
-    queryFn: fetchStockModels
+    queryFn: fetchStockModels,
   });
 
   const { data: featuresData = [], isLoading: featuresLoading } = useQuery({
     queryKey: ['/api/features'],
-    queryFn: fetchFeatures
+    queryFn: fetchFeatures,
   });
 
   // Load initial data
@@ -76,9 +110,12 @@ export default function POOrderEntry({ poId, isOpen, onClose, onSuccess }: POOrd
       try {
         // Load features
         const featuresResponse = await fetchFeatures();
-        console.log('🔧 PO Order Entry: Loaded features:', featuresResponse.length);
+        console.log(
+          '🔧 PO Order Entry: Loaded features:',
+          featuresResponse.length
+        );
         setFeatureDefs(featuresResponse as FeatureDefinition[]);
-        
+
         // Load discount options
         await loadDiscountCodes();
       } catch (error) {
@@ -94,7 +131,7 @@ export default function POOrderEntry({ poId, isOpen, onClose, onSuccess }: POOrd
     try {
       const [persistentDiscounts, shortTermSales] = await Promise.all([
         apiRequest('/api/persistent-discounts'),
-        apiRequest('/api/short-term-sales')
+        apiRequest('/api/short-term-sales'),
       ]);
 
       const discountOptionsMap: Record<string, any> = {};
@@ -105,7 +142,7 @@ export default function POOrderEntry({ poId, isOpen, onClose, onSuccess }: POOrd
           discountOptionsMap[key] = discount;
           return {
             value: key,
-            label: `${discount.code} - ${discount.description} (${discount.discountType === 'percent' ? `${discount.discountValue}%` : `$${discount.discountValue}`})`
+            label: `${discount.code} - ${discount.description} (${discount.discountType === 'percent' ? `${discount.discountValue}%` : `$${discount.discountValue}`})`,
           };
         }),
         ...shortTermSales.map((sale: any) => {
@@ -113,13 +150,13 @@ export default function POOrderEntry({ poId, isOpen, onClose, onSuccess }: POOrd
           discountOptionsMap[key] = sale;
           return {
             value: key,
-            label: `${sale.saleCode} - ${sale.description} (${sale.discountType === 'percent' ? `${sale.discountValue}%` : `$${sale.discountValue}`})`
+            label: `${sale.saleCode} - ${sale.description} (${sale.discountType === 'percent' ? `${sale.discountValue}%` : `$${sale.discountValue}`})`,
           };
-        })
+        }),
       ];
 
       setDiscountOptions(discounts);
-      
+
       // Store discount details for appliesTo logic
       if (discountCode && discountOptionsMap[discountCode]) {
         setDiscountDetails(discountOptionsMap[discountCode]);
@@ -130,7 +167,7 @@ export default function POOrderEntry({ poId, isOpen, onClose, onSuccess }: POOrd
   };
 
   // Pricing calculations - matching OrderEntry logic
-  const selectedModel = stockModels.find(m => m.id === modelId);
+  const selectedModel = stockModels.find((m) => m.id === modelId);
 
   const basePrice = useMemo(() => {
     if (!selectedModel) return 0;
@@ -139,25 +176,27 @@ export default function POOrderEntry({ poId, isOpen, onClose, onSuccess }: POOrd
 
   const featuresPrice = useMemo(() => {
     let total = 0;
-    
+
     Object.entries(features).forEach(([featureId, value]) => {
       if (!value) return;
-      
-      const featureDef = featureDefs.find(f => f.id === featureId);
+
+      const featureDef = featureDefs.find((f) => f.id === featureId);
       if (!featureDef) return;
 
       if (Array.isArray(value)) {
         // Multi-select feature
-        value.forEach(optionValue => {
-          const option = featureDef.options?.find(opt => opt.value === optionValue);
+        value.forEach((optionValue) => {
+          const option = featureDef.options?.find(
+            (opt) => opt.value === optionValue
+          );
           if (option?.price) total += option.price;
         });
       } else if (typeof value === 'string') {
-        const option = featureDef.options?.find(opt => opt.value === value);
+        const option = featureDef.options?.find((opt) => opt.value === value);
         if (option?.price) total += option.price;
       }
     });
-    
+
     return total;
   }, [features, featureDefs]);
 
@@ -167,22 +206,22 @@ export default function POOrderEntry({ poId, isOpen, onClose, onSuccess }: POOrd
 
   const calculateDiscountAmount = useMemo(() => {
     if (!discountDetails) return 0;
-    
+
     const discountValue = discountDetails.discountValue || 0;
     const discountType = discountDetails.discountType || 'percent';
     const appliesTo = discountDetails.appliesTo || 'total_order';
-    
+
     if (appliesTo === 'stock_model') {
       // Apply discount only to base model price
       const discountBase = basePrice * quantity;
-      return discountType === 'percent' ? 
-        (discountBase * discountValue / 100) : 
-        Math.min(discountValue, discountBase);
+      return discountType === 'percent'
+        ? (discountBase * discountValue) / 100
+        : Math.min(discountValue, discountBase);
     } else {
       // Apply to entire subtotal
-      return discountType === 'percent' ? 
-        (subtotalPrice * discountValue / 100) : 
-        Math.min(discountValue, subtotalPrice);
+      return discountType === 'percent'
+        ? (subtotalPrice * discountValue) / 100
+        : Math.min(discountValue, subtotalPrice);
     }
   }, [discountDetails, basePrice, subtotalPrice, quantity]);
 
@@ -200,76 +239,88 @@ export default function POOrderEntry({ poId, isOpen, onClose, onSuccess }: POOrd
       style: 'currency',
       currency: 'USD',
       minimumFractionDigits: 2,
-      maximumFractionDigits: 2
+      maximumFractionDigits: 2,
     }).format(amount);
   };
 
   // Business rules and feature validation - matching OrderEntry
   useEffect(() => {
     if (modelId) {
-      const selectedModel = stockModels.find(m => m.id === modelId);
+      const selectedModel = stockModels.find((m) => m.id === modelId);
       const modelName = selectedModel?.displayName || selectedModel?.name || '';
-      
+
       // Handle Medium action length exclusion for Ferrata/Armor models
       if (features.action_length === 'medium') {
-        const shouldExcludeMedium = modelName.toLowerCase().includes('ferrata') || 
-                                    modelName.toLowerCase().includes('armor');
-        
+        const shouldExcludeMedium =
+          modelName.toLowerCase().includes('ferrata') ||
+          modelName.toLowerCase().includes('armor');
+
         if (shouldExcludeMedium) {
-          setFeatures(prev => ({ 
-            ...prev, 
-            action_length: undefined
+          setFeatures((prev) => ({
+            ...prev,
+            action_length: undefined,
           }));
           toast({
-            title: "Action Length Updated",
-            description: "Medium action length is not available for this model. Please select Short or Long.",
-            variant: "default",
+            title: 'Action Length Updated',
+            description:
+              'Medium action length is not available for this model. Please select Short or Long.',
+            variant: 'default',
           });
         }
       }
-      
+
       // Handle LOP exclusion for CAT/Visigoth models
       if (features.length_of_pull) {
-        const shouldExcludeLOP = modelName.toLowerCase().includes('cat') || 
-                                 modelName.toLowerCase().includes('visigoth');
-        
+        const shouldExcludeLOP =
+          modelName.toLowerCase().includes('cat') ||
+          modelName.toLowerCase().includes('visigoth');
+
         if (shouldExcludeLOP) {
-          setFeatures(prev => ({ 
-            ...prev, 
-            length_of_pull: undefined
+          setFeatures((prev) => ({
+            ...prev,
+            length_of_pull: undefined,
           }));
           toast({
-            title: "LOP Option Removed",
-            description: "Length of Pull options are not available for this model.",
-            variant: "default",
+            title: 'LOP Option Removed',
+            description:
+              'Length of Pull options are not available for this model.',
+            variant: 'default',
           });
         }
       }
     }
-  }, [modelId, stockModels, features.action_length, features.length_of_pull, toast]);
+  }, [
+    modelId,
+    stockModels,
+    features.action_length,
+    features.length_of_pull,
+    toast,
+  ]);
 
   // Conditional feature filtering for Chalk models
   const getFilteredFeatureOptions = (featureDef: FeatureDefinition) => {
     if (!selectedModel || !featureDef.options) return featureDef.options;
-    
+
     const modelName = selectedModel.displayName || selectedModel.name || '';
     const isChalkModel = modelName.toLowerCase().includes('chalk');
-    
+
     if (!isChalkModel) return featureDef.options;
-    
+
     // Filter options for Chalk models
     if (featureDef.id === 'rail_accessory') {
-      return featureDef.options.filter(option => 
+      return featureDef.options.filter((option) =>
         ['4" ARCA Rail', 'AG Pic', 'AG Pic w/Int Stud'].includes(option.value)
       );
     }
-    
+
     if (featureDef.id === 'qd_accessory') {
-      return featureDef.options.filter(option => 
-        ['No QDs', 'QDs - 1 Right (Butt)', 'QDs - 1 Left (Butt)'].includes(option.value)
+      return featureDef.options.filter((option) =>
+        ['No QDs', 'QDs - 1 Right (Butt)', 'QDs - 1 Left (Butt)'].includes(
+          option.value
+        )
       );
     }
-    
+
     return featureDef.options;
   };
 
@@ -291,8 +342,8 @@ export default function POOrderEntry({ poId, isOpen, onClose, onSuccess }: POOrd
     mutationFn: (data: CreatePurchaseOrderItemData) => createPOItem(poId, data),
     onSuccess: () => {
       toast({
-        title: "Success",
-        description: "Item added successfully",
+        title: 'Success',
+        description: 'Item added successfully',
       });
       queryClient.invalidateQueries({ queryKey: ['/api/pos', poId, 'items'] });
       onSuccess();
@@ -302,40 +353,40 @@ export default function POOrderEntry({ poId, isOpen, onClose, onSuccess }: POOrd
     onError: (error) => {
       console.error('Failed to create PO item:', error);
       toast({
-        title: "Error",
-        description: "Failed to add item",
-        variant: "destructive",
+        title: 'Error',
+        description: 'Failed to add item',
+        variant: 'destructive',
       });
-    }
+    },
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!modelId) {
       toast({
-        title: "Error",
-        description: "Please select a stock model",
-        variant: "destructive",
+        title: 'Error',
+        description: 'Please select a stock model',
+        variant: 'destructive',
       });
       return;
     }
 
     if (quantity <= 0) {
       toast({
-        title: "Error", 
-        description: "Quantity must be greater than 0",
-        variant: "destructive",
+        title: 'Error',
+        description: 'Quantity must be greater than 0',
+        variant: 'destructive',
       });
       return;
     }
 
-    const selectedModel = stockModels.find(m => m.id === modelId);
+    const selectedModel = stockModels.find((m) => m.id === modelId);
     if (!selectedModel) {
       toast({
-        title: "Error",
-        description: "Selected model not found",
-        variant: "destructive",
+        title: 'Error',
+        description: 'Selected model not found',
+        variant: 'destructive',
       });
       return;
     }
@@ -354,9 +405,9 @@ export default function POOrderEntry({ poId, isOpen, onClose, onSuccess }: POOrd
         priceOverride: priceOverride,
         discountCode: discountCode,
         discountAmount: discountAmount,
-        isFlattop: isFlattop
+        isFlattop: isFlattop,
       },
-      notes: notes
+      notes: notes,
     };
 
     createItemMutation.mutate(itemData);
@@ -366,27 +417,46 @@ export default function POOrderEntry({ poId, isOpen, onClose, onSuccess }: POOrd
   const renderFeatureForm = (featureDef: FeatureDefinition) => {
     const filteredOptions = getFilteredFeatureOptions(featureDef);
     const currentValue = features[featureDef.id];
-    
+
     switch (featureDef.type) {
       case 'dropdown':
-        const isRestrictedForFlattop = isFlattop && ['action_length', 'action_inlet', 'bottom_metal', 'barrel_inlet'].includes(featureDef.id);
+        const isRestrictedForFlattop =
+          isFlattop &&
+          [
+            'action_length',
+            'action_inlet',
+            'bottom_metal',
+            'barrel_inlet',
+          ].includes(featureDef.id);
         return (
           <div key={featureDef.id} className="space-y-2">
             <Label>{featureDef.displayName}</Label>
-            <Select 
-              value={currentValue || ''} 
-              onValueChange={(value) => setFeatures(prev => ({ 
-                ...prev, 
-                [featureDef.id]: value 
-              }))}
+            <Select
+              value={currentValue || ''}
+              onValueChange={(value) =>
+                setFeatures((prev) => ({
+                  ...prev,
+                  [featureDef.id]: value,
+                }))
+              }
               disabled={isRestrictedForFlattop}
             >
-              <SelectTrigger className={isRestrictedForFlattop ? "opacity-50 cursor-not-allowed" : ""}>
-                <SelectValue placeholder={isRestrictedForFlattop ? "Not Available (Flattop)" : `Select ${featureDef.displayName}`} />
+              <SelectTrigger
+                className={
+                  isRestrictedForFlattop ? 'opacity-50 cursor-not-allowed' : ''
+                }
+              >
+                <SelectValue
+                  placeholder={
+                    isRestrictedForFlattop
+                      ? 'Not Available (Flattop)'
+                      : `Select ${featureDef.displayName}`
+                  }
+                />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="">No selection</SelectItem>
-                {filteredOptions?.map(option => (
+                {filteredOptions?.map((option) => (
                   <SelectItem key={option.value} value={option.value}>
                     {option.label}
                   </SelectItem>
@@ -395,35 +465,42 @@ export default function POOrderEntry({ poId, isOpen, onClose, onSuccess }: POOrd
             </Select>
           </div>
         );
-      
+
       case 'multiselect':
         return (
           <div key={featureDef.id} className="space-y-2">
             <Label>{featureDef.displayName}</Label>
             <div className="space-y-2">
-              {filteredOptions?.map(option => (
+              {filteredOptions?.map((option) => (
                 <div key={option.value} className="flex items-center space-x-2">
                   <Checkbox
                     id={`${featureDef.id}-${option.value}`}
-                    checked={Array.isArray(currentValue) && currentValue.includes(option.value)}
+                    checked={
+                      Array.isArray(currentValue) &&
+                      currentValue.includes(option.value)
+                    }
                     onCheckedChange={(checked) => {
-                      setFeatures(prev => {
-                        const current = Array.isArray(prev[featureDef.id]) ? prev[featureDef.id] : [];
+                      setFeatures((prev) => {
+                        const current = Array.isArray(prev[featureDef.id])
+                          ? prev[featureDef.id]
+                          : [];
                         if (checked) {
                           return {
                             ...prev,
-                            [featureDef.id]: [...current, option.value]
+                            [featureDef.id]: [...current, option.value],
                           };
                         } else {
                           return {
                             ...prev,
-                            [featureDef.id]: current.filter((v: string) => v !== option.value)
+                            [featureDef.id]: current.filter(
+                              (v: string) => v !== option.value
+                            ),
                           };
                         }
                       });
                     }}
                   />
-                  <Label 
+                  <Label
                     htmlFor={`${featureDef.id}-${option.value}`}
                     className="text-sm font-normal"
                   >
@@ -434,7 +511,7 @@ export default function POOrderEntry({ poId, isOpen, onClose, onSuccess }: POOrd
             </div>
           </div>
         );
-      
+
       case 'text':
         return (
           <div key={featureDef.id} className="space-y-2">
@@ -442,15 +519,17 @@ export default function POOrderEntry({ poId, isOpen, onClose, onSuccess }: POOrd
             <Input
               id={featureDef.id}
               value={currentValue || ''}
-              onChange={(e) => setFeatures(prev => ({
-                ...prev,
-                [featureDef.id]: e.target.value
-              }))}
+              onChange={(e) =>
+                setFeatures((prev) => ({
+                  ...prev,
+                  [featureDef.id]: e.target.value,
+                }))
+              }
               placeholder={`Enter ${featureDef.displayName}`}
             />
           </div>
         );
-      
+
       default:
         return null;
     }
@@ -486,7 +565,9 @@ export default function POOrderEntry({ poId, isOpen, onClose, onSuccess }: POOrd
                   aria-expanded={modelOpen}
                   className="w-full justify-between"
                 >
-                  {modelId ? stockModels.find(m => m.id === modelId)?.displayName : "Select stock model..."}
+                  {modelId
+                    ? stockModels.find((m) => m.id === modelId)?.displayName
+                    : 'Select stock model...'}
                   <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                 </Button>
               </PopoverTrigger>
@@ -501,13 +582,15 @@ export default function POOrderEntry({ poId, isOpen, onClose, onSuccess }: POOrd
                           key={model.id}
                           value={model.id}
                           onSelect={(currentValue) => {
-                            setModelId(currentValue === modelId ? '' : currentValue);
+                            setModelId(
+                              currentValue === modelId ? '' : currentValue
+                            );
                             setModelOpen(false);
                           }}
                         >
                           <Check
                             className={`mr-2 h-4 w-4 ${
-                              modelId === model.id ? "opacity-100" : "opacity-0"
+                              modelId === model.id ? 'opacity-100' : 'opacity-0'
                             }`}
                           />
                           {model.displayName} - {formatCurrency(model.price)}
@@ -522,44 +605,51 @@ export default function POOrderEntry({ poId, isOpen, onClose, onSuccess }: POOrd
 
           {/* Flattop Option */}
           <div className="flex items-center space-x-2 p-3 border rounded-lg bg-yellow-50">
-            <Checkbox 
+            <Checkbox
               id="flattop-checkbox"
               checked={isFlattop}
               onCheckedChange={(checked) => {
                 setIsFlattop(!!checked);
                 if (checked) {
                   // Clear features that are not available for flattop
-                  setFeatures(prev => ({
+                  setFeatures((prev) => ({
                     ...prev,
                     action_length: undefined,
                     action_inlet: undefined,
                     bottom_metal: undefined,
-                    barrel_inlet: undefined
+                    barrel_inlet: undefined,
                   }));
                 }
               }}
             />
-            <Label 
-              htmlFor="flattop-checkbox" 
+            <Label
+              htmlFor="flattop-checkbox"
               className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
             >
               Flattop
             </Label>
             <span className="text-xs text-muted-foreground">
-              (Stock not machined for Action Length, Action Inlet, Bottom Metal, or Barrel Inlet)
+              (Stock not machined for Action Length, Action Inlet, Bottom Metal,
+              or Barrel Inlet)
             </span>
           </div>
 
           {/* Chalk Model Indicator */}
-          {selectedModel && (selectedModel.displayName || selectedModel.name || '').toLowerCase().includes('chalk') && (
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-              <div className="flex items-center gap-2">
-                <Badge variant="outline" className="bg-blue-100 text-blue-800 border-blue-300">
-                  Chalk Model - Limited Options
-                </Badge>
+          {selectedModel &&
+            (selectedModel.displayName || selectedModel.name || '')
+              .toLowerCase()
+              .includes('chalk') && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                <div className="flex items-center gap-2">
+                  <Badge
+                    variant="outline"
+                    className="bg-blue-100 text-blue-800 border-blue-300"
+                  >
+                    Chalk Model - Limited Options
+                  </Badge>
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
           {/* Features Configuration */}
           {modelId && featureDefs.length > 0 && (
@@ -591,7 +681,9 @@ export default function POOrderEntry({ poId, isOpen, onClose, onSuccess }: POOrd
                 <Checkbox
                   id="showPriceOverride"
                   checked={showPriceOverride}
-                  onCheckedChange={(checked) => setShowPriceOverride(checked === true)}
+                  onCheckedChange={(checked) =>
+                    setShowPriceOverride(checked === true)
+                  }
                 />
                 <Label htmlFor="showPriceOverride" className="text-sm">
                   Override price
@@ -604,7 +696,11 @@ export default function POOrderEntry({ poId, isOpen, onClose, onSuccess }: POOrd
                   step="0.01"
                   min="0"
                   value={priceOverride || ''}
-                  onChange={(e) => setPriceOverride(e.target.value ? parseFloat(e.target.value) : null)}
+                  onChange={(e) =>
+                    setPriceOverride(
+                      e.target.value ? parseFloat(e.target.value) : null
+                    )
+                  }
                   placeholder="Enter override price"
                   className="mt-2"
                 />
@@ -618,7 +714,7 @@ export default function POOrderEntry({ poId, isOpen, onClose, onSuccess }: POOrd
                   <SelectValue placeholder="Select discount" />
                 </SelectTrigger>
                 <SelectContent>
-                  {discountOptions.map(discount => (
+                  {discountOptions.map((discount) => (
                     <SelectItem key={discount.value} value={discount.value}>
                       {discount.label}
                     </SelectItem>

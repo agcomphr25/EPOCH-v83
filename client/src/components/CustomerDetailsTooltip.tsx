@@ -1,8 +1,20 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
+import {
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from '@/components/ui/hover-card';
 import { Badge } from '@/components/ui/badge';
-import { User, Building2, Mail, Phone, MapPin, FileText, MessageSquare } from 'lucide-react';
+import {
+  User,
+  Building2,
+  Mail,
+  Phone,
+  MapPin,
+  FileText,
+  MessageSquare,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import CommunicationCompose from './CommunicationCompose';
 
@@ -41,7 +53,11 @@ interface CustomerDetailsTooltipProps {
   children: React.ReactNode;
 }
 
-export default function CustomerDetailsTooltip({ customerId, customerName, children }: CustomerDetailsTooltipProps) {
+export default function CustomerDetailsTooltip({
+  customerId,
+  customerName,
+  children,
+}: CustomerDetailsTooltipProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isComposerOpen, setIsComposerOpen] = useState(false);
   const [defaultType, setDefaultType] = useState<'email' | 'sms'>('email');
@@ -59,18 +75,18 @@ export default function CustomerDetailsTooltip({ customerId, customerName, child
   });
 
   // Get the primary/default address
-  const primaryAddress = addresses.find(addr => addr.isDefault) || addresses[0];
+  const primaryAddress =
+    addresses.find((addr) => addr.isDefault) || addresses[0];
 
   const handleEmailClick = () => {
-        setDefaultType('email');
-        setIsComposerOpen(true);
-    };
+    setDefaultType('email');
+    setIsComposerOpen(true);
+  };
 
-    const handleSMSClick = () => {
-        setDefaultType('sms');
-        setIsComposerOpen(true);
-    };
-
+  const handleSMSClick = () => {
+    setDefaultType('sms');
+    setIsComposerOpen(true);
+  };
 
   return (
     <>
@@ -141,7 +157,8 @@ export default function CustomerDetailsTooltip({ customerId, customerName, child
                 <div className="text-sm text-gray-600 ml-6">
                   <div>{primaryAddress.street}</div>
                   <div>
-                    {primaryAddress.city}, {primaryAddress.state} {primaryAddress.zipCode}
+                    {primaryAddress.city}, {primaryAddress.state}{' '}
+                    {primaryAddress.zipCode}
                   </div>
                   {primaryAddress.country !== 'United States' && (
                     <div>{primaryAddress.country}</div>
@@ -176,7 +193,9 @@ export default function CustomerDetailsTooltip({ customerId, customerName, child
             {customer && (customer.email || customer.phone) && (
               <div className="border-t pt-3">
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium text-gray-700">Contact:</span>
+                  <span className="text-sm font-medium text-gray-700">
+                    Contact:
+                  </span>
                   <div className="flex gap-1">
                     {customer.email && (
                       <Button
@@ -216,14 +235,14 @@ export default function CustomerDetailsTooltip({ customerId, customerName, child
           </div>
         </HoverCardContent>
       </HoverCard>
-        {customer && (
-                    <CommunicationCompose
-                        isOpen={isComposerOpen}
-                        onClose={() => setIsComposerOpen(false)}
-                        customer={customer}
-                        defaultType={defaultType}
-                    />
-                )}
+      {customer && (
+        <CommunicationCompose
+          isOpen={isComposerOpen}
+          onClose={() => setIsComposerOpen(false)}
+          customer={customer}
+          defaultType={defaultType}
+        />
+      )}
     </>
   );
 }

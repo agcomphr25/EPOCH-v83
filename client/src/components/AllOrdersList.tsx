@@ -29,9 +29,31 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ArrowRight, AlertTriangle, Package2, Edit, Search, X, Mail, MessageSquare } from 'lucide-react';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import {
+  ArrowRight,
+  AlertTriangle,
+  Package2,
+  Edit,
+  Search,
+  X,
+  Mail,
+  MessageSquare,
+} from 'lucide-react';
 import { apiRequest } from '@/lib/queryClient';
 import ScrapOrderModal from './ScrapOrderModal';
 import OrderSummaryModal from './OrderSummaryModal';
@@ -41,12 +63,25 @@ import { getDisplayOrderId } from '@/lib/orderUtils';
 import CustomerDetailsTooltip from './CustomerDetailsTooltip';
 import CommunicationCompose from './CommunicationCompose';
 
-const departments = ['P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 'Gunsmith', 'Finish', 'Finish QC', 'Paint', 'Shipping QC', 'Shipping'];
+const departments = [
+  'P1 Production Queue',
+  'Layup/Plugging',
+  'Barcode',
+  'CNC',
+  'Gunsmith',
+  'Finish',
+  'Finish QC',
+  'Paint',
+  'Shipping QC',
+  'Shipping',
+];
 
 export default function AllOrdersList() {
   const [selectedDepartment, setSelectedDepartment] = useState('all');
   const [showCancelled, setShowCancelled] = useState(false);
-  const [sortBy, setSortBy] = useState<'orderDate' | 'dueDate' | 'customer' | 'model'>('orderDate');
+  const [sortBy, setSortBy] = useState<
+    'orderDate' | 'dueDate' | 'customer' | 'model'
+  >('orderDate');
   const [scrapModalOrder, setScrapModalOrder] = useState<Order | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const queryClient = useQueryClient();
@@ -62,20 +97,24 @@ export default function AllOrdersList() {
     };
   }, []);
 
-  const { data: orders, isLoading, refetch } = useQuery<Order[]>({
+  const {
+    data: orders,
+    isLoading,
+    refetch,
+  } = useQuery<Order[]>({
     queryKey: ['/api/orders/with-payment-status'],
     refetchInterval: false, // Completely disable automatic refetching
     refetchOnWindowFocus: false, // Disable refetch on window focus
     refetchOnReconnect: false, // Disable refetch on network reconnect
   });
-  
+
   // Add a manual refresh button for debugging
   const handleRefresh = () => {
-    queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
+    queryClient.invalidateQueries({
+      queryKey: ['/api/orders/with-payment-status'],
+    });
     refetch();
   };
-
-
 
   // Fetch stock models to get display names
   const { data: stockModels = [] } = useQuery({
@@ -86,7 +125,7 @@ export default function AllOrdersList() {
   // Fetch all kickbacks to determine which orders have kickbacks
   const { data: allKickbacks = [] } = useQuery<Kickback[]>({
     queryKey: ['/api/kickbacks'],
-    refetchInterval: 30000 // Refresh every 30 seconds
+    refetchInterval: 30000, // Refresh every 30 seconds
   });
 
   // Helper function to get model display name
@@ -94,18 +133,22 @@ export default function AllOrdersList() {
     if (!modelId || !stockModels || stockModels.length === 0) {
       return modelId || 'Unknown Model';
     }
-    const model = (stockModels as any[]).find((m: any) => m && m.id === modelId);
+    const model = (stockModels as any[]).find(
+      (m: any) => m && m.id === modelId
+    );
     return model?.displayName || model?.name || modelId;
   };
 
   // Helper function to check if an order has kickbacks
   const hasKickbacks = (orderId: string) => {
-    return allKickbacks.some(kickback => kickback.orderId === orderId);
+    return allKickbacks.some((kickback) => kickback.orderId === orderId);
   };
 
   // Helper function to get the most severe kickback status for an order
   const getKickbackStatus = (orderId: string) => {
-    const orderKickbacks = allKickbacks.filter(kickback => kickback.orderId === orderId);
+    const orderKickbacks = allKickbacks.filter(
+      (kickback) => kickback.orderId === orderId
+    );
     if (orderKickbacks.length === 0) return null;
 
     // Priority order: CRITICAL > HIGH > MEDIUM > LOW
@@ -125,37 +168,49 @@ export default function AllOrdersList() {
   };
 
   // Local state for immediate UI updates - back to dual approach but with better synchronization
-  const [localOrderUpdates, setLocalOrderUpdates] = React.useState<Record<string, string>>({});
-  
+  const [localOrderUpdates, setLocalOrderUpdates] = React.useState<
+    Record<string, string>
+  >({});
+
   // Track orders being updated to prevent query invalidation interference
-  const [updatingOrders, setUpdatingOrders] = React.useState<Set<string>>(new Set());
+  const [updatingOrders, setUpdatingOrders] = React.useState<Set<string>>(
+    new Set()
+  );
 
   const progressOrderMutation = useMutation({
-    mutationFn: async ({ orderId, nextDepartment }: { orderId: string, nextDepartment: string }) => {
+    mutationFn: async ({
+      orderId,
+      nextDepartment,
+    }: {
+      orderId: string;
+      nextDepartment: string;
+    }) => {
       const requestBody = {
         orderIds: [orderId],
         department: nextDepartment,
-        status: 'IN_PROGRESS'
+        status: 'IN_PROGRESS',
       };
-      
+
       const response = await apiRequest('/api/orders/update-department', {
         method: 'POST',
-        body: JSON.stringify(requestBody)
+        body: JSON.stringify(requestBody),
       });
       return response;
     },
     onSuccess: (data, variables) => {
-      console.log(`✅ API Success: ${variables.orderId} -> ${variables.nextDepartment}`);
+      console.log(
+        `✅ API Success: ${variables.orderId} -> ${variables.nextDepartment}`
+      );
       toast.success('Department updated');
-      
+
       // Cache is already updated from button click - just clean up local state
       setTimeout(() => {
-        setLocalOrderUpdates(prev => {
+        setLocalOrderUpdates((prev) => {
           const newState = { ...prev };
           delete newState[variables.orderId];
           return newState;
         });
-        setUpdatingOrders(prev => {
+        setUpdatingOrders((prev) => {
           const newSet = new Set(prev);
           newSet.delete(variables.orderId);
           return newSet;
@@ -164,80 +219,105 @@ export default function AllOrdersList() {
     },
     onError: (err, variables) => {
       // Remove failed local update and updating flag immediately
-      setLocalOrderUpdates(prev => {
+      setLocalOrderUpdates((prev) => {
         const newState = { ...prev };
         delete newState[variables.orderId];
         return newState;
       });
-      setUpdatingOrders(prev => {
+      setUpdatingOrders((prev) => {
         const newSet = new Set(prev);
         newSet.delete(variables.orderId);
         return newSet;
       });
-      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/orders/with-payment-status'],
+      });
       toast.error('Failed to update department');
-    }
+    },
   });
 
   const scrapOrderMutation = useMutation({
-    mutationFn: async ({ orderId, scrapData }: { orderId: string, scrapData: any }) => {
+    mutationFn: async ({
+      orderId,
+      scrapData,
+    }: {
+      orderId: string;
+      scrapData: any;
+    }) => {
       return apiRequest(`/api/orders/${orderId}/scrap`, {
         method: 'POST',
-        body: scrapData
+        body: scrapData,
       });
     },
     onSuccess: () => {
       toast.success('Order scrapped successfully');
-      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/orders/pipeline-counts'] });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/orders/with-payment-status'],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/orders/pipeline-counts'],
+      });
       setScrapModalOrder(null);
     },
     onError: (error) => {
       toast.error(`Failed to scrap order: ${error.message}`);
-    }
+    },
   });
 
   const createReplacementMutation = useMutation({
     mutationFn: async (orderId: string) => {
       return apiRequest(`/api/orders/${orderId}/reload-replacement`, {
-        method: 'POST'
+        method: 'POST',
       });
     },
     onSuccess: () => {
       toast.success('Replacement order created successfully');
-      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/orders/with-payment-status'],
+      });
     },
     onError: (error) => {
       toast.error(`Failed to create replacement: ${error.message}`);
-    }
+    },
   });
 
   const cancelOrderMutation = useMutation({
-    mutationFn: async ({ orderId, reason }: { orderId: string, reason?: string }) => {
+    mutationFn: async ({
+      orderId,
+      reason,
+    }: {
+      orderId: string;
+      reason?: string;
+    }) => {
       return apiRequest(`/api/orders/cancel/${orderId}`, {
         method: 'POST',
-        body: JSON.stringify({ reason })
+        body: JSON.stringify({ reason }),
       });
     },
     onSuccess: () => {
       toast.success('Order cancelled successfully');
-      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/orders/pipeline-counts'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/production-queue/prioritized'] });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/orders/with-payment-status'],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/orders/pipeline-counts'],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/production-queue/prioritized'],
+      });
       queryClient.invalidateQueries({ queryKey: ['/api/p1-layup-queue'] });
       queryClient.invalidateQueries({ queryKey: ['/api/layup-schedule'] });
     },
     onError: (error) => {
       toast.error(`Failed to cancel order: ${error.message}`);
-    }
+    },
   });
-
-
 
   const filteredOrders = (orders || []).filter((order: any) => {
     // Show cancelled orders only when specifically viewing cancelled orders
-    const isCancelled = order.status === 'CANCELLED' || order.isCancelled === true;
-    
+    const isCancelled =
+      order.status === 'CANCELLED' || order.isCancelled === true;
+
     if (showCancelled) {
       // When showing cancelled orders, only show cancelled ones
       if (!isCancelled) {
@@ -246,7 +326,9 @@ export default function AllOrdersList() {
     } else {
       // When showing active orders, exclude cancelled ones
       if (isCancelled) {
-        console.log(`🚫 Filtering out cancelled order: ${order.orderId}, status: ${order.status}, isCancelled: ${order.isCancelled}`);
+        console.log(
+          `🚫 Filtering out cancelled order: ${order.orderId}, status: ${order.status}, isCancelled: ${order.isCancelled}`
+        );
         return false;
       }
     }
@@ -257,8 +339,10 @@ export default function AllOrdersList() {
       if (order.status === 'FULFILLED') {
         return false;
       }
-      
-      const departmentMatch = selectedDepartment === 'all' || order.currentDepartment === selectedDepartment;
+
+      const departmentMatch =
+        selectedDepartment === 'all' ||
+        order.currentDepartment === selectedDepartment;
       if (!departmentMatch) return false;
     }
 
@@ -274,10 +358,12 @@ export default function AllOrdersList() {
       order.customer?.toLowerCase(),
       order.customerId?.toLowerCase(),
       order.product?.toLowerCase(),
-      order.modelId?.toLowerCase()
+      order.modelId?.toLowerCase(),
     ].filter(Boolean);
 
-    const searchMatch = searchFields.some(field => field?.includes(searchLower));
+    const searchMatch = searchFields.some((field) =>
+      field?.includes(searchLower)
+    );
 
     return searchMatch;
   });
@@ -286,7 +372,9 @@ export default function AllOrdersList() {
   const sortedOrders = [...filteredOrders].sort((a, b) => {
     switch (sortBy) {
       case 'orderDate':
-        return new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime(); // Newest first
+        return (
+          new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime()
+        ); // Newest first
       case 'dueDate':
         return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime(); // Earliest due date first
       case 'customer':
@@ -299,13 +387,23 @@ export default function AllOrdersList() {
   });
 
   const departments = [
-    'P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 'Gunsmith', 'Finish', 'Finish QC', 'Paint', 'Shipping QC', 'Shipping'
+    'P1 Production Queue',
+    'Layup/Plugging',
+    'Barcode',
+    'CNC',
+    'Gunsmith',
+    'Finish',
+    'Finish QC',
+    'Paint',
+    'Shipping QC',
+    'Shipping',
   ];
 
   const getNextDepartment = (currentDepartment: string) => {
     // Handle alternative department names
-    const normalizedDepartment = currentDepartment === 'Layup' ? 'Layup/Plugging' : currentDepartment;
-    
+    const normalizedDepartment =
+      currentDepartment === 'Layup' ? 'Layup/Plugging' : currentDepartment;
+
     const currentIndex = departments.indexOf(normalizedDepartment);
     if (currentIndex >= 0 && currentIndex < departments.length - 1) {
       return departments[currentIndex + 1];
@@ -313,65 +411,76 @@ export default function AllOrdersList() {
     return null;
   };
 
-  const handleProgressOrder = React.useCallback((orderId: string, currentDepartment: string) => {
-    const nextDepartment = getNextDepartment(currentDepartment);
-    if (!nextDepartment) {
-      toast.error('No next department available');
-      return;
-    }
-    
-    console.log(`🔄 Progressing order ${orderId} from ${currentDepartment} to ${nextDepartment}`);
-    
-    // IMMEDIATELY update React Query cache - this prevents any reversion
-    queryClient.setQueryData(['/api/orders/with-payment-status'], (old: any[]) => {
-      if (!old) return old;
-      const updated = old.map((order: any) => {
-        if (order.orderId === orderId) {
-          console.log(`✅ Cache updated: ${orderId} -> ${nextDepartment}`);
-          return { ...order, currentDepartment: nextDepartment };
+  const handleProgressOrder = React.useCallback(
+    (orderId: string, currentDepartment: string) => {
+      const nextDepartment = getNextDepartment(currentDepartment);
+      if (!nextDepartment) {
+        toast.error('No next department available');
+        return;
+      }
+
+      console.log(
+        `🔄 Progressing order ${orderId} from ${currentDepartment} to ${nextDepartment}`
+      );
+
+      // IMMEDIATELY update React Query cache - this prevents any reversion
+      queryClient.setQueryData(
+        ['/api/orders/with-payment-status'],
+        (old: any[]) => {
+          if (!old) return old;
+          const updated = old.map((order: any) => {
+            if (order.orderId === orderId) {
+              console.log(`✅ Cache updated: ${orderId} -> ${nextDepartment}`);
+              return { ...order, currentDepartment: nextDepartment };
+            }
+            return order;
+          });
+          return updated;
         }
-        return order;
-      });
-      return updated;
-    });
-    
-    // Also update local state for redundancy
-    setLocalOrderUpdates(prev => ({ ...prev, [orderId]: nextDepartment }));
-    
-    // Make the API call in the background
-    progressOrderMutation.mutate({ orderId, nextDepartment });
-  }, [progressOrderMutation, queryClient]);
+      );
+
+      // Also update local state for redundancy
+      setLocalOrderUpdates((prev) => ({ ...prev, [orderId]: nextDepartment }));
+
+      // Make the API call in the background
+      progressOrderMutation.mutate({ orderId, nextDepartment });
+    },
+    [progressOrderMutation, queryClient]
+  );
 
   const handlePushToLayupPlugging = (orderId: string) => {
     const nextDepartment = 'Layup/Plugging';
-    
+
     console.log(`🔄 Pushing order ${orderId} to ${nextDepartment}`);
-    
+
     // IMMEDIATELY update React Query cache - this prevents any reversion
-    queryClient.setQueryData(['/api/orders/with-payment-status'], (old: any[]) => {
-      if (!old) return old;
-      const updated = old.map((order: any) => {
-        if (order.orderId === orderId) {
-          console.log(`✅ Cache updated: ${orderId} -> ${nextDepartment}`);
-          return { ...order, currentDepartment: nextDepartment };
-        }
-        return order;
-      });
-      return updated;
-    });
-    
+    queryClient.setQueryData(
+      ['/api/orders/with-payment-status'],
+      (old: any[]) => {
+        if (!old) return old;
+        const updated = old.map((order: any) => {
+          if (order.orderId === orderId) {
+            console.log(`✅ Cache updated: ${orderId} -> ${nextDepartment}`);
+            return { ...order, currentDepartment: nextDepartment };
+          }
+          return order;
+        });
+        return updated;
+      }
+    );
+
     // Also update local state for redundancy
-    setLocalOrderUpdates(prev => ({ ...prev, [orderId]: nextDepartment }));
-    
+    setLocalOrderUpdates((prev) => ({ ...prev, [orderId]: nextDepartment }));
+
     // Make the API call in the background
     progressOrderMutation.mutate({ orderId, nextDepartment });
   };
 
   const handleScrapOrder = (scrapData: any) => {
     if (scrapModalOrder) {
-      scrapOrderMutation.mutate({ 
-        orderId: scrapModalOrder.orderId, 
-        scrapData 
+      scrapOrderMutation.mutate({
+        orderId: scrapModalOrder.orderId,
+        scrapData,
       });
     }
   };
@@ -380,22 +489,25 @@ export default function AllOrdersList() {
     const colors: { [key: string]: string } = {
       'P1 Production Queue': 'bg-slate-600',
       'Layup/Plugging': 'bg-blue-500',
-      'Barcode': 'bg-cyan-500',
-      'CNC': 'bg-green-500',
-      'Finish': 'bg-yellow-500',
-      'Gunsmith': 'bg-purple-500',
+      Barcode: 'bg-cyan-500',
+      CNC: 'bg-green-500',
+      Finish: 'bg-yellow-500',
+      Gunsmith: 'bg-purple-500',
       'Finish QC': 'bg-yellow-600',
-      'Paint': 'bg-pink-500',
+      Paint: 'bg-pink-500',
       'Shipping QC': 'bg-indigo-500',
-      'Shipping': 'bg-gray-500'
+      Shipping: 'bg-gray-500',
     };
     return colors[department] || 'bg-gray-400';
   };
 
-  const handleCommunicationOpen = (customer: any, communicationType: string) => {
+  const handleCommunicationOpen = (
+    customer: any,
+    communicationType: string
+  ) => {
     setSelectedCustomer({
       ...customer,
-      preferredCommunication: communicationType
+      preferredCommunication: communicationType,
     });
     setCommunicationModalOpen(true);
   };
@@ -404,8 +516,6 @@ export default function AllOrdersList() {
     setCommunicationModalOpen(false);
     setSelectedCustomer(null);
   };
-
-
 
   if (isLoading) {
     return (
@@ -425,7 +535,8 @@ export default function AllOrdersList() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
-            {showCancelled ? 'Cancelled Orders' : 'All Orders'} ({sortedOrders.length})
+            {showCancelled ? 'Cancelled Orders' : 'All Orders'} (
+            {sortedOrders.length})
             <div className="flex items-center gap-4">
               {/* Refresh Button */}
               <Button
@@ -438,7 +549,7 @@ export default function AllOrdersList() {
               </Button>
               {/* Toggle between Active and Cancelled Orders */}
               <Button
-                variant={showCancelled ? "default" : "outline"}
+                variant={showCancelled ? 'default' : 'outline'}
                 size="sm"
                 onClick={() => {
                   setShowCancelled(!showCancelled);
@@ -473,14 +584,19 @@ export default function AllOrdersList() {
               {!showCancelled && (
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-medium">Department:</span>
-                  <Select value={selectedDepartment} onValueChange={setSelectedDepartment}>
+                  <Select
+                    value={selectedDepartment}
+                    onValueChange={setSelectedDepartment}
+                  >
                     <SelectTrigger className="w-48">
                       <SelectValue placeholder="All Departments" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">All Departments</SelectItem>
-                      {departments.map(dept => (
-                        <SelectItem key={dept} value={dept}>{dept}</SelectItem>
+                      {departments.map((dept) => (
+                        <SelectItem key={dept} value={dept}>
+                          {dept}
+                        </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -490,7 +606,12 @@ export default function AllOrdersList() {
               {/* Sort By */}
               <div className="flex items-center gap-2">
                 <span className="text-sm font-medium">Sort by:</span>
-                <Select value={sortBy} onValueChange={(value: 'orderDate' | 'dueDate' | 'customer' | 'model') => setSortBy(value)}>
+                <Select
+                  value={sortBy}
+                  onValueChange={(
+                    value: 'orderDate' | 'dueDate' | 'customer' | 'model'
+                  ) => setSortBy(value)}
+                >
                   <SelectTrigger className="w-40">
                     <SelectValue />
                   </SelectTrigger>
@@ -522,9 +643,10 @@ export default function AllOrdersList() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {sortedOrders.map(order => {
+              {sortedOrders.map((order) => {
                 // Use local update if available, otherwise server data
-                const displayDepartment = localOrderUpdates[order.orderId] || order.currentDepartment;
+                const displayDepartment =
+                  localOrderUpdates[order.orderId] || order.currentDepartment;
                 const nextDept = getNextDepartment(displayDepartment);
                 const isComplete = displayDepartment === 'Fulfilled';
                 const isScrapped = order.status === 'SCRAPPED';
@@ -532,15 +654,19 @@ export default function AllOrdersList() {
 
                 // Apply local department updates for immediate visual feedback
 
-                const rowClassName = order.isVerified 
-                  ? "bg-green-100 hover:bg-green-150 dark:bg-green-900/30 dark:hover:bg-green-900/40" 
-                  : "";
+                const rowClassName = order.isVerified
+                  ? 'bg-green-100 hover:bg-green-150 dark:bg-green-900/30 dark:hover:bg-green-900/40'
+                  : '';
 
                 return (
-                  <TableRow 
+                  <TableRow
                     key={order.orderId}
                     className={rowClassName}
-                    style={order.isVerified ? { backgroundColor: '#dcfce7' } : undefined}
+                    style={
+                      order.isVerified
+                        ? { backgroundColor: '#dcfce7' }
+                        : undefined
+                    }
                   >
                     <TableCell className="font-medium">
                       <OrderSummaryModal orderId={order.orderId}>
@@ -550,25 +676,33 @@ export default function AllOrdersList() {
                       </OrderSummaryModal>
                     </TableCell>
                     <TableCell>
-                      {order.orderDate ? (() => {
-                        // Handle timezone issues by creating date without timezone conversion
-                        const date = new Date(order.orderDate);
-                        // If the date string contains 'T' (ISO format), extract just the date part
-                        if (typeof order.orderDate === 'string' && order.orderDate.includes('T')) {
-                          const datePart = order.orderDate.split('T')[0];
-                          const [year, month, day] = datePart.split('-');
-                          return `${month}/${day}/${year}`;
-                        }
-                        return date.toLocaleDateString('en-US', { 
-                          year: 'numeric', 
-                          month: '2-digit', 
-                          day: '2-digit',
-                          timeZone: 'UTC'
-                        });
-                      })() : '-'}
+                      {order.orderDate
+                        ? (() => {
+                            // Handle timezone issues by creating date without timezone conversion
+                            const date = new Date(order.orderDate);
+                            // If the date string contains 'T' (ISO format), extract just the date part
+                            if (
+                              typeof order.orderDate === 'string' &&
+                              order.orderDate.includes('T')
+                            ) {
+                              const datePart = order.orderDate.split('T')[0];
+                              const [year, month, day] = datePart.split('-');
+                              return `${month}/${day}/${year}`;
+                            }
+                            return date.toLocaleDateString('en-US', {
+                              year: 'numeric',
+                              month: '2-digit',
+                              day: '2-digit',
+                              timeZone: 'UTC',
+                            });
+                          })()
+                        : '-'}
                     </TableCell>
                     <TableCell>
-                      <CustomerDetailsTooltip customerId={order.customerId} customerName={order.customer || 'N/A'}>
+                      <CustomerDetailsTooltip
+                        customerId={order.customerId}
+                        customerName={order.customer || 'N/A'}
+                      >
                         <span className="cursor-pointer hover:text-blue-600 dark:hover:text-blue-400">
                           {order.customer || 'N/A'}
                         </span>
@@ -582,36 +716,51 @@ export default function AllOrdersList() {
                     <TableCell>
                       {order.product || getModelDisplayName(order.modelId)}
                       {stockModels.length === 0 && (
-                        <span className="text-xs text-gray-400 ml-2">(Loading...)</span>
+                        <span className="text-xs text-gray-400 ml-2">
+                          (Loading...)
+                        </span>
                       )}
                     </TableCell>
                     <TableCell>
-                      <Badge className={`${getDepartmentBadgeColor(displayDepartment)} text-white`}>
+                      <Badge
+                        className={`${getDepartmentBadgeColor(displayDepartment)} text-white`}
+                      >
                         {displayDepartment || 'Completed'}
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      {order.dueDate ? (() => {
-                        // Handle timezone issues by creating date without timezone conversion
-                        const date = new Date(order.dueDate);
-                        // If the date string contains 'T' (ISO format), extract just the date part
-                        if (typeof order.dueDate === 'string' && order.dueDate.includes('T')) {
-                          const datePart = order.dueDate.split('T')[0];
-                          const [year, month, day] = datePart.split('-');
-                          return `${month}/${day}/${year}`;
-                        }
-                        return date.toLocaleDateString('en-US', { 
-                          year: 'numeric', 
-                          month: '2-digit', 
-                          day: '2-digit',
-                          timeZone: 'UTC'
-                        });
-                      })() : '-'}
+                      {order.dueDate
+                        ? (() => {
+                            // Handle timezone issues by creating date without timezone conversion
+                            const date = new Date(order.dueDate);
+                            // If the date string contains 'T' (ISO format), extract just the date part
+                            if (
+                              typeof order.dueDate === 'string' &&
+                              order.dueDate.includes('T')
+                            ) {
+                              const datePart = order.dueDate.split('T')[0];
+                              const [year, month, day] = datePart.split('-');
+                              return `${month}/${day}/${year}`;
+                            }
+                            return date.toLocaleDateString('en-US', {
+                              year: 'numeric',
+                              month: '2-digit',
+                              day: '2-digit',
+                              timeZone: 'UTC',
+                            });
+                          })()
+                        : '-'}
                     </TableCell>
                     <TableCell>
                       <div className="flex flex-col gap-1">
                         <div className="font-semibold text-sm">
-                          ${order.paymentTotal ? order.paymentTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}
+                          $
+                          {order.paymentTotal
+                            ? order.paymentTotal.toLocaleString('en-US', {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2,
+                              })
+                            : '0.00'}
                         </div>
                         <div>
                           {order.isFullyPaid ? (
@@ -635,10 +784,14 @@ export default function AllOrdersList() {
                           <Badge
                             variant="destructive"
                             className={`cursor-pointer hover:opacity-80 transition-opacity ${
-                              getKickbackStatus(order.orderId) === 'CRITICAL' ? 'bg-red-600 hover:bg-red-700' :
-                              getKickbackStatus(order.orderId) === 'HIGH' ? 'bg-orange-600 hover:bg-orange-700' :
-                              getKickbackStatus(order.orderId) === 'MEDIUM' ? 'bg-yellow-600 hover:bg-yellow-700' :
-                              'bg-gray-600 hover:bg-gray-700'
+                              getKickbackStatus(order.orderId) === 'CRITICAL'
+                                ? 'bg-red-600 hover:bg-red-700'
+                                : getKickbackStatus(order.orderId) === 'HIGH'
+                                  ? 'bg-orange-600 hover:bg-orange-700'
+                                  : getKickbackStatus(order.orderId) ===
+                                      'MEDIUM'
+                                    ? 'bg-yellow-600 hover:bg-yellow-700'
+                                    : 'bg-gray-600 hover:bg-gray-700'
                             }`}
                             onClick={() => handleKickbackClick(order.orderId)}
                           >
@@ -662,27 +815,41 @@ export default function AllOrdersList() {
                           </Button>
                         </Link>
 
-                        {!isScrapped && !isComplete && !isFulfilled && order.currentDepartment === 'P1 Production Queue' && (
-                          <Button
-                            size="sm"
-                            onClick={() => handlePushToLayupPlugging(order.orderId)}
-                            className="bg-green-600 hover:bg-green-700 text-white"
-                          >
-                            <ArrowRight className="w-4 h-4 mr-1" />
-                            Push to Layup/Plugging
-                          </Button>
-                        )}
+                        {!isScrapped &&
+                          !isComplete &&
+                          !isFulfilled &&
+                          order.currentDepartment === 'P1 Production Queue' && (
+                            <Button
+                              size="sm"
+                              onClick={() =>
+                                handlePushToLayupPlugging(order.orderId)
+                              }
+                              className="bg-green-600 hover:bg-green-700 text-white"
+                            >
+                              <ArrowRight className="w-4 h-4 mr-1" />
+                              Push to Layup/Plugging
+                            </Button>
+                          )}
 
-                        {!isScrapped && !isComplete && !isFulfilled && nextDept && order.currentDepartment !== 'P1 Production Queue' && (
-                          <Button
-                            size="sm"
-                            onClick={() => handleProgressOrder(order.orderId, displayDepartment)}
-                            className="bg-blue-600 hover:bg-blue-700 text-white"
-                          >
-                            <ArrowRight className="w-4 h-4 mr-1" />
-                            {nextDept}
-                          </Button>
-                        )}
+                        {!isScrapped &&
+                          !isComplete &&
+                          !isFulfilled &&
+                          nextDept &&
+                          order.currentDepartment !== 'P1 Production Queue' && (
+                            <Button
+                              size="sm"
+                              onClick={() =>
+                                handleProgressOrder(
+                                  order.orderId,
+                                  displayDepartment
+                                )
+                              }
+                              className="bg-blue-600 hover:bg-blue-700 text-white"
+                            >
+                              <ArrowRight className="w-4 h-4 mr-1" />
+                              {nextDept}
+                            </Button>
+                          )}
 
                         {!isScrapped && (
                           <Button
@@ -700,7 +867,9 @@ export default function AllOrdersList() {
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => createReplacementMutation.mutate(order.orderId)}
+                            onClick={() =>
+                              createReplacementMutation.mutate(order.orderId)
+                            }
                             disabled={createReplacementMutation.isPending}
                           >
                             <Package2 className="w-4 h-4 mr-1" />

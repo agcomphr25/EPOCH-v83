@@ -15,10 +15,14 @@ const departments = [
   { name: 'Finish QC', color: 'bg-[#7BAFD4]' },
   { name: 'Paint', color: 'bg-[#7BAFD4]' },
   { name: 'Shipping QC', color: 'bg-[#7BAFD4]' },
-  { name: 'Shipping', color: 'bg-[#7BAFD4]' }
+  { name: 'Shipping', color: 'bg-[#7BAFD4]' },
 ];
 
-type ScheduleStatus = 'on-schedule' | 'dept-overdue' | 'cannot-meet-due' | 'critical';
+type ScheduleStatus =
+  | 'on-schedule'
+  | 'dept-overdue'
+  | 'cannot-meet-due'
+  | 'critical';
 
 interface OrderDetail {
   orderId: string;
@@ -33,11 +37,17 @@ const statusColors: Record<ScheduleStatus, string> = {
   'on-schedule': 'bg-green-500',
   'dept-overdue': 'bg-yellow-500',
   'cannot-meet-due': 'bg-orange-500',
-  'critical': 'bg-red-500'
+  critical: 'bg-red-500',
 };
 
 // Hybrid visualization components
-const OrderPixel = ({ order, onClick }: { order: OrderDetail; onClick?: () => void }) => {
+const OrderPixel = ({
+  order,
+  onClick,
+}: {
+  order: OrderDetail;
+  onClick?: () => void;
+}) => {
   const getStatusStyle = (status: ScheduleStatus) => {
     if (status === 'critical') {
       return { backgroundColor: '#EF4444' }; // red-500
@@ -52,9 +62,13 @@ const OrderPixel = ({ order, onClick }: { order: OrderDetail; onClick?: () => vo
   };
 
   return (
-    <div 
+    <div
       className={`w-2 h-2 cursor-pointer hover:scale-150 transition-transform ${
-        (order.scheduleStatus === 'critical' || order.scheduleStatus === 'cannot-meet-due' || order.scheduleStatus === 'dept-overdue') ? '' : statusColors[order.scheduleStatus]
+        order.scheduleStatus === 'critical' ||
+        order.scheduleStatus === 'cannot-meet-due' ||
+        order.scheduleStatus === 'dept-overdue'
+          ? ''
+          : statusColors[order.scheduleStatus]
       }`}
       style={getStatusStyle(order.scheduleStatus)}
       onClick={onClick}
@@ -63,7 +77,15 @@ const OrderPixel = ({ order, onClick }: { order: OrderDetail; onClick?: () => vo
   );
 };
 
-const OrderChip = ({ order, onClick, getModelDisplayName }: { order: OrderDetail; onClick?: () => void; getModelDisplayName?: (modelId: string) => string }) => {
+const OrderChip = ({
+  order,
+  onClick,
+  getModelDisplayName,
+}: {
+  order: OrderDetail;
+  onClick?: () => void;
+  getModelDisplayName?: (modelId: string) => string;
+}) => {
   const getStatusStyle = (status: ScheduleStatus) => {
     if (status === 'critical') {
       return { backgroundColor: '#EF4444', color: '#FFFFFF' }; // red-500 with white text
@@ -78,9 +100,13 @@ const OrderChip = ({ order, onClick, getModelDisplayName }: { order: OrderDetail
   };
 
   return (
-    <div 
+    <div
       className={`px-2 py-1 rounded text-xs cursor-pointer hover:bg-opacity-80 transition-colors ${
-        (order.scheduleStatus === 'critical' || order.scheduleStatus === 'cannot-meet-due' || order.scheduleStatus === 'dept-overdue') ? '' : statusColors[order.scheduleStatus] + ' text-white'
+        order.scheduleStatus === 'critical' ||
+        order.scheduleStatus === 'cannot-meet-due' ||
+        order.scheduleStatus === 'dept-overdue'
+          ? ''
+          : statusColors[order.scheduleStatus] + ' text-white'
       }`}
       style={getStatusStyle(order.scheduleStatus)}
       onClick={onClick}
@@ -91,7 +117,15 @@ const OrderChip = ({ order, onClick, getModelDisplayName }: { order: OrderDetail
   );
 };
 
-const DepartmentVisualization = ({ department, orders, getModelDisplayName }: { department: string; orders: OrderDetail[]; getModelDisplayName: (modelId: string) => string }) => {
+const DepartmentVisualization = ({
+  department,
+  orders,
+  getModelDisplayName,
+}: {
+  department: string;
+  orders: OrderDetail[];
+  getModelDisplayName: (modelId: string) => string;
+}) => {
   const count = orders.length;
   const usePixels = count > 20; // Hybrid selection threshold
 
@@ -111,7 +145,11 @@ const DepartmentVisualization = ({ department, orders, getModelDisplayName }: { 
     return (
       <div className="flex flex-wrap gap-1">
         {orders.map((order) => (
-          <OrderChip key={order.orderId} order={order} getModelDisplayName={getModelDisplayName} />
+          <OrderChip
+            key={order.orderId}
+            order={order}
+            getModelDisplayName={getModelDisplayName}
+          />
         ))}
       </div>
     );
@@ -119,14 +157,18 @@ const DepartmentVisualization = ({ department, orders, getModelDisplayName }: { 
 };
 
 export default function PipelineVisualization() {
-  const { data: pipelineCounts, isLoading: countsLoading } = useQuery<Record<string, number>>({
+  const { data: pipelineCounts, isLoading: countsLoading } = useQuery<
+    Record<string, number>
+  >({
     queryKey: ['/api/orders/pipeline-counts'],
-    refetchInterval: 30000 // Refresh every 30 seconds
+    refetchInterval: 30000, // Refresh every 30 seconds
   });
 
-  const { data: pipelineDetails, isLoading: detailsLoading } = useQuery<Record<string, OrderDetail[]>>({
+  const { data: pipelineDetails, isLoading: detailsLoading } = useQuery<
+    Record<string, OrderDetail[]>
+  >({
     queryKey: ['/api/orders/pipeline-details'],
-    refetchInterval: 30000 // Refresh every 30 seconds
+    refetchInterval: 30000, // Refresh every 30 seconds
   });
 
   // Fetch stock models to get display names
@@ -156,7 +198,10 @@ export default function PipelineVisualization() {
     );
   }
 
-  const totalOrders = Object.values(pipelineCounts || {}).reduce((sum, count) => sum + count, 0);
+  const totalOrders = Object.values(pipelineCounts || {}).reduce(
+    (sum, count) => sum + count,
+    0
+  );
 
   return (
     <Card>
@@ -174,15 +219,16 @@ export default function PipelineVisualization() {
             // Get count and orders for this department
             const count = pipelineCounts?.[dept.name] || 0;
             const orders = pipelineDetails?.[dept.name] || [];
-            
-            const percentage = totalOrders > 0 ? (count / totalOrders) * 100 : 0;
-            
+
+            const percentage =
+              totalOrders > 0 ? (count / totalOrders) * 100 : 0;
+
             // Determine if department should be highlighted (more than 45 stocks)
             const isOverloaded = count > 45;
-            
+
             return (
               <div key={dept.name} className="text-center space-y-2">
-                <div 
+                <div
                   className={`w-full h-16 rounded-lg flex items-center justify-center font-bold text-xl ${
                     isOverloaded ? 'text-black' : `${dept.color} text-white`
                   }`}
@@ -191,12 +237,16 @@ export default function PipelineVisualization() {
                   {count}
                 </div>
                 <div className="text-sm font-medium">{dept.name}</div>
-                
+
                 {/* Schedule status visualization */}
                 <div className="min-h-[60px] p-2 bg-gray-50 rounded border overflow-hidden">
-                  <DepartmentVisualization department={dept.name} orders={orders} getModelDisplayName={getModelDisplayName} />
+                  <DepartmentVisualization
+                    department={dept.name}
+                    orders={orders}
+                    getModelDisplayName={getModelDisplayName}
+                  />
                 </div>
-                
+
                 <Progress value={percentage} className="h-2" />
                 <div className="text-xs text-gray-500">
                   {percentage.toFixed(1)}%
@@ -205,7 +255,7 @@ export default function PipelineVisualization() {
             );
           })}
         </div>
-        
+
         {/* Legend */}
         <div className="mt-4 space-y-2">
           {/* Order Status Legend */}
@@ -215,11 +265,17 @@ export default function PipelineVisualization() {
               <span>On Schedule</span>
             </div>
             <div className="flex items-center gap-1">
-              <div className="w-3 h-3 rounded" style={{backgroundColor: '#FFFF00'}}></div>
+              <div
+                className="w-3 h-3 rounded"
+                style={{ backgroundColor: '#FFFF00' }}
+              ></div>
               <span>Dept Overdue</span>
             </div>
             <div className="flex items-center gap-1">
-              <div className="w-3 h-3 rounded" style={{backgroundColor: '#FFA500'}}></div>
+              <div
+                className="w-3 h-3 rounded"
+                style={{ backgroundColor: '#FFA500' }}
+              ></div>
               <span>Can't Meet Due</span>
             </div>
             <div className="flex items-center gap-1">
@@ -227,16 +283,19 @@ export default function PipelineVisualization() {
               <span>Critical</span>
             </div>
           </div>
-          
+
           {/* Department Card Legend */}
           <div className="flex items-center justify-center gap-4 text-xs text-gray-600">
             <div className="flex items-center gap-1">
-              <div className="w-3 h-3 rounded" style={{backgroundColor: '#FFFF00'}}></div>
+              <div
+                className="w-3 h-3 rounded"
+                style={{ backgroundColor: '#FFFF00' }}
+              ></div>
               <span>Department Card: {'>'}45 Stocks</span>
             </div>
           </div>
         </div>
-        
+
         <div className="mt-6 pt-4 border-t">
           <div className="flex items-center justify-between text-sm text-gray-600">
             <span>Pipeline Flow Direction:</span>

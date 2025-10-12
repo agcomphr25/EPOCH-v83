@@ -1,4 +1,12 @@
-import { format, startOfWeek, addDays, differenceInWeeks, getYear, setYear, parseISO } from 'date-fns';
+import {
+  format,
+  startOfWeek,
+  addDays,
+  differenceInWeeks,
+  getYear,
+  setYear,
+  parseISO,
+} from 'date-fns';
 
 /**
  * Company week utilities
@@ -18,39 +26,44 @@ const WEEK_OFFSET = 2;
 export function getCompanyWeek(date: Date): number {
   // Get the week number starting from Wednesday
   const wednesday = startOfWeek(date, { weekStartsOn: 3 }); // 3 = Wednesday
-  
+
   // Get the first Wednesday of the year
   const year = getYear(date);
   const firstDayOfYear = new Date(year, 0, 1);
   const firstWednesday = startOfWeek(firstDayOfYear, { weekStartsOn: 3 });
-  
+
   // If first Wednesday is in previous year, use next Wednesday
-  const startDate = getYear(firstWednesday) < year 
-    ? addDays(firstWednesday, 7) 
-    : firstWednesday;
-  
+  const startDate =
+    getYear(firstWednesday) < year
+      ? addDays(firstWednesday, 7)
+      : firstWednesday;
+
   // Calculate week number (1-based)
   const weekNumber = differenceInWeeks(wednesday, startDate) + 1;
-  
+
   // Apply company offset (week 3 in January becomes week 1)
   const companyWeek = weekNumber - WEEK_OFFSET;
-  
+
   return companyWeek > 0 ? companyWeek : 1;
 }
 
 /**
  * Get the start date (Wednesday) of a company week
  */
-export function getCompanyWeekStart(companyWeekNumber: number, year?: number): Date {
+export function getCompanyWeekStart(
+  companyWeekNumber: number,
+  year?: number
+): Date {
   const currentYear = year || getYear(new Date());
   const firstDayOfYear = new Date(currentYear, 0, 1);
   const firstWednesday = startOfWeek(firstDayOfYear, { weekStartsOn: 3 });
-  
+
   // Adjust if first Wednesday is in previous year
-  const startDate = getYear(firstWednesday) < currentYear 
-    ? addDays(firstWednesday, 7) 
-    : firstWednesday;
-  
+  const startDate =
+    getYear(firstWednesday) < currentYear
+      ? addDays(firstWednesday, 7)
+      : firstWednesday;
+
   // Add offset and calculate week start
   const calendarWeek = companyWeekNumber + WEEK_OFFSET;
   return addDays(startDate, (calendarWeek - 1) * 7);
@@ -59,7 +72,10 @@ export function getCompanyWeekStart(companyWeekNumber: number, year?: number): D
 /**
  * Get the end date (Tuesday) of a company week
  */
-export function getCompanyWeekEnd(companyWeekNumber: number, year?: number): Date {
+export function getCompanyWeekEnd(
+  companyWeekNumber: number,
+  year?: number
+): Date {
   const weekStart = getCompanyWeekStart(companyWeekNumber, year);
   return addDays(weekStart, 6); // Wednesday + 6 days = Tuesday
 }
@@ -67,7 +83,10 @@ export function getCompanyWeekEnd(companyWeekNumber: number, year?: number): Dat
 /**
  * Format a date range for display
  */
-export function formatWeekRange(companyWeekNumber: number, year?: number): string {
+export function formatWeekRange(
+  companyWeekNumber: number,
+  year?: number
+): string {
   const start = getCompanyWeekStart(companyWeekNumber, year);
   const end = getCompanyWeekEnd(companyWeekNumber, year);
   return `${format(start, 'MMM d')} - ${format(end, 'MMM d, yyyy')}`;
@@ -83,10 +102,14 @@ export function getCurrentCompanyWeek(): number {
 /**
  * Check if a date falls within a specific company week
  */
-export function isDateInCompanyWeek(date: Date | string, companyWeekNumber: number, year?: number): boolean {
+export function isDateInCompanyWeek(
+  date: Date | string,
+  companyWeekNumber: number,
+  year?: number
+): boolean {
   const checkDate = typeof date === 'string' ? parseISO(date) : date;
   const weekStart = getCompanyWeekStart(companyWeekNumber, year);
   const weekEnd = addDays(getCompanyWeekEnd(companyWeekNumber, year), 1); // Include end of Tuesday
-  
+
   return checkDate >= weekStart && checkDate < weekEnd;
 }

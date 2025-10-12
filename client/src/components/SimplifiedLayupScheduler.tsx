@@ -3,8 +3,14 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Calendar, Clock, AlertTriangle, CheckCircle } from 'lucide-react';
-import { createLayupSchedulerService, ScheduledOrder } from '../../../shared/services/LayupSchedulerService';
-import { createOrderPriorityService, PriorityOrder } from '../../../shared/services/OrderPriorityService';
+import {
+  createLayupSchedulerService,
+  ScheduledOrder,
+} from '../../../shared/services/LayupSchedulerService';
+import {
+  createOrderPriorityService,
+  PriorityOrder,
+} from '../../../shared/services/OrderPriorityService';
 import { Order } from '../../../shared/schema';
 
 // Sample data for demonstration
@@ -149,7 +155,9 @@ const sampleEmployeeCapacities = [
 ];
 
 const SimplifiedLayupScheduler: React.FC = () => {
-  const [prioritizedOrders, setPrioritizedOrders] = useState<PriorityOrder[]>([]);
+  const [prioritizedOrders, setPrioritizedOrders] = useState<PriorityOrder[]>(
+    []
+  );
   const [scheduledOrders, setScheduledOrders] = useState<ScheduledOrder[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -163,7 +171,7 @@ const SimplifiedLayupScheduler: React.FC = () => {
 
   const generateSchedule = () => {
     setLoading(true);
-    
+
     try {
       // Step 1: Use the priority service to sort orders
       const sorted = priorityService.sortOrdersByPriority(sampleOrders);
@@ -183,7 +191,10 @@ const SimplifiedLayupScheduler: React.FC = () => {
     }
   };
 
-  const getPriorityBadgeColor = (orderType: PriorityOrder['orderType'], urgency: PriorityOrder['urgencyLevel']) => {
+  const getPriorityBadgeColor = (
+    orderType: PriorityOrder['orderType'],
+    urgency: PriorityOrder['urgencyLevel']
+  ) => {
     if (orderType === 'mesa_universal') return 'bg-red-500 text-white';
     if (urgency === 'critical') return 'bg-orange-500 text-white';
     if (urgency === 'high') return 'bg-yellow-500 text-black';
@@ -228,19 +239,29 @@ const SimplifiedLayupScheduler: React.FC = () => {
           <CardContent>
             <div className="space-y-3">
               {prioritizedOrders.map((order, index) => (
-                <div key={order.id} className="flex items-center justify-between p-3 border rounded-lg">
+                <div
+                  key={order.id}
+                  className="flex items-center justify-between p-3 border rounded-lg"
+                >
                   <div className="flex items-center space-x-3">
                     <Badge variant="outline" className="text-xs">
                       #{index + 1}
                     </Badge>
                     <div>
                       <div className="font-medium">{order.orderId}</div>
-                      <div className="text-sm text-gray-600">{order.customer}</div>
+                      <div className="text-sm text-gray-600">
+                        {order.customer}
+                      </div>
                     </div>
                   </div>
                   <div className="flex items-center space-x-2">
                     {getUrgencyIcon(order.urgencyLevel)}
-                    <Badge className={getPriorityBadgeColor(order.orderType, order.urgencyLevel)}>
+                    <Badge
+                      className={getPriorityBadgeColor(
+                        order.orderType,
+                        order.urgencyLevel
+                      )}
+                    >
                       Score: {order.priorityScore}
                     </Badge>
                     <div className="text-xs text-gray-500 max-w-32 truncate">
@@ -275,7 +296,12 @@ const SimplifiedLayupScheduler: React.FC = () => {
                     <div>Estimated Hours: {order.estimatedHours}</div>
                     <div>Week: {order.scheduledWeek}</div>
                   </div>
-                  <Badge className={getPriorityBadgeColor(order.orderType, order.urgencyLevel)}>
+                  <Badge
+                    className={getPriorityBadgeColor(
+                      order.orderType,
+                      order.urgencyLevel
+                    )}
+                  >
                     {order.orderType.replace('_', ' ').toUpperCase()}
                   </Badge>
                 </div>
@@ -293,7 +319,9 @@ const SimplifiedLayupScheduler: React.FC = () => {
         <CardContent>
           <div className="grid md:grid-cols-3 gap-4 text-sm">
             <div className="p-3 bg-green-50 rounded-lg">
-              <h4 className="font-medium text-green-800 mb-2">Separated Concerns</h4>
+              <h4 className="font-medium text-green-800 mb-2">
+                Separated Concerns
+              </h4>
               <ul className="text-green-700 space-y-1">
                 <li>• Priority logic isolated</li>
                 <li>• Easy to test independently</li>
@@ -301,7 +329,9 @@ const SimplifiedLayupScheduler: React.FC = () => {
               </ul>
             </div>
             <div className="p-3 bg-blue-50 rounded-lg">
-              <h4 className="font-medium text-blue-800 mb-2">Maintainable Rules</h4>
+              <h4 className="font-medium text-blue-800 mb-2">
+                Maintainable Rules
+              </h4>
               <ul className="text-blue-700 space-y-1">
                 <li>• PO vs regular order rules</li>
                 <li>• Configurable priority scoring</li>
@@ -309,7 +339,9 @@ const SimplifiedLayupScheduler: React.FC = () => {
               </ul>
             </div>
             <div className="p-3 bg-purple-50 rounded-lg">
-              <h4 className="font-medium text-purple-800 mb-2">Clean Interface</h4>
+              <h4 className="font-medium text-purple-800 mb-2">
+                Clean Interface
+              </h4>
               <ul className="text-purple-700 space-y-1">
                 <li>• UI focuses on display only</li>
                 <li>• Services handle business logic</li>

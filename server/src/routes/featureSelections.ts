@@ -14,8 +14,8 @@ router.post('/track', async (req, res) => {
     const { featureName, optionValue, optionLabel } = req.body;
 
     if (!featureName || !optionValue || !optionLabel) {
-      return res.status(400).json({ 
-        error: 'featureName, optionValue, and optionLabel are required' 
+      return res.status(400).json({
+        error: 'featureName, optionValue, and optionLabel are required',
       });
     }
 

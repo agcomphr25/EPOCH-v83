@@ -10,44 +10,52 @@ function isDeploymentEnvironment(): boolean {
   // TEMPORARY: Authentication disabled for agcompepoch.xyz to allow access
   // TODO: Re-enable authentication once login issues are fully resolved
   return false;
-  
+
   // Prioritize NODE_ENV for development - always bypass auth in development
   if (import.meta.env.VITE_NODE_ENV === 'development' || import.meta.env.DEV) {
     return false;
   }
-  
+
   // Multiple methods to detect deployment environment
   const hostname = window.location.hostname;
   const viteDeployment = import.meta.env.VITE_REPLIT_DEPLOYMENT === '1';
   const nodeEnv = import.meta.env.VITE_NODE_ENV === 'production';
-  
+
   // Development overrides - only skip auth for actual development environments
-  const isLocalhost = hostname.includes('localhost') || hostname.includes('127.0.0.1');
-  const isReplitEditor = hostname.includes('replit.dev') && !hostname.includes('.replit.dev');
-  
+  const isLocalhost =
+    hostname.includes('localhost') || hostname.includes('127.0.0.1');
+  const isReplitEditor =
+    hostname.includes('replit.dev') && !hostname.includes('.replit.dev');
+
   // Debug logs removed - authentication working correctly
-  
+
   // Skip auth ONLY for localhost and Replit editor (not deployed)
   if (isLocalhost || isReplitEditor) {
-      return false;
+    return false;
   }
-  
+
   // For custom domains like agcompepoch.xyz, ALWAYS require auth
   return true;
 }
 
-export default function DeploymentAuthWrapper({ children }: DeploymentAuthWrapperProps) {
+export default function DeploymentAuthWrapper({
+  children,
+}: DeploymentAuthWrapperProps) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const hostname = window.location.hostname;
     const isDeployment = isDeploymentEnvironment();
-    
+
     // Failsafe: Reduced timeout for better UX during database issues
     const maxLoadingTimeout = setTimeout(() => {
-      console.warn('⚠️ TIMEOUT FAILSAFE TRIGGERED: Authentication check took too long, stopping loading state');
-      console.warn('This likely indicates database connectivity issues on the deployed site');
+      console.warn(
+        '⚠️ TIMEOUT FAILSAFE TRIGGERED: Authentication check took too long, stopping loading state'
+      );
+      console.warn(
+        'This likely indicates database connectivity issues on the deployed site'
+      );
       console.warn('🗑️ TIMEOUT: Clearing localStorage tokens due to timeout');
       setIsLoading(false);
       // Clear any stale tokens that might be causing issues
@@ -55,7 +63,7 @@ export default function DeploymentAuthWrapper({ children }: DeploymentAuthWrappe
       localStorage.removeItem('jwtToken');
       setIsAuthenticated(false);
     }, 8000); // 8 second absolute maximum (reduced from 12)
-    
+
     // Skip authentication in development
     if (!isDeployment) {
       clearTimeout(maxLoadingTimeout);
@@ -68,43 +76,56 @@ export default function DeploymentAuthWrapper({ children }: DeploymentAuthWrappe
     const checkAuth = async () => {
       try {
         // Wait a moment for tokens to be written to localStorage after redirect
-        await new Promise(resolve => setTimeout(resolve, 300));
-        
-        const token = localStorage.getItem('sessionToken') || localStorage.getItem('jwtToken');
+        await new Promise((resolve) => setTimeout(resolve, 300));
+
+        const token =
+          localStorage.getItem('sessionToken') ||
+          localStorage.getItem('jwtToken');
         console.log('🔍 AUTH WRAPPER: Token found after redirect:', !!token);
-        
+
         if (token) {
-          console.log('🔐 AUTH WRAPPER: Checking authentication for deployment...');
-          
+          console.log(
+            '🔐 AUTH WRAPPER: Checking authentication for deployment...'
+          );
+
           // Reduced timeout to fail faster and provide better UX
           const controller = new AbortController();
           const timeoutId = setTimeout(() => {
             console.log('Authentication check timed out after 5 seconds');
             controller.abort();
           }, 5000); // 5 second timeout
-          
+
           try {
             const response = await fetch('/api/auth/session', {
               headers: {
-                'Authorization': `Bearer ${token}`
+                Authorization: `Bearer ${token}`,
               },
-              signal: controller.signal
+              signal: controller.signal,
             });
             clearTimeout(timeoutId);
-            
+
             console.log('Authentication response status:', response.status);
-            
+
             if (response.ok) {
               const userData = await response.json();
-              console.log('✅ AUTH WRAPPER: Authentication successful for user:', userData.username);
+              console.log(
+                '✅ AUTH WRAPPER: Authentication successful for user:',
+                userData.username
+              );
               // Check if user is actually authenticated (not anonymous)
               if (userData.username !== 'anonymous' && userData.id > 0) {
                 console.log('👤 AUTH WRAPPER: Setting authenticated state');
                 setIsAuthenticated(true);
-                console.log('🎉 AUTH WRAPPER: Authentication process completed successfully!');
+                console.log(
+                  '🎉 AUTH WRAPPER: Authentication process completed successfully!'
+                );
               } else {
-                console.log('⚠️ AUTH WRAPPER: Invalid user data, clearing tokens');
-                console.log('🗑️ INVALID USER: Clearing localStorage tokens due to invalid user data');
+                console.log(
+                  '⚠️ AUTH WRAPPER: Invalid user data, clearing tokens'
+                );
+                console.log(
+                  '🗑️ INVALID USER: Clearing localStorage tokens due to invalid user data'
+                );
                 // Clear invalid tokens
                 localStorage.removeItem('sessionToken');
                 localStorage.removeItem('jwtToken');
@@ -112,14 +133,24 @@ export default function DeploymentAuthWrapper({ children }: DeploymentAuthWrappe
               }
             } else if (response.status === 408) {
               // Database timeout - clear tokens and show login
-              console.error('Database timeout detected, clearing authentication tokens');
-              console.log('🗑️ DB TIMEOUT: Clearing localStorage tokens due to database timeout');
+              console.error(
+                'Database timeout detected, clearing authentication tokens'
+              );
+              console.log(
+                '🗑️ DB TIMEOUT: Clearing localStorage tokens due to database timeout'
+              );
               localStorage.removeItem('sessionToken');
               localStorage.removeItem('jwtToken');
               setIsAuthenticated(false);
             } else {
-              console.log('Authentication failed with status:', response.status);
-              console.log('🗑️ AUTH FAILED: Clearing localStorage tokens due to auth failure, status:', response.status);
+              console.log(
+                'Authentication failed with status:',
+                response.status
+              );
+              console.log(
+                '🗑️ AUTH FAILED: Clearing localStorage tokens due to auth failure, status:',
+                response.status
+              );
               // Clear invalid tokens
               localStorage.removeItem('sessionToken');
               localStorage.removeItem('jwtToken');
@@ -128,14 +159,18 @@ export default function DeploymentAuthWrapper({ children }: DeploymentAuthWrappe
           } catch (fetchError: any) {
             clearTimeout(timeoutId);
             console.error('Session fetch failed:', fetchError);
-            
+
             // Enhanced error handling for specific scenarios
             if (fetchError.name === 'AbortError') {
-              console.error('Authentication request timed out - possible database connectivity issue');
+              console.error(
+                'Authentication request timed out - possible database connectivity issue'
+              );
             } else if (fetchError.message?.includes('fetch')) {
-              console.error('Network error during authentication - check server connectivity');
+              console.error(
+                'Network error during authentication - check server connectivity'
+              );
             }
-            
+
             // Clear invalid tokens on timeout/error
             localStorage.removeItem('sessionToken');
             localStorage.removeItem('jwtToken');

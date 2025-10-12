@@ -1,15 +1,49 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { CheckCircle, XCircle, Clock, Plus, FileText, Settings, Edit, Trash2 } from 'lucide-react';
+import {
+  CheckCircle,
+  XCircle,
+  Clock,
+  Plus,
+  FileText,
+  Settings,
+  Edit,
+  Trash2,
+} from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -18,9 +52,10 @@ import { z } from 'zod';
 import type { QcDefinition, QcSubmission } from '@shared/schema';
 
 export default function QCManager() {
-  const [activeTab, setActiveTab] = useState("submissions");
+  const [activeTab, setActiveTab] = useState('submissions');
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingSubmission, setEditingSubmission] = useState<QcSubmission | null>(null);
+  const [editingSubmission, setEditingSubmission] =
+    useState<QcSubmission | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -77,11 +112,14 @@ export default function QCManager() {
   const createSubmissionMutation = useMutation({
     mutationFn: async (data: z.infer<typeof insertQcSubmissionSchema>) => {
       if (editingSubmission) {
-        const response = await fetch(`/api/qc-submissions/${editingSubmission.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(data),
-        });
+        const response = await fetch(
+          `/api/qc-submissions/${editingSubmission.id}`,
+          {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data),
+          }
+        );
         if (!response.ok) throw new Error('Failed to update QC submission');
         return response.json();
       } else {
@@ -96,13 +134,23 @@ export default function QCManager() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/qc-submissions'] });
-      toast({ title: editingSubmission ? 'QC submission updated successfully' : 'QC submission created successfully' });
+      toast({
+        title: editingSubmission
+          ? 'QC submission updated successfully'
+          : 'QC submission created successfully',
+      });
       setIsModalOpen(false);
       setEditingSubmission(null);
       form.reset();
     },
     onError: (error) => {
-      toast({ title: editingSubmission ? 'Error updating QC submission' : 'Error creating QC submission', description: error.message, variant: 'destructive' });
+      toast({
+        title: editingSubmission
+          ? 'Error updating QC submission'
+          : 'Error creating QC submission',
+        description: error.message,
+        variant: 'destructive',
+      });
     },
   });
 
@@ -118,7 +166,11 @@ export default function QCManager() {
       toast({ title: 'QC submission deleted successfully' });
     },
     onError: (error) => {
-      toast({ title: 'Error deleting QC submission', description: error.message, variant: 'destructive' });
+      toast({
+        title: 'Error deleting QC submission',
+        description: error.message,
+        variant: 'destructive',
+      });
     },
   });
 
@@ -149,7 +201,7 @@ export default function QCManager() {
       const response = await fetch('/api/qc-submissions');
       if (!response.ok) throw new Error('Failed to fetch QC submissions');
       return response.json() as Promise<QcSubmission[]>;
-    }
+    },
   });
 
   // Fetch QC definitions
@@ -159,17 +211,32 @@ export default function QCManager() {
       const response = await fetch('/api/qc-definitions');
       if (!response.ok) throw new Error('Failed to fetch QC definitions');
       return response.json() as Promise<QcDefinition[]>;
-    }
+    },
   });
 
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'PASS':
-        return <Badge className="bg-green-100 text-green-800 border-green-200"><CheckCircle className="h-3 w-3 mr-1" />PASS</Badge>;
+        return (
+          <Badge className="bg-green-100 text-green-800 border-green-200">
+            <CheckCircle className="h-3 w-3 mr-1" />
+            PASS
+          </Badge>
+        );
       case 'FAIL':
-        return <Badge className="bg-red-100 text-red-800 border-red-200"><XCircle className="h-3 w-3 mr-1" />FAIL</Badge>;
+        return (
+          <Badge className="bg-red-100 text-red-800 border-red-200">
+            <XCircle className="h-3 w-3 mr-1" />
+            FAIL
+          </Badge>
+        );
       default:
-        return <Badge className="bg-yellow-100 text-yellow-800 border-yellow-200"><Clock className="h-3 w-3 mr-1" />PENDING</Badge>;
+        return (
+          <Badge className="bg-yellow-100 text-yellow-800 border-yellow-200">
+            <Clock className="h-3 w-3 mr-1" />
+            PENDING
+          </Badge>
+        );
     }
   };
 
@@ -179,7 +246,7 @@ export default function QCManager() {
       month: 'short',
       day: 'numeric',
       hour: '2-digit',
-      minute: '2-digit'
+      minute: '2-digit',
     });
   };
 
@@ -187,8 +254,12 @@ export default function QCManager() {
     <div className="container mx-auto px-4 py-8">
       <div className="flex justify-between items-center mb-8">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Quality Control Manager</h1>
-          <p className="text-gray-600 mt-2">Manage QC processes and submissions</p>
+          <h1 className="text-3xl font-bold text-gray-900">
+            Quality Control Manager
+          </h1>
+          <p className="text-gray-600 mt-2">
+            Manage QC processes and submissions
+          </p>
         </div>
         <Dialog open={isModalOpen} onOpenChange={handleModalClose}>
           <DialogTrigger asChild>
@@ -199,10 +270,17 @@ export default function QCManager() {
           </DialogTrigger>
           <DialogContent className="sm:max-w-[425px]">
             <DialogHeader>
-              <DialogTitle>{editingSubmission ? 'Edit QC Submission' : 'Create New QC Submission'}</DialogTitle>
+              <DialogTitle>
+                {editingSubmission
+                  ? 'Edit QC Submission'
+                  : 'Create New QC Submission'}
+              </DialogTitle>
             </DialogHeader>
             <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              <form
+                onSubmit={form.handleSubmit(onSubmit)}
+                className="space-y-4"
+              >
                 <FormField
                   control={form.control}
                   name="orderId"
@@ -216,14 +294,17 @@ export default function QCManager() {
                     </FormItem>
                   )}
                 />
-                
+
                 <FormField
                   control={form.control}
                   name="line"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Line</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <Select
+                        onValueChange={field.onChange}
+                        defaultValue={field.value}
+                      >
                         <FormControl>
                           <SelectTrigger>
                             <SelectValue placeholder="Select line" />
@@ -274,7 +355,11 @@ export default function QCManager() {
                     <FormItem>
                       <FormLabel>Submitted By</FormLabel>
                       <FormControl>
-                        <Input placeholder="Enter name" {...field} value={field.value || ''} />
+                        <Input
+                          placeholder="Enter name"
+                          {...field}
+                          value={field.value || ''}
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -282,14 +367,24 @@ export default function QCManager() {
                 />
 
                 <div className="flex justify-end space-x-2">
-                  <Button type="button" variant="outline" onClick={handleModalClose}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleModalClose}
+                  >
                     Cancel
                   </Button>
-                  <Button type="submit" disabled={createSubmissionMutation.isPending}>
-                    {createSubmissionMutation.isPending 
-                      ? (editingSubmission ? 'Updating...' : 'Creating...') 
-                      : (editingSubmission ? 'Update' : 'Create')
-                    }
+                  <Button
+                    type="submit"
+                    disabled={createSubmissionMutation.isPending}
+                  >
+                    {createSubmissionMutation.isPending
+                      ? editingSubmission
+                        ? 'Updating...'
+                        : 'Creating...'
+                      : editingSubmission
+                        ? 'Update'
+                        : 'Create'}
                   </Button>
                 </div>
               </form>
@@ -329,12 +424,18 @@ export default function QCManager() {
               ) : (
                 <div className="space-y-4">
                   {submissions.map((submission) => (
-                    <div key={submission.id} className="border rounded-lg p-4 hover:bg-gray-50">
+                    <div
+                      key={submission.id}
+                      className="border rounded-lg p-4 hover:bg-gray-50"
+                    >
                       <div className="flex justify-between items-start mb-2">
                         <div>
-                          <h3 className="font-semibold text-lg">Order #{submission.orderId}</h3>
+                          <h3 className="font-semibold text-lg">
+                            Order #{submission.orderId}
+                          </h3>
                           <p className="text-sm text-gray-600">
-                            {submission.line} • {submission.department} • SKU: {submission.sku}
+                            {submission.line} • {submission.department} • SKU:{' '}
+                            {submission.sku}
                           </p>
                         </div>
                         <div className="flex items-center gap-2">
@@ -356,22 +457,30 @@ export default function QCManager() {
                           </Button>
                         </div>
                       </div>
-                      
+
                       <div className="grid grid-cols-2 gap-4 text-sm">
                         <div>
-                          <span className="font-medium">Submitted:</span> {submission.submittedAt ? formatDate(submission.submittedAt) : 'N/A'}
+                          <span className="font-medium">Submitted:</span>{' '}
+                          {submission.submittedAt
+                            ? formatDate(submission.submittedAt)
+                            : 'N/A'}
                         </div>
                         <div>
-                          <span className="font-medium">Due:</span> {submission.dueDate ? formatDate(submission.dueDate) : 'N/A'}
+                          <span className="font-medium">Due:</span>{' '}
+                          {submission.dueDate
+                            ? formatDate(submission.dueDate)
+                            : 'N/A'}
                         </div>
                         <div>
-                          <span className="font-medium">Submitted by:</span> {submission.submittedBy || 'N/A'}
+                          <span className="font-medium">Submitted by:</span>{' '}
+                          {submission.submittedBy || 'N/A'}
                         </div>
                         <div>
-                          <span className="font-medium">Status:</span> {submission.status}
+                          <span className="font-medium">Status:</span>{' '}
+                          {submission.status}
                         </div>
                       </div>
-                      
+
                       {submission.final && (
                         <Badge className="mt-2 bg-blue-100 text-blue-800 border-blue-200">
                           Final Inspection
@@ -414,7 +523,8 @@ export default function QCManager() {
                         <div>
                           <h3 className="font-semibold">{definition.label}</h3>
                           <p className="text-sm text-gray-600">
-                            {definition.line} • {definition.department} • {definition.type}
+                            {definition.line} • {definition.department} •{' '}
+                            {definition.type}
                           </p>
                         </div>
                         <div className="flex gap-2">
@@ -422,19 +532,25 @@ export default function QCManager() {
                             <Badge variant="destructive">Required</Badge>
                           )}
                           {definition.final && (
-                            <Badge className="bg-blue-100 text-blue-800 border-blue-200">Final</Badge>
+                            <Badge className="bg-blue-100 text-blue-800 border-blue-200">
+                              Final
+                            </Badge>
                           )}
                           {definition.isActive && (
-                            <Badge className="bg-green-100 text-green-800 border-green-200">Active</Badge>
+                            <Badge className="bg-green-100 text-green-800 border-green-200">
+                              Active
+                            </Badge>
                           )}
                         </div>
                       </div>
-                      
+
                       <div className="text-sm text-gray-700">
-                        <span className="font-medium">Key:</span> {definition.key}
+                        <span className="font-medium">Key:</span>{' '}
+                        {definition.key}
                       </div>
                       <div className="text-sm text-gray-700">
-                        <span className="font-medium">Sort Order:</span> {definition.sortOrder}
+                        <span className="font-medium">Sort Order:</span>{' '}
+                        {definition.sortOrder}
                       </div>
                     </div>
                   ))}
@@ -456,23 +572,31 @@ export default function QCManager() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="text-center p-6 bg-green-50 rounded-lg">
                   <div className="text-2xl font-bold text-green-600">
-                    {submissions.filter(s => s.summary === 'PASS').length}
+                    {submissions.filter((s) => s.summary === 'PASS').length}
                   </div>
-                  <div className="text-sm text-green-700">Passed Inspections</div>
+                  <div className="text-sm text-green-700">
+                    Passed Inspections
+                  </div>
                 </div>
-                
+
                 <div className="text-center p-6 bg-red-50 rounded-lg">
                   <div className="text-2xl font-bold text-red-600">
-                    {submissions.filter(s => s.summary === 'FAIL').length}
+                    {submissions.filter((s) => s.summary === 'FAIL').length}
                   </div>
                   <div className="text-sm text-red-700">Failed Inspections</div>
                 </div>
-                
+
                 <div className="text-center p-6 bg-yellow-50 rounded-lg">
                   <div className="text-2xl font-bold text-yellow-600">
-                    {submissions.filter(s => !s.summary || s.summary === 'pending').length}
+                    {
+                      submissions.filter(
+                        (s) => !s.summary || s.summary === 'pending'
+                      ).length
+                    }
                   </div>
-                  <div className="text-sm text-yellow-700">Pending Inspections</div>
+                  <div className="text-sm text-yellow-700">
+                    Pending Inspections
+                  </div>
                 </div>
               </div>
             </CardContent>

@@ -10,7 +10,8 @@ export default function CommunicationInboxPage() {
           Internal Communication Board
         </h1>
         <p className="text-muted-foreground mt-2">
-          Send messages to departments or specific people with attachments, track read status, and manage urgent communications
+          Send messages to departments or specific people with attachments,
+          track read status, and manage urgent communications
         </p>
       </div>
 

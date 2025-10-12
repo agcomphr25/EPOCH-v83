@@ -72,7 +72,6 @@ import EmployeeDetail from "./pages/EmployeeDetail";
 import EmployeePortal from "./pages/EmployeePortal";
 import UserManagement from "./pages/UserManagement";
 import LoginPage from "./pages/LoginPage";
-import ProtectedRoute from "./components/auth/ProtectedRoute";
 import P2Forms from '@/pages/P2Forms';
 import WasteManagementForm from '@/pages/WasteManagementForm';
 import TaskTracker from '@/pages/TaskTracker';

@@ -86,12 +86,7 @@ export default function AddEmployeeModal({ onClose }: AddEmployeeModalProps) {
       return;
     }
 
-    const submissionData = {
-      ...formData,
-      hireDate: formData.hireDate || undefined,
-    };
-
-    createEmployeeMutation.mutate(submissionData);
+    createEmployeeMutation.mutate(formData);
   };
 
   const handleInputChange = (field: string, value: string) => {

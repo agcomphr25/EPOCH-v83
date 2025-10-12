@@ -14,7 +14,10 @@ export interface DatabaseColumn {
 }
 
 export const getTables = async (params?: { category?: number }): Promise<{ tables: DatabaseTable[] }> => {
-  return apiRequest('/api/enhanced-forms/schema', { params });
+  const url = params?.category 
+    ? `/api/enhanced-forms/schema?category=${params.category}`
+    : '/api/enhanced-forms/schema';
+  return apiRequest(url);
 };
 
 export const getColumns = async (tableName: string): Promise<{ columns: DatabaseColumn[] }> => {

@@ -1,20 +1,28 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { AlertTriangle, Calendar, Package } from 'lucide-react';
 
 export default function MRPShortagesCard() {
   const { data: shortages = [], isLoading } = useQuery({
     queryKey: ['/api/mrp/shortages'],
-    queryFn: () => apiRequest('/api/mrp/shortages')
+    queryFn: () => apiRequest('/api/mrp/shortages'),
   });
 
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Material Shortages</h3>
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+          Material Shortages
+        </h3>
         <p className="text-sm text-gray-500 dark:text-gray-400">
           Critical shortages requiring immediate attention
         </p>
@@ -53,7 +61,10 @@ export default function MRPShortagesCard() {
                     <div>Shortage: {shortage.shortageQty || 0}</div>
                     <div className="flex items-center gap-1">
                       <Calendar className="h-3 w-3" />
-                      Need: {shortage.needDate ? new Date(shortage.needDate).toLocaleDateString() : 'ASAP'}
+                      Need:{' '}
+                      {shortage.needDate
+                        ? new Date(shortage.needDate).toLocaleDateString()
+                        : 'ASAP'}
                     </div>
                   </div>
                 </div>

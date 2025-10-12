@@ -25,13 +25,19 @@ const storage = multer.diskStorage({
     const timestamp = Date.now();
     const hash = crypto.randomBytes(8).toString('hex');
     const ext = path.extname(file.originalname);
-    const name = path.basename(file.originalname, ext).replace(/[^a-zA-Z0-9]/g, '_');
+    const name = path
+      .basename(file.originalname, ext)
+      .replace(/[^a-zA-Z0-9]/g, '_');
     cb(null, `${timestamp}_${hash}_${name}${ext}`);
-  }
+  },
 });
 
 // File filter for allowed document types
-const fileFilter = (req: any, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
+const fileFilter = (
+  req: any,
+  file: Express.Multer.File,
+  cb: multer.FileFilterCallback
+) => {
   const allowedTypes = [
     'application/pdf',
     'application/msword',
@@ -42,13 +48,17 @@ const fileFilter = (req: any, file: Express.Multer.File, cb: multer.FileFilterCa
     'image/jpg',
     'image/png',
     'image/gif',
-    'text/plain'
+    'text/plain',
   ];
 
   if (allowedTypes.includes(file.mimetype)) {
     cb(null, true);
   } else {
-    cb(new Error(`File type ${file.mimetype} not allowed. Allowed types: PDF, Word, Excel, Images, Text files.`));
+    cb(
+      new Error(
+        `File type ${file.mimetype} not allowed. Allowed types: PDF, Word, Excel, Images, Text files.`
+      )
+    );
   }
 };
 
@@ -57,8 +67,8 @@ export const uploadMiddleware = multer({
   fileFilter,
   limits: {
     fileSize: 10 * 1024 * 1024, // 10MB limit
-    files: 5 // Maximum 5 files per upload
-  }
+    files: 5, // Maximum 5 files per upload
+  },
 });
 
 // Helper function to get file info
@@ -68,7 +78,7 @@ export function getFileInfo(file: Express.Multer.File) {
     originalFileName: file.originalname,
     fileSize: file.size,
     mimeType: file.mimetype,
-    filePath: file.path
+    filePath: file.path,
   };
 }
 
@@ -93,23 +103,26 @@ export function getFileUrl(req: any, fileName: string): string {
 
 // Validate employee access to document
 export function validateEmployeeDocumentAccess(
-  userType: string, 
-  userEmployeeId: number | undefined, 
+  userType: string,
+  userEmployeeId: number | undefined,
   documentEmployeeId: number
 ): boolean {
   // Admins can access all documents
   if (userType === 'ADMIN') {
     return true;
   }
-  
+
   // Employees can only access their own documents
   return userEmployeeId === documentEmployeeId;
 }
 
 // Get document type from filename or mimetype
-export function getDocumentType(originalName: string, mimeType: string): string {
+export function getDocumentType(
+  originalName: string,
+  mimeType: string
+): string {
   const name = originalName.toLowerCase();
-  
+
   if (name.includes('certificate') || name.includes('cert')) {
     return 'CERTIFICATE';
   } else if (name.includes('handbook') || name.includes('manual')) {

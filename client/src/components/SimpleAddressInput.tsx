@@ -5,7 +5,11 @@ import { MapPin, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import debounce from 'lodash.debounce';
-import { autocompleteAddress, validateAddress, type AddressData } from '@/utils/addressUtils';
+import {
+  autocompleteAddress,
+  validateAddress,
+  type AddressData,
+} from '@/utils/addressUtils';
 
 interface SimpleAddressInputProps {
   label: string;
@@ -14,7 +18,12 @@ interface SimpleAddressInputProps {
   required?: boolean;
 }
 
-export default function SimpleAddressInput({ label, value, onChange, required = false }: SimpleAddressInputProps) {
+export default function SimpleAddressInput({
+  label,
+  value,
+  onChange,
+  required = false,
+}: SimpleAddressInputProps) {
   const [query, setQuery] = useState(value.street || '');
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -31,13 +40,13 @@ export default function SimpleAddressInput({ label, value, onChange, required = 
       setShowSuggestions(false);
       return;
     }
-    
+
     setIsLoading(true);
     try {
       console.log('Fetching SmartyStreets suggestions for:', q);
       const results = await autocompleteAddress(q);
       console.log('SmartyStreets suggestions received:', results);
-      
+
       setSuggestions(results);
       setShowSuggestions(results.length > 0);
       setSelectedIndex(-1);
@@ -65,32 +74,34 @@ export default function SimpleAddressInput({ label, value, onChange, required = 
 
   const parseAddressFromSuggestion = (suggestion: string): AddressData => {
     const parts = suggestion.split(', ');
-    
+
     if (parts.length >= 2) {
       const street = parts[0];
       const cityStateZip = parts[1];
-      
+
       // Parse "City ST" or "City ST 12345" format
-      const match = cityStateZip.match(/^(.+?)\s+([A-Z]{2})(?:\s+(\d{5}(?:-\d{4})?))?$/);
-      
+      const match = cityStateZip.match(
+        /^(.+?)\s+([A-Z]{2})(?:\s+(\d{5}(?:-\d{4})?))?$/
+      );
+
       if (match) {
         return {
           street,
           city: match[1],
           state: match[2],
           zipCode: match[3] || '',
-          country: 'United States'
+          country: 'United States',
         };
       }
     }
-    
+
     // Fallback - return the suggestion as street address
     return {
       street: suggestion,
       city: '',
       state: '',
       zipCode: '',
-      country: 'United States'
+      country: 'United States',
     };
   };
 
@@ -98,44 +109,67 @@ export default function SimpleAddressInput({ label, value, onChange, required = 
     console.log('🔧 SimpleAddressInput handleSelect called with:', suggestion);
     const parsedAddress = parseAddressFromSuggestion(suggestion);
     console.log('🔧 Parsed address components:', parsedAddress);
-    
+
     setQuery(parsedAddress.street);
     setShowSuggestions(false);
     setSelectedIndex(-1);
-    
+
     // Try to get ZIP code by calling SmartyStreets Street API directly
     try {
-      const response = await fetch('/api/customers/address-autocomplete-bypass', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          search: `${parsedAddress.street}, ${parsedAddress.city}, ${parsedAddress.state}`,
-          getZipCode: true 
-        })
-      });
-      
+      const response = await fetch(
+        '/api/customers/address-autocomplete-bypass',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            search: `${parsedAddress.street}, ${parsedAddress.city}, ${parsedAddress.state}`,
+            getZipCode: true,
+          }),
+        }
+      );
+
       const data = await response.json();
       console.log('🔧 ZIP code lookup response:', data);
-      
+
       // Check if we got ZIP code information from either fullAddress response or suggestions
-      if (data.fullAddress && data.fullAddress.components && data.fullAddress.components.zipcode) {
+      if (
+        data.fullAddress &&
+        data.fullAddress.components &&
+        data.fullAddress.components.zipcode
+      ) {
         parsedAddress.zipCode = data.fullAddress.components.zipcode;
-        console.log('🔧 ZIP code from fullAddress response:', parsedAddress.zipCode);
-      } else if (data.suggestions && data.suggestions.length > 0 && data.suggestions[0].zipCode) {
+        console.log(
+          '🔧 ZIP code from fullAddress response:',
+          parsedAddress.zipCode
+        );
+      } else if (
+        data.suggestions &&
+        data.suggestions.length > 0 &&
+        data.suggestions[0].zipCode
+      ) {
         parsedAddress.zipCode = data.suggestions[0].zipCode;
-        console.log('🔧 ZIP code from suggestions response:', parsedAddress.zipCode);
+        console.log(
+          '🔧 ZIP code from suggestions response:',
+          parsedAddress.zipCode
+        );
       } else {
         // Try to extract ZIP code from the suggestion text itself
         const zipMatch = suggestion.match(/\b(\d{5}(?:-\d{4})?)\b/);
         if (zipMatch) {
           parsedAddress.zipCode = zipMatch[1];
-          console.log('🔧 ZIP code extracted from suggestion text:', parsedAddress.zipCode);
+          console.log(
+            '🔧 ZIP code extracted from suggestion text:',
+            parsedAddress.zipCode
+          );
         }
       }
     } catch (error) {
-      console.log('🔧 ZIP code lookup failed, using address without ZIP:', error);
+      console.log(
+        '🔧 ZIP code lookup failed, using address without ZIP:',
+        error
+      );
     }
-    
+
     onChange(parsedAddress);
     toast({
       title: 'Address selected',
@@ -149,13 +183,13 @@ export default function SimpleAddressInput({ label, value, onChange, required = 
     switch (e.key) {
       case 'ArrowDown':
         e.preventDefault();
-        setSelectedIndex(prev => 
+        setSelectedIndex((prev) =>
           prev < suggestions.length - 1 ? prev + 1 : prev
         );
         break;
       case 'ArrowUp':
         e.preventDefault();
-        setSelectedIndex(prev => prev > 0 ? prev - 1 : -1);
+        setSelectedIndex((prev) => (prev > 0 ? prev - 1 : -1));
         break;
       case 'Enter':
         e.preventDefault();
@@ -175,11 +209,14 @@ export default function SimpleAddressInput({ label, value, onChange, required = 
     setQuery(newValue);
     onChange({
       ...value,
-      street: newValue
+      street: newValue,
     });
   };
 
-  const handleManualAddressChange = (field: keyof AddressData, newValue: string) => {
+  const handleManualAddressChange = (
+    field: keyof AddressData,
+    newValue: string
+  ) => {
     onChange({
       ...value,
       [field]: newValue,
@@ -216,9 +253,9 @@ export default function SimpleAddressInput({ label, value, onChange, required = 
             </div>
           )}
         </div>
-        
+
         {showSuggestions && suggestions.length > 0 && (
-          <div 
+          <div
             ref={suggestionsRef}
             className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-auto"
           >
@@ -227,8 +264,8 @@ export default function SimpleAddressInput({ label, value, onChange, required = 
                 key={index}
                 onClick={() => handleSelect(suggestion)}
                 className={cn(
-                  "px-3 py-2 cursor-pointer text-sm hover:bg-gray-100",
-                  selectedIndex === index && "bg-blue-50 text-blue-600"
+                  'px-3 py-2 cursor-pointer text-sm hover:bg-gray-100',
+                  selectedIndex === index && 'bg-blue-50 text-blue-600'
                 )}
               >
                 {suggestion}
@@ -245,7 +282,9 @@ export default function SimpleAddressInput({ label, value, onChange, required = 
           <Input
             id="street-manual"
             value={value.street}
-            onChange={(e) => handleManualAddressChange('street', e.target.value)}
+            onChange={(e) =>
+              handleManualAddressChange('street', e.target.value)
+            }
             placeholder="123 Main St"
           />
         </div>
@@ -272,12 +311,14 @@ export default function SimpleAddressInput({ label, value, onChange, required = 
           <Input
             id="zipCode"
             value={value.zipCode}
-            onChange={(e) => handleManualAddressChange('zipCode', e.target.value)}
+            onChange={(e) =>
+              handleManualAddressChange('zipCode', e.target.value)
+            }
             placeholder="10001"
           />
         </div>
       </div>
-      
+
       <div>
         <Label htmlFor="country">Country</Label>
         <Input

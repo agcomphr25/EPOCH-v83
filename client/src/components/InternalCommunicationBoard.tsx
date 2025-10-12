@@ -6,30 +6,36 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
-import { 
-  MessageSquare, 
-  Send, 
-  AlertTriangle, 
-  CheckCircle, 
-  Users, 
-  User, 
+import {
+  MessageSquare,
+  Send,
+  AlertTriangle,
+  CheckCircle,
+  Users,
+  User,
   Paperclip,
   Bell,
   Mail,
   MailOpen,
-  Clock
+  Clock,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import type {
   Department,
   InternalMessage,
   MessageRecipient,
-  MessageAttachment
+  MessageAttachment,
 } from '@shared/schema';
 
 interface MessageWithDetails extends InternalMessage {
@@ -52,26 +58,32 @@ interface CurrentUser {
 
 export default function InternalCommunicationBoard() {
   const { toast } = useToast();
-  const [recipientType, setRecipientType] = useState<'department' | 'person'>('department');
+  const [recipientType, setRecipientType] = useState<'department' | 'person'>(
+    'department'
+  );
   const [selectedDepartment, setSelectedDepartment] = useState<string>('');
   const [selectedPersons, setSelectedPersons] = useState<number[]>([]);
   const [subject, setSubject] = useState('');
   const [message, setMessage] = useState('');
   const [isUrgent, setIsUrgent] = useState(false);
   const [showCompose, setShowCompose] = useState(false);
-  const [filterType, setFilterType] = useState<'all' | 'sent' | 'received'>('all');
-  
+  const [filterType, setFilterType] = useState<'all' | 'sent' | 'received'>(
+    'all'
+  );
+
   // Attachment state
-  const [attachmentType, setAttachmentType] = useState<'none' | 'sales_order' | 'email' | 'download'>('none');
+  const [attachmentType, setAttachmentType] = useState<
+    'none' | 'sales_order' | 'email' | 'download'
+  >('none');
   const [selectedOrderId, setSelectedOrderId] = useState<string>('');
   const [isPullup, setIsPullup] = useState(false);
   const [emailSubject, setEmailSubject] = useState('');
   const [downloadUrl, setDownloadUrl] = useState('');
-  
+
   const { data: currentUser } = useQuery<CurrentUser>({
     queryKey: ['/api/auth/session'],
   });
-  
+
   const currentUserId = currentUser?.id || 0;
 
   const { data: departments = [] } = useQuery<Department[]>({
@@ -100,22 +112,28 @@ export default function InternalCommunicationBoard() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/internal-messages'] });
       toast({
-        title: "Message sent",
-        description: "Your message has been sent successfully.",
+        title: 'Message sent',
+        description: 'Your message has been sent successfully.',
       });
       resetForm();
     },
     onError: () => {
       toast({
-        title: "Error",
-        description: "Failed to send message. Please try again.",
-        variant: "destructive",
+        title: 'Error',
+        description: 'Failed to send message. Please try again.',
+        variant: 'destructive',
       });
     },
   });
 
   const markAsReadMutation = useMutation({
-    mutationFn: async ({ messageId, userId }: { messageId: number; userId: number }) => {
+    mutationFn: async ({
+      messageId,
+      userId,
+    }: {
+      messageId: number;
+      userId: number;
+    }) => {
       return await apiRequest(`/api/internal-messages/${messageId}/read`, {
         method: 'PATCH',
         body: JSON.stringify({ userId }),
@@ -127,17 +145,26 @@ export default function InternalCommunicationBoard() {
   });
 
   const markAsAccomplishedMutation = useMutation({
-    mutationFn: async ({ messageId, userId }: { messageId: number; userId: number }) => {
-      return await apiRequest(`/api/internal-messages/${messageId}/accomplished`, {
-        method: 'PATCH',
-        body: JSON.stringify({ userId }),
-      });
+    mutationFn: async ({
+      messageId,
+      userId,
+    }: {
+      messageId: number;
+      userId: number;
+    }) => {
+      return await apiRequest(
+        `/api/internal-messages/${messageId}/accomplished`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify({ userId }),
+        }
+      );
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/internal-messages'] });
       toast({
-        title: "Marked as accomplished",
-        description: "Message marked as accomplished.",
+        title: 'Marked as accomplished',
+        description: 'Message marked as accomplished.',
       });
     },
   });
@@ -158,9 +185,9 @@ export default function InternalCommunicationBoard() {
   };
 
   const handleToggleUser = (userId: number) => {
-    setSelectedPersons(prev => 
-      prev.includes(userId) 
-        ? prev.filter(id => id !== userId)
+    setSelectedPersons((prev) =>
+      prev.includes(userId)
+        ? prev.filter((id) => id !== userId)
         : [...prev, userId]
     );
   };
@@ -169,43 +196,45 @@ export default function InternalCommunicationBoard() {
     if (selectedPersons.length === users.length) {
       setSelectedPersons([]);
     } else {
-      setSelectedPersons(users.map(u => u.id));
+      setSelectedPersons(users.map((u) => u.id));
     }
   };
 
   const handleSendMessage = async () => {
     if (!subject.trim() || !message.trim()) {
       toast({
-        title: "Validation Error",
-        description: "Please provide both subject and message.",
-        variant: "destructive",
+        title: 'Validation Error',
+        description: 'Please provide both subject and message.',
+        variant: 'destructive',
       });
       return;
     }
 
     if (recipientType === 'department' && !selectedDepartment) {
       toast({
-        title: "Validation Error",
-        description: "Please select a department.",
-        variant: "destructive",
+        title: 'Validation Error',
+        description: 'Please select a department.',
+        variant: 'destructive',
       });
       return;
     }
 
     if (recipientType === 'person' && selectedPersons.length === 0) {
       toast({
-        title: "Validation Error",
-        description: "Please select at least one recipient.",
-        variant: "destructive",
+        title: 'Validation Error',
+        description: 'Please select at least one recipient.',
+        variant: 'destructive',
       });
       return;
     }
 
-    const senderUser = users.find(u => u.id === currentUserId);
+    const senderUser = users.find((u) => u.id === currentUserId);
     const senderName = senderUser ? senderUser.username : 'Unknown';
-    
+
     if (recipientType === 'department') {
-      const dept = departments.find(d => d.id === parseInt(selectedDepartment));
+      const dept = departments.find(
+        (d) => d.id === parseInt(selectedDepartment)
+      );
       const recipientName = dept ? dept.name : '';
 
       const messageData: any = {
@@ -223,7 +252,7 @@ export default function InternalCommunicationBoard() {
     } else {
       // Send individual message to each selected person
       for (const userId of selectedPersons) {
-        const user = users.find(u => u.id === userId);
+        const user = users.find((u) => u.id === userId);
         const recipientName = user ? user.username : '';
 
         const messageData: any = {
@@ -245,7 +274,7 @@ export default function InternalCommunicationBoard() {
 
       queryClient.invalidateQueries({ queryKey: ['/api/internal-messages'] });
       toast({
-        title: "Messages sent",
+        title: 'Messages sent',
         description: `Your message has been sent to ${selectedPersons.length} recipient(s).`,
       });
       resetForm();
@@ -262,29 +291,29 @@ export default function InternalCommunicationBoard() {
 
   const getRecipientInfo = (msg: MessageWithDetails) => {
     if (msg.recipientType === 'department' && msg.recipientDepartmentId) {
-      const dept = departments.find(d => d.id === msg.recipientDepartmentId);
+      const dept = departments.find((d) => d.id === msg.recipientDepartmentId);
       return dept ? dept.name : 'Unknown Department';
     } else if (msg.recipientType === 'person' && msg.recipientUserId) {
-      const user = users.find(u => u.id === msg.recipientUserId);
+      const user = users.find((u) => u.id === msg.recipientUserId);
       return user ? user.username : 'Unknown User';
     }
     return 'Unknown';
   };
 
   const getSenderName = (senderId: number) => {
-    const user = users.find(u => u.id === senderId);
+    const user = users.find((u) => u.id === senderId);
     return user ? user.username : 'Unknown';
   };
 
   const getUserRecipientStatus = (msg: MessageWithDetails) => {
-    const recipient = msg.recipients?.find(r => r.userId === currentUserId);
+    const recipient = msg.recipients?.find((r) => r.userId === currentUserId);
     return recipient;
   };
 
-  const filteredMessages = messages.filter(msg => {
+  const filteredMessages = messages.filter((msg) => {
     if (filterType === 'sent') return msg.senderId === currentUserId;
     if (filterType === 'received') {
-      return msg.recipients?.some(r => r.userId === currentUserId);
+      return msg.recipients?.some((r) => r.userId === currentUserId);
     }
     return true;
   });
@@ -294,18 +323,33 @@ export default function InternalCommunicationBoard() {
       {!showCompose ? (
         <div className="flex justify-between items-center">
           <div className="flex items-center gap-4">
-            <Select value={filterType} onValueChange={(value: any) => setFilterType(value)}>
-              <SelectTrigger className="w-[180px]" data-testid="select-message-filter">
+            <Select
+              value={filterType}
+              onValueChange={(value: any) => setFilterType(value)}
+            >
+              <SelectTrigger
+                className="w-[180px]"
+                data-testid="select-message-filter"
+              >
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all" data-testid="filter-all">All Messages</SelectItem>
-                <SelectItem value="sent" data-testid="filter-sent">Sent</SelectItem>
-                <SelectItem value="received" data-testid="filter-received">Received</SelectItem>
+                <SelectItem value="all" data-testid="filter-all">
+                  All Messages
+                </SelectItem>
+                <SelectItem value="sent" data-testid="filter-sent">
+                  Sent
+                </SelectItem>
+                <SelectItem value="received" data-testid="filter-received">
+                  Received
+                </SelectItem>
               </SelectContent>
             </Select>
           </div>
-          <Button onClick={() => setShowCompose(true)} data-testid="button-compose">
+          <Button
+            onClick={() => setShowCompose(true)}
+            data-testid="button-compose"
+          >
             <Send className="mr-2 h-4 w-4" />
             Compose Message
           </Button>
@@ -321,7 +365,10 @@ export default function InternalCommunicationBoard() {
           <CardContent className="space-y-4">
             <div className="space-y-2">
               <Label>Recipient Type</Label>
-              <Select value={recipientType} onValueChange={(value: any) => setRecipientType(value)}>
+              <Select
+                value={recipientType}
+                onValueChange={(value: any) => setRecipientType(value)}
+              >
                 <SelectTrigger data-testid="select-recipient-type">
                   <SelectValue />
                 </SelectTrigger>
@@ -345,13 +392,20 @@ export default function InternalCommunicationBoard() {
             {recipientType === 'department' ? (
               <div className="space-y-2">
                 <Label>Select Department</Label>
-                <Select value={selectedDepartment} onValueChange={setSelectedDepartment}>
+                <Select
+                  value={selectedDepartment}
+                  onValueChange={setSelectedDepartment}
+                >
                   <SelectTrigger data-testid="select-department">
                     <SelectValue placeholder="Choose a department" />
                   </SelectTrigger>
                   <SelectContent>
                     {departments.map((dept) => (
-                      <SelectItem key={dept.id} value={dept.id.toString()} data-testid={`dept-${dept.id}`}>
+                      <SelectItem
+                        key={dept.id}
+                        value={dept.id.toString()}
+                        data-testid={`dept-${dept.id}`}
+                      >
                         {dept.name}
                       </SelectItem>
                     ))}
@@ -360,30 +414,49 @@ export default function InternalCommunicationBoard() {
               </div>
             ) : (
               <div className="space-y-2">
-                <Label>Select Recipients ({selectedPersons.length} selected)</Label>
+                <Label>
+                  Select Recipients ({selectedPersons.length} selected)
+                </Label>
                 <div className="border rounded-md p-3 max-h-60 overflow-y-auto space-y-2 bg-background">
                   <div className="flex items-center space-x-2 p-2 bg-muted rounded-md">
                     <Checkbox
                       id="select-all"
-                      checked={selectedPersons.length === users.length && users.length > 0}
+                      checked={
+                        selectedPersons.length === users.length &&
+                        users.length > 0
+                      }
                       onCheckedChange={handleSelectAll}
                       data-testid="checkbox-select-all"
                     />
-                    <Label htmlFor="select-all" className="font-bold cursor-pointer flex-1 text-foreground">
+                    <Label
+                      htmlFor="select-all"
+                      className="font-bold cursor-pointer flex-1 text-foreground"
+                    >
                       Select All ({users.length} users)
                     </Label>
                   </div>
-                  
+
                   {users.map((user) => (
-                    <div key={user.id} className="flex items-center space-x-2 p-2 hover:bg-muted rounded-md">
+                    <div
+                      key={user.id}
+                      className="flex items-center space-x-2 p-2 hover:bg-muted rounded-md"
+                    >
                       <Checkbox
                         id={`user-${user.id}`}
                         checked={selectedPersons.includes(user.id)}
                         onCheckedChange={() => handleToggleUser(user.id)}
                         data-testid={`checkbox-user-${user.id}`}
                       />
-                      <Label htmlFor={`user-${user.id}`} className="cursor-pointer flex-1 text-foreground">
-                        {user.username} {!user.isActive && <span className="text-muted-foreground">(Inactive)</span>}
+                      <Label
+                        htmlFor={`user-${user.id}`}
+                        className="cursor-pointer flex-1 text-foreground"
+                      >
+                        {user.username}{' '}
+                        {!user.isActive && (
+                          <span className="text-muted-foreground">
+                            (Inactive)
+                          </span>
+                        )}
                       </Label>
                     </div>
                   ))}
@@ -419,8 +492,11 @@ export default function InternalCommunicationBoard() {
                 <Paperclip className="h-4 w-4" />
                 Attachments
               </Label>
-              
-              <Select value={attachmentType} onValueChange={(value: any) => setAttachmentType(value)}>
+
+              <Select
+                value={attachmentType}
+                onValueChange={(value: any) => setAttachmentType(value)}
+              >
                 <SelectTrigger data-testid="select-attachment-type">
                   <SelectValue placeholder="No attachment" />
                 </SelectTrigger>
@@ -434,24 +510,30 @@ export default function InternalCommunicationBoard() {
 
               {attachmentType === 'sales_order' && (
                 <div className="space-y-2 pl-4 border-l-2">
-                  <Select value={selectedOrderId} onValueChange={setSelectedOrderId}>
+                  <Select
+                    value={selectedOrderId}
+                    onValueChange={setSelectedOrderId}
+                  >
                     <SelectTrigger data-testid="select-order">
                       <SelectValue placeholder="Select an order" />
                     </SelectTrigger>
                     <SelectContent>
                       {orders.slice(0, 50).map((order: any) => (
                         <SelectItem key={order.id} value={order.id}>
-                          {order.id} - {order.customer_name || 'Unknown Customer'}
+                          {order.id} -{' '}
+                          {order.customer_name || 'Unknown Customer'}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
-                  
+
                   <div className="flex items-center space-x-2">
                     <Checkbox
                       id="pullup"
                       checked={isPullup}
-                      onCheckedChange={(checked) => setIsPullup(checked as boolean)}
+                      onCheckedChange={(checked) =>
+                        setIsPullup(checked as boolean)
+                      }
                       data-testid="checkbox-pullup"
                     />
                     <Label htmlFor="pullup" className="cursor-pointer">
@@ -491,18 +573,25 @@ export default function InternalCommunicationBoard() {
                 onCheckedChange={(checked) => setIsUrgent(checked as boolean)}
                 data-testid="checkbox-urgent"
               />
-              <Label htmlFor="urgent" className="flex items-center gap-2 cursor-pointer">
+              <Label
+                htmlFor="urgent"
+                className="flex items-center gap-2 cursor-pointer"
+              >
                 <AlertTriangle className="h-4 w-4 text-orange-500" />
                 Mark as Urgent
               </Label>
             </div>
 
             <div className="flex gap-2 justify-end">
-              <Button variant="outline" onClick={resetForm} data-testid="button-cancel">
+              <Button
+                variant="outline"
+                onClick={resetForm}
+                data-testid="button-cancel"
+              >
                 Cancel
               </Button>
-              <Button 
-                onClick={handleSendMessage} 
+              <Button
+                onClick={handleSendMessage}
                 disabled={sendMessageMutation.isPending}
                 data-testid="button-send"
               >
@@ -518,13 +607,18 @@ export default function InternalCommunicationBoard() {
         {isLoading ? (
           <Card>
             <CardContent className="p-6">
-              <p className="text-center text-muted-foreground">Loading messages...</p>
+              <p className="text-center text-muted-foreground">
+                Loading messages...
+              </p>
             </CardContent>
           </Card>
         ) : filteredMessages.length === 0 ? (
           <Card>
             <CardContent className="p-6">
-              <p className="text-center text-muted-foreground" data-testid="text-no-messages">
+              <p
+                className="text-center text-muted-foreground"
+                data-testid="text-no-messages"
+              >
                 No messages to display
               </p>
             </CardContent>
@@ -532,37 +626,60 @@ export default function InternalCommunicationBoard() {
         ) : (
           filteredMessages.map((msg) => {
             const recipientStatus = getUserRecipientStatus(msg);
-            const isReceived = msg.recipients?.some(r => r.userId === currentUserId);
+            const isReceived = msg.recipients?.some(
+              (r) => r.userId === currentUserId
+            );
             const isSent = msg.senderId === currentUserId;
 
             return (
-              <Card key={msg.id} className={msg.isUrgent ? 'border-orange-500 border-2' : ''} data-testid={`card-message-${msg.id}`}>
+              <Card
+                key={msg.id}
+                className={msg.isUrgent ? 'border-orange-500 border-2' : ''}
+                data-testid={`card-message-${msg.id}`}
+              >
                 <CardHeader>
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <CardTitle className="text-lg" data-testid={`text-subject-${msg.id}`}>
+                        <CardTitle
+                          className="text-lg"
+                          data-testid={`text-subject-${msg.id}`}
+                        >
                           {msg.subject}
                         </CardTitle>
                         {msg.isUrgent && (
-                          <Badge variant="destructive" className="flex items-center gap-1" data-testid={`badge-urgent-${msg.id}`}>
+                          <Badge
+                            variant="destructive"
+                            className="flex items-center gap-1"
+                            data-testid={`badge-urgent-${msg.id}`}
+                          >
                             <AlertTriangle className="h-3 w-3" />
                             Urgent
                           </Badge>
                         )}
                         {isSent && (
-                          <Badge variant="secondary" data-testid={`badge-sent-${msg.id}`}>
+                          <Badge
+                            variant="secondary"
+                            data-testid={`badge-sent-${msg.id}`}
+                          >
                             Sent
                           </Badge>
                         )}
                         {recipientStatus?.isRead && (
-                          <Badge variant="outline" className="flex items-center gap-1" data-testid={`badge-read-${msg.id}`}>
+                          <Badge
+                            variant="outline"
+                            className="flex items-center gap-1"
+                            data-testid={`badge-read-${msg.id}`}
+                          >
                             <MailOpen className="h-3 w-3" />
                             Read
                           </Badge>
                         )}
                         {recipientStatus?.isAccomplished && (
-                          <Badge className="flex items-center gap-1 bg-green-600" data-testid={`badge-accomplished-${msg.id}`}>
+                          <Badge
+                            className="flex items-center gap-1 bg-green-600"
+                            data-testid={`badge-accomplished-${msg.id}`}
+                          >
                             <CheckCircle className="h-3 w-3" />
                             Accomplished
                           </Badge>
@@ -573,11 +690,17 @@ export default function InternalCommunicationBoard() {
                           <strong>From:</strong> {getSenderName(msg.senderId)}
                         </p>
                         <p data-testid={`text-recipient-${msg.id}`}>
-                          <strong>To:</strong> {getRecipientInfo(msg)} ({msg.recipientType})
+                          <strong>To:</strong> {getRecipientInfo(msg)} (
+                          {msg.recipientType})
                         </p>
-                        <p className="flex items-center gap-1" data-testid={`text-sent-at-${msg.id}`}>
+                        <p
+                          className="flex items-center gap-1"
+                          data-testid={`text-sent-at-${msg.id}`}
+                        >
                           <Clock className="h-3 w-3" />
-                          {msg.sentAt ? format(new Date(msg.sentAt), 'PPp') : 'Unknown'}
+                          {msg.sentAt
+                            ? format(new Date(msg.sentAt), 'PPp')
+                            : 'Unknown'}
                         </p>
                       </div>
                     </div>
@@ -585,14 +708,25 @@ export default function InternalCommunicationBoard() {
                 </CardHeader>
                 <Separator />
                 <CardContent className="pt-4">
-                  <p className="whitespace-pre-wrap" data-testid={`text-body-${msg.id}`}>{msg.message}</p>
-                  
+                  <p
+                    className="whitespace-pre-wrap"
+                    data-testid={`text-body-${msg.id}`}
+                  >
+                    {msg.message}
+                  </p>
+
                   {msg.attachments && msg.attachments.length > 0 && (
                     <div className="mt-4 space-y-2">
-                      {msg.attachments.map(att => (
-                        <div key={att.id} className="p-3 bg-muted rounded-lg flex items-center gap-2" data-testid={`attachment-${att.id}`}>
+                      {msg.attachments.map((att) => (
+                        <div
+                          key={att.id}
+                          className="p-3 bg-muted rounded-lg flex items-center gap-2"
+                          data-testid={`attachment-${att.id}`}
+                        >
                           <Paperclip className="h-4 w-4" />
-                          <span className="text-sm">{att.fileName} - {att.fileType}</span>
+                          <span className="text-sm">
+                            {att.fileName} - {att.fileType}
+                          </span>
                         </div>
                       ))}
                     </div>

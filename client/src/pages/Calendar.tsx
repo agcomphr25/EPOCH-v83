@@ -1,20 +1,51 @@
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Calendar as BigCalendar, momentLocalizer, Views, Event } from 'react-big-calendar';
+import {
+  Calendar as BigCalendar,
+  momentLocalizer,
+  Views,
+  Event,
+} from 'react-big-calendar';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
 import moment from 'moment';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { CalendarIcon, Plus, FileDown, Edit, Trash2, Printer } from 'lucide-react';
+import {
+  CalendarIcon,
+  Plus,
+  FileDown,
+  Edit,
+  Trash2,
+  Printer,
+} from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
 // import type { CalendarEvent } from '@shared/schema'; // Type not exported from schema
@@ -33,7 +64,9 @@ const eventFormSchema = z.object({
   location: z.string().optional(),
   isAllDay: z.boolean().default(false),
   isPublic: z.boolean().default(true),
-  eventType: z.enum(['meeting', 'deadline', 'reminder', 'task', 'other']).default('meeting'),
+  eventType: z
+    .enum(['meeting', 'deadline', 'reminder', 'task', 'other'])
+    .default('meeting'),
 });
 
 type EventFormData = z.infer<typeof eventFormSchema>;
@@ -49,22 +82,23 @@ interface CalendarEventExtended extends Event {
 }
 
 export default function Calendar() {
-  const [selectedEvent, setSelectedEvent] = useState<CalendarEventExtended | null>(null);
+  const [selectedEvent, setSelectedEvent] =
+    useState<CalendarEventExtended | null>(null);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [currentView, setCurrentView] = useState<string>('month');
   const [currentDate, setCurrentDate] = useState(new Date());
-  
+
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
   // Fetch calendar events
   const { data: events = [], isLoading } = useQuery({
     queryKey: ['/api/calendar/events'],
-    select: (data: CalendarEvent[]) => 
-      data.map(event => ({
+    select: (data: CalendarEvent[]) =>
+      data.map((event) => ({
         id: event.id,
         start: new Date(event.startDate),
         end: new Date(event.endDate),
@@ -81,10 +115,11 @@ export default function Calendar() {
 
   // Create event mutation
   const createEventMutation = useMutation({
-    mutationFn: (eventData: any) => apiRequest('/api/calendar/events', {
-      method: 'POST',
-      body: eventData,
-    }),
+    mutationFn: (eventData: any) =>
+      apiRequest('/api/calendar/events', {
+        method: 'POST',
+        body: eventData,
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/calendar/events'] });
       setIsCreateDialogOpen(false);
@@ -104,10 +139,11 @@ export default function Calendar() {
 
   // Update event mutation
   const updateEventMutation = useMutation({
-    mutationFn: ({ id, ...eventData }: any) => apiRequest(`/api/calendar/events/${id}`, {
-      method: 'PUT',
-      body: eventData,
-    }),
+    mutationFn: ({ id, ...eventData }: any) =>
+      apiRequest(`/api/calendar/events/${id}`, {
+        method: 'PUT',
+        body: eventData,
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/calendar/events'] });
       setIsEditDialogOpen(false);
@@ -128,9 +164,10 @@ export default function Calendar() {
 
   // Delete event mutation
   const deleteEventMutation = useMutation({
-    mutationFn: (eventId: number) => apiRequest(`/api/calendar/events/${eventId}`, {
-      method: 'DELETE',
-    }),
+    mutationFn: (eventId: number) =>
+      apiRequest(`/api/calendar/events/${eventId}`, {
+        method: 'DELETE',
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/calendar/events'] });
       setSelectedEvent(null);
@@ -223,7 +260,7 @@ export default function Calendar() {
   // Handle edit event submission
   const onEditSubmit = (data: EventFormData) => {
     if (!selectedEvent) return;
-    
+
     const eventData = {
       id: selectedEvent.id,
       title: data.title,
@@ -252,20 +289,19 @@ export default function Calendar() {
       const pdfParams = new URLSearchParams({
         month: moment(currentDate).format('YYYY-MM'),
         view: currentView,
-        timestamp: Date.now().toString()
+        timestamp: Date.now().toString(),
       });
-      
+
       const pdfDirectUrl = `${window.location.origin}/api/calendar/blank-pdf?${pdfParams.toString()}`;
-      
+
       // Store the direct URL for the modal
       setPdfUrl(pdfDirectUrl);
       setIsPdfModalOpen(true);
-      
+
       toast({
         title: 'PDF Generated',
         description: 'Your blank calendar PDF is ready to view or download.',
       });
-      
     } catch (error) {
       console.error('PDF generation error:', error);
       toast({
@@ -287,7 +323,7 @@ export default function Calendar() {
 
   const eventStyleGetter = (event: CalendarEventExtended) => {
     let backgroundColor = '#3174ad';
-    
+
     switch (event.eventType) {
       case 'meeting':
         backgroundColor = '#3174ad';
@@ -304,7 +340,7 @@ export default function Calendar() {
       default:
         backgroundColor = '#6b7280';
     }
-    
+
     return {
       style: {
         backgroundColor,
@@ -334,7 +370,7 @@ export default function Calendar() {
           <CalendarIcon className="h-8 w-8 text-blue-600" />
           <h1 className="text-3xl font-bold text-gray-900">Calendar</h1>
         </div>
-        
+
         <div className="flex items-center space-x-3">
           <Button
             onClick={handleGenerateBlankPDF}
@@ -345,10 +381,16 @@ export default function Calendar() {
             <FileDown className="h-4 w-4" />
             <span>View Blank PDF</span>
           </Button>
-          
-          <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+
+          <Dialog
+            open={isCreateDialogOpen}
+            onOpenChange={setIsCreateDialogOpen}
+          >
             <DialogTrigger asChild>
-              <Button className="flex items-center space-x-2" data-testid="button-create-event">
+              <Button
+                className="flex items-center space-x-2"
+                data-testid="button-create-event"
+              >
                 <Plus className="h-4 w-4" />
                 <span>New Event</span>
               </Button>
@@ -358,7 +400,10 @@ export default function Calendar() {
                 <DialogTitle>Create New Event</DialogTitle>
               </DialogHeader>
               <Form {...createForm}>
-                <form onSubmit={createForm.handleSubmit(onCreateSubmit)} className="space-y-4">
+                <form
+                  onSubmit={createForm.handleSubmit(onCreateSubmit)}
+                  className="space-y-4"
+                >
                   <div className="grid grid-cols-2 gap-4">
                     <FormField
                       control={createForm.control}
@@ -373,14 +418,17 @@ export default function Calendar() {
                         </FormItem>
                       )}
                     />
-                    
+
                     <FormField
                       control={createForm.control}
                       name="eventType"
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>Event Type</FormLabel>
-                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <Select
+                            onValueChange={field.onChange}
+                            defaultValue={field.value}
+                          >
                             <FormControl>
                               <SelectTrigger data-testid="select-event-type">
                                 <SelectValue placeholder="Select event type" />
@@ -398,7 +446,7 @@ export default function Calendar() {
                         </FormItem>
                       )}
                     />
-                    
+
                     <FormField
                       control={createForm.control}
                       name="location"
@@ -406,13 +454,16 @@ export default function Calendar() {
                         <FormItem>
                           <FormLabel>Location</FormLabel>
                           <FormControl>
-                            <Input {...field} data-testid="input-event-location" />
+                            <Input
+                              {...field}
+                              data-testid="input-event-location"
+                            />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
                       )}
                     />
-                    
+
                     <FormField
                       control={createForm.control}
                       name="startDate"
@@ -420,13 +471,17 @@ export default function Calendar() {
                         <FormItem>
                           <FormLabel>Start Date</FormLabel>
                           <FormControl>
-                            <Input type="date" {...field} data-testid="input-start-date" />
+                            <Input
+                              type="date"
+                              {...field}
+                              data-testid="input-start-date"
+                            />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
                       )}
                     />
-                    
+
                     <FormField
                       control={createForm.control}
                       name="startTime"
@@ -434,13 +489,17 @@ export default function Calendar() {
                         <FormItem>
                           <FormLabel>Start Time</FormLabel>
                           <FormControl>
-                            <Input type="time" {...field} data-testid="input-start-time" />
+                            <Input
+                              type="time"
+                              {...field}
+                              data-testid="input-start-time"
+                            />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
                       )}
                     />
-                    
+
                     <FormField
                       control={createForm.control}
                       name="endDate"
@@ -448,13 +507,17 @@ export default function Calendar() {
                         <FormItem>
                           <FormLabel>End Date</FormLabel>
                           <FormControl>
-                            <Input type="date" {...field} data-testid="input-end-date" />
+                            <Input
+                              type="date"
+                              {...field}
+                              data-testid="input-end-date"
+                            />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
                       )}
                     />
-                    
+
                     <FormField
                       control={createForm.control}
                       name="endTime"
@@ -462,13 +525,17 @@ export default function Calendar() {
                         <FormItem>
                           <FormLabel>End Time</FormLabel>
                           <FormControl>
-                            <Input type="time" {...field} data-testid="input-end-time" />
+                            <Input
+                              type="time"
+                              {...field}
+                              data-testid="input-end-time"
+                            />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
                       )}
                     />
-                    
+
                     <FormField
                       control={createForm.control}
                       name="description"
@@ -476,13 +543,16 @@ export default function Calendar() {
                         <FormItem className="col-span-2">
                           <FormLabel>Description</FormLabel>
                           <FormControl>
-                            <Textarea {...field} data-testid="textarea-description" />
+                            <Textarea
+                              {...field}
+                              data-testid="textarea-description"
+                            />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
                       )}
                     />
-                    
+
                     <div className="col-span-2 flex items-center space-x-6">
                       <FormField
                         control={createForm.control}
@@ -502,7 +572,7 @@ export default function Calendar() {
                           </FormItem>
                         )}
                       />
-                      
+
                       <FormField
                         control={createForm.control}
                         name="isPublic"
@@ -523,7 +593,7 @@ export default function Calendar() {
                       />
                     </div>
                   </div>
-                  
+
                   <div className="flex justify-end space-x-3 pt-4">
                     <Button
                       type="button"
@@ -538,7 +608,9 @@ export default function Calendar() {
                       disabled={createEventMutation.isPending}
                       data-testid="button-submit-create"
                     >
-                      {createEventMutation.isPending ? 'Creating...' : 'Create Event'}
+                      {createEventMutation.isPending
+                        ? 'Creating...'
+                        : 'Create Event'}
                     </Button>
                   </div>
                 </form>
@@ -566,7 +638,9 @@ export default function Calendar() {
               onNavigate={setCurrentDate}
               eventPropGetter={eventStyleGetter}
               popup
-              tooltipAccessor={(event: CalendarEventExtended) => event.description || ''}
+              tooltipAccessor={(event: CalendarEventExtended) =>
+                event.description || ''
+              }
             />
           </div>
         </CardContent>
@@ -574,7 +648,10 @@ export default function Calendar() {
 
       {/* Event Details Dialog */}
       {selectedEvent && (
-        <Dialog open={!!selectedEvent} onOpenChange={() => setSelectedEvent(null)}>
+        <Dialog
+          open={!!selectedEvent}
+          onOpenChange={() => setSelectedEvent(null)}
+        >
           <DialogContent className="max-w-lg">
             <DialogHeader>
               <DialogTitle className="flex items-center justify-between">
@@ -606,38 +683,44 @@ export default function Calendar() {
               <div>
                 <p className="text-sm font-medium text-gray-500">Time</p>
                 <p className="text-sm">
-                  {moment(selectedEvent.start).format('MMM D, YYYY h:mm A')} - {' '}
+                  {moment(selectedEvent.start).format('MMM D, YYYY h:mm A')} -{' '}
                   {moment(selectedEvent.end).format('MMM D, YYYY h:mm A')}
                 </p>
               </div>
-              
+
               {selectedEvent.location && (
                 <div>
                   <p className="text-sm font-medium text-gray-500">Location</p>
                   <p className="text-sm">{selectedEvent.location}</p>
                 </div>
               )}
-              
+
               {selectedEvent.description && (
                 <div>
-                  <p className="text-sm font-medium text-gray-500">Description</p>
+                  <p className="text-sm font-medium text-gray-500">
+                    Description
+                  </p>
                   <p className="text-sm">{selectedEvent.description}</p>
                 </div>
               )}
-              
+
               <div>
                 <p className="text-sm font-medium text-gray-500">Event Type</p>
                 <p className="text-sm capitalize">{selectedEvent.eventType}</p>
               </div>
-              
+
               <div className="flex items-center space-x-4">
                 <div>
                   <p className="text-sm font-medium text-gray-500">All Day</p>
-                  <p className="text-sm">{selectedEvent.isAllDay ? 'Yes' : 'No'}</p>
+                  <p className="text-sm">
+                    {selectedEvent.isAllDay ? 'Yes' : 'No'}
+                  </p>
                 </div>
                 <div>
                   <p className="text-sm font-medium text-gray-500">Public</p>
-                  <p className="text-sm">{selectedEvent.isPublic ? 'Yes' : 'No'}</p>
+                  <p className="text-sm">
+                    {selectedEvent.isPublic ? 'Yes' : 'No'}
+                  </p>
                 </div>
               </div>
             </div>
@@ -652,7 +735,10 @@ export default function Calendar() {
             <DialogTitle>Edit Event</DialogTitle>
           </DialogHeader>
           <Form {...editForm}>
-            <form onSubmit={editForm.handleSubmit(onEditSubmit)} className="space-y-4">
+            <form
+              onSubmit={editForm.handleSubmit(onEditSubmit)}
+              className="space-y-4"
+            >
               {/* Similar form fields as create form - keeping DRY principle */}
               {/* For brevity, using same structure as create form */}
               {/* In production, this could be extracted to a shared component */}
@@ -670,14 +756,17 @@ export default function Calendar() {
                     </FormItem>
                   )}
                 />
-                
+
                 <FormField
                   control={editForm.control}
                   name="eventType"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Event Type</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
+                      <Select
+                        onValueChange={field.onChange}
+                        value={field.value}
+                      >
                         <FormControl>
                           <SelectTrigger data-testid="select-edit-event-type">
                             <SelectValue placeholder="Select event type" />
@@ -695,7 +784,7 @@ export default function Calendar() {
                     </FormItem>
                   )}
                 />
-                
+
                 <FormField
                   control={editForm.control}
                   name="location"
@@ -710,7 +799,7 @@ export default function Calendar() {
                   )}
                 />
               </div>
-              
+
               <div className="flex justify-end space-x-3 pt-4">
                 <Button
                   type="button"
@@ -725,7 +814,9 @@ export default function Calendar() {
                   disabled={updateEventMutation.isPending}
                   data-testid="button-submit-edit"
                 >
-                  {updateEventMutation.isPending ? 'Updating...' : 'Update Event'}
+                  {updateEventMutation.isPending
+                    ? 'Updating...'
+                    : 'Update Event'}
                 </Button>
               </div>
             </form>
@@ -738,7 +829,9 @@ export default function Calendar() {
         <DialogContent className="max-w-4xl h-[80vh] p-6">
           <DialogHeader>
             <DialogTitle className="flex items-center justify-between">
-              <span>Calendar PDF - {moment(currentDate).format('MMMM YYYY')}</span>
+              <span>
+                Calendar PDF - {moment(currentDate).format('MMMM YYYY')}
+              </span>
               <div className="flex items-center space-x-2">
                 <Button
                   size="sm"
@@ -752,7 +845,7 @@ export default function Calendar() {
                           printWindow.print();
                         };
                       }
-                      
+
                       toast({
                         title: 'Printing Calendar',
                         description: 'Opening print dialog for your calendar.',
@@ -775,10 +868,11 @@ export default function Calendar() {
                       document.body.appendChild(a);
                       a.click();
                       document.body.removeChild(a);
-                      
+
                       toast({
                         title: 'PDF Downloaded',
-                        description: 'Calendar PDF has been saved to your computer.',
+                        description:
+                          'Calendar PDF has been saved to your computer.',
                       });
                     }
                   }}
@@ -790,7 +884,7 @@ export default function Calendar() {
               </div>
             </DialogTitle>
           </DialogHeader>
-          
+
           <div className="flex-1 w-full h-full min-h-[500px] border rounded-lg overflow-hidden bg-gray-100">
             {pdfUrl ? (
               <div className="w-full h-full relative">
@@ -801,13 +895,15 @@ export default function Calendar() {
                   title="AG Composites LLC Calendar PDF"
                   style={{ minHeight: '500px' }}
                   onLoad={() => {
-                    console.log('✅ Direct PDF URL loaded successfully in iframe');
+                    console.log(
+                      '✅ Direct PDF URL loaded successfully in iframe'
+                    );
                   }}
                   onError={() => {
                     console.log('❌ Direct PDF URL failed to load');
                   }}
                 />
-                
+
                 {/* Fallback buttons overlay (hidden by default, shown if needed) */}
                 <div className="absolute top-4 right-4 flex space-x-2">
                   <Button

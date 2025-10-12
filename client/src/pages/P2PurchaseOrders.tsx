@@ -1,9 +1,9 @@
-import { useState } from "react";
-import { P2CustomerManager } from "@/components/P2CustomerManager";
-import { P2POManager } from "@/components/P2POManager";
-import { P2POItemsManager } from "@/components/P2POItemsManager";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Building2, FileText, Package } from "lucide-react";
+import { useState } from 'react';
+import { P2CustomerManager } from '@/components/P2CustomerManager';
+import { P2POManager } from '@/components/P2POManager';
+import { P2POItemsManager } from '@/components/P2POItemsManager';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Building2, FileText, Package } from 'lucide-react';
 
 type ViewMode = 'customers' | 'orders' | 'items';
 
@@ -34,8 +34,8 @@ export default function P2PurchaseOrders() {
   if (activeTab === 'items' && itemsView) {
     return (
       <div className="container mx-auto p-6">
-        <P2POItemsManager 
-          poId={itemsView.poId} 
+        <P2POItemsManager
+          poId={itemsView.poId}
           poNumber={itemsView.poNumber}
           onBack={handleBackToOrders}
         />
@@ -46,13 +46,19 @@ export default function P2PurchaseOrders() {
   return (
     <div className="container mx-auto p-6">
       <div className="mb-6">
-        <h1 className="text-3xl font-bold tracking-tight">P2 Purchase Orders</h1>
+        <h1 className="text-3xl font-bold tracking-tight">
+          P2 Purchase Orders
+        </h1>
         <p className="text-muted-foreground">
-          Manage P2 customers, purchase orders, and line items with Part #, Quantity, and Price tracking
+          Manage P2 customers, purchase orders, and line items with Part #,
+          Quantity, and Price tracking
         </p>
       </div>
 
-      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as ViewMode)}>
+      <Tabs
+        value={activeTab}
+        onValueChange={(value) => setActiveTab(value as ViewMode)}
+      >
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="customers" className="flex items-center gap-2">
             <Building2 className="h-4 w-4" />

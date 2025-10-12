@@ -1,20 +1,70 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { fetchPOs, createPO, updatePO, deletePO, fetchPOItems, type PurchaseOrder, type CreatePurchaseOrderData, type PurchaseOrderItem } from '@/lib/poUtils';
+import {
+  fetchPOs,
+  createPO,
+  updatePO,
+  deletePO,
+  fetchPOItems,
+  type PurchaseOrder,
+  type CreatePurchaseOrderData,
+  type PurchaseOrderItem,
+} from '@/lib/poUtils';
 import { generateProductionOrdersFromPO } from '@/lib/productionUtils';
 import { apiRequest } from '@/lib/queryClient';
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Pencil, Trash2, Plus, Eye, Package, Search, TrendingUp, ShoppingCart, ChevronsUpDown, Check, UserPlus } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+import { Badge } from '@/components/ui/badge';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import {
+  Pencil,
+  Trash2,
+  Plus,
+  Eye,
+  Package,
+  Search,
+  TrendingUp,
+  ShoppingCart,
+  ChevronsUpDown,
+  Check,
+  UserPlus,
+} from 'lucide-react';
 // @ts-ignore
 import debounce from 'lodash.debounce';
 import { toast } from 'react-hot-toast';
@@ -27,10 +77,13 @@ import { type AddressData } from '@/utils/addressUtils';
 function POQuantityDisplay({ poId }: { poId: number }) {
   const { data: items = [], isLoading } = useQuery({
     queryKey: [`/api/pos/${poId}/items`],
-    queryFn: () => fetchPOItems(poId)
+    queryFn: () => fetchPOItems(poId),
   });
 
-  const totalQuantity = items.reduce((sum, item: PurchaseOrderItem) => sum + item.quantity, 0);
+  const totalQuantity = items.reduce(
+    (sum, item: PurchaseOrderItem) => sum + item.quantity,
+    0
+  );
 
   if (isLoading) {
     return <span className="text-gray-500">Loading...</span>;
@@ -48,7 +101,7 @@ function POQuantityDisplay({ poId }: { poId: number }) {
 function ProductionStatusBadge({ poId }: { poId: number }) {
   const { data: productionOrders = [], isLoading } = useQuery({
     queryKey: [`/api/production-orders/by-po/${poId}`],
-    queryFn: () => apiRequest(`/api/production-orders/by-po/${poId}`)
+    queryFn: () => apiRequest(`/api/production-orders/by-po/${poId}`),
   });
 
   if (isLoading) {
@@ -60,22 +113,28 @@ function ProductionStatusBadge({ poId }: { poId: number }) {
   }
 
   const totalOrders = productionOrders.length;
-  const pendingOrders = productionOrders.filter((order: any) => order.productionStatus === 'PENDING').length;
-  const laidUpOrders = productionOrders.filter((order: any) => order.productionStatus === 'LAID_UP').length;
-  const shippedOrders = productionOrders.filter((order: any) => order.productionStatus === 'SHIPPED').length;
+  const pendingOrders = productionOrders.filter(
+    (order: any) => order.productionStatus === 'PENDING'
+  ).length;
+  const laidUpOrders = productionOrders.filter(
+    (order: any) => order.productionStatus === 'LAID_UP'
+  ).length;
+  const shippedOrders = productionOrders.filter(
+    (order: any) => order.productionStatus === 'SHIPPED'
+  ).length;
 
-  let badgeColor = "bg-blue-100 text-blue-800";
-  let statusText = "In Production";
-  
+  let badgeColor = 'bg-blue-100 text-blue-800';
+  let statusText = 'In Production';
+
   if (shippedOrders === totalOrders) {
-    badgeColor = "bg-green-100 text-green-800";
-    statusText = "Shipped";
+    badgeColor = 'bg-green-100 text-green-800';
+    statusText = 'Shipped';
   } else if (laidUpOrders > 0) {
-    badgeColor = "bg-yellow-100 text-yellow-800"; 
-    statusText = "In Progress";
+    badgeColor = 'bg-yellow-100 text-yellow-800';
+    statusText = 'In Progress';
   } else {
-    badgeColor = "bg-blue-100 text-blue-800";
-    statusText = "Scheduled";
+    badgeColor = 'bg-blue-100 text-blue-800';
+    statusText = 'Scheduled';
   }
 
   return (
@@ -86,7 +145,15 @@ function ProductionStatusBadge({ poId }: { poId: number }) {
 }
 
 // Component for individual PO card to safely use hooks
-function POCard({ po, onEdit, onDelete, onViewItems, onCalculateSchedule, onGenerateProductionOrders, isGeneratingOrders }: {
+function POCard({
+  po,
+  onEdit,
+  onDelete,
+  onViewItems,
+  onCalculateSchedule,
+  onGenerateProductionOrders,
+  isGeneratingOrders,
+}: {
   po: PurchaseOrder;
   onEdit: (po: PurchaseOrder) => void;
   onDelete: (id: number) => void;
@@ -97,7 +164,7 @@ function POCard({ po, onEdit, onDelete, onViewItems, onCalculateSchedule, onGene
 }) {
   const { data: productionOrders = [], isLoading } = useQuery({
     queryKey: [`/api/production-orders/by-po/${po.id}`],
-    queryFn: () => apiRequest(`/api/production-orders/by-po/${po.id}`)
+    queryFn: () => apiRequest(`/api/production-orders/by-po/${po.id}`),
   });
 
   const hasOrders = productionOrders.length > 0;
@@ -105,10 +172,14 @@ function POCard({ po, onEdit, onDelete, onViewItems, onCalculateSchedule, onGene
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'OPEN': return 'bg-green-100 text-green-800';
-      case 'CLOSED': return 'bg-gray-100 text-gray-800';
-      case 'CANCELED': return 'bg-red-100 text-red-800';
-      default: return 'bg-blue-100 text-blue-800';
+      case 'OPEN':
+        return 'bg-green-100 text-green-800';
+      case 'CLOSED':
+        return 'bg-gray-100 text-gray-800';
+      case 'CANCELED':
+        return 'bg-red-100 text-red-800';
+      default:
+        return 'bg-blue-100 text-blue-800';
     }
   };
 
@@ -126,9 +197,7 @@ function POCard({ po, onEdit, onDelete, onViewItems, onCalculateSchedule, onGene
             </div>
           </div>
           <div className="flex gap-2 flex-wrap">
-            <Badge className={getStatusColor(po.status)}>
-              {po.status}
-            </Badge>
+            <Badge className={getStatusColor(po.status)}>{po.status}</Badge>
             <ProductionStatusBadge poId={po.id} />
             <div className="flex gap-1 flex-wrap">
               <Button
@@ -162,9 +231,17 @@ function POCard({ po, onEdit, onDelete, onViewItems, onCalculateSchedule, onGene
                   size="sm"
                   onClick={() => onGenerateProductionOrders(po.id)}
                   disabled={isGeneratingOrders || hasOrders}
-                  title={hasOrders ? `Production orders already exist (${orderCount} orders)` : 'Generate production orders from this PO'}
+                  title={
+                    hasOrders
+                      ? `Production orders already exist (${orderCount} orders)`
+                      : 'Generate production orders from this PO'
+                  }
                 >
-                  {isGeneratingOrders ? 'Generating...' : hasOrders ? `Orders Generated (${orderCount})` : 'Generate Production Orders'}
+                  {isGeneratingOrders
+                    ? 'Generating...'
+                    : hasOrders
+                      ? `Orders Generated (${orderCount})`
+                      : 'Generate Production Orders'}
                 </Button>
               </div>
               <Button
@@ -182,10 +259,12 @@ function POCard({ po, onEdit, onDelete, onViewItems, onCalculateSchedule, onGene
       <CardContent>
         <div className="grid grid-cols-2 gap-4 text-sm">
           <div>
-            <span className="font-medium">PO Date:</span> {new Date(po.poDate).toLocaleDateString()}
+            <span className="font-medium">PO Date:</span>{' '}
+            {new Date(po.poDate).toLocaleDateString()}
           </div>
           <div>
-            <span className="font-medium">Expected Delivery:</span> {new Date(po.expectedDelivery).toLocaleDateString()}
+            <span className="font-medium">Expected Delivery:</span>{' '}
+            {new Date(po.expectedDelivery).toLocaleDateString()}
           </div>
         </div>
         {po.notes && (
@@ -220,10 +299,14 @@ export default function POManager() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingPO, setEditingPO] = useState<PurchaseOrder | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'ALL' | 'OPEN' | 'CLOSED' | 'CANCELED'>('ALL');
+  const [statusFilter, setStatusFilter] = useState<
+    'ALL' | 'OPEN' | 'CLOSED' | 'CANCELED'
+  >('ALL');
   const [selectedPO, setSelectedPO] = useState<PurchaseOrder | null>(null);
   const [showOrderEntry, setShowOrderEntry] = useState(false);
-  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(
+    null
+  );
   const [customerSearchOpen, setCustomerSearchOpen] = useState(false);
   const [customerSearchValue, setCustomerSearchValue] = useState('');
   const queryClient = useQueryClient();
@@ -242,10 +325,9 @@ export default function POManager() {
       city: '',
       state: '',
       zipCode: '',
-      country: 'USA'
-    } as AddressData
+      country: 'USA',
+    } as AddressData,
   });
-
 
   // Form state
   const [formData, setFormData] = useState({
@@ -255,24 +337,28 @@ export default function POManager() {
     poDate: new Date().toISOString().split('T')[0],
     expectedDelivery: '',
     status: 'OPEN' as 'OPEN' | 'CLOSED' | 'CANCELED',
-    notes: ''
+    notes: '',
   });
 
-  const { data: pos = [], isLoading, refetch } = useQuery({
+  const {
+    data: pos = [],
+    isLoading,
+    refetch,
+  } = useQuery({
     queryKey: ['/api/pos'],
-    queryFn: fetchPOs
+    queryFn: fetchPOs,
   });
 
   // Fetch customers who have had past purchase orders
   const { data: customers = [] } = useQuery({
     queryKey: ['/api/customers/with-pos'],
-    queryFn: () => apiRequest('/api/customers/with-pos')
+    queryFn: () => apiRequest('/api/customers/with-pos'),
   });
 
   // Fetch stock models for order entry
   const { data: stockModels = [] } = useQuery({
     queryKey: ['/api/stock-models'],
-    queryFn: () => apiRequest('/api/stock-models')
+    queryFn: () => apiRequest('/api/stock-models'),
   });
 
   const createMutation = useMutation({
@@ -288,11 +374,17 @@ export default function POManager() {
     },
     onError: () => {
       toast.error('Failed to create purchase order');
-    }
+    },
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: number; data: Partial<CreatePurchaseOrderData> }) => updatePO(id, data),
+    mutationFn: ({
+      id,
+      data,
+    }: {
+      id: number;
+      data: Partial<CreatePurchaseOrderData>;
+    }) => updatePO(id, data),
     onSuccess: () => {
       toast.success('Purchase order updated successfully');
       queryClient.invalidateQueries({ queryKey: ['/api/pos'] });
@@ -300,7 +392,7 @@ export default function POManager() {
     },
     onError: () => {
       toast.error('Failed to update purchase order');
-    }
+    },
   });
 
   const deleteMutation = useMutation({
@@ -311,7 +403,7 @@ export default function POManager() {
     },
     onError: () => {
       toast.error('Failed to delete purchase order');
-    }
+    },
   });
 
   const createCustomerMutation = useMutation({
@@ -322,11 +414,11 @@ export default function POManager() {
         address: customerData.address.street,
         city: customerData.address.city,
         state: customerData.address.state,
-        zipCode: customerData.address.zipCode
+        zipCode: customerData.address.zipCode,
       };
       return apiRequest('/api/customers/create-bypass', {
         method: 'POST',
-        body: JSON.stringify(flattenedData)
+        body: JSON.stringify(flattenedData),
       });
     },
     onSuccess: (newCustomer) => {
@@ -335,7 +427,7 @@ export default function POManager() {
       setFormData({
         ...formData,
         customerName: newCustomer.name,
-        customerId: newCustomer.id.toString()
+        customerId: newCustomer.id.toString(),
       });
       setSelectedCustomer(newCustomer);
       // Refresh customers list
@@ -353,37 +445,42 @@ export default function POManager() {
           city: '',
           state: '',
           zipCode: '',
-          country: 'USA'
-        } as AddressData
+          country: 'USA',
+        } as AddressData,
       });
     },
     onError: (error: any) => {
       toast.error(error?.message || 'Failed to create customer');
-    }
+    },
   });
 
   const handleCalculateSchedule = async (poId: number) => {
     try {
-      const result = await apiRequest(`/api/pos/${poId}/calculate-production-schedule`, {
-        method: 'POST'
-      });
+      const result = await apiRequest(
+        `/api/pos/${poId}/calculate-production-schedule`,
+        {
+          method: 'POST',
+        }
+      );
 
       console.log('Production schedule calculated:', result);
       setScheduleData(result);
       setShowScheduleModal(true);
-
     } catch (error) {
       console.error('Calculate schedule error:', error);
-      toast.error("Failed to calculate production schedule");
+      toast.error('Failed to calculate production schedule');
     }
   };
 
   const handleGenerateProductionOrders = async (poId: number) => {
     setIsGeneratingOrders(true);
     try {
-      const result = await apiRequest(`/api/pos/${poId}/generate-production-orders`, {
-        method: 'POST'
-      });
+      const result = await apiRequest(
+        `/api/pos/${poId}/generate-production-orders`,
+        {
+          method: 'POST',
+        }
+      );
 
       console.log('Generated production orders:', result);
       toast.success(`Generated ${result.createdOrders} production orders`);
@@ -395,17 +492,21 @@ export default function POManager() {
       try {
         console.log('🟢 Auto-scheduling new OEM production orders...');
         const scheduleResult = await apiRequest('/api/algorithmic-schedule', {
-          method: 'POST'
+          method: 'POST',
         });
         console.log('✅ OEM orders automatically scheduled:', scheduleResult);
-        toast.success(`OEM orders scheduled! ${result.createdOrders} green cards now visible on schedule.`);
+        toast.success(
+          `OEM orders scheduled! ${result.createdOrders} green cards now visible on schedule.`
+        );
       } catch (scheduleError) {
         console.error('❌ Auto-schedule failed:', scheduleError);
-        toast.error("Production orders created but auto-scheduling failed. Use Generate Schedule button.");
+        toast.error(
+          'Production orders created but auto-scheduling failed. Use Generate Schedule button.'
+        );
       }
     } catch (error) {
       console.error('Generate production orders error:', error);
-      toast.error("Failed to generate production orders");
+      toast.error('Failed to generate production orders');
     } finally {
       setIsGeneratingOrders(false);
     }
@@ -417,14 +518,20 @@ export default function POManager() {
     console.log('Form submitted with formData:', formData);
 
     // Validate required fields
-    if (!formData.poNumber || !formData.customerId || !formData.customerName || !formData.poDate || !formData.expectedDelivery) {
+    if (
+      !formData.poNumber ||
+      !formData.customerId ||
+      !formData.customerName ||
+      !formData.poDate ||
+      !formData.expectedDelivery
+    ) {
       console.log('Validation failed - missing fields:', {
         poNumber: !formData.poNumber,
         customerId: !formData.customerId,
         customerName: !formData.customerName,
 
         poDate: !formData.poDate,
-        expectedDelivery: !formData.expectedDelivery
+        expectedDelivery: !formData.expectedDelivery,
       });
       toast.error('Please fill in all required fields');
       return;
@@ -438,7 +545,7 @@ export default function POManager() {
       poDate: formData.poDate,
       expectedDelivery: formData.expectedDelivery,
       status: formData.status,
-      notes: formData.notes || undefined
+      notes: formData.notes || undefined,
     };
 
     console.log('Submitting PO data:', data);
@@ -460,7 +567,7 @@ export default function POManager() {
         poDate: new Date().toISOString().split('T')[0],
         expectedDelivery: '',
         status: 'OPEN',
-        notes: ''
+        notes: '',
       });
     }
   }, [editingPO]);
@@ -473,9 +580,11 @@ export default function POManager() {
       customerName: po.customerName,
 
       poDate: po.poDate ? new Date(po.poDate).toISOString().split('T')[0] : '',
-      expectedDelivery: po.expectedDelivery ? new Date(po.expectedDelivery).toISOString().split('T')[0] : '',
+      expectedDelivery: po.expectedDelivery
+        ? new Date(po.expectedDelivery).toISOString().split('T')[0]
+        : '',
       status: po.status,
-      notes: po.notes || ''
+      notes: po.notes || '',
     });
     setIsDialogOpen(true);
   };
@@ -490,19 +599,19 @@ export default function POManager() {
       poDate: new Date().toISOString().split('T')[0],
       expectedDelivery: '',
       status: 'OPEN',
-      notes: ''
+      notes: '',
     });
   };
 
   const handleCreateCustomer = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    
+
     // Validate required fields
     if (!newCustomerData.name) {
       toast.error('Customer name is required');
       return;
     }
-    
+
     createCustomerMutation.mutate(newCustomerData);
   };
 
@@ -519,13 +628,15 @@ export default function POManager() {
         city: '',
         state: '',
         zipCode: '',
-        country: 'USA'
-      } as AddressData
+        country: 'USA',
+      } as AddressData,
     });
   };
 
   const handleDelete = (id: number) => {
-    if (window.confirm('Are you sure you want to delete this purchase order?')) {
+    if (
+      window.confirm('Are you sure you want to delete this purchase order?')
+    ) {
       deleteMutation.mutate(id);
     }
   };
@@ -534,20 +645,25 @@ export default function POManager() {
     setSelectedPO(po);
   };
 
-  const filteredPOs = pos.filter(po => {
-    const matchesSearch = po.poNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         po.customerId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         po.customerName.toLowerCase().includes(searchTerm.toLowerCase());
+  const filteredPOs = pos.filter((po) => {
+    const matchesSearch =
+      po.poNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      po.customerId.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      po.customerName.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === 'ALL' || po.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'OPEN': return 'bg-green-100 text-green-800';
-      case 'CLOSED': return 'bg-gray-100 text-gray-800';
-      case 'CANCELED': return 'bg-red-100 text-red-800';
-      default: return 'bg-gray-100 text-gray-800';
+      case 'OPEN':
+        return 'bg-green-100 text-green-800';
+      case 'CLOSED':
+        return 'bg-gray-100 text-gray-800';
+      case 'CANCELED':
+        return 'bg-red-100 text-red-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
     }
   };
 
@@ -580,7 +696,9 @@ export default function POManager() {
             onClose={() => setShowOrderEntry(false)}
             onSuccess={() => {
               setShowOrderEntry(false);
-              queryClient.invalidateQueries({ queryKey: [`/api/pos/${selectedPO.id}/items`] });
+              queryClient.invalidateQueries({
+                queryKey: [`/api/pos/${selectedPO.id}/items`],
+              });
               queryClient.invalidateQueries({ queryKey: ['/api/pos'] });
             }}
           />
@@ -589,22 +707,25 @@ export default function POManager() {
         <div className="space-y-6">
           <div className="flex justify-between items-center">
             <h2 className="text-2xl font-bold">Purchase Order Management</h2>
-            <Dialog open={isDialogOpen} onOpenChange={(open) => {
-              if (open) {
-                setEditingPO(null);
-                setFormData({
-                  poNumber: '',
-                  customerId: '',
-                  customerName: '',
+            <Dialog
+              open={isDialogOpen}
+              onOpenChange={(open) => {
+                if (open) {
+                  setEditingPO(null);
+                  setFormData({
+                    poNumber: '',
+                    customerId: '',
+                    customerName: '',
 
-                  poDate: new Date().toISOString().split('T')[0],
-                  expectedDelivery: '',
-                  status: 'OPEN',
-                  notes: ''
-                });
-              }
-              setIsDialogOpen(open);
-            }}>
+                    poDate: new Date().toISOString().split('T')[0],
+                    expectedDelivery: '',
+                    status: 'OPEN',
+                    notes: '',
+                  });
+                }
+                setIsDialogOpen(open);
+              }}
+            >
               <DialogTrigger asChild>
                 <Button>
                   <Plus className="w-4 h-4 mr-2" />
@@ -614,7 +735,9 @@ export default function POManager() {
               <DialogContent className="max-w-2xl">
                 <DialogHeader>
                   <DialogTitle>
-                    {editingPO ? 'Edit Purchase Order' : 'Add New Purchase Order'}
+                    {editingPO
+                      ? 'Edit Purchase Order'
+                      : 'Add New Purchase Order'}
                   </DialogTitle>
                 </DialogHeader>
                 <form onSubmit={handleSubmit} className="space-y-4">
@@ -624,7 +747,9 @@ export default function POManager() {
                       id="poNumber"
                       name="poNumber"
                       value={formData.poNumber}
-                      onChange={(e) => setFormData({...formData, poNumber: e.target.value})}
+                      onChange={(e) =>
+                        setFormData({ ...formData, poNumber: e.target.value })
+                      }
                       required
                     />
                   </div>
@@ -643,7 +768,10 @@ export default function POManager() {
                         Create New Customer
                       </Button>
                     </div>
-                    <Popover open={customerSearchOpen} onOpenChange={setCustomerSearchOpen}>
+                    <Popover
+                      open={customerSearchOpen}
+                      onOpenChange={setCustomerSearchOpen}
+                    >
                       <PopoverTrigger asChild>
                         <Button
                           variant="outline"
@@ -651,7 +779,8 @@ export default function POManager() {
                           aria-expanded={customerSearchOpen}
                           className="w-full justify-between"
                         >
-                          {formData.customerName || "Search and select customer..."}
+                          {formData.customerName ||
+                            'Search and select customer...'}
                           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                         </Button>
                       </PopoverTrigger>
@@ -665,7 +794,9 @@ export default function POManager() {
                           <CommandList>
                             <CommandEmpty>
                               <div className="text-center py-4">
-                                <p className="text-sm text-gray-500 mb-2">No customers found.</p>
+                                <p className="text-sm text-gray-500 mb-2">
+                                  No customers found.
+                                </p>
                                 <Button
                                   type="button"
                                   variant="outline"
@@ -683,41 +814,53 @@ export default function POManager() {
                             </CommandEmpty>
                             <CommandGroup>
                               {customers
-                                .filter((customer: Customer) =>
-                                  customer.name.toLowerCase().includes(customerSearchValue.toLowerCase()) ||
-                                  (customer.company && customer.company.toLowerCase().includes(customerSearchValue.toLowerCase()))
+                                .filter(
+                                  (customer: Customer) =>
+                                    customer.name
+                                      .toLowerCase()
+                                      .includes(
+                                        customerSearchValue.toLowerCase()
+                                      ) ||
+                                    (customer.company &&
+                                      customer.company
+                                        .toLowerCase()
+                                        .includes(
+                                          customerSearchValue.toLowerCase()
+                                        ))
                                 )
                                 .map((customer: Customer) => (
-                                <CommandItem
-                                  key={customer.id}
-                                  value={customer.name}
-                                  onSelect={() => {
-                                    setFormData({
-                                      ...formData,
-                                      customerName: customer.name,
-                                      customerId: customer.id.toString()
-                                    });
-                                    setSelectedCustomer(customer);
-                                    setCustomerSearchOpen(false);
-                                    setCustomerSearchValue('');
-                                  }}
-                                >
-                                  <Check
-                                    className={`mr-2 h-4 w-4 ${
-                                      formData.customerName === customer.name ? "opacity-100" : "opacity-0"
-                                    }`}
-                                  />
-                                  {customer.name} {customer.company && `(${customer.company})`}
-                                </CommandItem>
-                              ))}
+                                  <CommandItem
+                                    key={customer.id}
+                                    value={customer.name}
+                                    onSelect={() => {
+                                      setFormData({
+                                        ...formData,
+                                        customerName: customer.name,
+                                        customerId: customer.id.toString(),
+                                      });
+                                      setSelectedCustomer(customer);
+                                      setCustomerSearchOpen(false);
+                                      setCustomerSearchValue('');
+                                    }}
+                                  >
+                                    <Check
+                                      className={`mr-2 h-4 w-4 ${
+                                        formData.customerName === customer.name
+                                          ? 'opacity-100'
+                                          : 'opacity-0'
+                                      }`}
+                                    />
+                                    {customer.name}{' '}
+                                    {customer.company &&
+                                      `(${customer.company})`}
+                                  </CommandItem>
+                                ))}
                             </CommandGroup>
                           </CommandList>
                         </Command>
                       </PopoverContent>
                     </Popover>
                   </div>
-
-
 
                   <div className="grid grid-cols-2 gap-4">
                     <div>
@@ -727,18 +870,27 @@ export default function POManager() {
                         name="poDate"
                         type="date"
                         value={formData.poDate}
-                        onChange={(e) => setFormData({...formData, poDate: e.target.value})}
+                        onChange={(e) =>
+                          setFormData({ ...formData, poDate: e.target.value })
+                        }
                         required
                       />
                     </div>
                     <div>
-                      <Label htmlFor="expectedDelivery">Expected Delivery</Label>
+                      <Label htmlFor="expectedDelivery">
+                        Expected Delivery
+                      </Label>
                       <Input
                         id="expectedDelivery"
                         name="expectedDelivery"
                         type="date"
                         value={formData.expectedDelivery}
-                        onChange={(e) => setFormData({...formData, expectedDelivery: e.target.value})}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            expectedDelivery: e.target.value,
+                          })
+                        }
                         required
                       />
                     </div>
@@ -746,7 +898,15 @@ export default function POManager() {
 
                   <div>
                     <Label htmlFor="status">Status</Label>
-                    <Select value={formData.status} onValueChange={(value) => setFormData({...formData, status: value as 'OPEN' | 'CLOSED' | 'CANCELED'})}>
+                    <Select
+                      value={formData.status}
+                      onValueChange={(value) =>
+                        setFormData({
+                          ...formData,
+                          status: value as 'OPEN' | 'CLOSED' | 'CANCELED',
+                        })
+                      }
+                    >
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
@@ -764,16 +924,27 @@ export default function POManager() {
                       id="notes"
                       name="notes"
                       value={formData.notes}
-                      onChange={(e) => setFormData({...formData, notes: e.target.value})}
+                      onChange={(e) =>
+                        setFormData({ ...formData, notes: e.target.value })
+                      }
                       rows={3}
                     />
                   </div>
 
                   <div className="flex justify-end space-x-2">
-                    <Button type="button" variant="outline" onClick={handleDialogClose}>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={handleDialogClose}
+                    >
                       Cancel
                     </Button>
-                    <Button type="submit" disabled={createMutation.isPending || updateMutation.isPending}>
+                    <Button
+                      type="submit"
+                      disabled={
+                        createMutation.isPending || updateMutation.isPending
+                      }
+                    >
                       {editingPO ? 'Update' : 'Create'} PO
                     </Button>
                   </div>
@@ -793,7 +964,10 @@ export default function POManager() {
                 className="pl-10"
               />
             </div>
-            <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as any)}>
+            <Select
+              value={statusFilter}
+              onValueChange={(value) => setStatusFilter(value as any)}
+            >
               <SelectTrigger className="w-32">
                 <SelectValue />
               </SelectTrigger>
@@ -812,11 +986,13 @@ export default function POManager() {
               <div className="text-center py-8">Loading purchase orders...</div>
             ) : filteredPOs.length === 0 ? (
               <div className="text-center py-8 text-gray-500">
-                {searchTerm || statusFilter !== 'ALL' ? 'No purchase orders match your search.' : 'No purchase orders yet. Click "Add Purchase Order" to create your first one.'}
+                {searchTerm || statusFilter !== 'ALL'
+                  ? 'No purchase orders match your search.'
+                  : 'No purchase orders yet. Click "Add Purchase Order" to create your first one.'}
               </div>
             ) : (
               filteredPOs.map((po) => (
-                <POCard 
+                <POCard
                   key={po.id}
                   po={po}
                   onEdit={handleEdit}
@@ -848,10 +1024,14 @@ export default function POManager() {
                 </div>
                 <div>
                   <label className="text-sm font-medium">Final Due Date:</label>
-                  <p className="text-lg">{new Date(scheduleData.finalDueDate).toLocaleDateString()}</p>
+                  <p className="text-lg">
+                    {new Date(scheduleData.finalDueDate).toLocaleDateString()}
+                  </p>
                 </div>
                 <div>
-                  <label className="text-sm font-medium">Available Weeks:</label>
+                  <label className="text-sm font-medium">
+                    Available Weeks:
+                  </label>
                   <p className="text-lg">{scheduleData.availableWeeks}</p>
                 </div>
                 <div>
@@ -860,65 +1040,92 @@ export default function POManager() {
                 </div>
               </div>
 
-              <div className={`p-4 rounded-lg ${
-                scheduleData.overallFeasible
-                  ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800'
-                  : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800'
-              }`}>
-                <h3 className={`font-semibold ${
+              <div
+                className={`p-4 rounded-lg ${
                   scheduleData.overallFeasible
-                    ? 'text-green-800 dark:text-green-200'
-                    : 'text-red-800 dark:text-red-200'
-                }`}>
-                  {scheduleData.recommendations.feasible ? '✅ Schedule Feasible' : '⚠️ Schedule Requires Attention'}
+                    ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800'
+                    : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800'
+                }`}
+              >
+                <h3
+                  className={`font-semibold ${
+                    scheduleData.overallFeasible
+                      ? 'text-green-800 dark:text-green-200'
+                      : 'text-red-800 dark:text-red-200'
+                  }`}
+                >
+                  {scheduleData.recommendations.feasible
+                    ? '✅ Schedule Feasible'
+                    : '⚠️ Schedule Requires Attention'}
                 </h3>
-                <p className="text-sm mt-1">{scheduleData.recommendations.message}</p>
+                <p className="text-sm mt-1">
+                  {scheduleData.recommendations.message}
+                </p>
                 <ul className="text-sm mt-2 space-y-1">
-                  {scheduleData.recommendations.suggestedActions.map((action: string, index: number) => (
-                    <li key={index} className="flex items-start">
-                      <span className="mr-2">•</span>
-                      <span>{action}</span>
-                    </li>
-                  ))}
+                  {scheduleData.recommendations.suggestedActions.map(
+                    (action: string, index: number) => (
+                      <li key={index} className="flex items-start">
+                        <span className="mr-2">•</span>
+                        <span>{action}</span>
+                      </li>
+                    )
+                  )}
                 </ul>
               </div>
 
               <div className="space-y-4">
-                <h3 className="text-lg font-semibold">Item Production Schedules</h3>
+                <h3 className="text-lg font-semibold">
+                  Item Production Schedules
+                </h3>
                 {scheduleData.itemSchedules.map((item: any, index: number) => (
-                  <div key={index} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                  <div
+                    key={index}
+                    className="border border-gray-200 dark:border-gray-700 rounded-lg p-4"
+                  >
                     <div className="flex justify-between items-start mb-3">
                       <div>
                         <h4 className="font-semibold">{item.itemName}</h4>
-                        <p className="text-sm text-gray-600">Total Quantity: {item.totalQuantity}</p>
+                        <p className="text-sm text-gray-600">
+                          Total Quantity: {item.totalQuantity}
+                        </p>
                       </div>
                       <div className="text-right">
-                        <div className={`inline-flex px-2 py-1 rounded text-xs font-medium ${
-                          item.feasible
-                            ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200'
-                            : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-200'
-                        }`}>
+                        <div
+                          className={`inline-flex px-2 py-1 rounded text-xs font-medium ${
+                            item.feasible
+                              ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200'
+                              : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-200'
+                          }`}
+                        >
                           {item.feasible ? 'Feasible' : 'Requires Attention'}
                         </div>
-                        <p className="text-sm mt-1">{item.itemsPerWeek} items/week for {item.weeksNeeded} weeks</p>
+                        <p className="text-sm mt-1">
+                          {item.itemsPerWeek} items/week for {item.weeksNeeded}{' '}
+                          weeks
+                        </p>
                       </div>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-                      {item.weeklySchedule.map((week: any, weekIndex: number) => (
-                        <div key={weekIndex} className="bg-gray-50 dark:bg-gray-800 p-3 rounded border">
-                          <div className="font-medium">Week {week.week}</div>
-                          <div className="text-sm text-gray-600 dark:text-gray-400">
-                            Due: {new Date(week.dueDate).toLocaleDateString()}
+                      {item.weeklySchedule.map(
+                        (week: any, weekIndex: number) => (
+                          <div
+                            key={weekIndex}
+                            className="bg-gray-50 dark:bg-gray-800 p-3 rounded border"
+                          >
+                            <div className="font-medium">Week {week.week}</div>
+                            <div className="text-sm text-gray-600 dark:text-gray-400">
+                              Due: {new Date(week.dueDate).toLocaleDateString()}
+                            </div>
+                            <div className="text-sm">
+                              Complete: {week.itemsToComplete} items
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              Cumulative: {week.cumulativeItems}
+                            </div>
                           </div>
-                          <div className="text-sm">
-                            Complete: {week.itemsToComplete} items
-                          </div>
-                          <div className="text-xs text-gray-500">
-                            Cumulative: {week.cumulativeItems}
-                          </div>
-                        </div>
-                      ))}
+                        )
+                      )}
                     </div>
                   </div>
                 ))}
@@ -929,12 +1136,15 @@ export default function POManager() {
       </Dialog>
 
       {/* Customer Creation Dialog */}
-      <Dialog open={showCreateCustomer} onOpenChange={(open) => {
-        if (!open) {
-          handleCreateCustomerDialogClose();
-        }
-        setShowCreateCustomer(open);
-      }}>
+      <Dialog
+        open={showCreateCustomer}
+        onOpenChange={(open) => {
+          if (!open) {
+            handleCreateCustomerDialogClose();
+          }
+          setShowCreateCustomer(open);
+        }}
+      >
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Create New Customer</DialogTitle>
@@ -946,7 +1156,12 @@ export default function POManager() {
                 <Input
                   id="customerNameNew"
                   value={newCustomerData.name}
-                  onChange={(e) => setNewCustomerData({...newCustomerData, name: e.target.value})}
+                  onChange={(e) =>
+                    setNewCustomerData({
+                      ...newCustomerData,
+                      name: e.target.value,
+                    })
+                  }
                   required
                   placeholder="Enter customer name"
                 />
@@ -956,7 +1171,12 @@ export default function POManager() {
                 <Input
                   id="customerCompany"
                   value={newCustomerData.company}
-                  onChange={(e) => setNewCustomerData({...newCustomerData, company: e.target.value})}
+                  onChange={(e) =>
+                    setNewCustomerData({
+                      ...newCustomerData,
+                      company: e.target.value,
+                    })
+                  }
                   placeholder="Company name (optional)"
                 />
               </div>
@@ -969,7 +1189,12 @@ export default function POManager() {
                   id="customerEmail"
                   type="email"
                   value={newCustomerData.email}
-                  onChange={(e) => setNewCustomerData({...newCustomerData, email: e.target.value})}
+                  onChange={(e) =>
+                    setNewCustomerData({
+                      ...newCustomerData,
+                      email: e.target.value,
+                    })
+                  }
                   placeholder="customer@email.com"
                 />
               </div>
@@ -978,7 +1203,12 @@ export default function POManager() {
                 <Input
                   id="customerPhone"
                   value={newCustomerData.phone}
-                  onChange={(e) => setNewCustomerData({...newCustomerData, phone: e.target.value})}
+                  onChange={(e) =>
+                    setNewCustomerData({
+                      ...newCustomerData,
+                      phone: e.target.value,
+                    })
+                  }
                   placeholder="Phone number"
                 />
               </div>
@@ -986,7 +1216,15 @@ export default function POManager() {
 
             <div>
               <Label htmlFor="customerType">Customer Type</Label>
-              <Select value={newCustomerData.customerType} onValueChange={(value) => setNewCustomerData({...newCustomerData, customerType: value})}>
+              <Select
+                value={newCustomerData.customerType}
+                onValueChange={(value) =>
+                  setNewCustomerData({
+                    ...newCustomerData,
+                    customerType: value,
+                  })
+                }
+              >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -1002,16 +1240,24 @@ export default function POManager() {
             <AddressInput
               label="Address"
               value={newCustomerData.address}
-              onChange={(address) => setNewCustomerData({...newCustomerData, address})}
+              onChange={(address) =>
+                setNewCustomerData({ ...newCustomerData, address })
+              }
               required={false}
             />
 
             <div className="flex justify-end space-x-2">
-              <Button type="button" variant="outline" onClick={handleCreateCustomerDialogClose}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleCreateCustomerDialogClose}
+              >
                 Cancel
               </Button>
               <Button type="submit" disabled={createCustomerMutation.isPending}>
-                {createCustomerMutation.isPending ? 'Creating...' : 'Create Customer'}
+                {createCustomerMutation.isPending
+                  ? 'Creating...'
+                  : 'Create Customer'}
               </Button>
             </div>
           </form>

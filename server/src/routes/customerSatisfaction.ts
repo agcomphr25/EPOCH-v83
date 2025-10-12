@@ -2,12 +2,12 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { eq, desc, and, gte, lte } from 'drizzle-orm';
 import { db } from '../../db';
-import { 
-  customerSatisfactionSurveys, 
+import {
+  customerSatisfactionSurveys,
   customerSatisfactionResponses,
   insertCustomerSatisfactionSurveySchema,
   insertCustomerSatisfactionResponseSchema,
-  customers
+  customers,
 } from '../../schema';
 
 const router = Router();
@@ -19,7 +19,7 @@ router.get('/surveys', async (req, res) => {
       .select()
       .from(customerSatisfactionSurveys)
       .orderBy(desc(customerSatisfactionSurveys.createdAt));
-    
+
     res.json(surveys);
   } catch (error) {
     console.error('Error fetching customer satisfaction surveys:', error);
@@ -31,7 +31,7 @@ router.get('/surveys', async (req, res) => {
 router.get('/surveys/:id', async (req, res) => {
   try {
     const surveyId = parseInt(req.params.id);
-    
+
     if (isNaN(surveyId)) {
       return res.status(400).json({ error: 'Invalid survey ID' });
     }
@@ -56,8 +56,10 @@ router.get('/surveys/:id', async (req, res) => {
 // Create a new customer satisfaction survey
 router.post('/surveys', async (req, res) => {
   try {
-    const validatedData = insertCustomerSatisfactionSurveySchema.parse(req.body);
-    
+    const validatedData = insertCustomerSatisfactionSurveySchema.parse(
+      req.body
+    );
+
     const newSurvey = await db
       .insert(customerSatisfactionSurveys)
       .values(validatedData)
@@ -66,12 +68,12 @@ router.post('/surveys', async (req, res) => {
     res.status(201).json(newSurvey[0]);
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return res.status(400).json({ 
-        error: 'Validation failed', 
-        details: error.errors 
+      return res.status(400).json({
+        error: 'Validation failed',
+        details: error.errors,
       });
     }
-    
+
     console.error('Error creating survey:', error);
     res.status(500).json({ error: 'Failed to create survey' });
   }
@@ -81,13 +83,15 @@ router.post('/surveys', async (req, res) => {
 router.put('/surveys/:id', async (req, res) => {
   try {
     const surveyId = parseInt(req.params.id);
-    
+
     if (isNaN(surveyId)) {
       return res.status(400).json({ error: 'Invalid survey ID' });
     }
 
-    const validatedData = insertCustomerSatisfactionSurveySchema.parse(req.body);
-    
+    const validatedData = insertCustomerSatisfactionSurveySchema.parse(
+      req.body
+    );
+
     const updatedSurvey = await db
       .update(customerSatisfactionSurveys)
       .set({ ...validatedData, updatedAt: new Date() })
@@ -101,12 +105,12 @@ router.put('/surveys/:id', async (req, res) => {
     res.json(updatedSurvey[0]);
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return res.status(400).json({ 
-        error: 'Validation failed', 
-        details: error.errors 
+      return res.status(400).json({
+        error: 'Validation failed',
+        details: error.errors,
       });
     }
-    
+
     console.error('Error updating survey:', error);
     res.status(500).json({ error: 'Failed to update survey' });
   }
@@ -116,7 +120,7 @@ router.put('/surveys/:id', async (req, res) => {
 router.delete('/surveys/:id', async (req, res) => {
   try {
     const surveyId = parseInt(req.params.id);
-    
+
     if (isNaN(surveyId)) {
       return res.status(400).json({ error: 'Invalid survey ID' });
     }
@@ -147,7 +151,7 @@ router.delete('/surveys/:id', async (req, res) => {
 router.get('/surveys/:id/responses', async (req, res) => {
   try {
     const surveyId = parseInt(req.params.id);
-    
+
     if (isNaN(surveyId)) {
       return res.status(400).json({ error: 'Invalid survey ID' });
     }
@@ -170,7 +174,10 @@ router.get('/surveys/:id/responses', async (req, res) => {
         updatedAt: customerSatisfactionResponses.updatedAt,
       })
       .from(customerSatisfactionResponses)
-      .leftJoin(customers, eq(customerSatisfactionResponses.customerId, customers.id))
+      .leftJoin(
+        customers,
+        eq(customerSatisfactionResponses.customerId, customers.id)
+      )
       .where(eq(customerSatisfactionResponses.surveyId, surveyId))
       .orderBy(desc(customerSatisfactionResponses.createdAt));
 
@@ -203,8 +210,17 @@ router.get('/responses', async (req, res) => {
         updatedAt: customerSatisfactionResponses.updatedAt,
       })
       .from(customerSatisfactionResponses)
-      .leftJoin(customers, eq(customerSatisfactionResponses.customerId, customers.id))
-      .leftJoin(customerSatisfactionSurveys, eq(customerSatisfactionResponses.surveyId, customerSatisfactionSurveys.id))
+      .leftJoin(
+        customers,
+        eq(customerSatisfactionResponses.customerId, customers.id)
+      )
+      .leftJoin(
+        customerSatisfactionSurveys,
+        eq(
+          customerSatisfactionResponses.surveyId,
+          customerSatisfactionSurveys.id
+        )
+      )
       .orderBy(desc(customerSatisfactionResponses.createdAt));
 
     res.json(responses);
@@ -217,12 +233,16 @@ router.get('/responses', async (req, res) => {
 // Submit a customer satisfaction response
 router.post('/responses', async (req, res) => {
   try {
-    const validatedData = insertCustomerSatisfactionResponseSchema.parse(req.body);
-    
+    const validatedData = insertCustomerSatisfactionResponseSchema.parse(
+      req.body
+    );
+
     // Convert submittedAt string to Date if provided
     const dataToInsert = {
       ...validatedData,
-      submittedAt: validatedData.submittedAt ? new Date(validatedData.submittedAt) : new Date(),
+      submittedAt: validatedData.submittedAt
+        ? new Date(validatedData.submittedAt)
+        : new Date(),
       ipAddress: req.ip,
       userAgent: req.get('User-Agent'),
     };
@@ -235,12 +255,12 @@ router.post('/responses', async (req, res) => {
     res.status(201).json(newResponse[0]);
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return res.status(400).json({ 
-        error: 'Validation failed', 
-        details: error.errors 
+      return res.status(400).json({
+        error: 'Validation failed',
+        details: error.errors,
       });
     }
-    
+
     console.error('Error creating response:', error);
     res.status(500).json({ error: 'Failed to submit response' });
   }
@@ -250,16 +270,20 @@ router.post('/responses', async (req, res) => {
 router.put('/responses/:id', async (req, res) => {
   try {
     const responseId = parseInt(req.params.id);
-    
+
     if (isNaN(responseId)) {
       return res.status(400).json({ error: 'Invalid response ID' });
     }
 
-    const validatedData = insertCustomerSatisfactionResponseSchema.parse(req.body);
-    
+    const validatedData = insertCustomerSatisfactionResponseSchema.parse(
+      req.body
+    );
+
     const dataToUpdate = {
       ...validatedData,
-      submittedAt: validatedData.submittedAt ? new Date(validatedData.submittedAt) : undefined,
+      submittedAt: validatedData.submittedAt
+        ? new Date(validatedData.submittedAt)
+        : undefined,
       updatedAt: new Date(),
     };
 
@@ -276,12 +300,12 @@ router.put('/responses/:id', async (req, res) => {
     res.json(updatedResponse[0]);
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return res.status(400).json({ 
-        error: 'Validation failed', 
-        details: error.errors 
+      return res.status(400).json({
+        error: 'Validation failed',
+        details: error.errors,
       });
     }
-    
+
     console.error('Error updating response:', error);
     res.status(500).json({ error: 'Failed to update response' });
   }
@@ -291,7 +315,7 @@ router.put('/responses/:id', async (req, res) => {
 router.delete('/responses/:id', async (req, res) => {
   try {
     const responseId = parseInt(req.params.id);
-    
+
     if (isNaN(responseId)) {
       return res.status(400).json({ error: 'Invalid response ID' });
     }
@@ -320,15 +344,27 @@ router.get('/analytics', async (req, res) => {
     let whereConditions = [];
 
     if (surveyId) {
-      whereConditions.push(eq(customerSatisfactionResponses.surveyId, parseInt(surveyId as string)));
+      whereConditions.push(
+        eq(customerSatisfactionResponses.surveyId, parseInt(surveyId as string))
+      );
     }
 
     if (startDate) {
-      whereConditions.push(gte(customerSatisfactionResponses.createdAt, new Date(startDate as string)));
+      whereConditions.push(
+        gte(
+          customerSatisfactionResponses.createdAt,
+          new Date(startDate as string)
+        )
+      );
     }
 
     if (endDate) {
-      whereConditions.push(lte(customerSatisfactionResponses.createdAt, new Date(endDate as string)));
+      whereConditions.push(
+        lte(
+          customerSatisfactionResponses.createdAt,
+          new Date(endDate as string)
+        )
+      );
     }
 
     // Get all responses for analytics
@@ -339,41 +375,53 @@ router.get('/analytics', async (req, res) => {
 
     // Calculate analytics
     const totalResponses = responses.length;
-    const completedResponses = responses.filter(r => r.isComplete).length;
-    const averageOverallSatisfaction = responses
-      .filter(r => r.overallSatisfaction !== null)
-      .reduce((sum, r) => sum + (r.overallSatisfaction || 0), 0) / 
-      responses.filter(r => r.overallSatisfaction !== null).length || 0;
+    const completedResponses = responses.filter((r) => r.isComplete).length;
+    const averageOverallSatisfaction =
+      responses
+        .filter((r) => r.overallSatisfaction !== null)
+        .reduce((sum, r) => sum + (r.overallSatisfaction || 0), 0) /
+        responses.filter((r) => r.overallSatisfaction !== null).length || 0;
 
-    const averageNpsScore = responses
-      .filter(r => r.npsScore !== null)
-      .reduce((sum, r) => sum + (r.npsScore || 0), 0) / 
-      responses.filter(r => r.npsScore !== null).length || 0;
+    const averageNpsScore =
+      responses
+        .filter((r) => r.npsScore !== null)
+        .reduce((sum, r) => sum + (r.npsScore || 0), 0) /
+        responses.filter((r) => r.npsScore !== null).length || 0;
 
     // Calculate NPS categories
-    const promoters = responses.filter(r => r.npsScore && r.npsScore >= 9).length;
-    const passives = responses.filter(r => r.npsScore && r.npsScore >= 7 && r.npsScore <= 8).length;
-    const detractors = responses.filter(r => r.npsScore && r.npsScore <= 6).length;
+    const promoters = responses.filter(
+      (r) => r.npsScore && r.npsScore >= 9
+    ).length;
+    const passives = responses.filter(
+      (r) => r.npsScore && r.npsScore >= 7 && r.npsScore <= 8
+    ).length;
+    const detractors = responses.filter(
+      (r) => r.npsScore && r.npsScore <= 6
+    ).length;
     const npsScore = ((promoters - detractors) / totalResponses) * 100;
 
-    const averageResponseTime = responses
-      .filter(r => r.responseTimeSeconds !== null)
-      .reduce((sum, r) => sum + (r.responseTimeSeconds || 0), 0) / 
-      responses.filter(r => r.responseTimeSeconds !== null).length || 0;
+    const averageResponseTime =
+      responses
+        .filter((r) => r.responseTimeSeconds !== null)
+        .reduce((sum, r) => sum + (r.responseTimeSeconds || 0), 0) /
+        responses.filter((r) => r.responseTimeSeconds !== null).length || 0;
 
     const analytics = {
       totalResponses,
       completedResponses,
-      completionRate: totalResponses > 0 ? (completedResponses / totalResponses) * 100 : 0,
-      averageOverallSatisfaction: Math.round(averageOverallSatisfaction * 100) / 100,
+      completionRate:
+        totalResponses > 0 ? (completedResponses / totalResponses) * 100 : 0,
+      averageOverallSatisfaction:
+        Math.round(averageOverallSatisfaction * 100) / 100,
       averageNpsScore: Math.round(averageNpsScore * 100) / 100,
       netPromoterScore: Math.round(npsScore * 100) / 100,
       npsBreakdown: {
         promoters,
         passives,
-        detractors
+        detractors,
       },
-      averageResponseTimeMinutes: Math.round((averageResponseTime / 60) * 100) / 100,
+      averageResponseTimeMinutes:
+        Math.round((averageResponseTime / 60) * 100) / 100,
     };
 
     res.json(analytics);
@@ -387,113 +435,118 @@ router.get('/analytics', async (req, res) => {
 router.post('/surveys/create-default', async (req, res) => {
   try {
     const defaultSurvey = {
-      title: "Customer Satisfaction Evaluation Form",
-      description: "On a scale from 1 to 10, One is the lowest level (very dissatisfied), while ten is the highest level (very satisfied), how would you rate the following:",
+      title: 'Customer Satisfaction Evaluation Form',
+      description:
+        'On a scale from 1 to 10, One is the lowest level (very dissatisfied), while ten is the highest level (very satisfied), how would you rate the following:',
       isActive: true,
       questions: [
         {
-          id: "product-quality",
-          type: "rating",
-          question: "How would you rate the overall quality of our products?",
+          id: 'product-quality',
+          type: 'rating',
+          question: 'How would you rate the overall quality of our products?',
           required: true,
           scale: {
             min: 1,
             max: 10,
-            minLabel: "Very Dissatisfied",
-            maxLabel: "Very Satisfied"
-          }
+            minLabel: 'Very Dissatisfied',
+            maxLabel: 'Very Satisfied',
+          },
         },
         {
-          id: "product-quality-comments",
-          type: "textarea",
-          question: "Comments on product quality:",
-          required: false
+          id: 'product-quality-comments',
+          type: 'textarea',
+          question: 'Comments on product quality:',
+          required: false,
         },
         {
-          id: "delivery-timeframe",
-          type: "rating",
-          question: "How would you rate the delivery timeframe for our products?",
+          id: 'delivery-timeframe',
+          type: 'rating',
+          question:
+            'How would you rate the delivery timeframe for our products?',
           required: true,
           scale: {
             min: 1,
             max: 10,
-            minLabel: "Very Dissatisfied",
-            maxLabel: "Very Satisfied"
-          }
+            minLabel: 'Very Dissatisfied',
+            maxLabel: 'Very Satisfied',
+          },
         },
         {
-          id: "delivery-timeframe-comments",
-          type: "textarea",
-          question: "Comments on delivery timeframe:",
-          required: false
+          id: 'delivery-timeframe-comments',
+          type: 'textarea',
+          question: 'Comments on delivery timeframe:',
+          required: false,
         },
         {
-          id: "customer-service",
-          type: "rating",
-          question: "How would you rate our customer service?",
+          id: 'customer-service',
+          type: 'rating',
+          question: 'How would you rate our customer service?',
           required: true,
           scale: {
             min: 1,
             max: 10,
-            minLabel: "Very Dissatisfied",
-            maxLabel: "Very Satisfied"
-          }
+            minLabel: 'Very Dissatisfied',
+            maxLabel: 'Very Satisfied',
+          },
         },
         {
-          id: "customer-service-comments",
-          type: "textarea",
-          question: "Comments on customer service:",
-          required: false
+          id: 'customer-service-comments',
+          type: 'textarea',
+          question: 'Comments on customer service:',
+          required: false,
         },
         {
-          id: "fit-function",
-          type: "rating",
-          question: "How satisfied are you with the overall fit and function of our products?",
+          id: 'fit-function',
+          type: 'rating',
+          question:
+            'How satisfied are you with the overall fit and function of our products?',
           required: true,
           scale: {
             min: 1,
             max: 10,
-            minLabel: "Very Dissatisfied",
-            maxLabel: "Very Satisfied"
-          }
+            minLabel: 'Very Dissatisfied',
+            maxLabel: 'Very Satisfied',
+          },
         },
         {
-          id: "fit-function-comments",
-          type: "textarea",
-          question: "Comments on fit and function:",
-          required: false
+          id: 'fit-function-comments',
+          type: 'textarea',
+          question: 'Comments on fit and function:',
+          required: false,
         },
         {
-          id: "recommendation-likelihood",
-          type: "rating",
-          question: "How likely are you to recommend our company and products to others? (1 is Highly Unlikely, 10 is Very Likely)",
+          id: 'recommendation-likelihood',
+          type: 'rating',
+          question:
+            'How likely are you to recommend our company and products to others? (1 is Highly Unlikely, 10 is Very Likely)',
           required: true,
           scale: {
             min: 1,
             max: 10,
-            minLabel: "Highly Unlikely",
-            maxLabel: "Very Likely"
-          }
+            minLabel: 'Highly Unlikely',
+            maxLabel: 'Very Likely',
+          },
         },
         {
-          id: "recommendation-comments",
-          type: "textarea",
-          question: "Comments on recommendation likelihood:",
-          required: false
+          id: 'recommendation-comments',
+          type: 'textarea',
+          question: 'Comments on recommendation likelihood:',
+          required: false,
         },
         {
-          id: "other-products",
-          type: "textarea",
-          question: "What is one other inlet or product you would be interested in seeing us offer?",
-          required: false
-        }
+          id: 'other-products',
+          type: 'textarea',
+          question:
+            'What is one other inlet or product you would be interested in seeing us offer?',
+          required: false,
+        },
       ],
       settings: {
         allowAnonymous: false,
         sendEmailReminders: true,
         showProgressBar: true,
-        autoSave: true
-      }
+        autoSave: true,
+      },
     };
 
     const newSurvey = await db

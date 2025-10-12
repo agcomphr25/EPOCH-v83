@@ -6,7 +6,12 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import { Download, Shield, Printer } from 'lucide-react';
-import { generateQuizPDF, generateAnswerKeyPDF, generateAttendancePDF, generateCombinedPDF } from '@/components/TrainingPDF';
+import {
+  generateQuizPDF,
+  generateAnswerKeyPDF,
+  generateAttendancePDF,
+  generateCombinedPDF,
+} from '@/components/TrainingPDF';
 
 interface QuizAnswer {
   questionId: string;
@@ -28,9 +33,9 @@ export default function SafetyPPETraining() {
         'A) Only when supervisors are present',
         'B) At all times in designated areas',
         'C) Only during inspections',
-        'D) Only when working with chemicals'
+        'D) Only when working with chemicals',
       ],
-      correctAnswer: 'B'
+      correctAnswer: 'B',
     },
     {
       id: 'q2',
@@ -39,9 +44,9 @@ export default function SafetyPPETraining() {
         'A) To improve vision',
         'B) To protect eyes from impact and debris',
         'C) To block sunlight',
-        'D) For style and appearance'
+        'D) For style and appearance',
       ],
-      correctAnswer: 'B'
+      correctAnswer: 'B',
     },
     {
       id: 'q3',
@@ -50,9 +55,9 @@ export default function SafetyPPETraining() {
         'A) Office areas only',
         'B) Break rooms',
         'C) All production and warehouse areas',
-        'D) Only when lifting heavy objects'
+        'D) Only when lifting heavy objects',
       ],
-      correctAnswer: 'C'
+      correctAnswer: 'C',
     },
     {
       id: 'q4',
@@ -61,39 +66,45 @@ export default function SafetyPPETraining() {
         'A) Continue using it until end of shift',
         'B) Report it immediately and get replacement',
         'C) Try to repair it yourself',
-        'D) Share with another employee'
+        'D) Share with another employee',
       ],
-      correctAnswer: 'B'
+      correctAnswer: 'B',
     },
     {
       id: 'q5',
-      question: 'Hearing protection must be worn in areas where noise levels exceed:',
+      question:
+        'Hearing protection must be worn in areas where noise levels exceed:',
       options: [
         'A) 50 decibels',
         'B) 65 decibels',
         'C) 85 decibels',
-        'D) 100 decibels'
+        'D) 100 decibels',
       ],
-      correctAnswer: 'C'
-    }
+      correctAnswer: 'C',
+    },
   ];
 
   const handleAnswerChange = (questionId: string, answer: string) => {
-    setQuizAnswers(prev => {
-      const existing = prev.find(a => a.questionId === questionId);
+    setQuizAnswers((prev) => {
+      const existing = prev.find((a) => a.questionId === questionId);
       if (existing) {
-        return prev.map(a => a.questionId === questionId ? { questionId, answer } : a);
+        return prev.map((a) =>
+          a.questionId === questionId ? { questionId, answer } : a
+        );
       }
       return [...prev, { questionId, answer }];
     });
   };
 
-  const handleGeneratePDF = async (type: 'quiz' | 'answers' | 'attendance' | 'combined') => {
+  const handleGeneratePDF = async (
+    type: 'quiz' | 'answers' | 'attendance' | 'combined'
+  ) => {
     const trainingInfo = {
       title: 'Safety and PPE Training',
       date: new Date().toLocaleDateString(),
       instructor: instructorSignature,
-      content: 'Safety and Personal Protective Equipment procedures and requirements.'
+      content:
+        'Safety and Personal Protective Equipment procedures and requirements.',
     };
 
     try {
@@ -117,18 +128,35 @@ export default function SafetyPPETraining() {
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-3">
             <Shield className="w-8 h-8 text-blue-600" />
-            <h1 className="text-3xl font-bold" data-testid="text-title">Safety and PPE Training</h1>
+            <h1 className="text-3xl font-bold" data-testid="text-title">
+              Safety and PPE Training
+            </h1>
           </div>
           <div className="flex gap-2">
-            <Button onClick={() => handleGeneratePDF('quiz')} variant="outline" size="sm" data-testid="button-generate-quiz">
+            <Button
+              onClick={() => handleGeneratePDF('quiz')}
+              variant="outline"
+              size="sm"
+              data-testid="button-generate-quiz"
+            >
               <Download className="w-4 h-4 mr-2" />
               Quiz PDF
             </Button>
-            <Button onClick={() => handleGeneratePDF('answers')} variant="outline" size="sm" data-testid="button-generate-answers">
+            <Button
+              onClick={() => handleGeneratePDF('answers')}
+              variant="outline"
+              size="sm"
+              data-testid="button-generate-answers"
+            >
               <Download className="w-4 h-4 mr-2" />
               Answer Key
             </Button>
-            <Button onClick={() => handleGeneratePDF('attendance')} variant="outline" size="sm" data-testid="button-generate-attendance">
+            <Button
+              onClick={() => handleGeneratePDF('attendance')}
+              variant="outline"
+              size="sm"
+              data-testid="button-generate-attendance"
+            >
               <Download className="w-4 h-4 mr-2" />
               Attendance
             </Button>
@@ -141,11 +169,17 @@ export default function SafetyPPETraining() {
           </CardHeader>
           <CardContent className="space-y-6">
             <div>
-              <h3 className="text-lg font-semibold mb-3">Personal Protective Equipment Requirements</h3>
+              <h3 className="text-lg font-semibold mb-3">
+                Personal Protective Equipment Requirements
+              </h3>
               <ul className="space-y-2 list-disc list-inside">
-                <li>Safety glasses with side shields in all production areas</li>
+                <li>
+                  Safety glasses with side shields in all production areas
+                </li>
                 <li>Steel-toed boots in warehouse and manufacturing zones</li>
-                <li>Hard hats in designated construction and overhead work areas</li>
+                <li>
+                  Hard hats in designated construction and overhead work areas
+                </li>
                 <li>Hearing protection in high-noise environments (85+ dB)</li>
                 <li>Cut-resistant gloves when handling sharp materials</li>
                 <li>Chemical-resistant gloves and aprons for hazmat work</li>
@@ -155,7 +189,9 @@ export default function SafetyPPETraining() {
             <Separator />
 
             <div>
-              <h3 className="text-lg font-semibold mb-3">PPE Inspection and Maintenance</h3>
+              <h3 className="text-lg font-semibold mb-3">
+                PPE Inspection and Maintenance
+              </h3>
               <ul className="space-y-2 list-disc list-inside">
                 <li>Inspect all PPE before each use for damage or wear</li>
                 <li>Report damaged equipment immediately to supervisor</li>
@@ -168,7 +204,9 @@ export default function SafetyPPETraining() {
             <Separator />
 
             <div>
-              <h3 className="text-lg font-semibold mb-3">Employee Responsibilities</h3>
+              <h3 className="text-lg font-semibold mb-3">
+                Employee Responsibilities
+              </h3>
               <ul className="space-y-2 list-disc list-inside">
                 <li>Wear all required PPE at all times in designated areas</li>
                 <li>Ensure proper fit and adjustment of equipment</li>
@@ -188,15 +226,26 @@ export default function SafetyPPETraining() {
             <div className="space-y-6">
               {questions.map((q, index) => (
                 <div key={q.id} className="space-y-3">
-                  <p className="font-medium">{index + 1}. {q.question}</p>
+                  <p className="font-medium">
+                    {index + 1}. {q.question}
+                  </p>
                   <RadioGroup
                     onValueChange={(value) => handleAnswerChange(q.id, value)}
-                    value={quizAnswers.find(a => a.questionId === q.id)?.answer || ''}
+                    value={
+                      quizAnswers.find((a) => a.questionId === q.id)?.answer ||
+                      ''
+                    }
                   >
                     {q.options.map((option) => (
                       <div key={option} className="flex items-center space-x-2">
-                        <RadioGroupItem value={option.charAt(0)} id={`${q.id}-${option.charAt(0)}`} data-testid={`radio-${q.id}-${option.charAt(0)}`} />
-                        <Label htmlFor={`${q.id}-${option.charAt(0)}`}>{option}</Label>
+                        <RadioGroupItem
+                          value={option.charAt(0)}
+                          id={`${q.id}-${option.charAt(0)}`}
+                          data-testid={`radio-${q.id}-${option.charAt(0)}`}
+                        />
+                        <Label htmlFor={`${q.id}-${option.charAt(0)}`}>
+                          {option}
+                        </Label>
                       </div>
                     ))}
                   </RadioGroup>
@@ -262,7 +311,10 @@ export default function SafetyPPETraining() {
             </div>
 
             <div className="mt-6 flex justify-end gap-3">
-              <Button onClick={() => handleGeneratePDF('combined')} data-testid="button-generate-complete">
+              <Button
+                onClick={() => handleGeneratePDF('combined')}
+                data-testid="button-generate-complete"
+              >
                 <Printer className="w-4 h-4 mr-2" />
                 Generate Complete Training Package
               </Button>

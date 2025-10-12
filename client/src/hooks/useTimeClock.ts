@@ -31,7 +31,9 @@ export default function useTimeClock(employeeId: string): UseTimeClockReturn {
   const refreshStatus = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await axios.get<TimeClockStatus>(`/api/timeclock?employeeId=${employeeId}`);
+      const res = await axios.get<TimeClockStatus>(
+        `/api/timeclock?employeeId=${employeeId}`
+      );
       const { status, clockIn, clockOut } = res.data;
       setClockedIn(status === 'IN');
       setClockInTime(clockIn || null);

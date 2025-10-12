@@ -1,9 +1,22 @@
 import React, { useState } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { MapPin, FileText, MessageSquare, Download, Send, Mail } from 'lucide-react';
+import {
+  MapPin,
+  FileText,
+  MessageSquare,
+  Download,
+  Send,
+  Mail,
+} from 'lucide-react';
 import AddressInput from '@/components/AddressInput';
 import AddressTestComponent from '@/components/AddressTestComponent';
 import PdfViewer from '@/components/PdfViewer';
@@ -16,13 +29,13 @@ export default function Module8TestPage() {
     city: '',
     state: '',
     zipCode: '',
-    country: 'United States'
+    country: 'United States',
   });
 
   const mockCustomerPreferences = {
     email: 'john.doe@example.com',
     phone: '+1 (555) 123-4567',
-    preferredMethod: 'email' as const
+    preferredMethod: 'email' as const,
   };
 
   const mockOrderId = 'AG001';
@@ -31,9 +44,12 @@ export default function Module8TestPage() {
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Module 8: API Integrations & Communications</h1>
+          <h1 className="text-3xl font-bold">
+            Module 8: API Integrations & Communications
+          </h1>
           <p className="text-muted-foreground mt-2">
-            Test suite for address validation, PDF generation, and customer communications
+            Test suite for address validation, PDF generation, and customer
+            communications
           </p>
         </div>
         <Badge variant="secondary" className="text-sm">
@@ -51,7 +67,10 @@ export default function Module8TestPage() {
             <FileText className="h-4 w-4" />
             PDF Generation
           </TabsTrigger>
-          <TabsTrigger value="communication" className="flex items-center gap-2">
+          <TabsTrigger
+            value="communication"
+            className="flex items-center gap-2"
+          >
             <MessageSquare className="h-4 w-4" />
             Communications
           </TabsTrigger>
@@ -72,7 +91,7 @@ export default function Module8TestPage() {
               <AddressTestComponent />
             </CardContent>
           </Card>
-          
+
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -91,7 +110,7 @@ export default function Module8TestPage() {
                   onChange={setSelectedAddress}
                   required
                 />
-                
+
                 <div className="bg-muted p-4 rounded-lg">
                   <h4 className="font-semibold mb-2">Selected Address:</h4>
                   <pre className="text-sm">
@@ -210,7 +229,7 @@ export default function Module8TestPage() {
                     <li>• Custom messages</li>
                   </ul>
                 </div>
-                
+
                 <div className="space-y-3">
                   <h4 className="font-semibold flex items-center gap-2">
                     <MessageSquare className="h-4 w-4" />
@@ -243,25 +262,31 @@ export default function Module8TestPage() {
                 Address Validation
               </h4>
               <p className="text-sm text-blue-700 dark:text-blue-300">
-                Currently using mock data. In production, integrate with Google Places API or USPS Address Validation API for real-time address verification and autocomplete.
+                Currently using mock data. In production, integrate with Google
+                Places API or USPS Address Validation API for real-time address
+                verification and autocomplete.
               </p>
             </div>
-            
+
             <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg">
               <h4 className="font-semibold text-green-900 dark:text-green-100 mb-2">
                 PDF Generation
               </h4>
               <p className="text-sm text-green-700 dark:text-green-300">
-                Mock PDF generation implemented. For production, use libraries like jsPDF, Puppeteer, or PDFKit to generate real documents with order data, company branding, and formatting.
+                Mock PDF generation implemented. For production, use libraries
+                like jsPDF, Puppeteer, or PDFKit to generate real documents with
+                order data, company branding, and formatting.
               </p>
             </div>
-            
+
             <div className="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-lg">
               <h4 className="font-semibold text-purple-900 dark:text-purple-100 mb-2">
                 Communications
               </h4>
               <p className="text-sm text-purple-700 dark:text-purple-300">
-                Mock communication sending. For production, integrate with SendGrid for email and Twilio for SMS. All communications are logged in the database for audit trails.
+                Mock communication sending. For production, integrate with
+                SendGrid for email and Twilio for SMS. All communications are
+                logged in the database for audit trails.
               </p>
             </div>
           </div>

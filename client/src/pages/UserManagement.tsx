@@ -1,15 +1,35 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
-import { Trash2, Edit, Plus, Users, Key, UserCheck, UserX, Shield } from "lucide-react";
-import { apiRequest } from "@/lib/queryClient";
-import { useToast } from "@/hooks/use-toast";
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
+import {
+  Trash2,
+  Edit,
+  Plus,
+  Users,
+  Key,
+  UserCheck,
+  UserX,
+  Shield,
+} from 'lucide-react';
+import { apiRequest } from '@/lib/queryClient';
+import { useToast } from '@/hooks/use-toast';
 
 // User interface matching the database schema
 interface User {
@@ -46,7 +66,7 @@ interface InsertUser {
 export default function UserManagement() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  
+
   const [showUserModal, setShowUserModal] = useState(false);
   const [showPermissionsModal, setShowPermissionsModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
@@ -58,86 +78,97 @@ export default function UserManagement() {
     password: '',
     role: 'EMPLOYEE',
     canOverridePrices: false,
-    isActive: true
+    isActive: true,
   });
 
   // Fetch users
-  const { data: allUsers = [], isLoading, refetch } = useQuery({
+  const {
+    data: allUsers = [],
+    isLoading,
+    refetch,
+  } = useQuery({
     queryKey: ['/api/users'],
     queryFn: () => apiRequest('/api/users'),
   });
 
   // Filter to show only active users (with safety check for array)
-  const users = Array.isArray(allUsers) ? allUsers.filter((user: User) => user.isActive) : [];
+  const users = Array.isArray(allUsers)
+    ? allUsers.filter((user: User) => user.isActive)
+    : [];
 
   // Create user mutation
   const createUserMutation = useMutation({
-    mutationFn: (data: InsertUser) => apiRequest('/api/users', {
-      method: 'POST',
-      body: data,
-    }),
+    mutationFn: (data: InsertUser) =>
+      apiRequest('/api/users', {
+        method: 'POST',
+        body: data,
+      }),
     onSuccess: () => {
       toast({
-        title: "User Created",
-        description: "New user has been successfully created.",
+        title: 'User Created',
+        description: 'New user has been successfully created.',
       });
       refetch();
       resetForm();
       setShowUserModal(false);
     },
     onError: (error: any) => {
-      const errorMessage = error.details || error.message || "Failed to create user.";
+      const errorMessage =
+        error.details || error.message || 'Failed to create user.';
       toast({
-        title: "User Creation Failed",
+        title: 'User Creation Failed',
         description: errorMessage,
-        variant: "destructive",
+        variant: 'destructive',
       });
     },
   });
 
   // Update user mutation
   const updateUserMutation = useMutation({
-    mutationFn: ({ id, data }: { id: number; data: Partial<InsertUser> }) => 
+    mutationFn: ({ id, data }: { id: number; data: Partial<InsertUser> }) =>
       apiRequest(`/api/users/${id}`, {
         method: 'PUT',
         body: data,
       }),
     onSuccess: () => {
       toast({
-        title: "User Updated",
-        description: "User has been successfully updated.",
+        title: 'User Updated',
+        description: 'User has been successfully updated.',
       });
       refetch();
       resetForm();
       setShowUserModal(false);
     },
     onError: (error: any) => {
-      const errorMessage = error.details || error.message || "Failed to update user.";
+      const errorMessage =
+        error.details || error.message || 'Failed to update user.';
       toast({
-        title: "User Update Failed", 
+        title: 'User Update Failed',
         description: errorMessage,
-        variant: "destructive",
+        variant: 'destructive',
       });
     },
   });
 
   // Delete user mutation
   const deleteUserMutation = useMutation({
-    mutationFn: (id: number) => apiRequest(`/api/users/${id}`, {
-      method: 'DELETE',
-    }),
+    mutationFn: (id: number) =>
+      apiRequest(`/api/users/${id}`, {
+        method: 'DELETE',
+      }),
     onSuccess: () => {
       toast({
-        title: "User Deactivated",
-        description: "User has been deactivated and removed from the active user list.",
+        title: 'User Deactivated',
+        description:
+          'User has been deactivated and removed from the active user list.',
       });
       refetch();
     },
     onError: (error: any) => {
       toast({
-        title: "Error",
-        description: error.message || "Failed to delete user.",
-        variant: "destructive",
+        title: 'Error',
+        description: error.message || 'Failed to delete user.',
+        variant: 'destructive',
       });
     },
   });
@@ -150,7 +181,7 @@ export default function UserManagement() {
       password: '',
       role: 'EMPLOYEE',
       canOverridePrices: false,
-      isActive: true
+      isActive: true,
     });
     setEditingUser(null);
   };
@@ -170,32 +201,40 @@ export default function UserManagement() {
       role: user.role,
       employeeId: user.employeeId,
       canOverridePrices: user.canOverridePrices,
-      isActive: user.isActive
+      isActive: user.isActive,
     });
     setShowUserModal(true);
   };
 
-  const handleDeleteUser = (id: number, firstName: string, lastName: string) => {
-    if (confirm(`Are you sure you want to deactivate user "${firstName} ${lastName}"? This will remove them from the active user list but preserve their data for audit purposes.`)) {
+  const handleDeleteUser = (
+    id: number,
+    firstName: string,
+    lastName: string
+  ) => {
+    if (
+      confirm(
+        `Are you sure you want to deactivate user "${firstName} ${lastName}"? This will remove them from the active user list but preserve their data for audit purposes.`
+      )
+    ) {
       deleteUserMutation.mutate(id);
     }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     // Different validation for create vs edit
     if (editingUser) {
       // When editing: only require first name and last name
       if (!formData.firstName || !formData.lastName) {
         toast({
-          title: "Missing Information",
-          description: "Please provide first name and last name.",
-          variant: "destructive",
+          title: 'Missing Information',
+          description: 'Please provide first name and last name.',
+          variant: 'destructive',
         });
         return;
       }
-      
+
       // For updates, don't include password if not provided
       const updateData = { ...formData };
       if (!updateData.password) {
@@ -212,11 +251,17 @@ export default function UserManagement() {
       });
     } else {
       // When creating: require all fields
-      if (!formData.username || !formData.firstName || !formData.lastName || !formData.password) {
+      if (
+        !formData.username ||
+        !formData.firstName ||
+        !formData.lastName ||
+        !formData.password
+      ) {
         toast({
-          title: "Missing Information",
-          description: "Please provide username, first name, last name, and password.",
-          variant: "destructive",
+          title: 'Missing Information',
+          description:
+            'Please provide username, first name, last name, and password.',
+          variant: 'destructive',
         });
         return;
       }
@@ -230,49 +275,78 @@ export default function UserManagement() {
     userName: string;
   }
 
-  function UserCapabilitiesManager({ userId, userName }: UserCapabilitiesManagerProps) {
+  function UserCapabilitiesManager({
+    userId,
+    userName,
+  }: UserCapabilitiesManagerProps) {
     // Fetch user capabilities
-    const { data: userCapabilities = [], isLoading: loadingUserCaps, refetch: refetchUserCaps } = useQuery({
+    const {
+      data: userCapabilities = [],
+      isLoading: loadingUserCaps,
+      refetch: refetchUserCaps,
+    } = useQuery<any[]>({
       queryKey: [`/api/users/${userId}/capabilities`],
-      enabled: !!userId
+      enabled: !!userId,
     });
 
     // Fetch all available capabilities
-    const { data: allCapabilities = [], isLoading: loadingAllCaps } = useQuery({
+    const { data: allCapabilities = [], isLoading: loadingAllCaps } = useQuery<
+      any[]
+    >({
       queryKey: ['/api/employees/capabilities'],
     });
 
     // Grant capability mutation
     const grantMutation = useMutation({
-      mutationFn: (capabilityId: number) => 
+      mutationFn: (capabilityId: number) =>
         apiRequest(`/api/users/${userId}/capabilities`, {
           method: 'POST',
-          body: { capabilityId, useHardcoded: true }
+          body: { capabilityId, useHardcoded: true },
         }),
       onSuccess: () => {
-        toast({ title: "Capability Granted", description: "Capability has been successfully granted." });
+        toast({
+          title: 'Capability Granted',
+          description: 'Capability has been successfully granted.',
+        });
         refetchUserCaps();
       },
       onError: (error: any) => {
-        toast({ title: "Error", description: error.message || "Failed to grant capability.", variant: "destructive" });
-      }
+        toast({
+          title: 'Error',
+          description: error.message || 'Failed to grant capability.',
+          variant: 'destructive',
+        });
+      },
     });
 
     // Revoke capability mutation
     const revokeMutation = useMutation({
-      mutationFn: (userCapId: number) => 
-        apiRequest(`/api/users/user-capabilities/${userCapId}`, { method: 'DELETE' }),
+      mutationFn: (userCapId: number) =>
+        apiRequest(`/api/users/user-capabilities/${userCapId}`, {
+          method: 'DELETE',
+        }),
       onSuccess: () => {
-        toast({ title: "Capability Revoked", description: "Capability has been successfully revoked." });
+        toast({
+          title: 'Capability Revoked',
+          description: 'Capability has been successfully revoked.',
+        });
         refetchUserCaps();
       },
       onError: (error: any) => {
-        toast({ title: "Error", description: error.message || "Failed to revoke capability.", variant: "destructive" });
-      }
+        toast({
+          title: 'Error',
+          description: error.message || 'Failed to revoke capability.',
+          variant: 'destructive',
+        });
+      },
     });
 
-    const grantedCapabilityIds = userCapabilities.map((uc: any) => uc.capabilityId);
-    const availableToGrant = allCapabilities.filter((cap: any) => !grantedCapabilityIds.includes(cap.id));
+    const grantedCapabilityIds = userCapabilities.map(
+      (uc: any) => uc.capabilityId
+    );
+    const availableToGrant = allCapabilities.filter(
+      (cap: any) => !grantedCapabilityIds.includes(cap.id)
+    );
 
     if (loadingUserCaps || loadingAllCaps) {
       return <div className="text-center py-4">Loading capabilities...</div>;
@@ -288,18 +362,31 @@ export default function UserManagement() {
 
         {/* Granted Capabilities */}
         <div>
-          <h3 className="font-semibold text-sm mb-3">Granted Capabilities ({userCapabilities.length})</h3>
+          <h3 className="font-semibold text-sm mb-3">
+            Granted Capabilities ({userCapabilities.length})
+          </h3>
           {userCapabilities.length === 0 ? (
-            <p className="text-sm text-gray-500">No capabilities granted yet.</p>
+            <p className="text-sm text-gray-500">
+              No capabilities granted yet.
+            </p>
           ) : (
             <div className="space-y-2">
               {userCapabilities.map((uc: any) => {
-                const capability = allCapabilities.find((c: any) => c.id === uc.capabilityId);
+                const capability = allCapabilities.find(
+                  (c: any) => c.id === uc.capabilityId
+                );
                 return (
-                  <div key={uc.id} className="flex items-center justify-between p-2 bg-green-50 border border-green-200 rounded">
+                  <div
+                    key={uc.id}
+                    className="flex items-center justify-between p-2 bg-green-50 border border-green-200 rounded"
+                  >
                     <div>
-                      <p className="text-sm font-medium">{capability?.displayName || 'Unknown'}</p>
-                      <p className="text-xs text-gray-600">{capability?.description}</p>
+                      <p className="text-sm font-medium">
+                        {capability?.displayName || 'Unknown'}
+                      </p>
+                      <p className="text-xs text-gray-600">
+                        {capability?.description}
+                      </p>
                     </div>
                     <Button
                       size="sm"
@@ -319,17 +406,26 @@ export default function UserManagement() {
 
         {/* Available to Grant */}
         <div>
-          <h3 className="font-semibold text-sm mb-3">Available Capabilities ({availableToGrant.length})</h3>
+          <h3 className="font-semibold text-sm mb-3">
+            Available Capabilities ({availableToGrant.length})
+          </h3>
           {availableToGrant.length === 0 ? (
-            <p className="text-sm text-gray-500">All capabilities have been granted.</p>
+            <p className="text-sm text-gray-500">
+              All capabilities have been granted.
+            </p>
           ) : (
             <div className="space-y-2 max-h-60 overflow-y-auto">
               {availableToGrant.map((cap: any) => (
-                <div key={cap.id} className="flex items-center justify-between p-2 bg-gray-50 border border-gray-200 rounded">
+                <div
+                  key={cap.id}
+                  className="flex items-center justify-between p-2 bg-gray-50 border border-gray-200 rounded"
+                >
                   <div>
                     <p className="text-sm font-medium">{cap.displayName}</p>
                     <p className="text-xs text-gray-600">{cap.description}</p>
-                    <p className="text-xs text-gray-500 mt-1">Category: {cap.category}</p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Category: {cap.category}
+                    </p>
                   </div>
                   <Button
                     size="sm"
@@ -354,10 +450,14 @@ export default function UserManagement() {
 
   const getRoleColor = (role: string) => {
     switch (role) {
-      case 'ADMIN': return 'bg-red-100 text-red-800';
-      case 'MANAGER': return 'bg-blue-100 text-blue-800';
-      case 'EMPLOYEE': return 'bg-green-100 text-green-800';
-      default: return 'bg-gray-100 text-gray-800';
+      case 'ADMIN':
+        return 'bg-red-100 text-red-800';
+      case 'MANAGER':
+        return 'bg-blue-100 text-blue-800';
+      case 'EMPLOYEE':
+        return 'bg-green-100 text-green-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
     }
   };
 
@@ -386,8 +486,12 @@ export default function UserManagement() {
         <Card>
           <CardContent className="text-center py-8">
             <Users className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No Users Found</h3>
-            <p className="text-gray-500 mb-4">Get started by creating your first user account.</p>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">
+              No Users Found
+            </h3>
+            <p className="text-gray-500 mb-4">
+              Get started by creating your first user account.
+            </p>
             <Button onClick={handleAddUser}>
               <Plus className="h-4 w-4 mr-2" />
               Add First User
@@ -397,7 +501,10 @@ export default function UserManagement() {
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {users.map((user: User) => (
-            <Card key={user.id} className={`${!user.isActive ? 'opacity-75' : ''}`}>
+            <Card
+              key={user.id}
+              className={`${!user.isActive ? 'opacity-75' : ''}`}
+            >
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-lg flex items-center gap-2">
@@ -408,29 +515,34 @@ export default function UserManagement() {
                     )}
                     {user.firstName} {user.lastName}
                   </CardTitle>
-                  <Badge className={getRoleColor(user.role)}>
-                    {user.role}
-                  </Badge>
+                  <Badge className={getRoleColor(user.role)}>{user.role}</Badge>
                 </div>
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="text-sm text-gray-600">
                   <div className="text-xs text-gray-500 mb-2">
-                    Username: <span className="font-medium text-gray-700">{user.username}</span>
+                    Username:{' '}
+                    <span className="font-medium text-gray-700">
+                      {user.username}
+                    </span>
                   </div>
                   <div className="flex items-center gap-2 mb-1">
                     <Key className="h-4 w-4" />
-                    <span className={`font-medium ${user.canOverridePrices ? 'text-orange-600' : 'text-gray-500'}`}>
-                      {user.canOverridePrices ? 'Can Override Prices' : 'Standard Access'}
+                    <span
+                      className={`font-medium ${user.canOverridePrices ? 'text-orange-600' : 'text-gray-500'}`}
+                    >
+                      {user.canOverridePrices
+                        ? 'Can Override Prices'
+                        : 'Standard Access'}
                     </span>
                   </div>
-                  
+
                   {user.employeeId && (
                     <div className="text-xs text-gray-500 mb-2">
                       Employee ID: {user.employeeId}
                     </div>
                   )}
-                  
+
                   <div className="text-xs text-gray-500 space-y-1">
                     <div>Created: {formatDate(user.createdAt)}</div>
                     <div>Last Login: {formatDate(user.lastLoginAt)}</div>
@@ -439,14 +551,16 @@ export default function UserManagement() {
                         Failed Attempts: {user.failedLoginAttempts}
                       </div>
                     )}
-                    {user.accountLockedUntil && new Date(user.accountLockedUntil) > new Date() && (
-                      <div className="text-red-600 font-medium">
-                        Account Locked Until: {formatDate(user.accountLockedUntil)}
-                      </div>
-                    )}
+                    {user.accountLockedUntil &&
+                      new Date(user.accountLockedUntil) > new Date() && (
+                        <div className="text-red-600 font-medium">
+                          Account Locked Until:{' '}
+                          {formatDate(user.accountLockedUntil)}
+                        </div>
+                      )}
                   </div>
                 </div>
-                
+
                 <div className="flex gap-2 pt-2">
                   <Button
                     variant="outline"
@@ -472,7 +586,9 @@ export default function UserManagement() {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => handleDeleteUser(user.id, user.firstName, user.lastName)}
+                    onClick={() =>
+                      handleDeleteUser(user.id, user.firstName, user.lastName)
+                    }
                     className="flex items-center gap-1 text-red-600 hover:text-red-700"
                   >
                     <Trash2 className="h-3 w-3" />
@@ -493,7 +609,7 @@ export default function UserManagement() {
               {editingUser ? 'Edit User' : 'Add New User'}
             </DialogTitle>
           </DialogHeader>
-          
+
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid gap-4">
               <div>
@@ -502,44 +618,54 @@ export default function UserManagement() {
                   id="username"
                   type="text"
                   value={formData.username}
-                  onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, username: e.target.value })
+                  }
                   required={!editingUser}
                   disabled={!!editingUser}
                   placeholder="Enter username"
                   data-testid="input-username"
-                  className={editingUser ? "bg-gray-100 cursor-not-allowed" : ""}
+                  className={
+                    editingUser ? 'bg-gray-100 cursor-not-allowed' : ''
+                  }
                 />
                 {editingUser && (
-                  <p className="text-xs text-gray-500 mt-1">Username cannot be changed</p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Username cannot be changed
+                  </p>
                 )}
               </div>
-              
+
               <div>
                 <Label htmlFor="firstName">First Name *</Label>
                 <Input
                   id="firstName"
                   type="text"
                   value={formData.firstName}
-                  onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, firstName: e.target.value })
+                  }
                   required
                   placeholder="Enter first name"
                   data-testid="input-firstname"
                 />
               </div>
-              
+
               <div>
                 <Label htmlFor="lastName">Last Name *</Label>
                 <Input
                   id="lastName"
                   type="text"
                   value={formData.lastName}
-                  onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, lastName: e.target.value })
+                  }
                   required
                   placeholder="Enter last name"
                   data-testid="input-lastname"
                 />
               </div>
-              
+
               <div>
                 <Label htmlFor="password">
                   Password * {editingUser && '(leave blank to keep current)'}
@@ -548,19 +674,25 @@ export default function UserManagement() {
                   id="password"
                   type="password"
                   value={formData.password}
-                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, password: e.target.value })
+                  }
                   required={!editingUser}
                   placeholder="Enter password (min 4 characters)"
                   minLength={4}
                 />
-                <p className="text-xs text-gray-500 mt-1">Password must be at least 4 characters long</p>
+                <p className="text-xs text-gray-500 mt-1">
+                  Password must be at least 4 characters long
+                </p>
               </div>
-              
+
               <div>
                 <Label htmlFor="role">Role</Label>
-                <Select 
-                  value={formData.role || 'EMPLOYEE'} 
-                  onValueChange={(value) => setFormData({ ...formData, role: value })}
+                <Select
+                  value={formData.role || 'EMPLOYEE'}
+                  onValueChange={(value) =>
+                    setFormData({ ...formData, role: value })
+                  }
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select role" />
@@ -572,50 +704,58 @@ export default function UserManagement() {
                   </SelectContent>
                 </Select>
               </div>
-              
+
               <div>
                 <Label htmlFor="employeeId">Employee ID (Optional)</Label>
                 <Input
                   id="employeeId"
                   type="number"
                   value={formData.employeeId || ''}
-                  onChange={(e) => setFormData({ 
-                    ...formData, 
-                    employeeId: e.target.value ? parseInt(e.target.value) : undefined 
-                  })}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      employeeId: e.target.value
+                        ? parseInt(e.target.value)
+                        : undefined,
+                    })
+                  }
                   placeholder="Link to employee record"
                 />
               </div>
-              
+
               <div className="flex items-center space-x-2">
                 <input
                   type="checkbox"
                   id="canOverridePrices"
                   checked={formData.canOverridePrices || false}
-                  onChange={(e) => setFormData({ 
-                    ...formData, 
-                    canOverridePrices: e.target.checked 
-                  })}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      canOverridePrices: e.target.checked,
+                    })
+                  }
                   className="rounded"
                 />
                 <Label htmlFor="canOverridePrices">Can Override Prices</Label>
               </div>
-              
+
               <div className="flex items-center space-x-2">
                 <input
                   type="checkbox"
                   id="isActive"
                   checked={formData.isActive !== false}
-                  onChange={(e) => setFormData({ 
-                    ...formData, 
-                    isActive: e.target.checked 
-                  })}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      isActive: e.target.checked,
+                    })
+                  }
                   className="rounded"
                 />
                 <Label htmlFor="isActive">Active User</Label>
               </div>
             </div>
-            
+
             <div className="flex justify-end gap-3 pt-4">
               <Button
                 type="button"
@@ -626,14 +766,15 @@ export default function UserManagement() {
               </Button>
               <Button
                 type="submit"
-                disabled={createUserMutation.isPending || updateUserMutation.isPending}
-              >
-                {createUserMutation.isPending || updateUserMutation.isPending 
-                  ? 'Saving...' 
-                  : editingUser 
-                    ? 'Update User' 
-                    : 'Create User'
+                disabled={
+                  createUserMutation.isPending || updateUserMutation.isPending
                 }
+              >
+                {createUserMutation.isPending || updateUserMutation.isPending
+                  ? 'Saving...'
+                  : editingUser
+                    ? 'Update User'
+                    : 'Create User'}
               </Button>
             </div>
           </form>
@@ -641,15 +782,24 @@ export default function UserManagement() {
       </Dialog>
 
       {/* Permissions Management Dialog */}
-      <Dialog open={showPermissionsModal} onOpenChange={setShowPermissionsModal}>
+      <Dialog
+        open={showPermissionsModal}
+        onOpenChange={setShowPermissionsModal}
+      >
         <DialogContent className="sm:max-w-[700px] max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
-              Manage Permissions - {selectedUser?.firstName} {selectedUser?.lastName}
+              Manage Permissions - {selectedUser?.firstName}{' '}
+              {selectedUser?.lastName}
             </DialogTitle>
           </DialogHeader>
-          
-          {selectedUser && <UserCapabilitiesManager userId={selectedUser.id} userName={`${selectedUser.firstName} ${selectedUser.lastName}`} />}
+
+          {selectedUser && (
+            <UserCapabilitiesManager
+              userId={selectedUser.id}
+              userName={`${selectedUser.firstName} ${selectedUser.lastName}`}
+            />
+          )}
         </DialogContent>
       </Dialog>
     </div>

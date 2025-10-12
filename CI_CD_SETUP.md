@@ -121,6 +121,7 @@ npm run db:push      # Push schema changes to database
 
 ## ❌ What Would've Prevented Your Issue
 
+
 With this setup, incomplete GitHub pulls will be caught:
 
 ### Before Your Scenario:

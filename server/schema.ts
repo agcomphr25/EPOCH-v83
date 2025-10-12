@@ -3201,7 +3201,7 @@ export const insertCustomerSatisfactionResponseSchema = createInsertSchema(
     customerId: z.number().min(1, 'Customer ID is required'),
     orderId: z.string().optional().nullable(),
     responses: z.record(z.any()).default({}), // Question ID to response mapping
-    overallSatisfaction: z.number().min(1).max(5).optional().nullable(),
+    overallSatisfaction: z.number().min(1).max(10).optional().nullable(),
     npsScore: z.number().min(0).max(10).optional().nullable(),
     responseTimeSeconds: z.number().optional().nullable(),
     ipAddress: z.string().optional().nullable(),

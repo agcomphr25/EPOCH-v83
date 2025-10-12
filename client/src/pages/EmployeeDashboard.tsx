@@ -3,9 +3,21 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Search, User, Shield, Calendar, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { Link } from 'wouter';
 import AddEmployeeModal from '@/components/employee/AddEmployeeModal';
@@ -29,7 +41,11 @@ export default function EmployeeDashboard() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const { data: employees = [], isLoading, error } = useQuery({
+  const {
+    data: employees = [],
+    isLoading,
+    error,
+  } = useQuery({
     queryKey: ['/api/employees'],
     queryFn: async () => {
       const response = await fetch('/api/employees');
@@ -38,22 +54,27 @@ export default function EmployeeDashboard() {
     },
   });
 
-  const filteredEmployees = employees.filter((employee: Employee) =>
-    employee.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    employee.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    employee.department?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    employee.jobTitle?.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredEmployees = employees.filter(
+    (employee: Employee) =>
+      employee.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      employee.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      employee.department?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      employee.jobTitle?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const activeEmployees = employees.filter((emp: Employee) => emp.isActive);
-  const totalDepartments = [...new Set(employees.map((emp: Employee) => emp.department))].length;
+  const totalDepartments = [
+    ...new Set(employees.map((emp: Employee) => emp.department)),
+  ].length;
 
   if (error) {
     return (
       <div className="p-6">
         <Card className="border-red-200 bg-red-50">
           <CardContent className="pt-6">
-            <p className="text-red-700">Error loading employees. Please try again.</p>
+            <p className="text-red-700">
+              Error loading employees. Please try again.
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -65,8 +86,12 @@ export default function EmployeeDashboard() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Employee Management</h1>
-          <p className="text-gray-600">Manage employee profiles, certifications, and evaluations</p>
+          <h1 className="text-3xl font-bold text-gray-900">
+            Employee Management
+          </h1>
+          <p className="text-gray-600">
+            Manage employee profiles, certifications, and evaluations
+          </p>
         </div>
         <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
           <DialogTrigger asChild>
@@ -88,7 +113,9 @@ export default function EmployeeDashboard() {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Employees</CardTitle>
+            <CardTitle className="text-sm font-medium">
+              Total Employees
+            </CardTitle>
             <User className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -98,7 +125,7 @@ export default function EmployeeDashboard() {
             </p>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Departments</CardTitle>
@@ -106,9 +133,7 @@ export default function EmployeeDashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{totalDepartments}</div>
-            <p className="text-xs text-muted-foreground">
-              Active departments
-            </p>
+            <p className="text-xs text-muted-foreground">Active departments</p>
           </CardContent>
         </Card>
 
@@ -119,29 +144,29 @@ export default function EmployeeDashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {employees.filter((emp: Employee) => {
-                const hireDate = new Date(emp.createdAt);
-                const thirtyDaysAgo = new Date();
-                thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-                return hireDate >= thirtyDaysAgo;
-              }).length}
+              {
+                employees.filter((emp: Employee) => {
+                  const hireDate = new Date(emp.createdAt);
+                  const thirtyDaysAgo = new Date();
+                  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+                  return hireDate >= thirtyDaysAgo;
+                }).length
+              }
             </div>
-            <p className="text-xs text-muted-foreground">
-              Last 30 days
-            </p>
+            <p className="text-xs text-muted-foreground">Last 30 days</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pending Reviews</CardTitle>
+            <CardTitle className="text-sm font-medium">
+              Pending Reviews
+            </CardTitle>
             <FileText className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">-</div>
-            <p className="text-xs text-muted-foreground">
-              Evaluations due
-            </p>
+            <p className="text-xs text-muted-foreground">Evaluations due</p>
           </CardContent>
         </Card>
       </div>
@@ -187,7 +212,9 @@ export default function EmployeeDashboard() {
             <div className="text-center py-8">
               <User className="w-12 h-12 text-gray-400 mx-auto mb-4" />
               <p className="text-gray-500">
-                {searchTerm ? 'No employees found matching your search.' : 'No employees added yet.'}
+                {searchTerm
+                  ? 'No employees found matching your search.'
+                  : 'No employees added yet.'}
               </p>
             </div>
           ) : (
@@ -200,7 +227,9 @@ export default function EmployeeDashboard() {
                         <User className="w-5 h-5 text-blue-600" />
                       </div>
                       <div>
-                        <h3 className="font-medium text-gray-900">{employee.name}</h3>
+                        <h3 className="font-medium text-gray-900">
+                          {employee.name}
+                        </h3>
                         <div className="flex items-center space-x-2 text-sm text-gray-500">
                           <span>{employee.jobTitle || 'No Title'}</span>
                           {employee.department && (
@@ -219,19 +248,23 @@ export default function EmployeeDashboard() {
                       </div>
                     </div>
                     <div className="flex items-center space-x-2">
-                      <Badge 
-                        variant={employee.isActive ? "default" : "secondary"}
-                        className={employee.isActive ? "bg-green-100 text-green-800" : ""}
+                      <Badge
+                        variant={employee.isActive ? 'default' : 'secondary'}
+                        className={
+                          employee.isActive ? 'bg-green-100 text-green-800' : ''
+                        }
                       >
                         {employee.isActive ? 'Active' : 'Inactive'}
                       </Badge>
                       {employee.userRole && (
-                        <Badge 
+                        <Badge
                           variant="outline"
                           className={
-                            employee.userRole === 'ADMIN' ? 'bg-red-50 text-red-700 border-red-200' :
-                            employee.userRole === 'OWNER' ? 'bg-purple-50 text-purple-700 border-purple-200' :
-                            'bg-blue-50 text-blue-700 border-blue-200'
+                            employee.userRole === 'ADMIN'
+                              ? 'bg-red-50 text-red-700 border-red-200'
+                              : employee.userRole === 'OWNER'
+                                ? 'bg-purple-50 text-purple-700 border-purple-200'
+                                : 'bg-blue-50 text-blue-700 border-blue-200'
                           }
                         >
                           {employee.userRole}

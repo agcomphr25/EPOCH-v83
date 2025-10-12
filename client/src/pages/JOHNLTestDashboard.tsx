@@ -10,7 +10,9 @@ export default function JOHNLTestDashboard() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">johnl dashboard</h1>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
+            johnl dashboard
+          </h1>
           <p className="text-gray-600 dark:text-gray-400 mt-1">
             CNC Operations & Production Management
           </p>
@@ -26,8 +28,12 @@ export default function JOHNLTestDashboard() {
           <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-blue-200">
             <CardContent className="p-4 text-center">
               <Wrench className="w-8 h-8 text-blue-600 mx-auto mb-3" />
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">CNC Queue</h3>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">CNC production queue</p>
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                CNC Queue
+              </h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                CNC production queue
+              </p>
             </CardContent>
           </Card>
         </Link>
@@ -36,8 +42,12 @@ export default function JOHNLTestDashboard() {
           <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-green-200">
             <CardContent className="p-4 text-center">
               <FileText className="w-8 h-8 text-green-600 mx-auto mb-3" />
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">All Orders</h3>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">View all orders</p>
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                All Orders
+              </h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                View all orders
+              </p>
             </CardContent>
           </Card>
         </Link>
@@ -45,8 +55,12 @@ export default function JOHNLTestDashboard() {
         <Card className="opacity-50 cursor-not-allowed border-2 border-gray-200">
           <CardContent className="p-4 text-center">
             <Users className="w-8 h-8 text-gray-400 mx-auto mb-3" />
-            <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-500">Employee Portal</h3>
-            <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Placeholder - Coming Soon</p>
+            <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-500">
+              Employee Portal
+            </h3>
+            <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+              Placeholder - Coming Soon
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -67,7 +81,6 @@ export default function JOHNLTestDashboard() {
           </CardContent>
         </Card>
       </div>
-
     </div>
   );
 }

@@ -1,29 +1,55 @@
-import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
-import { useToast } from "@/hooks/use-toast";
-import { Pencil, Trash2, Plus, Building2 } from "lucide-react";
-import { apiRequest } from "@/lib/queryClient";
+import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/ui/form';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { useToast } from '@/hooks/use-toast';
+import { Pencil, Trash2, Plus, Building2 } from 'lucide-react';
+import { apiRequest } from '@/lib/queryClient';
 
 const p2CustomerSchema = z.object({
-  customerId: z.string().min(1, "Customer ID is required"),
-  customerName: z.string().min(1, "Customer Name is required"),
-  contactEmail: z.string().email().optional().or(z.literal("")),
+  customerId: z.string().min(1, 'Customer ID is required'),
+  customerName: z.string().min(1, 'Customer Name is required'),
+  contactEmail: z.string().email().optional().or(z.literal('')),
   contactPhone: z.string().optional(),
   billingAddress: z.string().optional(),
   shippingAddress: z.string().optional(),
-  paymentTerms: z.string().default("NET_30"),
-  status: z.enum(["ACTIVE", "INACTIVE", "SUSPENDED"]).default("ACTIVE"),
+  paymentTerms: z.string().default('NET_30'),
+  status: z.enum(['ACTIVE', 'INACTIVE', 'SUSPENDED']).default('ACTIVE'),
   notes: z.string().optional(),
 });
 
@@ -36,72 +62,97 @@ interface P2Customer extends P2CustomerForm {
 }
 
 export function P2CustomerManager() {
-  const [selectedCustomer, setSelectedCustomer] = useState<P2Customer | null>(null);
+  const [selectedCustomer, setSelectedCustomer] = useState<P2Customer | null>(
+    null
+  );
   const [dialogOpen, setDialogOpen] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
   const { data: customers = [], isLoading } = useQuery<P2Customer[]>({
-    queryKey: ["/api/p2-customers-bypass"],
+    queryKey: ['/api/p2-customers-bypass'],
   });
 
   const form = useForm<P2CustomerForm>({
     resolver: zodResolver(p2CustomerSchema),
     defaultValues: {
-      customerId: "",
-      customerName: "",
-      contactEmail: "",
-      contactPhone: "",
-      billingAddress: "",
-      shippingAddress: "",
-      paymentTerms: "NET_30",
-      status: "ACTIVE",
-      notes: "",
+      customerId: '',
+      customerName: '',
+      contactEmail: '',
+      contactPhone: '',
+      billingAddress: '',
+      shippingAddress: '',
+      paymentTerms: 'NET_30',
+      status: 'ACTIVE',
+      notes: '',
     },
   });
 
   const createMutation = useMutation({
-    mutationFn: (data: P2CustomerForm) => apiRequest("/api/p2/customers", {
-      method: "POST",
-      body: data,
-    }),
+    mutationFn: (data: P2CustomerForm) =>
+      apiRequest('/api/p2/customers', {
+        method: 'POST',
+        body: data,
+      }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/p2-customers-bypass"] });
-      toast({ title: "Success", description: "P2 Customer created successfully" });
+      queryClient.invalidateQueries({ queryKey: ['/api/p2-customers-bypass'] });
+      toast({
+        title: 'Success',
+        description: 'P2 Customer created successfully',
+      });
       setDialogOpen(false);
       form.reset();
     },
     onError: (error: any) => {
-      toast({ title: "Error", description: error.message || "Failed to create P2 customer", variant: "destructive" });
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to create P2 customer',
+        variant: 'destructive',
+      });
     },
   });
 
   const updateMutation = useMutation({
     mutationFn: ({ id, data }: { id: number; data: Partial<P2CustomerForm> }) =>
       apiRequest(`/api/p2/customers/${id}`, {
-        method: "PUT",
+        method: 'PUT',
         body: data,
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/p2-customers-bypass"] });
-      toast({ title: "Success", description: "P2 Customer updated successfully" });
+      queryClient.invalidateQueries({ queryKey: ['/api/p2-customers-bypass'] });
+      toast({
+        title: 'Success',
+        description: 'P2 Customer updated successfully',
+      });
       setDialogOpen(false);
       setSelectedCustomer(null);
       form.reset();
     },
     onError: (error: any) => {
-      toast({ title: "Error", description: error.message || "Failed to update P2 customer", variant: "destructive" });
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to update P2 customer',
+        variant: 'destructive',
+      });
     },
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: number) => apiRequest(`/api/p2/customers/${id}`, { method: "DELETE" }),
+    mutationFn: (id: number) =>
+      apiRequest(`/api/p2/customers/${id}`, { method: 'DELETE' }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/p2-customers-bypass"] });
-      toast({ title: "Success", description: "P2 Customer deleted successfully" });
+      queryClient.invalidateQueries({ queryKey: ['/api/p2-customers-bypass'] });
+      toast({
+        title: 'Success',
+        description: 'P2 Customer deleted successfully',
+      });
     },
     onError: (error: any) => {
-      toast({ title: "Error", description: error.message || "Failed to delete P2 customer", variant: "destructive" });
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to delete P2 customer',
+        variant: 'destructive',
+      });
     },
   });
 
@@ -118,13 +169,13 @@ export function P2CustomerManager() {
     form.reset({
       customerId: customer.customerId,
       customerName: customer.customerName,
-      contactEmail: customer.contactEmail || "",
-      contactPhone: customer.contactPhone || "",
-      billingAddress: customer.billingAddress || "",
-      shippingAddress: customer.shippingAddress || "",
+      contactEmail: customer.contactEmail || '',
+      contactPhone: customer.contactPhone || '',
+      billingAddress: customer.billingAddress || '',
+      shippingAddress: customer.shippingAddress || '',
       paymentTerms: customer.paymentTerms,
       status: customer.status,
-      notes: customer.notes || "",
+      notes: customer.notes || '',
     });
     setDialogOpen(true);
   };
@@ -143,8 +194,12 @@ export function P2CustomerManager() {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight">P2 Customer Management</h2>
-          <p className="text-muted-foreground">Manage customers for P2 operations</p>
+          <h2 className="text-2xl font-bold tracking-tight">
+            P2 Customer Management
+          </h2>
+          <p className="text-muted-foreground">
+            Manage customers for P2 operations
+          </p>
         </div>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
@@ -156,14 +211,19 @@ export function P2CustomerManager() {
           <DialogContent className="max-w-2xl">
             <DialogHeader>
               <DialogTitle>
-                {selectedCustomer ? "Edit P2 Customer" : "Add P2 Customer"}
+                {selectedCustomer ? 'Edit P2 Customer' : 'Add P2 Customer'}
               </DialogTitle>
               <DialogDescription>
-                {selectedCustomer ? "Update customer information" : "Add a new P2 customer to the system"}
+                {selectedCustomer
+                  ? 'Update customer information'
+                  : 'Add a new P2 customer to the system'}
               </DialogDescription>
             </DialogHeader>
             <Form {...form}>
-              <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
+              <form
+                onSubmit={form.handleSubmit(handleSubmit)}
+                className="space-y-4"
+              >
                 <div className="grid grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
@@ -200,7 +260,11 @@ export function P2CustomerManager() {
                       <FormItem>
                         <FormLabel>Contact Email</FormLabel>
                         <FormControl>
-                          <Input type="email" placeholder="contact@company.com" {...field} />
+                          <Input
+                            type="email"
+                            placeholder="contact@company.com"
+                            {...field}
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -240,7 +304,10 @@ export function P2CustomerManager() {
                     <FormItem>
                       <FormLabel>Shipping Address</FormLabel>
                       <FormControl>
-                        <Textarea placeholder="Shipping address..." {...field} />
+                        <Textarea
+                          placeholder="Shipping address..."
+                          {...field}
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -253,7 +320,10 @@ export function P2CustomerManager() {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Payment Terms</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <Select
+                          onValueChange={field.onChange}
+                          defaultValue={field.value}
+                        >
                           <FormControl>
                             <SelectTrigger>
                               <SelectValue placeholder="Select payment terms" />
@@ -277,7 +347,10 @@ export function P2CustomerManager() {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Status</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <Select
+                          onValueChange={field.onChange}
+                          defaultValue={field.value}
+                        >
                           <FormControl>
                             <SelectTrigger>
                               <SelectValue placeholder="Select status" />
@@ -301,18 +374,30 @@ export function P2CustomerManager() {
                     <FormItem>
                       <FormLabel>Notes</FormLabel>
                       <FormControl>
-                        <Textarea placeholder="Additional notes..." {...field} />
+                        <Textarea
+                          placeholder="Additional notes..."
+                          {...field}
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
                 <div className="flex justify-end space-x-2">
-                  <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setDialogOpen(false)}
+                  >
                     Cancel
                   </Button>
-                  <Button type="submit" disabled={createMutation.isPending || updateMutation.isPending}>
-                    {selectedCustomer ? "Update" : "Create"} Customer
+                  <Button
+                    type="submit"
+                    disabled={
+                      createMutation.isPending || updateMutation.isPending
+                    }
+                  >
+                    {selectedCustomer ? 'Update' : 'Create'} Customer
                   </Button>
                 </div>
               </form>
@@ -351,12 +436,16 @@ export function P2CustomerManager() {
                     </CardDescription>
                   </div>
                   <div className="flex gap-2">
-                    <Button variant="outline" size="sm" onClick={() => openEditDialog(customer)}>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => openEditDialog(customer)}
+                    >
                       <Pencil className="h-4 w-4" />
                     </Button>
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
+                    <Button
+                      variant="outline"
+                      size="sm"
                       onClick={() => deleteMutation.mutate(customer.id)}
                       disabled={deleteMutation.isPending}
                     >
@@ -368,14 +457,30 @@ export function P2CustomerManager() {
               <CardContent>
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div>
-                    <p><strong>Email:</strong> {customer.contactEmail || "N/A"}</p>
-                    <p><strong>Phone:</strong> {customer.contactPhone || "N/A"}</p>
-                    <p><strong>Payment Terms:</strong> {customer.paymentTerms}</p>
+                    <p>
+                      <strong>Email:</strong> {customer.contactEmail || 'N/A'}
+                    </p>
+                    <p>
+                      <strong>Phone:</strong> {customer.contactPhone || 'N/A'}
+                    </p>
+                    <p>
+                      <strong>Payment Terms:</strong> {customer.paymentTerms}
+                    </p>
                   </div>
                   <div>
-                    <p><strong>Billing:</strong> {customer.billingAddress || "N/A"}</p>
-                    <p><strong>Shipping:</strong> {customer.shippingAddress || "N/A"}</p>
-                    {customer.notes && <p><strong>Notes:</strong> {customer.notes}</p>}
+                    <p>
+                      <strong>Billing:</strong>{' '}
+                      {customer.billingAddress || 'N/A'}
+                    </p>
+                    <p>
+                      <strong>Shipping:</strong>{' '}
+                      {customer.shippingAddress || 'N/A'}
+                    </p>
+                    {customer.notes && (
+                      <p>
+                        <strong>Notes:</strong> {customer.notes}
+                      </p>
+                    )}
                   </div>
                 </div>
               </CardContent>

@@ -1,23 +1,27 @@
-
-
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'wouter';
 import { useQuery } from '@tanstack/react-query';
-import { 
-  User, 
-  BookOpen, 
-  Award, 
-  FileText, 
-  Clock, 
-  CheckSquare, 
+import {
+  User,
+  BookOpen,
+  Award,
+  FileText,
+  Clock,
+  CheckSquare,
   Calendar,
   Building,
   Mail,
   Phone,
   Shield,
-  ExternalLink
+  ExternalLink,
 } from 'lucide-react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import TimeClockModal from '@/components/employee/TimeClockModal';
@@ -54,7 +58,7 @@ interface Evaluation {
   status: string;
 }
 
-export default function EmployeePortal() {  
+export default function EmployeePortal() {
   const { portalId } = useParams();
   const [currentTime, setCurrentTime] = useState(new Date());
   const [timeClockOpen, setTimeClockOpen] = useState(false);
@@ -67,7 +71,11 @@ export default function EmployeePortal() {
     return () => clearInterval(timer);
   }, []);
 
-  const { data: employee, isLoading: employeeLoading, error: employeeError } = useQuery({
+  const {
+    data: employee,
+    isLoading: employeeLoading,
+    error: employeeError,
+  } = useQuery({
     queryKey: ['/api/employee-portal', portalId],
     queryFn: async () => {
       const response = await fetch(`/api/employee-portal/${portalId}`);
@@ -80,7 +88,9 @@ export default function EmployeePortal() {
   const { data: certifications = [] } = useQuery({
     queryKey: ['/api/employee-certifications', { employeeId: employee?.id }],
     queryFn: async () => {
-      const response = await fetch(`/api/employee-certifications?employeeId=${employee.id}`);
+      const response = await fetch(
+        `/api/employee-certifications?employeeId=${employee.id}`
+      );
       if (!response.ok) throw new Error('Failed to fetch certifications');
       return response.json();
     },
@@ -90,7 +100,9 @@ export default function EmployeePortal() {
   const { data: evaluations = [] } = useQuery({
     queryKey: ['/api/evaluations', { employeeId: employee?.id }],
     queryFn: async () => {
-      const response = await fetch(`/api/evaluations?employeeId=${employee.id}`);
+      const response = await fetch(
+        `/api/evaluations?employeeId=${employee.id}`
+      );
       if (!response.ok) throw new Error('Failed to fetch evaluations');
       return response.json();
     },
@@ -103,7 +115,11 @@ export default function EmployeePortal() {
   };
 
   const formatTime = (date: Date) => {
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    return date.toLocaleTimeString([], {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    });
   };
 
   const getStatusBadge = (status: string) => {
@@ -115,15 +131,22 @@ export default function EmployeePortal() {
       SUBMITTED: 'bg-blue-100 text-blue-800',
       COMPLETED: 'bg-green-100 text-green-800',
     };
-    
+
     return (
-      <Badge className={statusColors[status as keyof typeof statusColors] || 'bg-gray-100 text-gray-800'}>
+      <Badge
+        className={
+          statusColors[status as keyof typeof statusColors] ||
+          'bg-gray-100 text-gray-800'
+        }
+      >
         {status}
       </Badge>
     );
   };
 
-  const activeCertifications = certifications.filter((cert: Certification) => cert.status === 'ACTIVE');
+  const activeCertifications = certifications.filter(
+    (cert: Certification) => cert.status === 'ACTIVE'
+  );
   const expiringSoon = certifications.filter((cert: Certification) => {
     if (!cert.dateExpiry || cert.status !== 'ACTIVE') return false;
     const expiryDate = new Date(cert.dateExpiry);
@@ -132,7 +155,9 @@ export default function EmployeePortal() {
     return expiryDate <= thirtyDaysFromNow;
   });
 
-  const recentEvaluations = evaluations.filter((evaluation: Evaluation) => evaluation.status === 'COMPLETED').slice(0, 3);
+  const recentEvaluations = evaluations
+    .filter((evaluation: Evaluation) => evaluation.status === 'COMPLETED')
+    .slice(0, 3);
 
   if (employeeLoading) {
     return (
@@ -151,8 +176,12 @@ export default function EmployeePortal() {
         <Card className="max-w-md border-red-200 bg-red-50">
           <CardContent className="pt-6 text-center">
             <Shield className="w-12 h-12 text-red-500 mx-auto mb-4" />
-            <h2 className="text-lg font-semibold text-red-700 mb-2">Access Denied</h2>
-            <p className="text-red-600">Invalid or expired portal link. Please contact HR for assistance.</p>
+            <h2 className="text-lg font-semibold text-red-700 mb-2">
+              Access Denied
+            </h2>
+            <p className="text-red-600">
+              Invalid or expired portal link. Please contact HR for assistance.
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -167,8 +196,12 @@ export default function EmployeePortal() {
           <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center mx-auto mb-4">
             <User className="w-10 h-10 text-white" />
           </div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Welcome, {employee.name}!</h1>
-          <p className="text-gray-600">{employee.role} • {employee.department}</p>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">
+            Welcome, {employee.name}!
+          </h1>
+          <p className="text-gray-600">
+            {employee.role} • {employee.department}
+          </p>
           <p className="text-sm text-gray-500 mt-1">Employee Portal</p>
         </div>
 
@@ -176,45 +209,67 @@ export default function EmployeePortal() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
           <Card className="bg-white/70 backdrop-blur-sm">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Active Certifications</CardTitle>
+              <CardTitle className="text-sm font-medium">
+                Active Certifications
+              </CardTitle>
               <Award className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-green-600">{activeCertifications.length}</div>
-              <p className="text-xs text-muted-foreground">Current certifications</p>
+              <div className="text-2xl font-bold text-green-600">
+                {activeCertifications.length}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Current certifications
+              </p>
             </CardContent>
           </Card>
 
           <Card className="bg-white/70 backdrop-blur-sm">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Expiring Soon</CardTitle>
+              <CardTitle className="text-sm font-medium">
+                Expiring Soon
+              </CardTitle>
               <Calendar className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-orange-600">{expiringSoon.length}</div>
+              <div className="text-2xl font-bold text-orange-600">
+                {expiringSoon.length}
+              </div>
               <p className="text-xs text-muted-foreground">Next 30 days</p>
             </CardContent>
           </Card>
 
           <Card className="bg-white/70 backdrop-blur-sm">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Employment Type</CardTitle>
+              <CardTitle className="text-sm font-medium">
+                Employment Type
+              </CardTitle>
               <Building className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-lg font-bold">{employee.employmentType || 'Full-time'}</div>
-              <p className="text-xs text-muted-foreground">Since {formatDate(employee.hireDate)}</p>
+              <div className="text-lg font-bold">
+                {employee.employmentType || 'Full-time'}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Since {formatDate(employee.hireDate)}
+              </p>
             </CardContent>
           </Card>
 
           <Card className="bg-white/70 backdrop-blur-sm">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Current Time</CardTitle>
+              <CardTitle className="text-sm font-medium">
+                Current Time
+              </CardTitle>
               <Clock className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-lg font-bold text-blue-600">{formatTime(currentTime)}</div>
-              <p className="text-xs text-muted-foreground">{currentTime.toLocaleDateString()}</p>
+              <div className="text-lg font-bold text-blue-600">
+                {formatTime(currentTime)}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {currentTime.toLocaleDateString()}
+              </p>
             </CardContent>
           </Card>
         </div>
@@ -222,7 +277,7 @@ export default function EmployeePortal() {
         {/* Main Portal Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
           {/* Employee Handbook */}
-          <Card 
+          <Card
             className="bg-white/80 backdrop-blur-sm hover:bg-white/90 transition-all cursor-pointer group"
             onClick={() => setHandbookOpen(true)}
           >
@@ -272,13 +327,20 @@ export default function EmployeePortal() {
             <CardContent>
               <div className="space-y-2 mb-4">
                 {activeCertifications.slice(0, 2).map((cert: Certification) => (
-                  <div key={cert.id} className="flex items-center justify-between text-sm">
-                    <span className="truncate">{cert.certification?.name || 'Unknown'}</span>
+                  <div
+                    key={cert.id}
+                    className="flex items-center justify-between text-sm"
+                  >
+                    <span className="truncate">
+                      {cert.certification?.name || 'Unknown'}
+                    </span>
                     {getStatusBadge(cert.status)}
                   </div>
                 ))}
                 {activeCertifications.length === 0 && (
-                  <p className="text-sm text-gray-500">No active certifications</p>
+                  <p className="text-sm text-gray-500">
+                    No active certifications
+                  </p>
                 )}
               </div>
               <Button variant="outline" className="w-full" disabled>
@@ -302,9 +364,13 @@ export default function EmployeePortal() {
             <CardContent>
               <div className="space-y-2 mb-4">
                 {recentEvaluations.slice(0, 2).map((evaluation: Evaluation) => (
-                  <div key={evaluation.id} className="flex items-center justify-between text-sm">
+                  <div
+                    key={evaluation.id}
+                    className="flex items-center justify-between text-sm"
+                  >
                     <span>
-                      {formatDate(evaluation.evaluationPeriodStart)} - {formatDate(evaluation.evaluationPeriodEnd)}
+                      {formatDate(evaluation.evaluationPeriodStart)} -{' '}
+                      {formatDate(evaluation.evaluationPeriodEnd)}
                     </span>
                     <div className="flex items-center space-x-1">
                       {evaluation.overallRating && (
@@ -317,7 +383,9 @@ export default function EmployeePortal() {
                   </div>
                 ))}
                 {recentEvaluations.length === 0 && (
-                  <p className="text-sm text-gray-500">No completed evaluations</p>
+                  <p className="text-sm text-gray-500">
+                    No completed evaluations
+                  </p>
                 )}
               </div>
               <Button variant="outline" className="w-full" disabled>
@@ -328,7 +396,7 @@ export default function EmployeePortal() {
           </Card>
 
           {/* Time Clock */}
-          <Card 
+          <Card
             className="bg-white/80 backdrop-blur-sm hover:bg-white/90 transition-all cursor-pointer group"
             onClick={() => setTimeClockOpen(true)}
           >
@@ -344,8 +412,12 @@ export default function EmployeePortal() {
             </CardHeader>
             <CardContent>
               <div className="text-center mb-4">
-                <div className="text-2xl font-bold text-indigo-600">{formatTime(currentTime)}</div>
-                <p className="text-sm text-gray-500">{currentTime.toLocaleDateString()}</p>
+                <div className="text-2xl font-bold text-indigo-600">
+                  {formatTime(currentTime)}
+                </div>
+                <p className="text-sm text-gray-500">
+                  {currentTime.toLocaleDateString()}
+                </p>
               </div>
               <Button variant="outline" className="w-full">
                 <Clock className="w-4 h-4 mr-2" />
@@ -355,7 +427,7 @@ export default function EmployeePortal() {
           </Card>
 
           {/* Checklist */}
-          <Card 
+          <Card
             className="bg-white/80 backdrop-blur-sm hover:bg-white/90 transition-all cursor-pointer group"
             onClick={() => setChecklistOpen(true)}
           >
@@ -413,7 +485,9 @@ export default function EmployeePortal() {
                 <Calendar className="w-4 h-4 mr-2" />
                 View Calendar
               </Button>
-              <p className="text-xs text-gray-500 mt-2 text-center">Coming Soon</p>
+              <p className="text-xs text-gray-500 mt-2 text-center">
+                Coming Soon
+              </p>
             </CardContent>
           </Card>
         </div>
@@ -433,31 +507,39 @@ export default function EmployeePortal() {
                 <Mail className="w-4 h-4 text-gray-400" />
                 <div>
                   <p className="text-sm font-medium">Email</p>
-                  <p className="text-sm text-gray-600">{employee.email || 'Not specified'}</p>
+                  <p className="text-sm text-gray-600">
+                    {employee.email || 'Not specified'}
+                  </p>
                 </div>
               </div>
-              
+
               <div className="flex items-center space-x-3">
                 <Phone className="w-4 h-4 text-gray-400" />
                 <div>
                   <p className="text-sm font-medium">Phone</p>
-                  <p className="text-sm text-gray-600">{employee.phone || 'Not specified'}</p>
+                  <p className="text-sm text-gray-600">
+                    {employee.phone || 'Not specified'}
+                  </p>
                 </div>
               </div>
-              
+
               <div className="flex items-center space-x-3">
                 <Building className="w-4 h-4 text-gray-400" />
                 <div>
                   <p className="text-sm font-medium">Department</p>
-                  <p className="text-sm text-gray-600">{employee.department || 'Not specified'}</p>
+                  <p className="text-sm text-gray-600">
+                    {employee.department || 'Not specified'}
+                  </p>
                 </div>
               </div>
-              
+
               <div className="flex items-center space-x-3">
                 <Calendar className="w-4 h-4 text-gray-400" />
                 <div>
                   <p className="text-sm font-medium">Hire Date</p>
-                  <p className="text-sm text-gray-600">{formatDate(employee.hireDate)}</p>
+                  <p className="text-sm text-gray-600">
+                    {formatDate(employee.hireDate)}
+                  </p>
                 </div>
               </div>
             </div>
@@ -477,14 +559,14 @@ export default function EmployeePortal() {
         isOpen={timeClockOpen}
         onClose={() => setTimeClockOpen(false)}
       />
-      
+
       <DailyChecklistModal
         employeeId={employee?.id || 0}
         department={employee?.department || 'General'}
         isOpen={checklistOpen}
         onClose={() => setChecklistOpen(false)}
       />
-      
+
       <HandbookModal
         isOpen={handbookOpen}
         onClose={() => setHandbookOpen(false)}

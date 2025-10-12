@@ -12,7 +12,11 @@ interface SignatureTableProps {
   title?: string;
 }
 
-export function SignatureTable({ attendeeCount = 10, includeDate = true, title = "Training Attendance" }: SignatureTableProps) {
+export function SignatureTable({
+  attendeeCount = 10,
+  includeDate = true,
+  title = 'Training Attendance',
+}: SignatureTableProps) {
   const rows = Array.from({ length: attendeeCount }, (_, i) => i + 1);
 
   return (
@@ -21,18 +25,28 @@ export function SignatureTable({ attendeeCount = 10, includeDate = true, title =
       <table className="w-full border-collapse border border-gray-800 print:border-black">
         <thead>
           <tr className="bg-gray-100 print:bg-white">
-            <th className="border border-gray-800 print:border-black p-2 text-left w-8">#</th>
-            <th className="border border-gray-800 print:border-black p-2 text-left">Employee Name (Print)</th>
-            <th className="border border-gray-800 print:border-black p-2 text-left">Signature</th>
+            <th className="border border-gray-800 print:border-black p-2 text-left w-8">
+              #
+            </th>
+            <th className="border border-gray-800 print:border-black p-2 text-left">
+              Employee Name (Print)
+            </th>
+            <th className="border border-gray-800 print:border-black p-2 text-left">
+              Signature
+            </th>
             {includeDate && (
-              <th className="border border-gray-800 print:border-black p-2 text-left w-24">Date</th>
+              <th className="border border-gray-800 print:border-black p-2 text-left w-24">
+                Date
+              </th>
             )}
           </tr>
         </thead>
         <tbody>
           {rows.map((row) => (
             <tr key={row}>
-              <td className="border border-gray-800 print:border-black p-2 h-10 print:h-12">{row}</td>
+              <td className="border border-gray-800 print:border-black p-2 h-10 print:h-12">
+                {row}
+              </td>
               <td className="border border-gray-800 print:border-black p-2 h-10 print:h-12"></td>
               <td className="border border-gray-800 print:border-black p-2 h-10 print:h-12"></td>
               {includeDate && (
@@ -46,7 +60,13 @@ export function SignatureTable({ attendeeCount = 10, includeDate = true, title =
   );
 }
 
-export function PrintLayout({ title, companyName = "AG Advanced Technologies LLC", children, includeSignatures = true, attendeeCount = 10 }: PrintLayoutProps) {
+export function PrintLayout({
+  title,
+  companyName = 'AG Advanced Technologies LLC',
+  children,
+  includeSignatures = true,
+  attendeeCount = 10,
+}: PrintLayoutProps) {
   return (
     <div className="print-content max-w-none print:max-w-none print:shadow-none print:border-none print:bg-white print:text-black print:text-sm">
       <style>{`
@@ -152,55 +172,68 @@ export function PrintLayout({ title, companyName = "AG Advanced Technologies LLC
           margin: 0.5in;
         }
       `}</style>
-      
+
       {/* Header */}
       <div className="text-center mb-6 print:mb-8 border-b-2 border-gray-200 print:border-black pb-4">
-        <div className="text-sm text-gray-600 print:text-black mb-1">{companyName}</div>
-        <h1 className="text-xl font-bold print:text-black print:text-2xl">{title}</h1>
+        <div className="text-sm text-gray-600 print:text-black mb-1">
+          {companyName}
+        </div>
+        <h1 className="text-xl font-bold print:text-black print:text-2xl">
+          {title}
+        </h1>
         <div className="text-sm text-gray-500 print:text-black mt-2">
-          Date: _________________ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Instructor: _________________
+          Date: _________________ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Instructor:
+          _________________
         </div>
       </div>
-      
+
       {/* Content */}
-      <div className="print:text-black">
-        {children}
-      </div>
-      
+      <div className="print:text-black">{children}</div>
+
       {/* Signature Section */}
       {includeSignatures && (
         <>
           <div className="page-break"></div>
           <SignatureTable attendeeCount={attendeeCount} />
-          
+
           <div className="mt-8 break-inside-avoid">
-            <h3 className="text-lg font-bold mb-4 print:text-black">Instructor Certification</h3>
+            <h3 className="text-lg font-bold mb-4 print:text-black">
+              Instructor Certification
+            </h3>
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium mb-2 print:text-black">
-                  I certify that this training was conducted in accordance with company procedures and all attendees demonstrated understanding of the material.
+                  I certify that this training was conducted in accordance with
+                  company procedures and all attendees demonstrated
+                  understanding of the material.
                 </label>
                 <div className="flex items-center space-x-8 mt-4">
                   <div>
                     <div className="signature-line mb-1"></div>
-                    <div className="text-xs print:text-black text-center">Instructor Signature</div>
+                    <div className="text-xs print:text-black text-center">
+                      Instructor Signature
+                    </div>
                   </div>
                   <div>
                     <div className="signature-line mb-1"></div>
-                    <div className="text-xs print:text-black text-center">Date</div>
+                    <div className="text-xs print:text-black text-center">
+                      Date
+                    </div>
                   </div>
                 </div>
               </div>
-              
+
               <div className="mt-6">
                 <label className="block text-sm font-medium mb-2 print:text-black">
-                  Instructor Name (Print): ________________________________________________
+                  Instructor Name (Print):
+                  ________________________________________________
                 </label>
               </div>
-              
+
               <div className="mt-4">
                 <label className="block text-sm font-medium mb-2 print:text-black">
-                  Training Location: ________________________________________________
+                  Training Location:
+                  ________________________________________________
                 </label>
               </div>
             </div>

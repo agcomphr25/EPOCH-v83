@@ -1,23 +1,75 @@
 import {
-  csvData, customerTypes, persistentDiscounts, shortTermSales, featureCategories, featureSubCategories, features, stockModels, orders, orderDrafts, payments, forms, formSubmissions,
-  inventoryItems, inventoryScans, partsRequests, employees, qcDefinitions, qcSubmissions, maintenanceSchedules, maintenanceLogs,
-  timeClockEntries, checklistItems, onboardingDocs, customers, customerAddresses, communicationLogs, pdfDocuments,
-  enhancedFormCategories, enhancedForms, enhancedFormVersions, enhancedFormSubmissions,
-  purchaseOrders, purchaseOrderItems, productionOrders,
-  p2Customers, p2PurchaseOrders, p2PurchaseOrderItems, p2ProductionOrders,
-  molds, employeeLayupSettings, productionQueue, layupSchedule, bomDefinitions, bomItems, orderIdReservations, purchaseReviewChecklists, manufacturersCertificates,
+  csvData,
+  customerTypes,
+  persistentDiscounts,
+  shortTermSales,
+  featureCategories,
+  featureSubCategories,
+  features,
+  stockModels,
+  orders,
+  orderDrafts,
+  payments,
+  forms,
+  formSubmissions,
+  inventoryItems,
+  inventoryScans,
+  partsRequests,
+  employees,
+  qcDefinitions,
+  qcSubmissions,
+  maintenanceSchedules,
+  maintenanceLogs,
+  timeClockEntries,
+  checklistItems,
+  onboardingDocs,
+  customers,
+  customerAddresses,
+  communicationLogs,
+  pdfDocuments,
+  enhancedFormCategories,
+  enhancedForms,
+  enhancedFormVersions,
+  enhancedFormSubmissions,
+  purchaseOrders,
+  purchaseOrderItems,
+  productionOrders,
+  p2Customers,
+  p2PurchaseOrders,
+  p2PurchaseOrderItems,
+  p2ProductionOrders,
+  molds,
+  employeeLayupSettings,
+  productionQueue,
+  layupSchedule,
+  bomDefinitions,
+  bomItems,
+  orderIdReservations,
+  purchaseReviewChecklists,
+  manufacturersCertificates,
   // Task tracker table
   taskItems,
   // Kickback tracking table
   kickbacks,
-  // Calendar system tables
-  calendarEvents, calendarEventAttendees,
   // Document management tables
-  documents, documentTags, documentTagRelations, documentCollections, documentCollectionRelations,
+  documents,
+  documentTags,
+  documentTagRelations,
+  documentCollections,
+  documentCollectionRelations,
   // New employee management tables
-  certifications, employeeCertifications, evaluations, employeeDocuments, employeeAuditLog,
+  certifications,
+  employeeCertifications,
+  evaluations,
+  employeeDocuments,
+  employeeAuditLog,
   // Capability-based permission system tables
-  capabilities, employeeCapabilities, userCapabilities,
+  capabilities,
+  employeeCapabilities,
+  userCapabilities,
+  // User authentication tables
+  users,
+  userSessions,
   // allOrders table as the finalized orders table
   allOrders,
   // Order reference tables
@@ -32,102 +84,203 @@ import {
   refundRequests,
   // OEM Priority Settings table
   oemPrioritySettings,
-  
+
   // Types
-  type Order, type InsertOrder, type CSVData, type InsertCSVData,
-  type CustomerType, type InsertCustomerType,
-  type PersistentDiscount, type InsertPersistentDiscount,
-  type ShortTermSale, type InsertShortTermSale,
-  type FeatureCategory, type InsertFeatureCategory,
-  type FeatureSubCategory, type InsertFeatureSubCategory,
-  type Feature, type InsertFeature,
-  type StockModel, type InsertStockModel,
-  type OrderDraft, type InsertOrderDraft,
-  type AllOrder, type InsertAllOrder, // Type for finalized orders
-  type OrderStatusType, type InsertOrderStatusType,
-  type OrderDepartmentType, type InsertOrderDepartmentType,
-  type Form, type InsertForm,
-  type FormSubmission, type InsertFormSubmission,
-  type InventoryItem, type InsertInventoryItem,
-  type InventoryScan, type InsertInventoryScan,
-  type PartsRequest, type InsertPartsRequest,
-  type Employee, type InsertEmployee,
+  type Order,
+  type InsertOrder,
+  type CSVData,
+  type InsertCSVData,
+  type CustomerType,
+  type InsertCustomerType,
+  type PersistentDiscount,
+  type InsertPersistentDiscount,
+  type ShortTermSale,
+  type InsertShortTermSale,
+  type FeatureCategory,
+  type InsertFeatureCategory,
+  type FeatureSubCategory,
+  type InsertFeatureSubCategory,
+  type Feature,
+  type InsertFeature,
+  type StockModel,
+  type InsertStockModel,
+  type OrderDraft,
+  type InsertOrderDraft,
+  type AllOrder,
+  type InsertAllOrder, // Type for finalized orders
+  type OrderStatusType,
+  type InsertOrderStatusType,
+  type OrderDepartmentType,
+  type InsertOrderDepartmentType,
+  type Form,
+  type InsertForm,
+  type FormSubmission,
+  type InsertFormSubmission,
+  type InventoryItem,
+  type InsertInventoryItem,
+  type InventoryScan,
+  type InsertInventoryScan,
+  type PartsRequest,
+  type InsertPartsRequest,
+  type Employee,
+  type InsertEmployee,
+  // User authentication types
+  type User,
+  type InsertUser,
+  type UserSession,
+  type InsertUserSession,
   // New employee management types
-  type Certification, type InsertCertification,
-  type EmployeeCertification, type InsertEmployeeCertification,
-  type Evaluation, type InsertEvaluation,
-  type EmployeeDocument, type InsertEmployeeDocument,
-  type EmployeeAuditLog, type InsertEmployeeAuditLog,
+  type Certification,
+  type InsertCertification,
+  type EmployeeCertification,
+  type InsertEmployeeCertification,
+  type Evaluation,
+  type InsertEvaluation,
+  type EmployeeDocument,
+  type InsertEmployeeDocument,
+  type EmployeeAuditLog,
+  type InsertEmployeeAuditLog,
   // Capability types
-  type Capability, type InsertCapability,
-  type EmployeeCapability, type InsertEmployeeCapability,
-  type UserCapability, type InsertUserCapability,
-  type QcDefinition, type InsertQcDefinition,
-  type QcSubmission, InsertQcSubmission,
-  type MaintenanceSchedule, type InsertMaintenanceSchedule,
-  type MaintenanceLog, type InsertMaintenanceLog,
-  type TimeClockEntry, type InsertTimeClockEntry,
-  type ChecklistItem, type InsertChecklistItem,
-  type OnboardingDoc, type InsertOnboardingDoc,
-  type Customer, type InsertCustomer,
-  type CustomerAddress, type InsertCustomerAddress,
-  type CommunicationLog, type InsertCommunicationLog,
-  type PdfDocument, type InsertPdfDocument,
-  type EnhancedFormCategory, type InsertEnhancedFormCategory,
-  type EnhancedForm, type InsertEnhancedForm,
-  type EnhancedFormVersion, type InsertEnhancedFormVersion,
-  type EnhancedFormSubmission, type InsertEnhancedFormSubmission,
-  type PurchaseOrder, type InsertPurchaseOrder,
-  type PurchaseOrderItem, type InsertPurchaseOrderItem,
-  type ProductionOrder, type InsertProductionOrder,
-  type P2Customer, type InsertP2Customer,
-  type P2PurchaseOrder, type InsertP2PurchaseOrder,
-  type P2PurchaseOrderItem, type InsertP2PurchaseOrderItem,
-  type P2ProductionOrder, type InsertP2ProductionOrder,
-  type Mold, type InsertMold,
-  type EmployeeLayupSettings, type InsertEmployeeLayupSettings,
-  type ProductionQueue, type InsertProductionQueue,
-  type LayupSchedule, type InsertLayupSchedule,
-  type BomDefinition, type InsertBomDefinition,
-  type BomItem, type InsertBomItem,
-  type PurchaseReviewChecklist, type InsertPurchaseReviewChecklist,
-  type ManufacturersCertificate, type InsertManufacturersCertificate,
+  type Capability,
+  type InsertCapability,
+  type EmployeeCapability,
+  type InsertEmployeeCapability,
+  type UserCapability,
+  type InsertUserCapability,
+  type QcDefinition,
+  type InsertQcDefinition,
+  type QcSubmission,
+  InsertQcSubmission,
+  type MaintenanceSchedule,
+  type InsertMaintenanceSchedule,
+  type MaintenanceLog,
+  type InsertMaintenanceLog,
+  type TimeClockEntry,
+  type InsertTimeClockEntry,
+  type ChecklistItem,
+  type InsertChecklistItem,
+  type OnboardingDoc,
+  type InsertOnboardingDoc,
+  type Customer,
+  type InsertCustomer,
+  type CustomerAddress,
+  type InsertCustomerAddress,
+  type CommunicationLog,
+  type InsertCommunicationLog,
+  type PdfDocument,
+  type InsertPdfDocument,
+  type EnhancedFormCategory,
+  type InsertEnhancedFormCategory,
+  type EnhancedForm,
+  type InsertEnhancedForm,
+  type EnhancedFormVersion,
+  type InsertEnhancedFormVersion,
+  type EnhancedFormSubmission,
+  type InsertEnhancedFormSubmission,
+  type PurchaseOrder,
+  type InsertPurchaseOrder,
+  type PurchaseOrderItem,
+  type InsertPurchaseOrderItem,
+  type ProductionOrder,
+  type InsertProductionOrder,
+  type P2Customer,
+  type InsertP2Customer,
+  type P2PurchaseOrder,
+  type InsertP2PurchaseOrder,
+  type P2PurchaseOrderItem,
+  type InsertP2PurchaseOrderItem,
+  type P2ProductionOrder,
+  type InsertP2ProductionOrder,
+  type Mold,
+  type InsertMold,
+  type EmployeeLayupSettings,
+  type InsertEmployeeLayupSettings,
+  type ProductionQueue,
+  type InsertProductionQueue,
+  type LayupSchedule,
+  type InsertLayupSchedule,
+  type BomDefinition,
+  type InsertBomDefinition,
+  type BomItem,
+  type InsertBomItem,
+  type PurchaseReviewChecklist,
+  type InsertPurchaseReviewChecklist,
+  type ManufacturersCertificate,
+  type InsertManufacturersCertificate,
   // Task tracker types
-  type TaskItem, type InsertTaskItem,
+  type TaskItem,
+  type InsertTaskItem,
   // Kickback tracking types
-  type Kickback, type InsertKickback,
-  // Calendar system types
-  type CalendarEvent, type InsertCalendarEvent, type CalendarEventAttendee, type InsertCalendarEventAttendee,
+  type Kickback,
+  type InsertKickback,
   // Document management types
-  type Document, type InsertDocument,
-  type DocumentTag, type InsertDocumentTag,
-  type DocumentCollection, type InsertDocumentCollection,
+  type Document,
+  type InsertDocument,
+  type DocumentTag,
+  type InsertDocumentTag,
+  type DocumentCollection,
+  type InsertDocumentCollection,
   // Payment types
-  type Payment, type InsertPayment,
+  type Payment,
+  type InsertPayment,
   // Order attachment types
-  type OrderAttachment, type InsertOrderAttachment,
+  type OrderAttachment,
+  type InsertOrderAttachment,
   // Gateway reports types - temporarily removed
   // PO Products types
-  type POProduct, type InsertPOProduct,
+  type POProduct,
+  type InsertPOProduct,
   // Refund request types
-  type RefundRequest, type InsertRefundRequest,
+  type RefundRequest,
+  type InsertRefundRequest,
   // OEM Priority Settings types
-  type OemPrioritySettings, type InsertOemPrioritySettings,
+  type OemPrioritySettings,
+  type InsertOemPrioritySettings,
   // Internal messaging types
-  type InternalMessage, type InsertInternalMessage,
-  type MessageRecipient, type InsertMessageRecipient,
-  type MessageAttachment, type InsertMessageAttachment,
-  type Department, type InsertDepartment,
+  type InternalMessage,
+  type InsertInternalMessage,
+  type MessageRecipient,
+  type InsertMessageRecipient,
+  type MessageAttachment,
+  type InsertMessageAttachment,
+  type Department,
+  type InsertDepartment,
   // Metal accessories types
   metalAccessories,
-  type MetalAccessory, type InsertMetalAccessory,
-
-} from "./schema";
-import { db } from "./db";
-import { eq, desc, asc, and, or, ilike, isNull, sql, ne, like, lt, gt, gte, lte, inArray, getTableColumns, count, sum, max, notInArray } from "drizzle-orm";
-import { nanoid } from "nanoid";
+  type MetalAccessory,
+  type InsertMetalAccessory,
+} from './schema';
+import { db } from './db';
+import {
+  eq,
+  desc,
+  asc,
+  and,
+  or,
+  ilike,
+  isNull,
+  sql,
+  ne,
+  like,
+  lt,
+  gt,
+  gte,
+  lte,
+  inArray,
+  getTableColumns,
+  count,
+  sum,
+  max,
+  notInArray,
+} from 'drizzle-orm';
+import { nanoid } from 'nanoid';
 import bcrypt from 'bcrypt';
-import { generateP1OrderId, getCurrentYearMonthPrefix, parseOrderId, formatOrderId } from "./utils/orderIdGenerator";
+import {
+  generateP1OrderId,
+  getCurrentYearMonthPrefix,
+  parseOrderId,
+  formatOrderId,
+} from './utils/orderIdGenerator';
 
 // modify the interface with any CRUD methods
 // you might need
@@ -141,10 +294,15 @@ export interface IStorage {
   updateUser(id: number, data: Partial<InsertUser>): Promise<User>;
   updateUserPassword(id: number, passwordHash: string): Promise<void>;
   generatePortalToken(employeeId: number): Promise<string>;
-  validatePortalToken(token: string): Promise<{ employeeId: number; isValid: boolean }>;
+  validatePortalToken(
+    token: string
+  ): Promise<{ employeeId: number; isValid: boolean }>;
 
   // Time clock methods for portal
-  getTimeClockEntry(employeeId: string, date: string): Promise<TimeClockEntry | undefined>;
+  getTimeClockEntry(
+    employeeId: string,
+    date: string
+  ): Promise<TimeClockEntry | undefined>;
   clockIn(employeeId: string): Promise<TimeClockEntry>;
   clockOut(employeeId: string): Promise<TimeClockEntry>;
 
@@ -159,35 +317,54 @@ export interface IStorage {
   getAllCustomerTypes(): Promise<CustomerType[]>;
   getCustomerType(id: number): Promise<CustomerType | undefined>;
   createCustomerType(data: InsertCustomerType): Promise<CustomerType>;
-  updateCustomerType(id: number, data: Partial<InsertCustomerType>): Promise<CustomerType>;
+  updateCustomerType(
+    id: number,
+    data: Partial<InsertCustomerType>
+  ): Promise<CustomerType>;
   deleteCustomerType(id: number): Promise<void>;
 
   // Persistent Discounts CRUD
   getAllPersistentDiscounts(): Promise<PersistentDiscount[]>;
   getPersistentDiscount(id: number): Promise<PersistentDiscount | undefined>;
-  createPersistentDiscount(data: InsertPersistentDiscount): Promise<PersistentDiscount>;
-  updatePersistentDiscount(id: number, data: Partial<InsertPersistentDiscount>): Promise<PersistentDiscount>;
+  createPersistentDiscount(
+    data: InsertPersistentDiscount
+  ): Promise<PersistentDiscount>;
+  updatePersistentDiscount(
+    id: number,
+    data: Partial<InsertPersistentDiscount>
+  ): Promise<PersistentDiscount>;
   deletePersistentDiscount(id: number): Promise<void>;
 
   // Short Term Sales CRUD
   getAllShortTermSales(): Promise<ShortTermSale[]>;
   getShortTermSale(id: number): Promise<ShortTermSale | undefined>;
   createShortTermSale(data: InsertShortTermSale): Promise<ShortTermSale>;
-  updateShortTermSale(id: number, data: Partial<InsertShortTermSale>): Promise<ShortTermSale>;
+  updateShortTermSale(
+    id: number,
+    data: Partial<InsertShortTermSale>
+  ): Promise<ShortTermSale>;
   deleteShortTermSale(id: number): Promise<void>;
 
   // Feature Categories CRUD
   getAllFeatureCategories(): Promise<FeatureCategory[]>;
   getFeatureCategory(id: string): Promise<FeatureCategory | undefined>;
   createFeatureCategory(data: InsertFeatureCategory): Promise<FeatureCategory>;
-  updateFeatureCategory(id: string, data: Partial<InsertFeatureCategory>): Promise<FeatureCategory>;
+  updateFeatureCategory(
+    id: string,
+    data: Partial<InsertFeatureCategory>
+  ): Promise<FeatureCategory>;
   deleteFeatureCategory(id: string): Promise<void>;
 
   // Feature Sub-Categories CRUD
   getAllFeatureSubCategories(): Promise<FeatureSubCategory[]>;
   getFeatureSubCategory(id: string): Promise<FeatureSubCategory | undefined>;
-  createFeatureSubCategory(data: InsertFeatureSubCategory): Promise<FeatureSubCategory>;
-  updateFeatureSubCategory(id: string, data: Partial<InsertFeatureSubCategory>): Promise<FeatureSubCategory>;
+  createFeatureSubCategory(
+    data: InsertFeatureSubCategory
+  ): Promise<FeatureSubCategory>;
+  updateFeatureSubCategory(
+    id: string,
+    data: Partial<InsertFeatureSubCategory>
+  ): Promise<FeatureSubCategory>;
   deleteFeatureSubCategory(id: string): Promise<void>;
 
   // Features CRUD
@@ -201,26 +378,38 @@ export interface IStorage {
   getAllStockModels(): Promise<StockModel[]>;
   getStockModel(id: string): Promise<StockModel | undefined>;
   createStockModel(data: InsertStockModel): Promise<StockModel>;
-  updateStockModel(id: string, data: Partial<InsertStockModel>): Promise<StockModel>;
+  updateStockModel(
+    id: string,
+    data: Partial<InsertStockModel>
+  ): Promise<StockModel>;
   deleteStockModel(id: string): Promise<void>;
 
   // Order Drafts CRUD
   createOrderDraft(data: InsertOrderDraft): Promise<OrderDraft>;
   getOrderDraft(orderId: string): Promise<OrderDraft | undefined>;
   getOrderDraftById(id: number): Promise<OrderDraft | undefined>;
-  updateOrderDraft(orderId: string, data: Partial<InsertOrderDraft>): Promise<OrderDraft>;
+  updateOrderDraft(
+    orderId: string,
+    data: Partial<InsertOrderDraft>
+  ): Promise<OrderDraft>;
   deleteOrderDraft(orderId: string): Promise<void>;
   getAllOrderDrafts(): Promise<OrderDraft[]>;
   getLastOrderId(): Promise<string>;
   getAllOrders(): Promise<AllOrder[]>;
   getCancelledOrders(): Promise<AllOrder[]>; // Returns finalized orders from allOrders table
-  getAllOrdersWithPaymentStatus(search?: string, limit?: number): Promise<(AllOrder & { paymentTotal: number; isFullyPaid: boolean })[]>; // Returns finalized orders with payment status
-  getAllOrdersWithPaymentStatusPaginated(page: number, limit: number): Promise<{ 
-    orders: (AllOrder & { paymentTotal: number; isFullyPaid: boolean })[], 
-    total: number, 
-    page: number, 
-    limit: number, 
-    totalPages: number 
+  getAllOrdersWithPaymentStatus(
+    search?: string,
+    limit?: number
+  ): Promise<(AllOrder & { paymentTotal: number; isFullyPaid: boolean })[]>; // Returns finalized orders with payment status
+  getAllOrdersWithPaymentStatusPaginated(
+    page: number,
+    limit: number
+  ): Promise<{
+    orders: (AllOrder & { paymentTotal: number; isFullyPaid: boolean })[];
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
   }>; // Returns paginated finalized orders with payment status
   getUnpaidOrders(): Promise<any[]>; // Returns orders that need payment
   getUnpaidOrdersByCustomer(customerId: string): Promise<any[]>; // Returns unpaid orders for specific customer
@@ -254,10 +443,15 @@ export interface IStorage {
   // Inventory Items CRUD
   getAllInventoryItems(): Promise<InventoryItem[]>;
   getInventoryItem(id: number): Promise<InventoryItem | undefined>;
-  getInventoryItemByAgPartNumber(agPartNumber: string): Promise<InventoryItem | undefined>;
+  getInventoryItemByAgPartNumber(
+    agPartNumber: string
+  ): Promise<InventoryItem | undefined>;
   getInventoryItemByCode(code: string): Promise<InventoryItem | undefined>;
   createInventoryItem(data: InsertInventoryItem): Promise<InventoryItem>;
-  updateInventoryItem(id: number, data: Partial<InsertInventoryItem>): Promise<InventoryItem>;
+  updateInventoryItem(
+    id: number,
+    data: Partial<InsertInventoryItem>
+  ): Promise<InventoryItem>;
   deleteInventoryItem(id: number): Promise<void>;
 
   // Inventory Scans CRUD
@@ -270,21 +464,26 @@ export interface IStorage {
   getAllPartsRequests(): Promise<PartsRequest[]>;
   getPartsRequest(id: number): Promise<PartsRequest | undefined>;
   createPartsRequest(data: InsertPartsRequest): Promise<PartsRequest>;
-  updatePartsRequest(id: number, data: Partial<InsertPartsRequest>): Promise<PartsRequest>;
+  updatePartsRequest(
+    id: number,
+    data: Partial<InsertPartsRequest>
+  ): Promise<PartsRequest>;
   deletePartsRequest(id: number): Promise<void>;
 
   // Outstanding Orders
   getOutstandingOrders(): Promise<OrderDraft[]>;
 
   // Search Orders
-  searchOrders(query: string): Promise<{
-    id: string;
-    orderId: string | null;
-    serialNumber: string | null;
-    customerName: string | null;
-    poNumber: string | null;
-    stockModel: string | null;
-  }[]>;
+  searchOrders(query: string): Promise<
+    {
+      id: string;
+      orderId: string | null;
+      serialNumber: string | null;
+      customerName: string | null;
+      poNumber: string | null;
+      stockModel: string | null;
+    }[]
+  >;
 
   // Employees CRUD
   getAllEmployees(): Promise<Employee[]>;
@@ -296,38 +495,63 @@ export interface IStorage {
   deleteEmployee(id: number): Promise<void>;
   getEmployeeByToken(token: string): Promise<Employee | undefined>;
   generateEmployeePortalToken(employeeId: number): Promise<string>;
-  updateEmployeePortalToken(employeeId: number, token: string, expiry: Date): Promise<void>;
-  
+  updateEmployeePortalToken(
+    employeeId: number,
+    token: string,
+    expiry: Date
+  ): Promise<void>;
+
   // Capability Management
   getAllCapabilities(): Promise<Capability[]>;
   getCapability(id: number): Promise<Capability | undefined>;
   createCapability(data: InsertCapability): Promise<Capability>;
-  updateCapability(id: number, data: Partial<InsertCapability>): Promise<Capability>;
+  updateCapability(
+    id: number,
+    data: Partial<InsertCapability>
+  ): Promise<Capability>;
   deleteCapability(id: number): Promise<void>;
-  
+
   getEmployeeCapabilities(employeeId: number): Promise<EmployeeCapability[]>;
   grantCapability(data: InsertEmployeeCapability): Promise<EmployeeCapability>;
   revokeCapability(id: number): Promise<void>;
-  toggleHardcodedCapability(id: number, useHardcoded: boolean): Promise<EmployeeCapability>;
-  
+  toggleHardcodedCapability(
+    id: number,
+    useHardcoded: boolean
+  ): Promise<EmployeeCapability>;
+
   // User Capability Management
   getUserCapabilities(userId: number): Promise<UserCapability[]>;
   grantUserCapability(data: InsertUserCapability): Promise<UserCapability>;
   revokeUserCapability(id: number): Promise<void>;
-  toggleUserHardcodedCapability(id: number, useHardcoded: boolean): Promise<UserCapability>;
+  toggleUserHardcodedCapability(
+    id: number,
+    useHardcoded: boolean
+  ): Promise<UserCapability>;
 
   // Certifications CRUD
   getAllCertifications(): Promise<Certification[]>;
   getCertification(id: number): Promise<Certification | undefined>;
   createCertification(data: InsertCertification): Promise<Certification>;
-  updateCertification(id: number, data: Partial<InsertCertification>): Promise<Certification>;
+  updateCertification(
+    id: number,
+    data: Partial<InsertCertification>
+  ): Promise<Certification>;
   deleteCertification(id: number): Promise<void>;
 
   // Employee Certifications CRUD
-  getEmployeeCertifications(employeeId?: number): Promise<EmployeeCertification[]>;
-  getEmployeeCertification(id: number): Promise<EmployeeCertification | undefined>;
-  createEmployeeCertification(data: InsertEmployeeCertification): Promise<EmployeeCertification>;
-  updateEmployeeCertification(id: number, data: Partial<InsertEmployeeCertification>): Promise<EmployeeCertification>;
+  getEmployeeCertifications(
+    employeeId?: number
+  ): Promise<EmployeeCertification[]>;
+  getEmployeeCertification(
+    id: number
+  ): Promise<EmployeeCertification | undefined>;
+  createEmployeeCertification(
+    data: InsertEmployeeCertification
+  ): Promise<EmployeeCertification>;
+  updateEmployeeCertification(
+    id: number,
+    data: Partial<InsertEmployeeCertification>
+  ): Promise<EmployeeCertification>;
   deleteEmployeeCertification(id: number): Promise<void>;
   getExpiringCertifications(days: number): Promise<EmployeeCertification[]>;
 
@@ -337,15 +561,24 @@ export interface IStorage {
   getEvaluationsByEmployee(employeeId: number): Promise<Evaluation[]>;
   getEvaluationsByEvaluator(evaluatorId: number): Promise<Evaluation[]>;
   createEvaluation(data: InsertEvaluation): Promise<Evaluation>;
-  updateEvaluation(id: number, data: Partial<InsertEvaluation>): Promise<Evaluation>;
+  updateEvaluation(
+    id: number,
+    data: Partial<InsertEvaluation>
+  ): Promise<Evaluation>;
   deleteEvaluation(id: number): Promise<void>;
   submitEvaluation(id: number): Promise<Evaluation>;
-  reviewEvaluation(id: number, reviewData: Partial<InsertEvaluation>): Promise<Evaluation>;
+  reviewEvaluation(
+    id: number,
+    reviewData: Partial<InsertEvaluation>
+  ): Promise<Evaluation>;
 
   // User Sessions CRUD (Authentication)
   createUserSession(data: InsertUserSession): Promise<UserSession>;
   getUserSession(sessionToken: string): Promise<UserSession | undefined>;
-  updateUserSession(sessionToken: string, data: Partial<InsertUserSession>): Promise<UserSession>;
+  updateUserSession(
+    sessionToken: string,
+    data: Partial<InsertUserSession>
+  ): Promise<UserSession>;
   deleteUserSession(sessionToken: string): Promise<void>;
   deleteExpiredSessions(): Promise<void>;
   getUserActiveSessions(userId: number): Promise<UserSession[]>;
@@ -354,62 +587,118 @@ export interface IStorage {
   getAllDocuments(employeeId?: number): Promise<EmployeeDocument[]>;
   getDocument(id: number): Promise<EmployeeDocument | undefined>;
   createDocument(data: InsertEmployeeDocument): Promise<EmployeeDocument>;
-  updateDocument(id: number, data: Partial<InsertEmployeeDocument>): Promise<EmployeeDocument>;
+  updateDocument(
+    id: number,
+    data: Partial<InsertEmployeeDocument>
+  ): Promise<EmployeeDocument>;
   deleteDocument(id: number): Promise<void>;
-  getDocumentsByType(documentType: string, employeeId?: number): Promise<EmployeeDocument[]>;
+  getDocumentsByType(
+    documentType: string,
+    employeeId?: number
+  ): Promise<EmployeeDocument[]>;
   getExpiringDocuments(days: number): Promise<EmployeeDocument[]>;
 
   // Employee Audit Log
   createAuditLog(data: InsertEmployeeAuditLog): Promise<EmployeeAuditLog>;
-  getAuditLogs(employeeId?: number, action?: string): Promise<EmployeeAuditLog[]>;
-  getAuditLogsByDateRange(startDate: Date, endDate: Date, employeeId?: number): Promise<EmployeeAuditLog[]>;
+  getAuditLogs(
+    employeeId?: number,
+    action?: string
+  ): Promise<EmployeeAuditLog[]>;
+  getAuditLogsByDateRange(
+    startDate: Date,
+    endDate: Date,
+    employeeId?: number
+  ): Promise<EmployeeAuditLog[]>;
 
   // QC Definitions CRUD
-  getQCDefinitions(line?: string, department?: string, final?: boolean): Promise<QcDefinition[]>;
+  getQCDefinitions(
+    line?: string,
+    department?: string,
+    final?: boolean
+  ): Promise<QcDefinition[]>;
   getQCDefinition(id: number): Promise<QcDefinition | undefined>;
   createQCDefinition(data: InsertQcDefinition): Promise<QcDefinition>;
-  updateQCDefinition(id: number, data: Partial<InsertQcDefinition>): Promise<QcDefinition>;
+  updateQCDefinition(
+    id: number,
+    data: Partial<InsertQcDefinition>
+  ): Promise<QcDefinition>;
   deleteQCDefinition(id: number): Promise<void>;
 
   // QC Submissions CRUD
   getQCSubmissions(status?: string): Promise<QcSubmission[]>;
   getQCSubmission(id: number): Promise<QcSubmission | undefined>;
   createQCSubmission(data: InsertQcSubmission): Promise<QcSubmission>;
-  updateQCSubmission(id: number, data: Partial<InsertQcSubmission>): Promise<QcSubmission>;
+  updateQCSubmission(
+    id: number,
+    data: Partial<InsertQcSubmission>
+  ): Promise<QcSubmission>;
   deleteQCSubmission(id: number): Promise<void>;
 
   // Maintenance Schedules CRUD
   getAllMaintenanceSchedules(): Promise<MaintenanceSchedule[]>;
   getMaintenanceSchedule(id: number): Promise<MaintenanceSchedule | undefined>;
-  createMaintenanceSchedule(data: InsertMaintenanceSchedule): Promise<MaintenanceSchedule>;
-  updateMaintenanceSchedule(id: number, data: Partial<InsertMaintenanceSchedule>): Promise<MaintenanceSchedule>;
+  createMaintenanceSchedule(
+    data: InsertMaintenanceSchedule
+  ): Promise<MaintenanceSchedule>;
+  updateMaintenanceSchedule(
+    id: number,
+    data: Partial<InsertMaintenanceSchedule>
+  ): Promise<MaintenanceSchedule>;
   deleteMaintenanceSchedule(id: number): Promise<void>;
 
   // Maintenance Logs CRUD
   getAllMaintenanceLogs(): Promise<MaintenanceLog[]>;
   getMaintenanceLog(id: number): Promise<MaintenanceLog | undefined>;
   createMaintenanceLog(data: InsertMaintenanceLog): Promise<MaintenanceLog>;
-  updateMaintenanceLog(id: number, data: Partial<InsertMaintenanceLog>): Promise<MaintenanceLog>;
+  updateMaintenanceLog(
+    id: number,
+    data: Partial<InsertMaintenanceLog>
+  ): Promise<MaintenanceLog>;
   deleteMaintenanceLog(id: number): Promise<void>;
 
   // Time Clock CRUD
-  getTimeClockStatus(employeeId: string): Promise<{ status: 'IN' | 'OUT'; clockIn: string | null; clockOut: string | null }>;
-  getTimeClockEntries(employeeId?: string, date?: string): Promise<TimeClockEntry[]>;
+  getTimeClockStatus(
+    employeeId: string
+  ): Promise<{
+    status: 'IN' | 'OUT';
+    clockIn: string | null;
+    clockOut: string | null;
+  }>;
+  getTimeClockEntries(
+    employeeId?: string,
+    date?: string
+  ): Promise<TimeClockEntry[]>;
   createTimeClockEntry(data: InsertTimeClockEntry): Promise<TimeClockEntry>;
-  updateTimeClockEntry(id: number, data: Partial<InsertTimeClockEntry>): Promise<TimeClockEntry>;
+  updateTimeClockEntry(
+    id: number,
+    data: Partial<InsertTimeClockEntry>
+  ): Promise<TimeClockEntry>;
   deleteTimeClockEntry(id: number): Promise<void>;
 
   // Checklist CRUD
   getChecklistItems(employeeId: string, date: string): Promise<ChecklistItem[]>;
   createChecklistItem(data: InsertChecklistItem): Promise<ChecklistItem>;
-  updateChecklistItem(id: number, data: Partial<InsertChecklistItem>): Promise<ChecklistItem>;
-  completeChecklist(employeeId: string, date: string, items: ChecklistItem[]): Promise<void>;
+  updateChecklistItem(
+    id: number,
+    data: Partial<InsertChecklistItem>
+  ): Promise<ChecklistItem>;
+  completeChecklist(
+    employeeId: string,
+    date: string,
+    items: ChecklistItem[]
+  ): Promise<void>;
 
   // Onboarding Docs CRUD
   getOnboardingDocs(employeeId: string): Promise<OnboardingDoc[]>;
   createOnboardingDoc(data: InsertOnboardingDoc): Promise<OnboardingDoc>;
-  signOnboardingDoc(id: number, signatureDataURL: string): Promise<OnboardingDoc>;
-  updateOnboardingDoc(id: number, data: Partial<InsertOnboardingDoc>): Promise<OnboardingDoc>;
+  signOnboardingDoc(
+    id: number,
+    signatureDataURL: string
+  ): Promise<OnboardingDoc>;
+  updateOnboardingDoc(
+    id: number,
+    data: Partial<InsertOnboardingDoc>
+  ): Promise<OnboardingDoc>;
 
   // Module 8: Customers CRUD
   getAllCustomers(): Promise<Customer[]>;
@@ -425,69 +714,117 @@ export interface IStorage {
   getAllAddresses(): Promise<CustomerAddress[]>;
   getCustomerAddresses(customerId: string): Promise<CustomerAddress[]>;
   createCustomerAddress(data: InsertCustomerAddress): Promise<CustomerAddress>;
-  updateCustomerAddress(id: number, data: Partial<InsertCustomerAddress>): Promise<CustomerAddress>;
+  updateCustomerAddress(
+    id: number,
+    data: Partial<InsertCustomerAddress>
+  ): Promise<CustomerAddress>;
   deleteCustomerAddress(id: number): Promise<void>;
 
   // Module 8: Communication Logs CRUD
   getCommunicationLogs(orderId: string): Promise<CommunicationLog[]>;
-  createCommunicationLog(data: InsertCommunicationLog): Promise<CommunicationLog>;
-  updateCommunicationLog(id: number, data: Partial<InsertCommunicationLog>): Promise<CommunicationLog>;
+  createCommunicationLog(
+    data: InsertCommunicationLog
+  ): Promise<CommunicationLog>;
+  updateCommunicationLog(
+    id: number,
+    data: Partial<InsertCommunicationLog>
+  ): Promise<CommunicationLog>;
 
   // Module 8: PDF Documents CRUD
   getPdfDocuments(orderId: string): Promise<PdfDocument[]>;
   createPdfDocument(data: InsertPdfDocument): Promise<PdfDocument>;
-  updatePdfDocument(id: number, data: Partial<InsertPdfDocument>): Promise<PdfDocument>;
+  updatePdfDocument(
+    id: number,
+    data: Partial<InsertPdfDocument>
+  ): Promise<PdfDocument>;
 
   // Module 12: Purchase Orders CRUD
   getAllPurchaseOrders(): Promise<PurchaseOrder[]>;
-  getPurchaseOrder(id: number, options?: { includeItems?: boolean; includeOrderCount?: boolean }): Promise<PurchaseOrder & { items?: PurchaseOrderItem[] } | undefined>;
+  getPurchaseOrder(
+    id: number,
+    options?: { includeItems?: boolean; includeOrderCount?: boolean }
+  ): Promise<(PurchaseOrder & { items?: PurchaseOrderItem[] }) | undefined>;
   createPurchaseOrder(data: InsertPurchaseOrder): Promise<PurchaseOrder>;
-  updatePurchaseOrder(id: number, data: Partial<InsertPurchaseOrder>): Promise<PurchaseOrder>;
+  updatePurchaseOrder(
+    id: number,
+    data: Partial<InsertPurchaseOrder>
+  ): Promise<PurchaseOrder>;
   deletePurchaseOrder(id: number): Promise<void>;
 
   // P2 Customers CRUD
   getAllP2Customers(): Promise<P2Customer[]>;
   getP2Customer(id: number): Promise<P2Customer | undefined>;
-  getP2CustomerByCustomerId(customerId: string): Promise<P2Customer | undefined>;
+  getP2CustomerByCustomerId(
+    customerId: string
+  ): Promise<P2Customer | undefined>;
   createP2Customer(data: InsertP2Customer): Promise<P2Customer>;
-  updateP2Customer(id: number, data: Partial<InsertP2Customer>): Promise<P2Customer>;
+  updateP2Customer(
+    id: number,
+    data: Partial<InsertP2Customer>
+  ): Promise<P2Customer>;
   deleteP2Customer(id: number): Promise<void>;
 
   // P2 Purchase Orders CRUD
   getAllP2PurchaseOrders(): Promise<P2PurchaseOrder[]>;
-  getP2PurchaseOrder(id: number, options?: { includeItems?: boolean }): Promise<P2PurchaseOrder & { items?: P2PurchaseOrderItem[] } | undefined>;
+  getP2PurchaseOrder(
+    id: number,
+    options?: { includeItems?: boolean }
+  ): Promise<(P2PurchaseOrder & { items?: P2PurchaseOrderItem[] }) | undefined>;
   createP2PurchaseOrder(data: InsertP2PurchaseOrder): Promise<P2PurchaseOrder>;
-  updateP2PurchaseOrder(id: number, data: Partial<InsertP2PurchaseOrder>): Promise<P2PurchaseOrder>;
+  updateP2PurchaseOrder(
+    id: number,
+    data: Partial<InsertP2PurchaseOrder>
+  ): Promise<P2PurchaseOrder>;
   deleteP2PurchaseOrder(id: number): Promise<void>;
 
   // P2 Purchase Order Items CRUD
   getP2PurchaseOrderItems(poId: number): Promise<P2PurchaseOrderItem[]>;
-  createP2PurchaseOrderItem(data: InsertP2PurchaseOrderItem): Promise<P2PurchaseOrderItem>;
-  updateP2PurchaseOrderItem(id: number, data: Partial<InsertP2PurchaseOrderItem>): Promise<P2PurchaseOrderItem>;
+  createP2PurchaseOrderItem(
+    data: InsertP2PurchaseOrderItem
+  ): Promise<P2PurchaseOrderItem>;
+  updateP2PurchaseOrderItem(
+    id: number,
+    data: Partial<InsertP2PurchaseOrderItem>
+  ): Promise<P2PurchaseOrderItem>;
   deleteP2PurchaseOrderItem(id: number): Promise<void>;
 
   // P2 Production Orders CRUD
   getAllP2ProductionOrders(): Promise<P2ProductionOrder[]>;
   getP2ProductionOrdersByPoId(poId: number): Promise<P2ProductionOrder[]>;
   getP2ProductionOrder(id: number): Promise<P2ProductionOrder | undefined>;
-  createP2ProductionOrder(data: InsertP2ProductionOrder): Promise<P2ProductionOrder>;
-  updateP2ProductionOrder(id: number, data: Partial<InsertP2ProductionOrder>): Promise<P2ProductionOrder>;
+  createP2ProductionOrder(
+    data: InsertP2ProductionOrder
+  ): Promise<P2ProductionOrder>;
+  updateP2ProductionOrder(
+    id: number,
+    data: Partial<InsertP2ProductionOrder>
+  ): Promise<P2ProductionOrder>;
   deleteP2ProductionOrder(id: number): Promise<void>;
   generateP2ProductionOrders(poId: number): Promise<P2ProductionOrder[]>;
   getP2MaterialRequirements(poId: number): Promise<any[]>;
 
   // Purchase Order Items CRUD
   getPurchaseOrderItems(poId: number): Promise<PurchaseOrderItem[]>;
-  createPurchaseOrderItem(data: InsertPurchaseOrderItem): Promise<PurchaseOrderItem>;
-  updatePurchaseOrderItem(id: number, data: Partial<InsertPurchaseOrderItem>): Promise<PurchaseOrderItem>;
+  createPurchaseOrderItem(
+    data: InsertPurchaseOrderItem
+  ): Promise<PurchaseOrderItem>;
+  updatePurchaseOrderItem(
+    id: number,
+    data: Partial<InsertPurchaseOrderItem>
+  ): Promise<PurchaseOrderItem>;
   deletePurchaseOrderItem(id: number): Promise<void>;
 
   // Production Orders CRUD
   getAllProductionOrders(): Promise<ProductionOrder[]>;
   getProductionOrder(id: number): Promise<ProductionOrder | undefined>;
-  getProductionOrderByOrderId(orderId: string): Promise<ProductionOrder | undefined>;
+  getProductionOrderByOrderId(
+    orderId: string
+  ): Promise<ProductionOrder | undefined>;
   createProductionOrder(data: InsertProductionOrder): Promise<ProductionOrder>;
-  updateProductionOrder(id: number, data: Partial<InsertProductionOrder>): Promise<ProductionOrder>;
+  updateProductionOrder(
+    id: number,
+    data: Partial<InsertProductionOrder>
+  ): Promise<ProductionOrder>;
   deleteProductionOrder(id: number): Promise<void>;
   generateProductionOrdersFromPO(poId: number): Promise<ProductionOrder[]>; // MODIFIED: Includes production scheduling
   generateProductionOrders(poId: number): Promise<ProductionOrder[]>;
@@ -501,42 +838,78 @@ export interface IStorage {
   clearMoldFromSchedule(moldId: string): Promise<void>;
 
   // Layup Scheduler: Employee Settings CRUD
-  getAllEmployeeLayupSettings(): Promise<(EmployeeLayupSettings & { name: string })[]>;
-  getEmployeeLayupSettings(employeeId: string): Promise<EmployeeLayupSettings | undefined>;
-  createEmployeeLayupSettings(data: InsertEmployeeLayupSettings): Promise<EmployeeLayupSettings>;
-  updateEmployeeLayupSettings(employeeId: string, data: Partial<InsertEmployeeLayupSettings>): Promise<EmployeeLayupSettings>;
+  getAllEmployeeLayupSettings(): Promise<
+    (EmployeeLayupSettings & { name: string })[]
+  >;
+  getEmployeeLayupSettings(
+    employeeId: string
+  ): Promise<EmployeeLayupSettings | undefined>;
+  createEmployeeLayupSettings(
+    data: InsertEmployeeLayupSettings
+  ): Promise<EmployeeLayupSettings>;
+  updateEmployeeLayupSettings(
+    employeeId: string,
+    data: Partial<InsertEmployeeLayupSettings>
+  ): Promise<EmployeeLayupSettings>;
   deleteEmployeeLayupSettings(employeeId: string): Promise<void>;
 
   // OEM Priority Settings CRUD
   getAllOemPrioritySettings(): Promise<OemPrioritySettings[]>;
   getOemPrioritySettings(id: number): Promise<OemPrioritySettings | undefined>;
-  getOemPrioritySettingsByVendor(vendorId: string): Promise<OemPrioritySettings[]>;
+  getOemPrioritySettingsByVendor(
+    vendorId: string
+  ): Promise<OemPrioritySettings[]>;
   getOemPrioritySettingsByPO(poId: number): Promise<OemPrioritySettings[]>;
-  createOemPrioritySettings(data: InsertOemPrioritySettings): Promise<OemPrioritySettings>;
-  updateOemPrioritySettings(id: number, data: Partial<InsertOemPrioritySettings>): Promise<OemPrioritySettings>;
+  createOemPrioritySettings(
+    data: InsertOemPrioritySettings
+  ): Promise<OemPrioritySettings>;
+  updateOemPrioritySettings(
+    id: number,
+    data: Partial<InsertOemPrioritySettings>
+  ): Promise<OemPrioritySettings>;
   deleteOemPrioritySettings(id: number): Promise<void>;
   deleteOemPrioritySettingsByPO(poId: number): Promise<void>;
   getActivePrioritySettings(): Promise<OemPrioritySettings[]>;
 
   // Layup Scheduler: Orders CRUD
-  getAllProductionQueue(filters?: { status?: string; department?: string }): Promise<any[]>;
+  getAllProductionQueue(filters?: {
+    status?: string;
+    department?: string;
+  }): Promise<any[]>;
   getProductionQueueItem(orderId: string): Promise<ProductionQueue | undefined>;
-  createProductionQueueItem(data: InsertProductionQueue): Promise<ProductionQueue>;
-  updateProductionQueueItem(orderId: string, data: Partial<InsertProductionQueue>): Promise<ProductionQueue>;
+  createProductionQueueItem(
+    data: InsertProductionQueue
+  ): Promise<ProductionQueue>;
+  updateProductionQueueItem(
+    orderId: string,
+    data: Partial<InsertProductionQueue>
+  ): Promise<ProductionQueue>;
   deleteProductionQueueItem(orderId: string): Promise<void>;
 
   // P1 Purchase Order Integration
   syncP1OrdersToProductionQueue(): Promise<{ synced: number; message: string }>;
   getUnifiedProductionQueue(): Promise<any[]>;
-  updateOrderDepartment(orderId: string, department: string, status: string): Promise<{ success: boolean; message: string }>;
+  updateOrderDepartment(
+    orderId: string,
+    department: string,
+    status: string
+  ): Promise<{ success: boolean; message: string }>;
 
   // Layup Scheduler: Schedule CRUD
   getAllLayupSchedule(): Promise<LayupSchedule[]>;
   getLayupScheduleByOrder(orderId: string): Promise<LayupSchedule[]>;
   createLayupSchedule(data: InsertLayupSchedule): Promise<LayupSchedule>;
-  updateLayupSchedule(id: number, data: Partial<InsertLayupSchedule>): Promise<LayupSchedule>;
+  updateLayupSchedule(
+    id: number,
+    data: Partial<InsertLayupSchedule>
+  ): Promise<LayupSchedule>;
   deleteLayupSchedule(id: number): Promise<void>;
-  overrideOrderSchedule(orderId: string, newDate: Date, moldId: string, overriddenBy?: string): Promise<LayupSchedule>;
+  overrideOrderSchedule(
+    orderId: string,
+    newDate: Date,
+    moldId: string,
+    overriddenBy?: string
+  ): Promise<LayupSchedule>;
   deleteLayupScheduleByOrder(orderId: string): Promise<void>;
   clearLayupSchedule(): Promise<void>;
 
@@ -548,37 +921,97 @@ export interface IStorage {
 
   // Department Progression Methods
   getPipelineCounts(): Promise<Record<string, number>>;
-  getPipelineDetails(): Promise<Record<string, Array<{ orderId: string; fbOrderNumber: string | null; modelId: string; dueDate: Date; daysInDept: number; scheduleStatus: 'on-schedule' | 'dept-overdue' | 'cannot-meet-due' | 'critical' }>>>;
-  progressOrder(orderId: string, nextDepartment?: string): Promise<OrderDraft | AllOrder>;
-  scrapOrder(orderId: string, scrapData: { reason: string; disposition: string; authorization: string; scrapDate: Date }): Promise<OrderDraft>;
+  getPipelineDetails(): Promise<
+    Record<
+      string,
+      Array<{
+        orderId: string;
+        fbOrderNumber: string | null;
+        modelId: string;
+        dueDate: Date;
+        daysInDept: number;
+        scheduleStatus:
+          | 'on-schedule'
+          | 'dept-overdue'
+          | 'cannot-meet-due'
+          | 'critical';
+      }>
+    >
+  >;
+  progressOrder(
+    orderId: string,
+    nextDepartment?: string
+  ): Promise<OrderDraft | AllOrder>;
+  scrapOrder(
+    orderId: string,
+    scrapData: {
+      reason: string;
+      disposition: string;
+      authorization: string;
+      scrapDate: Date;
+    }
+  ): Promise<OrderDraft>;
   createReplacementOrder(scrapOrderId: string): Promise<OrderDraft>;
 
   // BOM Management Methods
   getAllBOMs(): Promise<BomDefinition[]>;
-  getBOMDetails(bomId: number): Promise<(BomDefinition & { items: BomItem[], hierarchicalItems?: any[] }) | undefined>;
+  getBOMDetails(
+    bomId: number
+  ): Promise<
+    | (BomDefinition & { items: BomItem[]; hierarchicalItems?: any[] })
+    | undefined
+  >;
   getBOMDefinition(bomId: number): Promise<BomDefinition | undefined>; // Helper to get BOM definition
   buildHierarchicalItems(items: BomItem[]): Promise<any[]>; // Helper to build hierarchical BOM structure
-  createSubAssemblyReference(parentBomId: number, childBomId: number, partName: string, quantity: number, quantityMultiplier?: number, notes?: string): Promise<BomItem>;
+  createSubAssemblyReference(
+    parentBomId: number,
+    childBomId: number,
+    partName: string,
+    quantity: number,
+    quantityMultiplier?: number,
+    notes?: string
+  ): Promise<BomItem>;
   getAvailableSubAssemblies(excludeBomId?: number): Promise<BomDefinition[]>;
   createBOM(data: InsertBomDefinition): Promise<BomDefinition>;
-  updateBOM(bomId: number, data: Partial<InsertBomDefinition>): Promise<BomDefinition>;
+  updateBOM(
+    bomId: number,
+    data: Partial<InsertBomDefinition>
+  ): Promise<BomDefinition>;
   deleteBOM(bomId: number): Promise<void>;
   addBOMItem(bomId: number, data: InsertBomItem): Promise<BomItem>;
-  updateBOMItem(bomId: number, itemId: number, data: Partial<InsertBomItem>): Promise<BomItem>;
+  updateBOMItem(
+    bomId: number,
+    itemId: number,
+    data: Partial<InsertBomItem>
+  ): Promise<BomItem>;
   deleteBOMItem(bomId: number, itemId: number): Promise<void>;
 
   // Purchase Review Checklist Methods
   getAllPurchaseReviewChecklists(): Promise<PurchaseReviewChecklist[]>;
-  getPurchaseReviewChecklistById(id: number): Promise<PurchaseReviewChecklist | undefined>;
-  createPurchaseReviewChecklist(data: InsertPurchaseReviewChecklist): Promise<PurchaseReviewChecklist>;
-  updatePurchaseReviewChecklist(id: number, data: Partial<InsertPurchaseReviewChecklist>): Promise<PurchaseReviewChecklist>;
+  getPurchaseReviewChecklistById(
+    id: number
+  ): Promise<PurchaseReviewChecklist | undefined>;
+  createPurchaseReviewChecklist(
+    data: InsertPurchaseReviewChecklist
+  ): Promise<PurchaseReviewChecklist>;
+  updatePurchaseReviewChecklist(
+    id: number,
+    data: Partial<InsertPurchaseReviewChecklist>
+  ): Promise<PurchaseReviewChecklist>;
   deletePurchaseReviewChecklist(id: number): Promise<void>;
 
   // Manufacturer's Certificate of Conformance Methods
   getAllManufacturersCertificates(): Promise<ManufacturersCertificate[]>;
-  getManufacturersCertificate(id: number): Promise<ManufacturersCertificate | undefined>;
-  createManufacturersCertificate(data: InsertManufacturersCertificate): Promise<ManufacturersCertificate>;
-  updateManufacturersCertificate(id: number, data: Partial<InsertManufacturersCertificate>): Promise<ManufacturersCertificate>;
+  getManufacturersCertificate(
+    id: number
+  ): Promise<ManufacturersCertificate | undefined>;
+  createManufacturersCertificate(
+    data: InsertManufacturersCertificate
+  ): Promise<ManufacturersCertificate>;
+  updateManufacturersCertificate(
+    id: number,
+    data: Partial<InsertManufacturersCertificate>
+  ): Promise<ManufacturersCertificate>;
   deleteManufacturersCertificate(id: number): Promise<void>;
 
   // Task Tracker Methods
@@ -592,27 +1025,14 @@ export interface IStorage {
   // Kickback Tracking CRUD
   getAllKickbacks(): Promise<Kickback[]>;
   getKickbacksByOrderId(orderId: string): Promise<Kickback[]>;
-  getKickbacksByStatus(status: 'OPEN' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED'): Promise<Kickback[]>;
+  getKickbacksByStatus(
+    status: 'OPEN' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED'
+  ): Promise<Kickback[]>;
   getKickbacksByDepartment(department: string): Promise<Kickback[]>;
   getKickback(id: number): Promise<Kickback | undefined>;
   createKickback(data: InsertKickback): Promise<Kickback>;
   updateKickback(id: number, data: Partial<InsertKickback>): Promise<Kickback>;
   deleteKickback(id: number): Promise<void>;
-
-  // Calendar Event CRUD
-  getAllCalendarEvents(): Promise<CalendarEvent[]>;
-  getCalendarEventsByDateRange(startDate: Date, endDate: Date): Promise<CalendarEvent[]>;
-  getCalendarEvent(id: number): Promise<CalendarEvent | undefined>;
-  createCalendarEvent(data: InsertCalendarEvent): Promise<CalendarEvent>;
-  updateCalendarEvent(id: number, data: Partial<InsertCalendarEvent>): Promise<CalendarEvent>;
-  deleteCalendarEvent(id: number): Promise<void>;
-  
-  // Calendar Event Attendees CRUD
-  getEventAttendees(eventId: number): Promise<CalendarEventAttendee[]>;
-  addEventAttendee(data: InsertCalendarEventAttendee): Promise<CalendarEventAttendee>;
-  updateAttendeeStatus(eventId: number, userId: string, status: 'invited' | 'accepted' | 'declined' | 'tentative'): Promise<CalendarEventAttendee>;
-  removeEventAttendee(eventId: number, userId: string): Promise<void>;
-  getUserCalendarEvents(userId: string): Promise<CalendarEvent[]>;
 
   // Kickback Analytics Methods
   getKickbackAnalytics(dateRange?: { start: Date; end: Date }): Promise<{
@@ -633,7 +1053,10 @@ export interface IStorage {
   searchDocuments(query: string): Promise<Document[]>;
   getManagedDocumentsByType(documentType: string): Promise<Document[]>;
   createManagedDocument(data: InsertDocument): Promise<Document>;
-  updateManagedDocument(id: number, data: Partial<InsertDocument>): Promise<Document>;
+  updateManagedDocument(
+    id: number,
+    data: Partial<InsertDocument>
+  ): Promise<Document>;
   deleteManagedDocument(id: number): Promise<void>;
 
   // Document Tags CRUD
@@ -653,17 +1076,31 @@ export interface IStorage {
   getCollection(id: number): Promise<DocumentCollection | undefined>;
   getCollectionsByType(collectionType: string): Promise<DocumentCollection[]>;
   createCollection(data: InsertDocumentCollection): Promise<DocumentCollection>;
-  updateCollection(id: number, data: Partial<InsertDocumentCollection>): Promise<DocumentCollection>;
+  updateCollection(
+    id: number,
+    data: Partial<InsertDocumentCollection>
+  ): Promise<DocumentCollection>;
   deleteCollection(id: number): Promise<void>;
 
   // Document Collection Relations
   getCollectionDocuments(collectionId: number): Promise<Document[]>;
-  addDocumentToCollection(collectionId: number, documentId: number, relationshipType?: string, displayOrder?: number, addedBy?: number): Promise<void>;
-  removeDocumentFromCollection(collectionId: number, documentId: number): Promise<void>;
+  addDocumentToCollection(
+    collectionId: number,
+    documentId: number,
+    relationshipType?: string,
+    displayOrder?: number,
+    addedBy?: number
+  ): Promise<void>;
+  removeDocumentFromCollection(
+    collectionId: number,
+    documentId: number
+  ): Promise<void>;
 
   // Order Attachment Methods
   getOrderAttachments(orderId: string): Promise<OrderAttachment[]>;
-  getOrderAttachment(attachmentId: number): Promise<OrderAttachment | undefined>;
+  getOrderAttachment(
+    attachmentId: number
+  ): Promise<OrderAttachment | undefined>;
   createOrderAttachment(data: InsertOrderAttachment): Promise<OrderAttachment>;
   deleteOrderAttachment(attachmentId: number): Promise<void>;
 
@@ -671,11 +1108,12 @@ export interface IStorage {
   getAllFinalizedOrders(): Promise<AllOrder[]>;
   finalizeOrder(orderId: string, finalizedBy?: string): Promise<AllOrder>;
   getFinalizedOrderById(orderId: string): Promise<AllOrder | undefined>;
-  updateFinalizedOrder(orderId: string, data: Partial<InsertAllOrder>): Promise<AllOrder>;
+  updateFinalizedOrder(
+    orderId: string,
+    data: Partial<InsertAllOrder>
+  ): Promise<AllOrder>;
   fulfillOrder(orderId: string): Promise<AllOrder>;
   syncVerificationStatus(): Promise<{ updatedOrders: number; message: string }>;
-
-
 
   // Department-based order methods
   getOrdersByDepartment(department: string): Promise<any[]>;
@@ -686,17 +1124,34 @@ export interface IStorage {
   getAllPOProducts(): Promise<POProduct[]>;
   getPOProduct(id: number): Promise<POProduct | undefined>;
   createPOProduct(data: InsertPOProduct): Promise<POProduct>;
-  updatePOProduct(id: number, data: Partial<InsertPOProduct>): Promise<POProduct>;
+  updatePOProduct(
+    id: number,
+    data: Partial<InsertPOProduct>
+  ): Promise<POProduct>;
   deletePOProduct(id: number): Promise<void>;
 
   // Internal Messaging Methods
-  getAllInternalMessages(): Promise<(InternalMessage & { recipients: MessageRecipient[] })[]>;
-  getInternalMessage(id: number): Promise<(InternalMessage & { recipients: MessageRecipient[] }) | undefined>;
+  getAllInternalMessages(): Promise<
+    (InternalMessage & { recipients: MessageRecipient[] })[]
+  >;
+  getInternalMessage(
+    id: number
+  ): Promise<
+    (InternalMessage & { recipients: MessageRecipient[] }) | undefined
+  >;
   createInternalMessage(data: InsertInternalMessage): Promise<InternalMessage>;
-  getMessagesBySender(senderId: number): Promise<(InternalMessage & { recipients: MessageRecipient[] })[]>;
-  getMessagesForUser(userId: number): Promise<(InternalMessage & { recipients: MessageRecipient[] })[]>;
-  getMessagesForDepartment(departmentId: number): Promise<(InternalMessage & { recipients: MessageRecipient[] })[]>;
-  createMessageRecipient(data: InsertMessageRecipient): Promise<MessageRecipient>;
+  getMessagesBySender(
+    senderId: number
+  ): Promise<(InternalMessage & { recipients: MessageRecipient[] })[]>;
+  getMessagesForUser(
+    userId: number
+  ): Promise<(InternalMessage & { recipients: MessageRecipient[] })[]>;
+  getMessagesForDepartment(
+    departmentId: number
+  ): Promise<(InternalMessage & { recipients: MessageRecipient[] })[]>;
+  createMessageRecipient(
+    data: InsertMessageRecipient
+  ): Promise<MessageRecipient>;
   markMessageAsRead(messageId: number, userId: number): Promise<void>;
   markMessageAsAccomplished(messageId: number, userId: number): Promise<void>;
 
@@ -704,7 +1159,10 @@ export interface IStorage {
   getAllMetalAccessories(): Promise<MetalAccessory[]>;
   getMetalAccessory(id: number): Promise<MetalAccessory | undefined>;
   createMetalAccessory(data: InsertMetalAccessory): Promise<MetalAccessory>;
-  updateMetalAccessory(id: number, data: Partial<InsertMetalAccessory>): Promise<MetalAccessory>;
+  updateMetalAccessory(
+    id: number,
+    data: Partial<InsertMetalAccessory>
+  ): Promise<MetalAccessory>;
   deleteMetalAccessory(id: number): Promise<void>;
   getMetalAccessoriesDemands(): Promise<any[]>;
 }
@@ -716,37 +1174,36 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.username, username));
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.username, username));
     return user || undefined;
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
     // Hash the password before inserting
-    const passwordHash = await bcrypt.hash(insertUser.password, 12);
+    const passwordHash = await bcrypt.hash(insertUser.password || '', 12);
 
-    // Create user data with both original password and hashed password
+    // Create user data with hashed password
     const userData = {
       username: insertUser.username,
-      password: insertUser.password, // Include original password for database requirement
       passwordHash,
       role: insertUser.role,
       canOverridePrices: insertUser.canOverridePrices,
       employeeId: insertUser.employeeId,
       isActive: insertUser.isActive,
+      firstName: insertUser.firstName,
+      lastName: insertUser.lastName,
+      email: insertUser.email,
     };
 
-    const [user] = await db
-      .insert(users)
-      .values(userData)
-      .returning();
+    const [user] = await db.insert(users).values(userData).returning();
     return user;
   }
 
   async saveCSVData(data: InsertCSVData): Promise<CSVData> {
-    const [result] = await db
-      .insert(csvData)
-      .values(data)
-      .returning();
+    const [result] = await db.insert(csvData).values(data).returning();
     return result;
   }
 
@@ -769,7 +1226,10 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getCustomerType(id: number): Promise<CustomerType | undefined> {
-    const [result] = await db.select().from(customerTypes).where(eq(customerTypes.id, id));
+    const [result] = await db
+      .select()
+      .from(customerTypes)
+      .where(eq(customerTypes.id, id));
     return result || undefined;
   }
 
@@ -778,7 +1238,10 @@ export class DatabaseStorage implements IStorage {
     return result;
   }
 
-  async updateCustomerType(id: number, data: Partial<InsertCustomerType>): Promise<CustomerType> {
+  async updateCustomerType(
+    id: number,
+    data: Partial<InsertCustomerType>
+  ): Promise<CustomerType> {
     const [result] = await db
       .update(customerTypes)
       .set(data)
@@ -793,20 +1256,36 @@ export class DatabaseStorage implements IStorage {
 
   // Persistent Discounts CRUD
   async getAllPersistentDiscounts(): Promise<PersistentDiscount[]> {
-    return await db.select().from(persistentDiscounts).where(eq(persistentDiscounts.isActive, 1));
+    return await db
+      .select()
+      .from(persistentDiscounts)
+      .where(eq(persistentDiscounts.isActive, 1));
   }
 
-  async getPersistentDiscount(id: number): Promise<PersistentDiscount | undefined> {
-    const [result] = await db.select().from(persistentDiscounts).where(eq(persistentDiscounts.id, id));
+  async getPersistentDiscount(
+    id: number
+  ): Promise<PersistentDiscount | undefined> {
+    const [result] = await db
+      .select()
+      .from(persistentDiscounts)
+      .where(eq(persistentDiscounts.id, id));
     return result || undefined;
   }
 
-  async createPersistentDiscount(data: InsertPersistentDiscount): Promise<PersistentDiscount> {
-    const [result] = await db.insert(persistentDiscounts).values(data).returning();
+  async createPersistentDiscount(
+    data: InsertPersistentDiscount
+  ): Promise<PersistentDiscount> {
+    const [result] = await db
+      .insert(persistentDiscounts)
+      .values(data)
+      .returning();
     return result;
   }
 
-  async updatePersistentDiscount(id: number, data: Partial<InsertPersistentDiscount>): Promise<PersistentDiscount> {
+  async updatePersistentDiscount(
+    id: number,
+    data: Partial<InsertPersistentDiscount>
+  ): Promise<PersistentDiscount> {
     const [result] = await db
       .update(persistentDiscounts)
       .set(data)
@@ -821,11 +1300,18 @@ export class DatabaseStorage implements IStorage {
 
   // Short Term Sales CRUD
   async getAllShortTermSales(): Promise<ShortTermSale[]> {
-    return await db.select().from(shortTermSales).where(eq(shortTermSales.isActive, 1)).orderBy(desc(shortTermSales.createdAt));
+    return await db
+      .select()
+      .from(shortTermSales)
+      .where(eq(shortTermSales.isActive, 1))
+      .orderBy(desc(shortTermSales.createdAt));
   }
 
   async getShortTermSale(id: number): Promise<ShortTermSale | undefined> {
-    const [result] = await db.select().from(shortTermSales).where(eq(shortTermSales.id, id));
+    const [result] = await db
+      .select()
+      .from(shortTermSales)
+      .where(eq(shortTermSales.id, id));
     return result || undefined;
   }
 
@@ -834,7 +1320,10 @@ export class DatabaseStorage implements IStorage {
     return result;
   }
 
-  async updateShortTermSale(id: number, data: Partial<InsertShortTermSale>): Promise<ShortTermSale> {
+  async updateShortTermSale(
+    id: number,
+    data: Partial<InsertShortTermSale>
+  ): Promise<ShortTermSale> {
     const [result] = await db
       .update(shortTermSales)
       .set(data)
@@ -849,24 +1338,39 @@ export class DatabaseStorage implements IStorage {
 
   // Feature Categories CRUD
   async getAllFeatureCategories(): Promise<FeatureCategory[]> {
-    return await db.select().from(featureCategories).orderBy(featureCategories.sortOrder);
+    return await db
+      .select()
+      .from(featureCategories)
+      .orderBy(featureCategories.sortOrder);
   }
 
   async getFeatureCategory(id: string): Promise<FeatureCategory | undefined> {
-    const [category] = await db.select().from(featureCategories).where(eq(featureCategories.id, id));
+    const [category] = await db
+      .select()
+      .from(featureCategories)
+      .where(eq(featureCategories.id, id));
     return category || undefined;
   }
 
-  async createFeatureCategory(data: InsertFeatureCategory): Promise<FeatureCategory> {
+  async createFeatureCategory(
+    data: InsertFeatureCategory
+  ): Promise<FeatureCategory> {
     // Generate ID from name if not provided
     const id = data.id || data.name.toLowerCase().replace(/[^a-z0-9]/g, '_');
     const categoryData = { ...data, id };
-    const [category] = await db.insert(featureCategories).values(categoryData).returning();
+    const [category] = await db
+      .insert(featureCategories)
+      .values(categoryData)
+      .returning();
     return category;
   }
 
-  async updateFeatureCategory(id: string, data: Partial<InsertFeatureCategory>): Promise<FeatureCategory> {
-    const [category] = await db.update(featureCategories)
+  async updateFeatureCategory(
+    id: string,
+    data: Partial<InsertFeatureCategory>
+  ): Promise<FeatureCategory> {
+    const [category] = await db
+      .update(featureCategories)
       .set(data)
       .where(eq(featureCategories.id, id))
       .returning();
@@ -875,15 +1379,25 @@ export class DatabaseStorage implements IStorage {
 
   async deleteFeatureCategory(id: string): Promise<void> {
     // Check if any features are using this category
-    const relatedFeatures = await db.select().from(features).where(eq(features.category, id));
+    const relatedFeatures = await db
+      .select()
+      .from(features)
+      .where(eq(features.category, id));
     if (relatedFeatures.length > 0) {
-      throw new Error(`Cannot delete category. ${relatedFeatures.length} features are still using this category. Please delete or reassign those features first.`);
+      throw new Error(
+        `Cannot delete category. ${relatedFeatures.length} features are still using this category. Please delete or reassign those features first.`
+      );
     }
 
     // Check if any sub-categories are using this category
-    const relatedSubCategories = await db.select().from(featureSubCategories).where(eq(featureSubCategories.categoryId, id));
+    const relatedSubCategories = await db
+      .select()
+      .from(featureSubCategories)
+      .where(eq(featureSubCategories.categoryId, id));
     if (relatedSubCategories.length > 0) {
-      throw new Error(`Cannot delete category. ${relatedSubCategories.length} sub-categories are still using this category. Please delete or reassign those sub-categories first.`);
+      throw new Error(
+        `Cannot delete category. ${relatedSubCategories.length} sub-categories are still using this category. Please delete or reassign those sub-categories first.`
+      );
     }
 
     await db.delete(featureCategories).where(eq(featureCategories.id, id));
@@ -891,24 +1405,41 @@ export class DatabaseStorage implements IStorage {
 
   // Feature Sub-Categories CRUD
   async getAllFeatureSubCategories(): Promise<FeatureSubCategory[]> {
-    return await db.select().from(featureSubCategories).orderBy(featureSubCategories.sortOrder);
+    return await db
+      .select()
+      .from(featureSubCategories)
+      .orderBy(featureSubCategories.sortOrder);
   }
 
-  async getFeatureSubCategory(id: string): Promise<FeatureSubCategory | undefined> {
-    const [subCategory] = await db.select().from(featureSubCategories).where(eq(featureSubCategories.id, id));
+  async getFeatureSubCategory(
+    id: string
+  ): Promise<FeatureSubCategory | undefined> {
+    const [subCategory] = await db
+      .select()
+      .from(featureSubCategories)
+      .where(eq(featureSubCategories.id, id));
     return subCategory || undefined;
   }
 
-  async createFeatureSubCategory(data: InsertFeatureSubCategory): Promise<FeatureSubCategory> {
+  async createFeatureSubCategory(
+    data: InsertFeatureSubCategory
+  ): Promise<FeatureSubCategory> {
     // Generate ID from name if not provided
     const id = data.id || data.name.toLowerCase().replace(/[^a-z0-9]/g, '_');
     const subCategoryData = { ...data, id };
-    const [subCategory] = await db.insert(featureSubCategories).values(subCategoryData).returning();
+    const [subCategory] = await db
+      .insert(featureSubCategories)
+      .values(subCategoryData)
+      .returning();
     return subCategory;
   }
 
-  async updateFeatureSubCategory(id: string, data: Partial<InsertFeatureSubCategory>): Promise<FeatureSubCategory> {
-    const [subCategory] = await db.update(featureSubCategories)
+  async updateFeatureSubCategory(
+    id: string,
+    data: Partial<InsertFeatureSubCategory>
+  ): Promise<FeatureSubCategory> {
+    const [subCategory] = await db
+      .update(featureSubCategories)
       .set(data)
       .where(eq(featureSubCategories.id, id))
       .returning();
@@ -916,32 +1447,46 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteFeatureSubCategory(id: string): Promise<void> {
-    await db.delete(featureSubCategories).where(eq(featureSubCategories.id, id));
+    await db
+      .delete(featureSubCategories)
+      .where(eq(featureSubCategories.id, id));
   }
 
   // Features CRUD
   async getAllFeatures(): Promise<Feature[]> {
-    const rawFeatures = await db.select().from(features).orderBy(features.sortOrder);
+    const rawFeatures = await db
+      .select()
+      .from(features)
+      .orderBy(features.sortOrder);
 
     // Parse JSON options field if it's a string
-    return rawFeatures.map(feature => ({
+    return rawFeatures.map((feature) => ({
       ...feature,
-      options: typeof feature.options === 'string'
-        ? (feature.options ? JSON.parse(feature.options) : null)
-        : feature.options
+      options:
+        typeof feature.options === 'string'
+          ? feature.options
+            ? JSON.parse(feature.options)
+            : null
+          : feature.options,
     }));
   }
 
   async getFeature(id: string): Promise<Feature | undefined> {
-    const [feature] = await db.select().from(features).where(eq(features.id, id));
+    const [feature] = await db
+      .select()
+      .from(features)
+      .where(eq(features.id, id));
     if (!feature) return undefined;
 
     // Parse JSON options field if it's a string
     return {
       ...feature,
-      options: typeof feature.options === 'string'
-        ? (feature.options ? JSON.parse(feature.options) : null)
-        : feature.options
+      options:
+        typeof feature.options === 'string'
+          ? feature.options
+            ? JSON.parse(feature.options)
+            : null
+          : feature.options,
     };
   }
 
@@ -954,14 +1499,21 @@ export class DatabaseStorage implements IStorage {
     // Parse JSON options field if it's a string
     return {
       ...feature,
-      options: typeof feature.options === 'string'
-        ? (feature.options ? JSON.parse(feature.options) : null)
-        : feature.options
+      options:
+        typeof feature.options === 'string'
+          ? feature.options
+            ? JSON.parse(feature.options)
+            : null
+          : feature.options,
     };
   }
 
-  async updateFeature(id: string, data: Partial<InsertFeature>): Promise<Feature> {
-    const [feature] = await db.update(features)
+  async updateFeature(
+    id: string,
+    data: Partial<InsertFeature>
+  ): Promise<Feature> {
+    const [feature] = await db
+      .update(features)
       .set(data)
       .where(eq(features.id, id))
       .returning();
@@ -973,9 +1525,12 @@ export class DatabaseStorage implements IStorage {
     // Parse JSON options field if it's a string
     return {
       ...feature,
-      options: typeof feature.options === 'string'
-        ? (feature.options ? JSON.parse(feature.options) : null)
-        : feature.options
+      options:
+        typeof feature.options === 'string'
+          ? feature.options
+            ? JSON.parse(feature.options)
+            : null
+          : feature.options,
     };
   }
 
@@ -989,7 +1544,10 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getStockModel(id: string): Promise<StockModel | undefined> {
-    const [stockModel] = await db.select().from(stockModels).where(eq(stockModels.id, id));
+    const [stockModel] = await db
+      .select()
+      .from(stockModels)
+      .where(eq(stockModels.id, id));
     return stockModel || undefined;
   }
 
@@ -1003,11 +1561,17 @@ export class DatabaseStorage implements IStorage {
     while (true) {
       try {
         const stockModelData = { ...data, id };
-        const [stockModel] = await db.insert(stockModels).values(stockModelData).returning();
+        const [stockModel] = await db
+          .insert(stockModels)
+          .values(stockModelData)
+          .returning();
         return stockModel;
       } catch (error: any) {
         // If duplicate key error, try with incremented suffix
-        if (error.code === '23505' && error.constraint === 'stock_models_pkey') {
+        if (
+          error.code === '23505' &&
+          error.constraint === 'stock_models_pkey'
+        ) {
           counter++;
           id = `${baseId}_${counter}`;
           continue;
@@ -1018,8 +1582,12 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async updateStockModel(id: string, data: Partial<InsertStockModel>): Promise<StockModel> {
-    const [stockModel] = await db.update(stockModels)
+  async updateStockModel(
+    id: string,
+    data: Partial<InsertStockModel>
+  ): Promise<StockModel> {
+    const [stockModel] = await db
+      .update(stockModels)
       .set(data)
       .where(eq(stockModels.id, id))
       .returning();
@@ -1039,35 +1607,52 @@ export class DatabaseStorage implements IStorage {
       // Generate barcode if not provided
       const dataWithBarcode = {
         ...data,
-        barcode: data.barcode || `P1-${data.orderId}`
+        barcode: data.barcode || `P1-${data.orderId}`,
       };
 
-      const [draft] = await db.insert(orderDrafts).values(dataWithBarcode).returning();
+      const [draft] = await db
+        .insert(orderDrafts)
+        .values(dataWithBarcode)
+        .returning();
       console.log('Created draft:', draft.id);
 
       // CRITICAL: Mark the Order ID as used to prevent duplicate assignments
       await this.markOrderIdAsUsed(data.orderId);
-      console.log(`FIXED: Marked Order ID ${data.orderId} as used to prevent duplicates`);
+      console.log(
+        `FIXED: Marked Order ID ${data.orderId} as used to prevent duplicates`
+      );
 
       return draft;
     } catch (error) {
       console.error('Database error creating order draft:', error);
-      throw new Error(`Failed to create order draft: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new Error(
+        `Failed to create order draft: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
     }
   }
 
   async getOrderDraft(orderId: string): Promise<OrderDraft | undefined> {
-    const [draft] = await db.select().from(orderDrafts).where(eq(orderDrafts.orderId, orderId));
+    const [draft] = await db
+      .select()
+      .from(orderDrafts)
+      .where(eq(orderDrafts.orderId, orderId));
     return draft || undefined;
   }
 
   async getOrderDraftById(id: number): Promise<OrderDraft | undefined> {
-    const [draft] = await db.select().from(orderDrafts).where(eq(orderDrafts.id, id));
+    const [draft] = await db
+      .select()
+      .from(orderDrafts)
+      .where(eq(orderDrafts.id, id));
     return draft || undefined;
   }
 
-  async updateOrderDraft(orderId: string, data: Partial<InsertOrderDraft>): Promise<OrderDraft> {
-    const [draft] = await db.update(orderDrafts)
+  async updateOrderDraft(
+    orderId: string,
+    data: Partial<InsertOrderDraft>
+  ): Promise<OrderDraft> {
+    const [draft] = await db
+      .update(orderDrafts)
       .set(data)
       .where(eq(orderDrafts.orderId, orderId))
       .returning();
@@ -1085,28 +1670,35 @@ export class DatabaseStorage implements IStorage {
 
   async getAllOrderDrafts(): Promise<OrderDraft[]> {
     // First get all orders
-    const orders = await db.select().from(orderDrafts).orderBy(desc(orderDrafts.updatedAt));
+    const orders = await db
+      .select()
+      .from(orderDrafts)
+      .orderBy(desc(orderDrafts.updatedAt));
 
     // Get all customers to create a lookup map
-    const allCustomers = await db.select({
-      id: customers.id,
-      name: customers.name,
-      email: customers.email,
-      phone: customers.phone,
-      company: customers.company,
-      customerType: customers.customerType,
-      notes: customers.notes,
-      isActive: customers.isActive,
-      createdAt: customers.createdAt,
-      updatedAt: customers.updatedAt,
-      preferredCommunicationMethod: customers.preferredCommunicationMethod
-    }).from(customers);
-    const customerMap = new Map(allCustomers.map(c => [c.id.toString(), c.name]));
+    const allCustomers = await db
+      .select({
+        id: customers.id,
+        name: customers.name,
+        email: customers.email,
+        phone: customers.phone,
+        company: customers.company,
+        customerType: customers.customerType,
+        notes: customers.notes,
+        isActive: customers.isActive,
+        createdAt: customers.createdAt,
+        updatedAt: customers.updatedAt,
+        preferredCommunicationMethod: customers.preferredCommunicationMethod,
+      })
+      .from(customers);
+    const customerMap = new Map(
+      allCustomers.map((c) => [c.id.toString(), c.name])
+    );
 
     // Enrich orders with customer names
-    return orders.map(order => ({
+    return orders.map((order) => ({
       ...order,
-      customer: customerMap.get(order.customerId || '') || 'Unknown Customer'
+      customer: customerMap.get(order.customerId || '') || 'Unknown Customer',
     })) as OrderDraft[];
   }
 
@@ -1120,7 +1712,7 @@ export class DatabaseStorage implements IStorage {
 
       return result.length > 0 ? result[0].orderId : '';
     } catch (error) {
-      console.error("Error getting last order ID:", error);
+      console.error('Error getting last order ID:', error);
       return '';
     }
   }
@@ -1132,12 +1724,14 @@ export class DatabaseStorage implements IStorage {
 
       // Clean up expired reservations first (non-atomic, but helps keep table clean)
       try {
-        await db.delete(orderIdReservations).where(
-          and(
-            eq(orderIdReservations.isUsed, false),
-            lt(orderIdReservations.expiresAt, now)
-          )
-        );
+        await db
+          .delete(orderIdReservations)
+          .where(
+            and(
+              eq(orderIdReservations.isUsed, false),
+              lt(orderIdReservations.expiresAt, now)
+            )
+          );
       } catch (cleanupError) {
         console.warn('Cleanup error (non-critical):', cleanupError);
       }
@@ -1147,37 +1741,38 @@ export class DatabaseStorage implements IStorage {
         try {
           // Find the highest sequence number for current year-month prefix
           // Check draft orders, finalized orders, and active reservations
-          const [draftOrderResult, finalizedOrderResult, reservationResult] = await Promise.all([
-            // Get highest sequence from draft orders
-            db
-              .select({ orderId: orderDrafts.orderId })
-              .from(orderDrafts)
-              .where(like(orderDrafts.orderId, `${currentPrefix}%`))
-              .orderBy(desc(orderDrafts.orderId))
-              .limit(1),
+          const [draftOrderResult, finalizedOrderResult, reservationResult] =
+            await Promise.all([
+              // Get highest sequence from draft orders
+              db
+                .select({ orderId: orderDrafts.orderId })
+                .from(orderDrafts)
+                .where(like(orderDrafts.orderId, `${currentPrefix}%`))
+                .orderBy(desc(orderDrafts.orderId))
+                .limit(1),
 
-            // Get highest sequence from finalized orders
-            db
-              .select({ orderId: allOrders.orderId })
-              .from(allOrders)
-              .where(like(allOrders.orderId, `${currentPrefix}%`))
-              .orderBy(desc(allOrders.orderId))
-              .limit(1),
+              // Get highest sequence from finalized orders
+              db
+                .select({ orderId: allOrders.orderId })
+                .from(allOrders)
+                .where(like(allOrders.orderId, `${currentPrefix}%`))
+                .orderBy(desc(allOrders.orderId))
+                .limit(1),
 
-            // Get highest sequence from active reservations
-            db
-              .select({ sequenceNumber: orderIdReservations.sequenceNumber })
-              .from(orderIdReservations)
-              .where(
-                and(
-                  eq(orderIdReservations.yearMonthPrefix, currentPrefix),
-                  eq(orderIdReservations.isUsed, false),
-                  gt(orderIdReservations.expiresAt, now)
+              // Get highest sequence from active reservations
+              db
+                .select({ sequenceNumber: orderIdReservations.sequenceNumber })
+                .from(orderIdReservations)
+                .where(
+                  and(
+                    eq(orderIdReservations.yearMonthPrefix, currentPrefix),
+                    eq(orderIdReservations.isUsed, false),
+                    gt(orderIdReservations.expiresAt, now)
+                  )
                 )
-              )
-              .orderBy(desc(orderIdReservations.sequenceNumber))
-              .limit(1)
-          ]);
+                .orderBy(desc(orderIdReservations.sequenceNumber))
+                .limit(1),
+            ]);
 
           let maxSequence = 0;
 
@@ -1199,7 +1794,10 @@ export class DatabaseStorage implements IStorage {
 
           // Check highest sequence from active reservations
           if (reservationResult.length > 0) {
-            maxSequence = Math.max(maxSequence, reservationResult[0].sequenceNumber);
+            maxSequence = Math.max(
+              maxSequence,
+              reservationResult[0].sequenceNumber
+            );
           }
 
           // Generate next sequence number
@@ -1218,13 +1816,20 @@ export class DatabaseStorage implements IStorage {
             isUsed: false,
           });
 
-          console.log(`Reserved Order ID: ${nextOrderId} (expires: ${expiresAt.toISOString()})`);
+          console.log(
+            `Reserved Order ID: ${nextOrderId} (expires: ${expiresAt.toISOString()})`
+          );
           return nextOrderId;
-
         } catch (insertError: any) {
           // If unique constraint violation, retry with next sequence
-          if (insertError.code === '23505' || insertError.message?.includes('duplicate') || insertError.message?.includes('unique')) {
-            console.log(`Order ID conflict on attempt ${attempt + 1}, retrying...`);
+          if (
+            insertError.code === '23505' ||
+            insertError.message?.includes('duplicate') ||
+            insertError.message?.includes('unique')
+          ) {
+            console.log(
+              `Order ID conflict on attempt ${attempt + 1}, retrying...`
+            );
             continue;
           }
           throw insertError;
@@ -1246,11 +1851,11 @@ export class DatabaseStorage implements IStorage {
             .from(allOrders)
             .where(like(allOrders.orderId, `${currentPrefix}%`))
             .orderBy(desc(allOrders.orderId))
-            .limit(1)
+            .limit(1),
         ]);
 
         let maxSequence = 0;
-        
+
         // Check draft orders
         if (draftOrderResult.length > 0) {
           const parsed = parseOrderId(draftOrderResult[0].orderId);
@@ -1258,7 +1863,7 @@ export class DatabaseStorage implements IStorage {
             maxSequence = Math.max(maxSequence, parsed.sequence);
           }
         }
-        
+
         // Check finalized orders
         if (finalizedOrderResult.length > 0) {
           const parsed = parseOrderId(finalizedOrderResult[0].orderId);
@@ -1270,7 +1875,9 @@ export class DatabaseStorage implements IStorage {
         // Generate next sequential ID without reservation (fallback only)
         const fallbackSequence = maxSequence + 1;
         const fallbackId = formatOrderId(currentPrefix, fallbackSequence);
-        console.warn(`All Order ID generation attempts failed, using sequential fallback: ${fallbackId}`);
+        console.warn(
+          `All Order ID generation attempts failed, using sequential fallback: ${fallbackId}`
+        );
         return fallbackId;
       } catch (fallbackError) {
         console.error('Fallback ID generation also failed:', fallbackError);
@@ -1279,9 +1886,8 @@ export class DatabaseStorage implements IStorage {
         console.warn(`Using emergency fallback: ${fallbackId}`);
         return fallbackId;
       }
-
     } catch (error) {
-      console.error("Error in Order ID generation:", error);
+      console.error('Error in Order ID generation:', error);
       // Ultimate fallback - use current prefix with 001
       const now = new Date();
       const currentPrefix = getCurrentYearMonthPrefix(now);
@@ -1334,220 +1940,226 @@ export class DatabaseStorage implements IStorage {
   // Get all finalized orders
   async getCancelledOrders(): Promise<AllOrder[]> {
     // Select only the columns that actually exist in the all_orders table
-    const orders = await db.select({
-      id: allOrders.id,
-      orderId: allOrders.orderId,
-      orderDate: allOrders.orderDate,
-      dueDate: allOrders.dueDate,
-      customerId: allOrders.customerId,
-      customerPO: allOrders.customerPO,
-      fbOrderNumber: allOrders.fbOrderNumber,
-      agrOrderDetails: allOrders.agrOrderDetails,
-      isCustomOrder: allOrders.isCustomOrder,
-      modelId: allOrders.modelId,
-      handedness: allOrders.handedness,
-      shankLength: allOrders.shankLength,
-      features: allOrders.features,
-      featureQuantities: allOrders.featureQuantities,
-      discountCode: allOrders.discountCode,
-      notes: allOrders.notes,
-      customDiscountType: allOrders.customDiscountType,
-      customDiscountValue: allOrders.customDiscountValue,
-      showCustomDiscount: allOrders.showCustomDiscount,
-      priceOverride: allOrders.priceOverride,
-      shipping: allOrders.shipping,
-      tikkaOption: allOrders.tikkaOption,
-      status: allOrders.status,
-      statusId: allOrders.statusId,
-      barcode: allOrders.barcode,
-      currentDepartment: allOrders.currentDepartment,
-      currentDepartmentId: allOrders.currentDepartmentId,
-      departmentHistory: allOrders.departmentHistory,
-      scrappedQuantity: allOrders.scrappedQuantity,
-      totalProduced: allOrders.totalProduced,
-      layupCompletedAt: allOrders.layupCompletedAt,
-      pluggingCompletedAt: allOrders.pluggingCompletedAt,
-      cncCompletedAt: allOrders.cncCompletedAt,
-      finishCompletedAt: allOrders.finishCompletedAt,
-      gunsmithCompletedAt: allOrders.gunsmithCompletedAt,
-      paintCompletedAt: allOrders.paintCompletedAt,
-      qcCompletedAt: allOrders.qcCompletedAt,
-      shippingCompletedAt: allOrders.shippingCompletedAt,
-      scrapDate: allOrders.scrapDate,
-      scrapReason: allOrders.scrapReason,
-      scrapDisposition: allOrders.scrapDisposition,
-      scrapAuthorization: allOrders.scrapAuthorization,
-      isReplacement: allOrders.isReplacement,
-      replacedOrderId: allOrders.replacedOrderId,
-      isPaid: allOrders.isPaid,
-      paymentType: allOrders.paymentType,
-      paymentAmount: allOrders.paymentAmount,
-      paymentDate: allOrders.paymentDate,
-      paymentTimestamp: allOrders.paymentTimestamp,
-      trackingNumber: allOrders.trackingNumber,
-      shippingCarrier: allOrders.shippingCarrier,
-      shippingMethod: allOrders.shippingMethod,
-      shippedDate: allOrders.shippedDate,
-      estimatedDelivery: allOrders.estimatedDelivery,
-      shippingLabelGenerated: allOrders.shippingLabelGenerated,
-      customerNotified: allOrders.customerNotified,
-      notificationMethod: allOrders.notificationMethod,
-      notificationSentAt: allOrders.notificationSentAt,
-      deliveryConfirmed: allOrders.deliveryConfirmed,
-      deliveryConfirmedAt: allOrders.deliveryConfirmedAt,
-      isCancelled: allOrders.isCancelled,
-      cancelledAt: allOrders.cancelledAt,
-      cancelReason: allOrders.cancelReason,
-      isVerified: allOrders.isVerified,
-      createdAt: allOrders.createdAt,
-      updatedAt: allOrders.updatedAt
-    }).from(allOrders)
-    .where(
-      or(
-        eq(allOrders.status, 'CANCELLED'),
-        eq(allOrders.isCancelled, true)
+    const orders = await db
+      .select({
+        id: allOrders.id,
+        orderId: allOrders.orderId,
+        orderDate: allOrders.orderDate,
+        dueDate: allOrders.dueDate,
+        customerId: allOrders.customerId,
+        customerPO: allOrders.customerPO,
+        fbOrderNumber: allOrders.fbOrderNumber,
+        agrOrderDetails: allOrders.agrOrderDetails,
+        isCustomOrder: allOrders.isCustomOrder,
+        modelId: allOrders.modelId,
+        handedness: allOrders.handedness,
+        shankLength: allOrders.shankLength,
+        features: allOrders.features,
+        featureQuantities: allOrders.featureQuantities,
+        discountCode: allOrders.discountCode,
+        notes: allOrders.notes,
+        customDiscountType: allOrders.customDiscountType,
+        customDiscountValue: allOrders.customDiscountValue,
+        showCustomDiscount: allOrders.showCustomDiscount,
+        priceOverride: allOrders.priceOverride,
+        shipping: allOrders.shipping,
+        tikkaOption: allOrders.tikkaOption,
+        status: allOrders.status,
+        statusId: allOrders.statusId,
+        barcode: allOrders.barcode,
+        currentDepartment: allOrders.currentDepartment,
+        currentDepartmentId: allOrders.currentDepartmentId,
+        departmentHistory: allOrders.departmentHistory,
+        scrappedQuantity: allOrders.scrappedQuantity,
+        totalProduced: allOrders.totalProduced,
+        layupCompletedAt: allOrders.layupCompletedAt,
+        pluggingCompletedAt: allOrders.pluggingCompletedAt,
+        cncCompletedAt: allOrders.cncCompletedAt,
+        finishCompletedAt: allOrders.finishCompletedAt,
+        gunsmithCompletedAt: allOrders.gunsmithCompletedAt,
+        paintCompletedAt: allOrders.paintCompletedAt,
+        qcCompletedAt: allOrders.qcCompletedAt,
+        shippingCompletedAt: allOrders.shippingCompletedAt,
+        scrapDate: allOrders.scrapDate,
+        scrapReason: allOrders.scrapReason,
+        scrapDisposition: allOrders.scrapDisposition,
+        scrapAuthorization: allOrders.scrapAuthorization,
+        isReplacement: allOrders.isReplacement,
+        replacedOrderId: allOrders.replacedOrderId,
+        isPaid: allOrders.isPaid,
+        paymentType: allOrders.paymentType,
+        paymentAmount: allOrders.paymentAmount,
+        paymentDate: allOrders.paymentDate,
+        paymentTimestamp: allOrders.paymentTimestamp,
+        trackingNumber: allOrders.trackingNumber,
+        shippingCarrier: allOrders.shippingCarrier,
+        shippingMethod: allOrders.shippingMethod,
+        shippedDate: allOrders.shippedDate,
+        estimatedDelivery: allOrders.estimatedDelivery,
+        shippingLabelGenerated: allOrders.shippingLabelGenerated,
+        customerNotified: allOrders.customerNotified,
+        notificationMethod: allOrders.notificationMethod,
+        notificationSentAt: allOrders.notificationSentAt,
+        deliveryConfirmed: allOrders.deliveryConfirmed,
+        deliveryConfirmedAt: allOrders.deliveryConfirmedAt,
+        isCancelled: allOrders.isCancelled,
+        cancelledAt: allOrders.cancelledAt,
+        cancelReason: allOrders.cancelReason,
+        isVerified: allOrders.isVerified,
+        createdAt: allOrders.createdAt,
+        updatedAt: allOrders.updatedAt,
+      })
+      .from(allOrders)
+      .where(
+        or(eq(allOrders.status, 'CANCELLED'), eq(allOrders.isCancelled, true))
       )
-    )
-    .orderBy(desc(allOrders.cancelledAt));
+      .orderBy(desc(allOrders.cancelledAt));
 
     // Get all customers to create a lookup map
-    const allCustomers = await db.select({
-      id: customers.id,
-      name: customers.name,
-      email: customers.email,
-      phone: customers.phone,
-      company: customers.company,
-      customerType: customers.customerType,
-      notes: customers.notes,
-      isActive: customers.isActive,
-      createdAt: customers.createdAt,
-      updatedAt: customers.updatedAt,
-      preferredCommunicationMethod: customers.preferredCommunicationMethod
-    }).from(customers);
-    const customerMap = new Map(allCustomers.map(c => [c.id.toString(), c.name]));
+    const allCustomers = await db
+      .select({
+        id: customers.id,
+        name: customers.name,
+        email: customers.email,
+        phone: customers.phone,
+        company: customers.company,
+        customerType: customers.customerType,
+        notes: customers.notes,
+        isActive: customers.isActive,
+        createdAt: customers.createdAt,
+        updatedAt: customers.updatedAt,
+        preferredCommunicationMethod: customers.preferredCommunicationMethod,
+      })
+      .from(customers);
+    const customerMap = new Map(
+      allCustomers.map((c) => [c.id.toString(), c.name])
+    );
 
     // Enrich orders with customer names and add required frontend fields
-    return orders.map(order => ({
+    return orders.map((order) => ({
       ...order,
       customer: customerMap.get(order.customerId || '') || 'Unknown Customer',
       // Add product field for frontend compatibility
       product: order.modelId || 'Unknown Product',
-      isFlattop: false // Add missing field
+      isFlattop: false, // Add missing field
     })) as any;
   }
 
   async getAllOrders(): Promise<AllOrder[]> {
     // Select only the columns that actually exist in the all_orders table
-    const orders = await db.select({
-      id: allOrders.id,
-      orderId: allOrders.orderId,
-      orderDate: allOrders.orderDate,
-      dueDate: allOrders.dueDate,
-      customerId: allOrders.customerId,
-      customerPO: allOrders.customerPO,
-      fbOrderNumber: allOrders.fbOrderNumber,
-      agrOrderDetails: allOrders.agrOrderDetails,
-      isCustomOrder: allOrders.isCustomOrder,
-      modelId: allOrders.modelId,
-      handedness: allOrders.handedness,
-      shankLength: allOrders.shankLength,
-      features: allOrders.features,
-      featureQuantities: allOrders.featureQuantities,
-      discountCode: allOrders.discountCode,
-      notes: allOrders.notes,
-      customDiscountType: allOrders.customDiscountType,
-      customDiscountValue: allOrders.customDiscountValue,
-      showCustomDiscount: allOrders.showCustomDiscount,
-      priceOverride: allOrders.priceOverride,
-      shipping: allOrders.shipping,
-      tikkaOption: allOrders.tikkaOption,
-      status: allOrders.status,
-      statusId: allOrders.statusId,
-      barcode: allOrders.barcode,
-      currentDepartment: allOrders.currentDepartment,
-      currentDepartmentId: allOrders.currentDepartmentId,
-      departmentHistory: allOrders.departmentHistory,
-      scrappedQuantity: allOrders.scrappedQuantity,
-      totalProduced: allOrders.totalProduced,
-      layupCompletedAt: allOrders.layupCompletedAt,
-      pluggingCompletedAt: allOrders.pluggingCompletedAt,
-      cncCompletedAt: allOrders.cncCompletedAt,
-      finishCompletedAt: allOrders.finishCompletedAt,
-      gunsmithCompletedAt: allOrders.gunsmithCompletedAt,
-      paintCompletedAt: allOrders.paintCompletedAt,
-      qcCompletedAt: allOrders.qcCompletedAt,
-      shippingCompletedAt: allOrders.shippingCompletedAt,
-      scrapDate: allOrders.scrapDate,
-      scrapReason: allOrders.scrapReason,
-      scrapDisposition: allOrders.scrapDisposition,
-      scrapAuthorization: allOrders.scrapAuthorization,
-      isReplacement: allOrders.isReplacement,
-      replacedOrderId: allOrders.replacedOrderId,
-      isPaid: allOrders.isPaid,
-      paymentType: allOrders.paymentType,
-      paymentAmount: allOrders.paymentAmount,
-      paymentDate: allOrders.paymentDate,
-      paymentTimestamp: allOrders.paymentTimestamp,
-      trackingNumber: allOrders.trackingNumber,
-      shippingCarrier: allOrders.shippingCarrier,
-      shippingMethod: allOrders.shippingMethod,
-      shippedDate: allOrders.shippedDate,
-      estimatedDelivery: allOrders.estimatedDelivery,
-      shippingLabelGenerated: allOrders.shippingLabelGenerated,
-      customerNotified: allOrders.customerNotified,
-      notificationMethod: allOrders.notificationMethod,
-      notificationSentAt: allOrders.notificationSentAt,
-      deliveryConfirmed: allOrders.deliveryConfirmed,
-      deliveryConfirmedAt: allOrders.deliveryConfirmedAt,
-      isCancelled: allOrders.isCancelled,
-      cancelledAt: allOrders.cancelledAt,
-      cancelReason: allOrders.cancelReason,
-      isVerified: allOrders.isVerified,
-      createdAt: allOrders.createdAt,
-      updatedAt: allOrders.updatedAt
-    }).from(allOrders)
-    .where(
-      and(
-        ne(allOrders.status, 'CANCELLED'),
-        or(
-          eq(allOrders.isCancelled, false),
-          isNull(allOrders.isCancelled)
-        ),
-        sql`${allOrders.orderId} NOT LIKE 'P1-%'`
+    const orders = await db
+      .select({
+        id: allOrders.id,
+        orderId: allOrders.orderId,
+        orderDate: allOrders.orderDate,
+        dueDate: allOrders.dueDate,
+        customerId: allOrders.customerId,
+        customerPO: allOrders.customerPO,
+        fbOrderNumber: allOrders.fbOrderNumber,
+        agrOrderDetails: allOrders.agrOrderDetails,
+        isCustomOrder: allOrders.isCustomOrder,
+        modelId: allOrders.modelId,
+        handedness: allOrders.handedness,
+        shankLength: allOrders.shankLength,
+        features: allOrders.features,
+        featureQuantities: allOrders.featureQuantities,
+        discountCode: allOrders.discountCode,
+        notes: allOrders.notes,
+        customDiscountType: allOrders.customDiscountType,
+        customDiscountValue: allOrders.customDiscountValue,
+        showCustomDiscount: allOrders.showCustomDiscount,
+        priceOverride: allOrders.priceOverride,
+        shipping: allOrders.shipping,
+        tikkaOption: allOrders.tikkaOption,
+        status: allOrders.status,
+        statusId: allOrders.statusId,
+        barcode: allOrders.barcode,
+        currentDepartment: allOrders.currentDepartment,
+        currentDepartmentId: allOrders.currentDepartmentId,
+        departmentHistory: allOrders.departmentHistory,
+        scrappedQuantity: allOrders.scrappedQuantity,
+        totalProduced: allOrders.totalProduced,
+        layupCompletedAt: allOrders.layupCompletedAt,
+        pluggingCompletedAt: allOrders.pluggingCompletedAt,
+        cncCompletedAt: allOrders.cncCompletedAt,
+        finishCompletedAt: allOrders.finishCompletedAt,
+        gunsmithCompletedAt: allOrders.gunsmithCompletedAt,
+        paintCompletedAt: allOrders.paintCompletedAt,
+        qcCompletedAt: allOrders.qcCompletedAt,
+        shippingCompletedAt: allOrders.shippingCompletedAt,
+        scrapDate: allOrders.scrapDate,
+        scrapReason: allOrders.scrapReason,
+        scrapDisposition: allOrders.scrapDisposition,
+        scrapAuthorization: allOrders.scrapAuthorization,
+        isReplacement: allOrders.isReplacement,
+        replacedOrderId: allOrders.replacedOrderId,
+        isPaid: allOrders.isPaid,
+        paymentType: allOrders.paymentType,
+        paymentAmount: allOrders.paymentAmount,
+        paymentDate: allOrders.paymentDate,
+        paymentTimestamp: allOrders.paymentTimestamp,
+        trackingNumber: allOrders.trackingNumber,
+        shippingCarrier: allOrders.shippingCarrier,
+        shippingMethod: allOrders.shippingMethod,
+        shippedDate: allOrders.shippedDate,
+        estimatedDelivery: allOrders.estimatedDelivery,
+        shippingLabelGenerated: allOrders.shippingLabelGenerated,
+        customerNotified: allOrders.customerNotified,
+        notificationMethod: allOrders.notificationMethod,
+        notificationSentAt: allOrders.notificationSentAt,
+        deliveryConfirmed: allOrders.deliveryConfirmed,
+        deliveryConfirmedAt: allOrders.deliveryConfirmedAt,
+        isCancelled: allOrders.isCancelled,
+        cancelledAt: allOrders.cancelledAt,
+        cancelReason: allOrders.cancelReason,
+        isVerified: allOrders.isVerified,
+        createdAt: allOrders.createdAt,
+        updatedAt: allOrders.updatedAt,
+      })
+      .from(allOrders)
+      .where(
+        and(
+          ne(allOrders.status, 'CANCELLED'),
+          or(eq(allOrders.isCancelled, false), isNull(allOrders.isCancelled)),
+          sql`${allOrders.orderId} NOT LIKE 'P1-%'`
+        )
       )
-    )
-    .orderBy(desc(allOrders.updatedAt));
+      .orderBy(desc(allOrders.updatedAt));
 
     // Get all customers to create a lookup map
-    const allCustomers = await db.select({
-      id: customers.id,
-      name: customers.name,
-      email: customers.email,
-      phone: customers.phone,
-      company: customers.company,
-      customerType: customers.customerType,
-      notes: customers.notes,
-      isActive: customers.isActive,
-      createdAt: customers.createdAt,
-      updatedAt: customers.updatedAt,
-      preferredCommunicationMethod: customers.preferredCommunicationMethod
-    }).from(customers);
-    const customerMap = new Map(allCustomers.map(c => [c.id.toString(), c.name]));
+    const allCustomers = await db
+      .select({
+        id: customers.id,
+        name: customers.name,
+        email: customers.email,
+        phone: customers.phone,
+        company: customers.company,
+        customerType: customers.customerType,
+        notes: customers.notes,
+        isActive: customers.isActive,
+        createdAt: customers.createdAt,
+        updatedAt: customers.updatedAt,
+        preferredCommunicationMethod: customers.preferredCommunicationMethod,
+      })
+      .from(customers);
+    const customerMap = new Map(
+      allCustomers.map((c) => [c.id.toString(), c.name])
+    );
 
     // Enrich orders with customer names and add required frontend fields
-    return orders.map(order => ({
+    return orders.map((order) => ({
       ...order,
       customer: customerMap.get(order.customerId || '') || 'Unknown Customer',
       // Add product field for frontend compatibility
       product: order.modelId || 'Unknown Product',
-      isFlattop: false // Add missing field
+      isFlattop: false, // Add missing field
     })) as any;
   }
 
   // PERFORMANCE OPTIMIZED: Calculate order total with cached stock models and features
   private async calculateOrderTotalOptimized(
-    order: AllOrder, 
-    stockModels: StockModel[], 
+    order: AllOrder,
+    stockModels: StockModel[],
     features: Feature[],
     persistentDiscounts: PersistentDiscount[]
   ): Promise<number> {
@@ -1555,16 +2167,24 @@ export class DatabaseStorage implements IStorage {
 
     // Add base stock model price (use override if set, otherwise use standard price)
     if (order.modelId) {
-      const selectedModel = stockModels.find(model => model.id === order.modelId);
+      const selectedModel = stockModels.find(
+        (model) => model.id === order.modelId
+      );
       if (selectedModel) {
         // CRITICAL FIX: Ensure all values are proper numbers to prevent NaN
         const rawPrice = selectedModel.price;
-        const modelPrice = (rawPrice === null || rawPrice === undefined || isNaN(Number(rawPrice))) ? 0 : Number(rawPrice);
+        const modelPrice =
+          rawPrice === null || rawPrice === undefined || isNaN(Number(rawPrice))
+            ? 0
+            : Number(rawPrice);
         const priceOverride = order.priceOverride;
-        const basePrice = (priceOverride !== null && priceOverride !== undefined && !isNaN(Number(priceOverride))) 
-                          ? Number(priceOverride) 
-                          : modelPrice;
-        
+        const basePrice =
+          priceOverride !== null &&
+          priceOverride !== undefined &&
+          !isNaN(Number(priceOverride))
+            ? Number(priceOverride)
+            : modelPrice;
+
         // Ensure we're adding a valid number
         if (!isNaN(basePrice)) {
           total += basePrice;
@@ -1576,17 +2196,24 @@ export class DatabaseStorage implements IStorage {
     if (order.features && typeof order.features === 'object') {
       Object.entries(order.features).forEach(([featureId, value]) => {
         // Skip features that have separate state variables to avoid double counting (MATCH FRONTEND LOGIC)
-        if (featureId === 'bottom_metal' || featureId === 'paint_options' || featureId === 'rail_accessory' || featureId === 'other_options') {
+        if (
+          featureId === 'bottom_metal' ||
+          featureId === 'paint_options' ||
+          featureId === 'rail_accessory' ||
+          featureId === 'other_options'
+        ) {
           return;
         }
 
         if (value && value !== 'none') {
-          const feature = features.find(f => f.id === featureId);
+          const feature = features.find((f) => f.id === featureId);
           if (feature?.options) {
             if (Array.isArray(value)) {
               // Handle multi-select features
-              value.forEach(optionValue => {
-                const option = (feature.options as any[])?.find((opt: any) => opt.value === optionValue);
+              value.forEach((optionValue) => {
+                const option = (feature.options as any[])?.find(
+                  (opt: any) => opt.value === optionValue
+                );
                 if (option?.price) {
                   const featurePrice = Number(option.price);
                   if (!isNaN(featurePrice)) {
@@ -1596,7 +2223,9 @@ export class DatabaseStorage implements IStorage {
               });
             } else {
               // Handle single-select features
-              const option = (feature.options as any)?.find?.((opt: any) => opt.value === value);
+              const option = (feature.options as any)?.find?.(
+                (opt: any) => opt.value === value
+              );
               if (option?.price) {
                 const featurePrice = Number(option.price);
                 if (!isNaN(featurePrice)) {
@@ -1605,7 +2234,9 @@ export class DatabaseStorage implements IStorage {
               }
             }
           } else if (order.orderId === 'EH219') {
-            console.log(`🔍 DEBUG EH219 - Feature ${featureId}: no options found`);
+            console.log(
+              `🔍 DEBUG EH219 - Feature ${featureId}: no options found`
+            );
           }
         }
       });
@@ -1614,20 +2245,26 @@ export class DatabaseStorage implements IStorage {
     // Add paint options price (separately handled like frontend)
     const orderFeatures = order.features as any;
     if (orderFeatures) {
-      const currentPaint = orderFeatures.metallic_finishes || orderFeatures.paint_options || orderFeatures.paint_options_combined;
-      
+      const currentPaint =
+        orderFeatures.metallic_finishes ||
+        orderFeatures.paint_options ||
+        orderFeatures.paint_options_combined;
+
       if (currentPaint && currentPaint !== 'none') {
-        const paintFeatures = features.filter(f => 
-          f.displayName?.includes('Options') || 
-          f.displayName?.includes('Camo') || 
-          f.displayName?.includes('Cerakote') ||
-          f.displayName?.includes('Paint') ||
-          f.category === 'paint'
+        const paintFeatures = features.filter(
+          (f) =>
+            f.displayName?.includes('Options') ||
+            f.displayName?.includes('Camo') ||
+            f.displayName?.includes('Cerakote') ||
+            f.displayName?.includes('Paint') ||
+            f.category === 'paint'
         );
-        
+
         for (const feature of paintFeatures) {
           if (feature.options) {
-            const option = (feature.options as any[])?.find((opt: any) => opt.value === currentPaint);
+            const option = (feature.options as any[])?.find(
+              (opt: any) => opt.value === currentPaint
+            );
             if (option?.price) {
               const paintPrice = Number(option.price);
               if (!isNaN(paintPrice)) {
@@ -1641,17 +2278,26 @@ export class DatabaseStorage implements IStorage {
 
       // Add bottom metal price (separately handled like frontend)
       if (orderFeatures.bottom_metal && orderFeatures.bottom_metal !== 'none') {
-        const bottomMetalFeature = features.find(f => f.id === 'bottom_metal');
+        const bottomMetalFeature = features.find(
+          (f) => f.id === 'bottom_metal'
+        );
         if (bottomMetalFeature?.options) {
-          const option = (bottomMetalFeature.options as any[])?.find((opt: any) => opt.value === orderFeatures.bottom_metal);
+          const option = (bottomMetalFeature.options as any[])?.find(
+            (opt: any) => opt.value === orderFeatures.bottom_metal
+          );
           if (option?.price) {
             let bottomMetalPrice = Number(option.price);
-            
+
             // Special pricing: SepFG10 or SepCF25 seasonal sale + AG bottom metal = $100 instead of $149
-            if ((order.discountCode === 'short_term_3' || order.discountCode === 'short_term_1') && orderFeatures.bottom_metal.includes('ag_') && option.price === 149) {
+            if (
+              (order.discountCode === 'short_term_3' ||
+                order.discountCode === 'short_term_1') &&
+              orderFeatures.bottom_metal.includes('ag_') &&
+              option.price === 149
+            ) {
               bottomMetalPrice = 100;
             }
-            
+
             if (!isNaN(bottomMetalPrice)) {
               total += bottomMetalPrice;
             }
@@ -1660,11 +2306,17 @@ export class DatabaseStorage implements IStorage {
       }
 
       // Add rail accessory price (separately handled like frontend)
-      if (orderFeatures.rail_accessory && Array.isArray(orderFeatures.rail_accessory) && orderFeatures.rail_accessory.length > 0) {
-        const railFeature = features.find(f => f.id === 'rail_accessory');
+      if (
+        orderFeatures.rail_accessory &&
+        Array.isArray(orderFeatures.rail_accessory) &&
+        orderFeatures.rail_accessory.length > 0
+      ) {
+        const railFeature = features.find((f) => f.id === 'rail_accessory');
         if (railFeature?.options) {
           orderFeatures.rail_accessory.forEach((railValue: string) => {
-            const option = (railFeature.options as any[])?.find((opt: any) => opt.value === railValue);
+            const option = (railFeature.options as any[])?.find(
+              (opt: any) => opt.value === railValue
+            );
             if (option?.price) {
               const railPrice = Number(option.price);
               if (!isNaN(railPrice)) {
@@ -1676,11 +2328,19 @@ export class DatabaseStorage implements IStorage {
       }
 
       // Add other options price (separately handled like frontend)
-      if (orderFeatures.other_options && Array.isArray(orderFeatures.other_options) && orderFeatures.other_options.length > 0) {
-        const otherOptionsFeature = features.find(f => f.id === 'other_options');
+      if (
+        orderFeatures.other_options &&
+        Array.isArray(orderFeatures.other_options) &&
+        orderFeatures.other_options.length > 0
+      ) {
+        const otherOptionsFeature = features.find(
+          (f) => f.id === 'other_options'
+        );
         if (otherOptionsFeature?.options) {
           orderFeatures.other_options.forEach((optionValue: string) => {
-            const option = (otherOptionsFeature.options as any[])?.find((opt: any) => opt.value === optionValue);
+            const option = (otherOptionsFeature.options as any[])?.find(
+              (opt: any) => opt.value === optionValue
+            );
             if (option?.price) {
               const optionPrice = Number(option.price);
               if (!isNaN(optionPrice)) {
@@ -1697,30 +2357,40 @@ export class DatabaseStorage implements IStorage {
       // Handle both "persistent_2" format and direct name lookup
       let discount = null;
       if (order.discountCode.startsWith('persistent_')) {
-        const discountId = parseInt(order.discountCode.replace('persistent_', ''));
-        discount = persistentDiscounts.find(d => d.id === discountId);
+        const discountId = parseInt(
+          order.discountCode.replace('persistent_', '')
+        );
+        discount = persistentDiscounts.find((d) => d.id === discountId);
       } else {
-        discount = persistentDiscounts.find(d => d.name === order.discountCode);
+        discount = persistentDiscounts.find(
+          (d) => d.name === order.discountCode
+        );
       }
-      
+
       if (discount && discount.isActive) {
         if (discount.appliesTo === 'stock_model') {
           // Apply discount only to the base model price (using cached stockModels)
           if (order.modelId) {
-            const selectedModel = stockModels.find(model => model.id === order.modelId);
+            const selectedModel = stockModels.find(
+              (model) => model.id === order.modelId
+            );
             if (selectedModel) {
-              const basePrice = Number(order.priceOverride || selectedModel.price || 0);
-              const discountAmount = discount.percent > 0 
-                ? (basePrice * discount.percent / 100)
-                : Number(discount.fixedAmount || 0);
+              const basePrice = Number(
+                order.priceOverride || selectedModel.price || 0
+              );
+              const discountAmount =
+                discount.percent !== null && discount.percent > 0
+                  ? (basePrice * discount.percent) / 100
+                  : Number(discount.fixedAmount || 0);
               total -= discountAmount;
             }
           }
         } else if (discount.appliesTo === 'total_order') {
           // Apply discount to entire order total
-          const discountAmount = discount.percent > 0 
-            ? (total * discount.percent / 100)
-            : Number(discount.fixedAmount || 0);
+          const discountAmount =
+            discount.percent !== null && discount.percent > 0
+              ? (total * discount.percent) / 100
+              : Number(discount.fixedAmount || 0);
           total -= discountAmount;
         }
       }
@@ -1731,7 +2401,7 @@ export class DatabaseStorage implements IStorage {
       const discountValue = Number(order.customDiscountValue);
       if (!isNaN(discountValue)) {
         if (order.customDiscountType === 'percent') {
-          total = total * (1 - (discountValue / 100));
+          total = total * (1 - discountValue / 100);
         } else {
           total = Math.max(0, total - discountValue);
         }
@@ -1765,14 +2435,17 @@ export class DatabaseStorage implements IStorage {
   // Get stored order total using Order Summary calculation logic (for refund consistency)
   async getStoredOrderTotal(orderId: string): Promise<number> {
     // Get the order data
-    const [order] = await db.select().from(allOrders).where(eq(allOrders.orderId, orderId));
+    const [order] = await db
+      .select()
+      .from(allOrders)
+      .where(eq(allOrders.orderId, orderId));
     if (!order) {
       throw new Error(`Order ${orderId} not found`);
     }
 
     // Calculate using the same logic as Order Summary frontend:
     // 1. Calculate subtotal (base model + features)
-    // 2. Apply discounts 
+    // 2. Apply discounts
     // 3. Add shipping
     // This ensures refund amounts match exactly what users see in Order Summary
 
@@ -1781,11 +2454,14 @@ export class DatabaseStorage implements IStorage {
     // Add base stock model price (use override if set)
     if (order.modelId) {
       const stockModels = await this.getAllStockModels();
-      const selectedModel = stockModels.find(model => model.id === order.modelId);
+      const selectedModel = stockModels.find(
+        (model) => model.id === order.modelId
+      );
       if (selectedModel) {
-        const basePrice = order.priceOverride !== null && order.priceOverride !== undefined 
-                          ? Number(order.priceOverride) 
-                          : Number(selectedModel.price || 0);
+        const basePrice =
+          order.priceOverride !== null && order.priceOverride !== undefined
+            ? Number(order.priceOverride)
+            : Number(selectedModel.price || 0);
         if (!isNaN(basePrice)) {
           subtotal += basePrice;
         }
@@ -1797,11 +2473,13 @@ export class DatabaseStorage implements IStorage {
       const features = await this.getAllFeatures();
       Object.entries(order.features).forEach(([featureId, value]) => {
         if (value && value !== 'none') {
-          const feature = features.find(f => f.id === featureId);
+          const feature = features.find((f) => f.id === featureId);
           if (feature?.options) {
             if (Array.isArray(value)) {
-              value.forEach(optionValue => {
-                const option = (feature.options as any[])?.find((opt: any) => opt.value === optionValue);
+              value.forEach((optionValue) => {
+                const option = (feature.options as any[])?.find(
+                  (opt: any) => opt.value === optionValue
+                );
                 if (option?.price) {
                   const featurePrice = Number(option.price);
                   if (!isNaN(featurePrice)) {
@@ -1810,7 +2488,9 @@ export class DatabaseStorage implements IStorage {
                 }
               });
             } else {
-              const option = (feature.options as any)?.find?.((opt: any) => opt.value === value);
+              const option = (feature.options as any)?.find?.(
+                (opt: any) => opt.value === value
+              );
               if (option?.price) {
                 const featurePrice = Number(option.price);
                 if (!isNaN(featurePrice)) {
@@ -1839,37 +2519,47 @@ export class DatabaseStorage implements IStorage {
 
     // Apply discounts to get totalPrice (before shipping)
     let totalPrice = subtotal;
-    
+
     // Apply persistent discount
     if (order.discountCode && order.discountCode !== 'none') {
       const persistentDiscounts = await this.getAllPersistentDiscounts();
       let discount = null;
       if (order.discountCode.startsWith('persistent_')) {
-        const discountId = parseInt(order.discountCode.replace('persistent_', ''));
-        discount = persistentDiscounts.find(d => d.id === discountId);
+        const discountId = parseInt(
+          order.discountCode.replace('persistent_', '')
+        );
+        discount = persistentDiscounts.find((d) => d.id === discountId);
       } else {
-        discount = persistentDiscounts.find(d => d.name === order.discountCode);
+        discount = persistentDiscounts.find(
+          (d) => d.name === order.discountCode
+        );
       }
-      
+
       if (discount && discount.isActive) {
         if (discount.appliesTo === 'stock_model') {
           // Apply discount only to the base model price
           if (order.modelId) {
             const stockModels = await this.getAllStockModels();
-            const selectedModel = stockModels.find(model => model.id === order.modelId);
+            const selectedModel = stockModels.find(
+              (model) => model.id === order.modelId
+            );
             if (selectedModel) {
-              const basePrice = Number(order.priceOverride || selectedModel.price || 0);
-              const discountAmount = discount.percent > 0 
-                ? (basePrice * discount.percent / 100)
-                : Number(discount.fixedAmount || 0);
+              const basePrice = Number(
+                order.priceOverride || selectedModel.price || 0
+              );
+              const discountAmount =
+                discount.percent !== null && discount.percent > 0
+                  ? (basePrice * discount.percent) / 100
+                  : Number(discount.fixedAmount || 0);
               totalPrice -= discountAmount;
             }
           }
         } else if (discount.appliesTo === 'total_order') {
           // Apply discount to entire subtotal
-          const discountAmount = discount.percent > 0 
-            ? (subtotal * discount.percent / 100)
-            : Number(discount.fixedAmount || 0);
+          const discountAmount =
+            discount.percent !== null && discount.percent > 0
+              ? (subtotal * discount.percent) / 100
+              : Number(discount.fixedAmount || 0);
           totalPrice -= discountAmount;
         }
       }
@@ -1880,7 +2570,7 @@ export class DatabaseStorage implements IStorage {
       const discountValue = Number(order.customDiscountValue);
       if (!isNaN(discountValue)) {
         if (order.customDiscountType === 'percent') {
-          totalPrice = totalPrice * (1 - (discountValue / 100));
+          totalPrice = totalPrice * (1 - discountValue / 100);
         } else {
           totalPrice = Math.max(0, totalPrice - discountValue);
         }
@@ -1897,66 +2587,72 @@ export class DatabaseStorage implements IStorage {
   // Method to get unpaid orders for batch payment processing
   async getUnpaidOrders() {
     try {
-      const orders = await db.select({
-        id: allOrders.id,
-        orderId: allOrders.orderId,
-        orderDate: allOrders.orderDate,
-        dueDate: allOrders.dueDate,
-        status: allOrders.status,
-        isPaid: allOrders.isPaid,
-        paymentAmount: allOrders.paymentAmount,
-        customerId: allOrders.customerId,
-      })
-      .from(allOrders)
-      .where(eq(allOrders.isPaid, false))
-      .orderBy(desc(allOrders.orderDate));
+      const orders = await db
+        .select({
+          id: allOrders.id,
+          orderId: allOrders.orderId,
+          orderDate: allOrders.orderDate,
+          dueDate: allOrders.dueDate,
+          status: allOrders.status,
+          isPaid: allOrders.isPaid,
+          paymentAmount: allOrders.paymentAmount,
+          customerId: allOrders.customerId,
+        })
+        .from(allOrders)
+        .where(eq(allOrders.isPaid, false))
+        .orderBy(desc(allOrders.orderDate));
 
       // Get customer info and calculate remaining balances
-      const ordersWithDetails = await Promise.all(orders.map(async (order) => {
-        // Get customer info
-        let customerName = '';
-        if (order.customerId) {
-          const customer = await db.select({ name: customers.name })
-            .from(customers)
-            .where(eq(customers.id, parseInt(order.customerId)))
-            .limit(1);
-          if (customer.length > 0) {
-            customerName = customer[0].name;
+      const ordersWithDetails = await Promise.all(
+        orders.map(async (order) => {
+          // Get customer info
+          let customerName = '';
+          if (order.customerId) {
+            const customer = await db
+              .select({ name: customers.name })
+              .from(customers)
+              .where(eq(customers.id, parseInt(order.customerId)))
+              .limit(1);
+            if (customer.length > 0) {
+              customerName = customer[0].name;
+            }
           }
-        }
 
-        // Get total payments for this order
-        const paymentSums = await db.select({
-          totalPaid: sql<number>`COALESCE(SUM(${payments.paymentAmount}), 0)`,
+          // Get total payments for this order
+          const paymentSums = await db
+            .select({
+              totalPaid: sql<number>`COALESCE(SUM(${payments.paymentAmount}), 0)`,
+            })
+            .from(payments)
+            .where(eq(payments.orderId, order.orderId))
+            .groupBy(payments.orderId);
+
+          const totalPaid =
+            paymentSums.length > 0 ? paymentSums[0].totalPaid : 0;
+
+          // For now, assume a default order total of $1000 if not specified
+          // TODO: Calculate actual order total from features and pricing
+          const orderTotal = 1000; // This should be calculated from order details
+          const remainingBalance = Math.max(0, orderTotal - totalPaid);
+
+          return {
+            id: order.id.toString(),
+            orderId: order.orderId,
+            customerName,
+            orderDate: order.orderDate.toISOString(),
+            dueDate: order.dueDate.toISOString(),
+            status: order.status,
+            totalAmount: orderTotal,
+            paidAmount: totalPaid,
+            remainingBalance,
+          };
         })
-        .from(payments)
-        .where(eq(payments.orderId, order.orderId))
-        .groupBy(payments.orderId);
-
-        const totalPaid = paymentSums.length > 0 ? paymentSums[0].totalPaid : 0;
-        
-        // For now, assume a default order total of $1000 if not specified
-        // TODO: Calculate actual order total from features and pricing
-        const orderTotal = 1000; // This should be calculated from order details
-        const remainingBalance = Math.max(0, orderTotal - totalPaid);
-
-        return {
-          id: order.id.toString(),
-          orderId: order.orderId,
-          customerName,
-          orderDate: order.orderDate.toISOString(),
-          dueDate: order.dueDate.toISOString(),
-          status: order.status,
-          totalAmount: orderTotal,
-          paidAmount: totalPaid,
-          remainingBalance,
-        };
-      }));
+      );
 
       // Only return orders with remaining balance > 0
-      return ordersWithDetails.filter(order => order.remainingBalance > 0);
+      return ordersWithDetails.filter((order) => order.remainingBalance > 0);
     } catch (error) {
-      console.error("Error fetching unpaid orders:", error);
+      console.error('Error fetching unpaid orders:', error);
       throw error;
     }
   }
@@ -1964,89 +2660,95 @@ export class DatabaseStorage implements IStorage {
   // Method to get unpaid orders for a specific customer
   async getUnpaidOrdersByCustomer(customerId: string) {
     try {
-      const orders = await db.select({
-        id: allOrders.id,
-        orderId: allOrders.orderId,
-        orderDate: allOrders.orderDate,
-        dueDate: allOrders.dueDate,
-        status: allOrders.status,
-        isPaid: allOrders.isPaid,
-        paymentAmount: allOrders.paymentAmount,
-        customerId: allOrders.customerId,
-      })
-      .from(allOrders)
-      .where(
-        and(
-          eq(allOrders.isPaid, false),
-          eq(allOrders.customerId, customerId)
+      const orders = await db
+        .select({
+          id: allOrders.id,
+          orderId: allOrders.orderId,
+          orderDate: allOrders.orderDate,
+          dueDate: allOrders.dueDate,
+          status: allOrders.status,
+          isPaid: allOrders.isPaid,
+          paymentAmount: allOrders.paymentAmount,
+          customerId: allOrders.customerId,
+        })
+        .from(allOrders)
+        .where(
+          and(eq(allOrders.isPaid, false), eq(allOrders.customerId, customerId))
         )
-      )
-      .orderBy(desc(allOrders.orderDate));
+        .orderBy(desc(allOrders.orderDate));
 
       // Get customer info and calculate remaining balances
-      const ordersWithDetails = await Promise.all(orders.map(async (order) => {
-        // Get customer info
-        let customerName = '';
-        if (order.customerId) {
-          const customer = await db.select({ name: customers.name })
-            .from(customers)
-            .where(eq(customers.id, parseInt(order.customerId)))
-            .limit(1);
-          if (customer.length > 0) {
-            customerName = customer[0].name;
+      const ordersWithDetails = await Promise.all(
+        orders.map(async (order) => {
+          // Get customer info
+          let customerName = '';
+          if (order.customerId) {
+            const customer = await db
+              .select({ name: customers.name })
+              .from(customers)
+              .where(eq(customers.id, parseInt(order.customerId)))
+              .limit(1);
+            if (customer.length > 0) {
+              customerName = customer[0].name;
+            }
           }
-        }
 
-        // Get total payments for this order
-        const paymentSums = await db.select({
-          totalPaid: sql<number>`COALESCE(SUM(${payments.paymentAmount}), 0)`,
+          // Get total payments for this order
+          const paymentSums = await db
+            .select({
+              totalPaid: sql<number>`COALESCE(SUM(${payments.paymentAmount}), 0)`,
+            })
+            .from(payments)
+            .where(eq(payments.orderId, order.orderId))
+            .groupBy(payments.orderId);
+
+          const totalPaid =
+            paymentSums.length > 0 ? paymentSums[0].totalPaid : 0;
+
+          // For now, assume a default order total of $1000 if not specified
+          // TODO: Calculate actual order total from features and pricing
+          const orderTotal = 1000; // This should be calculated from order details
+          const remainingBalance = Math.max(0, orderTotal - totalPaid);
+
+          return {
+            id: order.id.toString(),
+            orderId: order.orderId,
+            customerName,
+            orderDate: order.orderDate.toISOString(),
+            dueDate: order.dueDate.toISOString(),
+            status: order.status,
+            totalAmount: orderTotal,
+            paidAmount: totalPaid,
+            remainingBalance,
+          };
         })
-        .from(payments)
-        .where(eq(payments.orderId, order.orderId))
-        .groupBy(payments.orderId);
-
-        const totalPaid = paymentSums.length > 0 ? paymentSums[0].totalPaid : 0;
-        
-        // For now, assume a default order total of $1000 if not specified
-        // TODO: Calculate actual order total from features and pricing
-        const orderTotal = 1000; // This should be calculated from order details
-        const remainingBalance = Math.max(0, orderTotal - totalPaid);
-
-        return {
-          id: order.id.toString(),
-          orderId: order.orderId,
-          customerName,
-          orderDate: order.orderDate.toISOString(),
-          dueDate: order.dueDate.toISOString(),
-          status: order.status,
-          totalAmount: orderTotal,
-          paidAmount: totalPaid,
-          remainingBalance,
-        };
-      }));
+      );
 
       // Only return orders with remaining balance > 0
-      return ordersWithDetails.filter(order => order.remainingBalance > 0);
+      return ordersWithDetails.filter((order) => order.remainingBalance > 0);
     } catch (error) {
-      console.error("Error fetching unpaid orders by customer:", error);
+      console.error('Error fetching unpaid orders by customer:', error);
       throw error;
     }
   }
 
   // Get all finalized orders with payment status
-  async getAllOrdersWithPaymentStatus(search: string = '', limit: number = 25): Promise<(AllOrder & { paymentTotal: number; isFullyPaid: boolean })[]> {
+  async getAllOrdersWithPaymentStatus(
+    search: string = '',
+    limit: number = 25
+  ): Promise<(AllOrder & { paymentTotal: number; isFullyPaid: boolean })[]> {
     // Optimized: Use single query to get orders with customer names and payment totals
     // Exclude P1 purchase orders from All Orders list
     // FIXED: Select ALL fields needed by calculateOrderTotal to prevent type errors
-    
+
     // Build WHERE conditions
     const whereConditions = [
       sql`${allOrders.orderId} NOT LIKE 'P1-%'`,
       sql`${allOrders.orderId} NOT LIKE 'PO%'`,
       sql`${allOrders.orderId} != 'AG1'`,
-      sql`${allOrders.orderId} NOT LIKE '%PO%'`
+      sql`${allOrders.orderId} NOT LIKE '%PO%'`,
     ];
-    
+
     // Add search filter if provided
     if (search && search.trim() !== '') {
       const searchPattern = `%${search}%`;
@@ -2059,7 +2761,7 @@ export class DatabaseStorage implements IStorage {
         )`
       );
     }
-    
+
     const ordersWithCustomers = await db
       .select({
         // ALL Order fields (matching getAllOrders to ensure calculateOrderTotal works)
@@ -2160,13 +2862,15 @@ export class DatabaseStorage implements IStorage {
     const paymentTotals = await db
       .select({
         orderId: payments.orderId,
-        totalPayments: sql<number>`COALESCE(SUM(${payments.paymentAmount}), 0)`
+        totalPayments: sql<number>`COALESCE(SUM(${payments.paymentAmount}), 0)`,
       })
       .from(payments)
       .groupBy(payments.orderId);
 
     // Create payment map for fast lookup
-    const paymentMap = new Map(paymentTotals.map(p => [p.orderId, p.totalPayments]));
+    const paymentMap = new Map(
+      paymentTotals.map((p) => [p.orderId, p.totalPayments])
+    );
 
     // PERFORMANCE FIX: Fetch stock models, features, and persistent discounts ONCE instead of per-order
     const stockModels = await this.getAllStockModels();
@@ -2174,33 +2878,44 @@ export class DatabaseStorage implements IStorage {
     const persistentDiscounts = await this.getAllPersistentDiscounts();
 
     // Process orders with payment info (using proper order total calculation)
-    const ordersWithPaymentInfo = await Promise.all(ordersWithCustomers.map(async order => {
-      const paymentTotal = paymentMap.get(order.orderId) || 0;
-      
-      // CRITICAL FIX: Use actual calculated order total with cached data for performance
-      const actualOrderTotal = await this.calculateOrderTotalOptimized(order, stockModels, features, persistentDiscounts);
+    const ordersWithPaymentInfo = await Promise.all(
+      ordersWithCustomers.map(async (order) => {
+        const paymentTotal = paymentMap.get(order.orderId) || 0;
 
-      // Fixed payment status logic using real current order total
-      const isFullyPaid = paymentTotal >= actualOrderTotal && actualOrderTotal > 0;
+        // CRITICAL FIX: Use actual calculated order total with cached data for performance
+        const actualOrderTotal = await this.calculateOrderTotalOptimized(
+          order,
+          stockModels,
+          features,
+          persistentDiscounts
+        );
 
-      return {
-        ...order,
-        customer: order.customerName || 'Unknown Customer',
-        paymentTotal,
-        isFullyPaid
-      };
-    }));
+        // Fixed payment status logic using real current order total
+        const isFullyPaid =
+          paymentTotal >= actualOrderTotal && actualOrderTotal > 0;
+
+        return {
+          ...order,
+          customer: order.customerName || 'Unknown Customer',
+          paymentTotal,
+          isFullyPaid,
+        };
+      })
+    );
 
     return ordersWithPaymentInfo;
   }
 
   // Get all finalized orders with payment status - PAGINATED
-  async getAllOrdersWithPaymentStatusPaginated(page: number = 1, limit: number = 50): Promise<{ 
-    orders: (AllOrder & { paymentTotal: number; isFullyPaid: boolean })[], 
-    total: number, 
-    page: number, 
-    limit: number, 
-    totalPages: number 
+  async getAllOrdersWithPaymentStatusPaginated(
+    page: number = 1,
+    limit: number = 50
+  ): Promise<{
+    orders: (AllOrder & { paymentTotal: number; isFullyPaid: boolean })[];
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
   }> {
     // First, get the total count for pagination
     const totalCountResult = await db
@@ -2214,7 +2929,7 @@ export class DatabaseStorage implements IStorage {
           sql`${allOrders.orderId} NOT LIKE '%PO%'`
         )
       );
-    
+
     const total = totalCountResult[0]?.count || 0;
     const totalPages = Math.ceil(total / limit);
     const offset = (page - 1) * limit;
@@ -2275,48 +2990,55 @@ export class DatabaseStorage implements IStorage {
     const paymentTotals = await db
       .select({
         orderId: payments.orderId,
-        totalPayments: sql<number>`COALESCE(SUM(${payments.paymentAmount}), 0)`
+        totalPayments: sql<number>`COALESCE(SUM(${payments.paymentAmount}), 0)`,
       })
       .from(payments)
       .groupBy(payments.orderId);
 
     // Create payment map for fast lookup
-    const paymentMap = new Map(paymentTotals.map(p => [p.orderId, p.totalPayments]));
+    const paymentMap = new Map(
+      paymentTotals.map((p) => [p.orderId, p.totalPayments])
+    );
 
     // Process orders with payment info using CORRECTED payment logic
-    const ordersWithPaymentInfo = await Promise.all(ordersWithCustomers.map(async order => {
-      const paymentTotal = paymentMap.get(order.orderId) || 0;
-      
-      // ULTRA SIMPLE FIX: Just compare payments to stored order total
-      // Use the same logic as Order Summary: if no stored total, assume payment covers it
-      const storedOrderTotal = Number(order.paymentAmount) || 0;
-      
-      // If there's a stored order total, compare against it
-      // If no stored total but there are payments, consider it paid (like Order Summary shows)
-      const isFullyPaid = storedOrderTotal > 0 
-        ? (paymentTotal >= storedOrderTotal) 
-        : (paymentTotal > 0);
+    const ordersWithPaymentInfo = await Promise.all(
+      ordersWithCustomers.map(async (order) => {
+        const paymentTotal = paymentMap.get(order.orderId) || 0;
 
-      return {
-        ...order,
-        customer: order.customerName || 'Unknown Customer',
-        paymentTotal,
-        isFullyPaid
-      } as any; // Type assertion to avoid complex type errors
-    }));
+        // ULTRA SIMPLE FIX: Just compare payments to stored order total
+        // Use the same logic as Order Summary: if no stored total, assume payment covers it
+        const storedOrderTotal = Number(order.paymentAmount) || 0;
+
+        // If there's a stored order total, compare against it
+        // If no stored total but there are payments, consider it paid (like Order Summary shows)
+        const isFullyPaid =
+          storedOrderTotal > 0
+            ? paymentTotal >= storedOrderTotal
+            : paymentTotal > 0;
+
+        return {
+          ...order,
+          customer: order.customerName || 'Unknown Customer',
+          paymentTotal,
+          isFullyPaid,
+        } as any; // Type assertion to avoid complex type errors
+      })
+    );
 
     return {
       orders: ordersWithPaymentInfo,
       total,
       page,
       limit,
-      totalPages
+      totalPages,
     };
   }
 
   async getOrdersByDepartment(department: string): Promise<AllOrder[]> {
     try {
-      console.log(`🏭 getOrdersByDepartment: Fetching orders for department "${department}"`);
+      console.log(
+        `🏭 getOrdersByDepartment: Fetching orders for department "${department}"`
+      );
 
       // Query the allOrders table with customer info for orders in the specified department
       const orders = await db
@@ -2378,10 +3100,13 @@ export class DatabaseStorage implements IStorage {
           cancelReason: allOrders.cancelReason,
           createdAt: allOrders.createdAt,
           updatedAt: allOrders.updatedAt,
-          assignedTechnician: allOrders.assignedTechnician
+          assignedTechnician: allOrders.assignedTechnician,
         })
         .from(allOrders)
-        .leftJoin(customers, sql`${allOrders.customerId} = CAST(${customers.id} AS TEXT)`)
+        .leftJoin(
+          customers,
+          sql`${allOrders.customerId} = CAST(${customers.id} AS TEXT)`
+        )
         .where(
           and(
             eq(allOrders.currentDepartment, department),
@@ -2392,41 +3117,57 @@ export class DatabaseStorage implements IStorage {
         )
         .orderBy(asc(allOrders.dueDate), asc(allOrders.createdAt));
 
-      console.log(`📋 getOrdersByDepartment: Found ${orders.length} orders in "${department}" department`);
+      console.log(
+        `📋 getOrdersByDepartment: Found ${orders.length} orders in "${department}" department`
+      );
 
       // Get all customers to create a lookup map
-      const allCustomers = await db.select({
-        id: customers.id,
-        name: customers.name,
-        email: customers.email,
-        phone: customers.phone,
-        company: customers.company,
-        customerType: customers.customerType,
-        notes: customers.notes,
-        isActive: customers.isActive,
-        createdAt: customers.createdAt,
-        updatedAt: customers.updatedAt,
-        preferredCommunicationMethod: customers.preferredCommunicationMethod
-      }).from(customers);
-      const customerMap = new Map(allCustomers.map(c => [c.id.toString(), c.name]));
+      const allCustomers = await db
+        .select({
+          id: customers.id,
+          name: customers.name,
+          email: customers.email,
+          phone: customers.phone,
+          company: customers.company,
+          customerType: customers.customerType,
+          notes: customers.notes,
+          isActive: customers.isActive,
+          createdAt: customers.createdAt,
+          updatedAt: customers.updatedAt,
+          preferredCommunicationMethod: customers.preferredCommunicationMethod,
+        })
+        .from(customers);
+      const customerMap = new Map(
+        allCustomers.map((c) => [c.id.toString(), c.name])
+      );
 
       // Get all stock models to create a lookup map for display names
       const allStockModels = await db.select().from(stockModels);
-      const stockModelMap = new Map(allStockModels.map(sm => [sm.id, sm.displayName || sm.name]));
+      const stockModelMap = new Map(
+        allStockModels.map((sm) => [sm.id, sm.displayName || sm.name])
+      );
 
       // Enrich orders with customer names and stock model display names
-      const enrichedOrders = orders.map(order => ({
+      const enrichedOrders = orders.map((order) => ({
         ...order,
         customer: order.customerName || 'Unknown Customer',
-        productName: stockModelMap.get(order.modelId || '') || order.modelId || 'Unknown Product',
+        productName:
+          stockModelMap.get(order.modelId || '') ||
+          order.modelId ||
+          'Unknown Product',
         stockModelId: order.modelId,
-        priority: 50 // Default priority
+        priority: 50, // Default priority
       })) as any;
 
-      console.log(`✅ getOrdersByDepartment: Enhanced ${enrichedOrders.length} orders with additional data`);
+      console.log(
+        `✅ getOrdersByDepartment: Enhanced ${enrichedOrders.length} orders with additional data`
+      );
       return enrichedOrders;
     } catch (error) {
-      console.error(`Error in getOrdersByDepartment for "${department}":`, error);
+      console.error(
+        `Error in getOrdersByDepartment for "${department}":`,
+        error
+      );
       throw error;
     }
   }
@@ -2447,21 +3188,23 @@ export class DatabaseStorage implements IStorage {
       }
 
       // If still not found, try searching by FB Order Number in finalized orders
-      const finalizedByFb = await db.select()
+      const finalizedByFb = await db
+        .select()
         .from(allOrders)
         .where(eq(allOrders.fbOrderNumber, orderId))
         .limit(1);
-      
+
       if (finalizedByFb.length > 0) {
         return { ...finalizedByFb[0], isFinalized: true } as any;
       }
 
       // Try searching by FB Order Number in draft orders
-      const draftByFb = await db.select()
+      const draftByFb = await db
+        .select()
         .from(orderDrafts)
         .where(eq(orderDrafts.fbOrderNumber, orderId))
         .limit(1);
-      
+
       if (draftByFb.length > 0) {
         return { ...draftByFb[0], isFinalized: false } as any;
       }
@@ -2473,18 +3216,19 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-
-
-
   // Get multiple orders by IDs
-  async getOrdersByIds(orderIds: string[]): Promise<Array<OrderDraft | AllOrder>> {
+  async getOrdersByIds(
+    orderIds: string[]
+  ): Promise<Array<OrderDraft | AllOrder>> {
     try {
       // Get from both finalized and draft orders
-      const finalizedOrders = await db.select()
+      const finalizedOrders = await db
+        .select()
         .from(allOrders)
         .where(inArray(allOrders.orderId, orderIds));
 
-      const draftOrders = await db.select()
+      const draftOrders = await db
+        .select()
         .from(orderDrafts)
         .where(inArray(orderDrafts.orderId, orderIds));
 
@@ -2492,30 +3236,32 @@ export class DatabaseStorage implements IStorage {
       const orderMap = new Map();
 
       // Add draft orders first
-      draftOrders.forEach(order => {
+      draftOrders.forEach((order) => {
         orderMap.set(order.orderId, { ...order, isFinalized: false });
       });
 
       // Add finalized orders (will overwrite drafts if same ID)
-      finalizedOrders.forEach(order => {
+      finalizedOrders.forEach((order) => {
         orderMap.set(order.orderId, { ...order, isFinalized: true });
       });
 
       return Array.from(orderMap.values());
     } catch (error) {
-      console.error("Error getting orders by IDs:", error);
+      console.error('Error getting orders by IDs:', error);
       throw error;
     }
   }
 
-  async searchOrders(query: string): Promise<{
-    id: string;
-    orderId: string | null;
-    serialNumber: string | null;
-    customerName: string | null;
-    poNumber: string | null;
-    stockModel: string | null;
-  }[]> {
+  async searchOrders(query: string): Promise<
+    {
+      id: string;
+      orderId: string | null;
+      serialNumber: string | null;
+      customerName: string | null;
+      poNumber: string | null;
+      stockModel: string | null;
+    }[]
+  > {
     // Simple implementation that doesn't cause TypeScript errors
     try {
       const results = await db
@@ -2530,7 +3276,7 @@ export class DatabaseStorage implements IStorage {
         .where(ilike(orderDrafts.orderId, `%${query}%`))
         .limit(10);
 
-      return results.map(r => ({
+      return results.map((r) => ({
         id: r.id.toString(),
         orderId: r.orderId,
         serialNumber: null,
@@ -2546,7 +3292,9 @@ export class DatabaseStorage implements IStorage {
 
   // Payments CRUD
   async getPaymentsByOrderId(orderId: string): Promise<Payment[]> {
-    return await db.select().from(payments)
+    return await db
+      .select()
+      .from(payments)
       .where(eq(payments.orderId, orderId))
       .orderBy(desc(payments.createdAt));
   }
@@ -2556,8 +3304,12 @@ export class DatabaseStorage implements IStorage {
     return payment;
   }
 
-  async updatePayment(id: number, data: Partial<InsertPayment>): Promise<Payment> {
-    const [payment] = await db.update(payments)
+  async updatePayment(
+    id: number,
+    data: Partial<InsertPayment>
+  ): Promise<Payment> {
+    const [payment] = await db
+      .update(payments)
       .set({ ...data, updatedAt: new Date() })
       .where(eq(payments.id, id))
       .returning();
@@ -2568,9 +3320,13 @@ export class DatabaseStorage implements IStorage {
     // Handle foreign key constraints - delete related credit card transactions first
     try {
       // First, delete any related credit card transactions using raw SQL
-      await db.execute(sql`DELETE FROM credit_card_transactions WHERE payment_id = ${id}`);
-      console.log(`🗑️ Deleted related credit card transactions for payment ${id}`);
-      
+      await db.execute(
+        sql`DELETE FROM credit_card_transactions WHERE payment_id = ${id}`
+      );
+      console.log(
+        `🗑️ Deleted related credit card transactions for payment ${id}`
+      );
+
       // Then delete the payment
       await db.delete(payments).where(eq(payments.id, id));
       console.log(`✅ Successfully deleted payment ${id}`);
@@ -2596,7 +3352,8 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateForm(id: number, data: Partial<InsertForm>): Promise<Form> {
-    const [form] = await db.update(forms)
+    const [form] = await db
+      .update(forms)
       .set(data)
       .where(eq(forms.id, id))
       .returning();
@@ -2610,20 +3367,33 @@ export class DatabaseStorage implements IStorage {
   // Form Submissions CRUD
   async getAllFormSubmissions(formId?: number): Promise<FormSubmission[]> {
     if (formId) {
-      return await db.select().from(formSubmissions)
+      return await db
+        .select()
+        .from(formSubmissions)
         .where(eq(formSubmissions.formId, formId))
         .orderBy(desc(formSubmissions.createdAt));
     }
-    return await db.select().from(formSubmissions).orderBy(desc(formSubmissions.createdAt));
+    return await db
+      .select()
+      .from(formSubmissions)
+      .orderBy(desc(formSubmissions.createdAt));
   }
 
   async getFormSubmission(id: number): Promise<FormSubmission | undefined> {
-    const [submission] = await db.select().from(formSubmissions).where(eq(formSubmissions.id, id));
+    const [submission] = await db
+      .select()
+      .from(formSubmissions)
+      .where(eq(formSubmissions.id, id));
     return submission || undefined;
   }
 
-  async createFormSubmission(data: InsertFormSubmission): Promise<FormSubmission> {
-    const [submission] = await db.insert(formSubmissions).values(data).returning();
+  async createFormSubmission(
+    data: InsertFormSubmission
+  ): Promise<FormSubmission> {
+    const [submission] = await db
+      .insert(formSubmissions)
+      .values(data)
+      .returning();
     return submission;
   }
 
@@ -2633,21 +3403,38 @@ export class DatabaseStorage implements IStorage {
 
   // Inventory Items CRUD
   async getAllInventoryItems(): Promise<InventoryItem[]> {
-    return await db.select().from(inventoryItems).where(eq(inventoryItems.isActive, true)).orderBy(inventoryItems.name);
+    return await db
+      .select()
+      .from(inventoryItems)
+      .where(eq(inventoryItems.isActive, true))
+      .orderBy(inventoryItems.name);
   }
 
   async getInventoryItem(id: number): Promise<InventoryItem | undefined> {
-    const [item] = await db.select().from(inventoryItems).where(eq(inventoryItems.id, id));
+    const [item] = await db
+      .select()
+      .from(inventoryItems)
+      .where(eq(inventoryItems.id, id));
     return item || undefined;
   }
 
-  async getInventoryItemByAgPartNumber(agPartNumber: string): Promise<InventoryItem | undefined> {
-    const [item] = await db.select().from(inventoryItems).where(eq(inventoryItems.agPartNumber, agPartNumber));
+  async getInventoryItemByAgPartNumber(
+    agPartNumber: string
+  ): Promise<InventoryItem | undefined> {
+    const [item] = await db
+      .select()
+      .from(inventoryItems)
+      .where(eq(inventoryItems.agPartNumber, agPartNumber));
     return item || undefined;
   }
 
-  async getInventoryItemByCode(code: string): Promise<InventoryItem | undefined> {
-    const [item] = await db.select().from(inventoryItems).where(eq(inventoryItems.agPartNumber, code));
+  async getInventoryItemByCode(
+    code: string
+  ): Promise<InventoryItem | undefined> {
+    const [item] = await db
+      .select()
+      .from(inventoryItems)
+      .where(eq(inventoryItems.agPartNumber, code));
     return item || undefined;
   }
 
@@ -2656,14 +3443,18 @@ export class DatabaseStorage implements IStorage {
     return item;
   }
 
-  async updateInventoryItem(id: number, data: Partial<InsertInventoryItem>): Promise<InventoryItem> {
+  async updateInventoryItem(
+    id: number,
+    data: Partial<InsertInventoryItem>
+  ): Promise<InventoryItem> {
     // Convert Date objects to strings for date fields
     const updateData: any = { ...data };
     if (updateData.orderDate instanceof Date) {
       updateData.orderDate = updateData.orderDate.toISOString().split('T')[0];
     }
 
-    const [item] = await db.update(inventoryItems)
+    const [item] = await db
+      .update(inventoryItems)
       .set(updateData)
       .where(eq(inventoryItems.id, id))
       .returning();
@@ -2671,17 +3462,22 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteInventoryItem(id: number): Promise<void> {
-    await db.delete(inventoryItems)
-      .where(eq(inventoryItems.id, id));
+    await db.delete(inventoryItems).where(eq(inventoryItems.id, id));
   }
 
   // Inventory Scans CRUD
   async getAllInventoryScans(): Promise<InventoryScan[]> {
-    return await db.select().from(inventoryScans).orderBy(desc(inventoryScans.scannedAt));
+    return await db
+      .select()
+      .from(inventoryScans)
+      .orderBy(desc(inventoryScans.scannedAt));
   }
 
   async getInventoryScan(id: number): Promise<InventoryScan | undefined> {
-    const [scan] = await db.select().from(inventoryScans).where(eq(inventoryScans.id, id));
+    const [scan] = await db
+      .select()
+      .from(inventoryScans)
+      .where(eq(inventoryScans.id, id));
     return scan || undefined;
   }
 
@@ -2689,14 +3485,21 @@ export class DatabaseStorage implements IStorage {
     // Convert Date objects to strings for date fields
     const insertData: any = { ...data };
     if (insertData.expirationDate instanceof Date) {
-      insertData.expirationDate = insertData.expirationDate.toISOString().split('T')[0];
+      insertData.expirationDate = insertData.expirationDate
+        .toISOString()
+        .split('T')[0];
     }
     if (insertData.manufactureDate instanceof Date) {
-      insertData.manufactureDate = insertData.manufactureDate.toISOString().split('T')[0];
+      insertData.manufactureDate = insertData.manufactureDate
+        .toISOString()
+        .split('T')[0];
     }
     // Remove scannedAt handling as it's not in the InsertInventoryScan type
 
-    const [scan] = await db.insert(inventoryScans).values(insertData).returning();
+    const [scan] = await db
+      .insert(inventoryScans)
+      .values(insertData)
+      .returning();
     // Note: Inventory scans are now for tracking only, not affecting inventory levels
     // since the new inventory schema doesn't track onHand/committed quantities
     return scan;
@@ -2708,11 +3511,18 @@ export class DatabaseStorage implements IStorage {
 
   // Parts Requests CRUD
   async getAllPartsRequests(): Promise<PartsRequest[]> {
-    return await db.select().from(partsRequests).where(eq(partsRequests.isActive, true)).orderBy(desc(partsRequests.requestDate));
+    return await db
+      .select()
+      .from(partsRequests)
+      .where(eq(partsRequests.isActive, true))
+      .orderBy(desc(partsRequests.requestDate));
   }
 
   async getPartsRequest(id: number): Promise<PartsRequest | undefined> {
-    const [request] = await db.select().from(partsRequests).where(eq(partsRequests.id, id));
+    const [request] = await db
+      .select()
+      .from(partsRequests)
+      .where(eq(partsRequests.id, id));
     return request || undefined;
   }
 
@@ -2720,27 +3530,42 @@ export class DatabaseStorage implements IStorage {
     // Convert Date objects to ISO strings for date fields
     const insertData: any = { ...data };
     if (insertData.expectedDelivery instanceof Date) {
-      insertData.expectedDelivery = insertData.expectedDelivery.toISOString().split('T')[0];
+      insertData.expectedDelivery = insertData.expectedDelivery
+        .toISOString()
+        .split('T')[0];
     }
     if (insertData.actualDelivery instanceof Date) {
-      insertData.actualDelivery = insertData.actualDelivery.toISOString().split('T')[0];
+      insertData.actualDelivery = insertData.actualDelivery
+        .toISOString()
+        .split('T')[0];
     }
 
-    const [request] = await db.insert(partsRequests).values(insertData).returning();
+    const [request] = await db
+      .insert(partsRequests)
+      .values(insertData)
+      .returning();
     return request;
   }
 
-  async updatePartsRequest(id: number, data: Partial<InsertPartsRequest>): Promise<PartsRequest> {
+  async updatePartsRequest(
+    id: number,
+    data: Partial<InsertPartsRequest>
+  ): Promise<PartsRequest> {
     // Convert Date objects to ISO strings for date fields
     const updateData: any = { ...data };
     if (updateData.expectedDelivery instanceof Date) {
-      updateData.expectedDelivery = updateData.expectedDelivery.toISOString().split('T')[0];
+      updateData.expectedDelivery = updateData.expectedDelivery
+        .toISOString()
+        .split('T')[0];
     }
     if (updateData.actualDelivery instanceof Date) {
-      updateData.actualDelivery = updateData.actualDelivery.toISOString().split('T')[0];
+      updateData.actualDelivery = updateData.actualDelivery
+        .toISOString()
+        .split('T')[0];
     }
 
-    const [request] = await db.update(partsRequests)
+    const [request] = await db
+      .update(partsRequests)
       .set(updateData)
       .where(eq(partsRequests.id, id))
       .returning();
@@ -2753,35 +3578,50 @@ export class DatabaseStorage implements IStorage {
 
   // Outstanding Orders
   async getOutstandingOrders(): Promise<OrderDraft[]> {
-    return await db.select().from(orderDrafts)
-      .where(or(
-        eq(orderDrafts.status, 'PENDING'),
-        eq(orderDrafts.status, 'CONFIRMED'),
-        eq(orderDrafts.status, 'IN_PRODUCTION'),
-        eq(orderDrafts.status, 'READY')
-      ))
+    return await db
+      .select()
+      .from(orderDrafts)
+      .where(
+        or(
+          eq(orderDrafts.status, 'PENDING'),
+          eq(orderDrafts.status, 'CONFIRMED'),
+          eq(orderDrafts.status, 'IN_PRODUCTION'),
+          eq(orderDrafts.status, 'READY')
+        )
+      )
       .orderBy(desc(orderDrafts.dueDate));
   }
 
   // Employees CRUD
 
   async getAllEmployees(): Promise<Employee[]> {
-    return await db.select().from(employees).where(eq(employees.isActive, true)).orderBy(employees.name);
+    return await db
+      .select()
+      .from(employees)
+      .where(eq(employees.isActive, true))
+      .orderBy(employees.name);
   }
 
   async getEmployee(id: number): Promise<Employee | undefined> {
-    const [employee] = await db.select().from(employees).where(eq(employees.id, id));
+    const [employee] = await db
+      .select()
+      .from(employees)
+      .where(eq(employees.id, id));
     return employee || undefined;
   }
 
   async getEmployeesByUserRole(userRole: string): Promise<Employee[]> {
-    return await db.select().from(employees)
+    return await db
+      .select()
+      .from(employees)
       .where(eq(employees.userRole, userRole))
       .orderBy(employees.name);
   }
 
   async getEmployeesByJobTitle(jobTitle: string): Promise<Employee[]> {
-    return await db.select().from(employees)
+    return await db
+      .select()
+      .from(employees)
       .where(eq(employees.jobTitle, jobTitle))
       .orderBy(employees.name);
   }
@@ -2793,18 +3633,25 @@ export class DatabaseStorage implements IStorage {
       insertData.hireDate = insertData.hireDate.toISOString().split('T')[0];
     }
 
-    const [employee] = await db.insert(employees).values(insertData).returning();
+    const [employee] = await db
+      .insert(employees)
+      .values(insertData)
+      .returning();
     return employee;
   }
 
-  async updateEmployee(id: number, data: Partial<InsertEmployee>): Promise<Employee> {
+  async updateEmployee(
+    id: number,
+    data: Partial<InsertEmployee>
+  ): Promise<Employee> {
     // Convert Date objects to strings for date fields
     const updateData: any = { ...data };
     if (updateData.hireDate instanceof Date) {
       updateData.hireDate = updateData.hireDate.toISOString().split('T')[0];
     }
 
-    const [employee] = await db.update(employees)
+    const [employee] = await db
+      .update(employees)
       .set(updateData)
       .where(eq(employees.id, id))
       .returning();
@@ -2812,18 +3659,23 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteEmployee(id: number): Promise<void> {
-    await db.update(employees)
+    await db
+      .update(employees)
       .set({ isActive: false })
       .where(eq(employees.id, id));
   }
 
   async getEmployeeByToken(token: string): Promise<Employee | undefined> {
-    const [employee] = await db.select().from(employees)
-      .where(and(
-        eq(employees.portalToken, token),
-        gt(employees.portalTokenExpiry, new Date()),
-        eq(employees.isActive, true)
-      ));
+    const [employee] = await db
+      .select()
+      .from(employees)
+      .where(
+        and(
+          eq(employees.portalToken, token),
+          gt(employees.portalTokenExpiry, new Date()),
+          eq(employees.isActive, true)
+        )
+      );
     return employee || undefined;
   }
 
@@ -2832,36 +3684,46 @@ export class DatabaseStorage implements IStorage {
     const expiry = new Date();
     expiry.setDate(expiry.getDate() + 30); // 30 days expiry
 
-    await db.update(employees)
+    await db
+      .update(employees)
       .set({
         portalToken: token,
         portalTokenExpiry: expiry,
-        updatedAt: new Date()
+        updatedAt: new Date(),
       })
       .where(eq(employees.id, employeeId));
 
     return token;
   }
 
-  async updateEmployeePortalToken(employeeId: number, token: string, expiry: Date): Promise<void> {
-    await db.update(employees)
+  async updateEmployeePortalToken(
+    employeeId: number,
+    token: string,
+    expiry: Date
+  ): Promise<void> {
+    await db
+      .update(employees)
       .set({
         portalToken: token,
         portalTokenExpiry: expiry,
-        updatedAt: new Date()
+        updatedAt: new Date(),
       })
       .where(eq(employees.id, employeeId));
   }
 
   // Capability Management
   async getAllCapabilities(): Promise<Capability[]> {
-    return await db.select().from(capabilities)
+    return await db
+      .select()
+      .from(capabilities)
       .where(eq(capabilities.isActive, true))
       .orderBy(capabilities.category, capabilities.name);
   }
 
   async getCapability(id: number): Promise<Capability | undefined> {
-    const [capability] = await db.select().from(capabilities)
+    const [capability] = await db
+      .select()
+      .from(capabilities)
       .where(eq(capabilities.id, id));
     return capability || undefined;
   }
@@ -2871,8 +3733,12 @@ export class DatabaseStorage implements IStorage {
     return capability;
   }
 
-  async updateCapability(id: number, data: Partial<InsertCapability>): Promise<Capability> {
-    const [capability] = await db.update(capabilities)
+  async updateCapability(
+    id: number,
+    data: Partial<InsertCapability>
+  ): Promise<Capability> {
+    const [capability] = await db
+      .update(capabilities)
       .set({ ...data, updatedAt: new Date() })
       .where(eq(capabilities.id, id))
       .returning();
@@ -2880,39 +3746,58 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteCapability(id: number): Promise<void> {
-    await db.update(capabilities)
+    await db
+      .update(capabilities)
       .set({ isActive: false, updatedAt: new Date() })
       .where(eq(capabilities.id, id));
   }
 
-  async getEmployeeCapabilities(employeeId: number): Promise<EmployeeCapability[]> {
-    return await db.select().from(employeeCapabilities)
+  async getEmployeeCapabilities(
+    employeeId: number
+  ): Promise<EmployeeCapability[]> {
+    return await db
+      .select()
+      .from(employeeCapabilities)
       .where(eq(employeeCapabilities.employeeId, employeeId));
   }
 
-  async grantCapability(data: InsertEmployeeCapability): Promise<EmployeeCapability> {
+  async grantCapability(
+    data: InsertEmployeeCapability
+  ): Promise<EmployeeCapability> {
     // Check if capability already exists for this employee
-    const existing = await db.select().from(employeeCapabilities)
-      .where(and(
-        eq(employeeCapabilities.employeeId, data.employeeId),
-        eq(employeeCapabilities.capabilityId, data.capabilityId)
-      ));
-    
+    const existing = await db
+      .select()
+      .from(employeeCapabilities)
+      .where(
+        and(
+          eq(employeeCapabilities.employeeId, data.employeeId),
+          eq(employeeCapabilities.capabilityId, data.capabilityId)
+        )
+      );
+
     if (existing.length > 0) {
       throw new Error('Employee already has this capability');
     }
-    
-    const [capability] = await db.insert(employeeCapabilities).values(data).returning();
+
+    const [capability] = await db
+      .insert(employeeCapabilities)
+      .values(data)
+      .returning();
     return capability;
   }
 
   async revokeCapability(id: number): Promise<void> {
-    await db.delete(employeeCapabilities)
+    await db
+      .delete(employeeCapabilities)
       .where(eq(employeeCapabilities.id, id));
   }
 
-  async toggleHardcodedCapability(id: number, useHardcoded: boolean): Promise<EmployeeCapability> {
-    const [capability] = await db.update(employeeCapabilities)
+  async toggleHardcodedCapability(
+    id: number,
+    useHardcoded: boolean
+  ): Promise<EmployeeCapability> {
+    const [capability] = await db
+      .update(employeeCapabilities)
       .set({ useHardcodedValue: useHardcoded, updatedAt: new Date() })
       .where(eq(employeeCapabilities.id, id))
       .returning();
@@ -2921,33 +3806,47 @@ export class DatabaseStorage implements IStorage {
 
   // User Capability Management
   async getUserCapabilities(userId: number): Promise<UserCapability[]> {
-    return await db.select().from(userCapabilities)
+    return await db
+      .select()
+      .from(userCapabilities)
       .where(eq(userCapabilities.userId, userId));
   }
 
-  async grantUserCapability(data: InsertUserCapability): Promise<UserCapability> {
+  async grantUserCapability(
+    data: InsertUserCapability
+  ): Promise<UserCapability> {
     // Check if capability already exists for this user
-    const existing = await db.select().from(userCapabilities)
-      .where(and(
-        eq(userCapabilities.userId, data.userId),
-        eq(userCapabilities.capabilityId, data.capabilityId)
-      ));
-    
+    const existing = await db
+      .select()
+      .from(userCapabilities)
+      .where(
+        and(
+          eq(userCapabilities.userId, data.userId),
+          eq(userCapabilities.capabilityId, data.capabilityId)
+        )
+      );
+
     if (existing.length > 0) {
       throw new Error('User already has this capability');
     }
-    
-    const [capability] = await db.insert(userCapabilities).values(data).returning();
+
+    const [capability] = await db
+      .insert(userCapabilities)
+      .values(data)
+      .returning();
     return capability;
   }
 
   async revokeUserCapability(id: number): Promise<void> {
-    await db.delete(userCapabilities)
-      .where(eq(userCapabilities.id, id));
+    await db.delete(userCapabilities).where(eq(userCapabilities.id, id));
   }
 
-  async toggleUserHardcodedCapability(id: number, useHardcoded: boolean): Promise<UserCapability> {
-    const [capability] = await db.update(userCapabilities)
+  async toggleUserHardcodedCapability(
+    id: number,
+    useHardcoded: boolean
+  ): Promise<UserCapability> {
+    const [capability] = await db
+      .update(userCapabilities)
       .set({ useHardcodedValue: useHardcoded, updatedAt: new Date() })
       .where(eq(userCapabilities.id, id))
       .returning();
@@ -2956,24 +3855,35 @@ export class DatabaseStorage implements IStorage {
 
   // Certifications CRUD
   async getAllCertifications(): Promise<Certification[]> {
-    return await db.select().from(certifications)
+    return await db
+      .select()
+      .from(certifications)
       .where(eq(certifications.isActive, true))
       .orderBy(certifications.name);
   }
 
   async getCertification(id: number): Promise<Certification | undefined> {
-    const [certification] = await db.select().from(certifications)
+    const [certification] = await db
+      .select()
+      .from(certifications)
       .where(eq(certifications.id, id));
     return certification || undefined;
   }
 
   async createCertification(data: InsertCertification): Promise<Certification> {
-    const [certification] = await db.insert(certifications).values(data).returning();
+    const [certification] = await db
+      .insert(certifications)
+      .values(data)
+      .returning();
     return certification;
   }
 
-  async updateCertification(id: number, data: Partial<InsertCertification>): Promise<Certification> {
-    const [certification] = await db.update(certifications)
+  async updateCertification(
+    id: number,
+    data: Partial<InsertCertification>
+  ): Promise<Certification> {
+    const [certification] = await db
+      .update(certifications)
       .set({ ...data, updatedAt: new Date() })
       .where(eq(certifications.id, id))
       .returning();
@@ -2981,57 +3891,84 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteCertification(id: number): Promise<void> {
-    await db.update(certifications)
+    await db
+      .update(certifications)
       .set({ isActive: false, updatedAt: new Date() })
       .where(eq(certifications.id, id));
   }
 
   // Employee Certifications CRUD
-  async getEmployeeCertifications(employeeId?: number): Promise<EmployeeCertification[]> {
-    let query = db.select().from(employeeCertifications)
+  async getEmployeeCertifications(
+    employeeId?: number
+  ): Promise<EmployeeCertification[]> {
+    let query = db
+      .select()
+      .from(employeeCertifications)
       .where(eq(employeeCertifications.isActive, true));
 
     if (employeeId) {
-      query = db.select().from(employeeCertifications).where(and(
-        eq(employeeCertifications.isActive, true),
-        eq(employeeCertifications.employeeId, employeeId)
-      ));
+      query = db
+        .select()
+        .from(employeeCertifications)
+        .where(
+          and(
+            eq(employeeCertifications.isActive, true),
+            eq(employeeCertifications.employeeId, employeeId)
+          )
+        );
     }
 
     return await query.orderBy(employeeCertifications.dateObtained);
   }
 
-  async getEmployeeCertification(id: number): Promise<EmployeeCertification | undefined> {
-    const [empCert] = await db.select().from(employeeCertifications)
+  async getEmployeeCertification(
+    id: number
+  ): Promise<EmployeeCertification | undefined> {
+    const [empCert] = await db
+      .select()
+      .from(employeeCertifications)
       .where(eq(employeeCertifications.id, id));
     return empCert || undefined;
   }
 
-  async createEmployeeCertification(data: InsertEmployeeCertification): Promise<EmployeeCertification> {
+  async createEmployeeCertification(
+    data: InsertEmployeeCertification
+  ): Promise<EmployeeCertification> {
     // Convert Date objects to strings for date fields
     const insertData: any = { ...data };
     if (insertData.dateObtained instanceof Date) {
-      insertData.dateObtained = insertData.dateObtained.toISOString().split('T')[0];
+      insertData.dateObtained = insertData.dateObtained
+        .toISOString()
+        .split('T')[0];
     }
     if (insertData.expiryDate instanceof Date) {
       insertData.expiryDate = insertData.expiryDate.toISOString().split('T')[0];
     }
 
-    const [empCert] = await db.insert(employeeCertifications).values(insertData).returning();
+    const [empCert] = await db
+      .insert(employeeCertifications)
+      .values(insertData)
+      .returning();
     return empCert;
   }
 
-  async updateEmployeeCertification(id: number, data: Partial<InsertEmployeeCertification>): Promise<EmployeeCertification> {
+  async updateEmployeeCertification(
+    id: number,
+    data: Partial<InsertEmployeeCertification>
+  ): Promise<EmployeeCertification> {
     // Convert Date objects to strings for date fields
     const updateData: any = { ...data };
     if (updateData.dateObtained instanceof Date) {
-      updateData.dateObtained = updateData.dateObtained.toISOString().split('T')[0];
+      updateData.dateObtained = updateData.dateObtained
+        .toISOString()
+        .split('T')[0];
     }
     if (updateData.expiryDate instanceof Date) {
       updateData.expiryDate = updateData.expiryDate.toISOString().split('T')[0];
     }
 
-    const [empCert] = await db.update(employeeCertifications)
+    const [empCert] = await db
+      .update(employeeCertifications)
       .set({ ...updateData, updatedAt: new Date() })
       .where(eq(employeeCertifications.id, id))
       .returning();
@@ -3039,44 +3976,65 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteEmployeeCertification(id: number): Promise<void> {
-    await db.update(employeeCertifications)
+    await db
+      .update(employeeCertifications)
       .set({ isActive: false, updatedAt: new Date() })
       .where(eq(employeeCertifications.id, id));
   }
 
-  async getExpiringCertifications(days: number): Promise<EmployeeCertification[]> {
+  async getExpiringCertifications(
+    days: number
+  ): Promise<EmployeeCertification[]> {
     const futureDate = new Date();
     futureDate.setDate(futureDate.getDate() + days);
 
-    return await db.select().from(employeeCertifications)
-      .where(and(
-        eq(employeeCertifications.isActive, true),
-        lte(employeeCertifications.expiryDate, futureDate.toISOString().split('T')[0]),
-        gte(employeeCertifications.expiryDate, new Date().toISOString().split('T')[0])
-      ))
+    return await db
+      .select()
+      .from(employeeCertifications)
+      .where(
+        and(
+          eq(employeeCertifications.isActive, true),
+          lte(
+            employeeCertifications.expiryDate,
+            futureDate.toISOString().split('T')[0]
+          ),
+          gte(
+            employeeCertifications.expiryDate,
+            new Date().toISOString().split('T')[0]
+          )
+        )
+      )
       .orderBy(employeeCertifications.expiryDate);
   }
 
   // Evaluations CRUD
   async getAllEvaluations(): Promise<Evaluation[]> {
-    return await db.select().from(evaluations)
+    return await db
+      .select()
+      .from(evaluations)
       .orderBy(desc(evaluations.createdAt));
   }
 
   async getEvaluation(id: number): Promise<Evaluation | undefined> {
-    const [evaluation] = await db.select().from(evaluations)
+    const [evaluation] = await db
+      .select()
+      .from(evaluations)
       .where(eq(evaluations.id, id));
     return evaluation || undefined;
   }
 
   async getEvaluationsByEmployee(employeeId: number): Promise<Evaluation[]> {
-    return await db.select().from(evaluations)
+    return await db
+      .select()
+      .from(evaluations)
       .where(eq(evaluations.employeeId, employeeId))
       .orderBy(desc(evaluations.evaluationPeriodEnd));
   }
 
-  async getEvaluationsByEvaluator(evaluatorId: number): Promise<Evaluation[] > {
-    return await db.select().from(evaluations)
+  async getEvaluationsByEvaluator(evaluatorId: number): Promise<Evaluation[]> {
+    return await db
+      .select()
+      .from(evaluations)
       .where(eq(evaluations.evaluatorId, evaluatorId))
       .orderBy(desc(evaluations.createdAt));
   }
@@ -3085,10 +4043,14 @@ export class DatabaseStorage implements IStorage {
     // Convert Date objects to strings for date fields
     const insertData: any = { ...data };
     if (insertData.evaluationPeriodStart instanceof Date) {
-      insertData.evaluationPeriodStart = insertData.evaluationPeriodStart.toISOString().split('T')[0];
+      insertData.evaluationPeriodStart = insertData.evaluationPeriodStart
+        .toISOString()
+        .split('T')[0];
     }
     if (insertData.evaluationPeriodEnd instanceof Date) {
-      insertData.evaluationPeriodEnd = insertData.evaluationPeriodEnd.toISOString().split('T')[0];
+      insertData.evaluationPeriodEnd = insertData.evaluationPeriodEnd
+        .toISOString()
+        .split('T')[0];
     }
     if (insertData.submittedAt instanceof Date) {
       insertData.submittedAt = insertData.submittedAt.toISOString();
@@ -3097,18 +4059,28 @@ export class DatabaseStorage implements IStorage {
       insertData.reviewedAt = insertData.reviewedAt.toISOString();
     }
 
-    const [evaluation] = await db.insert(evaluations).values(insertData).returning();
+    const [evaluation] = await db
+      .insert(evaluations)
+      .values(insertData)
+      .returning();
     return evaluation;
   }
 
-  async updateEvaluation(id: number, data: Partial<InsertEvaluation>): Promise<Evaluation> {
+  async updateEvaluation(
+    id: number,
+    data: Partial<InsertEvaluation>
+  ): Promise<Evaluation> {
     // Convert Date objects to strings for date fields
     const updateData: any = { ...data };
     if (updateData.evaluationPeriodStart instanceof Date) {
-      updateData.evaluationPeriodStart = updateData.evaluationPeriodStart.toISOString().split('T')[0];
+      updateData.evaluationPeriodStart = updateData.evaluationPeriodStart
+        .toISOString()
+        .split('T')[0];
     }
     if (updateData.evaluationPeriodEnd instanceof Date) {
-      updateData.evaluationPeriodEnd = updateData.evaluationPeriodEnd.toISOString().split('T')[0];
+      updateData.evaluationPeriodEnd = updateData.evaluationPeriodEnd
+        .toISOString()
+        .split('T')[0];
     }
     if (updateData.submittedAt instanceof Date) {
       updateData.submittedAt = updateData.submittedAt.toISOString();
@@ -3117,7 +4089,8 @@ export class DatabaseStorage implements IStorage {
       updateData.reviewedAt = updateData.reviewedAt.toISOString();
     }
 
-    const [evaluation] = await db.update(evaluations)
+    const [evaluation] = await db
+      .update(evaluations)
       .set({ ...updateData, updatedAt: new Date() })
       .where(eq(evaluations.id, id))
       .returning();
@@ -3129,33 +4102,42 @@ export class DatabaseStorage implements IStorage {
   }
 
   async submitEvaluation(id: number): Promise<Evaluation> {
-    const [evaluation] = await db.update(evaluations)
+    const [evaluation] = await db
+      .update(evaluations)
       .set({
         status: 'SUBMITTED',
         submittedAt: new Date(),
-        updatedAt: new Date()
+        updatedAt: new Date(),
       })
       .where(eq(evaluations.id, id))
       .returning();
     return evaluation;
   }
 
-  async reviewEvaluation(id: number, reviewData: Partial<InsertEvaluation>): Promise<Evaluation> {
+  async reviewEvaluation(
+    id: number,
+    reviewData: Partial<InsertEvaluation>
+  ): Promise<Evaluation> {
     // Convert Date objects to strings for date fields
     const updateData: any = { ...reviewData };
     if (updateData.evaluationPeriodStart instanceof Date) {
-      updateData.evaluationPeriodStart = updateData.evaluationPeriodStart.toISOString().split('T')[0];
+      updateData.evaluationPeriodStart = updateData.evaluationPeriodStart
+        .toISOString()
+        .split('T')[0];
     }
     if (updateData.evaluationPeriodEnd instanceof Date) {
-      updateData.evaluationPeriodEnd = updateData.evaluationPeriodEnd.toISOString().split('T')[0];
+      updateData.evaluationPeriodEnd = updateData.evaluationPeriodEnd
+        .toISOString()
+        .split('T')[0];
     }
 
-    const [evaluation] = await db.update(evaluations)
+    const [evaluation] = await db
+      .update(evaluations)
       .set({
         ...updateData,
         status: 'REVIEWED',
         reviewedAt: new Date(),
-        updatedAt: new Date()
+        updatedAt: new Date(),
       })
       .where(eq(evaluations.id, id))
       .returning();
@@ -3169,17 +4151,25 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getUserSession(sessionToken: string): Promise<UserSession | undefined> {
-    const [session] = await db.select().from(userSessions)
-      .where(and(
-        eq(userSessions.sessionToken, sessionToken),
-        eq(userSessions.isActive, true),
-        gt(userSessions.expiresAt, new Date())
-      ));
+    const [session] = await db
+      .select()
+      .from(userSessions)
+      .where(
+        and(
+          eq(userSessions.sessionToken, sessionToken),
+          eq(userSessions.isActive, true),
+          gt(userSessions.expiresAt, new Date())
+        )
+      );
     return session || undefined;
   }
 
-  async updateUserSession(sessionToken: string, data: Partial<InsertUserSession>): Promise<UserSession> {
-    const [session] = await db.update(userSessions)
+  async updateUserSession(
+    sessionToken: string,
+    data: Partial<InsertUserSession>
+  ): Promise<UserSession> {
+    const [session] = await db
+      .update(userSessions)
       .set(data)
       .where(eq(userSessions.sessionToken, sessionToken))
       .returning();
@@ -3187,67 +4177,88 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteUserSession(sessionToken: string): Promise<void> {
-    await db.update(userSessions)
+    await db
+      .update(userSessions)
       .set({ isActive: false })
       .where(eq(userSessions.sessionToken, sessionToken));
   }
 
   async deleteExpiredSessions(): Promise<void> {
-    await db.update(userSessions)
+    await db
+      .update(userSessions)
       .set({ isActive: false })
       .where(lt(userSessions.expiresAt, new Date()));
   }
 
   async getUserActiveSessions(userId: number): Promise<UserSession[]> {
-    return await db.select().from(userSessions)
-      .where(and(
-        eq(userSessions.userId, userId),
-        eq(userSessions.isActive, true),
-        gt(userSessions.expiresAt, new Date())
-      ))
+    return await db
+      .select()
+      .from(userSessions)
+      .where(
+        and(
+          eq(userSessions.userId, userId),
+          eq(userSessions.isActive, true),
+          gt(userSessions.expiresAt, new Date())
+        )
+      )
       .orderBy(desc(userSessions.createdAt));
   }
 
   // Employee Documents CRUD
   async getAllDocuments(employeeId?: number): Promise<EmployeeDocument[]> {
-    let query = db.select().from(employeeDocuments)
+    let query = db
+      .select()
+      .from(employeeDocuments)
       .where(eq(employeeDocuments.isActive, true));
 
     if (employeeId) {
-      query = query.where(and(
-        eq(employeeDocuments.isActive, true),
-        eq(employeeDocuments.employeeId, employeeId)
-      ));
+      query = query.where(
+        and(
+          eq(employeeDocuments.isActive, true),
+          eq(employeeDocuments.employeeId, employeeId)
+        )
+      );
     }
 
     return await query.orderBy(desc(employeeDocuments.createdAt));
   }
 
   async getDocument(id: number): Promise<EmployeeDocument | undefined> {
-    const [document] = await db.select().from(employeeDocuments)
+    const [document] = await db
+      .select()
+      .from(employeeDocuments)
       .where(eq(employeeDocuments.id, id));
     return document || undefined;
   }
 
-  async createDocument(data: InsertEmployeeDocument): Promise<EmployeeDocument> {
+  async createDocument(
+    data: InsertEmployeeDocument
+  ): Promise<EmployeeDocument> {
     // Convert Date objects to strings for date fields
     const insertData: any = { ...data };
     if (insertData.expiryDate instanceof Date) {
       insertData.expiryDate = insertData.expiryDate.toISOString().split('T')[0];
     }
 
-    const [document] = await db.insert(employeeDocuments).values(insertData).returning();
+    const [document] = await db
+      .insert(employeeDocuments)
+      .values(insertData)
+      .returning();
     return document;
   }
 
-  async updateDocument(id: number, data: Partial<InsertEmployeeDocument>): Promise<EmployeeDocument> {
+  async updateDocument(
+    id: number,
+    data: Partial<InsertEmployeeDocument>
+  ): Promise<EmployeeDocument> {
     // Convert Date objects to strings for date fields
     const updateData: any = { ...data };
     if (updateData.expiryDate instanceof Date) {
       updateData.expiryDate = updateData.expiryDate.toISOString().split('T')[0];
     }
 
-    const [document] = await db.update(employeeDocuments)
+    const [document] = await db
+      .update(employeeDocuments)
       .set({ ...updateData, updatedAt: new Date() })
       .where(eq(employeeDocuments.id, id))
       .returning();
@@ -3255,24 +4266,34 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteDocument(id: number): Promise<void> {
-    await db.update(employeeDocuments)
+    await db
+      .update(employeeDocuments)
       .set({ isActive: false, updatedAt: new Date() })
       .where(eq(employeeDocuments.id, id));
   }
 
-  async getDocumentsByType(documentType: string, employeeId?: number): Promise<EmployeeDocument[]> {
-    let query = db.select().from(employeeDocuments)
-      .where(and(
-        eq(employeeDocuments.documentType, documentType),
-        eq(employeeDocuments.isActive, true)
-      ));
+  async getDocumentsByType(
+    documentType: string,
+    employeeId?: number
+  ): Promise<EmployeeDocument[]> {
+    let query = db
+      .select()
+      .from(employeeDocuments)
+      .where(
+        and(
+          eq(employeeDocuments.documentType, documentType),
+          eq(employeeDocuments.isActive, true)
+        )
+      );
 
     if (employeeId) {
-      query = query.where(and(
-        eq(employeeDocuments.documentType, documentType),
-        eq(employeeDocuments.employeeId, employeeId),
-        eq(employeeDocuments.isActive, true)
-      ));
+      query = query.where(
+        and(
+          eq(employeeDocuments.documentType, documentType),
+          eq(employeeDocuments.employeeId, employeeId),
+          eq(employeeDocuments.isActive, true)
+        )
+      );
     }
 
     return await query.orderBy(desc(employeeDocuments.createdAt));
@@ -3282,26 +4303,45 @@ export class DatabaseStorage implements IStorage {
     const futureDate = new Date();
     futureDate.setDate(futureDate.getDate() + days);
 
-    return await db.select().from(employeeDocuments)
-      .where(and(
-        eq(employeeDocuments.isActive, true),
-        lte(employeeDocuments.expiryDate, futureDate.toISOString().split('T')[0]),
-        gte(employeeDocuments.expiryDate, new Date().toISOString().split('T')[0])
-      ))
+    return await db
+      .select()
+      .from(employeeDocuments)
+      .where(
+        and(
+          eq(employeeDocuments.isActive, true),
+          lte(
+            employeeDocuments.expiryDate,
+            futureDate.toISOString().split('T')[0]
+          ),
+          gte(
+            employeeDocuments.expiryDate,
+            new Date().toISOString().split('T')[0]
+          )
+        )
+      )
       .orderBy(employeeDocuments.expiryDate);
   }
 
   // Employee Audit Log
-  async createAuditLog(data: InsertEmployeeAuditLog): Promise<EmployeeAuditLog> {
-    const [auditLog] = await db.insert(employeeAuditLog).values(data).returning();
+  async createAuditLog(
+    data: InsertEmployeeAuditLog
+  ): Promise<EmployeeAuditLog> {
+    const [auditLog] = await db
+      .insert(employeeAuditLog)
+      .values(data)
+      .returning();
     return auditLog;
   }
 
-  async getAuditLogs(employeeId?: number, action?: string): Promise<EmployeeAuditLog[]> {
+  async getAuditLogs(
+    employeeId?: number,
+    action?: string
+  ): Promise<EmployeeAuditLog[]> {
     let query = db.select().from(employeeAuditLog);
 
     const conditions = [];
-    if (employeeId) conditions.push(eq(employeeAuditLog.employeeId, employeeId));
+    if (employeeId)
+      conditions.push(eq(employeeAuditLog.employeeId, employeeId));
     if (action) conditions.push(eq(employeeAuditLog.action, action));
 
     if (conditions.length > 0) {
@@ -3311,26 +4351,40 @@ export class DatabaseStorage implements IStorage {
     return await query.orderBy(desc(employeeAuditLog.timestamp));
   }
 
-  async getAuditLogsByDateRange(startDate: Date, endDate: Date, employeeId?: number): Promise<EmployeeAuditLog[]> {
-    let query = db.select().from(employeeAuditLog)
-      .where(and(
-        gte(employeeAuditLog.timestamp, startDate),
-        lte(employeeAuditLog.timestamp, endDate)
-      ));
+  async getAuditLogsByDateRange(
+    startDate: Date,
+    endDate: Date,
+    employeeId?: number
+  ): Promise<EmployeeAuditLog[]> {
+    let query = db
+      .select()
+      .from(employeeAuditLog)
+      .where(
+        and(
+          gte(employeeAuditLog.timestamp, startDate),
+          lte(employeeAuditLog.timestamp, endDate)
+        )
+      );
 
     if (employeeId) {
-      query = query.where(and(
-        gte(employeeAuditLog.timestamp, startDate),
-        lte(employeeAuditLog.timestamp, endDate),
-        eq(employeeAuditLog.employeeId, employeeId)
-      ));
+      query = query.where(
+        and(
+          gte(employeeAuditLog.timestamp, startDate),
+          lte(employeeAuditLog.timestamp, endDate),
+          eq(employeeAuditLog.employeeId, employeeId)
+        )
+      );
     }
 
     return await query.orderBy(desc(employeeAuditLog.timestamp));
   }
 
   // QC Definitions CRUD
-  async getQCDefinitions(line?: string, department?: string, final?: boolean): Promise<QcDefinition[]> {
+  async getQCDefinitions(
+    line?: string,
+    department?: string,
+    final?: boolean
+  ): Promise<QcDefinition[]> {
     let query = db.select().from(qcDefinitions);
 
     const conditions = [];
@@ -3346,17 +4400,27 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getQCDefinition(id: number): Promise<QcDefinition | undefined> {
-    const [definition] = await db.select().from(qcDefinitions).where(eq(qcDefinitions.id, id));
+    const [definition] = await db
+      .select()
+      .from(qcDefinitions)
+      .where(eq(qcDefinitions.id, id));
     return definition || undefined;
   }
 
   async createQCDefinition(data: InsertQcDefinition): Promise<QcDefinition> {
-    const [definition] = await db.insert(qcDefinitions).values(data).returning();
+    const [definition] = await db
+      .insert(qcDefinitions)
+      .values(data)
+      .returning();
     return definition;
   }
 
-  async updateQCDefinition(id: number, data: Partial<InsertQcDefinition>): Promise<QcDefinition> {
-    const [definition] = await db.update(qcDefinitions)
+  async updateQCDefinition(
+    id: number,
+    data: Partial<InsertQcDefinition>
+  ): Promise<QcDefinition> {
+    const [definition] = await db
+      .update(qcDefinitions)
       .set(data)
       .where(eq(qcDefinitions.id, id))
       .returning();
@@ -3379,17 +4443,27 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getQCSubmission(id: number): Promise<QcSubmission | undefined> {
-    const [submission] = await db.select().from(qcSubmissions).where(eq(qcSubmissions.id, id));
+    const [submission] = await db
+      .select()
+      .from(qcSubmissions)
+      .where(eq(qcSubmissions.id, id));
     return submission || undefined;
   }
 
   async createQCSubmission(data: InsertQcSubmission): Promise<QcSubmission> {
-    const [submission] = await db.insert(qcSubmissions).values(data).returning();
+    const [submission] = await db
+      .insert(qcSubmissions)
+      .values(data)
+      .returning();
     return submission;
   }
 
-  async updateQCSubmission(id: number, data: Partial<InsertQcSubmission>): Promise<QcSubmission> {
-    const [submission] = await db.update(qcSubmissions)
+  async updateQCSubmission(
+    id: number,
+    data: Partial<InsertQcSubmission>
+  ): Promise<QcSubmission> {
+    const [submission] = await db
+      .update(qcSubmissions)
       .set(data)
       .where(eq(qcSubmissions.id, id))
       .returning();
@@ -3402,23 +4476,39 @@ export class DatabaseStorage implements IStorage {
 
   // Maintenance Schedules CRUD
   async getAllMaintenanceSchedules(): Promise<MaintenanceSchedule[]> {
-    return await db.select().from(maintenanceSchedules)
+    return await db
+      .select()
+      .from(maintenanceSchedules)
       .where(eq(maintenanceSchedules.isActive, true))
       .orderBy(maintenanceSchedules.startDate);
   }
 
-  async getMaintenanceSchedule(id: number): Promise<MaintenanceSchedule | undefined> {
-    const [schedule] = await db.select().from(maintenanceSchedules).where(eq(maintenanceSchedules.id, id));
+  async getMaintenanceSchedule(
+    id: number
+  ): Promise<MaintenanceSchedule | undefined> {
+    const [schedule] = await db
+      .select()
+      .from(maintenanceSchedules)
+      .where(eq(maintenanceSchedules.id, id));
     return schedule || undefined;
   }
 
-  async createMaintenanceSchedule(data: InsertMaintenanceSchedule): Promise<MaintenanceSchedule> {
-    const [schedule] = await db.insert(maintenanceSchedules).values(data).returning();
+  async createMaintenanceSchedule(
+    data: InsertMaintenanceSchedule
+  ): Promise<MaintenanceSchedule> {
+    const [schedule] = await db
+      .insert(maintenanceSchedules)
+      .values(data)
+      .returning();
     return schedule;
   }
 
-  async updateMaintenanceSchedule(id: number, data: Partial<InsertMaintenanceSchedule>): Promise<MaintenanceSchedule> {
-    const [schedule] = await db.update(maintenanceSchedules)
+  async updateMaintenanceSchedule(
+    id: number,
+    data: Partial<InsertMaintenanceSchedule>
+  ): Promise<MaintenanceSchedule> {
+    const [schedule] = await db
+      .update(maintenanceSchedules)
       .set(data)
       .where(eq(maintenanceSchedules.id, id))
       .returning();
@@ -3426,28 +4516,41 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteMaintenanceSchedule(id: number): Promise<void> {
-    await db.update(maintenanceSchedules)
+    await db
+      .update(maintenanceSchedules)
       .set({ isActive: false })
       .where(eq(maintenanceSchedules.id, id));
   }
 
   // Maintenance Logs CRUD
   async getAllMaintenanceLogs(): Promise<MaintenanceLog[]> {
-    return await db.select().from(maintenanceLogs).orderBy(desc(maintenanceLogs.completedAt));
+    return await db
+      .select()
+      .from(maintenanceLogs)
+      .orderBy(desc(maintenanceLogs.completedAt));
   }
 
   async getMaintenanceLog(id: number): Promise<MaintenanceLog | undefined> {
-    const [log] = await db.select().from(maintenanceLogs).where(eq(maintenanceLogs.id, id));
+    const [log] = await db
+      .select()
+      .from(maintenanceLogs)
+      .where(eq(maintenanceLogs.id, id));
     return log || undefined;
   }
 
-  async createMaintenanceLog(data: InsertMaintenanceLog): Promise<MaintenanceLog> {
+  async createMaintenanceLog(
+    data: InsertMaintenanceLog
+  ): Promise<MaintenanceLog> {
     const [log] = await db.insert(maintenanceLogs).values(data).returning();
     return log;
   }
 
-  async updateMaintenanceLog(id: number, data: Partial<InsertMaintenanceLog>): Promise<MaintenanceLog> {
-    const [log] = await db.update(maintenanceLogs)
+  async updateMaintenanceLog(
+    id: number,
+    data: Partial<InsertMaintenanceLog>
+  ): Promise<MaintenanceLog> {
+    const [log] = await db
+      .update(maintenanceLogs)
       .set(data)
       .where(eq(maintenanceLogs.id, id))
       .returning();
@@ -3459,12 +4562,23 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Time Clock CRUD
-  async getTimeClockStatus(employeeId: string): Promise<{ status: 'IN' | 'OUT'; clockIn: string | null; clockOut: string | null }> {
+  async getTimeClockStatus(
+    employeeId: string
+  ): Promise<{
+    status: 'IN' | 'OUT';
+    clockIn: string | null;
+    clockOut: string | null;
+  }> {
     const today = new Date().toISOString().split('T')[0];
     const [entry] = await db
       .select()
       .from(timeClockEntries)
-      .where(and(eq(timeClockEntries.employeeId, employeeId), eq(timeClockEntries.date, today)))
+      .where(
+        and(
+          eq(timeClockEntries.employeeId, employeeId),
+          eq(timeClockEntries.date, today)
+        )
+      )
       .orderBy(desc(timeClockEntries.id))
       .limit(1);
 
@@ -3475,15 +4589,23 @@ export class DatabaseStorage implements IStorage {
     return {
       status: entry.clockOut ? 'OUT' : 'IN',
       clockIn: entry.clockIn?.toISOString() || null,
-      clockOut: entry.clockOut?.toISOString() || null
+      clockOut: entry.clockOut?.toISOString() || null,
     };
-}
+  }
 
-  async getTimeClockEntries(employeeId?: string, date?: string): Promise<TimeClockEntry[]> {
+  async getTimeClockEntries(
+    employeeId?: string,
+    date?: string
+  ): Promise<TimeClockEntry[]> {
     let query = db.select().from(timeClockEntries);
 
     if (employeeId && date) {
-      query = query.where(and(eq(timeClockEntries.employeeId, employeeId), eq(timeClockEntries.date, date)));
+      query = query.where(
+        and(
+          eq(timeClockEntries.employeeId, employeeId),
+          eq(timeClockEntries.date, date)
+        )
+      );
     } else if (employeeId) {
       query = query.where(eq(timeClockEntries.employeeId, employeeId));
     } else if (date) {
@@ -3493,24 +4615,41 @@ export class DatabaseStorage implements IStorage {
     return await query.orderBy(desc(timeClockEntries.date));
   }
 
-  async createTimeClockEntry(data: InsertTimeClockEntry): Promise<TimeClockEntry> {
+  async createTimeClockEntry(
+    data: InsertTimeClockEntry
+  ): Promise<TimeClockEntry> {
     // Normalize the date to YYYY-MM-DD format
     const normalizedData = {
       ...data,
-      date: typeof data.date === 'string' ? data.date : new Date(data.date).toISOString().split('T')[0]
+      date:
+        typeof data.date === 'string'
+          ? data.date
+          : new Date(data.date).toISOString().split('T')[0],
     };
-    const [entry] = await db.insert(timeClockEntries).values(normalizedData).returning();
+    const [entry] = await db
+      .insert(timeClockEntries)
+      .values(normalizedData)
+      .returning();
     return entry;
   }
 
-  async updateTimeClockEntry(id: number, data: Partial<InsertTimeClockEntry>): Promise<TimeClockEntry> {
+  async updateTimeClockEntry(
+    id: number,
+    data: Partial<InsertTimeClockEntry>
+  ): Promise<TimeClockEntry> {
     // Normalize the date to YYYY-MM-DD format if provided
-    const normalizedData = data.date ? {
-      ...data,
-      date: typeof data.date === 'string' ? data.date : new Date(data.date).toISOString().split('T')[0]
-    } : data;
+    const normalizedData = data.date
+      ? {
+          ...data,
+          date:
+            typeof data.date === 'string'
+              ? data.date
+              : new Date(data.date).toISOString().split('T')[0],
+        }
+      : data;
 
-    const [entry] = await db.update(timeClockEntries)
+    const [entry] = await db
+      .update(timeClockEntries)
       .set(normalizedData)
       .where(eq(timeClockEntries.id, id))
       .returning();
@@ -3522,25 +4661,62 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Checklist CRUD
-  async getChecklistItems(employeeId: string, date: string): Promise<ChecklistItem[]> {
+  async getChecklistItems(
+    employeeId: string,
+    date: string
+  ): Promise<ChecklistItem[]> {
     const items = await db
       .select()
       .from(checklistItems)
-      .where(and(eq(checklistItems.employeeId, employeeId), eq(checklistItems.date, date)))
+      .where(
+        and(
+          eq(checklistItems.employeeId, employeeId),
+          eq(checklistItems.date, date)
+        )
+      )
       .orderBy(checklistItems.id);
 
     // If no items exist for today, create default checklist items
     if (items.length === 0) {
       const defaultItems = [
-        { employeeId, date, label: 'Review safety procedures', type: 'checkbox' as const, required: true },
-        { employeeId, date, label: 'Check equipment status', type: 'dropdown' as const, options: ['Good', 'Needs Attention', 'Broken'], required: true },
-        { employeeId, date, label: 'Work area cleanliness', type: 'dropdown' as const, options: ['Clean', 'Needs Cleaning', 'Deep Clean Required'], required: true },
-        { employeeId, date, label: 'Special notes', type: 'text' as const, required: false }
+        {
+          employeeId,
+          date,
+          label: 'Review safety procedures',
+          type: 'checkbox' as const,
+          required: true,
+        },
+        {
+          employeeId,
+          date,
+          label: 'Check equipment status',
+          type: 'dropdown' as const,
+          options: ['Good', 'Needs Attention', 'Broken'],
+          required: true,
+        },
+        {
+          employeeId,
+          date,
+          label: 'Work area cleanliness',
+          type: 'dropdown' as const,
+          options: ['Clean', 'Needs Cleaning', 'Deep Clean Required'],
+          required: true,
+        },
+        {
+          employeeId,
+          date,
+          label: 'Special notes',
+          type: 'text' as const,
+          required: false,
+        },
       ];
 
       const createdItems = [];
       for (const item of defaultItems) {
-        const [created] = await db.insert(checklistItems).values(item).returning();
+        const [created] = await db
+          .insert(checklistItems)
+          .values(item)
+          .returning();
         createdItems.push(created);
       }
       return createdItems;
@@ -3556,28 +4732,40 @@ export class DatabaseStorage implements IStorage {
       insertData.date = insertData.date.toISOString().split('T')[0];
     }
 
-    const [item] = await db.insert(checklistItems).values(insertData).returning();
+    const [item] = await db
+      .insert(checklistItems)
+      .values(insertData)
+      .returning();
     return item;
   }
 
-  async updateChecklistItem(id: number, data: Partial<InsertChecklistItem>): Promise<ChecklistItem> {
+  async updateChecklistItem(
+    id: number,
+    data: Partial<InsertChecklistItem>
+  ): Promise<ChecklistItem> {
     // Convert Date objects to strings for date fields
     const updateData: any = { ...data };
     if (updateData.date instanceof Date) {
       updateData.date = updateData.date.toISOString().split('T')[0];
     }
 
-    const [item] = await db.update(checklistItems)
+    const [item] = await db
+      .update(checklistItems)
       .set(updateData)
       .where(eq(checklistItems.id, id))
       .returning();
     return item;
   }
 
-  async completeChecklist(employeeId: string, date: string, items: ChecklistItem[]): Promise<void> {
+  async completeChecklist(
+    employeeId: string,
+    date: string,
+    items: ChecklistItem[]
+  ): Promise<void> {
     // Update all items with their values
     for (const item of items) {
-      await db.update(checklistItems)
+      await db
+        .update(checklistItems)
         .set({ value: item.value })
         .where(eq(checklistItems.id, item.id));
     }
@@ -3594,15 +4782,38 @@ export class DatabaseStorage implements IStorage {
     // If no docs exist, create default onboarding documents
     if (docs.length === 0) {
       const defaultDocs = [
-        { employeeId, title: 'Employee Handbook', url: '/docs/employee-handbook.pdf', signed: false },
-        { employeeId, title: 'Safety Training Manual', url: '/docs/safety-training.pdf', signed: false },
-        { employeeId, title: 'Code of Conduct', url: '/docs/code-of-conduct.pdf', signed: false },
-        { employeeId, title: 'Emergency Procedures', url: '/docs/emergency-procedures.pdf', signed: false }
+        {
+          employeeId,
+          title: 'Employee Handbook',
+          url: '/docs/employee-handbook.pdf',
+          signed: false,
+        },
+        {
+          employeeId,
+          title: 'Safety Training Manual',
+          url: '/docs/safety-training.pdf',
+          signed: false,
+        },
+        {
+          employeeId,
+          title: 'Code of Conduct',
+          url: '/docs/code-of-conduct.pdf',
+          signed: false,
+        },
+        {
+          employeeId,
+          title: 'Emergency Procedures',
+          url: '/docs/emergency-procedures.pdf',
+          signed: false,
+        },
       ];
 
       const createdDocs = [];
       for (const doc of defaultDocs) {
-        const [created] = await db.insert(onboardingDocs).values(doc).returning();
+        const [created] = await db
+          .insert(onboardingDocs)
+          .values(doc)
+          .returning();
         createdDocs.push(created);
       }
       return createdDocs;
@@ -3616,20 +4827,28 @@ export class DatabaseStorage implements IStorage {
     return doc;
   }
 
-  async signOnboardingDoc(id: number, signatureDataURL: string): Promise<OnboardingDoc> {
-    const [doc] = await db.update(onboardingDocs)
+  async signOnboardingDoc(
+    id: number,
+    signatureDataURL: string
+  ): Promise<OnboardingDoc> {
+    const [doc] = await db
+      .update(onboardingDocs)
       .set({
         signed: true,
         signatureDataURL,
-        signedAt: new Date()
+        signedAt: new Date(),
       })
       .where(eq(onboardingDocs.id, id))
       .returning();
     return doc;
   }
 
-  async updateOnboardingDoc(id: number, data: Partial<InsertOnboardingDoc>): Promise<OnboardingDoc> {
-    const [doc] = await db.update(onboardingDocs)
+  async updateOnboardingDoc(
+    id: number,
+    data: Partial<InsertOnboardingDoc>
+  ): Promise<OnboardingDoc> {
+    const [doc] = await db
+      .update(onboardingDocs)
       .set(data)
       .where(eq(onboardingDocs.id, id))
       .returning();
@@ -3651,7 +4870,7 @@ export class DatabaseStorage implements IStorage {
         isActive: customers.isActive,
         createdAt: customers.createdAt,
         updatedAt: customers.updatedAt,
-        preferredCommunicationMethod: customers.preferredCommunicationMethod
+        preferredCommunicationMethod: customers.preferredCommunicationMethod,
       })
       .from(customers)
       .where(eq(customers.isActive, true))
@@ -3672,7 +4891,7 @@ export class DatabaseStorage implements IStorage {
         isActive: customers.isActive,
         createdAt: customers.createdAt,
         updatedAt: customers.updatedAt,
-        preferredCommunicationMethod: customers.preferredCommunicationMethod
+        preferredCommunicationMethod: customers.preferredCommunicationMethod,
       })
       .from(customers)
       .where(eq(customers.id, parseInt(id)));
@@ -3685,7 +4904,7 @@ export class DatabaseStorage implements IStorage {
       .selectDistinct({ customerName: purchaseOrders.customerName })
       .from(purchaseOrders);
 
-    const names = customerNames.map(row => row.customerName);
+    const names = customerNames.map((row) => row.customerName);
 
     if (names.length === 0) {
       return [];
@@ -3699,18 +4918,24 @@ export class DatabaseStorage implements IStorage {
         email: customers.email,
         phone: customers.phone,
         company: customers.company,
+        contact: customers.contact,
         customerType: customers.customerType,
         notes: customers.notes,
         isActive: customers.isActive,
         createdAt: customers.createdAt,
         updatedAt: customers.updatedAt,
-        preferredCommunicationMethod: customers.preferredCommunicationMethod
+        preferredCommunicationMethod: customers.preferredCommunicationMethod,
       })
       .from(customers)
-      .where(and(
-        eq(customers.isActive, true),
-        sql`${customers.name} IN (${sql.join(names.map(name => sql`${name}`), sql`, `)})`
-      ))
+      .where(
+        and(
+          eq(customers.isActive, true),
+          sql`${customers.name} IN (${sql.join(
+            names.map((name) => sql`${name}`),
+            sql`, `
+          )})`
+        )
+      )
       .orderBy(customers.name);
   }
 
@@ -3722,22 +4947,25 @@ export class DatabaseStorage implements IStorage {
         email: customers.email,
         phone: customers.phone,
         company: customers.company,
+        contact: customers.contact,
         customerType: customers.customerType,
         notes: customers.notes,
         isActive: customers.isActive,
         createdAt: customers.createdAt,
         updatedAt: customers.updatedAt,
-        preferredCommunicationMethod: customers.preferredCommunicationMethod
+        preferredCommunicationMethod: customers.preferredCommunicationMethod,
       })
       .from(customers)
-      .where(and(
-        eq(customers.isActive, true),
-        // Search by name or company
-        or(
-          ilike(customers.name, `%${query}%`),
-          ilike(customers.company, `%${query}%`)
+      .where(
+        and(
+          eq(customers.isActive, true),
+          // Search by name or company
+          or(
+            ilike(customers.name, `%${query}%`),
+            ilike(customers.company, `%${query}%`)
+          )
         )
-      ))
+      )
       .orderBy(customers.name)
       .limit(10);
   }
@@ -3758,8 +4986,12 @@ export class DatabaseStorage implements IStorage {
     return customer;
   }
 
-  async updateCustomer(id: number, data: Partial<InsertCustomer>): Promise<Customer> {
-    const [customer] = await db.update(customers)
+  async updateCustomer(
+    id: number,
+    data: Partial<InsertCustomer>
+  ): Promise<Customer> {
+    const [customer] = await db
+      .update(customers)
       .set(data)
       .where(eq(customers.id, id))
       .returning();
@@ -3768,7 +5000,8 @@ export class DatabaseStorage implements IStorage {
 
   async deleteCustomer(id: number): Promise<void> {
     // Soft delete - just mark as inactive
-    await db.update(customers)
+    await db
+      .update(customers)
       .set({ isActive: false })
       .where(eq(customers.id, id));
   }
@@ -3778,7 +5011,11 @@ export class DatabaseStorage implements IStorage {
     return await db
       .select()
       .from(customerAddresses)
-      .orderBy(customerAddresses.customerId, customerAddresses.isDefault, customerAddresses.id);
+      .orderBy(
+        customerAddresses.customerId,
+        customerAddresses.isDefault,
+        customerAddresses.id
+      );
   }
 
   async getCustomerAddresses(customerId: string): Promise<CustomerAddress[]> {
@@ -3789,13 +5026,22 @@ export class DatabaseStorage implements IStorage {
       .orderBy(customerAddresses.isDefault, customerAddresses.id);
   }
 
-  async createCustomerAddress(data: InsertCustomerAddress): Promise<CustomerAddress> {
-    const [address] = await db.insert(customerAddresses).values(data).returning();
+  async createCustomerAddress(
+    data: InsertCustomerAddress
+  ): Promise<CustomerAddress> {
+    const [address] = await db
+      .insert(customerAddresses)
+      .values(data)
+      .returning();
     return address;
   }
 
-  async updateCustomerAddress(id: number, data: Partial<InsertCustomerAddress>): Promise<CustomerAddress> {
-    const [address] = await db.update(customerAddresses)
+  async updateCustomerAddress(
+    id: number,
+    data: Partial<InsertCustomerAddress>
+  ): Promise<CustomerAddress> {
+    const [address] = await db
+      .update(customerAddresses)
       .set(data)
       .where(eq(customerAddresses.id, id))
       .returning();
@@ -3816,13 +5062,19 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(communicationLogs.createdAt));
   }
 
-  async createCommunicationLog(data: InsertCommunicationLog): Promise<CommunicationLog> {
+  async createCommunicationLog(
+    data: InsertCommunicationLog
+  ): Promise<CommunicationLog> {
     const [log] = await db.insert(communicationLogs).values(data).returning();
     return log;
   }
 
-  async updateCommunicationLog(id: number, data: Partial<InsertCommunicationLog>): Promise<CommunicationLog> {
-    const [log] = await db.update(communicationLogs)
+  async updateCommunicationLog(
+    id: number,
+    data: Partial<InsertCommunicationLog>
+  ): Promise<CommunicationLog> {
+    const [log] = await db
+      .update(communicationLogs)
       .set(data)
       .where(eq(communicationLogs.id, id))
       .returning();
@@ -3844,8 +5096,12 @@ export class DatabaseStorage implements IStorage {
     return doc;
   }
 
-  async updatePdfDocument(id: number, data: Partial<InsertPdfDocument>): Promise<PdfDocument> {
-    const [doc] = await db.update(pdfDocuments)
+  async updatePdfDocument(
+    id: number,
+    data: Partial<InsertPdfDocument>
+  ): Promise<PdfDocument> {
+    const [doc] = await db
+      .update(pdfDocuments)
       .set(data)
       .where(eq(pdfDocuments.id, id))
       .returning();
@@ -3860,7 +5116,10 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(purchaseOrders.createdAt));
   }
 
-  async getPurchaseOrder(id: number, options?: { includeItems?: boolean; includeOrderCount?: boolean }): Promise<PurchaseOrder & { items?: PurchaseOrderItem[] } | undefined> {
+  async getPurchaseOrder(
+    id: number,
+    options?: { includeItems?: boolean; includeOrderCount?: boolean }
+  ): Promise<(PurchaseOrder & { items?: PurchaseOrderItem[] }) | undefined> {
     const po = await db
       .select()
       .from(purchaseOrders)
@@ -3887,8 +5146,12 @@ export class DatabaseStorage implements IStorage {
     return po;
   }
 
-  async updatePurchaseOrder(id: number, data: Partial<InsertPurchaseOrder>): Promise<PurchaseOrder> {
-    const [po] = await db.update(purchaseOrders)
+  async updatePurchaseOrder(
+    id: number,
+    data: Partial<InsertPurchaseOrder>
+  ): Promise<PurchaseOrder> {
+    const [po] = await db
+      .update(purchaseOrders)
       .set(data)
       .where(eq(purchaseOrders.id, id))
       .returning();
@@ -3912,15 +5175,23 @@ export class DatabaseStorage implements IStorage {
       .orderBy(purchaseOrderItems.createdAt);
   }
 
-  async createPurchaseOrderItem(data: InsertPurchaseOrderItem): Promise<PurchaseOrderItem> {
+  async createPurchaseOrderItem(
+    data: InsertPurchaseOrderItem
+  ): Promise<PurchaseOrderItem> {
     const [item] = await db.insert(purchaseOrderItems).values(data).returning();
     return item;
   }
 
-  async updatePurchaseOrderItem(id: number, data: Partial<InsertPurchaseOrderItem>): Promise<PurchaseOrderItem> {
+  async updatePurchaseOrderItem(
+    id: number,
+    data: Partial<InsertPurchaseOrderItem>
+  ): Promise<PurchaseOrderItem> {
     // Calculate total price if quantity or unitPrice changed
     if (data.quantity !== undefined || data.unitPrice !== undefined) {
-      const currentItem = await db.select().from(purchaseOrderItems).where(eq(purchaseOrderItems.id, id));
+      const currentItem = await db
+        .select()
+        .from(purchaseOrderItems)
+        .where(eq(purchaseOrderItems.id, id));
       if (currentItem.length > 0) {
         const item = currentItem[0];
         const quantity = data.quantity ?? item.quantity;
@@ -3929,7 +5200,8 @@ export class DatabaseStorage implements IStorage {
       }
     }
 
-    const [item] = await db.update(purchaseOrderItems)
+    const [item] = await db
+      .update(purchaseOrderItems)
       .set(data)
       .where(eq(purchaseOrderItems.id, id))
       .returning();
@@ -3966,7 +5238,9 @@ export class DatabaseStorage implements IStorage {
     return order;
   }
 
-  async getProductionOrderByOrderId(orderId: string): Promise<ProductionOrder | undefined> {
+  async getProductionOrderByOrderId(
+    orderId: string
+  ): Promise<ProductionOrder | undefined> {
     const [order] = await db
       .select()
       .from(productionOrders)
@@ -3984,12 +5258,17 @@ export class DatabaseStorage implements IStorage {
     return orders;
   }
 
-  async createProductionOrder(data: InsertProductionOrder): Promise<ProductionOrder> {
+  async createProductionOrder(
+    data: InsertProductionOrder
+  ): Promise<ProductionOrder> {
     const [order] = await db.insert(productionOrders).values(data).returning();
     return order;
   }
 
-  async updateProductionOrder(id: number, data: Partial<InsertProductionOrder>): Promise<ProductionOrder> {
+  async updateProductionOrder(
+    id: number,
+    data: Partial<InsertProductionOrder>
+  ): Promise<ProductionOrder> {
     const [order] = await db
       .update(productionOrders)
       .set(data)
@@ -4003,16 +5282,19 @@ export class DatabaseStorage implements IStorage {
   }
 
   // MODIFIED: Includes production scheduling logic for P1 purchase orders
-  async generateProductionOrdersFromPO(poId: number): Promise<ProductionOrder[]> {
+  async generateProductionOrdersFromPO(
+    poId: number
+  ): Promise<ProductionOrder[]> {
     const po = await this.getPurchaseOrder(poId);
     if (!po) {
       throw new Error('Purchase order not found');
     }
 
-    const customer = await this.db.select()
+    const customer = await this.db
+      .select()
       .from(customers)
       .where(eq(customers.id, parseInt(po.customerId)))
-      .then(results => results[0]);
+      .then((results) => results[0]);
 
     if (!customer) {
       throw new Error('Customer not found');
@@ -4024,11 +5306,20 @@ export class DatabaseStorage implements IStorage {
     }
 
     // Calculate production schedule for due date fulfillment
-    const productionSchedule = await this.calculateProductionSchedule(po.expectedDelivery, items);
+    const productionSchedule = await this.calculateProductionSchedule(
+      po.expectedDelivery,
+      items
+    );
 
     // Generate base order ID: [First 3 letters of customer][Last 5 digits of PO#]
-    const customerPrefix = customer.name.replace(/[^A-Za-z]/g, '').substring(0, 3).toUpperCase();
-    const poNumberDigits = po.poNumber.replace(/[^0-9]/g, '').slice(-5).padStart(5, '0');
+    const customerPrefix = customer.name
+      .replace(/[^A-Za-z]/g, '')
+      .substring(0, 3)
+      .toUpperCase();
+    const poNumberDigits = po.poNumber
+      .replace(/[^0-9]/g, '')
+      .slice(-5)
+      .padStart(5, '0');
     const baseOrderId = `${customerPrefix}${poNumberDigits}`;
 
     const orders: ProductionOrder[] = [];
@@ -4043,7 +5334,9 @@ export class DatabaseStorage implements IStorage {
 
         // Get due date for this specific item instance
         const weekIndex = Math.floor(i / itemSchedule.itemsPerWeek);
-        const itemDueDate = itemSchedule.weeklyDueDates[weekIndex] || new Date(po.expectedDelivery);
+        const itemDueDate =
+          itemSchedule.weeklyDueDates[weekIndex] ||
+          new Date(po.expectedDelivery);
 
         const orderData: InsertProductionOrder = {
           orderId,
@@ -4060,7 +5353,7 @@ export class DatabaseStorage implements IStorage {
           dueDate: itemDueDate,
           productionStatus: 'PENDING',
           currentDepartment: 'P1 Production Queue',
-          status: 'IN_PROGRESS'
+          status: 'IN_PROGRESS',
         };
 
         const order = await this.createProductionOrder(orderData);
@@ -4069,24 +5362,36 @@ export class DatabaseStorage implements IStorage {
       }
 
       // Update the PO item's order count
-      await this.updatePurchaseOrderItem(item.id, { orderCount: item.quantity });
+      await this.updatePurchaseOrderItem(item.id, {
+        orderCount: item.quantity,
+      });
     }
 
     return orders;
   }
 
   // Helper to calculate production schedule for P1 POs
-  private async calculateProductionSchedule(dueDate: string, items: any[]): Promise<Record<number, {
-    itemsPerWeek: number;
-    weeksNeeded: number;
-    weeklyDueDates: Date[];
-  }>> {
+  private async calculateProductionSchedule(
+    dueDate: string,
+    items: any[]
+  ): Promise<
+    Record<
+      number,
+      {
+        itemsPerWeek: number;
+        weeksNeeded: number;
+        weeklyDueDates: Date[];
+      }
+    >
+  > {
     const finalDueDate = new Date(dueDate);
     const today = new Date();
 
     // Calculate available weeks (excluding weekends, only Mon-Thu production days)
     const msPerWeek = 7 * 24 * 60 * 60 * 1000;
-    const totalWeeksAvailable = Math.floor((finalDueDate.getTime() - today.getTime()) / msPerWeek);
+    const totalWeeksAvailable = Math.floor(
+      (finalDueDate.getTime() - today.getTime()) / msPerWeek
+    );
     const availableWeeks = Math.max(1, totalWeeksAvailable); // At least 1 week
 
     console.log(`📅 P1 PO Production Schedule Calculation:`);
@@ -4097,29 +5402,38 @@ export class DatabaseStorage implements IStorage {
 
     for (const item of items) {
       const itemsNeeded = item.quantity;
-      
+
       // Get mold capacity for this specific item
       const molds = await this.getAllMolds();
-      const enabledMolds = molds.filter(m => m.enabled);
-      
+      const enabledMolds = molds.filter((m) => m.enabled);
+
       // Find molds that support this item's stock model
       const itemStockModel = item.stockModelId || item.itemId;
-      const compatibleMolds = enabledMolds.filter(m => {
-        return m.stockModels && Array.isArray(m.stockModels) && 
-               m.stockModels.includes(itemStockModel);
+      const compatibleMolds = enabledMolds.filter((m) => {
+        return (
+          m.stockModels &&
+          Array.isArray(m.stockModels) &&
+          m.stockModels.includes(itemStockModel)
+        );
       });
-      
+
       // Calculate weekly capacity based on compatible molds
       // Assume 4 working days per week (Mon-Thu) and account for mold multipliers
-      const dailyMoldCapacity = compatibleMolds.reduce((sum, m) => sum + m.multiplier, 0);
+      const dailyMoldCapacity = compatibleMolds.reduce(
+        (sum, m) => sum + m.multiplier,
+        0
+      );
       const maxItemsPerWeek = dailyMoldCapacity * 4; // 4 working days per week
-      
+
       // If no compatible molds, use fallback capacity
       const effectiveWeeklyCapacity = maxItemsPerWeek > 0 ? maxItemsPerWeek : 8; // Fallback to 8 per week
 
       // Calculate items per week needed to meet due date
       const itemsPerWeekNeeded = Math.ceil(itemsNeeded / availableWeeks);
-      const actualItemsPerWeek = Math.min(itemsPerWeekNeeded, effectiveWeeklyCapacity);
+      const actualItemsPerWeek = Math.min(
+        itemsPerWeekNeeded,
+        effectiveWeeklyCapacity
+      );
       const weeksNeeded = Math.ceil(itemsNeeded / actualItemsPerWeek);
 
       console.log(`   Item ${item.itemName} (${item.quantity} units):`);
@@ -4132,16 +5446,24 @@ export class DatabaseStorage implements IStorage {
       for (let week = 0; week < weeksNeeded; week++) {
         // Calculate due date for this week (working backwards from final due date)
         const weekDueDate = new Date(finalDueDate);
-        weekDueDate.setDate(weekDueDate.getDate() - (weeksNeeded - week - 1) * 7);
+        weekDueDate.setDate(
+          weekDueDate.getDate() - (weeksNeeded - week - 1) * 7
+        );
 
         // Ensure due date is on a work day (Thursday for week completion)
         const dayOfWeek = weekDueDate.getDay();
-        if (dayOfWeek === 0) weekDueDate.setDate(weekDueDate.getDate() + 4); // Sunday -> Thursday
-        else if (dayOfWeek === 1) weekDueDate.setDate(weekDueDate.getDate() + 3); // Monday -> Thursday  
-        else if (dayOfWeek === 2) weekDueDate.setDate(weekDueDate.getDate() + 2); // Tuesday -> Thursday
-        else if (dayOfWeek === 3) weekDueDate.setDate(weekDueDate.getDate() + 1); // Wednesday -> Thursday
-        else if (dayOfWeek === 5) weekDueDate.setDate(weekDueDate.getDate() + 6); // Friday -> Thursday
-        else if (dayOfWeek === 6) weekDueDate.setDate(weekDueDate.getDate() + 5); // Saturday -> Thursday
+        if (dayOfWeek === 0)
+          weekDueDate.setDate(weekDueDate.getDate() + 4); // Sunday -> Thursday
+        else if (dayOfWeek === 1)
+          weekDueDate.setDate(weekDueDate.getDate() + 3); // Monday -> Thursday
+        else if (dayOfWeek === 2)
+          weekDueDate.setDate(weekDueDate.getDate() + 2); // Tuesday -> Thursday
+        else if (dayOfWeek === 3)
+          weekDueDate.setDate(weekDueDate.getDate() + 1); // Wednesday -> Thursday
+        else if (dayOfWeek === 5)
+          weekDueDate.setDate(weekDueDate.getDate() + 6); // Friday -> Thursday
+        else if (dayOfWeek === 6)
+          weekDueDate.setDate(weekDueDate.getDate() + 5); // Saturday -> Thursday
         // Thursday (4) stays the same
 
         weeklyDueDates.push(weekDueDate);
@@ -4152,21 +5474,26 @@ export class DatabaseStorage implements IStorage {
       schedule[item.id] = {
         itemsPerWeek: actualItemsPerWeek,
         weeksNeeded: weeksNeeded,
-        weeklyDueDates: weeklyDueDates
+        weeklyDueDates: weeklyDueDates,
       };
     }
 
     return schedule;
   }
 
-
   // Layup Scheduler: Molds CRUD
-  async getAllMolds(): Promise<Mold[] > {
-    return await db.select().from(molds).orderBy(molds.modelName, molds.instanceNumber);
+  async getAllMolds(): Promise<Mold[]> {
+    return await db
+      .select()
+      .from(molds)
+      .orderBy(molds.modelName, molds.instanceNumber);
   }
 
   async getMold(moldId: string): Promise<Mold | undefined> {
-    const [result] = await db.select().from(molds).where(eq(molds.moldId, moldId));
+    const [result] = await db
+      .select()
+      .from(molds)
+      .where(eq(molds.moldId, moldId));
     return result || undefined;
   }
 
@@ -4193,7 +5520,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Layup Scheduler: Employee Settings CRUD
-  async getAllEmployeeLayupSettings(): Promise<(EmployeeLayupSettings & { name: string })[]> {
+  async getAllEmployeeLayupSettings(): Promise<
+    (EmployeeLayupSettings & { name: string })[]
+  > {
     const result = await db
       .select({
         id: employeeLayupSettings.id,
@@ -4210,13 +5539,15 @@ export class DatabaseStorage implements IStorage {
       .where(eq(employeeLayupSettings.isActive, true))
       .orderBy(employeeLayupSettings.employeeId);
 
-    return result.map(r => ({
+    return result.map((r) => ({
       ...r,
-      name: r.name || r.employeeId
+      name: r.name || r.employeeId,
     }));
   }
 
-  async getEmployeeLayupSettings(employeeId: string): Promise<EmployeeLayupSettings | undefined> {
+  async getEmployeeLayupSettings(
+    employeeId: string
+  ): Promise<EmployeeLayupSettings | undefined> {
     const [result] = await db
       .select()
       .from(employeeLayupSettings)
@@ -4224,19 +5555,32 @@ export class DatabaseStorage implements IStorage {
     return result || undefined;
   }
 
-  async createEmployeeLayupSettings(data: InsertEmployeeLayupSettings): Promise<EmployeeLayupSettings> {
-    const [result] = await db.insert(employeeLayupSettings).values(data).returning();
+  async createEmployeeLayupSettings(
+    data: InsertEmployeeLayupSettings
+  ): Promise<EmployeeLayupSettings> {
+    const [result] = await db
+      .insert(employeeLayupSettings)
+      .values(data)
+      .returning();
     return result;
   }
 
-  async updateEmployeeLayupSettings(employeeId: string, data: Partial<InsertEmployeeLayupSettings>): Promise<EmployeeLayupSettings> {
-    console.log(`🔄 Storage: Updating employee "${employeeId}" with data:`, data);
+  async updateEmployeeLayupSettings(
+    employeeId: string,
+    data: Partial<InsertEmployeeLayupSettings>
+  ): Promise<EmployeeLayupSettings> {
+    console.log(
+      `🔄 Storage: Updating employee "${employeeId}" with data:`,
+      data
+    );
 
     // Check if employee exists first
     const existing = await this.getEmployeeLayupSettings(employeeId);
-    
+
     if (!existing) {
-      console.log(`➕ Employee "${employeeId}" not found in layup settings, creating new entry`);
+      console.log(
+        `➕ Employee "${employeeId}" not found in layup settings, creating new entry`
+      );
       // Create new employee layup settings entry
       const newSettings = {
         employeeId,
@@ -4245,11 +5589,17 @@ export class DatabaseStorage implements IStorage {
         department: data.department || 'Layup',
         isActive: data.isActive !== undefined ? data.isActive : true,
         createdAt: new Date(),
-        updatedAt: new Date()
+        updatedAt: new Date(),
       };
-      
-      const [result] = await db.insert(employeeLayupSettings).values(newSettings).returning();
-      console.log(`✅ Storage: Created new employee settings for "${employeeId}":`, result);
+
+      const [result] = await db
+        .insert(employeeLayupSettings)
+        .values(newSettings)
+        .returning();
+      console.log(
+        `✅ Storage: Created new employee settings for "${employeeId}":`,
+        result
+      );
       return result;
     }
 
@@ -4265,7 +5615,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteEmployeeLayupSettings(employeeId: string): Promise<void> {
-    await db.delete(employeeLayupSettings).where(eq(employeeLayupSettings.employeeId, employeeId));
+    await db
+      .delete(employeeLayupSettings)
+      .where(eq(employeeLayupSettings.employeeId, employeeId));
   }
 
   // OEM Priority Settings CRUD
@@ -4276,7 +5628,9 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(oemPrioritySettings.createdAt));
   }
 
-  async getOemPrioritySettings(id: number): Promise<OemPrioritySettings | undefined> {
+  async getOemPrioritySettings(
+    id: number
+  ): Promise<OemPrioritySettings | undefined> {
     const [result] = await db
       .select()
       .from(oemPrioritySettings)
@@ -4284,29 +5638,39 @@ export class DatabaseStorage implements IStorage {
     return result || undefined;
   }
 
-  async getOemPrioritySettingsByVendor(vendorId: string): Promise<OemPrioritySettings[]> {
+  async getOemPrioritySettingsByVendor(
+    vendorId: string
+  ): Promise<OemPrioritySettings[]> {
     return await db
       .select()
       .from(oemPrioritySettings)
-      .where(and(
-        eq(oemPrioritySettings.vendorId, vendorId),
-        eq(oemPrioritySettings.isActive, true)
-      ))
+      .where(
+        and(
+          eq(oemPrioritySettings.vendorId, vendorId),
+          eq(oemPrioritySettings.isActive, true)
+        )
+      )
       .orderBy(asc(oemPrioritySettings.priorityLevel));
   }
 
-  async getOemPrioritySettingsByPO(poId: number): Promise<OemPrioritySettings[]> {
+  async getOemPrioritySettingsByPO(
+    poId: number
+  ): Promise<OemPrioritySettings[]> {
     return await db
       .select()
       .from(oemPrioritySettings)
-      .where(and(
-        eq(oemPrioritySettings.poId, poId),
-        eq(oemPrioritySettings.isActive, true)
-      ))
+      .where(
+        and(
+          eq(oemPrioritySettings.poId, poId),
+          eq(oemPrioritySettings.isActive, true)
+        )
+      )
       .orderBy(asc(oemPrioritySettings.priorityLevel));
   }
 
-  async createOemPrioritySettings(data: InsertOemPrioritySettings): Promise<OemPrioritySettings> {
+  async createOemPrioritySettings(
+    data: InsertOemPrioritySettings
+  ): Promise<OemPrioritySettings> {
     const [result] = await db
       .insert(oemPrioritySettings)
       .values(data)
@@ -4314,12 +5678,15 @@ export class DatabaseStorage implements IStorage {
     return result;
   }
 
-  async updateOemPrioritySettings(id: number, data: Partial<InsertOemPrioritySettings>): Promise<OemPrioritySettings> {
+  async updateOemPrioritySettings(
+    id: number,
+    data: Partial<InsertOemPrioritySettings>
+  ): Promise<OemPrioritySettings> {
     const [result] = await db
       .update(oemPrioritySettings)
       .set({
         ...data,
-        updatedAt: new Date()
+        updatedAt: new Date(),
       })
       .where(eq(oemPrioritySettings.id, id))
       .returning();
@@ -4331,7 +5698,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteOemPrioritySettingsByPO(poId: number): Promise<void> {
-    await db.delete(oemPrioritySettings).where(eq(oemPrioritySettings.poId, poId));
+    await db
+      .delete(oemPrioritySettings)
+      .where(eq(oemPrioritySettings.poId, poId));
   }
 
   async getActivePrioritySettings(): Promise<OemPrioritySettings[]> {
@@ -4339,32 +5708,40 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(oemPrioritySettings)
       .where(eq(oemPrioritySettings.isActive, true))
-      .orderBy(asc(oemPrioritySettings.priorityLevel), desc(oemPrioritySettings.createdAt));
+      .orderBy(
+        asc(oemPrioritySettings.priorityLevel),
+        desc(oemPrioritySettings.createdAt)
+      );
   }
 
   // Layup Scheduler: Orders CRUD
-  async getAllProductionQueue(filters?: { status?: string; department?: string }): Promise<any[]> {
+  async getAllProductionQueue(filters?: {
+    status?: string;
+    department?: string;
+  }): Promise<any[]> {
     try {
       // Use production_orders table since production_queue table doesn't exist
       // This method should return orders sorted by due date (most urgent first) and priority score
-      let query = db.select({
-        id: productionOrders.id,
-        orderId: productionOrders.orderId,
-        orderDate: productionOrders.orderDate,
-        dueDate: productionOrders.dueDate,
-        customer: productionOrders.customerName,
-        product: productionOrders.itemName,
-        status: productionOrders.productionStatus,
-        department: productionOrders.productionStatus,
-        priorityScore: sql<number>`CASE 
+      let query = db
+        .select({
+          id: productionOrders.id,
+          orderId: productionOrders.orderId,
+          orderDate: productionOrders.orderDate,
+          dueDate: productionOrders.dueDate,
+          customer: productionOrders.customerName,
+          product: productionOrders.itemName,
+          status: productionOrders.productionStatus,
+          department: productionOrders.productionStatus,
+          priorityScore: sql<number>`CASE 
           WHEN ${productionOrders.dueDate} < CURRENT_DATE THEN 1 
           WHEN ${productionOrders.dueDate} <= CURRENT_DATE + INTERVAL '7 days' THEN 10
           WHEN ${productionOrders.dueDate} <= CURRENT_DATE + INTERVAL '30 days' THEN 30
           ELSE 50 
         END`.as('priority_score'),
-        createdAt: productionOrders.createdAt,
-        updatedAt: productionOrders.updatedAt
-      }).from(productionOrders);
+          createdAt: productionOrders.createdAt,
+          updatedAt: productionOrders.updatedAt,
+        })
+        .from(productionOrders);
 
       // Apply filters
       const conditions = [];
@@ -4372,7 +5749,9 @@ export class DatabaseStorage implements IStorage {
         conditions.push(eq(productionOrders.productionStatus, filters.status));
       }
       if (filters?.department) {
-        conditions.push(eq(productionOrders.productionStatus, filters.department));
+        conditions.push(
+          eq(productionOrders.productionStatus, filters.department)
+        );
       }
 
       if (conditions.length > 0) {
@@ -4397,17 +5776,27 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async getProductionQueueItem(orderId: string): Promise<ProductionQueue | undefined> {
-    const [result] = await db.select().from(productionQueue).where(eq(productionQueue.orderId, orderId));
+  async getProductionQueueItem(
+    orderId: string
+  ): Promise<ProductionQueue | undefined> {
+    const [result] = await db
+      .select()
+      .from(productionQueue)
+      .where(eq(productionQueue.orderId, orderId));
     return result || undefined;
   }
 
-  async createProductionQueueItem(data: InsertProductionQueue): Promise<ProductionQueue> {
+  async createProductionQueueItem(
+    data: InsertProductionQueue
+  ): Promise<ProductionQueue> {
     const [result] = await db.insert(productionQueue).values(data).returning();
     return result;
   }
 
-  async updateProductionQueueItem(orderId: string, data: Partial<InsertProductionQueue>): Promise<ProductionQueue> {
+  async updateProductionQueueItem(
+    orderId: string,
+    data: Partial<InsertProductionQueue>
+  ): Promise<ProductionQueue> {
     const [result] = await db
       .update(productionQueue)
       .set({ ...data, updatedAt: new Date() })
@@ -4417,15 +5806,24 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteProductionQueueItem(orderId: string): Promise<void> {
-    await db.delete(productionQueue).where(eq(productionQueue.orderId, orderId));
+    await db
+      .delete(productionQueue)
+      .where(eq(productionQueue.orderId, orderId));
   }
 
   // P1 Purchase Order Integration - Sync P1 orders into production queue
-  async syncP1OrdersToProductionQueue(): Promise<{ synced: number; message: string }> {
+  async syncP1OrdersToProductionQueue(): Promise<{
+    synced: number;
+    message: string;
+  }> {
     try {
       // Get existing layup order IDs for comparison
-      const existingLayupOrders = await db.select({ orderId: productionQueue.orderId }).from(productionQueue);
-      const existingOrderIds = new Set(existingLayupOrders.map(o => o.orderId));
+      const existingLayupOrders = await db
+        .select({ orderId: productionQueue.orderId })
+        .from(productionQueue);
+      const existingOrderIds = new Set(
+        existingLayupOrders.map((o) => o.orderId)
+      );
 
       // Get P1 orders that aren't already in layup queue
       const p1Orders = await db
@@ -4434,13 +5832,15 @@ export class DatabaseStorage implements IStorage {
           customerName: productionOrders.customerName,
           itemName: productionOrders.itemName,
           orderDate: productionOrders.orderDate,
-          dueDate: productionOrders.dueDate
+          dueDate: productionOrders.dueDate,
         })
         .from(productionOrders)
         .where(eq(productionOrders.productionStatus, 'PENDING'));
 
       // Filter out orders already in layup queue
-      const ordersToSync = p1Orders.filter(order => !existingOrderIds.has(order.orderId));
+      const ordersToSync = p1Orders.filter(
+        (order) => !existingOrderIds.has(order.orderId)
+      );
 
       let syncedCount = 0;
 
@@ -4448,20 +5848,27 @@ export class DatabaseStorage implements IStorage {
         // Calculate priority score based on due date (closer = higher priority)
         const dueDate = new Date(order.dueDate || order.orderDate);
         const today = new Date();
-        const daysUntilDue = Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-        const priorityScore = daysUntilDue <= 30 ? 1 : daysUntilDue <= 60 ? 2 : 50;
+        const daysUntilDue = Math.ceil(
+          (dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
+        );
+        const priorityScore =
+          daysUntilDue <= 30 ? 1 : daysUntilDue <= 60 ? 2 : 50;
 
         // Insert P1 order into layup queue
         await db.insert(productionQueue).values({
           orderId: order.orderId,
-          orderDate: order.orderDate?.toISOString().split('T')[0] || new Date().toISOString().split('T')[0],
-          dueDate: order.dueDate?.toISOString().split('T')[0] || new Date().toISOString().split('T')[0],
+          orderDate:
+            order.orderDate?.toISOString().split('T')[0] ||
+            new Date().toISOString().split('T')[0],
+          dueDate:
+            order.dueDate?.toISOString().split('T')[0] ||
+            new Date().toISOString().split('T')[0],
           priorityScore: priorityScore,
           department: 'Layup',
           status: 'FINALIZED',
           customer: order.customerName || 'Unknown',
           product: order.itemName || 'Unknown',
-          isActive: true
+          isActive: true,
         });
 
         syncedCount++;
@@ -4469,7 +5876,7 @@ export class DatabaseStorage implements IStorage {
 
       return {
         synced: syncedCount,
-        message: `Successfully synced ${syncedCount} P1 purchase orders to production queue`
+        message: `Successfully synced ${syncedCount} P1 purchase orders to production queue`,
       };
     } catch (error) {
       console.error('Error syncing P1 orders:', error);
@@ -4478,9 +5885,15 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Production Flow: Update order department and status for layup scheduler workflow
-  async updateOrderDepartment(orderId: string, department: string, status: string): Promise<{ success: boolean; message: string }> {
+  async updateOrderDepartment(
+    orderId: string,
+    department: string,
+    status: string
+  ): Promise<{ success: boolean; message: string }> {
     try {
-      console.log(` প্রক্র PRODUCTION FLOW: Updating order ${orderId} to department ${department} with status ${status}`);
+      console.log(
+        ` প্রক্র PRODUCTION FLOW: Updating order ${orderId} to department ${department} with status ${status}`
+      );
 
       // Try to update in allOrders table first
       const allOrdersResult = await db
@@ -4488,16 +5901,18 @@ export class DatabaseStorage implements IStorage {
         .set({
           currentDepartment: department,
           status: status,
-          updatedAt: new Date()
+          updatedAt: new Date(),
         })
         .where(eq(allOrders.orderId, orderId))
         .returning();
 
       if (allOrdersResult.length > 0) {
-        console.log(`✅ PRODUCTION FLOW: Updated regular order ${orderId} in allOrders table`);
+        console.log(
+          `✅ PRODUCTION FLOW: Updated regular order ${orderId} in allOrders table`
+        );
         return {
           success: true,
-          message: `Regular order ${orderId} updated to ${department} department`
+          message: `Regular order ${orderId} updated to ${department} department`,
         };
       }
 
@@ -4506,31 +5921,37 @@ export class DatabaseStorage implements IStorage {
         .update(productionOrders)
         .set({
           productionStatus: status,
-          updatedAt: new Date()
+          updatedAt: new Date(),
         })
         .where(eq(productionOrders.orderId, orderId))
         .returning();
 
       if (productionOrdersResult.length > 0) {
-        console.log(`✅ PRODUCTION FLOW: Updated production order ${orderId} in productionOrders table`);
+        console.log(
+          `✅ PRODUCTION FLOW: Updated production order ${orderId} in productionOrders table`
+        );
         return {
           success: true,
-          message: `Production order ${orderId} updated to ${status} status`
+          message: `Production order ${orderId} updated to ${status} status`,
         };
       }
 
       // If not found in either table, log and return success with warning
-      console.warn(`⚠️ PRODUCTION FLOW: Order ${orderId} not found in allOrders or productionOrders tables`);
+      console.warn(
+        `⚠️ PRODUCTION FLOW: Order ${orderId} not found in allOrders or productionOrders tables`
+      );
       return {
         success: false,
-        message: `Order ${orderId} not found in database`
+        message: `Order ${orderId} not found in database`,
       };
-
     } catch (error) {
-      console.error(`❌ PRODUCTION FLOW: Error updating order ${orderId}:`, error);
+      console.error(
+        `❌ PRODUCTION FLOW: Error updating order ${orderId}:`,
+        error
+      );
       return {
         success: false,
-        message: `Database error updating order ${orderId}: ${error}`
+        message: `Database error updating order ${orderId}: ${error}`,
       };
     }
   }
@@ -4554,13 +5975,17 @@ export class DatabaseStorage implements IStorage {
         FROM production_orders 
         WHERE production_status = 'PENDING'
       `);
-      const productionOrderMap = new Map((productionQuery.rows || []).map((po: any) => [po.order_id, po]));
+      const productionOrderMap = new Map(
+        (productionQuery.rows || []).map((po: any) => [po.order_id, po])
+      );
 
       // Process the results
       const unifiedQueue = (layupQuery.rows || []).map((order: any) => {
         const today = new Date();
         const dueDate = new Date(order.due_date || order.order_date);
-        const daysUntilDue = Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+        const daysUntilDue = Math.ceil(
+          (dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
+        );
 
         let urgencyStatus = 'NORMAL';
         if (daysUntilDue < 0) urgencyStatus = 'OVERDUE';
@@ -4583,7 +6008,7 @@ export class DatabaseStorage implements IStorage {
           urgencyStatus,
           daysUntilDue,
           createdAt: order.created_at,
-          updatedAt: order.updated_at
+          updatedAt: order.updated_at,
         };
       });
 
@@ -4596,11 +6021,19 @@ export class DatabaseStorage implements IStorage {
 
   // Layup Scheduler: Schedule CRUD
   async getAllLayupSchedule(): Promise<LayupSchedule[]> {
-    return await db.select().from(layupSchedule).orderBy(layupSchedule.scheduledDate);
+    return await db
+      .select()
+      .from(layupSchedule)
+      .orderBy(layupSchedule.scheduledDate);
   }
 
-  async getLayupScheduleByDateRange(startDate: string, endDate: string): Promise<LayupSchedule[]> {
-    return await db.select().from(layupSchedule)
+  async getLayupScheduleByDateRange(
+    startDate: string,
+    endDate: string
+  ): Promise<LayupSchedule[]> {
+    return await db
+      .select()
+      .from(layupSchedule)
       .where(
         and(
           gte(layupSchedule.scheduledDate, new Date(startDate)),
@@ -4611,7 +6044,10 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getLayupScheduleByOrder(orderId: string): Promise<LayupSchedule[]> {
-    return await db.select().from(layupSchedule).where(eq(layupSchedule.orderId, orderId));
+    return await db
+      .select()
+      .from(layupSchedule)
+      .where(eq(layupSchedule.orderId, orderId));
   }
 
   async createLayupSchedule(data: InsertLayupSchedule): Promise<LayupSchedule> {
@@ -4619,7 +6055,10 @@ export class DatabaseStorage implements IStorage {
     return result;
   }
 
-  async updateLayupSchedule(id: number, data: Partial<InsertLayupSchedule>): Promise<LayupSchedule> {
+  async updateLayupSchedule(
+    id: number,
+    data: Partial<InsertLayupSchedule>
+  ): Promise<LayupSchedule> {
     const [result] = await db
       .update(layupSchedule)
       .set({ ...data, updatedAt: new Date() })
@@ -4644,14 +6083,19 @@ export class DatabaseStorage implements IStorage {
     return await this.getAllEmployeeLayupSettings();
   }
 
-  async overrideOrderSchedule(orderId: string, newDate: Date, moldId: string, overriddenBy?: string): Promise<LayupSchedule> {
+  async overrideOrderSchedule(
+    orderId: string,
+    newDate: Date,
+    moldId: string,
+    overriddenBy?: string
+  ): Promise<LayupSchedule> {
     // First, mark any existing schedule entries as overridden
     await db
       .update(layupSchedule)
       .set({
         isOverride: true,
         overriddenAt: new Date(),
-        overriddenBy
+        overriddenBy,
       })
       .where(eq(layupSchedule.orderId, orderId));
 
@@ -4662,7 +6106,7 @@ export class DatabaseStorage implements IStorage {
       moldId,
       employeeAssignments: [], // This would be filled by the scheduler algorithm
       isOverride: true,
-      overriddenBy
+      overriddenBy,
     };
 
     const [result] = await db.insert(layupSchedule).values(data).returning();
@@ -4676,21 +6120,21 @@ export class DatabaseStorage implements IStorage {
       const results = await db
         .select({
           department: allOrders.currentDepartment,
-          count: sql<number>`count(*)::integer`
+          count: sql<number>`count(*)::integer`,
         })
         .from(allOrders)
         .where(
           and(
             ne(allOrders.status, 'SCRAPPED'), // Only count active orders
             ne(allOrders.status, 'CANCELLED'), // Exclude cancelled orders
-            isNull(allOrders.scrapDate)       // Exclude scrapped orders
+            isNull(allOrders.scrapDate) // Exclude scrapped orders
           )
         )
         .groupBy(allOrders.currentDepartment);
 
       // Convert to object format
       const counts: Record<string, number> = {};
-      results.forEach(result => {
+      results.forEach((result) => {
         if (result.department) {
           counts[result.department] = result.count;
         }
@@ -4703,7 +6147,22 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async getPipelineDetails(): Promise<Record<string, Array<{ orderId: string; modelId: string; dueDate: Date; daysInDept: number; scheduleStatus: 'on-schedule' | 'dept-overdue' | 'cannot-meet-due' | 'critical' }>>> {
+  async getPipelineDetails(): Promise<
+    Record<
+      string,
+      Array<{
+        orderId: string;
+        modelId: string;
+        dueDate: Date;
+        daysInDept: number;
+        scheduleStatus:
+          | 'on-schedule'
+          | 'dept-overdue'
+          | 'cannot-meet-due'
+          | 'critical';
+      }>
+    >
+  > {
     try {
       // Get all active orders with their department entry timestamps from allOrders (includes both drafts and finalized)
       const orders = await db
@@ -4720,7 +6179,7 @@ export class DatabaseStorage implements IStorage {
           gunsmithCompletedAt: allOrders.gunsmithCompletedAt,
           paintCompletedAt: allOrders.paintCompletedAt,
           qcCompletedAt: allOrders.qcCompletedAt,
-          createdAt: allOrders.createdAt
+          createdAt: allOrders.createdAt,
         })
         .from(allOrders)
         .where(
@@ -4732,9 +6191,22 @@ export class DatabaseStorage implements IStorage {
         );
 
       // Group by department and calculate schedule status
-      const pipelineDetails: Record<string, Array<{ orderId: string; modelId: string; dueDate: Date; daysInDept: number; scheduleStatus: 'on-schedule' | 'dept-overdue' | 'cannot-meet-due' | 'critical' }>> = {};
+      const pipelineDetails: Record<
+        string,
+        Array<{
+          orderId: string;
+          modelId: string;
+          dueDate: Date;
+          daysInDept: number;
+          scheduleStatus:
+            | 'on-schedule'
+            | 'dept-overdue'
+            | 'cannot-meet-due'
+            | 'critical';
+        }>
+      > = {};
 
-      orders.forEach(order => {
+      orders.forEach((order) => {
         if (!order.currentDepartment) return;
 
         // Calculate days in current department
@@ -4753,7 +6225,7 @@ export class DatabaseStorage implements IStorage {
           modelId: order.modelId || '',
           dueDate: order.dueDate,
           daysInDept,
-          scheduleStatus
+          scheduleStatus,
         });
       });
 
@@ -4800,7 +6272,9 @@ export class DatabaseStorage implements IStorage {
 
     // Safety check: if deptEntryDate is still null, use current time
     if (!deptEntryDate) {
-      console.warn(`Order ${order.orderId}: No valid entry date found, using current time`);
+      console.warn(
+        `Order ${order.orderId}: No valid entry date found, using current time`
+      );
       deptEntryDate = now;
     }
 
@@ -4813,35 +6287,54 @@ export class DatabaseStorage implements IStorage {
     return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   }
 
-  private calculateScheduleStatus(order: any, daysInDept: number): 'on-schedule' | 'dept-overdue' | 'cannot-meet-due' | 'critical' {
+  private calculateScheduleStatus(
+    order: any,
+    daysInDept: number
+  ): 'on-schedule' | 'dept-overdue' | 'cannot-meet-due' | 'critical' {
     const isAdjusted = order.modelId?.includes('Adj') || false;
     const now = new Date();
     const dueDate = new Date(order.dueDate);
-    const daysUntilDue = Math.ceil((dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    const daysUntilDue = Math.ceil(
+      (dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
+    );
 
     // Define standard processing times for each department
     const departmentTimes = {
-      'Layup': 35,
-      'Plugging': 7,
-      'CNC': 7,
-      'Gunsmith': isAdjusted ? 14 : 7,
-      'Finish': isAdjusted ? 14 : 7,
+      Layup: 35,
+      Plugging: 7,
+      CNC: 7,
+      Gunsmith: isAdjusted ? 14 : 7,
+      Finish: isAdjusted ? 14 : 7,
       'Finish QC': 7,
-      'Paint': 7,
-      'QC': 7,
+      Paint: 7,
+      QC: 7,
       'Shipping QC': 7,
-      'Shipping': 7
+      Shipping: 7,
     };
 
     // Define department sequence
-    const departmentSequence = ['P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 'Gunsmith', 'Finish', 'Finish QC', 'Paint', 'Shipping QC', 'Shipping'];
+    const departmentSequence = [
+      'P1 Production Queue',
+      'Layup/Plugging',
+      'Barcode',
+      'CNC',
+      'Gunsmith',
+      'Finish',
+      'Finish QC',
+      'Paint',
+      'Shipping QC',
+      'Shipping',
+    ];
 
     // Check if order is overdue in current department
-    const currentDeptStandardTime = departmentTimes[order.currentDepartment] || 7;
+    const currentDeptStandardTime =
+      departmentTimes[order.currentDepartment] || 7;
     const isDeptOverdue = daysInDept > currentDeptStandardTime;
 
     // Calculate remaining time needed from current department onward
-    const currentDeptIndex = departmentSequence.indexOf(order.currentDepartment);
+    const currentDeptIndex = departmentSequence.indexOf(
+      order.currentDepartment
+    );
     let remainingProcessingDays = 0;
 
     if (currentDeptIndex !== -1) {
@@ -4857,25 +6350,38 @@ export class DatabaseStorage implements IStorage {
     // Check if order cannot meet due date
     const cannotMeetDueDate = remainingProcessingDays > daysUntilDue;
 
-    console.log(`📊 Order ${order.orderId}: ${daysUntilDue} days until due, needs ${remainingProcessingDays} days remaining, ${daysInDept} days in ${order.currentDepartment} (limit: ${currentDeptStandardTime}), isAdj: ${isAdjusted}`);
+    console.log(
+      `📊 Order ${order.orderId}: ${daysUntilDue} days until due, needs ${remainingProcessingDays} days remaining, ${daysInDept} days in ${order.currentDepartment} (limit: ${currentDeptStandardTime}), isAdj: ${isAdjusted}`
+    );
 
     // Determine status priority: critical (both conditions) overrides all others
     if (isDeptOverdue && cannotMeetDueDate) {
-      console.log(`🔴 Order ${order.orderId}: CRITICAL - Over dept time AND cannot meet due date (${daysInDept} > ${currentDeptStandardTime} days in ${order.currentDepartment}, needs ${remainingProcessingDays} days, has ${daysUntilDue})`);
+      console.log(
+        `🔴 Order ${order.orderId}: CRITICAL - Over dept time AND cannot meet due date (${daysInDept} > ${currentDeptStandardTime} days in ${order.currentDepartment}, needs ${remainingProcessingDays} days, has ${daysUntilDue})`
+      );
       return 'critical';
     } else if (cannotMeetDueDate) {
-      console.log(`🟠 Order ${order.orderId}: CANNOT-MEET-DUE - Cannot meet due date (needs ${remainingProcessingDays} days, has ${daysUntilDue})`);
+      console.log(
+        `🟠 Order ${order.orderId}: CANNOT-MEET-DUE - Cannot meet due date (needs ${remainingProcessingDays} days, has ${daysUntilDue})`
+      );
       return 'cannot-meet-due';
     } else if (isDeptOverdue) {
-      console.log(`🟡 Order ${order.orderId}: DEPT-OVERDUE - Over department time limit (${daysInDept} > ${currentDeptStandardTime} days in ${order.currentDepartment})`);
+      console.log(
+        `🟡 Order ${order.orderId}: DEPT-OVERDUE - Over department time limit (${daysInDept} > ${currentDeptStandardTime} days in ${order.currentDepartment})`
+      );
       return 'dept-overdue';
     } else {
-      console.log(`🟢 Order ${order.orderId}: ON-SCHEDULE - Good timing (${daysInDept} ≤ ${currentDeptStandardTime} days in dept, can meet due date)`);
+      console.log(
+        `🟢 Order ${order.orderId}: ON-SCHEDULE - Good timing (${daysInDept} ≤ ${currentDeptStandardTime} days in dept, can meet due date)`
+      );
       return 'on-schedule';
     }
   }
 
-  async progressOrder(orderId: string, nextDepartment?: string): Promise<OrderDraft | AllOrder> {
+  async progressOrder(
+    orderId: string,
+    nextDepartment?: string
+  ): Promise<OrderDraft | AllOrder> {
     try {
       // Try to find order in finalized orders first
       let currentOrder = await this.getFinalizedOrderById(orderId);
@@ -4893,32 +6399,55 @@ export class DatabaseStorage implements IStorage {
 
       // Department progression logic
       const departmentFlow = [
-        'P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 'Gunsmith', 'Finish', 'Finish QC', 'Paint', 'Shipping QC', 'Shipping'
+        'P1 Production Queue',
+        'Layup/Plugging',
+        'Barcode',
+        'CNC',
+        'Gunsmith',
+        'Finish',
+        'Finish QC',
+        'Paint',
+        'Shipping QC',
+        'Shipping',
       ];
 
       // Special handling for flat top orders - they bypass CNC and go directly to Finish
       const isFlatTop = currentOrder.isFlattop || false;
-      
+
       // Check if order has no_rail - these bypass Gunsmith entirely
-      const features = typeof currentOrder.features === 'string' ? JSON.parse(currentOrder.features) : currentOrder.features;
-      const hasNoRail = features?.rail_accessory?.includes?.('no_rail') || false;
+      const features =
+        typeof currentOrder.features === 'string'
+          ? JSON.parse(currentOrder.features)
+          : currentOrder.features;
+      const hasNoRail =
+        features?.rail_accessory?.includes?.('no_rail') || false;
 
       let nextDept = nextDepartment;
       if (!nextDept) {
         // Flat top orders skip CNC and go directly to Finish after Layup/Plugging
         if (isFlatTop && currentOrder.currentDepartment === 'Layup/Plugging') {
           nextDept = 'Finish';
-          console.log(`🏔️ Order ${orderId} is flat top - bypassing CNC, routing directly to Finish`);
+          console.log(
+            `🏔️ Order ${orderId} is flat top - bypassing CNC, routing directly to Finish`
+          );
         }
         // Orders with no_rail skip Gunsmith and go directly from CNC to Finish
         else if (hasNoRail && currentOrder.currentDepartment === 'CNC') {
           nextDept = 'Finish';
-          console.log(`🔧 Order ${orderId} has no_rail - bypassing Gunsmith, routing directly from CNC to Finish`);
-        }
-        else {
-          const currentIndex = departmentFlow.indexOf(currentOrder.currentDepartment || '');
-          if (currentIndex === -1 || currentIndex >= departmentFlow.length - 1) {
-            throw new Error(`Cannot progress from ${currentOrder.currentDepartment}`);
+          console.log(
+            `🔧 Order ${orderId} has no_rail - bypassing Gunsmith, routing directly from CNC to Finish`
+          );
+        } else {
+          const currentIndex = departmentFlow.indexOf(
+            currentOrder.currentDepartment || ''
+          );
+          if (
+            currentIndex === -1 ||
+            currentIndex >= departmentFlow.length - 1
+          ) {
+            throw new Error(
+              `Cannot progress from ${currentOrder.currentDepartment}`
+            );
           }
           nextDept = departmentFlow[currentIndex + 1];
         }
@@ -4929,15 +6458,33 @@ export class DatabaseStorage implements IStorage {
       const now = new Date();
 
       switch (currentOrder.currentDepartment) {
-        case 'P1 Production Queue': completionUpdates.productionQueueCompletedAt = now; break;
-        case 'Layup/Plugging': completionUpdates.layupPluggingCompletedAt = now; break;
-        case 'Barcode': completionUpdates.barcodeCompletedAt = now; break;
-        case 'CNC': completionUpdates.cncCompletedAt = now; break;
-        case 'Finish': completionUpdates.finishCompletedAt = now; break;
-        case 'Gunsmith': completionUpdates.gunsmithCompletedAt = now; break;
-        case 'Paint': completionUpdates.paintCompletedAt = now; break;
-        case 'Shipping QC': completionUpdates.shippingQcCompletedAt = now; break;
-        case 'Shipping': completionUpdates.shippingCompletedAt = now; break;
+        case 'P1 Production Queue':
+          completionUpdates.productionQueueCompletedAt = now;
+          break;
+        case 'Layup/Plugging':
+          completionUpdates.layupPluggingCompletedAt = now;
+          break;
+        case 'Barcode':
+          completionUpdates.barcodeCompletedAt = now;
+          break;
+        case 'CNC':
+          completionUpdates.cncCompletedAt = now;
+          break;
+        case 'Finish':
+          completionUpdates.finishCompletedAt = now;
+          break;
+        case 'Gunsmith':
+          completionUpdates.gunsmithCompletedAt = now;
+          break;
+        case 'Paint':
+          completionUpdates.paintCompletedAt = now;
+          break;
+        case 'Shipping QC':
+          completionUpdates.shippingQcCompletedAt = now;
+          break;
+        case 'Shipping':
+          completionUpdates.shippingCompletedAt = now;
+          break;
       }
 
       // Update the appropriate table
@@ -4945,13 +6492,13 @@ export class DatabaseStorage implements IStorage {
       if (isFinalized) {
         updatedOrder = await this.updateFinalizedOrder(orderId, {
           currentDepartment: nextDept,
-          ...completionUpdates
+          ...completionUpdates,
         });
       } else {
         updatedOrder = await this.updateOrderDraft(orderId, {
           currentDepartment: nextDept,
           ...completionUpdates,
-          updatedAt: now
+          updatedAt: now,
         });
       }
 
@@ -4962,7 +6509,15 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async scrapOrder(orderId: string, scrapData: { reason: string; disposition: string; authorization: string; scrapDate: Date }): Promise<OrderDraft> {
+  async scrapOrder(
+    orderId: string,
+    scrapData: {
+      reason: string;
+      disposition: string;
+      authorization: string;
+      scrapDate: Date;
+    }
+  ): Promise<OrderDraft> {
     try {
       const [updatedOrder] = await db
         .update(orderDrafts)
@@ -4972,7 +6527,7 @@ export class DatabaseStorage implements IStorage {
           scrapDisposition: scrapData.disposition,
           scrapAuthorization: scrapData.authorization,
           status: 'SCRAPPED',
-          updatedAt: new Date()
+          updatedAt: new Date(),
         })
         .where(eq(orderDrafts.orderId, orderId))
         .returning();
@@ -5024,7 +6579,7 @@ export class DatabaseStorage implements IStorage {
           isReplacement: true,
           replacedOrderId: scrapOrderId,
           createdAt: new Date(),
-          updatedAt: new Date()
+          updatedAt: new Date(),
         })
         .returning();
 
@@ -5050,12 +6605,19 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async getBOMDetails(bomId: number): Promise<(BomDefinition & { items: BomItem[], hierarchicalItems?: any[] }) | undefined> {
+  async getBOMDetails(
+    bomId: number
+  ): Promise<
+    | (BomDefinition & { items: BomItem[]; hierarchicalItems?: any[] })
+    | undefined
+  > {
     try {
       const [bom] = await db
         .select()
         .from(bomDefinitions)
-        .where(and(eq(bomDefinitions.id, bomId), eq(bomDefinitions.isActive, true)));
+        .where(
+          and(eq(bomDefinitions.id, bomId), eq(bomDefinitions.isActive, true))
+        );
 
       if (!bom) return undefined;
 
@@ -5102,7 +6664,7 @@ export class DatabaseStorage implements IStorage {
           if (referencedBom) {
             hierarchicalItem.subAssembly = {
               bomDefinition: referencedBom,
-              calculatedQuantity: item.quantity * item.quantityMultiplier
+              calculatedQuantity: item.quantity * item.quantityMultiplier,
             };
           }
         }
@@ -5118,7 +6680,14 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Method to create sub-assembly relationships
-  async createSubAssemblyReference(parentBomId: number, childBomId: number, partName: string, quantity: number, quantityMultiplier: number = 1, notes?: string): Promise<BomItem> {
+  async createSubAssemblyReference(
+    parentBomId: number,
+    childBomId: number,
+    partName: string,
+    quantity: number,
+    quantityMultiplier: number = 1,
+    notes?: string
+  ): Promise<BomItem> {
     try {
       // First verify both BOMs exist
       const parentBom = await this.getBOMDefinition(parentBomId);
@@ -5134,7 +6703,10 @@ export class DatabaseStorage implements IStorage {
         .from(bomItems)
         .where(eq(bomItems.bomId, childBomId));
 
-      const maxChildLevel = Math.max(...childItems.map(item => item.assemblyLevel || 0), 0);
+      const maxChildLevel = Math.max(
+        ...childItems.map((item) => item.assemblyLevel || 0),
+        0
+      );
       const assemblyLevel = maxChildLevel + 1;
 
       const [newItem] = await db
@@ -5161,7 +6733,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Method to get available BOMs that can be used as sub-assemblies
-  async getAvailableSubAssemblies(excludeBomId?: number): Promise<BomDefinition[]> {
+  async getAvailableSubAssemblies(
+    excludeBomId?: number
+  ): Promise<BomDefinition[]> {
     try {
       let whereCondition = eq(bomDefinitions.isActive, true);
 
@@ -5189,7 +6763,7 @@ export class DatabaseStorage implements IStorage {
         .insert(bomDefinitions)
         .values({
           ...data,
-          updatedAt: new Date()
+          updatedAt: new Date(),
         })
         .returning();
       return bom;
@@ -5199,13 +6773,16 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async updateBOM(bomId: number, data: Partial<InsertBomDefinition>): Promise<BomDefinition> {
+  async updateBOM(
+    bomId: number,
+    data: Partial<InsertBomDefinition>
+  ): Promise<BomDefinition> {
     try {
       const [bom] = await db
         .update(bomDefinitions)
         .set({
           ...data,
-          updatedAt: new Date()
+          updatedAt: new Date(),
         })
         .where(eq(bomDefinitions.id, bomId))
         .returning();
@@ -5228,7 +6805,7 @@ export class DatabaseStorage implements IStorage {
         .update(bomDefinitions)
         .set({
           isActive: false,
-          updatedAt: new Date()
+          updatedAt: new Date(),
         })
         .where(eq(bomDefinitions.id, bomId));
 
@@ -5237,7 +6814,7 @@ export class DatabaseStorage implements IStorage {
         .update(bomItems)
         .set({
           isActive: false,
-          updatedAt: new Date()
+          updatedAt: new Date(),
         })
         .where(eq(bomItems.bomId, bomId));
     } catch (error) {
@@ -5253,7 +6830,7 @@ export class DatabaseStorage implements IStorage {
         .values({
           ...data,
           bomId,
-          updatedAt: new Date()
+          updatedAt: new Date(),
         })
         .returning();
       return item;
@@ -5263,13 +6840,17 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async updateBOMItem(bomId: number, itemId: number, data: Partial<InsertBomItem>): Promise<BomItem> {
+  async updateBOMItem(
+    bomId: number,
+    itemId: number,
+    data: Partial<InsertBomItem>
+  ): Promise<BomItem> {
     try {
       const [item] = await db
         .update(bomItems)
         .set({
           ...data,
-          updatedAt: new Date()
+          updatedAt: new Date(),
         })
         .where(and(eq(bomItems.id, itemId), eq(bomItems.bomId, bomId)))
         .returning();
@@ -5292,7 +6873,7 @@ export class DatabaseStorage implements IStorage {
         .update(bomItems)
         .set({
           isActive: false,
-          updatedAt: new Date()
+          updatedAt: new Date(),
         })
         .where(and(eq(bomItems.id, itemId), eq(bomItems.bomId, bomId)));
     } catch (error) {
@@ -5318,7 +6899,9 @@ export class DatabaseStorage implements IStorage {
     return customer;
   }
 
-  async getP2CustomerByCustomerId(customerId: string): Promise<P2Customer | undefined> {
+  async getP2CustomerByCustomerId(
+    customerId: string
+  ): Promise<P2Customer | undefined> {
     const [customer] = await db
       .select()
       .from(p2Customers)
@@ -5332,7 +6915,10 @@ export class DatabaseStorage implements IStorage {
     return customer;
   }
 
-  async updateP2Customer(id: number, data: Partial<InsertP2Customer>): Promise<P2Customer> {
+  async updateP2Customer(
+    id: number,
+    data: Partial<InsertP2Customer>
+  ): Promise<P2Customer> {
     const [customer] = await db
       .update(p2Customers)
       .set(data)
@@ -5353,7 +6939,12 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(p2PurchaseOrders.createdAt));
   }
 
-  async getP2PurchaseOrder(id: number, options?: { includeItems?: boolean }): Promise<P2PurchaseOrder & { items?: P2PurchaseOrderItem[] } | undefined> {
+  async getP2PurchaseOrder(
+    id: number,
+    options?: { includeItems?: boolean }
+  ): Promise<
+    (P2PurchaseOrder & { items?: P2PurchaseOrderItem[] }) | undefined
+  > {
     const [po] = await db
       .select()
       .from(p2PurchaseOrders)
@@ -5370,12 +6961,17 @@ export class DatabaseStorage implements IStorage {
     return { ...po, items };
   }
 
-  async createP2PurchaseOrder(data: InsertP2PurchaseOrder): Promise<P2PurchaseOrder> {
+  async createP2PurchaseOrder(
+    data: InsertP2PurchaseOrder
+  ): Promise<P2PurchaseOrder> {
     const [po] = await db.insert(p2PurchaseOrders).values(data).returning();
     return po;
   }
 
-  async updateP2PurchaseOrder(id: number, data: Partial<InsertP2PurchaseOrder>): Promise<P2PurchaseOrder> {
+  async updateP2PurchaseOrder(
+    id: number,
+    data: Partial<InsertP2PurchaseOrder>
+  ): Promise<P2PurchaseOrder> {
     const [po] = await db
       .update(p2PurchaseOrders)
       .set(data)
@@ -5397,15 +6993,26 @@ export class DatabaseStorage implements IStorage {
       .orderBy(p2PurchaseOrderItems.createdAt);
   }
 
-  async createP2PurchaseOrderItem(data: InsertP2PurchaseOrderItem): Promise<P2PurchaseOrderItem> {
-    const [item] = await db.insert(p2PurchaseOrderItems).values(data).returning();
+  async createP2PurchaseOrderItem(
+    data: InsertP2PurchaseOrderItem
+  ): Promise<P2PurchaseOrderItem> {
+    const [item] = await db
+      .insert(p2PurchaseOrderItems)
+      .values(data)
+      .returning();
     return item;
   }
 
-  async updateP2PurchaseOrderItem(id: number, data: Partial<InsertP2PurchaseOrderItem>): Promise<P2PurchaseOrderItem> {
+  async updateP2PurchaseOrderItem(
+    id: number,
+    data: Partial<InsertP2PurchaseOrderItem>
+  ): Promise<P2PurchaseOrderItem> {
     // Calculate total price if quantity or unitPrice changed
     if (data.quantity !== undefined || data.unitPrice !== undefined) {
-      const currentItem = await db.select().from(p2PurchaseOrderItems).where(eq(p2PurchaseOrderItems.id, id));
+      const currentItem = await db
+        .select()
+        .from(p2PurchaseOrderItems)
+        .where(eq(p2PurchaseOrderItems.id, id));
       if (currentItem.length > 0) {
         const item = currentItem[0];
         const quantity = data.quantity ?? item.quantity;
@@ -5414,7 +7021,8 @@ export class DatabaseStorage implements IStorage {
       }
     }
 
-    const [item] = await db.update(p2PurchaseOrderItems)
+    const [item] = await db
+      .update(p2PurchaseOrderItems)
       .set(data)
       .where(eq(p2PurchaseOrderItems.id, id))
       .returning();
@@ -5422,7 +7030,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteP2PurchaseOrderItem(id: number): Promise<void> {
-    await db.delete(p2PurchaseOrderItems).where(eq(p2PurchaseOrderItems.id, id));
+    await db
+      .delete(p2PurchaseOrderItems)
+      .where(eq(p2PurchaseOrderItems.id, id));
   }
 
   // P2 Production Orders CRUD
@@ -5433,7 +7043,9 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(p2ProductionOrders.createdAt));
   }
 
-  async getP2ProductionOrdersByPoId(poId: number): Promise<P2ProductionOrder[]> {
+  async getP2ProductionOrdersByPoId(
+    poId: number
+  ): Promise<P2ProductionOrder[]> {
     return await db
       .select()
       .from(p2ProductionOrders)
@@ -5441,7 +7053,9 @@ export class DatabaseStorage implements IStorage {
       .orderBy(p2ProductionOrders.department, p2ProductionOrders.createdAt);
   }
 
-  async getP2ProductionOrder(id: number): Promise<P2ProductionOrder | undefined> {
+  async getP2ProductionOrder(
+    id: number
+  ): Promise<P2ProductionOrder | undefined> {
     const orders = await db
       .select()
       .from(p2ProductionOrders)
@@ -5449,13 +7063,22 @@ export class DatabaseStorage implements IStorage {
     return orders[0];
   }
 
-  async createP2ProductionOrder(data: InsertP2ProductionOrder): Promise<P2ProductionOrder> {
-    const [order] = await db.insert(p2ProductionOrders).values(data).returning();
+  async createP2ProductionOrder(
+    data: InsertP2ProductionOrder
+  ): Promise<P2ProductionOrder> {
+    const [order] = await db
+      .insert(p2ProductionOrders)
+      .values(data)
+      .returning();
     return order;
   }
 
-  async updateP2ProductionOrder(id: number, data: Partial<InsertP2ProductionOrder>): Promise<P2ProductionOrder> {
-    const [order] = await db.update(p2ProductionOrders)
+  async updateP2ProductionOrder(
+    id: number,
+    data: Partial<InsertP2ProductionOrder>
+  ): Promise<P2ProductionOrder> {
+    const [order] = await db
+      .update(p2ProductionOrders)
       .set({ ...data, updatedAt: new Date() })
       .where(eq(p2ProductionOrders.id, id))
       .returning();
@@ -5499,10 +7122,7 @@ export class DatabaseStorage implements IStorage {
       const bomItemsList = await db
         .select()
         .from(bomItems)
-        .where(and(
-          eq(bomItems.bomId, bomDef.id),
-          eq(bomItems.isActive, true)
-        ));
+        .where(and(eq(bomItems.bomId, bomDef.id), eq(bomItems.isActive, true)));
 
       // Create production orders for each BOM item
       for (let i = 0; i < bomItemsList.length; i++) {
@@ -5510,7 +7130,9 @@ export class DatabaseStorage implements IStorage {
 
         // Skip materials - only create production orders for manufactured parts
         if (bomItem.itemType === 'material') {
-          console.log(`Skipping material item: ${bomItem.partName} - quantity tracking only`);
+          console.log(
+            `Skipping material item: ${bomItem.partName} - quantity tracking only`
+          );
           continue;
         }
 
@@ -5539,7 +7161,8 @@ export class DatabaseStorage implements IStorage {
             notes: `Generated from P2 PO ${po.poNumber} - ${bomDef.modelName} (${bomDef.revision}) - Unit ${unitIndex} of ${totalQuantity}`,
           };
 
-          const productionOrder = await this.createP2ProductionOrder(productionOrderData);
+          const productionOrder =
+            await this.createP2ProductionOrder(productionOrderData);
           productionOrders.push(productionOrder);
         }
       }
@@ -5579,11 +7202,13 @@ export class DatabaseStorage implements IStorage {
       const materialItems = await db
         .select()
         .from(bomItems)
-        .where(and(
-          eq(bomItems.bomId, bomDef.id),
-          eq(bomItems.isActive, true),
-          eq(bomItems.itemType, 'material')
-        ));
+        .where(
+          and(
+            eq(bomItems.bomId, bomDef.id),
+            eq(bomItems.isActive, true),
+            eq(bomItems.itemType, 'material')
+          )
+        );
 
       // Calculate material requirements
       for (const materialItem of materialItems) {
@@ -5591,7 +7216,7 @@ export class DatabaseStorage implements IStorage {
 
         // Check if this material is already in our requirements list
         const existingIndex = materialRequirements.findIndex(
-          req => req.partName === materialItem.partName
+          (req) => req.partName === materialItem.partName
         );
 
         if (existingIndex >= 0) {
@@ -5601,7 +7226,7 @@ export class DatabaseStorage implements IStorage {
             sku: poItem.partNumber,
             skuQuantity: poItem.quantity,
             bomQuantity: materialItem.quantity,
-            subtotal: totalQuantity
+            subtotal: totalQuantity,
           });
         } else {
           // Create new requirement
@@ -5610,12 +7235,14 @@ export class DatabaseStorage implements IStorage {
             unitQuantity: materialItem.quantity,
             totalQuantity: totalQuantity,
             department: materialItem.firstDept,
-            sources: [{
-              sku: poItem.partNumber,
-              skuQuantity: poItem.quantity,
-              bomQuantity: materialItem.quantity,
-              subtotal: totalQuantity
-            }]
+            sources: [
+              {
+                sku: poItem.partNumber,
+                skuQuantity: poItem.quantity,
+                bomQuantity: materialItem.quantity,
+                subtotal: totalQuantity,
+              },
+            ],
           });
         }
       }
@@ -5626,10 +7253,7 @@ export class DatabaseStorage implements IStorage {
 
   // Authentication methods
   async getAllUsers(): Promise<User[]> {
-    return await db
-      .select()
-      .from(users)
-      .orderBy(users.username);
+    return await db.select().from(users).orderBy(users.username);
   }
 
   async updateUser(id: number, data: Partial<InsertUser>): Promise<User> {
@@ -5647,7 +7271,7 @@ export class DatabaseStorage implements IStorage {
       .set({
         passwordHash,
         passwordChangedAt: new Date(),
-        updatedAt: new Date()
+        updatedAt: new Date(),
       })
       .where(eq(users.id, id));
   }
@@ -5663,15 +7287,19 @@ export class DatabaseStorage implements IStorage {
     const payload = {
       employeeId,
       expiresAt: expiresAt.getTime(),
-      random: crypto.randomBytes(16).toString('hex')
+      random: crypto.randomBytes(16).toString('hex'),
     };
 
     // Simple encoding (in production, use proper encryption)
-    const encodedPayload = Buffer.from(JSON.stringify(payload)).toString('base64url');
+    const encodedPayload = Buffer.from(JSON.stringify(payload)).toString(
+      'base64url'
+    );
     return `portal_${encodedPayload}`;
   }
 
-  async validatePortalToken(token: string): Promise<{ employeeId: number; isValid: boolean }> {
+  async validatePortalToken(
+    token: string
+  ): Promise<{ employeeId: number; isValid: boolean }> {
     try {
       if (!token.startsWith('portal_')) {
         return { employeeId: 0, isValid: false };
@@ -5700,14 +7328,19 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Time clock methods for portal
-  async getTimeClockEntry(employeeId: string, date: string): Promise<TimeClockEntry | undefined> {
+  async getTimeClockEntry(
+    employeeId: string,
+    date: string
+  ): Promise<TimeClockEntry | undefined> {
     const [entry] = await db
       .select()
       .from(timeClockEntries)
-      .where(and(
-        eq(timeClockEntries.employeeId, employeeId),
-        eq(timeClockEntries.date, date)
-      ));
+      .where(
+        and(
+          eq(timeClockEntries.employeeId, employeeId),
+          eq(timeClockEntries.date, date)
+        )
+      );
     return entry;
   }
 
@@ -5738,7 +7371,7 @@ export class DatabaseStorage implements IStorage {
           employeeId,
           clockIn: now,
           clockOut: null,
-          date: today
+          date: today,
         })
         .returning();
       return created;
@@ -5768,27 +7401,37 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Daily checklist methods for portal
-  async getDailyChecklist(employeeId: string, date: string): Promise<ChecklistItem[]> {
+  async getDailyChecklist(
+    employeeId: string,
+    date: string
+  ): Promise<ChecklistItem[]> {
     return await db
       .select()
       .from(checklistItems)
-      .where(and(
-        eq(checklistItems.employeeId, employeeId),
-        eq(checklistItems.date, date)
-      ))
+      .where(
+        and(
+          eq(checklistItems.employeeId, employeeId),
+          eq(checklistItems.date, date)
+        )
+      )
       .orderBy(checklistItems.id);
   }
 
-  async updateDailyChecklist(employeeId: string, data: any): Promise<ChecklistItem[]> {
+  async updateDailyChecklist(
+    employeeId: string,
+    data: any
+  ): Promise<ChecklistItem[]> {
     const today = new Date().toISOString().split('T')[0];
 
     // Delete existing entries for today
     await db
       .delete(checklistItems)
-      .where(and(
-        eq(checklistItems.employeeId, employeeId),
-        eq(checklistItems.date, today)
-      ));
+      .where(
+        and(
+          eq(checklistItems.employeeId, employeeId),
+          eq(checklistItems.date, today)
+        )
+      );
 
     // Insert new entries
     if (data.items && data.items.length > 0) {
@@ -5799,7 +7442,7 @@ export class DatabaseStorage implements IStorage {
         type: item.type,
         options: item.options || null,
         value: item.value || null,
-        required: item.required || false
+        required: item.required || false,
       }));
 
       await db.insert(checklistItems).values(itemsToInsert);
@@ -5816,7 +7459,9 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(purchaseReviewChecklists.createdAt));
   }
 
-  async getPurchaseReviewChecklistById(id: number): Promise<PurchaseReviewChecklist | undefined> {
+  async getPurchaseReviewChecklistById(
+    id: number
+  ): Promise<PurchaseReviewChecklist | undefined> {
     const [result] = await db
       .select()
       .from(purchaseReviewChecklists)
@@ -5824,7 +7469,9 @@ export class DatabaseStorage implements IStorage {
     return result || undefined;
   }
 
-  async createPurchaseReviewChecklist(data: InsertPurchaseReviewChecklist): Promise<PurchaseReviewChecklist> {
+  async createPurchaseReviewChecklist(
+    data: InsertPurchaseReviewChecklist
+  ): Promise<PurchaseReviewChecklist> {
     const [result] = await db
       .insert(purchaseReviewChecklists)
       .values(data)
@@ -5832,7 +7479,10 @@ export class DatabaseStorage implements IStorage {
     return result;
   }
 
-  async updatePurchaseReviewChecklist(id: number, data: Partial<InsertPurchaseReviewChecklist>): Promise<PurchaseReviewChecklist> {
+  async updatePurchaseReviewChecklist(
+    id: number,
+    data: Partial<InsertPurchaseReviewChecklist>
+  ): Promise<PurchaseReviewChecklist> {
     const [result] = await db
       .update(purchaseReviewChecklists)
       .set({ ...data, updatedAt: new Date() })
@@ -5855,7 +7505,9 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(manufacturersCertificates.createdAt));
   }
 
-  async getManufacturersCertificate(id: number): Promise<ManufacturersCertificate | undefined> {
+  async getManufacturersCertificate(
+    id: number
+  ): Promise<ManufacturersCertificate | undefined> {
     const [result] = await db
       .select()
       .from(manufacturersCertificates)
@@ -5863,7 +7515,9 @@ export class DatabaseStorage implements IStorage {
     return result || undefined;
   }
 
-  async createManufacturersCertificate(data: InsertManufacturersCertificate): Promise<ManufacturersCertificate> {
+  async createManufacturersCertificate(
+    data: InsertManufacturersCertificate
+  ): Promise<ManufacturersCertificate> {
     const [result] = await db
       .insert(manufacturersCertificates)
       .values(data)
@@ -5871,7 +7525,10 @@ export class DatabaseStorage implements IStorage {
     return result;
   }
 
-  async updateManufacturersCertificate(id: number, data: Partial<InsertManufacturersCertificate>): Promise<ManufacturersCertificate> {
+  async updateManufacturersCertificate(
+    id: number,
+    data: Partial<InsertManufacturersCertificate>
+  ): Promise<ManufacturersCertificate> {
     const [result] = await db
       .update(manufacturersCertificates)
       .set({ ...data, updatedAt: new Date() })
@@ -5904,14 +7561,14 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createTaskItem(data: InsertTaskItem): Promise<TaskItem> {
-    const [result] = await db
-      .insert(taskItems)
-      .values(data)
-      .returning();
+    const [result] = await db.insert(taskItems).values(data).returning();
     return result;
   }
 
-  async updateTaskItem(id: number, data: Partial<InsertTaskItem>): Promise<TaskItem> {
+  async updateTaskItem(
+    id: number,
+    data: Partial<InsertTaskItem>
+  ): Promise<TaskItem> {
     const [result] = await db
       .update(taskItems)
       .set({ ...data, updatedAt: new Date() })
@@ -5943,28 +7600,36 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getKickbacksByOrderId(orderId: string): Promise<Kickback[]> {
-    return await db.select()
+    return await db
+      .select()
       .from(kickbacks)
       .where(eq(kickbacks.orderId, orderId))
       .orderBy(desc(kickbacks.createdAt));
   }
 
-  async getKickbacksByStatus(status: 'OPEN' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED'): Promise<Kickback[]> {
-    return await db.select()
+  async getKickbacksByStatus(
+    status: 'OPEN' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED'
+  ): Promise<Kickback[]> {
+    return await db
+      .select()
       .from(kickbacks)
       .where(eq(kickbacks.status, status))
       .orderBy(desc(kickbacks.createdAt));
   }
 
   async getKickbacksByDepartment(department: string): Promise<Kickback[]> {
-    return await db.select()
+    return await db
+      .select()
       .from(kickbacks)
       .where(eq(kickbacks.kickbackDept, department))
       .orderBy(desc(kickbacks.createdAt));
   }
 
   async getKickback(id: number): Promise<Kickback | undefined> {
-    const [kickback] = await db.select().from(kickbacks).where(eq(kickbacks.id, id));
+    const [kickback] = await db
+      .select()
+      .from(kickbacks)
+      .where(eq(kickbacks.id, id));
     return kickback || undefined;
   }
 
@@ -5973,8 +7638,12 @@ export class DatabaseStorage implements IStorage {
     return kickback;
   }
 
-  async updateKickback(id: number, data: Partial<InsertKickback>): Promise<Kickback> {
-    const [kickback] = await db.update(kickbacks)
+  async updateKickback(
+    id: number,
+    data: Partial<InsertKickback>
+  ): Promise<Kickback> {
+    const [kickback] = await db
+      .update(kickbacks)
       .set({ ...data, updatedAt: new Date() })
       .where(eq(kickbacks.id, id))
       .returning();
@@ -5983,95 +7652,6 @@ export class DatabaseStorage implements IStorage {
 
   async deleteKickback(id: number): Promise<void> {
     await db.delete(kickbacks).where(eq(kickbacks.id, id));
-  }
-
-  // Calendar Event CRUD Implementation
-  async getAllCalendarEvents(): Promise<CalendarEvent[]> {
-    return await db.select().from(calendarEvents).orderBy(asc(calendarEvents.startDate));
-  }
-
-  async getCalendarEventsByDateRange(startDate: Date, endDate: Date): Promise<CalendarEvent[]> {
-    return await db.select()
-      .from(calendarEvents)
-      .where(
-        and(
-          gte(calendarEvents.startDate, startDate),
-          lte(calendarEvents.endDate, endDate)
-        )
-      )
-      .orderBy(asc(calendarEvents.startDate));
-  }
-
-  async getCalendarEvent(id: number): Promise<CalendarEvent | undefined> {
-    const results = await db.select().from(calendarEvents).where(eq(calendarEvents.id, id));
-    return results[0];
-  }
-
-  async createCalendarEvent(data: InsertCalendarEvent): Promise<CalendarEvent> {
-    const [newEvent] = await db.insert(calendarEvents).values(data).returning();
-    return newEvent;
-  }
-
-  async updateCalendarEvent(id: number, data: Partial<InsertCalendarEvent>): Promise<CalendarEvent> {
-    const [updatedEvent] = await db.update(calendarEvents)
-      .set({ ...data, updatedAt: new Date() })
-      .where(eq(calendarEvents.id, id))
-      .returning();
-    return updatedEvent;
-  }
-
-  async deleteCalendarEvent(id: number): Promise<void> {
-    await db.delete(calendarEvents).where(eq(calendarEvents.id, id));
-  }
-
-  // Calendar Event Attendees CRUD Implementation
-  async getEventAttendees(eventId: number): Promise<CalendarEventAttendee[]> {
-    return await db.select()
-      .from(calendarEventAttendees)
-      .where(eq(calendarEventAttendees.eventId, eventId))
-      .orderBy(asc(calendarEventAttendees.userId));
-  }
-
-  async addEventAttendee(data: InsertCalendarEventAttendee): Promise<CalendarEventAttendee> {
-    const [newAttendee] = await db.insert(calendarEventAttendees).values(data).returning();
-    return newAttendee;
-  }
-
-  async updateAttendeeStatus(eventId: number, userId: string, status: 'invited' | 'accepted' | 'declined' | 'tentative'): Promise<CalendarEventAttendee> {
-    const [updatedAttendee] = await db.update(calendarEventAttendees)
-      .set({ status })
-      .where(
-        and(
-          eq(calendarEventAttendees.eventId, eventId),
-          eq(calendarEventAttendees.userId, userId)
-        )
-      )
-      .returning();
-    return updatedAttendee;
-  }
-
-  async removeEventAttendee(eventId: number, userId: string): Promise<void> {
-    await db.delete(calendarEventAttendees)
-      .where(
-        and(
-          eq(calendarEventAttendees.eventId, eventId),
-          eq(calendarEventAttendees.userId, userId)
-        )
-      );
-  }
-
-  async getUserCalendarEvents(userId: string): Promise<CalendarEvent[]> {
-    return await db.select()
-      .from(calendarEvents)
-      .leftJoin(calendarEventAttendees, eq(calendarEvents.id, calendarEventAttendees.eventId))
-      .where(
-        or(
-          eq(calendarEvents.createdBy, userId),
-          eq(calendarEventAttendees.userId, userId),
-          eq(calendarEvents.isPublic, true)
-        )
-      )
-      .orderBy(asc(calendarEvents.startDate));
   }
 
   // Kickback Analytics Methods
@@ -6107,12 +7687,14 @@ export class DatabaseStorage implements IStorage {
     let totalResolutionTime = 0;
     let resolutionCount = 0;
 
-    allKickbacks.forEach(kickback => {
+    allKickbacks.forEach((kickback) => {
       // Department counts
-      byDepartment[kickback.kickbackDept] = (byDepartment[kickback.kickbackDept] || 0) + 1;
+      byDepartment[kickback.kickbackDept] =
+        (byDepartment[kickback.kickbackDept] || 0) + 1;
 
       // Reason code counts
-      byReasonCode[kickback.reasonCode] = (byReasonCode[kickback.reasonCode] || 0) + 1;
+      byReasonCode[kickback.reasonCode] =
+        (byReasonCode[kickback.reasonCode] || 0) + 1;
 
       // Status counts
       byStatus[kickback.status] = (byStatus[kickback.status] || 0) + 1;
@@ -6125,16 +7707,18 @@ export class DatabaseStorage implements IStorage {
         resolvedKickbacks++;
 
         if (kickback.resolvedAt) {
-          const resolutionTime = kickback.resolvedAt.getTime() - kickback.kickbackDate.getTime();
+          const resolutionTime =
+            kickback.resolvedAt.getTime() - kickback.kickbackDate.getTime();
           totalResolutionTime += resolutionTime;
           resolutionCount++;
         }
       }
     });
 
-    const averageResolutionTime = resolutionCount > 0
-      ? totalResolutionTime / resolutionCount / (1000 * 60 * 60 * 24) // Convert to days
-      : null;
+    const averageResolutionTime =
+      resolutionCount > 0
+        ? totalResolutionTime / resolutionCount / (1000 * 60 * 60 * 24) // Convert to days
+        : null;
 
     return {
       totalKickbacks,
@@ -6143,7 +7727,7 @@ export class DatabaseStorage implements IStorage {
       byStatus,
       byPriority,
       resolvedKickbacks,
-      averageResolutionTime
+      averageResolutionTime,
     };
   }
 
@@ -6170,15 +7754,17 @@ export class DatabaseStorage implements IStorage {
     return await db
       .select()
       .from(documents)
-      .where(and(
-        eq(documents.isActive, true),
-        or(
-          ilike(documents.title, `%${query}%`),
-          ilike(documents.description, `%${query}%`),
-          ilike(documents.fileName, `%${query}%`),
-          ilike(documents.documentType, `%${query}%`)
+      .where(
+        and(
+          eq(documents.isActive, true),
+          or(
+            ilike(documents.title, `%${query}%`),
+            ilike(documents.description, `%${query}%`),
+            ilike(documents.fileName, `%${query}%`),
+            ilike(documents.documentType, `%${query}%`)
+          )
         )
-      ))
+      )
       .orderBy(desc(documents.uploadDate))
       .limit(50);
   }
@@ -6187,10 +7773,12 @@ export class DatabaseStorage implements IStorage {
     return await db
       .select()
       .from(documents)
-      .where(and(
-        eq(documents.isActive, true),
-        eq(documents.documentType, documentType)
-      ))
+      .where(
+        and(
+          eq(documents.isActive, true),
+          eq(documents.documentType, documentType)
+        )
+      )
       .orderBy(desc(documents.uploadDate));
   }
 
@@ -6201,18 +7789,21 @@ export class DatabaseStorage implements IStorage {
         ...data,
         uploadDate: new Date(),
         createdAt: new Date(),
-        updatedAt: new Date()
+        updatedAt: new Date(),
       })
       .returning();
     return document;
   }
 
-  async updateManagedDocument(id: number, data: Partial<InsertDocument>): Promise<Document> {
+  async updateManagedDocument(
+    id: number,
+    data: Partial<InsertDocument>
+  ): Promise<Document> {
     const [document] = await db
       .update(documents)
       .set({
         ...data,
-        updatedAt: new Date()
+        updatedAt: new Date(),
       })
       .where(eq(documents.id, id))
       .returning();
@@ -6225,7 +7816,7 @@ export class DatabaseStorage implements IStorage {
       .update(documents)
       .set({
         isActive: false,
-        updatedAt: new Date()
+        updatedAt: new Date(),
       })
       .where(eq(documents.id, id));
   }
@@ -6243,10 +7834,12 @@ export class DatabaseStorage implements IStorage {
     return await db
       .select()
       .from(documentTags)
-      .where(and(
-        eq(documentTags.isActive, true),
-        eq(documentTags.category, category)
-      ))
+      .where(
+        and(
+          eq(documentTags.isActive, true),
+          eq(documentTags.category, category)
+        )
+      )
       .orderBy(documentTags.name);
   }
 
@@ -6255,13 +7848,16 @@ export class DatabaseStorage implements IStorage {
       .insert(documentTags)
       .values({
         ...data,
-        createdAt: new Date()
+        createdAt: new Date(),
       })
       .returning();
     return tag;
   }
 
-  async updateTag(id: number, data: Partial<InsertDocumentTag>): Promise<DocumentTag> {
+  async updateTag(
+    id: number,
+    data: Partial<InsertDocumentTag>
+  ): Promise<DocumentTag> {
     const [tag] = await db
       .update(documentTags)
       .set(data)
@@ -6293,14 +7889,16 @@ export class DatabaseStorage implements IStorage {
         color: documentTags.color,
         description: documentTags.description,
         isActive: documentTags.isActive,
-        createdAt: documentTags.createdAt
+        createdAt: documentTags.createdAt,
       })
       .from(documentTagRelations)
       .innerJoin(documentTags, eq(documentTagRelations.tagId, documentTags.id))
-      .where(and(
-        eq(documentTagRelations.documentId, documentId),
-        eq(documentTags.isActive, true)
-      ))
+      .where(
+        and(
+          eq(documentTagRelations.documentId, documentId),
+          eq(documentTags.isActive, true)
+        )
+      )
       .orderBy(documentTags.category, documentTags.name);
   }
 
@@ -6310,18 +7908,23 @@ export class DatabaseStorage implements IStorage {
       .values({
         documentId,
         tagId,
-        addedAt: new Date()
+        addedAt: new Date(),
       })
       .onConflictDoNothing();
   }
 
-  async removeTagFromDocument(documentId: number, tagId: number): Promise<void> {
+  async removeTagFromDocument(
+    documentId: number,
+    tagId: number
+  ): Promise<void> {
     await db
       .delete(documentTagRelations)
-      .where(and(
-        eq(documentTagRelations.documentId, documentId),
-        eq(documentTagRelations.tagId, tagId)
-      ));
+      .where(
+        and(
+          eq(documentTagRelations.documentId, documentId),
+          eq(documentTagRelations.tagId, tagId)
+        )
+      );
   }
 
   // Document Collections CRUD
@@ -6340,7 +7943,9 @@ export class DatabaseStorage implements IStorage {
     return collection;
   }
 
-  async getCollectionsByType(collectionType: string): Promise<DocumentCollection[]> {
+  async getCollectionsByType(
+    collectionType: string
+  ): Promise<DocumentCollection[]> {
     return await db
       .select()
       .from(documentCollections)
@@ -6348,24 +7953,29 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(documentCollections.createdAt));
   }
 
-  async createCollection(data: InsertDocumentCollection): Promise<DocumentCollection> {
+  async createCollection(
+    data: InsertDocumentCollection
+  ): Promise<DocumentCollection> {
     const [collection] = await db
       .insert(documentCollections)
       .values({
         ...data,
         createdAt: new Date(),
-        updatedAt: new Date()
+        updatedAt: new Date(),
       })
       .returning();
     return collection;
   }
 
-  async updateCollection(id: number, data: Partial<InsertDocumentCollection>): Promise<DocumentCollection> {
+  async updateCollection(
+    id: number,
+    data: Partial<InsertDocumentCollection>
+  ): Promise<DocumentCollection> {
     const [collection] = await db
       .update(documentCollections)
       .set({
         ...data,
-        updatedAt: new Date()
+        updatedAt: new Date(),
       })
       .where(eq(documentCollections.id, id))
       .returning();
@@ -6378,9 +7988,7 @@ export class DatabaseStorage implements IStorage {
       .delete(documentCollectionRelations)
       .where(eq(documentCollectionRelations.collectionId, id));
 
-    await db
-      .delete(documentCollections)
-      .where(eq(documentCollections.id, id));
+    await db.delete(documentCollections).where(eq(documentCollections.id, id));
   }
 
   // Document Collection Relations
@@ -6400,18 +8008,29 @@ export class DatabaseStorage implements IStorage {
         uploadedBy: documents.uploadedBy,
         isActive: documents.isActive,
         createdAt: documents.createdAt,
-        updatedAt: documents.updatedAt
+        updatedAt: documents.updatedAt,
       })
       .from(documentCollectionRelations)
-      .innerJoin(documents, eq(documentCollectionRelations.documentId, documents.id))
-      .where(and(
-        eq(documentCollectionRelations.collectionId, collectionId),
-        eq(documents.isActive, true)
-      ))
+      .innerJoin(
+        documents,
+        eq(documentCollectionRelations.documentId, documents.id)
+      )
+      .where(
+        and(
+          eq(documentCollectionRelations.collectionId, collectionId),
+          eq(documents.isActive, true)
+        )
+      )
       .orderBy(documentCollectionRelations.displayOrder, documents.uploadDate);
   }
 
-  async addDocumentToCollection(collectionId: number, documentId: number, relationshipType: string = 'primary', displayOrder: number = 0, addedBy?: number): Promise<void> {
+  async addDocumentToCollection(
+    collectionId: number,
+    documentId: number,
+    relationshipType: string = 'primary',
+    displayOrder: number = 0,
+    addedBy?: number
+  ): Promise<void> {
     await db
       .insert(documentCollectionRelations)
       .values({
@@ -6420,18 +8039,23 @@ export class DatabaseStorage implements IStorage {
         relationshipType,
         displayOrder,
         addedBy,
-        addedAt: new Date()
+        addedAt: new Date(),
       })
       .onConflictDoNothing();
   }
 
-  async removeDocumentFromCollection(collectionId: number, documentId: number): Promise<void> {
+  async removeDocumentFromCollection(
+    collectionId: number,
+    documentId: number
+  ): Promise<void> {
     await db
       .delete(documentCollectionRelations)
-      .where(and(
-        eq(documentCollectionRelations.collectionId, collectionId),
-        eq(documentCollectionRelations.documentId, documentId)
-      ));
+      .where(
+        and(
+          eq(documentCollectionRelations.collectionId, collectionId),
+          eq(documentCollectionRelations.documentId, documentId)
+        )
+      );
   }
 
   // Order Attachment Methods
@@ -6443,7 +8067,9 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(orderAttachments.createdAt));
   }
 
-  async getOrderAttachment(attachmentId: number): Promise<OrderAttachment | undefined> {
+  async getOrderAttachment(
+    attachmentId: number
+  ): Promise<OrderAttachment | undefined> {
     const [attachment] = await db
       .select()
       .from(orderAttachments)
@@ -6451,7 +8077,9 @@ export class DatabaseStorage implements IStorage {
     return attachment || undefined;
   }
 
-  async createOrderAttachment(data: InsertOrderAttachment): Promise<OrderAttachment> {
+  async createOrderAttachment(
+    data: InsertOrderAttachment
+  ): Promise<OrderAttachment> {
     const [attachment] = await db
       .insert(orderAttachments)
       .values(data)
@@ -6467,45 +8095,62 @@ export class DatabaseStorage implements IStorage {
 
   // Add methods for finalized orders
   async getAllFinalizedOrders(): Promise<AllOrder[]> {
-    const orders = await db.select().from(allOrders).orderBy(desc(allOrders.updatedAt));
+    const orders = await db
+      .select()
+      .from(allOrders)
+      .orderBy(desc(allOrders.updatedAt));
 
     // Get all customers to create a lookup map
-    const allCustomers = await db.select({
-      id: customers.id,
-      name: customers.name,
-      email: customers.email,
-      phone: customers.phone,
-      company: customers.company,
-      customerType: customers.customerType,
-      notes: customers.notes,
-      isActive: customers.isActive,
-      createdAt: customers.createdAt,
-      updatedAt: customers.updatedAt,
-      preferredCommunicationMethod: customers.preferredCommunicationMethod
-    }).from(customers);
-    const customerMap = new Map(allCustomers.map(c => [c.id.toString(), c.name]));
+    const allCustomers = await db
+      .select({
+        id: customers.id,
+        name: customers.name,
+        email: customers.email,
+        phone: customers.phone,
+        company: customers.company,
+        customerType: customers.customerType,
+        notes: customers.notes,
+        isActive: customers.isActive,
+        createdAt: customers.createdAt,
+        updatedAt: customers.updatedAt,
+        preferredCommunicationMethod: customers.preferredCommunicationMethod,
+      })
+      .from(customers);
+    const customerMap = new Map(
+      allCustomers.map((c) => [c.id.toString(), c.name])
+    );
 
     // Enrich orders with customer names
-    return orders.map(order => ({
+    return orders.map((order) => ({
       ...order,
-      customer: customerMap.get(order.customerId || '') || 'Unknown Customer'
+      customer: customerMap.get(order.customerId || '') || 'Unknown Customer',
     })) as any;
   }
 
   // Create a finalized order directly (bypassing draft process)
-  async createFinalizedOrder(orderData: InsertOrderDraft, finalizedBy?: string): Promise<AllOrder> {
+  async createFinalizedOrder(
+    orderData: InsertOrderDraft,
+    finalizedBy?: string
+  ): Promise<AllOrder> {
     // Special handling for orders with no stock model - route directly to Shipping QC
-    const hasNoStockModel = !orderData.modelId || orderData.modelId.toLowerCase() === 'none' || orderData.modelId.toLowerCase().trim() === '';
-    
+    const hasNoStockModel =
+      !orderData.modelId ||
+      orderData.modelId.toLowerCase() === 'none' ||
+      orderData.modelId.toLowerCase().trim() === '';
+
     let currentDepartment: string;
     let barcode: string;
-    
+
     if (hasNoStockModel) {
-      console.log(`🚀 CREATE APPROVED: Order ${orderData.orderId} has no stock model - routing directly to Shipping QC`);
+      console.log(
+        `🚀 CREATE APPROVED: Order ${orderData.orderId} has no stock model - routing directly to Shipping QC`
+      );
       currentDepartment = 'Shipping QC';
       barcode = orderData.barcode || `NOSTOCK-${orderData.orderId}`;
     } else {
-      console.log(`✅ CREATE APPROVED: Order ${orderData.orderId} has valid stock model "${orderData.modelId}" - going directly to P1 Production Queue`);
+      console.log(
+        `✅ CREATE APPROVED: Order ${orderData.orderId} has valid stock model "${orderData.modelId}" - going directly to P1 Production Queue`
+      );
       currentDepartment = 'P1 Production Queue';
       barcode = orderData.barcode || `P1-${orderData.orderId}`;
     }
@@ -6579,25 +8224,36 @@ export class DatabaseStorage implements IStorage {
       altShipToCompany: orderData.altShipToCompany,
       altShipToEmail: orderData.altShipToEmail,
       altShipToPhone: orderData.altShipToPhone,
-      altShipToAddress: orderData.altShipToAddress
+      altShipToAddress: orderData.altShipToAddress,
     };
 
     // Insert directly into all_orders table
-    const { id, createdAt, updatedAt, ...insertData } = finalizedOrderData as any;
-    const [finalizedOrder] = await db.insert(allOrders).values(insertData).returning();
+    const { id, createdAt, updatedAt, ...insertData } =
+      finalizedOrderData as any;
+    const [finalizedOrder] = await db
+      .insert(allOrders)
+      .values(insertData)
+      .returning();
 
     // Mark the Order ID as used to prevent duplicate assignments
     await this.markOrderIdAsUsed(orderData.orderId);
-    console.log(`🔒 MARKED ORDER ID: ${orderData.orderId} as used to prevent duplicates`);
+    console.log(
+      `🔒 MARKED ORDER ID: ${orderData.orderId} as used to prevent duplicates`
+    );
 
     // Log the auto-addition to Production Queue
-    console.log(`🎯 AUTO-ADDED TO P1 PRODUCTION QUEUE: Order ${orderData.orderId} with stock model "${orderData.modelId}"`);
+    console.log(
+      `🎯 AUTO-ADDED TO P1 PRODUCTION QUEUE: Order ${orderData.orderId} with stock model "${orderData.modelId}"`
+    );
 
     return finalizedOrder;
   }
 
   // Finalize an order - move from draft to production (legacy method for existing drafts)
-  async finalizeOrder(orderId: string, finalizedBy?: string): Promise<AllOrder> {
+  async finalizeOrder(
+    orderId: string,
+    finalizedBy?: string
+  ): Promise<AllOrder> {
     // Get the draft order
     const draft = await this.getOrderDraft(orderId);
     if (!draft) {
@@ -6609,21 +8265,27 @@ export class DatabaseStorage implements IStorage {
     }
 
     // Special handling for orders with "None" stock model - route directly to Shipping QC
-    const hasNoStockModel = !draft.modelId || draft.modelId.toLowerCase() === 'none' || draft.modelId.toLowerCase().trim() === '';
-    
+    const hasNoStockModel =
+      !draft.modelId ||
+      draft.modelId.toLowerCase() === 'none' ||
+      draft.modelId.toLowerCase().trim() === '';
+
     let currentDepartment: string;
     let barcode: string;
-    
+
     if (hasNoStockModel) {
-      console.log(`🚀 FINALIZE APPROVED: Order ${orderId} has no stock model - routing directly to Shipping QC (ready-to-sell product)`);
+      console.log(
+        `🚀 FINALIZE APPROVED: Order ${orderId} has no stock model - routing directly to Shipping QC (ready-to-sell product)`
+      );
       currentDepartment = 'Shipping QC';
       barcode = `NOSTOCK-${orderId}`; // Force NOSTOCK barcode for ready-to-sell products
     } else {
-      console.log(`✅ FINALIZE APPROVED: Order ${orderId} has valid stock model "${draft.modelId}" - proceeding to P1 Production Queue`);
+      console.log(
+        `✅ FINALIZE APPROVED: Order ${orderId} has valid stock model "${draft.modelId}" - proceeding to P1 Production Queue`
+      );
       currentDepartment = 'P1 Production Queue';
       barcode = draft.barcode || `P1-${orderId}`;
     }
-    
 
     // Create the finalized order data
     const finalizedOrderData: InsertAllOrder = {
@@ -6694,20 +8356,27 @@ export class DatabaseStorage implements IStorage {
       altShipToEmail: draft.altShipToEmail,
       altShipToPhone: draft.altShipToPhone,
       altShipToAddress: draft.altShipToAddress,
-      finalizedBy: finalizedBy || 'System'
+      finalizedBy: finalizedBy || 'System',
     };
 
     // Insert into all_orders table
-    const [finalizedOrder] = await db.insert(allOrders).values(finalizedOrderData).returning();
+    const [finalizedOrder] = await db
+      .insert(allOrders)
+      .values(finalizedOrderData)
+      .returning();
 
     // Remove from order_drafts table
     await db.delete(orderDrafts).where(eq(orderDrafts.orderId, orderId));
 
     // Log the finalization result based on department
     if (hasNoStockModel) {
-      console.log(`🚀 FINALIZED TO SHIPPING QC: Order ${orderId} (ready-to-sell product) sent to Shipping QC department`);
+      console.log(
+        `🚀 FINALIZED TO SHIPPING QC: Order ${orderId} (ready-to-sell product) sent to Shipping QC department`
+      );
     } else {
-      console.log(`🎯 FINALIZED TO PRODUCTION: Order ${orderId} sent to P1 Production Queue for manufacturing`);
+      console.log(
+        `🎯 FINALIZED TO PRODUCTION: Order ${orderId} sent to P1 Production Queue for manufacturing`
+      );
     }
 
     return finalizedOrder;
@@ -6715,13 +8384,20 @@ export class DatabaseStorage implements IStorage {
 
   // Get finalized order by ID
   async getFinalizedOrderById(orderId: string): Promise<AllOrder | undefined> {
-    const [order] = await db.select().from(allOrders).where(eq(allOrders.orderId, orderId));
+    const [order] = await db
+      .select()
+      .from(allOrders)
+      .where(eq(allOrders.orderId, orderId));
     return order || undefined;
   }
 
   // Update finalized order
-  async updateFinalizedOrder(orderId: string, data: Partial<InsertAllOrder>): Promise<AllOrder> {
-    const [order] = await db.update(allOrders)
+  async updateFinalizedOrder(
+    orderId: string,
+    data: Partial<InsertAllOrder>
+  ): Promise<AllOrder> {
+    const [order] = await db
+      .update(allOrders)
       .set({ ...data, updatedAt: new Date() })
       .where(eq(allOrders.orderId, orderId))
       .returning();
@@ -6735,12 +8411,13 @@ export class DatabaseStorage implements IStorage {
 
   async fulfillOrder(orderId: string): Promise<AllOrder> {
     // Update the order to be fulfilled and move to shipping management
-    const [order] = await db.update(allOrders)
-      .set({ 
+    const [order] = await db
+      .update(allOrders)
+      .set({
         currentDepartment: 'Shipping Management',
         status: 'FULFILLED',
         shippedDate: new Date(), // Set shipped date to current date when fulfilled
-        updatedAt: new Date()
+        updatedAt: new Date(),
       })
       .where(eq(allOrders.orderId, orderId))
       .returning();
@@ -6749,14 +8426,21 @@ export class DatabaseStorage implements IStorage {
       throw new Error(`Order with ID ${orderId} not found`);
     }
 
-    console.log(`✅ FULFILLED: Order ${orderId} has been marked as fulfilled and moved to shipping management with shipped date: ${new Date().toISOString()}`);
+    console.log(
+      `✅ FULFILLED: Order ${orderId} has been marked as fulfilled and moved to shipping management with shipped date: ${new Date().toISOString()}`
+    );
     return order;
   }
 
-  // Sync verification status between draft and finalized orders  
-  async syncVerificationStatus(): Promise<{ updatedOrders: number; message: string }> {
-    console.log('🔄 Starting verification status sync between draft and finalized orders...');
-    
+  // Sync verification status between draft and finalized orders
+  async syncVerificationStatus(): Promise<{
+    updatedOrders: number;
+    message: string;
+  }> {
+    console.log(
+      '🔄 Starting verification status sync between draft and finalized orders...'
+    );
+
     try {
       // Get mismatched records first
       const mismatches = await db.execute(sql`
@@ -6767,7 +8451,10 @@ export class DatabaseStorage implements IStorage {
       `);
 
       if (mismatches.rows.length === 0) {
-        return { updatedOrders: 0, message: 'No verification status mismatches found' };
+        return {
+          updatedOrders: 0,
+          message: 'No verification status mismatches found',
+        };
       }
 
       // Update finalized orders to match drafts (prioritize draft verification status)
@@ -6779,15 +8466,19 @@ export class DatabaseStorage implements IStorage {
         AND all_orders.is_verified != order_drafts.is_verified
       `);
 
-      console.log(`✅ Verification sync complete: ${updates.rowCount || 0} orders updated`);
-      
+      console.log(
+        `✅ Verification sync complete: ${updates.rowCount || 0} orders updated`
+      );
+
       return {
         updatedOrders: updates.rowCount || 0,
-        message: `Synced verification status for ${updates.rowCount || 0} orders`
+        message: `Synced verification status for ${updates.rowCount || 0} orders`,
       };
     } catch (error) {
       console.error('❌ Error syncing verification status:', error);
-      throw new Error(`Failed to sync verification status: ${(error as Error).message}`);
+      throw new Error(
+        `Failed to sync verification status: ${(error as Error).message}`
+      );
     }
   }
 
@@ -6822,7 +8513,10 @@ export class DatabaseStorage implements IStorage {
     return product;
   }
 
-  async updatePOProduct(id: number, data: Partial<InsertPOProduct>): Promise<POProduct> {
+  async updatePOProduct(
+    id: number,
+    data: Partial<InsertPOProduct>
+  ): Promise<POProduct> {
     const [product] = await db
       .update(poProducts)
       .set({
@@ -6843,7 +8537,7 @@ export class DatabaseStorage implements IStorage {
     // Soft delete by setting isActive to false
     await db
       .update(poProducts)
-      .set({ 
+      .set({
         isActive: false,
         updatedAt: new Date(),
       })
@@ -6851,9 +8545,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Internal Messaging Methods Implementation
-  async getAllInternalMessages(): Promise<(InternalMessage & { recipients: MessageRecipient[] })[]> {
+  async getAllInternalMessages(): Promise<
+    (InternalMessage & { recipients: MessageRecipient[] })[]
+  > {
     const { internalMessages, messageRecipients } = await import('./schema');
-    
+
     const messages = await db
       .select()
       .from(internalMessages)
@@ -6866,7 +8562,7 @@ export class DatabaseStorage implements IStorage {
           .select()
           .from(messageRecipients)
           .where(eq(messageRecipients.messageId, message.id));
-        
+
         return {
           ...message,
           recipients,
@@ -6877,9 +8573,13 @@ export class DatabaseStorage implements IStorage {
     return messagesWithRecipients;
   }
 
-  async getInternalMessage(id: number): Promise<(InternalMessage & { recipients: MessageRecipient[] }) | undefined> {
+  async getInternalMessage(
+    id: number
+  ): Promise<
+    (InternalMessage & { recipients: MessageRecipient[] }) | undefined
+  > {
     const { internalMessages, messageRecipients } = await import('./schema');
-    
+
     const [message] = await db
       .select()
       .from(internalMessages)
@@ -6900,9 +8600,11 @@ export class DatabaseStorage implements IStorage {
     };
   }
 
-  async createInternalMessage(data: InsertInternalMessage): Promise<InternalMessage> {
+  async createInternalMessage(
+    data: InsertInternalMessage
+  ): Promise<InternalMessage> {
     const { internalMessages } = await import('./schema');
-    
+
     const [message] = await db
       .insert(internalMessages)
       .values(data)
@@ -6911,9 +8613,11 @@ export class DatabaseStorage implements IStorage {
     return message;
   }
 
-  async getMessagesBySender(senderId: number): Promise<(InternalMessage & { recipients: MessageRecipient[] })[]> {
+  async getMessagesBySender(
+    senderId: number
+  ): Promise<(InternalMessage & { recipients: MessageRecipient[] })[]> {
     const { internalMessages, messageRecipients } = await import('./schema');
-    
+
     const messages = await db
       .select()
       .from(internalMessages)
@@ -6926,7 +8630,7 @@ export class DatabaseStorage implements IStorage {
           .select()
           .from(messageRecipients)
           .where(eq(messageRecipients.messageId, message.id));
-        
+
         return {
           ...message,
           recipients,
@@ -6937,16 +8641,18 @@ export class DatabaseStorage implements IStorage {
     return messagesWithRecipients;
   }
 
-  async getMessagesForUser(userId: number): Promise<(InternalMessage & { recipients: MessageRecipient[] })[]> {
+  async getMessagesForUser(
+    userId: number
+  ): Promise<(InternalMessage & { recipients: MessageRecipient[] })[]> {
     const { internalMessages, messageRecipients } = await import('./schema');
-    
+
     // Get all message IDs where this user is a recipient
     const userRecipients = await db
       .select()
       .from(messageRecipients)
       .where(eq(messageRecipients.userId, userId));
 
-    const messageIds = userRecipients.map(r => r.messageId);
+    const messageIds = userRecipients.map((r) => r.messageId);
 
     if (messageIds.length === 0) {
       return [];
@@ -6965,7 +8671,7 @@ export class DatabaseStorage implements IStorage {
           .select()
           .from(messageRecipients)
           .where(eq(messageRecipients.messageId, message.id));
-        
+
         return {
           ...message,
           recipients,
@@ -6976,9 +8682,11 @@ export class DatabaseStorage implements IStorage {
     return messagesWithRecipients;
   }
 
-  async getMessagesForDepartment(departmentId: number): Promise<(InternalMessage & { recipients: MessageRecipient[] })[]> {
+  async getMessagesForDepartment(
+    departmentId: number
+  ): Promise<(InternalMessage & { recipients: MessageRecipient[] })[]> {
     const { internalMessages, messageRecipients } = await import('./schema');
-    
+
     const messages = await db
       .select()
       .from(internalMessages)
@@ -6991,7 +8699,7 @@ export class DatabaseStorage implements IStorage {
           .select()
           .from(messageRecipients)
           .where(eq(messageRecipients.messageId, message.id));
-        
+
         return {
           ...message,
           recipients,
@@ -7002,9 +8710,11 @@ export class DatabaseStorage implements IStorage {
     return messagesWithRecipients;
   }
 
-  async createMessageRecipient(data: InsertMessageRecipient): Promise<MessageRecipient> {
+  async createMessageRecipient(
+    data: InsertMessageRecipient
+  ): Promise<MessageRecipient> {
     const { messageRecipients } = await import('./schema');
-    
+
     const [recipient] = await db
       .insert(messageRecipients)
       .values(data)
@@ -7015,7 +8725,7 @@ export class DatabaseStorage implements IStorage {
 
   async markMessageAsRead(messageId: number, userId: number): Promise<void> {
     const { messageRecipients } = await import('./schema');
-    
+
     await db
       .update(messageRecipients)
       .set({
@@ -7031,9 +8741,12 @@ export class DatabaseStorage implements IStorage {
       );
   }
 
-  async markMessageAsAccomplished(messageId: number, userId: number): Promise<void> {
+  async markMessageAsAccomplished(
+    messageId: number,
+    userId: number
+  ): Promise<void> {
     const { messageRecipients } = await import('./schema');
-    
+
     await db
       .update(messageRecipients)
       .set({
@@ -7065,15 +8778,17 @@ export class DatabaseStorage implements IStorage {
     return item || undefined;
   }
 
-  async createMetalAccessory(data: InsertMetalAccessory): Promise<MetalAccessory> {
-    const [item] = await db
-      .insert(metalAccessories)
-      .values(data)
-      .returning();
+  async createMetalAccessory(
+    data: InsertMetalAccessory
+  ): Promise<MetalAccessory> {
+    const [item] = await db.insert(metalAccessories).values(data).returning();
     return item;
   }
 
-  async updateMetalAccessory(id: number, data: Partial<InsertMetalAccessory>): Promise<MetalAccessory> {
+  async updateMetalAccessory(
+    id: number,
+    data: Partial<InsertMetalAccessory>
+  ): Promise<MetalAccessory> {
     const [item] = await db
       .update(metalAccessories)
       .set({ ...data, updatedAt: new Date() })
@@ -7083,14 +8798,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteMetalAccessory(id: number): Promise<void> {
-    await db
-      .delete(metalAccessories)
-      .where(eq(metalAccessories.id, id));
+    await db.delete(metalAccessories).where(eq(metalAccessories.id, id));
   }
 
   async getMetalAccessoriesDemands(): Promise<any[]> {
     const items = await this.getAllMetalAccessories();
-    
+
     const ordersInProgress = await db
       .select()
       .from(allOrders)
@@ -7104,25 +8817,31 @@ export class DatabaseStorage implements IStorage {
         )
       );
 
-    console.log('🔍 Metal Accessories Demands - Total orders:', ordersInProgress.length);
+    console.log(
+      '🔍 Metal Accessories Demands - Total orders:',
+      ordersInProgress.length
+    );
 
-    const demands = items.map(item => {
+    const demands = items.map((item) => {
       const weeklyDemand = [0, 0, 0, 0];
       const weeklyOrders: any[][] = [[], [], [], []]; // Track orders for each week
       const now = new Date();
-      
+
       // Normalize item name for comparison (remove hyphens/underscores, lowercase)
       const normalizedItemName = item.name.toLowerCase().replace(/[-_]/g, '');
-      
-      ordersInProgress.forEach(order => {
+
+      ordersInProgress.forEach((order) => {
         const features = order.features as any;
         const featureQuantities = order.featureQuantities as any;
-        
+
         let matchFound = false;
         let quantity = 0;
-        
+
         // Special logic for Cheek Riser items - check for "Adj" in model ID
-        if (item.name === 'Cheek Riser - Stock Inserts' || item.name === 'Cheek Riser - Riser Inserts') {
+        if (
+          item.name === 'Cheek Riser - Stock Inserts' ||
+          item.name === 'Cheek Riser - Riser Inserts'
+        ) {
           if (order.modelId && order.modelId.toLowerCase().includes('adj')) {
             quantity = 1; // Each order with adjustable stock needs these inserts
             matchFound = true;
@@ -7130,8 +8849,10 @@ export class DatabaseStorage implements IStorage {
         } else {
           // Check featureQuantities for accessories with quantities
           if (featureQuantities && typeof featureQuantities === 'object') {
-            Object.keys(featureQuantities).forEach(featureKey => {
-              const normalizedKey = featureKey.toLowerCase().replace(/[-_]/g, '');
+            Object.keys(featureQuantities).forEach((featureKey) => {
+              const normalizedKey = featureKey
+                .toLowerCase()
+                .replace(/[-_]/g, '');
               if (normalizedKey.includes(normalizedItemName)) {
                 quantity = parseInt(featureQuantities[featureKey]) || 0;
                 if (quantity > 0) {
@@ -7140,25 +8861,32 @@ export class DatabaseStorage implements IStorage {
               }
             });
           }
-          
+
           // Check features.bottom_metal for bottom metal selections
           if (!matchFound && features && features.bottom_metal) {
-            const normalizedBottomMetal = features.bottom_metal.toLowerCase().replace(/[-_]/g, '');
+            const normalizedBottomMetal = features.bottom_metal
+              .toLowerCase()
+              .replace(/[-_]/g, '');
             if (normalizedBottomMetal === normalizedItemName) {
               quantity = 1; // Each order needs 1 bottom metal
               matchFound = true;
             }
           }
         }
-        
+
         // If match found, add to weekly demand
         if (matchFound && quantity > 0) {
           const dueDate = order.dueDate ? new Date(order.dueDate) : null;
-          
+
           if (dueDate) {
-            const daysUntilDue = Math.ceil((dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-            const weekIndex = Math.min(Math.max(Math.floor(daysUntilDue / 7), 0), 3);
-            
+            const daysUntilDue = Math.ceil(
+              (dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
+            );
+            const weekIndex = Math.min(
+              Math.max(Math.floor(daysUntilDue / 7), 0),
+              3
+            );
+
             weeklyDemand[weekIndex] += quantity;
             weeklyOrders[weekIndex].push({
               orderId: order.orderId,
@@ -7200,7 +8928,6 @@ export class DatabaseStorage implements IStorage {
 
     return demands;
   }
-
 }
 
 export const storage = new DatabaseStorage();

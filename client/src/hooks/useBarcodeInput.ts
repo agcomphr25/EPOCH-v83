@@ -21,9 +21,9 @@ const BARCODE_PATTERNS = {
   INVENTORY: /^(PART|INV)-\w+$/i,
 } as const;
 
-function validateBarcode(barcode: string): { 
-  isValid: boolean; 
-  type: BarcodeInputState['barcodeType'] 
+function validateBarcode(barcode: string): {
+  isValid: boolean;
+  type: BarcodeInputState['barcodeType'];
 } {
   if (!barcode.trim()) {
     return { isValid: false, type: null };
@@ -31,9 +31,9 @@ function validateBarcode(barcode: string): {
 
   for (const [type, pattern] of Object.entries(BARCODE_PATTERNS)) {
     if (pattern.test(barcode)) {
-      return { 
-        isValid: true, 
-        type: type as BarcodeInputState['barcodeType'] 
+      return {
+        isValid: true,
+        type: type as BarcodeInputState['barcodeType'],
       };
     }
   }
@@ -62,7 +62,7 @@ export function useBarcodeInput(): BarcodeInputState & BarcodeInputActions {
   const handleBarcodeDetected = useCallback((detectedBarcode: string) => {
     const cleanBarcode = detectedBarcode.trim().toUpperCase();
     setBarcode(cleanBarcode);
-    
+
     const detectedValidation = validateBarcode(cleanBarcode);
     if (detectedValidation.isValid) {
       setScannedBarcode(cleanBarcode);
@@ -81,8 +81,10 @@ export function useBarcodeInput(): BarcodeInputState & BarcodeInputActions {
 
     const handleKeyPress = (e: KeyboardEvent) => {
       // Only process if no input is focused (traditional scanner behavior)
-      if (document.activeElement?.tagName === 'INPUT' || 
-          document.activeElement?.tagName === 'TEXTAREA') {
+      if (
+        document.activeElement?.tagName === 'INPUT' ||
+        document.activeElement?.tagName === 'TEXTAREA'
+      ) {
         return;
       }
 
@@ -103,10 +105,11 @@ export function useBarcodeInput(): BarcodeInputState & BarcodeInputActions {
       // Accumulate characters
       if (e.key.length === 1) {
         barcodeBuffer += e.key;
-        
+
         // Auto-submit after 100ms of no input (typical for barcode scanners)
         timeoutId = setTimeout(() => {
-          if (barcodeBuffer.length > 3) { // Minimum barcode length
+          if (barcodeBuffer.length > 3) {
+            // Minimum barcode length
             handleBarcodeDetected(barcodeBuffer);
           }
           barcodeBuffer = '';
@@ -115,7 +118,7 @@ export function useBarcodeInput(): BarcodeInputState & BarcodeInputActions {
     };
 
     window.addEventListener('keypress', handleKeyPress);
-    
+
     return () => {
       window.removeEventListener('keypress', handleKeyPress);
       if (timeoutId) {

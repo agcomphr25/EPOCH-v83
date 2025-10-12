@@ -1,30 +1,40 @@
 import React, { useState } from 'react';
-import { useAPTransactions, useARTransactions, useCOGS } from '../hooks/useTransactions';
+import {
+  useAPTransactions,
+  useARTransactions,
+  useCOGS,
+} from '../hooks/useTransactions';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { 
-  DollarSign, 
-  TrendingUp, 
-  TrendingDown, 
-  Clock, 
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  DollarSign,
+  TrendingUp,
+  TrendingDown,
+  Clock,
   AlertTriangle,
   Target,
-  RefreshCw
+  RefreshCw,
 } from 'lucide-react';
-import { 
-  LineChart, 
-  Line, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
-  Legend, 
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
   ResponsiveContainer,
   PieChart,
   Pie,
-  Cell
+  Cell,
 } from 'recharts';
 import { format, subDays } from 'date-fns';
 
@@ -38,14 +48,26 @@ export default function FinanceDashboard() {
     const thirtyDaysAgo = subDays(today, 30);
     return {
       dateFrom: format(thirtyDaysAgo, 'yyyy-MM-dd'),
-      dateTo: format(today, 'yyyy-MM-dd')
+      dateTo: format(today, 'yyyy-MM-dd'),
     };
   });
 
   // Fetch data from all three financial modules
-  const { data: apData, loading: apLoading, refresh: refreshAP } = useAPTransactions(dateRange);
-  const { data: arData, loading: arLoading, refresh: refreshAR } = useARTransactions(dateRange);
-  const { data: cogsData, loading: cogsLoading, refresh: refreshCOGS } = useCOGS(dateRange);
+  const {
+    data: apData,
+    loading: apLoading,
+    refresh: refreshAP,
+  } = useAPTransactions(dateRange);
+  const {
+    data: arData,
+    loading: arLoading,
+    refresh: refreshAR,
+  } = useARTransactions(dateRange);
+  const {
+    data: cogsData,
+    loading: cogsLoading,
+    refresh: refreshCOGS,
+  } = useCOGS(dateRange);
 
   const isLoading = apLoading || arLoading || cogsLoading;
 
@@ -54,29 +76,34 @@ export default function FinanceDashboard() {
     // Ensure data is array before calling reduce
     const apDataArray = Array.isArray(apData) ? apData : [];
     const arDataArray = Array.isArray(arData) ? arData : [];
-    
+
     const totalAP = apDataArray.reduce((sum, tx) => sum + tx.amount, 0);
     const totalAR = arDataArray.reduce((sum, tx) => sum + tx.amount, 0);
-    
+
     // AR Aging buckets (days overdue)
     const today = new Date();
-    const arAging = arDataArray.reduce((buckets, tx) => {
-      const txDate = new Date(tx.date);
-      const daysOverdue = Math.floor((today - txDate) / (1000 * 60 * 60 * 24));
-      
-      if (daysOverdue <= 30) buckets.current += tx.amount;
-      else if (daysOverdue <= 60) buckets.days30 += tx.amount;
-      else if (daysOverdue <= 90) buckets.days60 += tx.amount;
-      else buckets.days90Plus += tx.amount;
-      
-      return buckets;
-    }, { current: 0, days30: 0, days60: 0, days90Plus: 0 });
+    const arAging = arDataArray.reduce(
+      (buckets, tx) => {
+        const txDate = new Date(tx.date);
+        const daysOverdue = Math.floor(
+          (today - txDate) / (1000 * 60 * 60 * 24)
+        );
+
+        if (daysOverdue <= 30) buckets.current += tx.amount;
+        else if (daysOverdue <= 60) buckets.days30 += tx.amount;
+        else if (daysOverdue <= 90) buckets.days60 += tx.amount;
+        else buckets.days90Plus += tx.amount;
+
+        return buckets;
+      },
+      { current: 0, days30: 0, days60: 0, days90Plus: 0 }
+    );
 
     // Mock additional KPIs (in real implementation, these would come from production data)
     const wipValue = 85000; // Work in Progress value
     const scrapPercentage = 2.3; // Scrap percentage
     const utilizationPercentage = 87.5; // Machine utilization percentage
-    
+
     return {
       totalAP,
       totalAR,
@@ -84,9 +111,10 @@ export default function FinanceDashboard() {
       wipValue,
       scrapPercentage,
       utilizationPercentage,
-      cogsVariance: cogsData && typeof cogsData === 'object' 
-        ? (cogsData.actualCost - cogsData.standardCost) 
-        : 0
+      cogsVariance:
+        cogsData && typeof cogsData === 'object'
+          ? cogsData.actualCost - cogsData.standardCost
+          : 0,
     };
   };
 
@@ -104,11 +132,36 @@ export default function FinanceDashboard() {
 
   // Mock slow-moving orders data
   const slowMovingOrders = [
-    { orderId: 'AG001', customer: 'Acme Corp', daysInProduction: 45, value: 12500 },
-    { orderId: 'AG002', customer: 'Beta Industries', daysInProduction: 38, value: 8900 },
-    { orderId: 'AG003', customer: 'Gamma Ltd', daysInProduction: 32, value: 15600 },
-    { orderId: 'AG004', customer: 'Delta Systems', daysInProduction: 28, value: 6700 },
-    { orderId: 'AG005', customer: 'Echo Manufacturing', daysInProduction: 25, value: 9800 },
+    {
+      orderId: 'AG001',
+      customer: 'Acme Corp',
+      daysInProduction: 45,
+      value: 12500,
+    },
+    {
+      orderId: 'AG002',
+      customer: 'Beta Industries',
+      daysInProduction: 38,
+      value: 8900,
+    },
+    {
+      orderId: 'AG003',
+      customer: 'Gamma Ltd',
+      daysInProduction: 32,
+      value: 15600,
+    },
+    {
+      orderId: 'AG004',
+      customer: 'Delta Systems',
+      daysInProduction: 28,
+      value: 6700,
+    },
+    {
+      orderId: 'AG005',
+      customer: 'Echo Manufacturing',
+      daysInProduction: 25,
+      value: 9800,
+    },
   ];
 
   // AR Aging pie chart data
@@ -123,7 +176,7 @@ export default function FinanceDashboard() {
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
-      currency: 'USD'
+      currency: 'USD',
     }).format(amount);
   };
 
@@ -131,7 +184,7 @@ export default function FinanceDashboard() {
   const handleDateRangeChange = (preset) => {
     const today = new Date();
     let startDate;
-    
+
     switch (preset) {
       case 'today':
         startDate = today;
@@ -148,10 +201,10 @@ export default function FinanceDashboard() {
       default:
         startDate = subDays(today, 30);
     }
-    
+
     setDateRange({
       dateFrom: format(startDate, 'yyyy-MM-dd'),
-      dateTo: format(today, 'yyyy-MM-dd')
+      dateTo: format(today, 'yyyy-MM-dd'),
     });
   };
 
@@ -205,8 +258,12 @@ export default function FinanceDashboard() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{formatCurrency(kpis.totalAP)}</div>
-                <p className="text-xs text-muted-foreground">Outstanding payables</p>
+                <div className="text-2xl font-bold">
+                  {formatCurrency(kpis.totalAP)}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Outstanding payables
+                </p>
               </CardContent>
             </Card>
 
@@ -218,8 +275,12 @@ export default function FinanceDashboard() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{formatCurrency(kpis.totalAR)}</div>
-                <p className="text-xs text-muted-foreground">Outstanding receivables</p>
+                <div className="text-2xl font-bold">
+                  {formatCurrency(kpis.totalAR)}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Outstanding receivables
+                </p>
               </CardContent>
             </Card>
 
@@ -231,8 +292,12 @@ export default function FinanceDashboard() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{formatCurrency(kpis.wipValue)}</div>
-                <p className="text-xs text-muted-foreground">Work in progress</p>
+                <div className="text-2xl font-bold">
+                  {formatCurrency(kpis.wipValue)}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Work in progress
+                </p>
               </CardContent>
             </Card>
 
@@ -244,8 +309,12 @@ export default function FinanceDashboard() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{kpis.utilizationPercentage}%</div>
-                <p className="text-xs text-muted-foreground">Machine utilization</p>
+                <div className="text-2xl font-bold">
+                  {kpis.utilizationPercentage}%
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Machine utilization
+                </p>
               </CardContent>
             </Card>
           </div>
@@ -263,11 +332,26 @@ export default function FinanceDashboard() {
                     <LineChart data={revenueData}>
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis dataKey="month" />
-                      <YAxis tickFormatter={(value) => `$${value.toLocaleString()}`} />
+                      <YAxis
+                        tickFormatter={(value) => `$${value.toLocaleString()}`}
+                      />
                       <Tooltip formatter={(value) => formatCurrency(value)} />
                       <Legend />
-                      <Line type="monotone" dataKey="revenue" stroke="#3b82f6" strokeWidth={2} name="Actual Revenue" />
-                      <Line type="monotone" dataKey="target" stroke="#ef4444" strokeWidth={2} strokeDasharray="5 5" name="Target Revenue" />
+                      <Line
+                        type="monotone"
+                        dataKey="revenue"
+                        stroke="#3b82f6"
+                        strokeWidth={2}
+                        name="Actual Revenue"
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="target"
+                        stroke="#ef4444"
+                        strokeWidth={2}
+                        strokeDasharray="5 5"
+                        name="Target Revenue"
+                      />
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
@@ -288,7 +372,9 @@ export default function FinanceDashboard() {
                         cx="50%"
                         cy="50%"
                         labelLine={false}
-                        label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                        label={({ name, percent }) =>
+                          `${name} ${(percent * 100).toFixed(0)}%`
+                        }
                         outerRadius={80}
                         fill="#8884d8"
                         dataKey="value"
@@ -316,19 +402,33 @@ export default function FinanceDashboard() {
                 <div className="space-y-4">
                   <div className="flex justify-between items-center">
                     <span className="text-sm font-medium">COGS Variance</span>
-                    <Badge variant={kpis.cogsVariance > 0 ? 'destructive' : 'default'}>
+                    <Badge
+                      variant={
+                        kpis.cogsVariance > 0 ? 'destructive' : 'default'
+                      }
+                    >
                       {formatCurrency(kpis.cogsVariance)}
                     </Badge>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-sm font-medium">Scrap Percentage</span>
-                    <Badge variant={kpis.scrapPercentage > 3 ? 'destructive' : 'default'}>
+                    <span className="text-sm font-medium">
+                      Scrap Percentage
+                    </span>
+                    <Badge
+                      variant={
+                        kpis.scrapPercentage > 3 ? 'destructive' : 'default'
+                      }
+                    >
                       {kpis.scrapPercentage}%
                     </Badge>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-sm font-medium">Overdue AR</span>
-                    <Badge variant={kpis.arAging.days90Plus > 0 ? 'destructive' : 'default'}>
+                    <Badge
+                      variant={
+                        kpis.arAging.days90Plus > 0 ? 'destructive' : 'default'
+                      }
+                    >
                       {formatCurrency(kpis.arAging.days90Plus)}
                     </Badge>
                   </div>
@@ -347,14 +447,25 @@ export default function FinanceDashboard() {
               <CardContent>
                 <div className="space-y-3">
                   {slowMovingOrders.map((order) => (
-                    <div key={order.orderId} className="flex justify-between items-center">
+                    <div
+                      key={order.orderId}
+                      className="flex justify-between items-center"
+                    >
                       <div>
-                        <div className="font-medium text-sm">{order.orderId}</div>
-                        <div className="text-xs text-muted-foreground">{order.customer}</div>
+                        <div className="font-medium text-sm">
+                          {order.orderId}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {order.customer}
+                        </div>
                       </div>
                       <div className="text-right">
-                        <div className="text-sm font-medium">{order.daysInProduction} days</div>
-                        <div className="text-xs text-muted-foreground">{formatCurrency(order.value)}</div>
+                        <div className="text-sm font-medium">
+                          {order.daysInProduction} days
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {formatCurrency(order.value)}
+                        </div>
                       </div>
                     </div>
                   ))}

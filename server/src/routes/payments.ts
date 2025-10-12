@@ -1,7 +1,14 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { db } from '../../db';
-import { payments, creditCardTransactions, allOrders, orderDrafts, insertPaymentSchema, insertCreditCardTransactionSchema } from '../../schema';
+import {
+  payments,
+  creditCardTransactions,
+  allOrders,
+  orderDrafts,
+  insertPaymentSchema,
+  insertCreditCardTransactionSchema,
+} from '../../schema';
 import { eq, desc } from 'drizzle-orm';
 // @ts-ignore - AuthorizeNet doesn't have proper TypeScript definitions
 import AuthorizeNet from 'authorizenet';
@@ -13,7 +20,9 @@ const apiLoginId = process.env.AUTHORIZE_NET_API_LOGIN_ID;
 const transactionKey = process.env.AUTHORIZE_NET_TRANSACTION_KEY;
 
 if (!apiLoginId || !transactionKey) {
-  console.error('Missing Authorize.Net credentials. Please set AUTHORIZE_NET_API_LOGIN_ID and AUTHORIZE_NET_TRANSACTION_KEY');
+  console.error(
+    'Missing Authorize.Net credentials. Please set AUTHORIZE_NET_API_LOGIN_ID and AUTHORIZE_NET_TRANSACTION_KEY'
+  );
 }
 
 // Determine if we're in test mode (sandbox)
@@ -21,21 +30,29 @@ const isTestMode = process.env.NODE_ENV !== 'production';
 
 // Credit card payment schema for API validation
 const creditCardPaymentSchema = z.object({
-  orderId: z.string().min(1, "Order ID is required"),
-  amount: z.number().min(0.01, "Amount must be greater than 0"),
-  cardNumber: z.string().min(13, "Card number must be at least 13 digits").max(19, "Card number must be at most 19 digits"),
-  expirationDate: z.string().regex(/^\d{2}\/\d{2}$/, "Expiration date must be in MM/YY format"),
-  cvv: z.string().min(3, "CVV must be at least 3 digits").max(4, "CVV must be at most 4 digits"),
+  orderId: z.string().min(1, 'Order ID is required'),
+  amount: z.number().min(0.01, 'Amount must be greater than 0'),
+  cardNumber: z
+    .string()
+    .min(13, 'Card number must be at least 13 digits')
+    .max(19, 'Card number must be at most 19 digits'),
+  expirationDate: z
+    .string()
+    .regex(/^\d{2}\/\d{2}$/, 'Expiration date must be in MM/YY format'),
+  cvv: z
+    .string()
+    .min(3, 'CVV must be at least 3 digits')
+    .max(4, 'CVV must be at most 4 digits'),
   billingAddress: z.object({
-    firstName: z.string().min(1, "First name is required"),
-    lastName: z.string().min(1, "Last name is required"),
-    address: z.string().min(1, "Address is required"),
-    city: z.string().min(1, "City is required"),
-    state: z.string().min(2, "State is required"),
-    zip: z.string().min(5, "ZIP code is required"),
-    country: z.string().default("US"),
+    firstName: z.string().min(1, 'First name is required'),
+    lastName: z.string().min(1, 'Last name is required'),
+    address: z.string().min(1, 'Address is required'),
+    city: z.string().min(1, 'City is required'),
+    state: z.string().min(2, 'State is required'),
+    zip: z.string().min(5, 'ZIP code is required'),
+    country: z.string().default('US'),
   }),
-  customerEmail: z.string().email().optional().or(z.literal("")),
+  customerEmail: z.string().email().optional().or(z.literal('')),
   taxAmount: z.number().min(0).default(0),
   shippingAmount: z.number().min(0).default(0),
 });
@@ -43,21 +60,41 @@ const creditCardPaymentSchema = z.object({
 // Process credit card payment
 router.post('/credit-card', async (req, res) => {
   try {
-    console.log('🔄 Payment request received for body:', JSON.stringify(req.body, null, 2));
+    console.log(
+      '🔄 Payment request received for body:',
+      JSON.stringify(req.body, null, 2)
+    );
     const paymentData = creditCardPaymentSchema.parse(req.body);
-    console.log('💰 Processing payment for order:', paymentData.orderId, 'amount:', paymentData.amount);
-    console.log('🔑 Credentials check:', { hasApiLoginId: !!apiLoginId, hasTransactionKey: !!transactionKey, isTestMode });
-    
+    console.log(
+      '💰 Processing payment for order:',
+      paymentData.orderId,
+      'amount:',
+      paymentData.amount
+    );
+    console.log('🔑 Credentials check:', {
+      hasApiLoginId: !!apiLoginId,
+      hasTransactionKey: !!transactionKey,
+      isTestMode,
+    });
+
     if (!apiLoginId || !transactionKey) {
-      return res.status(500).json({ 
-        error: 'Payment processing not configured. Please contact support.' 
+      return res.status(500).json({
+        error: 'Payment processing not configured. Please contact support.',
       });
     }
 
     // Verify order exists
-    const order = await db.select().from(allOrders).where(eq(allOrders.orderId, paymentData.orderId)).limit(1);
-    const draftOrder = await db.select().from(orderDrafts).where(eq(orderDrafts.orderId, paymentData.orderId)).limit(1);
-    
+    const order = await db
+      .select()
+      .from(allOrders)
+      .where(eq(allOrders.orderId, paymentData.orderId))
+      .limit(1);
+    const draftOrder = await db
+      .select()
+      .from(orderDrafts)
+      .where(eq(orderDrafts.orderId, paymentData.orderId))
+      .limit(1);
+
     if (order.length === 0 && draftOrder.length === 0) {
       return res.status(404).json({ error: 'Order not found' });
     }
@@ -67,7 +104,8 @@ router.post('/credit-card', async (req, res) => {
     const apiControllers = AuthorizeNet.APIControllers;
 
     // Set up merchant authentication
-    const merchantAuthenticationType = new apiContracts.MerchantAuthenticationType();
+    const merchantAuthenticationType =
+      new apiContracts.MerchantAuthenticationType();
     merchantAuthenticationType.setName(apiLoginId);
     merchantAuthenticationType.setTransactionKey(transactionKey);
 
@@ -93,11 +131,13 @@ router.post('/credit-card', async (req, res) => {
 
     // Set up transaction request
     const transactionRequestType = new apiContracts.TransactionRequestType();
-    transactionRequestType.setTransactionType(apiContracts.TransactionTypeEnum.AUTHCAPTURETRANSACTION);
+    transactionRequestType.setTransactionType(
+      apiContracts.TransactionTypeEnum.AUTHCAPTURETRANSACTION
+    );
     transactionRequestType.setPayment(paymentType);
     transactionRequestType.setAmount(paymentData.amount);
     transactionRequestType.setBillTo(customerAddress);
-    
+
     // Add order information
     const orderInfo = new apiContracts.OrderType();
     orderInfo.setInvoiceNumber(paymentData.orderId);
@@ -107,7 +147,7 @@ router.post('/credit-card', async (req, res) => {
     // Add line items if we have tax or shipping
     if (paymentData.taxAmount > 0 || paymentData.shippingAmount > 0) {
       const lineItems = [];
-      
+
       if (paymentData.taxAmount > 0) {
         const taxItem = new apiContracts.LineItemType();
         taxItem.setItemId('TAX');
@@ -117,7 +157,7 @@ router.post('/credit-card', async (req, res) => {
         taxItem.setUnitPrice(paymentData.taxAmount);
         lineItems.push(taxItem);
       }
-      
+
       if (paymentData.shippingAmount > 0) {
         const shippingItem = new apiContracts.LineItemType();
         shippingItem.setItemId('SHIPPING');
@@ -127,7 +167,7 @@ router.post('/credit-card', async (req, res) => {
         shippingItem.setUnitPrice(paymentData.shippingAmount);
         lineItems.push(shippingItem);
       }
-      
+
       transactionRequestType.setLineItems(lineItems);
     }
 
@@ -145,9 +185,14 @@ router.post('/credit-card', async (req, res) => {
     createRequest.setTransactionRequest(transactionRequestType);
 
     // Set up controller
-    const ctrl = new apiControllers.CreateTransactionController(createRequest.getJSON());
-    console.log('🌐 Setting up Authorize.Net controller, test mode:', isTestMode);
-    
+    const ctrl = new apiControllers.CreateTransactionController(
+      createRequest.getJSON()
+    );
+    console.log(
+      '🌐 Setting up Authorize.Net controller, test mode:',
+      isTestMode
+    );
+
     // Use sandbox for testing
     if (isTestMode) {
       ctrl.setEnvironment('https://apitest.authorize.net/xml/v1/request.api');
@@ -165,70 +210,86 @@ router.post('/credit-card', async (req, res) => {
         clearTimeout(timeoutId);
         try {
           const apiResponse = ctrl.getResponse();
-          const response = new apiContracts.CreateTransactionResponse(apiResponse);
-        
-        // Parse response
-        const resultCode = response.getMessages().getResultCode();
-        const messageCode = response.getMessages().getMessage()[0].getCode();
-        const messageText = response.getMessages().getMessage()[0].getText();
-        
-        let transactionResponse = null;
-        let authCode = null;
-        let transactionId = null;
-        let avsResult = null;
-        let cvvResult = null;
-        let responseCode = '3'; // Default to error
-        let responseReasonCode = null;
-        let responseReasonText = messageText;
+          const response = new apiContracts.CreateTransactionResponse(
+            apiResponse
+          );
 
-        if (response.getTransactionResponse() != null) {
-          transactionResponse = response.getTransactionResponse();
-          authCode = transactionResponse.getAuthCode();
-          transactionId = transactionResponse.getTransId();
-          responseCode = transactionResponse.getResponseCode();
-          
-          // Safely get messages if they exist
-          if (transactionResponse.getMessages() && transactionResponse.getMessages().getMessage() && transactionResponse.getMessages().getMessage().length > 0) {
-            responseReasonCode = transactionResponse.getMessages().getMessage()[0].getCode();
-            responseReasonText = transactionResponse.getMessages().getMessage()[0].getDescription();
-          } else {
-            // Fallback for transactions without detailed messages
-            responseReasonText = `Transaction ${responseCode === '1' ? 'approved' : 'declined'}`;
-          }
-          
-          if (transactionResponse.getAvsResultCode()) {
-            avsResult = transactionResponse.getAvsResultCode();
-          }
-          if (transactionResponse.getCvvResultCode()) {
-            cvvResult = transactionResponse.getCvvResultCode();
-          }
-        }
+          // Parse response
+          const resultCode = response.getMessages().getResultCode();
+          const messageCode = response.getMessages().getMessage()[0].getCode();
+          const messageText = response.getMessages().getMessage()[0].getText();
 
-        // Process the transaction result
-        processTransactionResult({
-          orderId: paymentData.orderId,
-          amount: paymentData.amount,
-          taxAmount: paymentData.taxAmount,
-          shippingAmount: paymentData.shippingAmount,
-          billingAddress: paymentData.billingAddress,
-          customerEmail: paymentData.customerEmail,
-          transactionId: transactionId || 'UNKNOWN',
-          authCode,
-          responseCode,
-          responseReasonCode,
-          responseReasonText,
-          avsResult,
-          cvvResult,
-          rawResponse: apiResponse,
-          isTest: isTestMode
-        }).then(result => {
-          res.json(result);
-          resolve(undefined);
-        }).catch(error => {
-          console.error('Error processing transaction result:', error);
-          res.status(500).json({ error: 'Failed to save transaction result' });
-          reject(error);
-        });
+          let transactionResponse = null;
+          let authCode = null;
+          let transactionId = null;
+          let avsResult = null;
+          let cvvResult = null;
+          let responseCode = '3'; // Default to error
+          let responseReasonCode = null;
+          let responseReasonText = messageText;
+
+          if (response.getTransactionResponse() != null) {
+            transactionResponse = response.getTransactionResponse();
+            authCode = transactionResponse.getAuthCode();
+            transactionId = transactionResponse.getTransId();
+            responseCode = transactionResponse.getResponseCode();
+
+            // Safely get messages if they exist
+            if (
+              transactionResponse.getMessages() &&
+              transactionResponse.getMessages().getMessage() &&
+              transactionResponse.getMessages().getMessage().length > 0
+            ) {
+              responseReasonCode = transactionResponse
+                .getMessages()
+                .getMessage()[0]
+                .getCode();
+              responseReasonText = transactionResponse
+                .getMessages()
+                .getMessage()[0]
+                .getDescription();
+            } else {
+              // Fallback for transactions without detailed messages
+              responseReasonText = `Transaction ${responseCode === '1' ? 'approved' : 'declined'}`;
+            }
+
+            if (transactionResponse.getAvsResultCode()) {
+              avsResult = transactionResponse.getAvsResultCode();
+            }
+            if (transactionResponse.getCvvResultCode()) {
+              cvvResult = transactionResponse.getCvvResultCode();
+            }
+          }
+
+          // Process the transaction result
+          processTransactionResult({
+            orderId: paymentData.orderId,
+            amount: paymentData.amount,
+            taxAmount: paymentData.taxAmount,
+            shippingAmount: paymentData.shippingAmount,
+            billingAddress: paymentData.billingAddress,
+            customerEmail: paymentData.customerEmail,
+            transactionId: transactionId || 'UNKNOWN',
+            authCode,
+            responseCode,
+            responseReasonCode,
+            responseReasonText,
+            avsResult,
+            cvvResult,
+            rawResponse: apiResponse,
+            isTest: isTestMode,
+          })
+            .then((result) => {
+              res.json(result);
+              resolve(undefined);
+            })
+            .catch((error) => {
+              console.error('Error processing transaction result:', error);
+              res
+                .status(500)
+                .json({ error: 'Failed to save transaction result' });
+              reject(error);
+            });
         } catch (error) {
           clearTimeout(timeoutId);
           console.error('Error parsing Authorize.Net response:', error);
@@ -236,13 +297,12 @@ router.post('/credit-card', async (req, res) => {
         }
       });
     });
-
   } catch (error) {
     console.error('Credit card payment error:', error);
     if (error instanceof z.ZodError) {
-      return res.status(400).json({ 
-        error: 'Invalid payment data', 
-        details: error.errors 
+      return res.status(400).json({
+        error: 'Invalid payment data',
+        details: error.errors,
       });
     }
     return res.status(500).json({ error: 'Payment processing failed' });
@@ -269,51 +329,61 @@ async function processTransactionResult(data: {
 }) {
   const isApproved = data.responseCode === '1';
   const status = isApproved ? 'completed' : 'failed';
-  
+
   // Create payment record
-  const [payment] = await db.insert(payments).values({
-    orderId: data.orderId,
-    paymentType: 'credit_card',
-    paymentAmount: data.amount,
-    paymentDate: new Date(),
-    notes: isApproved ? `Credit card payment approved - Auth: ${data.authCode}` : `Credit card payment failed - ${data.responseReasonText}`,
-  }).returning();
+  const [payment] = await db
+    .insert(payments)
+    .values({
+      orderId: data.orderId,
+      paymentType: 'credit_card',
+      paymentAmount: data.amount,
+      paymentDate: new Date(),
+      notes: isApproved
+        ? `Credit card payment approved - Auth: ${data.authCode}`
+        : `Credit card payment failed - ${data.responseReasonText}`,
+    })
+    .returning();
 
   // Create credit card transaction record
-  const [transaction] = await db.insert(creditCardTransactions).values({
-    paymentId: payment.id,
-    orderId: data.orderId,
-    transactionId: data.transactionId,
-    authCode: data.authCode,
-    responseCode: data.responseCode,
-    responseReasonCode: data.responseReasonCode,
-    responseReasonText: data.responseReasonText,
-    avsResult: data.avsResult,
-    cvvResult: data.cvvResult,
-    lastFourDigits: data.rawResponse?.transactionResponse?.accountNumber?.slice(-4),
-    cardType: data.rawResponse?.transactionResponse?.accountType,
-    amount: data.amount,
-    taxAmount: data.taxAmount,
-    shippingAmount: data.shippingAmount,
-    customerEmail: data.customerEmail,
-    billingFirstName: data.billingAddress.firstName,
-    billingLastName: data.billingAddress.lastName,
-    billingAddress: data.billingAddress.address,
-    billingCity: data.billingAddress.city,
-    billingState: data.billingAddress.state,
-    billingZip: data.billingAddress.zip,
-    billingCountry: data.billingAddress.country,
-    isTest: data.isTest,
-    rawResponse: data.rawResponse,
-    status: status,
-  }).returning();
+  const [transaction] = await db
+    .insert(creditCardTransactions)
+    .values({
+      paymentId: payment.id,
+      orderId: data.orderId,
+      transactionId: data.transactionId,
+      authCode: data.authCode,
+      responseCode: data.responseCode,
+      responseReasonCode: data.responseReasonCode,
+      responseReasonText: data.responseReasonText,
+      avsResult: data.avsResult,
+      cvvResult: data.cvvResult,
+      lastFourDigits:
+        data.rawResponse?.transactionResponse?.accountNumber?.slice(-4),
+      cardType: data.rawResponse?.transactionResponse?.accountType,
+      amount: data.amount,
+      taxAmount: data.taxAmount,
+      shippingAmount: data.shippingAmount,
+      customerEmail: data.customerEmail,
+      billingFirstName: data.billingAddress.firstName,
+      billingLastName: data.billingAddress.lastName,
+      billingAddress: data.billingAddress.address,
+      billingCity: data.billingAddress.city,
+      billingState: data.billingAddress.state,
+      billingZip: data.billingAddress.zip,
+      billingCountry: data.billingAddress.country,
+      isTest: data.isTest,
+      rawResponse: data.rawResponse,
+      status: status,
+    })
+    .returning();
 
   // If payment was approved, update order status
   if (isApproved) {
     // Update order payment status
-    await db.update(allOrders)
-      .set({ 
-        isPaid: true, 
+    await db
+      .update(allOrders)
+      .set({
+        isPaid: true,
         paymentType: 'credit_card',
         paymentAmount: data.amount,
         paymentDate: new Date(),
@@ -322,9 +392,10 @@ async function processTransactionResult(data: {
       .where(eq(allOrders.orderId, data.orderId));
 
     // Also try to update draft order if it exists
-    await db.update(orderDrafts)
-      .set({ 
-        isPaid: true, 
+    await db
+      .update(orderDrafts)
+      .set({
+        isPaid: true,
         paymentType: 'credit_card',
         paymentAmount: data.amount,
         paymentDate: new Date(),
@@ -350,14 +421,17 @@ async function processTransactionResult(data: {
 router.get('/order/:orderId', async (req, res) => {
   try {
     const { orderId } = req.params;
-    
+
     const orderPayments = await db
       .select({
         payment: payments,
         transaction: creditCardTransactions,
       })
       .from(payments)
-      .leftJoin(creditCardTransactions, eq(payments.id, creditCardTransactions.paymentId))
+      .leftJoin(
+        creditCardTransactions,
+        eq(payments.id, creditCardTransactions.paymentId)
+      )
       .where(eq(payments.orderId, orderId))
       .orderBy(desc(payments.createdAt));
 
@@ -377,7 +451,10 @@ router.get('/', async (req, res) => {
         transaction: creditCardTransactions,
       })
       .from(payments)
-      .leftJoin(creditCardTransactions, eq(payments.id, creditCardTransactions.paymentId))
+      .leftJoin(
+        creditCardTransactions,
+        eq(payments.id, creditCardTransactions.paymentId)
+      )
       .orderBy(desc(payments.createdAt))
       .limit(100);
 
@@ -392,10 +469,10 @@ router.get('/', async (req, res) => {
 router.post('/void/:transactionId', async (req, res) => {
   try {
     const { transactionId } = req.params;
-    
+
     if (!apiLoginId || !transactionKey) {
-      return res.status(500).json({ 
-        error: 'Payment processing not configured. Please contact support.' 
+      return res.status(500).json({
+        error: 'Payment processing not configured. Please contact support.',
       });
     }
 
@@ -411,27 +488,34 @@ router.post('/void/:transactionId', async (req, res) => {
     }
 
     if (transaction.status !== 'completed') {
-      return res.status(400).json({ error: 'Can only void completed transactions' });
+      return res
+        .status(400)
+        .json({ error: 'Can only void completed transactions' });
     }
 
     // Set up Authorize.Net void request
     const apiContracts = AuthorizeNet.APIContracts;
     const apiControllers = AuthorizeNet.APIControllers;
 
-    const merchantAuthenticationType = new apiContracts.MerchantAuthenticationType();
+    const merchantAuthenticationType =
+      new apiContracts.MerchantAuthenticationType();
     merchantAuthenticationType.setName(apiLoginId);
     merchantAuthenticationType.setTransactionKey(transactionKey);
 
     const transactionRequestType = new apiContracts.TransactionRequestType();
-    transactionRequestType.setTransactionType(apiContracts.TransactionTypeEnum.VOIDTRANSACTION);
+    transactionRequestType.setTransactionType(
+      apiContracts.TransactionTypeEnum.VOIDTRANSACTION
+    );
     transactionRequestType.setRefTransId(transactionId);
 
     const createRequest = new apiContracts.CreateTransactionRequest();
     createRequest.setMerchantAuthentication(merchantAuthenticationType);
     createRequest.setTransactionRequest(transactionRequestType);
 
-    const ctrl = new apiControllers.CreateTransactionController(createRequest.getJSON());
-    
+    const ctrl = new apiControllers.CreateTransactionController(
+      createRequest.getJSON()
+    );
+
     if (isTestMode) {
       ctrl.setEnvironment('https://apitest.authorize.net/xml/v1/request.api');
     }
@@ -439,37 +523,38 @@ router.post('/void/:transactionId', async (req, res) => {
     return new Promise((resolve, reject) => {
       ctrl.execute(() => {
         const apiResponse = ctrl.getResponse();
-        const response = new apiContracts.CreateTransactionResponse(apiResponse);
-        
+        const response = new apiContracts.CreateTransactionResponse(
+          apiResponse
+        );
+
         const resultCode = response.getMessages().getResultCode();
         const isSuccess = resultCode === apiContracts.MessageTypeEnum.OK;
 
         if (isSuccess) {
           // Update transaction status
           db.update(creditCardTransactions)
-            .set({ 
+            .set({
               status: 'voided',
               voidedAt: new Date(),
             })
             .where(eq(creditCardTransactions.transactionId, transactionId))
             .then(() => {
-              res.json({ 
-                success: true, 
-                message: 'Transaction voided successfully' 
+              res.json({
+                success: true,
+                message: 'Transaction voided successfully',
               });
               resolve(undefined);
             });
         } else {
           const errorMessage = response.getMessages().getMessage()[0].getText();
-          res.status(400).json({ 
-            success: false, 
-            error: errorMessage 
+          res.status(400).json({
+            success: false,
+            error: errorMessage,
           });
           resolve(undefined);
         }
       });
     });
-
   } catch (error) {
     console.error('Error voiding transaction:', error);
     res.status(500).json({ error: 'Failed to void transaction' });
@@ -481,39 +566,51 @@ const batchPaymentSchema = z.object({
   paymentMethod: z.enum(['cash', 'check', 'credit_card', 'agr', 'ach']),
   totalAmount: z.number().min(0.01),
   notes: z.string().optional(),
-  orderAllocations: z.array(z.object({
-    orderId: z.string(),
-    amount: z.number().min(0),
-  })).min(1),
+  orderAllocations: z
+    .array(
+      z.object({
+        orderId: z.string(),
+        amount: z.number().min(0),
+      })
+    )
+    .min(1),
 });
 
 router.post('/batch', async (req, res) => {
   try {
     const batchData = batchPaymentSchema.parse(req.body);
-    
+
     console.log('🔄 Processing batch payment:', {
       method: batchData.paymentMethod,
       total: batchData.totalAmount,
-      orders: batchData.orderAllocations.length
+      orders: batchData.orderAllocations.length,
     });
 
     // Validate that allocations sum to total amount
-    const totalAllocated = batchData.orderAllocations.reduce((sum, allocation) => sum + allocation.amount, 0);
+    const totalAllocated = batchData.orderAllocations.reduce(
+      (sum, allocation) => sum + allocation.amount,
+      0
+    );
     if (Math.abs(totalAllocated - batchData.totalAmount) > 0.01) {
-      return res.status(400).json({ 
-        error: 'Total allocation amount does not match payment amount' 
+      return res.status(400).json({
+        error: 'Total allocation amount does not match payment amount',
       });
     }
 
     // Verify all orders exist
-    const orderIds = batchData.orderAllocations.map(a => a.orderId);
-    const existingOrders = await db.select().from(allOrders).where(
-      orderIds.map(id => eq(allOrders.orderId, id)).reduce((acc, condition) => acc || condition)
-    );
-    
+    const orderIds = batchData.orderAllocations.map((a) => a.orderId);
+    const existingOrders = await db
+      .select()
+      .from(allOrders)
+      .where(
+        orderIds
+          .map((id) => eq(allOrders.orderId, id))
+          .reduce((acc, condition) => acc || condition)
+      );
+
     if (existingOrders.length !== orderIds.length) {
-      return res.status(400).json({ 
-        error: 'One or more orders not found' 
+      return res.status(400).json({
+        error: 'One or more orders not found',
       });
     }
 
@@ -524,16 +621,22 @@ router.post('/batch', async (req, res) => {
     for (const allocation of batchData.orderAllocations) {
       if (allocation.amount > 0) {
         // Create payment record
-        const [paymentRecord] = await db.insert(payments).values({
-          orderId: allocation.orderId,
-          paymentType: batchData.paymentMethod,
-          paymentAmount: allocation.amount,
-          paymentDate: new Date(),
-          notes: batchData.notes || `${batchData.paymentMethod.replace('_', ' ').toUpperCase()} payment via batch processing`,
-        }).returning();
+        const [paymentRecord] = await db
+          .insert(payments)
+          .values({
+            orderId: allocation.orderId,
+            paymentType: batchData.paymentMethod,
+            paymentAmount: allocation.amount,
+            paymentDate: new Date(),
+            notes:
+              batchData.notes ||
+              `${batchData.paymentMethod.replace('_', ' ').toUpperCase()} payment via batch processing`,
+          })
+          .returning();
 
         // Update order payment status
-        await db.update(allOrders)
+        await db
+          .update(allOrders)
           .set({
             isPaid: true, // This should be calculated based on total payments vs order total
             paymentType: batchData.paymentMethod,
@@ -553,7 +656,10 @@ router.post('/batch', async (req, res) => {
       }
     }
 
-    console.log('✅ Batch payment completed:', { ordersUpdated, results: results.length });
+    console.log('✅ Batch payment completed:', {
+      ordersUpdated,
+      results: results.length,
+    });
 
     res.json({
       success: true,
@@ -563,13 +669,12 @@ router.post('/batch', async (req, res) => {
       paymentMethod: batchData.paymentMethod,
       results,
     });
-
   } catch (error) {
     console.error('Batch payment error:', error);
     if (error instanceof z.ZodError) {
-      return res.status(400).json({ 
-        error: 'Invalid batch payment data', 
-        details: error.errors 
+      return res.status(400).json({
+        error: 'Invalid batch payment data',
+        details: error.errors,
       });
     }
     return res.status(500).json({ error: 'Batch payment processing failed' });

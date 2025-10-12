@@ -6,11 +6,30 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { Plus, Edit, Trash2, AlertCircle, FileWarning } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -88,24 +107,16 @@ const ISSUE_CAUSES = [
   'other',
 ];
 
-const DISPOSITIONS = [
-  'Repair',
-  'Scrap',
-  'Use "As Is"',
-];
+const DISPOSITIONS = ['Repair', 'Scrap', 'Use "As Is"'];
 
-const AUTHORIZATIONS = [
-  'Customer',
-  'Glenn',
-  'Laurie',
-  'Matt',
-  'AG',
-];
+const AUTHORIZATIONS = ['Customer', 'Glenn', 'Laurie', 'Matt', 'AG'];
 
 export default function NonConformingItemsPage() {
   const { toast } = useToast();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingItem, setEditingItem] = useState<NonConformingItem | null>(null);
+  const [editingItem, setEditingItem] = useState<NonConformingItem | null>(
+    null
+  );
   const [formData, setFormData] = useState<FormData>(initialFormData);
 
   const { data: items = [], isLoading } = useQuery<NonConformingItem[]>({
@@ -120,40 +131,51 @@ export default function NonConformingItemsPage() {
     queryKey: ['/api/customers/p2-customers-bypass'],
   });
 
-  const availableCustomers = formData.p1OrP2 === 'P1' 
-    ? p1Customers.map(c => c.name)
-    : p2Customers.map(c => c.customerName);
+  const availableCustomers =
+    formData.p1OrP2 === 'P1'
+      ? p1Customers.map((c) => c.name)
+      : p2Customers.map((c) => c.customerName);
 
   useEffect(() => {
     if (formData.customer && !availableCustomers.includes(formData.customer)) {
-      setFormData(prev => ({ ...prev, customer: '' }));
+      setFormData((prev) => ({ ...prev, customer: '' }));
     }
   }, [formData.p1OrP2]);
 
   const createMutation = useMutation({
-    mutationFn: (data: FormData) => apiRequest('/api/non-conforming-items', {
-      method: 'POST',
-      body: JSON.stringify({
-        ...data,
-        qty: Number(data.qty),
-        dispositionDate: data.dispositionDate || null,
-        serialTagNumber: data.serialTagNumber || null,
-        correctiveActionNotes: data.correctiveActionNotes || null,
+    mutationFn: (data: FormData) =>
+      apiRequest('/api/non-conforming-items', {
+        method: 'POST',
+        body: JSON.stringify({
+          ...data,
+          qty: Number(data.qty),
+          dispositionDate: data.dispositionDate || null,
+          serialTagNumber: data.serialTagNumber || null,
+          correctiveActionNotes: data.correctiveActionNotes || null,
+        }),
       }),
-    }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/non-conforming-items'] });
-      toast({ title: 'Success', description: 'Non-conforming item created successfully' });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/non-conforming-items'],
+      });
+      toast({
+        title: 'Success',
+        description: 'Non-conforming item created successfully',
+      });
       setIsDialogOpen(false);
       setFormData(initialFormData);
     },
     onError: () => {
-      toast({ title: 'Error', description: 'Failed to create non-conforming item', variant: 'destructive' });
+      toast({
+        title: 'Error',
+        description: 'Failed to create non-conforming item',
+        variant: 'destructive',
+      });
     },
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: number; data: FormData }) => 
+    mutationFn: ({ id, data }: { id: number; data: FormData }) =>
       apiRequest(`/api/non-conforming-items/${id}`, {
         method: 'PUT',
         body: JSON.stringify({
@@ -165,40 +187,59 @@ export default function NonConformingItemsPage() {
         }),
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/non-conforming-items'] });
-      toast({ title: 'Success', description: 'Non-conforming item updated successfully' });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/non-conforming-items'],
+      });
+      toast({
+        title: 'Success',
+        description: 'Non-conforming item updated successfully',
+      });
       setIsDialogOpen(false);
       setEditingItem(null);
       setFormData(initialFormData);
     },
     onError: () => {
-      toast({ title: 'Error', description: 'Failed to update non-conforming item', variant: 'destructive' });
+      toast({
+        title: 'Error',
+        description: 'Failed to update non-conforming item',
+        variant: 'destructive',
+      });
     },
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: number) => apiRequest(`/api/non-conforming-items/${id}`, { method: 'DELETE' }),
+    mutationFn: (id: number) =>
+      apiRequest(`/api/non-conforming-items/${id}`, { method: 'DELETE' }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/non-conforming-items'] });
-      toast({ title: 'Success', description: 'Non-conforming item deleted successfully' });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/non-conforming-items'],
+      });
+      toast({
+        title: 'Success',
+        description: 'Non-conforming item deleted successfully',
+      });
     },
     onError: () => {
-      toast({ title: 'Error', description: 'Failed to delete non-conforming item', variant: 'destructive' });
+      toast({
+        title: 'Error',
+        description: 'Failed to delete non-conforming item',
+        variant: 'destructive',
+      });
     },
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!formData.p1OrP2) {
-      toast({ 
-        title: 'Validation Error', 
-        description: 'Please select P1 or P2', 
-        variant: 'destructive' 
+      toast({
+        title: 'Validation Error',
+        description: 'Please select P1 or P2',
+        variant: 'destructive',
       });
       return;
     }
-    
+
     if (editingItem) {
       updateMutation.mutate({ id: editingItem.id, data: formData });
     } else {
@@ -243,7 +284,9 @@ export default function NonConformingItemsPage() {
         <CardHeader className="flex flex-row items-center justify-between">
           <div className="flex items-center gap-3">
             <FileWarning className="h-6 w-6 text-red-600" />
-            <CardTitle className="text-2xl font-bold">Non-Conforming Items Tracking</CardTitle>
+            <CardTitle className="text-2xl font-bold">
+              Non-Conforming Items Tracking
+            </CardTitle>
           </div>
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
@@ -255,7 +298,9 @@ export default function NonConformingItemsPage() {
             <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>
-                  {editingItem ? 'Edit Non-Conforming Item' : 'Add Non-Conforming Item'}
+                  {editingItem
+                    ? 'Edit Non-Conforming Item'
+                    : 'Add Non-Conforming Item'}
                 </DialogTitle>
               </DialogHeader>
               <form onSubmit={handleSubmit} className="space-y-4">
@@ -266,7 +311,12 @@ export default function NonConformingItemsPage() {
                       id="date"
                       type="date"
                       value={formData.date}
-                      onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
+                      onChange={(e) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          date: e.target.value,
+                        }))
+                      }
                       required
                       data-testid="input-date"
                     />
@@ -276,7 +326,9 @@ export default function NonConformingItemsPage() {
                     <Label htmlFor="p1OrP2">P1 or P2 *</Label>
                     <Select
                       value={formData.p1OrP2}
-                      onValueChange={(value) => setFormData(prev => ({ ...prev, p1OrP2: value }))}
+                      onValueChange={(value) =>
+                        setFormData((prev) => ({ ...prev, p1OrP2: value }))
+                      }
                     >
                       <SelectTrigger id="p1OrP2" data-testid="select-p1-or-p2">
                         <SelectValue />
@@ -292,9 +344,14 @@ export default function NonConformingItemsPage() {
                     <Label htmlFor="customer">Customer *</Label>
                     <Select
                       value={formData.customer}
-                      onValueChange={(value) => setFormData(prev => ({ ...prev, customer: value }))}
+                      onValueChange={(value) =>
+                        setFormData((prev) => ({ ...prev, customer: value }))
+                      }
                     >
-                      <SelectTrigger id="customer" data-testid="select-customer">
+                      <SelectTrigger
+                        id="customer"
+                        data-testid="select-customer"
+                      >
                         <SelectValue placeholder="Select customer" />
                       </SelectTrigger>
                       <SelectContent>
@@ -318,7 +375,12 @@ export default function NonConformingItemsPage() {
                     <Input
                       id="sku"
                       value={formData.sku}
-                      onChange={(e) => setFormData(prev => ({ ...prev, sku: e.target.value }))}
+                      onChange={(e) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          sku: e.target.value,
+                        }))
+                      }
                       required
                       placeholder="Enter SKU"
                       data-testid="input-sku"
@@ -332,7 +394,12 @@ export default function NonConformingItemsPage() {
                       type="number"
                       min="1"
                       value={formData.qty}
-                      onChange={(e) => setFormData(prev => ({ ...prev, qty: parseInt(e.target.value) || 1 }))}
+                      onChange={(e) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          qty: parseInt(e.target.value) || 1,
+                        }))
+                      }
                       required
                       data-testid="input-qty"
                     />
@@ -342,7 +409,9 @@ export default function NonConformingItemsPage() {
                     <Label htmlFor="issueCause">Issue/Cause *</Label>
                     <Select
                       value={formData.issueCause}
-                      onValueChange={(value) => setFormData(prev => ({ ...prev, issueCause: value }))}
+                      onValueChange={(value) =>
+                        setFormData((prev) => ({ ...prev, issueCause: value }))
+                      }
                     >
                       <SelectTrigger data-testid="select-issue-cause">
                         <SelectValue placeholder="Select issue/cause" />
@@ -362,12 +431,18 @@ export default function NonConformingItemsPage() {
                       <Checkbox
                         id="manufacturerDefect"
                         checked={formData.manufacturerDefect}
-                        onCheckedChange={(checked) => 
-                          setFormData(prev => ({ ...prev, manufacturerDefect: checked as boolean }))
+                        onCheckedChange={(checked) =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            manufacturerDefect: checked as boolean,
+                          }))
                         }
                         data-testid="checkbox-manufacturer-defect"
                       />
-                      <Label htmlFor="manufacturerDefect" className="cursor-pointer">
+                      <Label
+                        htmlFor="manufacturerDefect"
+                        className="cursor-pointer"
+                      >
                         Manufacturer Defect/Error
                       </Label>
                     </div>
@@ -377,7 +452,9 @@ export default function NonConformingItemsPage() {
                     <Label htmlFor="disposition">Disposition *</Label>
                     <Select
                       value={formData.disposition}
-                      onValueChange={(value) => setFormData(prev => ({ ...prev, disposition: value }))}
+                      onValueChange={(value) =>
+                        setFormData((prev) => ({ ...prev, disposition: value }))
+                      }
                     >
                       <SelectTrigger data-testid="select-disposition">
                         <SelectValue placeholder="Select disposition" />
@@ -396,7 +473,12 @@ export default function NonConformingItemsPage() {
                     <Label htmlFor="authorization">Authorization *</Label>
                     <Select
                       value={formData.authorization}
-                      onValueChange={(value) => setFormData(prev => ({ ...prev, authorization: value }))}
+                      onValueChange={(value) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          authorization: value,
+                        }))
+                      }
                     >
                       <SelectTrigger data-testid="select-authorization">
                         <SelectValue placeholder="Select authorization" />
@@ -416,7 +498,12 @@ export default function NonConformingItemsPage() {
                     <Input
                       id="serialTagNumber"
                       value={formData.serialTagNumber}
-                      onChange={(e) => setFormData(prev => ({ ...prev, serialTagNumber: e.target.value }))}
+                      onChange={(e) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          serialTagNumber: e.target.value,
+                        }))
+                      }
                       placeholder="Enter serial/tag number"
                       data-testid="input-serial-tag"
                     />
@@ -428,17 +515,29 @@ export default function NonConformingItemsPage() {
                       id="dispositionDate"
                       type="date"
                       value={formData.dispositionDate}
-                      onChange={(e) => setFormData(prev => ({ ...prev, dispositionDate: e.target.value }))}
+                      onChange={(e) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          dispositionDate: e.target.value,
+                        }))
+                      }
                       data-testid="input-disposition-date"
                     />
                   </div>
 
                   <div className="space-y-2 md:col-span-2">
-                    <Label htmlFor="correctiveActionNotes">Corrective Action or Concession Info, Notes</Label>
+                    <Label htmlFor="correctiveActionNotes">
+                      Corrective Action or Concession Info, Notes
+                    </Label>
                     <Textarea
                       id="correctiveActionNotes"
                       value={formData.correctiveActionNotes}
-                      onChange={(e) => setFormData(prev => ({ ...prev, correctiveActionNotes: e.target.value }))}
+                      onChange={(e) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          correctiveActionNotes: e.target.value,
+                        }))
+                      }
                       placeholder="Enter notes..."
                       rows={4}
                       data-testid="textarea-notes"
@@ -459,12 +558,16 @@ export default function NonConformingItemsPage() {
                   >
                     Cancel
                   </Button>
-                  <Button 
-                    type="submit" 
-                    disabled={createMutation.isPending || updateMutation.isPending}
+                  <Button
+                    type="submit"
+                    disabled={
+                      createMutation.isPending || updateMutation.isPending
+                    }
                     data-testid="button-submit"
                   >
-                    {createMutation.isPending || updateMutation.isPending ? 'Saving...' : 'Save'}
+                    {createMutation.isPending || updateMutation.isPending
+                      ? 'Saving...'
+                      : 'Save'}
                   </Button>
                 </div>
               </form>
@@ -479,8 +582,12 @@ export default function NonConformingItemsPage() {
           ) : items.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <AlertCircle className="h-12 w-12 text-gray-400 mb-4" />
-              <p className="text-gray-500 text-lg">No non-conforming items found</p>
-              <p className="text-gray-400 text-sm mt-2">Click "Add Item" to create your first entry</p>
+              <p className="text-gray-500 text-lg">
+                No non-conforming items found
+              </p>
+              <p className="text-gray-400 text-sm mt-2">
+                Click "Add Item" to create your first entry
+              </p>
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -507,21 +614,41 @@ export default function NonConformingItemsPage() {
                       <TableCell data-testid={`text-date-${item.id}`}>
                         {format(new Date(item.date), 'MM/dd/yyyy')}
                       </TableCell>
-                      <TableCell data-testid={`text-p1-or-p2-${item.id}`}>{item.p1OrP2}</TableCell>
-                      <TableCell data-testid={`text-customer-${item.id}`}>{item.customer}</TableCell>
-                      <TableCell data-testid={`text-sku-${item.id}`}>{item.sku}</TableCell>
-                      <TableCell data-testid={`text-qty-${item.id}`}>{item.qty}</TableCell>
-                      <TableCell data-testid={`text-issue-${item.id}`} className="max-w-xs truncate" title={item.issueCause}>
+                      <TableCell data-testid={`text-p1-or-p2-${item.id}`}>
+                        {item.p1OrP2}
+                      </TableCell>
+                      <TableCell data-testid={`text-customer-${item.id}`}>
+                        {item.customer}
+                      </TableCell>
+                      <TableCell data-testid={`text-sku-${item.id}`}>
+                        {item.sku}
+                      </TableCell>
+                      <TableCell data-testid={`text-qty-${item.id}`}>
+                        {item.qty}
+                      </TableCell>
+                      <TableCell
+                        data-testid={`text-issue-${item.id}`}
+                        className="max-w-xs truncate"
+                        title={item.issueCause}
+                      >
                         {item.issueCause}
                       </TableCell>
                       <TableCell data-testid={`text-defect-${item.id}`}>
                         {item.manufacturerDefect ? 'Y' : 'N'}
                       </TableCell>
-                      <TableCell data-testid={`text-disposition-${item.id}`}>{item.disposition}</TableCell>
-                      <TableCell data-testid={`text-auth-${item.id}`}>{item.authorization}</TableCell>
-                      <TableCell data-testid={`text-serial-${item.id}`}>{item.serialTagNumber || '-'}</TableCell>
+                      <TableCell data-testid={`text-disposition-${item.id}`}>
+                        {item.disposition}
+                      </TableCell>
+                      <TableCell data-testid={`text-auth-${item.id}`}>
+                        {item.authorization}
+                      </TableCell>
+                      <TableCell data-testid={`text-serial-${item.id}`}>
+                        {item.serialTagNumber || '-'}
+                      </TableCell>
                       <TableCell data-testid={`text-disp-date-${item.id}`}>
-                        {item.dispositionDate ? format(new Date(item.dispositionDate), 'MM/dd/yyyy') : '-'}
+                        {item.dispositionDate
+                          ? format(new Date(item.dispositionDate), 'MM/dd/yyyy')
+                          : '-'}
                       </TableCell>
                       <TableCell>
                         <div className="flex gap-2">

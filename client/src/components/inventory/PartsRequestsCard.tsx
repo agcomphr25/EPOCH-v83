@@ -5,8 +5,20 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Plus, Edit, Trash2, Calendar, User, Package } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -31,7 +43,9 @@ export default function PartsRequestsCard() {
   const queryClient = useQueryClient();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
-  const [editingRequest, setEditingRequest] = useState<PartsRequest | null>(null);
+  const [editingRequest, setEditingRequest] = useState<PartsRequest | null>(
+    null
+  );
 
   const [formData, setFormData] = useState<PartsRequestFormData>({
     partNumber: '',
@@ -45,7 +59,7 @@ export default function PartsRequestsCard() {
     reason: '',
     status: 'PENDING',
     expectedDelivery: '',
-    notes: ''
+    notes: '',
   });
 
   // Load parts requests
@@ -56,34 +70,41 @@ export default function PartsRequestsCard() {
 
   // Group requests by department
   const requestsByDepartment = useMemo(() => {
-    const grouped = requests.reduce((acc, request) => {
-      const dept = request.department || 'No Department';
-      if (!acc[dept]) {
-        acc[dept] = [];
-      }
-      acc[dept].push(request);
-      return acc;
-    }, {} as Record<string, PartsRequest[]>);
-    
+    const grouped = requests.reduce(
+      (acc, request) => {
+        const dept = request.department || 'No Department';
+        if (!acc[dept]) {
+          acc[dept] = [];
+        }
+        acc[dept].push(request);
+        return acc;
+      },
+      {} as Record<string, PartsRequest[]>
+    );
+
     // Sort departments alphabetically, with "No Department" last
     const sortedDepartments = Object.keys(grouped).sort((a, b) => {
       if (a === 'No Department') return 1;
       if (b === 'No Department') return -1;
       return a.localeCompare(b);
     });
-    
-    return sortedDepartments.reduce((acc, dept) => {
-      acc[dept] = grouped[dept];
-      return acc;
-    }, {} as Record<string, PartsRequest[]>);
+
+    return sortedDepartments.reduce(
+      (acc, dept) => {
+        acc[dept] = grouped[dept];
+        return acc;
+      },
+      {} as Record<string, PartsRequest[]>
+    );
   }, [requests]);
 
   // Create mutation
   const createMutation = useMutation({
-    mutationFn: (data: any) => apiRequest('/api/parts-requests', {
-      method: 'POST',
-      body: data
-    }),
+    mutationFn: (data: any) =>
+      apiRequest('/api/parts-requests', {
+        method: 'POST',
+        body: data,
+      }),
     onSuccess: () => {
       toast.success('Parts request created successfully');
       setIsCreateOpen(false);
@@ -95,10 +116,11 @@ export default function PartsRequestsCard() {
 
   // Update mutation
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: number; data: any }) => apiRequest(`/api/parts-requests/${id}`, {
-      method: 'PUT',
-      body: data
-    }),
+    mutationFn: ({ id, data }: { id: number; data: any }) =>
+      apiRequest(`/api/parts-requests/${id}`, {
+        method: 'PUT',
+        body: data,
+      }),
     onSuccess: () => {
       toast.success('Parts request updated successfully');
       setIsEditOpen(false);
@@ -111,9 +133,10 @@ export default function PartsRequestsCard() {
 
   // Delete mutation
   const deleteMutation = useMutation({
-    mutationFn: (id: number) => apiRequest(`/api/parts-requests/${id}`, {
-      method: 'DELETE'
-    }),
+    mutationFn: (id: number) =>
+      apiRequest(`/api/parts-requests/${id}`, {
+        method: 'DELETE',
+      }),
     onSuccess: () => {
       toast.success('Parts request deleted successfully');
       queryClient.invalidateQueries({ queryKey: ['/api/parts-requests'] });
@@ -134,23 +157,30 @@ export default function PartsRequestsCard() {
       reason: '',
       status: 'PENDING',
       expectedDelivery: '',
-      notes: ''
+      notes: '',
     });
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  const handleChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+  ) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleSelectChange = (name: string, value: string) => {
-    setFormData(prev => ({ ...prev, [name]: value }));
+    setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!formData.partNumber || !formData.partName || !formData.requestedBy || !formData.quantity) {
+
+    if (
+      !formData.partNumber ||
+      !formData.partName ||
+      !formData.requestedBy ||
+      !formData.quantity
+    ) {
       toast.error('Please fill in all required fields');
       return;
     }
@@ -163,7 +193,9 @@ export default function PartsRequestsCard() {
       quantity: parseInt(formData.quantity),
       urgency: formData.urgency,
       supplier: formData.supplier || null,
-      estimatedCost: formData.estimatedCost ? parseFloat(formData.estimatedCost) : null,
+      estimatedCost: formData.estimatedCost
+        ? parseFloat(formData.estimatedCost)
+        : null,
       reason: formData.reason || null,
       status: formData.status,
       expectedDelivery: formData.expectedDelivery || null,
@@ -187,10 +219,14 @@ export default function PartsRequestsCard() {
       quantity: request.quantity.toString(),
       urgency: request.urgency,
       supplier: request.supplier || '',
-      estimatedCost: request.estimatedCost ? request.estimatedCost.toString() : '',
+      estimatedCost: request.estimatedCost
+        ? request.estimatedCost.toString()
+        : '',
       reason: request.reason || '',
       status: request.status,
-      expectedDelivery: request.expectedDelivery ? new Date(request.expectedDelivery).toISOString().split('T')[0] : '',
+      expectedDelivery: request.expectedDelivery
+        ? new Date(request.expectedDelivery).toISOString().split('T')[0]
+        : '',
       notes: request.notes || '',
     });
     setIsEditOpen(true);
@@ -204,22 +240,33 @@ export default function PartsRequestsCard() {
 
   const getStatusBadgeColor = (status: string) => {
     switch (status) {
-      case 'PENDING': return 'bg-yellow-100 text-yellow-800';
-      case 'APPROVED': return 'bg-green-100 text-green-800';
-      case 'ORDERED': return 'bg-blue-100 text-blue-800';
-      case 'RECEIVED': return 'bg-gray-100 text-gray-800';
-      case 'REJECTED': return 'bg-red-100 text-red-800';
-      default: return 'bg-gray-100 text-gray-800';
+      case 'PENDING':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'APPROVED':
+        return 'bg-green-100 text-green-800';
+      case 'ORDERED':
+        return 'bg-blue-100 text-blue-800';
+      case 'RECEIVED':
+        return 'bg-gray-100 text-gray-800';
+      case 'REJECTED':
+        return 'bg-red-100 text-red-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
     }
   };
 
   const getUrgencyBadgeColor = (urgency: string) => {
     switch (urgency) {
-      case 'LOW': return 'bg-gray-100 text-gray-800';
-      case 'MEDIUM': return 'bg-yellow-100 text-yellow-800';
-      case 'HIGH': return 'bg-orange-100 text-orange-800';
-      case 'CRITICAL': return 'bg-red-100 text-red-800';
-      default: return 'bg-gray-100 text-gray-800';
+      case 'LOW':
+        return 'bg-gray-100 text-gray-800';
+      case 'MEDIUM':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'HIGH':
+        return 'bg-orange-100 text-orange-800';
+      case 'CRITICAL':
+        return 'bg-red-100 text-red-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
     }
   };
 
@@ -289,7 +336,10 @@ export default function PartsRequestsCard() {
         </div>
         <div>
           <Label htmlFor="urgency">Urgency</Label>
-          <Select value={formData.urgency} onValueChange={(value) => handleSelectChange('urgency', value)}>
+          <Select
+            value={formData.urgency}
+            onValueChange={(value) => handleSelectChange('urgency', value)}
+          >
             <SelectTrigger>
               <SelectValue placeholder="Select urgency" />
             </SelectTrigger>
@@ -303,7 +353,10 @@ export default function PartsRequestsCard() {
         </div>
         <div>
           <Label htmlFor="status">Status</Label>
-          <Select value={formData.status} onValueChange={(value) => handleSelectChange('status', value)}>
+          <Select
+            value={formData.status}
+            onValueChange={(value) => handleSelectChange('status', value)}
+          >
             <SelectTrigger>
               <SelectValue placeholder="Select status" />
             </SelectTrigger>
@@ -379,9 +432,9 @@ export default function PartsRequestsCard() {
       </div>
 
       <div className="flex justify-end space-x-2">
-        <Button 
-          type="button" 
-          variant="outline" 
+        <Button
+          type="button"
+          variant="outline"
           onClick={() => {
             if (editingRequest) {
               setIsEditOpen(false);
@@ -394,8 +447,8 @@ export default function PartsRequestsCard() {
         >
           Cancel
         </Button>
-        <Button 
-          type="submit" 
+        <Button
+          type="submit"
           disabled={createMutation.isPending || updateMutation.isPending}
         >
           {editingRequest ? 'Update' : 'Create'} Request
@@ -428,107 +481,135 @@ export default function PartsRequestsCard() {
       {isLoading ? (
         <div className="text-center py-8">Loading parts requests...</div>
       ) : Object.keys(requestsByDepartment).length === 0 ? (
-        <div className="text-center py-8 text-gray-500">No parts requests found</div>
+        <div className="text-center py-8 text-gray-500">
+          No parts requests found
+        </div>
       ) : (
         <div className="space-y-6">
-          {Object.entries(requestsByDepartment).map(([department, deptRequests]) => (
-            <div key={department} className="space-y-4">
-              {/* Department Header */}
-              <div className="bg-gray-50 px-4 py-3 rounded-lg border">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-lg font-semibold text-gray-800">{department}</h4>
-                  <span className="text-sm text-gray-600 bg-white px-2 py-1 rounded">
-                    {deptRequests.length} request{deptRequests.length !== 1 ? 's' : ''}
-                  </span>
+          {Object.entries(requestsByDepartment).map(
+            ([department, deptRequests]) => (
+              <div key={department} className="space-y-4">
+                {/* Department Header */}
+                <div className="bg-gray-50 px-4 py-3 rounded-lg border">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-lg font-semibold text-gray-800">
+                      {department}
+                    </h4>
+                    <span className="text-sm text-gray-600 bg-white px-2 py-1 rounded">
+                      {deptRequests.length} request
+                      {deptRequests.length !== 1 ? 's' : ''}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Department Requests Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 ml-4">
+                  {deptRequests.map((request) => (
+                    <div
+                      key={request.id}
+                      className="border rounded-lg p-4 space-y-3 hover:shadow-md transition-shadow bg-white"
+                    >
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <h5 className="font-medium">{request.partName}</h5>
+                          <p className="text-sm text-gray-600">
+                            Part: {request.partNumber}
+                          </p>
+                        </div>
+                        <div className="flex space-x-1">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleEdit(request)}
+                            title="Edit"
+                          >
+                            <Edit className="h-3 w-3" />
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleDelete(request.id)}
+                            disabled={deleteMutation.isPending}
+                            title="Delete"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <Badge className={getStatusBadgeColor(request.status)}>
+                          {request.status}
+                        </Badge>
+                        <Badge
+                          className={getUrgencyBadgeColor(request.urgency)}
+                        >
+                          {request.urgency}
+                        </Badge>
+                      </div>
+
+                      <div className="space-y-2 text-sm">
+                        <div className="flex items-center gap-2">
+                          <User className="h-4 w-4 text-gray-400" />
+                          <span>{request.requestedBy}</span>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <Package className="h-4 w-4 text-gray-400" />
+                          <span>Qty: {request.quantity}</span>
+                          {request.estimatedCost && (
+                            <span className="text-gray-500">
+                              • ${request.estimatedCost.toFixed(2)}
+                            </span>
+                          )}
+                        </div>
+
+                        {request.supplier && (
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-gray-500">
+                              Supplier: {request.supplier}
+                            </span>
+                          </div>
+                        )}
+
+                        {request.expectedDelivery && (
+                          <div className="flex items-center gap-2">
+                            <Calendar className="h-4 w-4 text-gray-400" />
+                            <span>
+                              Expected:{' '}
+                              {new Date(
+                                request.expectedDelivery
+                              ).toLocaleDateString()}
+                            </span>
+                          </div>
+                        )}
+
+                        {request.reason && (
+                          <div className="text-xs text-gray-600 bg-gray-50 p-2 rounded">
+                            {request.reason}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
-
-              {/* Department Requests Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 ml-4">
-                {deptRequests.map((request) => (
-                  <div key={request.id} className="border rounded-lg p-4 space-y-3 hover:shadow-md transition-shadow bg-white">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <h5 className="font-medium">{request.partName}</h5>
-                        <p className="text-sm text-gray-600">Part: {request.partNumber}</p>
-                      </div>
-                      <div className="flex space-x-1">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleEdit(request)}
-                          title="Edit"
-                        >
-                          <Edit className="h-3 w-3" />
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleDelete(request.id)}
-                          disabled={deleteMutation.isPending}
-                          title="Delete"
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <Badge className={getStatusBadgeColor(request.status)}>
-                        {request.status}
-                      </Badge>
-                      <Badge className={getUrgencyBadgeColor(request.urgency)}>
-                        {request.urgency}
-                      </Badge>
-                    </div>
-
-                    <div className="space-y-2 text-sm">
-                      <div className="flex items-center gap-2">
-                        <User className="h-4 w-4 text-gray-400" />
-                        <span>{request.requestedBy}</span>
-                      </div>
-                      
-                      <div className="flex items-center gap-2">
-                        <Package className="h-4 w-4 text-gray-400" />
-                        <span>Qty: {request.quantity}</span>
-                        {request.estimatedCost && <span className="text-gray-500">• ${request.estimatedCost.toFixed(2)}</span>}
-                      </div>
-
-                      {request.supplier && (
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-gray-500">Supplier: {request.supplier}</span>
-                        </div>
-                      )}
-
-                      {request.expectedDelivery && (
-                        <div className="flex items-center gap-2">
-                          <Calendar className="h-4 w-4 text-gray-400" />
-                          <span>Expected: {new Date(request.expectedDelivery).toLocaleDateString()}</span>
-                        </div>
-                      )}
-
-                      {request.reason && (
-                        <div className="text-xs text-gray-600 bg-gray-50 p-2 rounded">
-                          {request.reason}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
+            )
+          )}
         </div>
       )}
 
       {/* Edit Dialog */}
-      <Dialog open={isEditOpen} onOpenChange={(open) => {
-        setIsEditOpen(open);
-        if (!open) {
-          setEditingRequest(null);
-          resetForm();
-        }
-      }}>
+      <Dialog
+        open={isEditOpen}
+        onOpenChange={(open) => {
+          setIsEditOpen(open);
+          if (!open) {
+            setEditingRequest(null);
+            resetForm();
+          }
+        }}
+      >
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Edit Parts Request</DialogTitle>

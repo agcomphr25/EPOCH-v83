@@ -96,6 +96,7 @@ export default [
       'build/',
       '.next/',
       'coverage/',
+      'attached_assets/',
       '*.config.js',
       '*.config.ts',
     ],

@@ -1,4 +1,3 @@
-
 import React from 'react';
 import P2LayupScheduler from '@/components/P2LayupScheduler';
 

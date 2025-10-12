@@ -8,13 +8,35 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/ui/form';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { Badge } from '@/components/ui/badge';
-import { DollarSign, CreditCard, Banknote, FileText, Building, University, Users, Search } from 'lucide-react';
+import {
+  DollarSign,
+  CreditCard,
+  Banknote,
+  FileText,
+  Building,
+  University,
+  Users,
+  Search,
+} from 'lucide-react';
 import CustomerSearchInput from '@/components/CustomerSearchInput';
 import type { Customer } from '@shared/schema';
 
@@ -22,7 +44,12 @@ import type { Customer } from '@shared/schema';
 const PAYMENT_METHODS = [
   { value: 'cash', label: 'Cash', icon: Banknote, color: 'bg-green-500' },
   { value: 'check', label: 'Check', icon: FileText, color: 'bg-blue-500' },
-  { value: 'credit_card', label: 'Credit Card', icon: CreditCard, color: 'bg-purple-500' },
+  {
+    value: 'credit_card',
+    label: 'Credit Card',
+    icon: CreditCard,
+    color: 'bg-purple-500',
+  },
   { value: 'agr', label: 'AGR', icon: Building, color: 'bg-orange-500' },
   { value: 'ach', label: 'ACH', icon: University, color: 'bg-indigo-500' },
 ];
@@ -31,10 +58,14 @@ const batchPaymentSchema = z.object({
   paymentMethod: z.string().min(1, 'Payment method is required'),
   totalAmount: z.number().min(0.01, 'Amount must be greater than 0'),
   notes: z.string().optional(),
-  orderAllocations: z.array(z.object({
-    orderId: z.string(),
-    amount: z.number().min(0, 'Amount cannot be negative'),
-  })).min(1, 'At least one order must be selected'),
+  orderAllocations: z
+    .array(
+      z.object({
+        orderId: z.string(),
+        amount: z.number().min(0, 'Amount cannot be negative'),
+      })
+    )
+    .min(1, 'At least one order must be selected'),
 });
 
 type BatchPaymentFormData = z.infer<typeof batchPaymentSchema>;
@@ -58,9 +89,13 @@ interface BatchPaymentProps {
 export default function BatchPayment({ onPaymentSuccess }: BatchPaymentProps) {
   const { toast } = useToast();
   const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
-  const [orderAllocations, setOrderAllocations] = useState<Record<string, number>>({});
+  const [orderAllocations, setOrderAllocations] = useState<
+    Record<string, number>
+  >({});
   const [autoAllocate, setAutoAllocate] = useState(true);
-  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(
+    null
+  );
   const [searchMode, setSearchMode] = useState<'all' | 'customer'>('all');
 
   const form = useForm<BatchPaymentFormData>({
@@ -75,19 +110,24 @@ export default function BatchPayment({ onPaymentSuccess }: BatchPaymentProps) {
 
   // Fetch unpaid/partially paid orders (all or by customer)
   const { data: ordersData, isLoading } = useQuery({
-    queryKey: searchMode === 'customer' && selectedCustomer
-      ? ['/api/orders/unpaid/customer', selectedCustomer.id]
-      : ['/api/orders/unpaid'],
+    queryKey:
+      searchMode === 'customer' && selectedCustomer
+        ? ['/api/orders/unpaid/customer', selectedCustomer.id]
+        : ['/api/orders/unpaid'],
     queryFn: async () => {
       if (searchMode === 'customer' && selectedCustomer) {
-        const response = await apiRequest(`/api/orders/unpaid/customer/${selectedCustomer.id}`);
+        const response = await apiRequest(
+          `/api/orders/unpaid/customer/${selectedCustomer.id}`
+        );
         return response;
       } else {
         const response = await apiRequest('/api/orders/unpaid');
         return response;
       }
     },
-    enabled: searchMode === 'all' || (searchMode === 'customer' && selectedCustomer !== null),
+    enabled:
+      searchMode === 'all' ||
+      (searchMode === 'customer' && selectedCustomer !== null),
   });
 
   const orders: Order[] = (ordersData as Order[]) || [];
@@ -101,7 +141,7 @@ export default function BatchPayment({ onPaymentSuccess }: BatchPaymentProps) {
     },
     onSuccess: (result) => {
       toast({
-        title: "Batch Payment Successful",
+        title: 'Batch Payment Successful',
         description: `Payment processed for ${result.ordersUpdated} orders`,
       });
       queryClient.invalidateQueries({ queryKey: ['/api/payments'] });
@@ -111,9 +151,11 @@ export default function BatchPayment({ onPaymentSuccess }: BatchPaymentProps) {
     },
     onError: (error: any) => {
       toast({
-        title: "Batch Payment Failed",
-        description: error.message || "An error occurred while processing the batch payment",
-        variant: "destructive",
+        title: 'Batch Payment Failed',
+        description:
+          error.message ||
+          'An error occurred while processing the batch payment',
+        variant: 'destructive',
       });
     },
   });
@@ -166,8 +208,11 @@ export default function BatchPayment({ onPaymentSuccess }: BatchPaymentProps) {
     updateFormAllocations(selectedOrders, newAllocations);
   };
 
-  const updateFormAllocations = (selected: Set<string>, allocations: Record<string, number>) => {
-    const orderAllocations = Array.from(selected).map(orderId => ({
+  const updateFormAllocations = (
+    selected: Set<string>,
+    allocations: Record<string, number>
+  ) => {
+    const orderAllocations = Array.from(selected).map((orderId) => ({
       orderId,
       amount: allocations[orderId] || 0,
     }));
@@ -178,15 +223,18 @@ export default function BatchPayment({ onPaymentSuccess }: BatchPaymentProps) {
     const totalAmount = form.getValues('totalAmount');
     if (totalAmount <= 0 || selectedOrders.size === 0) return;
 
-    const selectedOrdersList = Array.from(selectedOrders).map(orderId => 
-      orders.find(order => order.orderId === orderId)
-    ).filter(Boolean) as Order[];
+    const selectedOrdersList = Array.from(selectedOrders)
+      .map((orderId) => orders.find((order) => order.orderId === orderId))
+      .filter(Boolean) as Order[];
 
     let remainingAmount = totalAmount;
     const newAllocations: Record<string, number> = {};
 
     // Allocate to orders by oldest first, up to their remaining balance
-    for (const order of selectedOrdersList.sort((a, b) => new Date(a.orderDate).getTime() - new Date(b.orderDate).getTime())) {
+    for (const order of selectedOrdersList.sort(
+      (a, b) =>
+        new Date(a.orderDate).getTime() - new Date(b.orderDate).getTime()
+    )) {
       const remainingBalance = order.remainingBalance || 0;
       const allocation = Math.min(remainingAmount, remainingBalance);
       newAllocations[order.orderId] = allocation;
@@ -207,11 +255,14 @@ export default function BatchPayment({ onPaymentSuccess }: BatchPaymentProps) {
     }
   }, [watchedTotalAmount, selectedOrders, autoAllocate]);
 
-  const totalAllocated = Object.values(orderAllocations).reduce((sum, amount) => sum + amount, 0);
+  const totalAllocated = Object.values(orderAllocations).reduce(
+    (sum, amount) => sum + amount,
+    0
+  );
   const remainingAmount = watchedTotalAmount - totalAllocated;
 
   const getPaymentMethodIcon = (method: string) => {
-    const config = PAYMENT_METHODS.find(m => m.value === method);
+    const config = PAYMENT_METHODS.find((m) => m.value === method);
     if (!config) return <DollarSign className="h-4 w-4" />;
     const IconComponent = config.icon;
     return <IconComponent className="h-4 w-4" />;
@@ -220,9 +271,9 @@ export default function BatchPayment({ onPaymentSuccess }: BatchPaymentProps) {
   const onSubmit = (data: BatchPaymentFormData) => {
     if (totalAllocated !== data.totalAmount) {
       toast({
-        title: "Allocation Error",
-        description: "Total allocated amount must equal the payment amount",
-        variant: "destructive",
+        title: 'Allocation Error',
+        description: 'Total allocated amount must equal the payment amount',
+        variant: 'destructive',
       });
       return;
     }
@@ -258,7 +309,10 @@ export default function BatchPayment({ onPaymentSuccess }: BatchPaymentProps) {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Payment Method</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <Select
+                      onValueChange={field.onChange}
+                      defaultValue={field.value}
+                    >
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Select payment method" />
@@ -270,7 +324,9 @@ export default function BatchPayment({ onPaymentSuccess }: BatchPaymentProps) {
                           return (
                             <SelectItem key={method.value} value={method.value}>
                               <div className="flex items-center gap-2">
-                                <div className={`p-1 rounded ${method.color} text-white`}>
+                                <div
+                                  className={`p-1 rounded ${method.color} text-white`}
+                                >
                                   <IconComponent className="h-3 w-3" />
                                 </div>
                                 {method.label}
@@ -298,7 +354,9 @@ export default function BatchPayment({ onPaymentSuccess }: BatchPaymentProps) {
                         min="0"
                         placeholder="0.00"
                         {...field}
-                        onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                        onChange={(e) =>
+                          field.onChange(parseFloat(e.target.value) || 0)
+                        }
                       />
                     </FormControl>
                     <FormMessage />
@@ -330,7 +388,7 @@ export default function BatchPayment({ onPaymentSuccess }: BatchPaymentProps) {
                   By Customer
                 </Button>
               </div>
-              
+
               {searchMode === 'customer' && (
                 <CustomerSearchInput
                   value={selectedCustomer}
@@ -346,15 +404,21 @@ export default function BatchPayment({ onPaymentSuccess }: BatchPaymentProps) {
               <div className="bg-gray-50 p-4 rounded-lg">
                 <div className="flex justify-between items-center text-sm">
                   <span>Payment Amount:</span>
-                  <span className="font-medium">${watchedTotalAmount.toFixed(2)}</span>
+                  <span className="font-medium">
+                    ${watchedTotalAmount.toFixed(2)}
+                  </span>
                 </div>
                 <div className="flex justify-between items-center text-sm">
                   <span>Total Allocated:</span>
-                  <span className="font-medium">${totalAllocated.toFixed(2)}</span>
+                  <span className="font-medium">
+                    ${totalAllocated.toFixed(2)}
+                  </span>
                 </div>
                 <div className="flex justify-between items-center text-sm border-t pt-2 mt-2">
                   <span>Remaining:</span>
-                  <span className={`font-medium ${remainingAmount === 0 ? 'text-green-600' : remainingAmount > 0 ? 'text-orange-600' : 'text-red-600'}`}>
+                  <span
+                    className={`font-medium ${remainingAmount === 0 ? 'text-green-600' : remainingAmount > 0 ? 'text-orange-600' : 'text-red-600'}`}
+                  >
                     ${remainingAmount.toFixed(2)}
                   </span>
                 </div>
@@ -362,7 +426,9 @@ export default function BatchPayment({ onPaymentSuccess }: BatchPaymentProps) {
                   <div className="flex justify-between items-center text-sm mt-2 pt-2 border-t">
                     <span>Customer:</span>
                     <span className="font-medium text-blue-600">
-                      {selectedCustomer.company ? `${selectedCustomer.name} (${selectedCustomer.company})` : selectedCustomer.name}
+                      {selectedCustomer.company
+                        ? `${selectedCustomer.name} (${selectedCustomer.company})`
+                        : selectedCustomer.name}
                     </span>
                   </div>
                 )}
@@ -376,9 +442,16 @@ export default function BatchPayment({ onPaymentSuccess }: BatchPaymentProps) {
                 checked={autoAllocate}
                 onCheckedChange={(checked) => setAutoAllocate(Boolean(checked))}
               />
-              <Label htmlFor="auto-allocate">Auto-allocate to oldest orders first</Label>
+              <Label htmlFor="auto-allocate">
+                Auto-allocate to oldest orders first
+              </Label>
               {!autoAllocate && (
-                <Button type="button" variant="outline" size="sm" onClick={handleAutoAllocate}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleAutoAllocate}
+                >
                   Auto-allocate Now
                 </Button>
               )}
@@ -404,22 +477,31 @@ export default function BatchPayment({ onPaymentSuccess }: BatchPaymentProps) {
                     {searchMode === 'customer' && selectedCustomer
                       ? `No unpaid orders found for ${selectedCustomer.name}`
                       : searchMode === 'customer'
-                      ? 'Select a customer to see their unpaid orders'
-                      : 'No unpaid orders found'
-                    }
+                        ? 'Select a customer to see their unpaid orders'
+                        : 'No unpaid orders found'}
                   </div>
                 ) : (
                   orders.map((order) => (
-                    <div key={order.orderId} className="flex items-center justify-between p-3 border rounded-lg">
+                    <div
+                      key={order.orderId}
+                      className="flex items-center justify-between p-3 border rounded-lg"
+                    >
                       <div className="flex items-center space-x-3">
                         <Checkbox
                           checked={selectedOrders.has(order.orderId)}
-                          onCheckedChange={(checked) => handleOrderSelection(order.orderId, Boolean(checked))}
+                          onCheckedChange={(checked) =>
+                            handleOrderSelection(
+                              order.orderId,
+                              Boolean(checked)
+                            )
+                          }
                         />
                         <div>
                           <div className="font-medium">{order.orderId}</div>
                           {order.customerName && (
-                            <div className="text-sm text-gray-600">{order.customerName}</div>
+                            <div className="text-sm text-gray-600">
+                              {order.customerName}
+                            </div>
                           )}
                           <div className="text-xs text-gray-500">
                             Due: {new Date(order.dueDate).toLocaleDateString()}
@@ -429,9 +511,18 @@ export default function BatchPayment({ onPaymentSuccess }: BatchPaymentProps) {
                       <div className="flex items-center gap-3">
                         <div className="text-right">
                           <div className="text-sm">
-                            Balance: <span className="font-medium">${(order.remainingBalance || 0).toFixed(2)}</span>
+                            Balance:{' '}
+                            <span className="font-medium">
+                              ${(order.remainingBalance || 0).toFixed(2)}
+                            </span>
                           </div>
-                          <Badge variant={order.status === 'FINALIZED' ? 'default' : 'secondary'}>
+                          <Badge
+                            variant={
+                              order.status === 'FINALIZED'
+                                ? 'default'
+                                : 'secondary'
+                            }
+                          >
                             {order.status}
                           </Badge>
                         </div>
@@ -444,7 +535,12 @@ export default function BatchPayment({ onPaymentSuccess }: BatchPaymentProps) {
                               max={order.remainingBalance || 0}
                               placeholder="Amount"
                               value={orderAllocations[order.orderId] || ''}
-                              onChange={(e) => handleAllocationChange(order.orderId, parseFloat(e.target.value) || 0)}
+                              onChange={(e) =>
+                                handleAllocationChange(
+                                  order.orderId,
+                                  parseFloat(e.target.value) || 0
+                                )
+                              }
                             />
                           </div>
                         )}
@@ -477,7 +573,11 @@ export default function BatchPayment({ onPaymentSuccess }: BatchPaymentProps) {
             <div className="flex gap-3">
               <Button
                 type="submit"
-                disabled={batchPaymentMutation.isPending || selectedOrders.size === 0 || remainingAmount !== 0}
+                disabled={
+                  batchPaymentMutation.isPending ||
+                  selectedOrders.size === 0 ||
+                  remainingAmount !== 0
+                }
                 className="flex-1"
               >
                 {batchPaymentMutation.isPending ? (
@@ -486,8 +586,14 @@ export default function BatchPayment({ onPaymentSuccess }: BatchPaymentProps) {
                   <>
                     {getPaymentMethodIcon(watchedPaymentMethod)}
                     <span className="ml-2">
-                      Process {watchedPaymentMethod ? PAYMENT_METHODS.find(m => m.value === watchedPaymentMethod)?.label : 'Payment'} 
-                      {watchedTotalAmount > 0 && ` - $${watchedTotalAmount.toFixed(2)}`}
+                      Process{' '}
+                      {watchedPaymentMethod
+                        ? PAYMENT_METHODS.find(
+                            (m) => m.value === watchedPaymentMethod
+                          )?.label
+                        : 'Payment'}
+                      {watchedTotalAmount > 0 &&
+                        ` - $${watchedTotalAmount.toFixed(2)}`}
                     </span>
                   </>
                 )}

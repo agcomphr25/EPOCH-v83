@@ -21,12 +21,15 @@ interface SelectionStat {
  * Tracks selection frequency and sorts options intelligently:
  * - Most frequently selected options appear first
  * - Within same frequency, sorts alphabetically
- * 
+ *
  * @param featureName - The name of the feature (e.g., 'action_inlet')
  * @param options - The available options to sort
  * @returns Sorted options and a tracking function
  */
-export function useSmartSort(featureName: string, options: FeatureOption[] | undefined) {
+export function useSmartSort(
+  featureName: string,
+  options: FeatureOption[] | undefined
+) {
   // Fetch selection statistics for this feature
   const { data: selectionStats = [] } = useQuery<SelectionStat[]>({
     queryKey: ['/api/feature-selections/sorted', featureName],
@@ -39,7 +42,7 @@ export function useSmartSort(featureName: string, options: FeatureOption[] | und
 
     // Create a map of selection counts for quick lookup
     const selectionMap = new Map<string, number>();
-    selectionStats.forEach(stat => {
+    selectionStats.forEach((stat) => {
       selectionMap.set(stat.optionValue, stat.selectionCount);
     });
 
@@ -59,21 +62,24 @@ export function useSmartSort(featureName: string, options: FeatureOption[] | und
   }, [options, selectionStats]);
 
   // Function to track a selection
-  const trackSelection = useCallback(async (optionValue: string, optionLabel: string) => {
-    try {
-      await apiRequest('/api/feature-selections/track', {
-        method: 'POST',
-        body: {
-          featureName,
-          optionValue,
-          optionLabel,
-        },
-      });
-    } catch (error) {
-      console.error('Failed to track feature selection:', error);
-      // Don't throw error - tracking failures shouldn't break the UI
-    }
-  }, [featureName]);
+  const trackSelection = useCallback(
+    async (optionValue: string, optionLabel: string) => {
+      try {
+        await apiRequest('/api/feature-selections/track', {
+          method: 'POST',
+          body: {
+            featureName,
+            optionValue,
+            optionLabel,
+          },
+        });
+      } catch (error) {
+        console.error('Failed to track feature selection:', error);
+        // Don't throw error - tracking failures shouldn't break the UI
+      }
+    },
+    [featureName]
+  );
 
   return {
     sortedOptions,

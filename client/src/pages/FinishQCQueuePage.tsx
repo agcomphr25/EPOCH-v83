@@ -327,6 +327,7 @@ export default function FinishQCQueuePage() {
                         showPaintAndTexture={true}
                         showHoverText={false}
                         disableHoverPopup={true}
+                        showTechnician={true}
                         className={`border-l-purple-500 cursor-pointer ${
                           isSelected ? 'bg-blue-50 dark:bg-blue-900/20' : ''
                         }`}

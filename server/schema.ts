@@ -695,6 +695,7 @@ export const userSessions = pgTable("user_sessions", {
   userId: integer("user_id").references(() => users.id).notNull(),
   username: text("username").notNull(),
   expiresAt: timestamp("expires_at").notNull(),
+  lastActivityAt: timestamp("last_activity_at"),
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
 });

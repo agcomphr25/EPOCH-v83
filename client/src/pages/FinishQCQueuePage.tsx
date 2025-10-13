@@ -21,19 +21,15 @@ export default function FinishQCQueuePage() {
   const [selectAll, setSelectAll] = useState(false);
   const [highlightedOrderId, setHighlightedOrderId] = useState<string | null>(null);
 
-  // Get all orders from production pipeline
+  // Get orders in Finish QC department directly
+  const { data: finishQCOrders = [] } = useQuery({
+    queryKey: ['/api/orders/department/Finish QC'],
+  });
+
+  // Also get all orders for counting other departments
   const { data: allOrders = [] } = useQuery({
     queryKey: ['/api/orders/all'],
   });
-
-  // Get orders in Finish QC department
-  const finishQCOrders = useMemo(() => {
-    const filtered = (allOrders as any[]).filter((order: any) => 
-      isOrderInDepartment(order, 'Finish QC')
-    );
-    
-    return filtered;
-  }, [allOrders]);
 
   // Filter orders based on search query
   const filteredOrders = useMemo(() => {

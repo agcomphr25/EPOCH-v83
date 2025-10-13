@@ -62,30 +62,63 @@ export default function Calendar() {
   const queryClient = useQueryClient();
 
   // Fetch local calendar events
-  const { data: localEvents = [], isLoading: isLoadingLocal } = useQuery({
-    queryKey: ['/api/calendar/events'],
-    select: (data: any[]) => 
-      data.map(event => ({
+  const { data: localEvents = [], isLoading: isLoadingLocal, error: localError, status: localStatus } = useQuery({
+    queryKey: ['calendar-events'],
+    queryFn: async () => {
+      const response = await fetch('/api/calendar/events', {
+        credentials: 'include',
+      });
+      if (!response.ok) throw new Error('Failed to fetch events');
+      return response.json();
+    },
+    select: (data: any) => {
+      console.log('📅 Local events raw data:', data);
+      if (!Array.isArray(data)) {
+        console.warn('Local events response is not an array:', data);
+        return [];
+      }
+      const transformed = data.map((event: any) => ({
         id: event.id,
         start: new Date(event.startDate),
         end: new Date(event.endDate),
-        title: event.title,
-        description: event.description,
-        location: event.location,
-        isAllDay: event.allDay,
-        isPublic: event.isPublic,
+        title: event.title || 'Untitled',
+        description: event.description || '',
+        location: event.location || '',
+        isAllDay: event.allDay || false,
+        isPublic: event.isPublic !== undefined ? event.isPublic : true,
         eventType: event.eventType || 'meeting',
-        createdBy: event.createdBy,
+        createdBy: event.createdBy || 'Unknown',
         source: 'local',
         resource: event,
-      })) as CalendarEventExtended[],
+      })) as CalendarEventExtended[];
+      console.log('📅 Local events transformed:', transformed.length);
+      return transformed;
+    },
   });
 
-  // Fetch Google Calendar events
-  const { data: googleEvents = [], isLoading: isLoadingGoogle } = useQuery({
-    queryKey: ['/api/calendar/google-events'],
-    select: (data: any[]) => 
-      data.map(event => ({
+  console.log('📅 Calendar state:', { 
+    localStatus, 
+    isLoadingLocal, 
+    localEventsCount: localEvents.length,
+    localError: localError?.message 
+  });
+
+  // Fetch Google Calendar events (optional - won't block calendar if it fails)
+  const { data: googleEvents = [], isLoading: isLoadingGoogle, error: googleError } = useQuery({
+    queryKey: ['google-calendar-events'],
+    queryFn: async () => {
+      const response = await fetch('/api/calendar/google-events', {
+        credentials: 'include',
+      });
+      if (!response.ok) throw new Error('Failed to fetch Google Calendar events');
+      return response.json();
+    },
+    retry: false,
+    enabled: true,
+    staleTime: 1000 * 60 * 5,
+    select: (data: any) => {
+      if (!Array.isArray(data)) return [];
+      return data.map((event: any) => ({
         id: event.id,
         start: new Date(event.startDate),
         end: new Date(event.endDate),
@@ -98,7 +131,8 @@ export default function Calendar() {
         createdBy: event.createdBy,
         source: 'google',
         resource: event,
-      })) as CalendarEventExtended[],
+      })) as CalendarEventExtended[];
+    },
   });
 
   // Combine all events
@@ -106,7 +140,8 @@ export default function Calendar() {
     return [...localEvents, ...googleEvents];
   }, [localEvents, googleEvents]);
 
-  const isLoading = isLoadingLocal || isLoadingGoogle;
+  // Only block loading on local events, show warning if Google Calendar fails
+  const isLoading = isLoadingLocal;
 
   // Create event mutation
   const createEventMutation = useMutation({
@@ -363,10 +398,25 @@ export default function Calendar() {
 
   return (
     <div className="p-6 space-y-6">
+      {googleError && (
+        <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4">
+          <div className="flex">
+            <div className="ml-3">
+              <p className="text-sm text-yellow-700">
+                Unable to load Google Calendar events. Showing local events only.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+      
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-3">
           <CalendarIcon className="h-8 w-8 text-blue-600" />
           <h1 className="text-3xl font-bold text-gray-900">Calendar</h1>
+          {isLoadingGoogle && (
+            <span className="text-sm text-gray-500">(Syncing Google Calendar...)</span>
+          )}
         </div>
         
         <div className="flex items-center space-x-3">

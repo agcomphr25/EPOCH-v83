@@ -964,11 +964,11 @@ export default function POManager() {
         }
         setShowCreateCustomer(open);
       }}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+          <DialogHeader className="flex-shrink-0">
             <DialogTitle>Create New Customer</DialogTitle>
           </DialogHeader>
-          <form onSubmit={handleCreateCustomer} className="space-y-4">
+          <form onSubmit={handleCreateCustomer} className="space-y-4 overflow-y-auto flex-1 pr-2">
             {/* Name - Full width */}
             <div>
               <Label htmlFor="customerNameNew">Customer Name *</Label>
@@ -1128,7 +1128,7 @@ export default function POManager() {
               <Label htmlFor="isActiveCustomer" className="cursor-pointer">Active Customer</Label>
             </div>
 
-            <div className="flex justify-end space-x-2">
+            <div className="flex justify-end space-x-2 flex-shrink-0 pt-4 border-t mt-4 sticky bottom-0 bg-white dark:bg-gray-900">
               <Button type="button" variant="outline" onClick={handleCreateCustomerDialogClose} data-testid="button-cancel">
                 Cancel
               </Button>

@@ -916,7 +916,7 @@ export default function ShippingQueuePage() {
               />
               <div className="flex flex-col gap-0.5">
                 <div className={`text-sm font-semibold ${isSelected ? 'text-blue-700' : 'text-blue-600'}`}>
-                  {getDisplayOrderId(order)}
+                  {order.orderId}
                 </div>
                 {order.fbOrderNumber && (
                   <div className="text-xs text-gray-600">

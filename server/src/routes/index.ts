@@ -36,6 +36,8 @@ import oemSettingsRoutes from './oemSettings';
 import metalAccessoriesRoutes from './metalAccessories';
 import featureSelectionsRoutes from './featureSelections';
 import calendarRoutes from './calendar';
+import documentIntelligenceRoutes from './documentIntelligence';
+import trainingRoutes from './training';
 import { getAccessToken } from '../utils/upsShipping';
 
 export function registerRoutes(app: Express): Server {
@@ -144,6 +146,12 @@ export function registerRoutes(app: Express): Server {
 
   // Feature Selection Tracking routes (AI-powered smart sorting)
   app.use('/api/feature-selections', featureSelectionsRoutes);
+  
+  // Azure Document Intelligence routes
+  app.use('/api/document-intelligence', documentIntelligenceRoutes);
+  
+  // Training management routes
+  app.use('/api/training', trainingRoutes);
   
   // UPS Test endpoint
   app.post('/api/test-ups-auth', async (req, res) => {

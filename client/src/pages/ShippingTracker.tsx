@@ -10,6 +10,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import { Package, TrendingUp, Calendar, Search, Truck, CheckCircle, XCircle, ExternalLink } from 'lucide-react';
 import { getCurrentCompanyWeek, formatWeekRange, isDateInCompanyWeek } from '@shared/weekUtils';
 import { format } from 'date-fns';
+import { ManualTrackingEntry } from '@/components/ManualTrackingEntry';
 
 interface Order {
   id: number;
@@ -298,6 +299,7 @@ export default function ShippingTracker() {
                     <TableHead>Shipped Date</TableHead>
                     <TableHead>Carrier</TableHead>
                     <TableHead>Customer Notified</TableHead>
+                    <TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -354,6 +356,9 @@ export default function ShippingTracker() {
                               <span className="text-xs">No</span>
                             </div>
                           )}
+                        </TableCell>
+                        <TableCell>
+                          <ManualTrackingEntry orderId={order.orderId} />
                         </TableCell>
                       </TableRow>
                     );

@@ -493,4 +493,75 @@ router.post('/address-autocomplete-bypass', async (req: Request, res: Response) 
   }
 });
 
+// Address validation endpoint using SmartyStreets API
+router.post('/validate-address', async (req: Request, res: Response) => {
+  try {
+    const { street, city, state, zipCode } = req.body;
+    
+    // Check if we have SmartyStreets credentials
+    const authId = process.env.SMARTYSTREETS_AUTH_ID;
+    const authToken = process.env.SMARTYSTREETS_AUTH_TOKEN;
+    
+    if (!authId || !authToken) {
+      return res.status(500).json({ 
+        error: "SmartyStreets credentials not configured" 
+      });
+    }
+    
+    // Use SmartyStreets US Street API for validation
+    const smartyStreetsUrl = `https://us-street.api.smartystreets.com/street-address?auth-id=${authId}&auth-token=${authToken}`;
+    
+    const requestBody = [{
+      street: street || '',
+      city: city || '',
+      state: state || '',
+      zipcode: zipCode || '',
+      candidates: 3 // Request up to 3 suggestions
+    }];
+    
+    const response = await fetch(smartyStreetsUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(requestBody)
+    });
+    
+    if (!response.ok) {
+      throw new Error(`SmartyStreets API error: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    
+    // Transform SmartyStreets response to our format
+    const suggestions = data.map((item: any) => ({
+      street: item.delivery_line_1 || '',
+      city: item.components?.city_name || '',
+      state: item.components?.state_abbreviation || '',
+      zipCode: item.components?.zipcode || '',
+      isValid: true,
+      smartyStreetsData: {
+        deliveryLine1: item.delivery_line_1,
+        lastLine: item.last_line,
+        deliveryPointBarcode: item.delivery_point_barcode,
+        components: item.components,
+        metadata: item.metadata,
+        analysis: item.analysis
+      }
+    }));
+    
+    res.json({
+      isValid: suggestions.length > 0,
+      suggestions: suggestions
+    });
+    
+  } catch (error) {
+    console.error('Address validation error:', error);
+    res.status(500).json({ 
+      error: "Failed to validate address",
+      details: (error as any).message || 'Unknown error'
+    });
+  }
+});
+
 export default router;

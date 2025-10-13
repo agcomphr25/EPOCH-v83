@@ -189,6 +189,32 @@ export default function OrdersList() {
     }
   });
 
+  // Undo cancel mutation (restore order)
+  const undoCancelMutation = useMutation({
+    mutationFn: async (orderId: string) => {
+      return apiRequest(`/api/orders/undo-cancel/${orderId}`, {
+        method: 'POST'
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/pipeline-counts'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/production-queue/prioritized'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/layup-schedule'] });
+      showToast({
+        title: "Order Restored",
+        description: "The order has been restored to production queue.",
+      });
+    },
+    onError: (error: any) => {
+      showToast({
+        title: "Error",
+        description: "Failed to restore order: " + (error.message || 'Unknown error'),
+        variant: "destructive",
+      });
+    }
+  });
+
   // Create kickback mutation
   const createKickbackMutation = useMutation({
     mutationFn: async (data: KickbackFormData) => {
@@ -1169,15 +1195,6 @@ export default function OrdersList() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            {!order.isCancelled && (
-                              <DropdownMenuItem 
-                                onClick={() => handleCancelOrder(order.orderId)}
-                                className="text-red-600"
-                              >
-                                <XCircle className="mr-2 h-4 w-4" />
-                                Cancel Order
-                              </DropdownMenuItem>
-                            )}
                             <DropdownMenuItem 
                               onClick={() => handleSalesOrderView(order.orderId)}
                               className="text-blue-600"
@@ -1189,9 +1206,26 @@ export default function OrdersList() {
                               onClick={() => handleSalesOrderView(order.orderId)}
                               className="text-blue-600"
                             >
-                              <FileText className="mr-2 h-4 w-4" />
+                              <Download className="mr-2 h-4 w-4" />
                               Download Sales Order
                             </DropdownMenuItem>
+                            {order.isCancelled ? (
+                              <DropdownMenuItem 
+                                onClick={() => undoCancelMutation.mutate(order.orderId)}
+                                className="text-green-600"
+                              >
+                                <ArrowRight className="mr-2 h-4 w-4" />
+                                Restore Order
+                              </DropdownMenuItem>
+                            ) : (
+                              <DropdownMenuItem 
+                                onClick={() => handleCancelOrder(order.orderId)}
+                                className="text-red-600"
+                              >
+                                <XCircle className="mr-2 h-4 w-4" />
+                                Cancel Order
+                              </DropdownMenuItem>
+                            )}
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </div>

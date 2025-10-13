@@ -669,6 +669,107 @@ export const employeeAuditLog = pgTable("employee_audit_log", {
   timestamp: timestamp("timestamp").defaultNow().notNull(),
 });
 
+// Training Modules - Store training content
+export const trainingModules = pgTable("training_modules", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  description: text("description"),
+  content: text("content"), // Rich text content or markdown
+  contentHtml: text("content_html"), // HTML version of content
+  category: text("category"), // SAFETY, TECHNICAL, COMPLIANCE, QUALITY, etc.
+  estimatedMinutes: integer("estimated_minutes").default(30),
+  passingScore: integer("passing_score").default(80), // Percentage
+  requiresCertification: boolean("requires_certification").default(false),
+  certificationId: integer("certification_id").references(() => certifications.id),
+  pdfSource: text("pdf_source"), // URL or path to source PDF if imported
+  version: integer("version").default(1),
+  isActive: boolean("is_active").default(true),
+  createdBy: text("created_by"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Training Questions - Quiz questions for modules
+export const trainingQuestions = pgTable("training_questions", {
+  id: serial("id").primaryKey(),
+  moduleId: integer("module_id").references(() => trainingModules.id).notNull(),
+  questionText: text("question_text").notNull(),
+  questionType: text("question_type").notNull().default("MULTIPLE_CHOICE"), // MULTIPLE_CHOICE, TRUE_FALSE, SHORT_ANSWER
+  correctAnswer: text("correct_answer"), // For TRUE_FALSE or SHORT_ANSWER
+  explanation: text("explanation"), // Explanation of the correct answer
+  points: integer("points").default(1),
+  sortOrder: integer("sort_order").default(0),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Training Question Options - Multiple choice options
+export const trainingQuestionOptions = pgTable("training_question_options", {
+  id: serial("id").primaryKey(),
+  questionId: integer("question_id").references(() => trainingQuestions.id).notNull(),
+  optionText: text("option_text").notNull(),
+  isCorrect: boolean("is_correct").default(false),
+  sortOrder: integer("sort_order").default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Employee Training Records - Track completed training
+export const employeeTrainingRecords = pgTable("employee_training_records", {
+  id: serial("id").primaryKey(),
+  employeeId: integer("employee_id").references(() => employees.id).notNull(),
+  moduleId: integer("module_id").references(() => trainingModules.id).notNull(),
+  status: text("status").notNull().default("NOT_STARTED"), // NOT_STARTED, IN_PROGRESS, COMPLETED, FAILED
+  startedAt: timestamp("started_at"),
+  completedAt: timestamp("completed_at"),
+  score: integer("score"), // Percentage score
+  attempts: integer("attempts").default(0),
+  certificateIssued: boolean("certificate_issued").default(false),
+  certificateNumber: text("certificate_number"),
+  certificateUrl: text("certificate_url"), // URL to generated certificate PDF
+  expiryDate: timestamp("expiry_date"), // If certification expires
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Employee Quiz Attempts - Detailed quiz attempt records
+export const employeeQuizAttempts = pgTable("employee_quiz_attempts", {
+  id: serial("id").primaryKey(),
+  trainingRecordId: integer("training_record_id").references(() => employeeTrainingRecords.id).notNull(),
+  employeeId: integer("employee_id").references(() => employees.id).notNull(),
+  moduleId: integer("module_id").references(() => trainingModules.id).notNull(),
+  attemptNumber: integer("attempt_number").notNull(),
+  answers: jsonb("answers"), // JSON array of {questionId, answer, isCorrect}
+  score: integer("score"), // Percentage
+  passed: boolean("passed").default(false),
+  timeSpentSeconds: integer("time_spent_seconds"),
+  startedAt: timestamp("started_at").notNull(),
+  completedAt: timestamp("completed_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Training Matrix - Legacy training matrix and requirements
+export const trainingMatrix = pgTable("training_matrix", {
+  id: serial("id").primaryKey(),
+  employeeId: integer("employee_id").references(() => employees.id),
+  employeeName: text("employee_name"), // For legacy data without employee_id
+  jobTitle: text("job_title"),
+  department: text("department"),
+  trainingName: text("training_name").notNull(),
+  requiredBy: text("required_by"), // JOB_ROLE, DEPARTMENT, REGULATORY, etc.
+  frequency: text("frequency"), // ONCE, ANNUAL, QUARTERLY, MONTHLY
+  lastCompleted: timestamp("last_completed"),
+  nextDue: timestamp("next_due"),
+  status: text("status").default("PENDING"), // PENDING, COMPLETED, OVERDUE, NOT_REQUIRED
+  documentationUrl: text("documentation_url"),
+  notes: text("notes"),
+  isLegacy: boolean("is_legacy").default(false), // Mark imported legacy data
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // User Authentication Table
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
@@ -1245,6 +1346,108 @@ export const insertEmployeeAuditLogSchema = createInsertSchema(employeeAuditLog)
   userAgent: z.string().optional().nullable(),
 });
 
+// Training Modules schemas
+export const insertTrainingModuleSchema = createInsertSchema(trainingModules).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  title: z.string().min(1, "Title is required"),
+  description: z.string().optional().nullable(),
+  content: z.string().optional().nullable(),
+  contentHtml: z.string().optional().nullable(),
+  category: z.string().optional().nullable(),
+  estimatedMinutes: z.number().min(1).default(30),
+  passingScore: z.number().min(0).max(100).default(80),
+  requiresCertification: z.boolean().default(false),
+  certificationId: z.number().optional().nullable(),
+  pdfSource: z.string().optional().nullable(),
+  version: z.number().default(1),
+  isActive: z.boolean().default(true),
+  createdBy: z.string().optional().nullable(),
+});
+
+export const insertTrainingQuestionSchema = createInsertSchema(trainingQuestions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  moduleId: z.number().min(1, "Module ID is required"),
+  questionText: z.string().min(1, "Question text is required"),
+  questionType: z.enum(['MULTIPLE_CHOICE', 'TRUE_FALSE', 'SHORT_ANSWER']).default('MULTIPLE_CHOICE'),
+  correctAnswer: z.string().optional().nullable(),
+  explanation: z.string().optional().nullable(),
+  points: z.number().default(1),
+  sortOrder: z.number().default(0),
+  isActive: z.boolean().default(true),
+});
+
+export const insertTrainingQuestionOptionSchema = createInsertSchema(trainingQuestionOptions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  questionId: z.number().min(1, "Question ID is required"),
+  optionText: z.string().min(1, "Option text is required"),
+  isCorrect: z.boolean().default(false),
+  sortOrder: z.number().default(0),
+});
+
+export const insertEmployeeTrainingRecordSchema = createInsertSchema(employeeTrainingRecords).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  employeeId: z.number().min(1, "Employee ID is required"),
+  moduleId: z.number().min(1, "Module ID is required"),
+  status: z.enum(['NOT_STARTED', 'IN_PROGRESS', 'COMPLETED', 'FAILED']).default('NOT_STARTED'),
+  startedAt: z.coerce.date().optional().nullable(),
+  completedAt: z.coerce.date().optional().nullable(),
+  score: z.number().min(0).max(100).optional().nullable(),
+  attempts: z.number().default(0),
+  certificateIssued: z.boolean().default(false),
+  certificateNumber: z.string().optional().nullable(),
+  certificateUrl: z.string().optional().nullable(),
+  expiryDate: z.coerce.date().optional().nullable(),
+  notes: z.string().optional().nullable(),
+});
+
+export const insertEmployeeQuizAttemptSchema = createInsertSchema(employeeQuizAttempts).omit({
+  id: true,
+  createdAt: true,
+}).extend({
+  trainingRecordId: z.number().min(1, "Training record ID is required"),
+  employeeId: z.number().min(1, "Employee ID is required"),
+  moduleId: z.number().min(1, "Module ID is required"),
+  attemptNumber: z.number().min(1, "Attempt number is required"),
+  answers: z.array(z.any()).optional().nullable(),
+  score: z.number().min(0).max(100).optional().nullable(),
+  passed: z.boolean().default(false),
+  timeSpentSeconds: z.number().optional().nullable(),
+  startedAt: z.coerce.date(),
+  completedAt: z.coerce.date().optional().nullable(),
+});
+
+export const insertTrainingMatrixSchema = createInsertSchema(trainingMatrix).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  employeeId: z.number().optional().nullable(),
+  employeeName: z.string().optional().nullable(),
+  jobTitle: z.string().optional().nullable(),
+  department: z.string().optional().nullable(),
+  trainingName: z.string().min(1, "Training name is required"),
+  requiredBy: z.string().optional().nullable(),
+  frequency: z.string().optional().nullable(),
+  lastCompleted: z.coerce.date().optional().nullable(),
+  nextDue: z.coerce.date().optional().nullable(),
+  status: z.enum(['PENDING', 'COMPLETED', 'OVERDUE', 'NOT_REQUIRED']).default('PENDING'),
+  documentationUrl: z.string().optional().nullable(),
+  notes: z.string().optional().nullable(),
+  isLegacy: z.boolean().default(false),
+});
+
 // Capability schemas
 export const insertCapabilitySchema = createInsertSchema(capabilities).omit({
   id: true,
@@ -1467,6 +1670,20 @@ export type InsertEmployeeDocument = z.infer<typeof insertEmployeeDocumentSchema
 export type EmployeeDocument = typeof employeeDocuments.$inferSelect;
 export type InsertEmployeeAuditLog = z.infer<typeof insertEmployeeAuditLogSchema>;
 export type EmployeeAuditLog = typeof employeeAuditLog.$inferSelect;
+
+// Training system types
+export type InsertTrainingModule = z.infer<typeof insertTrainingModuleSchema>;
+export type TrainingModule = typeof trainingModules.$inferSelect;
+export type InsertTrainingQuestion = z.infer<typeof insertTrainingQuestionSchema>;
+export type TrainingQuestion = typeof trainingQuestions.$inferSelect;
+export type InsertTrainingQuestionOption = z.infer<typeof insertTrainingQuestionOptionSchema>;
+export type TrainingQuestionOption = typeof trainingQuestionOptions.$inferSelect;
+export type InsertEmployeeTrainingRecord = z.infer<typeof insertEmployeeTrainingRecordSchema>;
+export type EmployeeTrainingRecord = typeof employeeTrainingRecords.$inferSelect;
+export type InsertEmployeeQuizAttempt = z.infer<typeof insertEmployeeQuizAttemptSchema>;
+export type EmployeeQuizAttempt = typeof employeeQuizAttempts.$inferSelect;
+export type InsertTrainingMatrix = z.infer<typeof insertTrainingMatrixSchema>;
+export type TrainingMatrixEntry = typeof trainingMatrix.$inferSelect;
 
 export type InsertCapability = z.infer<typeof insertCapabilitySchema>;
 export type Capability = typeof capabilities.$inferSelect;

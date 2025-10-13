@@ -22,7 +22,7 @@ export default function FinishQCQueuePage() {
   const [highlightedOrderId, setHighlightedOrderId] = useState<string | null>(null);
 
   // Get orders in Finish QC department directly
-  const { data: finishQCOrders = [] } = useQuery({
+  const { data: finishQCOrders = [] } = useQuery<any[]>({
     queryKey: ['/api/orders/department/Finish QC'],
   });
 
@@ -68,11 +68,10 @@ export default function FinishQCQueuePage() {
     queryKey: ['/api/stock-models'],
   });
 
-  // Auto-select order when scanned
+  // Auto-highlight order when scanned (do not select)
   const handleOrderScanned = (orderId: string) => {
     const orderExists = finishQCOrders.some((order: any) => order.orderId === orderId);
     if (orderExists) {
-      setSelectedOrders(new Set([orderId]));
       setHighlightedOrderId(orderId);
       setTimeout(() => {
         const element = document.getElementById(`order-${orderId}`);
@@ -80,26 +79,25 @@ export default function FinishQCQueuePage() {
           element.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
       }, 100);
-      toast.success(`Order ${orderId} selected`);
+      toast.success(`Order ${orderId} highlighted`);
     } else {
       toast.error(`Order ${orderId} is not in the Finish QC department`);
     }
   };
 
-  // Handle order search selection - select and highlight
+  // Handle order search selection - highlight only (do not select)
   const handleOrderSearchSelect = (order: any) => {
     const orderExists = finishQCOrders.some((o: any) => o.orderId === order.orderId);
     if (orderExists) {
-      setSelectedOrders(new Set([order.orderId]));
       setHighlightedOrderId(order.orderId);
-      // Auto-scroll to the selected order
+      // Auto-scroll to the highlighted order
       setTimeout(() => {
         const element = document.getElementById(`order-${order.orderId}`);
         if (element) {
           element.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
       }, 100);
-      toast.success(`Order ${order.orderId} selected`);
+      toast.success(`Order ${order.orderId} highlighted`);
     } else {
       toast.error(`Order ${order.orderId} is not in the Finish QC department`);
     }
@@ -127,7 +125,7 @@ export default function FinishQCQueuePage() {
     setSelectAll(!selectAll);
   };
 
-  // Handle search - auto-select matching orders
+  // Handle search - auto-highlight matching orders (do not select)
   const handleSearchWithSelection = (query: string) => {
     setSearchQuery(query);
     
@@ -146,9 +144,7 @@ export default function FinishQCQueuePage() {
       });
       
       if (matchingOrders.length > 0) {
-        // Select all matching orders
-        const orderIds = matchingOrders.map((order: any) => order.orderId);
-        setSelectedOrders(new Set(orderIds));
+        // Highlight first matching order (do not select)
         setHighlightedOrderId(matchingOrders[0].orderId);
         
         // Scroll to first match
@@ -159,14 +155,12 @@ export default function FinishQCQueuePage() {
           }
         }, 100);
         
-        toast.success(`${matchingOrders.length} order(s) selected`);
+        toast.success(`${matchingOrders.length} order(s) found - first one highlighted`);
       } else {
-        setSelectedOrders(new Set());
         setHighlightedOrderId(null);
         toast.error('No matching orders found');
       }
     } else {
-      setSelectedOrders(new Set());
       setHighlightedOrderId(null);
     }
   };
@@ -219,30 +213,15 @@ export default function FinishQCQueuePage() {
               >
                 Select All Matches
               </Button>
+              {highlightedOrderId && (
+                <Button
+                  variant="outline"
+                  onClick={() => setHighlightedOrderId(null)}
+                >
+                  Clear Highlight
+                </Button>
+              )}
             </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Order Search Box */}
-      <Card>
-        <CardContent className="p-4">
-          <div className="flex items-center gap-4">
-            <OrderSearchBox 
-              orders={finishQCOrders}
-              placeholder="Search orders by Order ID or FishBowl Number..."
-              onOrderSelect={handleOrderSearchSelect}
-            />
-            {highlightedOrderId && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setHighlightedOrderId(null)}
-                className="text-sm"
-              >
-                Clear highlight
-              </Button>
-            )}
           </div>
         </CardContent>
       </Card>

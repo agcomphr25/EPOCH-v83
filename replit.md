@@ -5,10 +5,11 @@ EPOCH v8 is a comprehensive Manufacturing ERP system designed for small manufact
 
 ## Recent Changes
 **October 13, 2025 - Barcode Label Information Update**
-- **Enhanced Barcode Labels**: Updated PDF label generation to include complete order information with clear labeling:
-  - Paint option clearly labeled (e.g., "Chalkbranch - SA - PAINT: TERRAINE")
-  - Swivel studs changes shown in orange (e.g., "SWIVEL: QD FLUSH CUP")
-  - Texture options shown in purple (e.g., "TEXTURE: CHECKERED")
+- **Enhanced Barcode Labels**: Updated PDF label generation to include complete order information with paint subcategories:
+  - Paint options now show subcategory + name (e.g., "Chalkbranch - SA - STANDARD: PRIMED ONLY")
+  - Paint subcategories: STANDARD (black_sky, charcoal_gray, primed_only), TERRAIN (muddy_creek, sunset, prairie), ROGUE (arctic, canyon, swamper), PREMIUM (webs, special camos), CARBON (carbon camos), CARBON READY (carbon_camo_ready)
+  - Swivel studs changes shown in orange when non-standard (e.g., "SWIVEL: QD FLUSH CUP")
+  - Texture options shown in purple when non-standard (e.g., "TEXTURE: GRIP ONLY")
   - All special features properly color-coded and labeled for quick identification
   
 **October 13, 2025 - OEM Priority Clarification & Material-Based Colors**

@@ -3220,19 +3220,59 @@ export function registerRoutes(app: Express): Server {
           // Check for special features to add to label
           const features = (order as any).features || {};
           
-          // Get paint option for display
+          // Get paint option for display with subcategory
           const paintOption = features.paint_options || '';
+          
+          // Map paint values to their subcategories
+          const paintSubcategoryMap: {[key: string]: string} = {
+            // Standard Options
+            'black_sky': 'STANDARD', 'charcoal_gray': 'STANDARD', 'primed_only': 'STANDARD',
+            // Terrain Options
+            'muddy_creek_terrain': 'TERRAIN', 'sunset_terrain': 'TERRAIN', 'prairie_terrain': 'TERRAIN',
+            'blackthorn_terrain': 'TERRAIN', 'basin_terrain': 'TERRAIN', 'bayou_terrain': 'TERRAIN',
+            'dark_timber_terrain': 'TERRAIN', 'everglades_terrain': 'TERRAIN', 'ravine_terrain': 'TERRAIN',
+            'red_terrain': 'TERRAIN', 'riverbed_terrain': 'TERRAIN', 'rocky_terrain': 'TERRAIN',
+            'snowline_terrain': 'TERRAIN', 'verglas_terrain': 'TERRAIN',
+            // Rogue Options
+            'arctic_rogue': 'ROGUE', 'badland_rogue': 'ROGUE', 'bengal_rogue': 'ROGUE',
+            'canyon_rogue': 'ROGUE', 'erosion_rogue': 'ROGUE', 'glacier_rogue': 'ROGUE',
+            'hazard_rogue': 'ROGUE', 'killshot_rogue': 'ROGUE', 'kodiak_rogue': 'ROGUE',
+            'mudshot_rogue': 'ROGUE', 'purple_haze_rogue': 'ROGUE', 'rattlesnake_rogue': 'ROGUE',
+            'swamper_rogue': 'ROGUE', 'winter_pine_rogue': 'ROGUE', 'wintergreen_rogue': 'ROGUE',
+            'zombie_rogue': 'ROGUE',
+            // Premium Options
+            'black_bronze_web': 'PREMIUM', 'white_rock_web': 'PREMIUM', 'brown_widow_web': 'PREMIUM',
+            'green_widow_web': 'PREMIUM', 'sawtooth_web': 'PREMIUM', 'granite_web': 'PREMIUM',
+            'yellow_web': 'PREMIUM', 'tan_widow': 'PREMIUM', 'red_web': 'PREMIUM', 'orange_web': 'PREMIUM',
+            'neon_green_web': 'PREMIUM', 'blue_web': 'PREMIUM', 'tungsten_black_web': 'PREMIUM',
+            'yellow_camo': 'PREMIUM', 'red_camo': 'PREMIUM', 'orange_camo': 'PREMIUM', 'blue_camo': 'PREMIUM',
+            'green_camo': 'PREMIUM', 'sand_storm': 'PREMIUM', 'urban_pattern': 'PREMIUM',
+            'midnight_forest': 'PREMIUM', 'desert_night': 'PREMIUM', 'sagebrush_pattern': 'PREMIUM',
+            // Camo Options (Carbon patterns)
+            'carbon_neon_green_camo': 'CARBON', 'carbon_midnight_forest': 'CARBON', 'carbon_yellow_camo': 'CARBON',
+            'carbon_black_tan_camo': 'CARBON', 'carbon_mossy_rock_camo': 'CARBON', 'carbon_red_camo': 'CARBON',
+            'carbon_steel_camo': 'CARBON', 'carbon_black_camo': 'CARBON', 'carbon_blue_camo': 'CARBON',
+            'carbon_desert_night_camo': 'CARBON', 'carbon_orange_camo': 'CARBON', 'carbon_sagebrush_camo': 'CARBON',
+            'carbon_urban_camo': 'CARBON', 'carbon_bronze_camo': 'CARBON', 'carbon_zebra_camo': 'CARBON',
+            'neon_green_camo': 'CARBON',
+            // Carbon Camo Ready
+            'carbon_camo_ready': 'CARBON READY'
+          };
+          
+          const subcategory = paintOption ? (paintSubcategoryMap[paintOption] || '') : '';
           const paintDisplayName = paintOption ? paintOption.replace(/_/g, ' ').toUpperCase() : '';
           
-          // Add stock model, action length, and paint option on same line below barcode
+          // Add stock model, action length, and paint option with subcategory on same line below barcode
           const labelLine = paintDisplayName 
-            ? `${modelDisplayName} - ${actionLength.toUpperCase()} - PAINT: ${paintDisplayName}`
+            ? subcategory 
+              ? `${modelDisplayName} - ${actionLength.toUpperCase()} - ${subcategory}: ${paintDisplayName}`
+              : `${modelDisplayName} - ${actionLength.toUpperCase()} - PAINT: ${paintDisplayName}`
             : `${modelDisplayName} - ${actionLength.toUpperCase()}`;
           
           page.drawText(labelLine, {
             x: x + 8,
             y: y + 22,
-            size: 6.5,  // Slightly smaller to fit more text
+            size: 6,  // Smaller to fit subcategory + paint name
             color: rgb(0, 0, 0),
           });
           

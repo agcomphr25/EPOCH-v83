@@ -90,19 +90,20 @@ export default function FinishQCQueuePage() {
     }
   };
 
-  // Handle order search selection
+  // Handle order search selection - select and highlight
   const handleOrderSearchSelect = (order: any) => {
     const orderExists = finishQCOrders.some((o: any) => o.orderId === order.orderId);
     if (orderExists) {
+      setSelectedOrders(new Set([order.orderId]));
       setHighlightedOrderId(order.orderId);
-      // Auto-scroll to the highlighted order
+      // Auto-scroll to the selected order
       setTimeout(() => {
         const element = document.getElementById(`order-${order.orderId}`);
         if (element) {
           element.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
       }, 100);
-      toast.success(`Order ${order.orderId} highlighted in the list`);
+      toast.success(`Order ${order.orderId} selected`);
     } else {
       toast.error(`Order ${order.orderId} is not in the Finish QC department`);
     }

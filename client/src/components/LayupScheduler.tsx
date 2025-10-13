@@ -146,33 +146,27 @@ const DraggableOrderItem = React.memo(({ order, priority, totalOrdersInCell, mol
     });
   }
 
-  // Determine card styling based on source and material
+  // Determine card styling based on material type
+  // Purchase Orders (OEM) get green border, but still use material-based background colors
   const getCardStyling = () => {
-
-    // OEM Priority ONLY applies to Purchase Orders (items with poId or productionOrderId)
-    // NOT to be confused with regular production orders
-    if (order.poId || order.productionOrderId) {
+    const isPurchaseOrder = !!(order.poId || order.productionOrderId);
+    
+    if (materialType === 'CF') {
+      // CF cards: Light orange background with green border for POs
       return {
-        bg: 'bg-green-100 dark:bg-green-800/50 hover:bg-green-200 dark:hover:bg-green-800/70 border-2 border-green-300 dark:border-green-600',
-        text: 'text-green-800 dark:text-green-200'
-      };
-
-    } else if (materialType === 'CF') {
-      // CF cards: Orange-200 (light orange)
-      return {
-        bg: 'bg-orange-200 dark:bg-orange-800/50 hover:bg-orange-300 dark:hover:bg-orange-800/70 border-2 border-orange-300 dark:border-orange-600',
+        bg: `bg-orange-200 dark:bg-orange-800/50 hover:bg-orange-300 dark:hover:bg-orange-800/70 border-2 ${isPurchaseOrder ? 'border-green-500 dark:border-green-400' : 'border-orange-300 dark:border-orange-600'}`,
         text: 'text-orange-800 dark:text-orange-200'
       };
     } else if (materialType === 'FG') {
-      // FG cards: Orange-600 (darker orange)
+      // FG cards: Dark orange background with green border for POs
       return {
-        bg: 'bg-orange-600 dark:bg-orange-700/80 hover:bg-orange-700 dark:hover:bg-orange-800/90 border-2 border-orange-700 dark:border-orange-800',
+        bg: `bg-orange-600 dark:bg-orange-700/80 hover:bg-orange-700 dark:hover:bg-orange-800/90 border-2 ${isPurchaseOrder ? 'border-green-500 dark:border-green-400' : 'border-orange-700 dark:border-orange-800'}`,
         text: 'text-white dark:text-orange-100'
       };
     } else {
-      // Default/unknown material
+      // Unknown/default material with green border for POs
       return {
-        bg: 'bg-gray-100 dark:bg-gray-800/50 hover:bg-gray-200 dark:hover:bg-gray-800/70 border-2 border-gray-300 dark:border-gray-600',
+        bg: `bg-gray-100 dark:bg-gray-800/50 hover:bg-gray-200 dark:hover:bg-gray-800/70 border-2 ${isPurchaseOrder ? 'border-green-500 dark:border-green-400' : 'border-gray-300 dark:border-gray-600'}`,
         text: 'text-gray-800 dark:text-gray-200'
       };
     }

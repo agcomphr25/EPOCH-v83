@@ -286,8 +286,9 @@ export default function POManager() {
         setShowOrderEntry(true);
       }
     },
-    onError: () => {
-      toast.error('Failed to create purchase order');
+    onError: (error: any) => {
+      const errorMessage = error?.response?.data?.error || error?.message || 'Failed to create purchase order';
+      toast.error(errorMessage);
     }
   });
 

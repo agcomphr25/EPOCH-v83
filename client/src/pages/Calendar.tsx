@@ -39,13 +39,14 @@ const eventFormSchema = z.object({
 type EventFormData = z.infer<typeof eventFormSchema>;
 
 interface CalendarEventExtended extends Event {
-  id: number;
+  id: number | string;
   description?: string;
   location?: string;
   isAllDay: boolean;
   isPublic: boolean;
   eventType: string;
   createdBy: string;
+  source?: string;
 }
 
 export default function Calendar() {
@@ -60,10 +61,10 @@ export default function Calendar() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // Fetch calendar events
-  const { data: events = [], isLoading } = useQuery({
+  // Fetch local calendar events
+  const { data: localEvents = [], isLoading: isLoadingLocal } = useQuery({
     queryKey: ['/api/calendar/events'],
-    select: (data: CalendarEvent[]) => 
+    select: (data: any[]) => 
       data.map(event => ({
         id: event.id,
         start: new Date(event.startDate),
@@ -73,11 +74,39 @@ export default function Calendar() {
         location: event.location,
         isAllDay: event.allDay,
         isPublic: event.isPublic,
-        eventType: 'meeting', // Default since it's not in the schema yet
+        eventType: event.eventType || 'meeting',
         createdBy: event.createdBy,
+        source: 'local',
         resource: event,
       })) as CalendarEventExtended[],
   });
+
+  // Fetch Google Calendar events
+  const { data: googleEvents = [], isLoading: isLoadingGoogle } = useQuery({
+    queryKey: ['/api/calendar/google-events'],
+    select: (data: any[]) => 
+      data.map(event => ({
+        id: event.id,
+        start: new Date(event.startDate),
+        end: new Date(event.endDate),
+        title: event.title,
+        description: event.description,
+        location: event.location,
+        isAllDay: event.allDay,
+        isPublic: event.isPublic,
+        eventType: event.eventType || 'meeting',
+        createdBy: event.createdBy,
+        source: 'google',
+        resource: event,
+      })) as CalendarEventExtended[],
+  });
+
+  // Combine all events
+  const events = useMemo(() => {
+    return [...localEvents, ...googleEvents];
+  }, [localEvents, googleEvents]);
+
+  const isLoading = isLoadingLocal || isLoadingGoogle;
 
   // Create event mutation
   const createEventMutation = useMutation({
@@ -240,8 +269,8 @@ export default function Calendar() {
 
   // Handle event deletion
   const handleDeleteEvent = () => {
-    if (selectedEvent) {
-      deleteEventMutation.mutate(selectedEvent.id);
+    if (selectedEvent && selectedEvent.source !== 'google') {
+      deleteEventMutation.mutate(selectedEvent.id as number);
     }
   };
 
@@ -288,21 +317,26 @@ export default function Calendar() {
   const eventStyleGetter = (event: CalendarEventExtended) => {
     let backgroundColor = '#3174ad';
     
-    switch (event.eventType) {
-      case 'meeting':
-        backgroundColor = '#3174ad';
-        break;
-      case 'deadline':
-        backgroundColor = '#dc2626';
-        break;
-      case 'reminder':
-        backgroundColor = '#f59e0b';
-        break;
-      case 'task':
-        backgroundColor = '#10b981';
-        break;
-      default:
-        backgroundColor = '#6b7280';
+    // Google Calendar events get a distinct color
+    if (event.source === 'google') {
+      backgroundColor = '#4285f4';
+    } else {
+      switch (event.eventType) {
+        case 'meeting':
+          backgroundColor = '#3174ad';
+          break;
+        case 'deadline':
+          backgroundColor = '#dc2626';
+          break;
+        case 'reminder':
+          backgroundColor = '#f59e0b';
+          break;
+        case 'task':
+          backgroundColor = '#10b981';
+          break;
+        default:
+          backgroundColor = '#6b7280';
+      }
     }
     
     return {
@@ -311,7 +345,7 @@ export default function Calendar() {
         borderRadius: '4px',
         opacity: 0.8,
         color: 'white',
-        border: '0px',
+        border: event.source === 'google' ? '2px solid #1a73e8' : '0px',
         display: 'block',
       },
     };
@@ -578,31 +612,46 @@ export default function Calendar() {
           <DialogContent className="max-w-lg">
             <DialogHeader>
               <DialogTitle className="flex items-center justify-between">
-                <span>{selectedEvent.title}</span>
-                <div className="flex items-center space-x-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      setIsEditDialogOpen(true);
-                      setSelectedEvent(null);
-                    }}
-                    data-testid="button-edit-event"
-                  >
-                    <Edit className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="destructive"
-                    onClick={handleDeleteEvent}
-                    data-testid="button-delete-event"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                <div className="flex items-center gap-2">
+                  <span>{selectedEvent.title}</span>
+                  {selectedEvent.source === 'google' && (
+                    <span className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded">
+                      Google Calendar
+                    </span>
+                  )}
                 </div>
+                {selectedEvent.source !== 'google' && (
+                  <div className="flex items-center space-x-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setIsEditDialogOpen(true);
+                        setSelectedEvent(null);
+                      }}
+                      data-testid="button-edit-event"
+                    >
+                      <Edit className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      onClick={handleDeleteEvent}
+                      data-testid="button-delete-event"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
               </DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
+              {selectedEvent.source === 'google' && (
+                <div className="p-3 bg-blue-50 rounded-md text-sm text-blue-800">
+                  This event is from Google Calendar and cannot be edited here.
+                </div>
+              )}
+              
               <div>
                 <p className="text-sm font-medium text-gray-500">Time</p>
                 <p className="text-sm">

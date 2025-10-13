@@ -8,7 +8,7 @@ export const users = pgTable("users", {
   username: text("username").notNull().unique(),
   password: text("password").notNull(),
   passwordHash: text("password_hash"),
-  role: text("role").notNull().default("EMPLOYEE"), // ADMIN, HR, MANAGER, EMPLOYEE
+  role: text("role").notNull().default("EMPLOYEE"), // ADMIN, HR, OWNER, EMPLOYEE
   canOverridePrices: boolean("can_override_prices").default(false),
   employeeId: integer("employee_id").references(() => employees.id),
   isActive: boolean("is_active").default(true),
@@ -739,7 +739,7 @@ export const insertUserSchema = createInsertSchema(users).omit({
 }).extend({
   username: z.string().min(3, "Username must be at least 3 characters"),
   password: z.string().min(4, "Password must be at least 4 characters"),
-  role: z.enum(['ADMIN', 'HR', 'MANAGER', 'EMPLOYEE']).default('EMPLOYEE'),
+  role: z.enum(['ADMIN', 'HR', 'OWNER', 'EMPLOYEE']).default('EMPLOYEE'),
   employeeId: z.number().optional().nullable(),
   isActive: z.boolean().default(true),
 });

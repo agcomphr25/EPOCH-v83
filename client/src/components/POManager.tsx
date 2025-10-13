@@ -9,12 +9,14 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Pencil, Trash2, Plus, Eye, Package, Search, TrendingUp, ShoppingCart, ChevronsUpDown, Check, UserPlus } from 'lucide-react';
+import { Pencil, Trash2, Plus, Eye, Package, Search, TrendingUp, ShoppingCart, ChevronsUpDown, Check, UserPlus, Mail, Phone } from 'lucide-react';
 // @ts-ignore
 import debounce from 'lodash.debounce';
 import { toast } from 'react-hot-toast';
@@ -235,16 +237,20 @@ export default function POManager() {
     name: '',
     email: '',
     phone: '',
-    company: '',
-    customerType: 'Individual' as string,
-    preferredCommunicationMethod: 'email' as string,
+    contact: '',
+    customerType: 'standard' as string,
+    preferredCommunicationMethod: [] as string[],
+    notes: '',
+    isActive: true,
     address: {
       street: '',
+      street2: '',
       city: '',
       state: '',
       zipCode: '',
-      country: 'USA'
-    } as AddressData
+      country: 'United States',
+      type: 'both' as 'shipping' | 'billing' | 'both'
+    }
   });
 
 
@@ -348,16 +354,20 @@ export default function POManager() {
         name: '',
         email: '',
         phone: '',
-        company: '',
-        customerType: 'Individual',
-        preferredCommunicationMethod: 'email',
+        contact: '',
+        customerType: 'standard',
+        preferredCommunicationMethod: [],
+        notes: '',
+        isActive: true,
         address: {
           street: '',
+          street2: '',
           city: '',
           state: '',
           zipCode: '',
-          country: 'USA'
-        } as AddressData
+          country: 'United States',
+          type: 'both'
+        }
       });
     },
     onError: (error: any) => {
@@ -523,16 +533,20 @@ export default function POManager() {
       name: '',
       email: '',
       phone: '',
-      company: '',
-      customerType: 'Individual',
-      preferredCommunicationMethod: 'email',
+      contact: '',
+      customerType: 'standard',
+      preferredCommunicationMethod: [],
+      notes: '',
+      isActive: true,
       address: {
         street: '',
+        street2: '',
         city: '',
         state: '',
         zipCode: '',
-        country: 'USA'
-      } as AddressData
+        country: 'United States',
+        type: 'both'
+      }
     });
   };
 
@@ -955,33 +969,38 @@ export default function POManager() {
             <DialogTitle>Create New Customer</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleCreateCustomer} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="customerNameNew">Customer Name *</Label>
-                <Input
-                  id="customerNameNew"
-                  value={newCustomerData.name}
-                  onChange={(e) => setNewCustomerData({...newCustomerData, name: e.target.value})}
-                  required
-                  placeholder="Enter customer name"
-                />
-              </div>
-              <div>
-                <Label htmlFor="customerCompany">Company</Label>
-                <Input
-                  id="customerCompany"
-                  value={newCustomerData.company}
-                  onChange={(e) => setNewCustomerData({...newCustomerData, company: e.target.value})}
-                  placeholder="Company name (optional)"
-                />
-              </div>
+            {/* Name - Full width */}
+            <div>
+              <Label htmlFor="customerNameNew">Customer Name *</Label>
+              <Input
+                id="customerNameNew"
+                data-testid="input-customer-name"
+                value={newCustomerData.name}
+                onChange={(e) => setNewCustomerData({...newCustomerData, name: e.target.value})}
+                required
+                placeholder="John Smith"
+              />
             </div>
 
+            {/* Contact - Full width */}
+            <div>
+              <Label htmlFor="customerContact">Contact Person</Label>
+              <Input
+                id="customerContact"
+                data-testid="input-customer-contact"
+                value={newCustomerData.contact}
+                onChange={(e) => setNewCustomerData({...newCustomerData, contact: e.target.value})}
+                placeholder="John Doe"
+              />
+            </div>
+
+            {/* Email and Phone */}
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="customerEmail">Email</Label>
                 <Input
                   id="customerEmail"
+                  data-testid="input-customer-email"
                   type="email"
                   value={newCustomerData.email}
                   onChange={(e) => setNewCustomerData({...newCustomerData, email: e.target.value})}
@@ -992,59 +1011,128 @@ export default function POManager() {
                 <Label htmlFor="customerPhone">Phone</Label>
                 <Input
                   id="customerPhone"
+                  data-testid="input-customer-phone"
                   value={newCustomerData.phone}
                   onChange={(e) => setNewCustomerData({...newCustomerData, phone: e.target.value})}
-                  placeholder="Phone number"
+                  placeholder="555-0123"
                 />
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="customerType">Customer Type</Label>
-                <Select value={newCustomerData.customerType} onValueChange={(value) => setNewCustomerData({...newCustomerData, customerType: value})}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Individual">Individual</SelectItem>
-                    <SelectItem value="Business">Business</SelectItem>
-                    <SelectItem value="Government">Government</SelectItem>
-                    <SelectItem value="Military">Military</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <Label htmlFor="preferredCommunicationMethod">Preferred Contact Method</Label>
-                <Select 
-                  value={newCustomerData.preferredCommunicationMethod} 
-                  onValueChange={(value) => setNewCustomerData({...newCustomerData, preferredCommunicationMethod: value})}
-                >
-                  <SelectTrigger data-testid="select-preferred-communication">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="email">Email</SelectItem>
-                    <SelectItem value="sms">SMS</SelectItem>
-                    <SelectItem value="both">Both (Email & SMS)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+            {/* Customer Type */}
+            <div>
+              <Label htmlFor="customerType">Customer Type</Label>
+              <Select value={newCustomerData.customerType} onValueChange={(value) => setNewCustomerData({...newCustomerData, customerType: value})}>
+                <SelectTrigger data-testid="select-customer-type">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Individual">Individual</SelectItem>
+                  <SelectItem value="Business">Business</SelectItem>
+                  <SelectItem value="Government">Government</SelectItem>
+                  <SelectItem value="Military">Military</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
+            {/* Preferred Communication Method - Checkboxes */}
+            <div className="space-y-3">
+              <Label className="text-sm font-medium">Preferred Communication Method</Label>
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="comm-email-po"
+                    data-testid="checkbox-comm-email"
+                    checked={newCustomerData.preferredCommunicationMethod.includes('email')}
+                    onCheckedChange={(checked) => {
+                      const methods = newCustomerData.preferredCommunicationMethod;
+                      setNewCustomerData({
+                        ...newCustomerData,
+                        preferredCommunicationMethod: checked 
+                          ? [...methods, 'email'] 
+                          : methods.filter(m => m !== 'email')
+                      });
+                    }}
+                  />
+                  <Label htmlFor="comm-email-po" className="text-sm font-normal cursor-pointer">
+                    <div className="flex items-center gap-2">
+                      <Mail className="h-4 w-4 text-gray-500" />
+                      <span>Email</span>
+                    </div>
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="comm-sms-po"
+                    data-testid="checkbox-comm-sms"
+                    checked={newCustomerData.preferredCommunicationMethod.includes('sms')}
+                    onCheckedChange={(checked) => {
+                      const methods = newCustomerData.preferredCommunicationMethod;
+                      setNewCustomerData({
+                        ...newCustomerData,
+                        preferredCommunicationMethod: checked 
+                          ? [...methods, 'sms'] 
+                          : methods.filter(m => m !== 'sms')
+                      });
+                    }}
+                  />
+                  <Label htmlFor="comm-sms-po" className="text-sm font-normal cursor-pointer">
+                    <div className="flex items-center gap-2">
+                      <Phone className="h-4 w-4 text-gray-500" />
+                      <span>SMS</span>
+                    </div>
+                  </Label>
+                </div>
+              </div>
+              {newCustomerData.preferredCommunicationMethod.length === 0 && (
+                <p className="text-sm text-gray-500 italic">No communication method selected</p>
+              )}
+            </div>
+
+            {/* Notes */}
+            <div>
+              <Label htmlFor="customerNotes">Notes</Label>
+              <Textarea
+                id="customerNotes"
+                data-testid="textarea-customer-notes"
+                value={newCustomerData.notes}
+                onChange={(e) => setNewCustomerData({...newCustomerData, notes: e.target.value})}
+                placeholder="Additional notes..."
+                className="min-h-[80px]"
+              />
+            </div>
+
+            {/* Address */}
             <AddressInput
-              label="Address"
+              label="Address (Optional)"
               value={newCustomerData.address}
-              onChange={(address) => setNewCustomerData({...newCustomerData, address})}
+              onChange={(address) => setNewCustomerData({
+                ...newCustomerData, 
+                address: {
+                  ...address,
+                  street2: newCustomerData.address.street2 || '',
+                  type: newCustomerData.address.type || 'both'
+                }
+              })}
               required={false}
             />
 
+            {/* Is Active Toggle */}
+            <div className="flex items-center space-x-2">
+              <Switch
+                id="isActiveCustomer"
+                data-testid="switch-is-active"
+                checked={newCustomerData.isActive}
+                onCheckedChange={(checked) => setNewCustomerData({...newCustomerData, isActive: checked})}
+              />
+              <Label htmlFor="isActiveCustomer" className="cursor-pointer">Active Customer</Label>
+            </div>
+
             <div className="flex justify-end space-x-2">
-              <Button type="button" variant="outline" onClick={handleCreateCustomerDialogClose}>
+              <Button type="button" variant="outline" onClick={handleCreateCustomerDialogClose} data-testid="button-cancel">
                 Cancel
               </Button>
-              <Button type="submit" disabled={createCustomerMutation.isPending}>
+              <Button type="submit" disabled={createCustomerMutation.isPending} data-testid="button-create-customer">
                 {createCustomerMutation.isPending ? 'Creating...' : 'Create Customer'}
               </Button>
             </div>

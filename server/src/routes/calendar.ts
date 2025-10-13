@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { storage } from '../../storage';
 import { insertCalendarEventSchema, insertCalendarEventAttendeeSchema } from '../../schema';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
+import { getUncachableGoogleCalendarClient } from '../lib/googleCalendar';
 
 const router = Router();
 
@@ -30,6 +31,47 @@ router.get('/events', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Get calendar events error:', error);
     res.status(500).json({ error: 'Failed to fetch calendar events' });
+  }
+});
+
+// GET /api/calendar/google-events - Get Google Calendar events
+router.get('/google-events', async (req: Request, res: Response) => {
+  try {
+    const calendar = await getUncachableGoogleCalendarClient();
+    
+    const now = new Date();
+    const threeMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 3, now.getDate());
+    const threeMonthsFromNow = new Date(now.getFullYear(), now.getMonth() + 3, now.getDate());
+    
+    const response = await calendar.events.list({
+      calendarId: 'primary',
+      timeMin: threeMonthsAgo.toISOString(),
+      timeMax: threeMonthsFromNow.toISOString(),
+      singleEvents: true,
+      orderBy: 'startTime',
+      maxResults: 250,
+    });
+
+    const events = response.data.items || [];
+    
+    const formattedEvents = events.map((event: any) => ({
+      id: event.id,
+      title: event.summary || 'Untitled Event',
+      description: event.description || '',
+      startDate: event.start?.dateTime || event.start?.date,
+      endDate: event.end?.dateTime || event.end?.date,
+      location: event.location || '',
+      allDay: !event.start?.dateTime,
+      isPublic: event.visibility === 'public',
+      eventType: 'meeting',
+      createdBy: 'Google Calendar',
+      source: 'google',
+    }));
+
+    res.json(formattedEvents);
+  } catch (error) {
+    console.error('Get Google Calendar events error:', error);
+    res.status(500).json({ error: 'Failed to fetch Google Calendar events' });
   }
 });
 

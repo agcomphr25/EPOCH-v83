@@ -325,6 +325,8 @@ export default function FinishQCQueuePage() {
                         order={order} 
                         stockModels={stockModels as any[]} 
                         showPaintAndTexture={true}
+                        showHoverText={false}
+                        disableHoverPopup={true}
                         className={`border-l-purple-500 cursor-pointer ${
                           isSelected ? 'bg-blue-50 dark:bg-blue-900/20' : ''
                         }`}

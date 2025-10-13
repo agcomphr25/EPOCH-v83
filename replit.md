@@ -4,6 +4,19 @@
 EPOCH v8 is a comprehensive Manufacturing ERP system designed for small manufacturing companies specializing in customizable products. It aims to streamline operations, enhance efficiency, and improve scalability by providing end-to-end order management, inventory tracking, employee portal functionality, and quality control workflows. The project's vision is to become the leading ERP solution for small-to-medium customizable product manufacturers. It is a full-stack TypeScript application with a React frontend and Express backend, featuring Progressive Web App (PWA) capabilities for deployment to web and mobile platforms via Capacitor.
 
 ## Recent Changes
+**October 13, 2025 - Address Validation Integration Complete**
+- **Enabled Address Validation Endpoint**: Added missing `/api/customers/validate-address` endpoint to active routes
+  - Migrated SmartyStreets address validation functionality from disabled routes to production
+  - Endpoint validates addresses using SmartyStreets US Street API
+  - Returns standardized, validated address data with delivery point information
+  - Updated client-side addressUtils.ts to use correct endpoint path
+- **Address Autocomplete & Validation Verified**: Complete integration working end-to-end
+  - AddressInput component using SmartyStreets autocomplete via `/api/customers/address-autocomplete-bypass`
+  - Address validation via `/api/customers/validate-address` for full verification
+  - Debounced autocomplete suggestions with 300ms delay for optimal performance
+  - Automatic address parsing and standardization on selection
+- **All GitHub Pull Changes Locked In**: Recent changes from GitHub are fully functional and integrated ✅
+
 **October 13, 2025 - GitHub CI/CD TypeScript Fixes**
 - **Fixed All TypeScript Errors**: Resolved 11 TypeScript errors identified by GitHub Actions CI/CD checks:
   - Fixed `Array().fill()` calls missing required argument - changed to `Array().fill(null)` in BarcodeDisplay.tsx and AveryLabelPrint.tsx

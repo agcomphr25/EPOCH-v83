@@ -4,12 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Package, Plus, Trash2, Edit2, Eye } from 'lucide-react';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 
@@ -57,21 +52,13 @@ interface POItemsManagerProps {
   onAddItem: () => void;
 }
 
-export default function POItemsManager({
-  poId,
-  customerName,
-  onAddItem,
-}: POItemsManagerProps) {
+export default function POItemsManager({ poId, customerName, onAddItem }: POItemsManagerProps) {
   const [selectedItem, setSelectedItem] = useState<POItem | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const { toast } = useToast();
 
   // Fetch PO items
-  const {
-    data: poItems = [],
-    isLoading,
-    error,
-  } = useQuery<POItem[]>({
+  const { data: poItems = [], isLoading, error } = useQuery<POItem[]>({
     queryKey: [`/api/pos/${poId}/items`],
     queryFn: async () => {
       const result = await apiRequest(`/api/pos/${poId}/items`);
@@ -86,7 +73,7 @@ export default function POItemsManager({
       const result = await apiRequest('/api/po-products');
       return result;
     },
-    enabled: poItems.some((item) => item.itemType === 'custom_model'),
+    enabled: poItems.some(item => item.itemType === 'custom_model'),
   });
 
   // Delete mutation
@@ -99,17 +86,17 @@ export default function POItemsManager({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/pos/${poId}/items`] });
       toast({
-        title: 'Item Deleted',
-        description: 'Purchase order item has been removed successfully.',
+        title: "Item Deleted",
+        description: "Purchase order item has been removed successfully.",
       });
     },
     onError: (error: any) => {
       toast({
-        title: 'Error',
-        description: error.message || 'Failed to delete item',
-        variant: 'destructive',
+        title: "Error",
+        description: error.message || "Failed to delete item",
+        variant: "destructive",
       });
-    },
+    }
   });
 
   const handleViewItem = (item: POItem) => {
@@ -131,7 +118,7 @@ export default function POItemsManager({
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
-      currency: 'USD',
+      currency: 'USD'
     }).format(price);
   };
 
@@ -141,9 +128,7 @@ export default function POItemsManager({
 
   const getProductTypeForItem = (item: POItem) => {
     if (item.itemType === 'custom_model') {
-      const poProduct = poProducts.find(
-        (product) => product.id.toString() === item.itemId
-      );
+      const poProduct = poProducts.find(product => product.id.toString() === item.itemId);
       return poProduct?.productType || item.itemType;
     }
     return item.itemType;
@@ -166,9 +151,7 @@ export default function POItemsManager({
         <CardContent className="py-8">
           <div className="text-center">
             <Package className="h-12 w-12 text-red-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">
-              Error Loading Items
-            </h3>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">Error Loading Items</h3>
             <p className="text-red-600 mb-4">
               Failed to load purchase order items.
             </p>
@@ -204,12 +187,9 @@ export default function POItemsManager({
           <CardContent className="py-8">
             <div className="text-center">
               <Package className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">
-                No Items Added
-              </h3>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No Items Added</h3>
               <p className="text-gray-500">
-                This purchase order doesn't have any items yet. Use the "Add
-                Item" button above to get started.
+                This purchase order doesn't have any items yet. Use the "Add Item" button above to get started.
               </p>
             </div>
           </CardContent>
@@ -228,9 +208,7 @@ export default function POItemsManager({
                 >
                   <div className="flex-1">
                     <div className="flex items-center gap-3">
-                      <h3 className="font-medium text-gray-900">
-                        {item.itemName}
-                      </h3>
+                      <h3 className="font-medium text-gray-900">{item.itemName}</h3>
                       <Badge variant="outline" className="text-xs">
                         {getProductTypeForItem(item)}
                       </Badge>
@@ -240,9 +218,7 @@ export default function POItemsManager({
                       <span className="mx-2">•</span>
                       <span>Unit Price: {formatPrice(item.unitPrice)}</span>
                       <span className="mx-2">•</span>
-                      <span className="font-medium">
-                        Total: {formatPrice(item.totalPrice)}
-                      </span>
+                      <span className="font-medium">Total: {formatPrice(item.totalPrice)}</span>
                     </div>
                     {item.notes && (
                       <p className="mt-1 text-xs text-gray-500">{item.notes}</p>
@@ -280,65 +256,39 @@ export default function POItemsManager({
           <DialogHeader>
             <DialogTitle>Item Details</DialogTitle>
           </DialogHeader>
-
+          
           {selectedItem && (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-sm font-medium text-gray-500">
-                    Item Name
-                  </label>
-                  <p className="mt-1 text-sm text-gray-900">
-                    {selectedItem.itemName}
-                  </p>
+                  <label className="text-sm font-medium text-gray-500">Item Name</label>
+                  <p className="mt-1 text-sm text-gray-900">{selectedItem.itemName}</p>
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-gray-500">
-                    Product Type
-                  </label>
-                  <p className="mt-1 text-sm text-gray-900">
-                    {getProductTypeForItem(selectedItem)}
-                  </p>
+                  <label className="text-sm font-medium text-gray-500">Product Type</label>
+                  <p className="mt-1 text-sm text-gray-900">{getProductTypeForItem(selectedItem)}</p>
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-gray-500">
-                    Quantity
-                  </label>
-                  <p className="mt-1 text-sm text-gray-900">
-                    {selectedItem.quantity}
-                  </p>
+                  <label className="text-sm font-medium text-gray-500">Quantity</label>
+                  <p className="mt-1 text-sm text-gray-900">{selectedItem.quantity}</p>
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-gray-500">
-                    Unit Price
-                  </label>
-                  <p className="mt-1 text-sm text-gray-900">
-                    {formatPrice(selectedItem.unitPrice)}
-                  </p>
+                  <label className="text-sm font-medium text-gray-500">Unit Price</label>
+                  <p className="mt-1 text-sm text-gray-900">{formatPrice(selectedItem.unitPrice)}</p>
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-gray-500">
-                    Total Price
-                  </label>
-                  <p className="mt-1 text-sm text-gray-900 font-medium">
-                    {formatPrice(selectedItem.totalPrice)}
-                  </p>
+                  <label className="text-sm font-medium text-gray-500">Total Price</label>
+                  <p className="mt-1 text-sm text-gray-900 font-medium">{formatPrice(selectedItem.totalPrice)}</p>
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-gray-500">
-                    Item ID
-                  </label>
-                  <p className="mt-1 text-sm text-gray-900">
-                    {selectedItem.itemId}
-                  </p>
+                  <label className="text-sm font-medium text-gray-500">Item ID</label>
+                  <p className="mt-1 text-sm text-gray-900">{selectedItem.itemId}</p>
                 </div>
               </div>
 
               {selectedItem.specifications && (
                 <div>
-                  <label className="text-sm font-medium text-gray-500">
-                    Specifications
-                  </label>
+                  <label className="text-sm font-medium text-gray-500">Specifications</label>
                   <div className="mt-1 p-3 bg-gray-50 rounded border">
                     <pre className="text-xs text-gray-700 whitespace-pre-wrap">
                       {JSON.stringify(selectedItem.specifications, null, 2)}
@@ -349,12 +299,8 @@ export default function POItemsManager({
 
               {selectedItem.notes && (
                 <div>
-                  <label className="text-sm font-medium text-gray-500">
-                    Notes
-                  </label>
-                  <p className="mt-1 text-sm text-gray-900">
-                    {selectedItem.notes}
-                  </p>
+                  <label className="text-sm font-medium text-gray-500">Notes</label>
+                  <p className="mt-1 text-sm text-gray-900">{selectedItem.notes}</p>
                 </div>
               )}
 

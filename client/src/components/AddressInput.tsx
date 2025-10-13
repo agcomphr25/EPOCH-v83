@@ -2,26 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from '@/components/ui/command';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Check, ChevronsUpDown, MapPin } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import {
-  autocompleteAddress,
-  validateAddress,
-  type AddressData,
-} from '@/utils/addressUtils';
+import { autocompleteAddress, validateAddress, type AddressData } from '@/utils/addressUtils';
 import { useToast } from '@/hooks/use-toast';
 import debounce from 'lodash.debounce';
 
@@ -32,12 +17,7 @@ interface AddressInputProps {
   required?: boolean;
 }
 
-export default function AddressInput({
-  label,
-  value,
-  onChange,
-  required = false,
-}: AddressInputProps) {
+export default function AddressInput({ label, value, onChange, required = false }: AddressInputProps) {
   const [query, setQuery] = useState(value.street || '');
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -80,38 +60,36 @@ export default function AddressInput({
   const parseAddressFromSuggestion = (suggestion: string): AddressData => {
     // SmartyStreets returns suggestions in format: "123 Main St, City ST" or "123 Main St, City ST 12345"
     const parts = suggestion.split(', ');
-
+    
     if (parts.length >= 2) {
       const street = parts[0];
       const cityStateZip = parts[1];
-
+      
       // Parse city, state, and zip from "City ST" or "City ST 12345" format
-      const cityStateZipMatch = cityStateZip.match(
-        /^(.+?)\s+([A-Z]{2})(?:\s+(\d{5}(?:-\d{4})?))?$/
-      );
-
+      const cityStateZipMatch = cityStateZip.match(/^(.+?)\s+([A-Z]{2})(?:\s+(\d{5}(?:-\d{4})?))?$/);
+      
       if (cityStateZipMatch) {
         const city = cityStateZipMatch[1];
         const state = cityStateZipMatch[2];
         const zipCode = cityStateZipMatch[3] || '';
-
+        
         return {
           street,
           city,
           state,
           zipCode,
-          country: 'United States',
+          country: 'United States'
         };
       }
     }
-
+    
     // Fallback: treat the entire suggestion as street address
     return {
       street: suggestion,
       city: value.city,
       state: value.state,
       zipCode: value.zipCode,
-      country: value.country || 'United States',
+      country: value.country || 'United States'
     };
   };
 
@@ -119,11 +97,11 @@ export default function AddressInput({
     setQuery(suggestion);
     setOpen(false);
     setSuggestions([]);
-
+    
     try {
       // First parse the suggestion to extract address components
       const parsedAddress = parseAddressFromSuggestion(suggestion);
-
+      
       // Then validate the parsed address with SmartyStreets
       const validated = await validateAddress(parsedAddress);
       onChange(validated);
@@ -137,17 +115,13 @@ export default function AddressInput({
       onChange(parsedAddress);
       toast({
         title: 'Address selected',
-        description:
-          'Address fields have been filled. You may need to verify the details.',
+        description: 'Address fields have been filled. You may need to verify the details.',
         variant: 'default',
       });
     }
   };
 
-  const handleManualAddressChange = (
-    field: keyof AddressData,
-    newValue: string
-  ) => {
+  const handleManualAddressChange = (field: keyof AddressData, newValue: string) => {
     onChange({
       ...value,
       [field]: newValue,
@@ -170,18 +144,19 @@ export default function AddressInput({
             >
               <div className="flex items-center gap-2">
                 <MapPin className="h-4 w-4" />
-                <span
-                  className={cn('text-left', !query && 'text-muted-foreground')}
-                >
-                  {query || 'Start typing address...'}
+                <span className={cn(
+                  "text-left",
+                  !query && "text-muted-foreground"
+                )}>
+                  {query || "Start typing address..."}
                 </span>
               </div>
               <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
             </Button>
           </PopoverTrigger>
-          <PopoverContent
-            className="w-full p-0 z-[9999]"
-            side="bottom"
+          <PopoverContent 
+            className="w-full p-0 z-[9999]" 
+            side="bottom" 
             align="start"
             sideOffset={4}
             avoidCollisions={true}
@@ -206,8 +181,8 @@ export default function AddressInput({
                     >
                       <Check
                         className={cn(
-                          'mr-2 h-4 w-4',
-                          query === suggestion ? 'opacity-100' : 'opacity-0'
+                          "mr-2 h-4 w-4",
+                          query === suggestion ? "opacity-100" : "opacity-0"
                         )}
                       />
                       {suggestion}
@@ -227,9 +202,7 @@ export default function AddressInput({
           <Input
             id="street"
             value={value.street}
-            onChange={(e) =>
-              handleManualAddressChange('street', e.target.value)
-            }
+            onChange={(e) => handleManualAddressChange('street', e.target.value)}
             placeholder="123 Main St"
           />
         </div>
@@ -256,14 +229,12 @@ export default function AddressInput({
           <Input
             id="zipCode"
             value={value.zipCode}
-            onChange={(e) =>
-              handleManualAddressChange('zipCode', e.target.value)
-            }
+            onChange={(e) => handleManualAddressChange('zipCode', e.target.value)}
             placeholder="10001"
           />
         </div>
       </div>
-
+      
       <div>
         <Label htmlFor="country">Country</Label>
         <Input

@@ -15,23 +15,18 @@ export interface AddressData {
  */
 export async function autocompleteAddress(query: string): Promise<string[]> {
   try {
-    const response = await apiRequest(
-      '/api/customers/address-autocomplete-bypass',
-      {
-        method: 'POST',
-        body: { search: query },
-      }
-    );
-
+    const response = await apiRequest('/api/customers/address-autocomplete-bypass', {
+      method: 'POST',
+      body: { search: query }
+    });
+    
     console.log('SmartyStreets autocomplete response:', response);
-
+    
     // Transform the response to extract the text property from each suggestion
     if (response.suggestions && Array.isArray(response.suggestions)) {
-      return response.suggestions.map(
-        (suggestion: any) => suggestion.text || suggestion
-      );
+      return response.suggestions.map((suggestion: any) => suggestion.text || suggestion);
     }
-
+    
     return [];
   } catch (error) {
     console.error('Error fetching address autocomplete:', error);
@@ -44,9 +39,7 @@ export async function autocompleteAddress(query: string): Promise<string[]> {
  * @param address - Address object to validate
  * @returns Validated address object
  */
-export async function validateAddress(
-  address: AddressData
-): Promise<AddressData> {
+export async function validateAddress(address: AddressData): Promise<AddressData> {
   try {
     const response = await apiRequest('/api/validate-address', {
       method: 'POST',
@@ -54,27 +47,23 @@ export async function validateAddress(
         street: address.street,
         city: address.city,
         state: address.state,
-        zipCode: address.zipCode,
-      },
+        zipCode: address.zipCode
+      }
     });
-
+    
     console.log('SmartyStreets validation response:', response);
-
-    if (
-      response.isValid &&
-      response.suggestions &&
-      response.suggestions.length > 0
-    ) {
+    
+    if (response.isValid && response.suggestions && response.suggestions.length > 0) {
       const validatedAddress = response.suggestions[0];
       return {
         street: validatedAddress.street,
         city: validatedAddress.city,
         state: validatedAddress.state,
         zipCode: validatedAddress.zipCode,
-        country: address.country || 'United States',
+        country: address.country || 'United States'
       };
     }
-
+    
     // If validation fails, return the original address
     return address;
   } catch (error) {

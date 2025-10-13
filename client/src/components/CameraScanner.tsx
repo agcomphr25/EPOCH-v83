@@ -1,6 +1,6 @@
 import { useRef, useEffect } from 'react';
-import { Card, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Camera, CameraOff, Zap, AlertCircle } from 'lucide-react';
 import { useCameraScanner } from '@/hooks/useCameraScanner';
 
@@ -10,13 +10,9 @@ interface CameraScannerProps {
   onClose: () => void;
 }
 
-export function CameraScanner({
-  onBarcodeDetected,
-  isOpen,
-  onClose,
-}: CameraScannerProps) {
+export function CameraScanner({ onBarcodeDetected, isOpen, onClose }: CameraScannerProps) {
   const videoContainerRef = useRef<HTMLDivElement>(null);
-
+  
   const {
     isScanning,
     isInitializing,
@@ -25,7 +21,7 @@ export function CameraScanner({
     startScanning,
     stopScanning,
     requestPermission,
-    getVideoRef,
+    getVideoRef
   } = useCameraScanner((barcode) => {
     onBarcodeDetected(barcode);
     onClose(); // Auto-close after successful scan
@@ -38,7 +34,7 @@ export function CameraScanner({
     if (isScanning && videoRef.current && videoContainerRef.current) {
       videoContainerRef.current.appendChild(videoRef.current);
     }
-
+    
     return () => {
       if (videoRef.current && videoRef.current.parentNode) {
         videoRef.current.parentNode.removeChild(videoRef.current);
@@ -59,27 +55,19 @@ export function CameraScanner({
 
   const handleStartScanning = async () => {
     console.log('📱 Mobile Camera Debug: Start scanning button clicked');
-    console.log(
-      '📱 Mobile Camera Debug: Current hasPermission:',
-      hasPermission
-    );
-
+    console.log('📱 Mobile Camera Debug: Current hasPermission:', hasPermission);
+    
     if (!hasPermission) {
       console.log('📱 Mobile Camera Debug: Requesting permission first...');
       const granted = await requestPermission();
-      console.log(
-        '📱 Mobile Camera Debug: Permission request result:',
-        granted
-      );
+      console.log('📱 Mobile Camera Debug: Permission request result:', granted);
       if (!granted) {
         console.log('📱 Mobile Camera Debug: Permission denied, stopping');
         return;
       }
     }
-
-    console.log(
-      '📱 Mobile Camera Debug: Starting scanning with permission granted'
-    );
+    
+    console.log('📱 Mobile Camera Debug: Starting scanning with permission granted');
     await startScanning();
   };
 
@@ -98,13 +86,11 @@ export function CameraScanner({
             {!isScanning && !isInitializing && (
               <div className="flex flex-col items-center justify-center h-full p-6 text-center">
                 <Camera className="h-16 w-16 text-gray-400 mb-4" />
-                <h3 className="text-lg font-semibold mb-2">
-                  Camera Barcode Scanner
-                </h3>
+                <h3 className="text-lg font-semibold mb-2">Camera Barcode Scanner</h3>
                 <p className="text-gray-600 mb-6">
                   Point your camera at a barcode to scan it automatically
                 </p>
-
+                
                 {error && (
                   <div className="flex flex-col items-center gap-2 text-red-600 mb-4 p-3 bg-red-50 rounded-lg">
                     <div className="flex items-center gap-2">
@@ -118,19 +104,14 @@ export function CameraScanner({
                         <li>Refresh the page and try again</li>
                         <li>Check camera permissions in browser settings</li>
                         <li>Ensure no other apps are using the camera</li>
-                        <li>
-                          Try switching between front/back camera if available
-                        </li>
+                        <li>Try switching between front/back camera if available</li>
                       </ul>
                     </div>
                   </div>
                 )}
-
+                
                 <div className="flex gap-3">
-                  <Button
-                    onClick={handleStartScanning}
-                    disabled={isInitializing}
-                  >
+                  <Button onClick={handleStartScanning} disabled={isInitializing}>
                     <Camera className="h-4 w-4 mr-2" />
                     {isInitializing ? 'Initializing...' : 'Start Camera'}
                   </Button>
@@ -146,8 +127,7 @@ export function CameraScanner({
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mb-4"></div>
                 <p className="text-gray-600 mb-2">Initializing camera...</p>
                 <p className="text-xs text-gray-500 text-center max-w-xs">
-                  This may take a few seconds. If it gets stuck, try refreshing
-                  the page.
+                  This may take a few seconds. If it gets stuck, try refreshing the page.
                 </p>
                 <div className="mt-4">
                   <Button variant="outline" size="sm" onClick={onClose}>
@@ -160,11 +140,11 @@ export function CameraScanner({
             {isScanning && (
               <>
                 {/* Video container */}
-                <div
+                <div 
                   ref={videoContainerRef}
                   className="w-full h-full bg-black rounded-lg overflow-hidden"
                 />
-
+                
                 {/* Scanning overlay */}
                 <div className="absolute inset-0 pointer-events-none">
                   {/* Scanning frame */}
@@ -175,20 +155,18 @@ export function CameraScanner({
                       <div className="absolute top-0 right-0 w-6 h-6 border-t-4 border-r-4 border-green-400"></div>
                       <div className="absolute bottom-0 left-0 w-6 h-6 border-b-4 border-l-4 border-green-400"></div>
                       <div className="absolute bottom-0 right-0 w-6 h-6 border-b-4 border-r-4 border-green-400"></div>
-
+                      
                       {/* Scanning line animation */}
                       <div className="absolute top-0 left-0 w-full h-0.5 bg-green-400 animate-pulse"></div>
                     </div>
                   </div>
-
+                  
                   {/* Instructions */}
                   <div className="absolute bottom-20 left-0 right-0 text-center">
                     <div className="bg-black/70 text-white px-4 py-2 rounded-lg mx-4">
                       <div className="flex items-center justify-center gap-2 mb-1">
                         <Zap className="h-4 w-4" />
-                        <span className="font-medium">
-                          Position barcode in frame
-                        </span>
+                        <span className="font-medium">Position barcode in frame</span>
                       </div>
                       <p className="text-xs text-gray-300">
                         Hold steady for automatic detection
@@ -199,8 +177,8 @@ export function CameraScanner({
 
                 {/* Control buttons */}
                 <div className="absolute bottom-6 left-0 right-0 flex justify-center gap-3">
-                  <Button
-                    variant="destructive"
+                  <Button 
+                    variant="destructive" 
                     onClick={handleStopScanning}
                     className="bg-red-600 hover:bg-red-700"
                   >

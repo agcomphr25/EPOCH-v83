@@ -4,22 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import {
-  BarChart3,
-  Calendar,
-  List,
-  Maximize2,
-  Minimize2,
-  Search,
-  ArrowRight,
-  Edit,
-  QrCode,
-  Users,
-  ExternalLink,
-  LogOut,
-  ListOrdered,
-  Repeat,
-} from 'lucide-react';
+import { BarChart3, Calendar, List, Maximize2, Minimize2, Search, ArrowRight, Edit, QrCode, Users, ExternalLink, LogOut, ListOrdered, Repeat } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import PipelineVisualization from '@/components/PipelineVisualization';
@@ -49,7 +34,7 @@ export default function AGTestDashboard() {
       // Clear any local storage tokens
       localStorage.removeItem('sessionToken');
       localStorage.removeItem('jwtToken');
-
+      
       // Redirect to login page
       window.location.href = '/login';
     }
@@ -68,7 +53,7 @@ export default function AGTestDashboard() {
   // Filter orders based on search term
   const filteredOrders = allOrders.filter((order: any) => {
     if (!searchTerm) return true;
-
+    
     const searchLower = searchTerm.toLowerCase();
     return (
       order.orderId?.toLowerCase().includes(searchLower) ||
@@ -94,9 +79,7 @@ export default function AGTestDashboard() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
-            AGTEST Dashboard
-          </h1>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">AGTEST Dashboard</h1>
           <p className="text-gray-600 dark:text-gray-400 mt-1">
             Production Pipeline Overview, Order Management & Layup Scheduling
           </p>
@@ -119,7 +102,7 @@ export default function AGTestDashboard() {
 
       {/* Navigation Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card
+        <Card 
           className="hover:shadow-md transition-all duration-200 cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20"
           onClick={() => navigateTo('/layup-scheduler')}
         >
@@ -136,8 +119,8 @@ export default function AGTestDashboard() {
             </p>
           </CardContent>
         </Card>
-
-        <Card
+        
+        <Card 
           className="hover:shadow-md transition-all duration-200 cursor-pointer hover:bg-green-50 dark:hover:bg-green-900/20"
           onClick={() => navigateTo('/all-orders')}
         >
@@ -154,8 +137,8 @@ export default function AGTestDashboard() {
             </p>
           </CardContent>
         </Card>
-
-        <Card
+        
+        <Card 
           className="hover:shadow-md transition-all duration-200 cursor-pointer hover:bg-orange-50 dark:hover:bg-orange-900/20"
           onClick={() => navigateTo('/department-queue/barcode')}
         >
@@ -172,8 +155,8 @@ export default function AGTestDashboard() {
             </p>
           </CardContent>
         </Card>
-
-        <Card
+        
+        <Card 
           className="hover:shadow-md transition-all duration-200 cursor-pointer hover:bg-indigo-50 dark:hover:bg-indigo-900/20"
           onClick={() => navigateTo('/department-queue/finish')}
         >
@@ -191,7 +174,7 @@ export default function AGTestDashboard() {
           </CardContent>
         </Card>
 
-        <Card
+        <Card 
           className="hover:shadow-md transition-all duration-200 cursor-pointer hover:bg-red-50 dark:hover:bg-red-900/20"
           onClick={() => navigateTo('/department-queue/production-queue')}
         >
@@ -209,7 +192,7 @@ export default function AGTestDashboard() {
           </CardContent>
         </Card>
 
-        <Card
+        <Card 
           className="hover:shadow-md transition-all duration-200 cursor-pointer hover:bg-teal-50 dark:hover:bg-teal-900/20"
           onClick={() => navigateTo('/order-department-transfer')}
         >
@@ -217,14 +200,30 @@ export default function AGTestDashboard() {
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-2">
                 <Repeat className="w-5 h-5 text-teal-600" />
-                <span className="text-sm font-medium">
-                  Order Department Transfer
-                </span>
+                <span className="text-sm font-medium">Order Department Transfer</span>
               </div>
               <ExternalLink className="w-4 h-4 text-gray-400" />
             </div>
             <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
               Transfer orders between production departments
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card 
+          className="hover:shadow-md transition-all duration-200 cursor-pointer hover:bg-yellow-50 dark:hover:bg-yellow-900/20"
+          onClick={() => navigateTo('/metal-accessories')}
+        >
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <Edit className="w-5 h-5 text-yellow-600" />
+                <span className="text-sm font-medium">Metal Accessories</span>
+              </div>
+              <ExternalLink className="w-4 h-4 text-gray-400" />
+            </div>
+            <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+              Metal accessories tracker
             </p>
           </CardContent>
         </Card>
@@ -239,9 +238,7 @@ export default function AGTestDashboard() {
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
               <div className="flex items-center space-x-2">
                 <BarChart3 className="w-5 h-5 text-blue-600" />
-                <CardTitle className="text-lg">
-                  Production Pipeline Overview
-                </CardTitle>
+                <CardTitle className="text-lg">Production Pipeline Overview</CardTitle>
               </div>
               <Button
                 variant="ghost"
@@ -256,6 +253,10 @@ export default function AGTestDashboard() {
               <PipelineVisualization />
             </CardContent>
           </Card>
+
+
+
+
         </div>
       ) : (
         /* Expanded View */
@@ -265,11 +266,11 @@ export default function AGTestDashboard() {
               {expandedSection === 'pipeline' && (
                 <>
                   <BarChart3 className="w-5 h-5 text-blue-600" />
-                  <CardTitle className="text-xl">
-                    Production Pipeline Overview - Expanded
-                  </CardTitle>
+                  <CardTitle className="text-xl">Production Pipeline Overview - Expanded</CardTitle>
                 </>
               )}
+
+
             </div>
             <Button
               variant="ghost"
@@ -282,6 +283,8 @@ export default function AGTestDashboard() {
           </CardHeader>
           <CardContent className="h-full">
             {expandedSection === 'pipeline' && <PipelineVisualization />}
+
+
           </CardContent>
         </Card>
       )}

@@ -14,13 +14,13 @@ function App() {
 function VanillaTest() {
   // Try to access React from window object
   const React = (window as any).React;
-
+  
   if (!React) {
     return <div>ERROR: React not found on window object</div>;
   }
-
+  
   const [count, setCount] = React.useState(0);
-
+  
   return (
     <div>
       <p>Count: {count}</p>

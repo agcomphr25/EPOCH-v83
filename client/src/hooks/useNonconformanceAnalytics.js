@@ -9,12 +9,12 @@ export default function useNonconformanceAnalytics(filters) {
   useEffect(() => {
     setLoading(true);
     setError(null);
-
+    
     fetchAnalytics(filters)
-      .then((analyticsData) => {
+      .then(analyticsData => {
         setData(analyticsData);
       })
-      .catch((err) => {
+      .catch(err => {
         console.error('Error fetching analytics:', err);
         setError(err.message || 'Failed to fetch analytics');
         setData(null);

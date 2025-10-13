@@ -1,22 +1,10 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
@@ -38,12 +26,7 @@ interface BOMDefinition {
   isActive: boolean;
 }
 
-export function SubAssemblyDialog({
-  open,
-  onOpenChange,
-  parentBomId,
-  onSuccess,
-}: SubAssemblyDialogProps) {
+export function SubAssemblyDialog({ open, onOpenChange, parentBomId, onSuccess }: SubAssemblyDialogProps) {
   const [selectedChildBomId, setSelectedChildBomId] = useState<string>('');
   const [partName, setPartName] = useState('');
   const [quantity, setQuantity] = useState('1');
@@ -66,19 +49,17 @@ export function SubAssemblyDialog({
       });
     },
     onSuccess: () => {
-      toast({ title: 'Sub-assembly created successfully' });
-      queryClient.invalidateQueries({
-        queryKey: [`/api/boms/${parentBomId}/details`],
-      });
+      toast({ title: "Sub-assembly created successfully" });
+      queryClient.invalidateQueries({ queryKey: [`/api/boms/${parentBomId}/details`] });
       resetForm();
       onSuccess();
       onOpenChange(false);
     },
     onError: (error: any) => {
       toast({
-        title: 'Failed to create sub-assembly',
-        description: error.message || 'An error occurred',
-        variant: 'destructive',
+        title: "Failed to create sub-assembly",
+        description: error.message || "An error occurred",
+        variant: "destructive",
       });
     },
   });
@@ -93,12 +74,12 @@ export function SubAssemblyDialog({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-
+    
     if (!selectedChildBomId || !partName || !quantity) {
       toast({
-        title: 'Missing required fields',
-        description: 'Please fill in Child BOM, Part Name, and Quantity',
-        variant: 'destructive',
+        title: "Missing required fields",
+        description: "Please fill in Child BOM, Part Name, and Quantity",
+        variant: "destructive",
       });
       return;
     }
@@ -112,9 +93,7 @@ export function SubAssemblyDialog({
     });
   };
 
-  const selectedBOM = availableBOMs.find(
-    (bom) => bom.id.toString() === selectedChildBomId
-  );
+  const selectedBOM = availableBOMs.find(bom => bom.id.toString() === selectedChildBomId);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -125,8 +104,7 @@ export function SubAssemblyDialog({
             Add Sub-Assembly
           </DialogTitle>
           <DialogDescription>
-            Create a hierarchical relationship by referencing another BOM as a
-            sub-assembly
+            Create a hierarchical relationship by referencing another BOM as a sub-assembly
           </DialogDescription>
         </DialogHeader>
 
@@ -134,30 +112,21 @@ export function SubAssemblyDialog({
           {/* Child BOM Selection */}
           <div className="space-y-2">
             <Label htmlFor="childBom">Child BOM *</Label>
-            <Select
-              value={selectedChildBomId}
-              onValueChange={setSelectedChildBomId}
-            >
+            <Select value={selectedChildBomId} onValueChange={setSelectedChildBomId}>
               <SelectTrigger>
                 <SelectValue placeholder="Select a BOM to use as sub-assembly" />
               </SelectTrigger>
               <SelectContent>
                 {isLoading ? (
-                  <SelectItem value="loading" disabled>
-                    Loading...
-                  </SelectItem>
+                  <SelectItem value="loading" disabled>Loading...</SelectItem>
                 ) : availableBOMs.length === 0 ? (
-                  <SelectItem value="none" disabled>
-                    No BOMs available
-                  </SelectItem>
+                  <SelectItem value="none" disabled>No BOMs available</SelectItem>
                 ) : (
                   availableBOMs.map((bom) => (
                     <SelectItem key={bom.id} value={bom.id.toString()}>
                       <div className="flex items-center gap-2">
                         <Package className="w-4 h-4" />
-                        <span>
-                          {bom.modelName} ({bom.revision})
-                        </span>
+                        <span>{bom.modelName} ({bom.revision})</span>
                       </div>
                     </SelectItem>
                   ))
@@ -197,9 +166,7 @@ export function SubAssemblyDialog({
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="purchasingUnitConversion">
-                Purchasing Unit Conversion
-              </Label>
+              <Label htmlFor="purchasingUnitConversion">Purchasing Unit Conversion</Label>
               <Input
                 id="purchasingUnitConversion"
                 type="number"
@@ -211,8 +178,7 @@ export function SubAssemblyDialog({
                 placeholder="1.0"
               />
               <p className="text-xs text-muted-foreground">
-                Conversion factor for procurement (e.g., 0.02 if screws come in
-                packs of 50)
+                Conversion factor for procurement (e.g., 0.02 if screws come in packs of 50)
               </p>
             </div>
           </div>
@@ -231,21 +197,19 @@ export function SubAssemblyDialog({
 
           {/* Action Buttons */}
           <div className="flex justify-end space-x-2 pt-4">
-            <Button
-              type="button"
-              variant="outline"
+            <Button 
+              type="button" 
+              variant="outline" 
               onClick={() => onOpenChange(false)}
               disabled={createSubAssemblyMutation.isPending}
             >
               Cancel
             </Button>
-            <Button
-              type="submit"
+            <Button 
+              type="submit" 
               disabled={createSubAssemblyMutation.isPending}
             >
-              {createSubAssemblyMutation.isPending
-                ? 'Creating...'
-                : 'Create Sub-Assembly'}
+              {createSubAssemblyMutation.isPending ? 'Creating...' : 'Create Sub-Assembly'}
             </Button>
           </div>
         </form>

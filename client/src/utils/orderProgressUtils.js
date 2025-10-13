@@ -52,9 +52,7 @@ export async function createReplacementOrder(orderId) {
 export async function fetchAllOrders() {
   try {
     // Include department info and schedule flags in query
-    return await axios.get(
-      '/api/orders?view=all&includeDept&includeScheduleFlag'
-    );
+    return await axios.get('/api/orders?view=all&includeDept&includeScheduleFlag');
   } catch (error) {
     console.error('Failed to fetch orders:', error);
     throw error;

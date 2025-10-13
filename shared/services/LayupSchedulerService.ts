@@ -1,9 +1,5 @@
 import { Order } from '../schema';
-import {
-  OrderPriorityService,
-  PriorityOrder,
-  createOrderPriorityService,
-} from './OrderPriorityService';
+import { OrderPriorityService, PriorityOrder, createOrderPriorityService } from './OrderPriorityService';
 
 export interface ScheduledOrder extends PriorityOrder {
   scheduledDay: number; // 1=Monday, 2=Tuesday, 3=Wednesday, 4=Thursday, 5=Friday
@@ -35,10 +31,7 @@ export class LayupSchedulerService {
   private priorityService: OrderPriorityService;
   private config: ScheduleConfig;
 
-  constructor(
-    priorityService?: OrderPriorityService,
-    config?: Partial<ScheduleConfig>
-  ) {
+  constructor(priorityService?: OrderPriorityService, config?: Partial<ScheduleConfig>) {
     this.priorityService = priorityService || createOrderPriorityService();
     this.config = {
       workDays: [1, 2, 3, 4], // Monday through Thursday
@@ -76,7 +69,7 @@ export class LayupSchedulerService {
    * Filters orders that have valid stock models and can be scheduled
    */
   private filterSchedulableOrders(orders: PriorityOrder[]): PriorityOrder[] {
-    return orders.filter((order) => {
+    return orders.filter(order => {
       // Exclude orders with "None" or empty stock models
       if (!order.stockModelId || order.stockModelId.toLowerCase() === 'none') {
         return false;
@@ -85,7 +78,7 @@ export class LayupSchedulerService {
       // Include orders in departments that need layup scheduling, or orders without department set
       const validDepartments = ['P1 Production Queue', 'Layup', 'Plugging'];
       const currentDept = order.currentDepartment || '';
-
+      
       // Include if in valid department OR if no department is set (likely unprocessed orders)
       return validDepartments.includes(currentDept) || currentDept === '';
     });
@@ -100,19 +93,11 @@ export class LayupSchedulerService {
     employeeCapacities: EmployeeCapacity[]
   ): ScheduledOrder[] {
     const scheduledOrders: ScheduledOrder[] = [];
-    const capacityTracker = this.initializeCapacityTracker(
-      moldCapacities,
-      employeeCapacities
-    );
+    const capacityTracker = this.initializeCapacityTracker(moldCapacities, employeeCapacities);
 
     for (const order of orders) {
-      const assignment = this.findBestScheduleSlot(
-        order,
-        capacityTracker,
-        moldCapacities,
-        employeeCapacities
-      );
-
+      const assignment = this.findBestScheduleSlot(order, capacityTracker, moldCapacities, employeeCapacities);
+      
       if (assignment) {
         const scheduledOrder: ScheduledOrder = {
           ...order,
@@ -141,7 +126,7 @@ export class LayupSchedulerService {
     employeeCapacities: EmployeeCapacity[]
   ) {
     // Find compatible molds for this order's stock model
-    const compatibleMolds = moldCapacities.filter((mold) =>
+    const compatibleMolds = moldCapacities.filter(mold =>
       mold.compatibleStockModels.includes(order.stockModelId || '')
     );
 
@@ -153,27 +138,16 @@ export class LayupSchedulerService {
     const estimatedHours = this.estimateOrderHours(order);
 
     // Try to schedule within work days, starting from current week
-    for (
-      let weekOffset = 0;
-      weekOffset < this.config.weeksToSchedule;
-      weekOffset++
-    ) {
+    for (let weekOffset = 0; weekOffset < this.config.weeksToSchedule; weekOffset++) {
       const week = this.getWeekString(this.config.startDate, weekOffset);
-
+      
       for (const day of this.config.workDays) {
         for (const mold of compatibleMolds) {
           const availableEmployee = this.findAvailableEmployee(
-            day,
-            week,
-            estimatedHours,
-            employeeCapacities,
-            capacityTracker
+            day, week, estimatedHours, employeeCapacities, capacityTracker
           );
 
-          if (
-            availableEmployee &&
-            this.hasMoldCapacity(mold.moldId, day, week, capacityTracker)
-          ) {
+          if (availableEmployee && this.hasMoldCapacity(mold.moldId, day, week, capacityTracker)) {
             return {
               day,
               week,
@@ -225,15 +199,9 @@ export class LayupSchedulerService {
   /**
    * Gets orders filtered by type (useful for separate PO handling)
    */
-  getOrdersByType(
-    orders: Order[],
-    orderType: PriorityOrder['orderType']
-  ): PriorityOrder[] {
+  getOrdersByType(orders: Order[], orderType: PriorityOrder['orderType']): PriorityOrder[] {
     const prioritizedOrders = this.priorityService.sortOrdersByPriority(orders);
-    return this.priorityService.filterOrdersByType(
-      prioritizedOrders,
-      orderType
-    );
+    return this.priorityService.filterOrdersByType(prioritizedOrders, orderType);
   }
 
   /**
@@ -246,17 +214,12 @@ export class LayupSchedulerService {
   /**
    * Updates priority rules
    */
-  updatePriorityRules(
-    rules: Parameters<OrderPriorityService['updateRules']>[0]
-  ): void {
+  updatePriorityRules(rules: Parameters<OrderPriorityService['updateRules']>[0]): void {
     this.priorityService.updateRules(rules);
   }
 
   // Helper methods for internal use
-  private initializeCapacityTracker(
-    moldCapacities: MoldCapacity[],
-    employeeCapacities: EmployeeCapacity[]
-  ) {
+  private initializeCapacityTracker(moldCapacities: MoldCapacity[], employeeCapacities: EmployeeCapacity[]) {
     // Initialize tracking structure for capacity management
     return {
       molds: new Map(),
@@ -269,43 +232,30 @@ export class LayupSchedulerService {
     // Implementation would track used capacity per day/week
   }
 
-  private findAvailableEmployee(
-    day: number,
-    week: string,
-    hours: number,
-    employees: EmployeeCapacity[],
-    tracker: any
-  ) {
+  private findAvailableEmployee(day: number, week: string, hours: number, employees: EmployeeCapacity[], tracker: any) {
     // Find employee with available capacity
-    return employees.find((emp) => emp.availableDays.includes(day));
+    return employees.find(emp => emp.availableDays.includes(day));
   }
 
-  private hasMoldCapacity(
-    moldId: string,
-    day: number,
-    week: string,
-    tracker: any
-  ): boolean {
+  private hasMoldCapacity(moldId: string, day: number, week: string, tracker: any): boolean {
     // Check if mold has available capacity
     return true; // Simplified for now
   }
 
   private getWeekString(startDate: Date, weekOffset: number): string {
     const date = new Date(startDate);
-    date.setDate(date.getDate() + weekOffset * 7);
+    date.setDate(date.getDate() + (weekOffset * 7));
     const year = date.getFullYear();
     const week = this.getWeekNumber(date);
     return `${year}-W${week.toString().padStart(2, '0')}`;
   }
 
   private getWeekNumber(date: Date): number {
-    const d = new Date(
-      Date.UTC(date.getFullYear(), date.getMonth(), date.getDate())
-    );
+    const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
     const dayNum = d.getUTCDay() || 7;
     d.setUTCDate(d.getUTCDate() + 4 - dayNum);
     const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-    return Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+    return Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
   }
 }
 

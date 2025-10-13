@@ -6,38 +6,29 @@ const router = Router();
 // Save layup schedule and move orders to Layup/Plugging department
 router.post('/save', async (req: Request, res: Response) => {
   try {
-    console.log(
-      '💾 SCHEDULE SAVE: Starting layup schedule save and department progression...'
-    );
-
+    console.log('💾 SCHEDULE SAVE: Starting layup schedule save and department progression...');
+    
     const { entries, workDays, weekStart } = req.body;
-
+    
     if (!entries || !Array.isArray(entries)) {
       return res.status(400).json({
         success: false,
-        error: 'Invalid schedule entries provided',
+        error: "Invalid schedule entries provided"
       });
     }
 
-    console.log(
-      `📋 Processing ${entries.length} schedule entries for week starting ${weekStart}`
-    );
-    console.log(
-      `📅 Configured work days: ${workDays.map((d: number) => ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d]).join(', ')}`
-    );
+    console.log(`📋 Processing ${entries.length} schedule entries for week starting ${weekStart}`);
+    console.log(`📅 Configured work days: ${workDays.map((d: number) => ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d]).join(', ')}`);
 
     // Start transaction
     await pool.query('BEGIN');
 
     try {
       // Clear existing schedule for this week
-      await pool.query(
-        `
+      await pool.query(`
         DELETE FROM layup_schedule 
         WHERE scheduled_date >= $1 AND scheduled_date < $1::date + INTERVAL '7 days'
-      `,
-        [weekStart]
-      );
+      `, [weekStart]);
 
       let savedCount = 0;
       let progressedCount = 0;
@@ -45,7 +36,7 @@ router.post('/save', async (req: Request, res: Response) => {
       // Save schedule entries and progress orders
       for (const entry of entries) {
         const { orderId, scheduledDate, moldId, employeeAssignments } = entry;
-
+        
         // Validate required fields
         if (!orderId || !scheduledDate) {
           console.log(`⚠️ Skipping invalid entry: ${JSON.stringify(entry)}`);
@@ -53,60 +44,52 @@ router.post('/save', async (req: Request, res: Response) => {
         }
 
         // Convert scheduledDate to Date object if it's a string
-        const processedScheduledDate =
-          typeof scheduledDate === 'string'
-            ? new Date(scheduledDate)
-            : scheduledDate;
+        const processedScheduledDate = typeof scheduledDate === 'string' ? new Date(scheduledDate) : scheduledDate;
 
         // Insert schedule entry
-        await pool.query(
-          `
+        await pool.query(`
           INSERT INTO layup_schedule (
             order_id, scheduled_date, mold_id, employee_assignments,
             is_override, created_at, updated_at
           ) VALUES ($1, $2, $3, $4, $5, $6, $7)
-        `,
-          [
-            orderId,
-            processedScheduledDate,
-            moldId || 'auto',
-            JSON.stringify(employeeAssignments || []),
-            true, // This is a manual schedule save
-            new Date().toISOString(),
-            new Date().toISOString(),
-          ]
-        );
+        `, [
+          orderId,
+          processedScheduledDate,
+          moldId || 'auto',
+          JSON.stringify(employeeAssignments || []),
+          true, // This is a manual schedule save
+          new Date().toISOString(),
+          new Date().toISOString()
+        ]);
 
         savedCount++;
-        console.log(
-          `✅ Order ${orderId} scheduled for ${scheduledDate} (schedule only, no department change)`
-        );
+        console.log(`✅ Order ${orderId} scheduled for ${scheduledDate} (schedule only, no department change)`);
       }
 
       // Commit transaction
       await pool.query('COMMIT');
 
-      console.log(
-        `✅ Successfully saved ${savedCount} schedule entries (no department changes)`
-      );
-
+      console.log(`✅ Successfully saved ${savedCount} schedule entries (no department changes)`);
+      
       res.json({
         success: true,
         message: `Weekly schedule saved successfully`,
         entriesSaved: savedCount,
         weekStart: weekStart,
-        workDays: workDays,
+        workDays: workDays
       });
+
     } catch (transactionError) {
       await pool.query('ROLLBACK');
       throw transactionError;
     }
+    
   } catch (error) {
     console.error('❌ SCHEDULE SAVE: Error saving layup schedule:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to save layup schedule',
-      details: error instanceof Error ? error.message : 'Unknown error',
+      error: "Failed to save layup schedule",
+      details: error instanceof Error ? error.message : 'Unknown error'
     });
   }
 });
@@ -115,7 +98,7 @@ router.post('/save', async (req: Request, res: Response) => {
 router.get('/current-week', async (req: Request, res: Response) => {
   try {
     console.log('📅 CURRENT WEEK: Fetching current week layup schedule...');
-
+    
     // Get start of current week (Monday)
     const now = new Date();
     const startOfWeek = new Date(now);
@@ -156,31 +139,27 @@ router.get('/current-week', async (req: Request, res: Response) => {
 
     const scheduleResult = await pool.query(scheduleQuery, [
       startOfWeek.toISOString(),
-      endOfWeek.toISOString(),
+      endOfWeek.toISOString()
     ]);
 
     const scheduleEntries = scheduleResult || [];
-
-    console.log(
-      `📋 Found ${scheduleEntries.length} schedule entries for current week`
-    );
-
+    
+    console.log(`📋 Found ${scheduleEntries.length} schedule entries for current week`);
+    
     res.json({
       success: true,
       schedule: scheduleEntries,
       weekStart: startOfWeek.toISOString(),
       weekEnd: endOfWeek.toISOString(),
-      totalEntries: scheduleEntries.length,
+      totalEntries: scheduleEntries.length
     });
+    
   } catch (error) {
-    console.error(
-      '❌ CURRENT WEEK: Error fetching current week schedule:',
-      error
-    );
+    console.error('❌ CURRENT WEEK: Error fetching current week schedule:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch current week schedule',
-      details: error instanceof Error ? error.message : 'Unknown error',
+      error: "Failed to fetch current week schedule",
+      details: error instanceof Error ? error.message : 'Unknown error'
     });
   }
 });
@@ -189,69 +168,54 @@ router.get('/current-week', async (req: Request, res: Response) => {
 router.post('/', async (req: Request, res: Response) => {
   try {
     console.log('💾 INDIVIDUAL SAVE: Saving single order assignment...');
-
-    const {
-      orderId,
-      scheduledDate,
-      moldId,
-      instanceNumber,
-      employeeAssignments,
-      isOverride,
-      overriddenBy,
-    } = req.body;
-
+    
+    const { orderId, scheduledDate, moldId, instanceNumber, employeeAssignments, isOverride, overriddenBy } = req.body;
+    
     if (!orderId || !scheduledDate || !moldId) {
       return res.status(400).json({
         success: false,
-        error: 'Missing required fields: orderId, scheduledDate, moldId',
+        error: "Missing required fields: orderId, scheduledDate, moldId"
       });
     }
 
-    console.log(
-      `📋 Saving assignment: ${orderId} → ${moldId} on ${scheduledDate}`
-    );
+    console.log(`📋 Saving assignment: ${orderId} → ${moldId} on ${scheduledDate}`);
 
     // Convert scheduledDate to Date object if it's a string
-    const processedScheduledDate =
-      typeof scheduledDate === 'string'
-        ? new Date(scheduledDate)
-        : scheduledDate;
+    const processedScheduledDate = typeof scheduledDate === 'string' ? new Date(scheduledDate) : scheduledDate;
 
     // Insert schedule entry
-    await pool.query(
-      `
+    await pool.query(`
       INSERT INTO layup_schedule (
         order_id, scheduled_date, mold_id, employee_assignments,
         is_override, overridden_by, created_at, updated_at
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-    `,
-      [
-        orderId,
-        processedScheduledDate,
-        moldId,
-        JSON.stringify(employeeAssignments || []),
-        isOverride || true,
-        overriddenBy || 'user',
-        new Date().toISOString(),
-        new Date().toISOString(),
-      ]
-    );
+    `, [
+      orderId,
+      processedScheduledDate,
+      moldId,
+      JSON.stringify(employeeAssignments || []),
+      isOverride || true,
+      overriddenBy || 'user',
+      new Date().toISOString(),
+      new Date().toISOString()
+    ]);
 
     console.log(`✅ Successfully saved assignment: ${orderId} → ${moldId}`);
-
+    
     res.json({
       success: true,
       message: `Order ${orderId} assigned to ${moldId}`,
       orderId,
       moldId,
-      scheduledDate: processedScheduledDate,
+      scheduledDate: processedScheduledDate
     });
+    
   } catch (error) {
     console.error('❌ INDIVIDUAL SAVE ERROR:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to save order assignment',
-      details: error instanceof Error ? error.message : 'Unknown error',
+      error: "Failed to save order assignment",
+      details: error instanceof Error ? error.message : 'Unknown error'
     });
   }
 });
@@ -260,40 +224,34 @@ router.post('/', async (req: Request, res: Response) => {
 router.delete('/by-order/:orderId', async (req: Request, res: Response) => {
   try {
     const { orderId } = req.params;
-    console.log(
-      `🗑️ INDIVIDUAL DELETE: Removing assignment for order ${orderId}`
-    );
-
-    const result = await pool.query(
-      `
+    console.log(`🗑️ INDIVIDUAL DELETE: Removing assignment for order ${orderId}`);
+    
+    const result = await pool.query(`
       DELETE FROM layup_schedule 
       WHERE order_id = $1
-    `,
-      [orderId]
-    );
+    `, [orderId]);
 
     const deletedRows = (result as any).rowCount || 0;
-
+    
     if (deletedRows > 0) {
-      console.log(
-        `✅ Successfully deleted ${deletedRows} assignment(s) for order ${orderId}`
-      );
+      console.log(`✅ Successfully deleted ${deletedRows} assignment(s) for order ${orderId}`);
     } else {
       console.log(`ℹ️ No existing assignment found for order ${orderId}`);
     }
-
+    
     res.json({
       success: true,
       message: `Removed ${deletedRows} assignment(s) for order ${orderId}`,
       orderId,
-      deletedRows,
+      deletedRows
     });
+    
   } catch (error) {
     console.error('❌ INDIVIDUAL DELETE ERROR:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to delete order assignment',
-      details: error instanceof Error ? error.message : 'Unknown error',
+      error: "Failed to delete order assignment",
+      details: error instanceof Error ? error.message : 'Unknown error'
     });
   }
 });

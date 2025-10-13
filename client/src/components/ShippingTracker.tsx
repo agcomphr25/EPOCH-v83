@@ -3,13 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
@@ -42,7 +36,7 @@ export function ShippingTracker({ orderId, onUpdate }: ShippingTrackerProps) {
     trackingNumber: '',
     carrier: 'UPS',
     estimatedDelivery: '',
-    sendNotification: true,
+    sendNotification: true
   });
   const { toast } = useToast();
 
@@ -59,10 +53,8 @@ export function ShippingTracker({ orderId, onUpdate }: ShippingTrackerProps) {
         setFormData({
           trackingNumber: data.trackingNumber || '',
           carrier: data.shippingCarrier || 'UPS',
-          estimatedDelivery: data.estimatedDelivery
-            ? data.estimatedDelivery.split('T')[0]
-            : '',
-          sendNotification: false,
+          estimatedDelivery: data.estimatedDelivery ? data.estimatedDelivery.split('T')[0] : '',
+          sendNotification: false
         });
       }
     } catch (error) {
@@ -73,9 +65,9 @@ export function ShippingTracker({ orderId, onUpdate }: ShippingTrackerProps) {
   const updateTracking = async () => {
     if (!formData.trackingNumber.trim()) {
       toast({
-        title: 'Error',
-        description: 'Tracking number is required',
-        variant: 'destructive',
+        title: "Error",
+        description: "Tracking number is required",
+        variant: "destructive"
       });
       return;
     }
@@ -85,23 +77,23 @@ export function ShippingTracker({ orderId, onUpdate }: ShippingTrackerProps) {
       const response = await fetch(`/api/shipping/update-tracking/${orderId}`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({
           trackingNumber: formData.trackingNumber,
           carrier: formData.carrier,
           estimatedDelivery: formData.estimatedDelivery || null,
-          sendNotification: formData.sendNotification,
-        }),
+          sendNotification: formData.sendNotification
+        })
       });
 
       if (response.ok) {
         const result = await response.json();
         toast({
-          title: 'Success',
-          description: 'Tracking information updated successfully',
+          title: "Success",
+          description: "Tracking information updated successfully"
         });
-
+        
         setIsEditing(false);
         await loadTrackingInfo();
         onUpdate?.();
@@ -110,9 +102,9 @@ export function ShippingTracker({ orderId, onUpdate }: ShippingTrackerProps) {
       }
     } catch (error) {
       toast({
-        title: 'Error',
-        description: 'Failed to update tracking information',
-        variant: 'destructive',
+        title: "Error",
+        description: "Failed to update tracking information",
+        variant: "destructive"
       });
     } finally {
       setIsLoading(false);
@@ -163,28 +155,28 @@ export function ShippingTracker({ orderId, onUpdate }: ShippingTrackerProps) {
                 </Badge>
               </div>
             )}
-
+            
             {trackingInfo.shippingCarrier && (
               <div className="flex items-center justify-between">
                 <span className="font-medium">Carrier:</span>
                 <span>{trackingInfo.shippingCarrier}</span>
               </div>
             )}
-
+            
             {trackingInfo.shippedDate && (
               <div className="flex items-center justify-between">
                 <span className="font-medium">Shipped Date:</span>
                 <span>{formatDate(trackingInfo.shippedDate)}</span>
               </div>
             )}
-
+            
             {trackingInfo.estimatedDelivery && (
               <div className="flex items-center justify-between">
                 <span className="font-medium">Est. Delivery:</span>
                 <span>{formatDate(trackingInfo.estimatedDelivery)}</span>
               </div>
             )}
-
+            
             <div className="flex items-center justify-between">
               <span className="font-medium">Customer Notified:</span>
               <div className="flex items-center gap-2">
@@ -198,10 +190,10 @@ export function ShippingTracker({ orderId, onUpdate }: ShippingTrackerProps) {
                 )}
               </div>
             </div>
-
-            <Button
+            
+            <Button 
               onClick={() => setIsEditing(true)}
-              variant="outline"
+              variant="outline" 
               className="w-full"
             >
               Update Tracking Info
@@ -214,21 +206,14 @@ export function ShippingTracker({ orderId, onUpdate }: ShippingTrackerProps) {
               <Input
                 id="trackingNumber"
                 value={formData.trackingNumber}
-                onChange={(e) =>
-                  setFormData({ ...formData, trackingNumber: e.target.value })
-                }
+                onChange={(e) => setFormData({ ...formData, trackingNumber: e.target.value })}
                 placeholder="Enter tracking number"
               />
             </div>
-
+            
             <div className="space-y-2">
               <Label htmlFor="carrier">Carrier</Label>
-              <Select
-                value={formData.carrier}
-                onValueChange={(value) =>
-                  setFormData({ ...formData, carrier: value })
-                }
-              >
+              <Select value={formData.carrier} onValueChange={(value) => setFormData({ ...formData, carrier: value })}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -241,43 +226,29 @@ export function ShippingTracker({ orderId, onUpdate }: ShippingTrackerProps) {
                 </SelectContent>
               </Select>
             </div>
-
+            
             <div className="space-y-2">
-              <Label htmlFor="estimatedDelivery">
-                Estimated Delivery Date (Optional)
-              </Label>
+              <Label htmlFor="estimatedDelivery">Estimated Delivery Date (Optional)</Label>
               <Input
                 id="estimatedDelivery"
                 type="date"
                 value={formData.estimatedDelivery}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    estimatedDelivery: e.target.value,
-                  })
-                }
+                onChange={(e) => setFormData({ ...formData, estimatedDelivery: e.target.value })}
               />
             </div>
-
+            
             <div className="flex items-center space-x-2">
               <Checkbox
                 id="sendNotification"
                 checked={formData.sendNotification}
-                onCheckedChange={(checked) =>
-                  setFormData({
-                    ...formData,
-                    sendNotification: checked as boolean,
-                  })
-                }
+                onCheckedChange={(checked) => setFormData({ ...formData, sendNotification: checked as boolean })}
               />
-              <Label htmlFor="sendNotification">
-                Send customer notification
-              </Label>
+              <Label htmlFor="sendNotification">Send customer notification</Label>
             </div>
-
+            
             <div className="flex gap-2">
-              <Button
-                onClick={updateTracking}
+              <Button 
+                onClick={updateTracking} 
                 disabled={isLoading}
                 className="flex-1"
               >
@@ -290,8 +261,8 @@ export function ShippingTracker({ orderId, onUpdate }: ShippingTrackerProps) {
                   'Update Tracking'
                 )}
               </Button>
-              <Button
-                variant="outline"
+              <Button 
+                variant="outline" 
                 onClick={() => setIsEditing(false)}
                 disabled={isLoading}
               >

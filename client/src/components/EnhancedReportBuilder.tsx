@@ -5,21 +5,15 @@ import html2pdf from 'html2pdf.js';
 import toast from 'react-hot-toast';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-  FileText,
-  Download,
-  FileDown,
-  FileBarChart,
+import { 
+  FileText, 
+  Download, 
+  FileDown, 
+  FileBarChart, 
   Filter,
   Calendar,
   Search,
@@ -27,7 +21,7 @@ import {
   AlertCircle,
   CheckCircle,
   Users,
-  Clock,
+  Clock
 } from 'lucide-react';
 
 import { apiRequest } from '@/lib/queryClient';
@@ -57,25 +51,17 @@ export default function EnhancedReportBuilder() {
   const reportRef = useRef<HTMLDivElement>(null);
 
   // Fetch forms
-  const { data: forms = [], isLoading: loadingForms } = useQuery<
-    EnhancedForm[]
-  >({
+  const { data: forms = [], isLoading: loadingForms } = useQuery<EnhancedForm[]>({
     queryKey: ['/api/enhanced-forms'],
     queryFn: () => apiRequest('/api/enhanced-forms'),
   });
 
   // Fetch submissions for selected form
-  const {
-    data: submissions = [],
-    isLoading: loadingSubmissions,
-    refetch,
-  } = useQuery<FormSubmission[]>({
+  const { data: submissions = [], isLoading: loadingSubmissions, refetch } = useQuery<FormSubmission[]>({
     queryKey: ['/api/enhanced-forms/submissions', selectedFormId],
     queryFn: async () => {
       try {
-        const response = await apiRequest(
-          `/api/enhanced-forms/submissions?formId=${selectedFormId}`
-        );
+        const response = await apiRequest('/api/enhanced-forms/submissions', { params: { formId: selectedFormId } });
         return response;
       } catch (error) {
         console.error('Error fetching submissions:', error);
@@ -98,6 +84,10 @@ export default function EnhancedReportBuilder() {
     },
     retry: 1,
     retryDelay: 1000,
+    onError: (error) => {
+      console.error('Submissions query error:', error);
+      toast.error('Failed to fetch submissions data');
+    }
   });
 
   // Filter submissions based on date range and search term
@@ -112,19 +102,15 @@ export default function EnhancedReportBuilder() {
 
     // Date filter
     if (dateFilter.start) {
-      filtered = filtered.filter(
-        (s) => new Date(s.createdAt) >= new Date(dateFilter.start)
-      );
+      filtered = filtered.filter(s => new Date(s.createdAt) >= new Date(dateFilter.start));
     }
     if (dateFilter.end) {
-      filtered = filtered.filter(
-        (s) => new Date(s.createdAt) <= new Date(dateFilter.end)
-      );
+      filtered = filtered.filter(s => new Date(s.createdAt) <= new Date(dateFilter.end));
     }
 
     // Search filter
     if (searchTerm) {
-      filtered = filtered.filter((s) =>
+      filtered = filtered.filter(s => 
         JSON.stringify(s.data).toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
@@ -133,13 +119,12 @@ export default function EnhancedReportBuilder() {
   }, [submissions, dateFilter, searchTerm]);
 
   // Get selected form info
-  const selectedForm = forms.find((f) => f.id.toString() === selectedFormId);
+  const selectedForm = forms.find(f => f.id.toString() === selectedFormId);
 
   // Get all unique column keys from submissions
-  const columns =
-    filteredData.length > 0
-      ? Array.from(new Set(filteredData.flatMap((s) => Object.keys(s.data))))
-      : [];
+  const columns = filteredData.length > 0 
+    ? Array.from(new Set(filteredData.flatMap(s => Object.keys(s.data))))
+    : [];
 
   // Export to CSV
   const exportToCsv = () => {
@@ -148,10 +133,10 @@ export default function EnhancedReportBuilder() {
       return;
     }
 
-    const csvData = filteredData.map((s) => ({
+    const csvData = filteredData.map(s => ({
       ...s.data,
       'Submission ID': s.id,
-      'Submitted At': new Date(s.createdAt).toLocaleString(),
+      'Submitted At': new Date(s.createdAt).toLocaleString()
     }));
 
     return csvData;
@@ -168,12 +153,10 @@ export default function EnhancedReportBuilder() {
       form: selectedForm,
       submissions: filteredData,
       exported_at: new Date().toISOString(),
-      total_submissions: filteredData.length,
+      total_submissions: filteredData.length
     };
 
-    const blob = new Blob([JSON.stringify(jsonData, null, 2)], {
-      type: 'application/json',
-    });
+    const blob = new Blob([JSON.stringify(jsonData, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -192,7 +175,7 @@ export default function EnhancedReportBuilder() {
       filename: `${selectedForm?.name || 'form'}-report.pdf`,
       image: { type: 'jpeg', quality: 0.98 },
       html2canvas: { scale: 2 },
-      jsPDF: { unit: 'in', format: 'letter', orientation: 'landscape' },
+      jsPDF: { unit: 'in', format: 'letter', orientation: 'landscape' }
     };
 
     html2pdf().from(reportRef.current).set(opt).save();
@@ -201,44 +184,20 @@ export default function EnhancedReportBuilder() {
   // Calculate summary statistics
   const summaryStats = {
     totalSubmissions: filteredData.length,
-    todaySubmissions: filteredData.filter(
-      (s) => new Date(s.createdAt).toDateString() === new Date().toDateString()
+    todaySubmissions: filteredData.filter(s => 
+      new Date(s.createdAt).toDateString() === new Date().toDateString()
     ).length,
-    avgSubmissionsPerDay:
-      filteredData.length > 0
-        ? Math.round(
-            filteredData.length /
-              Math.max(
-                1,
-                Math.ceil(
-                  (new Date().getTime() -
-                    new Date(
-                      Math.min(
-                        ...filteredData.map((s) =>
-                          new Date(s.createdAt).getTime()
-                        )
-                      )
-                    ).getTime()) /
-                    (1000 * 60 * 60 * 24)
-                )
-              )
-          )
-        : 0,
-    dateRange:
-      filteredData.length > 0
-        ? {
-            start: new Date(
-              Math.min(
-                ...filteredData.map((s) => new Date(s.createdAt).getTime())
-              )
-            ),
-            end: new Date(
-              Math.max(
-                ...filteredData.map((s) => new Date(s.createdAt).getTime())
-              )
-            ),
-          }
-        : null,
+    avgSubmissionsPerDay: filteredData.length > 0 
+      ? Math.round(filteredData.length / Math.max(1, 
+          Math.ceil((new Date().getTime() - new Date(Math.min(...filteredData.map(s => new Date(s.createdAt).getTime()))).getTime()) / (1000 * 60 * 60 * 24))
+        ))
+      : 0,
+    dateRange: filteredData.length > 0 
+      ? {
+          start: new Date(Math.min(...filteredData.map(s => new Date(s.createdAt).getTime()))),
+          end: new Date(Math.max(...filteredData.map(s => new Date(s.createdAt).getTime())))
+        }
+      : null
   };
 
   if (loadingForms) {
@@ -256,7 +215,7 @@ export default function EnhancedReportBuilder() {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold">Enhanced Report Builder</h1>
-        <Button
+        <Button 
           onClick={async () => {
             try {
               await refetch();
@@ -265,14 +224,12 @@ export default function EnhancedReportBuilder() {
               console.error('Error refreshing data:', error);
               toast.error('Failed to refresh data');
             }
-          }}
-          variant="outline"
+          }} 
+          variant="outline" 
           className="flex items-center gap-2"
           disabled={loadingSubmissions}
         >
-          <RefreshCw
-            className={`h-4 w-4 ${loadingSubmissions ? 'animate-spin' : ''}`}
-          />
+          <RefreshCw className={`h-4 w-4 ${loadingSubmissions ? 'animate-spin' : ''}`} />
           Refresh
         </Button>
       </div>
@@ -288,15 +245,13 @@ export default function EnhancedReportBuilder() {
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <Label htmlFor="form-select">
-                Choose a form to view submissions
-              </Label>
+              <Label htmlFor="form-select">Choose a form to view submissions</Label>
               <Select value={selectedFormId} onValueChange={setSelectedFormId}>
                 <SelectTrigger id="form-select">
                   <SelectValue placeholder="— Select a form —" />
                 </SelectTrigger>
                 <SelectContent>
-                  {forms.map((form) => (
+                  {forms.map(form => (
                     <SelectItem key={form.id} value={form.id.toString()}>
                       {form.name}
                     </SelectItem>
@@ -333,12 +288,7 @@ export default function EnhancedReportBuilder() {
                   id="start-date"
                   type="date"
                   value={dateFilter.start}
-                  onChange={(e) =>
-                    setDateFilter((prev) => ({
-                      ...prev,
-                      start: e.target.value,
-                    }))
-                  }
+                  onChange={(e) => setDateFilter(prev => ({ ...prev, start: e.target.value }))}
                 />
               </div>
               <div>
@@ -347,9 +297,7 @@ export default function EnhancedReportBuilder() {
                   id="end-date"
                   type="date"
                   value={dateFilter.end}
-                  onChange={(e) =>
-                    setDateFilter((prev) => ({ ...prev, end: e.target.value }))
-                  }
+                  onChange={(e) => setDateFilter(prev => ({ ...prev, end: e.target.value }))}
                 />
               </div>
               <div>
@@ -382,27 +330,21 @@ export default function EnhancedReportBuilder() {
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div className="text-center p-4 bg-blue-50 rounded-lg">
-                <div className="text-2xl font-bold text-blue-600">
-                  {summaryStats.totalSubmissions}
-                </div>
+                <div className="text-2xl font-bold text-blue-600">{summaryStats.totalSubmissions}</div>
                 <div className="text-sm text-gray-600 flex items-center justify-center gap-1">
                   <Users className="h-4 w-4" />
                   Total Submissions
                 </div>
               </div>
               <div className="text-center p-4 bg-green-50 rounded-lg">
-                <div className="text-2xl font-bold text-green-600">
-                  {summaryStats.todaySubmissions}
-                </div>
+                <div className="text-2xl font-bold text-green-600">{summaryStats.todaySubmissions}</div>
                 <div className="text-sm text-gray-600 flex items-center justify-center gap-1">
                   <Calendar className="h-4 w-4" />
                   Today's Submissions
                 </div>
               </div>
               <div className="text-center p-4 bg-purple-50 rounded-lg">
-                <div className="text-2xl font-bold text-purple-600">
-                  {summaryStats.avgSubmissionsPerDay}
-                </div>
+                <div className="text-2xl font-bold text-purple-600">{summaryStats.avgSubmissionsPerDay}</div>
                 <div className="text-sm text-gray-600 flex items-center justify-center gap-1">
                   <Clock className="h-4 w-4" />
                   Avg. per Day
@@ -410,9 +352,10 @@ export default function EnhancedReportBuilder() {
               </div>
               <div className="text-center p-4 bg-orange-50 rounded-lg">
                 <div className="text-sm font-bold text-orange-600">
-                  {summaryStats.dateRange
+                  {summaryStats.dateRange 
                     ? `${summaryStats.dateRange.start.toLocaleDateString()} - ${summaryStats.dateRange.end.toLocaleDateString()}`
-                    : 'No data'}
+                    : 'No data'
+                  }
                 </div>
                 <div className="text-sm text-gray-600">Date Range</div>
               </div>
@@ -441,20 +384,12 @@ export default function EnhancedReportBuilder() {
                 Export CSV
               </CSVLink>
 
-              <Button
-                onClick={exportToJson}
-                variant="outline"
-                className="flex items-center gap-2"
-              >
+              <Button onClick={exportToJson} variant="outline" className="flex items-center gap-2">
                 <FileDown className="h-4 w-4" />
                 Export JSON
               </Button>
 
-              <Button
-                onClick={exportToPdf}
-                variant="outline"
-                className="flex items-center gap-2"
-              >
+              <Button onClick={exportToPdf} variant="outline" className="flex items-center gap-2">
                 <FileDown className="h-4 w-4" />
                 Export PDF
               </Button>
@@ -484,13 +419,12 @@ export default function EnhancedReportBuilder() {
             ) : filteredData.length === 0 ? (
               <div className="text-center py-8">
                 <AlertCircle className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                <p className="text-lg font-semibold text-gray-600">
-                  No submissions found
-                </p>
+                <p className="text-lg font-semibold text-gray-600">No submissions found</p>
                 <p className="text-gray-500">
-                  {submissions.length === 0
-                    ? 'This form has no submissions yet'
-                    : 'No submissions match your current filters'}
+                  {submissions.length === 0 
+                    ? 'This form has no submissions yet' 
+                    : 'No submissions match your current filters'
+                  }
                 </p>
               </div>
             ) : (
@@ -498,33 +432,23 @@ export default function EnhancedReportBuilder() {
                 <table className="w-full border-collapse border border-gray-300">
                   <thead>
                     <tr className="bg-gray-100">
-                      <th className="border border-gray-300 px-4 py-2 text-left">
-                        ID
-                      </th>
-                      {columns.map((col) => (
-                        <th
-                          key={col}
-                          className="border border-gray-300 px-4 py-2 text-left"
-                        >
+                      <th className="border border-gray-300 px-4 py-2 text-left">ID</th>
+                      {columns.map(col => (
+                        <th key={col} className="border border-gray-300 px-4 py-2 text-left">
                           {col.charAt(0).toUpperCase() + col.slice(1)}
                         </th>
                       ))}
-                      <th className="border border-gray-300 px-4 py-2 text-left">
-                        Submitted At
-                      </th>
+                      <th className="border border-gray-300 px-4 py-2 text-left">Submitted At</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredData.map((submission) => (
+                    {filteredData.map(submission => (
                       <tr key={submission.id} className="hover:bg-gray-50">
                         <td className="border border-gray-300 px-4 py-2 font-mono text-sm">
                           {submission.id}
                         </td>
-                        {columns.map((col) => (
-                          <td
-                            key={col}
-                            className="border border-gray-300 px-4 py-2"
-                          >
+                        {columns.map(col => (
+                          <td key={col} className="border border-gray-300 px-4 py-2">
                             {submission.data[col] ? (
                               typeof submission.data[col] === 'boolean' ? (
                                 submission.data[col] ? (
@@ -550,8 +474,7 @@ export default function EnhancedReportBuilder() {
 
                 {filteredData.length > 0 && (
                   <div className="mt-4 text-sm text-gray-600 text-center">
-                    Showing {filteredData.length} of {submissions.length}{' '}
-                    submissions
+                    Showing {filteredData.length} of {submissions.length} submissions
                   </div>
                 )}
               </div>

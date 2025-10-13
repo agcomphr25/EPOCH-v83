@@ -1,48 +1,17 @@
-import { useState } from 'react';
-import { useQuery, useMutation } from '@tanstack/react-query';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
-import { apiRequest, queryClient } from '@/lib/queryClient';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from '@/components/ui/card';
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from '@/components/ui/form';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from '@/components/ui/accordion';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useState } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -52,23 +21,23 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
+} from "@/components/ui/alert-dialog";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
-import { useToast } from '@/hooks/use-toast';
-import { Loader2, Plus, Pencil, Trash2, X, Check } from 'lucide-react';
+} from "@/components/ui/dialog";
+import { useToast } from "@/hooks/use-toast";
+import { Loader2, Plus, Pencil, Trash2, X, Check } from "lucide-react";
 
 const metalAccessorySchema = z.object({
-  name: z.string().min(1, 'Name is required'),
-  category: z.enum(['Bottom Metals', 'Rails', 'Other']),
-  inventory: z.number().min(0, 'Must be 0 or greater'),
-  machined: z.number().min(0, 'Must be 0 or greater'),
-  atAnodizer: z.number().min(0, 'Must be 0 or greater'),
+  name: z.string().min(1, "Name is required"),
+  category: z.enum(["Bottom Metals", "Rails", "Other"]),
+  inventory: z.number().min(0, "Must be 0 or greater"),
+  machined: z.number().min(0, "Must be 0 or greater"),
+  atAnodizer: z.number().min(0, "Must be 0 or greater"),
 });
 
 type MetalAccessory = z.infer<typeof metalAccessorySchema> & { id: number };
@@ -90,21 +59,19 @@ export default function MetalAccessoriesTracker() {
   });
   const { toast } = useToast();
 
-  const { data: items = [], isLoading: itemsLoading } = useQuery<
-    MetalAccessory[]
-  >({
-    queryKey: ['/api/metal-accessories'],
+  const { data: items = [], isLoading: itemsLoading } = useQuery<MetalAccessory[]>({
+    queryKey: ["/api/metal-accessories"],
   });
 
   const { data: demands = [], isLoading: demandsLoading } = useQuery<any[]>({
-    queryKey: ['/api/metal-accessories/demands'],
+    queryKey: ["/api/metal-accessories/demands"],
   });
 
   const form = useForm({
     resolver: zodResolver(metalAccessorySchema),
     defaultValues: {
-      name: '',
-      category: 'Bottom Metals' as const,
+      name: "",
+      category: "Bottom Metals" as const,
       inventory: 0,
       machined: 0,
       atAnodizer: 0,
@@ -114,8 +81,8 @@ export default function MetalAccessoriesTracker() {
   const editForm = useForm({
     resolver: zodResolver(metalAccessorySchema),
     defaultValues: {
-      name: '',
-      category: 'Bottom Metals' as const,
+      name: "",
+      category: "Bottom Metals" as const,
       inventory: 0,
       machined: 0,
       atAnodizer: 0,
@@ -124,76 +91,52 @@ export default function MetalAccessoriesTracker() {
 
   const createMutation = useMutation({
     mutationFn: (data: z.infer<typeof metalAccessorySchema>) =>
-      apiRequest('/api/metal-accessories', {
-        method: 'POST',
+      apiRequest("/api/metal-accessories", {
+        method: "POST",
         body: JSON.stringify(data),
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/metal-accessories'] });
-      queryClient.invalidateQueries({
-        queryKey: ['/api/metal-accessories/demands'],
-      });
+      queryClient.invalidateQueries({ queryKey: ["/api/metal-accessories"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/metal-accessories/demands"] });
       form.reset();
-      toast({ title: 'Success', description: 'Item added successfully' });
+      toast({ title: "Success", description: "Item added successfully" });
     },
     onError: (error: Error) => {
-      toast({
-        title: 'Error',
-        description: error.message,
-        variant: 'destructive',
-      });
+      toast({ title: "Error", description: error.message, variant: "destructive" });
     },
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({
-      id,
-      data,
-    }: {
-      id: number;
-      data: z.infer<typeof metalAccessorySchema>;
-    }) =>
+    mutationFn: ({ id, data }: { id: number; data: z.infer<typeof metalAccessorySchema> }) =>
       apiRequest(`/api/metal-accessories/${id}`, {
-        method: 'PUT',
+        method: "PUT",
         body: JSON.stringify(data),
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/metal-accessories'] });
-      queryClient.invalidateQueries({
-        queryKey: ['/api/metal-accessories/demands'],
-      });
+      queryClient.invalidateQueries({ queryKey: ["/api/metal-accessories"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/metal-accessories/demands"] });
       setEditingItem(null);
-      toast({ title: 'Success', description: 'Item updated successfully' });
+      toast({ title: "Success", description: "Item updated successfully" });
     },
     onError: (error: Error) => {
-      toast({
-        title: 'Error',
-        description: error.message,
-        variant: 'destructive',
-      });
+      toast({ title: "Error", description: error.message, variant: "destructive" });
     },
   });
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) =>
       apiRequest(`/api/metal-accessories/${id}`, {
-        method: 'DELETE',
+        method: "DELETE",
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/metal-accessories'] });
-      queryClient.invalidateQueries({
-        queryKey: ['/api/metal-accessories/demands'],
-      });
+      queryClient.invalidateQueries({ queryKey: ["/api/metal-accessories"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/metal-accessories/demands"] });
       setDeleteDialogOpen(false);
       setItemToDelete(null);
-      toast({ title: 'Success', description: 'Item deleted successfully' });
+      toast({ title: "Success", description: "Item deleted successfully" });
     },
     onError: (error: Error) => {
-      toast({
-        title: 'Error',
-        description: error.message,
-        variant: 'destructive',
-      });
+      toast({ title: "Error", description: error.message, variant: "destructive" });
     },
   });
 
@@ -238,23 +181,14 @@ export default function MetalAccessoriesTracker() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">Metal Accessories Tracker</h1>
-          <p className="text-muted-foreground">
-            Track inventory, machined, and anodizer quantities
-          </p>
+          <p className="text-muted-foreground">Track inventory, machined, and anodizer quantities</p>
         </div>
       </div>
 
       <Tabs defaultValue="inventory" className="w-full">
-        <TabsList
-          className="grid w-full max-w-md grid-cols-2"
-          data-testid="tabs-list"
-        >
-          <TabsTrigger value="inventory" data-testid="tab-inventory">
-            Inventory Management
-          </TabsTrigger>
-          <TabsTrigger value="add-new" data-testid="tab-add-new">
-            Add New Item
-          </TabsTrigger>
+        <TabsList className="grid w-full max-w-md grid-cols-2" data-testid="tabs-list">
+          <TabsTrigger value="inventory" data-testid="tab-inventory">Inventory Management</TabsTrigger>
+          <TabsTrigger value="add-new" data-testid="tab-add-new">Add New Item</TabsTrigger>
         </TabsList>
 
         <TabsContent value="inventory" className="space-y-6">
@@ -262,8 +196,7 @@ export default function MetalAccessoriesTracker() {
             <CardHeader>
               <CardTitle>Production Demand (Next 4 Weeks)</CardTitle>
               <CardDescription>
-                Automatically calculated from current IN_PROGRESS and FINALIZED
-                orders
+                Automatically calculated from current IN_PROGRESS and FINALIZED orders
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -273,8 +206,7 @@ export default function MetalAccessoriesTracker() {
                 </div>
               ) : demands.length === 0 ? (
                 <p className="text-center text-muted-foreground py-8">
-                  No demand data available. Add items and orders to see
-                  production needs.
+                  No demand data available. Add items and orders to see production needs.
                 </p>
               ) : (
                 <Accordion type="single" collapsible className="w-full">
@@ -286,17 +218,12 @@ export default function MetalAccessoriesTracker() {
                     >
                       <AccordionTrigger>
                         <div className="flex justify-between w-full pr-4">
-                          <span
-                            className="font-semibold"
-                            data-testid={`text-demand-name-${demand.itemId}`}
-                          >
+                          <span className="font-semibold" data-testid={`text-demand-name-${demand.itemId}`}>
                             {demand.name}
                           </span>
                           <span
                             className={`font-bold ${
-                              demand.productionNeeded > 0
-                                ? 'text-red-600'
-                                : 'text-green-600'
+                              demand.productionNeeded > 0 ? "text-red-600" : "text-green-600"
                             }`}
                             data-testid={`text-production-needed-${demand.itemId}`}
                           >
@@ -310,89 +237,59 @@ export default function MetalAccessoriesTracker() {
                         <div className="space-y-3 pt-2">
                           <div className="grid grid-cols-2 gap-4">
                             <div>
-                              <p className="text-sm text-muted-foreground">
-                                Category
-                              </p>
+                              <p className="text-sm text-muted-foreground">Category</p>
                               <p className="font-medium">{demand.category}</p>
                             </div>
                             <div>
-                              <p className="text-sm text-muted-foreground">
-                                Total Demand (4 weeks)
-                              </p>
-                              <p className="font-medium">
-                                {demand.totalDemandNext4}
-                              </p>
+                              <p className="text-sm text-muted-foreground">Total Demand (4 weeks)</p>
+                              <p className="font-medium">{demand.totalDemandNext4}</p>
                             </div>
                           </div>
 
                           <div className="grid grid-cols-3 gap-4 pt-2 border-t">
                             <div>
-                              <p className="text-sm text-muted-foreground">
-                                Inventory
-                              </p>
+                              <p className="text-sm text-muted-foreground">Inventory</p>
                               <p className="font-medium">{demand.inventory}</p>
                             </div>
                             <div>
-                              <p className="text-sm text-muted-foreground">
-                                Machined
-                              </p>
+                              <p className="text-sm text-muted-foreground">Machined</p>
                               <p className="font-medium">{demand.machined}</p>
                             </div>
                             <div>
-                              <p className="text-sm text-muted-foreground">
-                                At Anodizer
-                              </p>
+                              <p className="text-sm text-muted-foreground">At Anodizer</p>
                               <p className="font-medium">{demand.atAnodizer}</p>
                             </div>
                           </div>
 
                           <div className="pt-2 border-t">
-                            <p className="font-medium mb-2">
-                              Weekly Demand Breakdown:
-                            </p>
+                            <p className="font-medium mb-2">Weekly Demand Breakdown:</p>
                             <div className="grid grid-cols-4 gap-2">
-                              {demand.weeklyDemand.map(
-                                (count: number, index: number) => (
-                                  <button
-                                    key={index}
-                                    onClick={() => {
-                                      if (
-                                        count > 0 &&
-                                        demand.weeklyOrders &&
-                                        demand.weeklyOrders[index]
-                                      ) {
-                                        setWeeklyOrdersModal({
-                                          open: true,
-                                          weekNumber: index + 1,
-                                          itemName: demand.name,
-                                          orders: demand.weeklyOrders[index],
-                                        });
-                                      }
-                                    }}
-                                    disabled={count === 0}
-                                    className={`text-center p-2 rounded transition-colors ${
-                                      count > 0
-                                        ? 'bg-muted hover:bg-primary/10 cursor-pointer active:scale-95 border-2 border-transparent hover:border-primary/30'
-                                        : 'bg-muted/50 cursor-not-allowed opacity-60'
-                                    }`}
-                                    data-testid={`button-week-${index + 1}-${demand.itemId}`}
-                                  >
-                                    <p className="text-xs text-muted-foreground">
-                                      Week {index + 1}
-                                    </p>
-                                    <p
-                                      className={`font-bold text-lg ${count > 0 ? 'text-blue-600' : 'text-gray-400'}`}
-                                    >
-                                      {count}
-                                    </p>
-                                    {count > 0 && (
-                                      <p className="text-xs text-blue-500 mt-1">
-                                        Click to view
-                                      </p>
-                                    )}
-                                  </button>
-                                )
-                              )}
+                              {demand.weeklyDemand.map((count: number, index: number) => (
+                                <button
+                                  key={index}
+                                  onClick={() => {
+                                    if (count > 0 && demand.weeklyOrders && demand.weeklyOrders[index]) {
+                                      setWeeklyOrdersModal({
+                                        open: true,
+                                        weekNumber: index + 1,
+                                        itemName: demand.name,
+                                        orders: demand.weeklyOrders[index],
+                                      });
+                                    }
+                                  }}
+                                  disabled={count === 0}
+                                  className={`text-center p-2 rounded transition-colors ${
+                                    count > 0 
+                                      ? 'bg-muted hover:bg-primary/10 cursor-pointer active:scale-95 border-2 border-transparent hover:border-primary/30' 
+                                      : 'bg-muted/50 cursor-not-allowed opacity-60'
+                                  }`}
+                                  data-testid={`button-week-${index + 1}-${demand.itemId}`}
+                                >
+                                  <p className="text-xs text-muted-foreground">Week {index + 1}</p>
+                                  <p className={`font-bold text-lg ${count > 0 ? 'text-blue-600' : 'text-gray-400'}`}>{count}</p>
+                                  {count > 0 && <p className="text-xs text-blue-500 mt-1">Click to view</p>}
+                                </button>
+                              ))}
                             </div>
                           </div>
                         </div>
@@ -408,8 +305,7 @@ export default function MetalAccessoriesTracker() {
             <CardHeader>
               <CardTitle>Current Inventory</CardTitle>
               <CardDescription>
-                View and manage your metal accessories. Click Edit to modify or
-                Delete to remove items.
+                View and manage your metal accessories. Click Edit to modify or Delete to remove items.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -417,10 +313,7 @@ export default function MetalAccessoriesTracker() {
                 <div className="space-y-4 mb-6 p-4 border rounded-lg bg-muted/50">
                   <h3 className="font-semibold">Editing: {editingItem.name}</h3>
                   <Form {...editForm}>
-                    <form
-                      onSubmit={editForm.handleSubmit(handleUpdate)}
-                      className="space-y-4"
-                    >
+                    <form onSubmit={editForm.handleSubmit(handleUpdate)} className="space-y-4">
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <FormField
                           control={editForm.control}
@@ -429,10 +322,7 @@ export default function MetalAccessoriesTracker() {
                             <FormItem>
                               <FormLabel>Name</FormLabel>
                               <FormControl>
-                                <Input
-                                  {...field}
-                                  data-testid="edit-input-name"
-                                />
+                                <Input {...field} data-testid="edit-input-name" />
                               </FormControl>
                               <FormMessage />
                             </FormItem>
@@ -445,19 +335,14 @@ export default function MetalAccessoriesTracker() {
                           render={({ field }) => (
                             <FormItem>
                               <FormLabel>Category</FormLabel>
-                              <Select
-                                onValueChange={field.onChange}
-                                value={field.value}
-                              >
+                              <Select onValueChange={field.onChange} value={field.value}>
                                 <FormControl>
                                   <SelectTrigger data-testid="edit-select-category">
                                     <SelectValue placeholder="Select category" />
                                   </SelectTrigger>
                                 </FormControl>
                                 <SelectContent>
-                                  <SelectItem value="Bottom Metals">
-                                    Bottom Metals
-                                  </SelectItem>
+                                  <SelectItem value="Bottom Metals">Bottom Metals</SelectItem>
                                   <SelectItem value="Rails">Rails</SelectItem>
                                   <SelectItem value="Other">Other</SelectItem>
                                 </SelectContent>
@@ -477,11 +362,7 @@ export default function MetalAccessoriesTracker() {
                                 <Input
                                   type="number"
                                   {...field}
-                                  onChange={(e) =>
-                                    field.onChange(
-                                      parseInt(e.target.value) || 0
-                                    )
-                                  }
+                                  onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
                                   data-testid="edit-input-inventory"
                                 />
                               </FormControl>
@@ -500,11 +381,7 @@ export default function MetalAccessoriesTracker() {
                                 <Input
                                   type="number"
                                   {...field}
-                                  onChange={(e) =>
-                                    field.onChange(
-                                      parseInt(e.target.value) || 0
-                                    )
-                                  }
+                                  onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
                                   data-testid="edit-input-machined"
                                 />
                               </FormControl>
@@ -523,11 +400,7 @@ export default function MetalAccessoriesTracker() {
                                 <Input
                                   type="number"
                                   {...field}
-                                  onChange={(e) =>
-                                    field.onChange(
-                                      parseInt(e.target.value) || 0
-                                    )
-                                  }
+                                  onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
                                   data-testid="edit-input-at-anodizer"
                                 />
                               </FormControl>
@@ -545,8 +418,7 @@ export default function MetalAccessoriesTracker() {
                         >
                           {updateMutation.isPending ? (
                             <>
-                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />{' '}
-                              Saving...
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving...
                             </>
                           ) : (
                             <>
@@ -591,14 +463,8 @@ export default function MetalAccessoriesTracker() {
                   </TableHeader>
                   <TableBody>
                     {items.map((item) => (
-                      <TableRow
-                        key={item.id}
-                        data-testid={`row-item-${item.id}`}
-                      >
-                        <TableCell
-                          data-testid={`text-name-${item.id}`}
-                          className="font-medium"
-                        >
+                      <TableRow key={item.id} data-testid={`row-item-${item.id}`}>
+                        <TableCell data-testid={`text-name-${item.id}`} className="font-medium">
                           {item.name}
                         </TableCell>
                         <TableCell data-testid={`text-category-${item.id}`}>
@@ -647,16 +513,11 @@ export default function MetalAccessoriesTracker() {
           <Card>
             <CardHeader>
               <CardTitle>Add New Item</CardTitle>
-              <CardDescription>
-                Create a new metal accessory to track
-              </CardDescription>
+              <CardDescription>Create a new metal accessory to track</CardDescription>
             </CardHeader>
             <CardContent>
               <Form {...form}>
-                <form
-                  onSubmit={form.handleSubmit(handleSubmit)}
-                  className="space-y-4"
-                >
+                <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FormField
                       control={form.control}
@@ -665,11 +526,7 @@ export default function MetalAccessoriesTracker() {
                         <FormItem>
                           <FormLabel>Name</FormLabel>
                           <FormControl>
-                            <Input
-                              {...field}
-                              placeholder="e.g., Bottom Metal - Glock"
-                              data-testid="input-name"
-                            />
+                            <Input {...field} placeholder="e.g., Bottom Metal - Glock" data-testid="input-name" />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -682,19 +539,14 @@ export default function MetalAccessoriesTracker() {
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>Category</FormLabel>
-                          <Select
-                            onValueChange={field.onChange}
-                            value={field.value}
-                          >
+                          <Select onValueChange={field.onChange} value={field.value}>
                             <FormControl>
                               <SelectTrigger data-testid="select-category">
                                 <SelectValue placeholder="Select category" />
                               </SelectTrigger>
                             </FormControl>
                             <SelectContent>
-                              <SelectItem value="Bottom Metals">
-                                Bottom Metals
-                              </SelectItem>
+                              <SelectItem value="Bottom Metals">Bottom Metals</SelectItem>
                               <SelectItem value="Rails">Rails</SelectItem>
                               <SelectItem value="Other">Other</SelectItem>
                             </SelectContent>
@@ -714,9 +566,7 @@ export default function MetalAccessoriesTracker() {
                             <Input
                               type="number"
                               {...field}
-                              onChange={(e) =>
-                                field.onChange(parseInt(e.target.value) || 0)
-                              }
+                              onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
                               data-testid="input-inventory"
                             />
                           </FormControl>
@@ -735,9 +585,7 @@ export default function MetalAccessoriesTracker() {
                             <Input
                               type="number"
                               {...field}
-                              onChange={(e) =>
-                                field.onChange(parseInt(e.target.value) || 0)
-                              }
+                              onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
                               data-testid="input-machined"
                             />
                           </FormControl>
@@ -756,9 +604,7 @@ export default function MetalAccessoriesTracker() {
                             <Input
                               type="number"
                               {...field}
-                              onChange={(e) =>
-                                field.onChange(parseInt(e.target.value) || 0)
-                              }
+                              onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
                               data-testid="input-at-anodizer"
                             />
                           </FormControl>
@@ -775,8 +621,7 @@ export default function MetalAccessoriesTracker() {
                   >
                     {createMutation.isPending ? (
                       <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />{' '}
-                        Adding...
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Adding...
                       </>
                     ) : (
                       <>
@@ -791,25 +636,14 @@ export default function MetalAccessoriesTracker() {
         </TabsContent>
       </Tabs>
 
-      <Dialog
-        open={weeklyOrdersModal.open}
-        onOpenChange={(open) =>
-          setWeeklyOrdersModal({ ...weeklyOrdersModal, open })
-        }
-      >
-        <DialogContent
-          className="max-w-3xl max-h-[80vh] overflow-y-auto"
-          data-testid="weekly-orders-dialog"
-        >
+      <Dialog open={weeklyOrdersModal.open} onOpenChange={(open) => setWeeklyOrdersModal({ ...weeklyOrdersModal, open })}>
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto" data-testid="weekly-orders-dialog">
           <DialogHeader>
             <DialogTitle>
-              Week {weeklyOrdersModal.weekNumber} Orders -{' '}
-              {weeklyOrdersModal.itemName}
+              Week {weeklyOrdersModal.weekNumber} Orders - {weeklyOrdersModal.itemName}
             </DialogTitle>
             <DialogDescription>
-              {weeklyOrdersModal.orders.length} order
-              {weeklyOrdersModal.orders.length !== 1 ? 's' : ''} requiring this
-              item
+              {weeklyOrdersModal.orders.length} order{weeklyOrdersModal.orders.length !== 1 ? 's' : ''} requiring this item
             </DialogDescription>
           </DialogHeader>
           <div className="mt-4">
@@ -826,28 +660,21 @@ export default function MetalAccessoriesTracker() {
                 </TableHeader>
                 <TableBody>
                   {weeklyOrdersModal.orders.map((order, idx) => (
-                    <TableRow
-                      key={idx}
-                      data-testid={`order-row-${order.orderId}`}
-                    >
-                      <TableCell className="font-medium">
-                        {order.orderId}
-                      </TableCell>
+                    <TableRow key={idx} data-testid={`order-row-${order.orderId}`}>
+                      <TableCell className="font-medium">{order.orderId}</TableCell>
                       <TableCell>
-                        {order.dueDate
+                        {order.dueDate 
                           ? new Date(order.dueDate).toLocaleDateString()
                           : 'No due date'}
                       </TableCell>
                       <TableCell>{order.quantity}</TableCell>
                       <TableCell>{order.customerId || 'N/A'}</TableCell>
                       <TableCell>
-                        <span
-                          className={`px-2 py-1 rounded text-xs ${
-                            order.status === 'FINALIZED'
-                              ? 'bg-green-100 text-green-800'
-                              : 'bg-blue-100 text-blue-800'
-                          }`}
-                        >
+                        <span className={`px-2 py-1 rounded text-xs ${
+                          order.status === 'FINALIZED' 
+                            ? 'bg-green-100 text-green-800' 
+                            : 'bg-blue-100 text-blue-800'
+                        }`}>
                           {order.status}
                         </span>
                       </TableCell>
@@ -857,12 +684,8 @@ export default function MetalAccessoriesTracker() {
               </Table>
             ) : (
               <div className="text-center py-12">
-                <p className="text-muted-foreground text-lg mb-2">
-                  No orders scheduled this week
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  This week has no production demand for this item
-                </p>
+                <p className="text-muted-foreground text-lg mb-2">No orders scheduled this week</p>
+                <p className="text-sm text-muted-foreground">This week has no production demand for this item</p>
               </div>
             )}
           </div>
@@ -874,14 +697,12 @@ export default function MetalAccessoriesTracker() {
           <AlertDialogHeader>
             <AlertDialogTitle>Are you sure?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete <strong>{itemToDelete?.name}</strong>{' '}
-              from the tracker. This action cannot be undone.
+              This will permanently delete <strong>{itemToDelete?.name}</strong> from the tracker.
+              This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel data-testid="button-cancel-delete">
-              Cancel
-            </AlertDialogCancel>
+            <AlertDialogCancel data-testid="button-cancel-delete">Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDeleteConfirm}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
@@ -892,7 +713,7 @@ export default function MetalAccessoriesTracker() {
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Deleting...
                 </>
               ) : (
-                'Delete'
+                "Delete"
               )}
             </AlertDialogAction>
           </AlertDialogFooter>

@@ -61,10 +61,7 @@ interface DetailedOrder {
   updatedAt: string;
 }
 
-export default function OrderSummaryModal({
-  children,
-  orderId,
-}: OrderSummaryModalProps) {
+export default function OrderSummaryModal({ children, orderId }: OrderSummaryModalProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [hoverTimeout, setHoverTimeout] = useState<NodeJS.Timeout | null>(null);
 
@@ -87,9 +84,7 @@ export default function OrderSummaryModal({
   });
 
   // Handle the payments data structure - API returns { payments: [] }
-  const payments = Array.isArray(paymentsData)
-    ? paymentsData
-    : paymentsData?.payments || [];
+  const payments = Array.isArray(paymentsData) ? paymentsData : (paymentsData?.payments || []);
 
   const { data: features = [] } = useQuery({
     queryKey: ['/api/features'],
@@ -137,22 +132,20 @@ export default function OrderSummaryModal({
     if (!modelId || !stockModels || stockModels.length === 0) {
       return modelId || 'Unknown Model';
     }
-    const model = (stockModels as any[]).find(
-      (m: any) => m && m.id === modelId
-    );
+    const model = (stockModels as any[]).find((m: any) => m && m.id === modelId);
     return model?.displayName || model?.name || modelId;
   };
 
   const getDepartmentBadgeColor = (department: string) => {
     const colors: { [key: string]: string } = {
-      Layup: 'bg-blue-500',
-      Plugging: 'bg-orange-500',
-      CNC: 'bg-green-500',
-      Finish: 'bg-yellow-500',
-      Gunsmith: 'bg-purple-500',
-      Paint: 'bg-pink-500',
-      QC: 'bg-indigo-500',
-      Shipping: 'bg-gray-500',
+      'Layup': 'bg-blue-500',
+      'Plugging': 'bg-orange-500',
+      'CNC': 'bg-green-500',
+      'Finish': 'bg-yellow-500',
+      'Gunsmith': 'bg-purple-500',
+      'Paint': 'bg-pink-500',
+      'QC': 'bg-indigo-500',
+      'Shipping': 'bg-gray-500'
     };
     return colors[department] || 'bg-gray-400';
   };
@@ -169,15 +162,15 @@ export default function OrderSummaryModal({
       // If no features data, provide basic formatting for common values
       return formatBasicValue(featureValue);
     }
-
+    
     // Find the feature by id matching the featureType
     const feature = features.find((f: any) => f.id === featureType);
-
+    
     if (!feature || !feature.options) {
       // If no feature definition found, provide basic formatting
       return formatBasicValue(featureValue);
     }
-
+    
     // Parse the options if it's a string
     let options = feature.options;
     if (typeof options === 'string') {
@@ -187,13 +180,11 @@ export default function OrderSummaryModal({
         return formatBasicValue(featureValue);
       }
     }
-
+    
     // Find the option by value
     const option = options.find((opt: any) => opt.value === featureValue);
-
-    return (
-      option?.label || option?.displayName || formatBasicValue(featureValue)
-    );
+    
+    return option?.label || option?.displayName || formatBasicValue(featureValue);
   };
 
   const formatBasicValue = (value: string) => {
@@ -213,35 +204,32 @@ export default function OrderSummaryModal({
 
   const renderFeatures = (orderFeatures: any) => {
     if (!orderFeatures || typeof orderFeatures !== 'object') return null;
-
+    
     return Object.entries(orderFeatures).map(([key, value]) => {
       let displayValue;
-
+      
       if (Array.isArray(value)) {
         // Handle array values (like other_options, rail_accessory)
-        displayValue = value
-          .map((v) => getFeatureDisplayName(key, String(v)))
-          .join(', ');
+        displayValue = value.map(v => getFeatureDisplayName(key, String(v))).join(', ');
       } else {
         // Handle single values
         displayValue = getFeatureDisplayName(key, String(value));
       }
-
+      
       return (
         <div key={key} className="flex justify-between text-sm py-1">
           <span className="font-medium capitalize text-gray-700">
             {key.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ')}:
           </span>
-          <span className="text-gray-900 ml-4">{displayValue}</span>
+          <span className="text-gray-900 ml-4">
+            {displayValue}
+          </span>
         </div>
       );
     });
   };
 
-  const totalPayments = payments.reduce(
-    (sum: number, payment: any) => sum + (payment.paymentAmount || 0),
-    0
-  );
+  const totalPayments = payments.reduce((sum: number, payment: any) => sum + (payment.paymentAmount || 0), 0);
   const isScrapped = order?.status === 'SCRAPPED';
 
   return (
@@ -274,6 +262,7 @@ export default function OrderSummaryModal({
             </div>
           ) : (
             <div className="space-y-6">
+
               {/* Order Notes - Moved to top for visibility */}
               {order.notes && (
                 <Card className="border-yellow-200 bg-yellow-50 dark:bg-yellow-900/20">
@@ -284,9 +273,7 @@ export default function OrderSummaryModal({
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <p className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap font-medium">
-                      {order.notes}
-                    </p>
+                    <p className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap font-medium">{order.notes}</p>
                   </CardContent>
                 </Card>
               )}
@@ -303,31 +290,23 @@ export default function OrderSummaryModal({
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="flex items-center gap-2">
                       <span className="text-sm text-gray-600">Model:</span>
-                      <span className="font-medium">
-                        {getModelDisplayName(order.modelId)}
-                      </span>
+                      <span className="font-medium">{getModelDisplayName(order.modelId)}</span>
                     </div>
                     {order.handedness && (
                       <div className="flex items-center gap-2">
-                        <span className="text-sm text-gray-600">
-                          Handedness:
-                        </span>
+                        <span className="text-sm text-gray-600">Handedness:</span>
                         <span className="font-medium">{order.handedness}</span>
                       </div>
                     )}
                     {order.shankLength && (
                       <div className="flex items-center gap-2">
-                        <span className="text-sm text-gray-600">
-                          Shank Length:
-                        </span>
+                        <span className="text-sm text-gray-600">Shank Length:</span>
                         <span className="font-medium">{order.shankLength}</span>
                       </div>
                     )}
                     {order.tikkaOption && (
                       <div className="flex items-center gap-2">
-                        <span className="text-sm text-gray-600">
-                          Tikka Option:
-                        </span>
+                        <span className="text-sm text-gray-600">Tikka Option:</span>
                         <span className="font-medium">{order.tikkaOption}</span>
                       </div>
                     )}
@@ -336,9 +315,7 @@ export default function OrderSummaryModal({
                   {/* Product Features */}
                   {order.features && Object.keys(order.features).length > 0 && (
                     <div className="mt-4 pt-4 border-t">
-                      <h4 className="font-medium text-gray-900 mb-3">
-                        Product Features
-                      </h4>
+                      <h4 className="font-medium text-gray-900 mb-3">Product Features</h4>
                       <div className="space-y-1 bg-gray-50 p-3 rounded">
                         {renderFeatures(order.features)}
                       </div>
@@ -349,72 +326,44 @@ export default function OrderSummaryModal({
 
               {/* Special Conditions */}
               {(order.isReplacement || isScrapped) && (
-                <Card
-                  className={isScrapped ? 'border-red-200' : 'border-blue-200'}
-                >
+                <Card className={isScrapped ? "border-red-200" : "border-blue-200"}>
                   <CardHeader>
-                    <CardTitle
-                      className={`flex items-center gap-2 ${isScrapped ? 'text-red-700' : 'text-blue-700'}`}
-                    >
-                      {isScrapped ? (
-                        <AlertTriangle className="h-5 w-5" />
-                      ) : (
-                        <CheckCircle className="h-5 w-5" />
-                      )}
-                      {isScrapped ? 'Scrapped Order' : 'Replacement Order'}
+                    <CardTitle className={`flex items-center gap-2 ${isScrapped ? "text-red-700" : "text-blue-700"}`}>
+                      {isScrapped ? <AlertTriangle className="h-5 w-5" /> : <CheckCircle className="h-5 w-5" />}
+                      {isScrapped ? "Scrapped Order" : "Replacement Order"}
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-3">
                     {order.isReplacement && order.replacedOrderId && (
                       <div className="flex items-center gap-2">
-                        <span className="text-sm text-gray-600">
-                          Replaces Order:
-                        </span>
-                        <span className="font-medium">
-                          {order.replacedOrderId}
-                        </span>
+                        <span className="text-sm text-gray-600">Replaces Order:</span>
+                        <span className="font-medium">{order.replacedOrderId}</span>
                       </div>
                     )}
                     {isScrapped && (
                       <>
                         {order.scrapDate && (
                           <div className="flex items-center gap-2">
-                            <span className="text-sm text-gray-600">
-                              Scrap Date:
-                            </span>
-                            <span className="font-medium">
-                              {formatDate(order.scrapDate)}
-                            </span>
+                            <span className="text-sm text-gray-600">Scrap Date:</span>
+                            <span className="font-medium">{formatDate(order.scrapDate)}</span>
                           </div>
                         )}
                         {order.scrapReason && (
                           <div className="flex items-center gap-2">
-                            <span className="text-sm text-gray-600">
-                              Reason:
-                            </span>
-                            <span className="font-medium">
-                              {order.scrapReason}
-                            </span>
+                            <span className="text-sm text-gray-600">Reason:</span>
+                            <span className="font-medium">{order.scrapReason}</span>
                           </div>
                         )}
                         {order.scrapDisposition && (
                           <div className="flex items-center gap-2">
-                            <span className="text-sm text-gray-600">
-                              Disposition:
-                            </span>
-                            <span className="font-medium">
-                              {order.scrapDisposition}
-                            </span>
+                            <span className="text-sm text-gray-600">Disposition:</span>
+                            <span className="font-medium">{order.scrapDisposition}</span>
                           </div>
                         )}
                         {order.scrapAuthorization && (
                           <div className="flex items-center gap-2">
-                            <span className="text-sm text-gray-600">
-                              Authorization:
-                            </span>
-                            <span className="font-medium">
-                              {order.scrapAuthorization}
-                            </span>
+                            <span className="text-sm text-gray-600">Authorization:</span>
+                            <span className="font-medium">{order.scrapAuthorization}</span>
                           </div>
                         )}
                       </>
@@ -422,6 +371,8 @@ export default function OrderSummaryModal({
                   </CardContent>
                 </Card>
               )}
+
+
             </div>
           )}
         </DialogContent>

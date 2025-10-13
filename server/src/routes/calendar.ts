@@ -1,9 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { storage } from '../../storage';
-import {
-  insertCalendarEventSchema,
-  insertCalendarEventAttendeeSchema,
-} from '../../schema';
+import { insertCalendarEventSchema, insertCalendarEventAttendeeSchema } from '../../schema';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 
 const router = Router();
@@ -12,9 +9,9 @@ const router = Router();
 router.get('/events', async (req: Request, res: Response) => {
   try {
     const { startDate, endDate, userId } = req.query;
-
+    
     let events;
-
+    
     if (userId) {
       // Get events for a specific user
       events = await storage.getUserCalendarEvents(userId as string);
@@ -28,7 +25,7 @@ router.get('/events', async (req: Request, res: Response) => {
       // Get all events
       events = await storage.getAllCalendarEvents();
     }
-
+    
     res.json(events);
   } catch (error) {
     console.error('Get calendar events error:', error);
@@ -41,11 +38,11 @@ router.get('/events/:id', async (req: Request, res: Response) => {
   try {
     const eventId = parseInt(req.params.id);
     const event = await storage.getCalendarEvent(eventId);
-
+    
     if (!event) {
       return res.status(404).json({ error: 'Event not found' });
     }
-
+    
     res.json(event);
   } catch (error) {
     console.error('Get calendar event error:', error);
@@ -62,9 +59,7 @@ router.post('/events', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Create calendar event error:', error);
     if (error instanceof Error && error.message.includes('validation')) {
-      res
-        .status(400)
-        .json({ error: 'Invalid event data', details: error.message });
+      res.status(400).json({ error: 'Invalid event data', details: error.message });
     } else {
       res.status(500).json({ error: 'Failed to create calendar event' });
     }
@@ -75,21 +70,16 @@ router.post('/events', async (req: Request, res: Response) => {
 router.put('/events/:id', async (req: Request, res: Response) => {
   try {
     const eventId = parseInt(req.params.id);
-
+    
     // Validate the data against insert schema but allow partial updates
     const validatedData = insertCalendarEventSchema.partial().parse(req.body);
-
-    const updatedEvent = await storage.updateCalendarEvent(
-      eventId,
-      validatedData
-    );
+    
+    const updatedEvent = await storage.updateCalendarEvent(eventId, validatedData);
     res.json(updatedEvent);
   } catch (error) {
     console.error('Update calendar event error:', error);
     if (error instanceof Error && error.message.includes('validation')) {
-      res
-        .status(400)
-        .json({ error: 'Invalid event data', details: error.message });
+      res.status(400).json({ error: 'Invalid event data', details: error.message });
     } else {
       res.status(500).json({ error: 'Failed to update calendar event' });
     }
@@ -126,18 +116,16 @@ router.post('/events/:id/attendees', async (req: Request, res: Response) => {
     const eventId = parseInt(req.params.id);
     const attendeeData = {
       ...req.body,
-      eventId,
+      eventId
     };
-
+    
     const validatedData = insertCalendarEventAttendeeSchema.parse(attendeeData);
     const newAttendee = await storage.addEventAttendee(validatedData);
     res.status(201).json(newAttendee);
   } catch (error) {
     console.error('Add event attendee error:', error);
     if (error instanceof Error && error.message.includes('validation')) {
-      res
-        .status(400)
-        .json({ error: 'Invalid attendee data', details: error.message });
+      res.status(400).json({ error: 'Invalid attendee data', details: error.message });
     } else {
       res.status(500).json({ error: 'Failed to add event attendee' });
     }
@@ -145,94 +133,68 @@ router.post('/events/:id/attendees', async (req: Request, res: Response) => {
 });
 
 // PUT /api/calendar/events/:id/attendees/:userId - Update attendee status
-router.put(
-  '/events/:id/attendees/:userId',
-  async (req: Request, res: Response) => {
-    try {
-      const eventId = parseInt(req.params.id);
-      const userId = req.params.userId;
-      const { status } = req.body;
-
-      if (!['invited', 'accepted', 'declined', 'tentative'].includes(status)) {
-        return res.status(400).json({ error: 'Invalid status value' });
-      }
-
-      const updatedAttendee = await storage.updateAttendeeStatus(
-        eventId,
-        userId,
-        status
-      );
-      res.json(updatedAttendee);
-    } catch (error) {
-      console.error('Update attendee status error:', error);
-      res.status(500).json({ error: 'Failed to update attendee status' });
+router.put('/events/:id/attendees/:userId', async (req: Request, res: Response) => {
+  try {
+    const eventId = parseInt(req.params.id);
+    const userId = req.params.userId;
+    const { status } = req.body;
+    
+    if (!['invited', 'accepted', 'declined', 'tentative'].includes(status)) {
+      return res.status(400).json({ error: 'Invalid status value' });
     }
+    
+    const updatedAttendee = await storage.updateAttendeeStatus(eventId, userId, status);
+    res.json(updatedAttendee);
+  } catch (error) {
+    console.error('Update attendee status error:', error);
+    res.status(500).json({ error: 'Failed to update attendee status' });
   }
-);
+});
 
 // DELETE /api/calendar/events/:id/attendees/:userId - Remove attendee from event
-router.delete(
-  '/events/:id/attendees/:userId',
-  async (req: Request, res: Response) => {
-    try {
-      const eventId = parseInt(req.params.id);
-      const userId = req.params.userId;
-
-      await storage.removeEventAttendee(eventId, userId);
-      res.status(204).send();
-    } catch (error) {
-      console.error('Remove event attendee error:', error);
-      res.status(500).json({ error: 'Failed to remove event attendee' });
-    }
+router.delete('/events/:id/attendees/:userId', async (req: Request, res: Response) => {
+  try {
+    const eventId = parseInt(req.params.id);
+    const userId = req.params.userId;
+    
+    await storage.removeEventAttendee(eventId, userId);
+    res.status(204).send();
+  } catch (error) {
+    console.error('Remove event attendee error:', error);
+    res.status(500).json({ error: 'Failed to remove event attendee' });
   }
-);
+});
 
 // Generate blank calendar PDF (shared function)
 const generateBlankPDF = async (req: Request, res: Response) => {
   // Support both GET (query params) and POST (body) parameters
   const params = req.method === 'GET' ? req.query : req.body;
-  console.log('🔍 PDF Route called with:', {
-    method: req.method,
-    month: params?.month,
-    view: params?.view,
-  });
+  console.log('🔍 PDF Route called with:', { method: req.method, month: params?.month, view: params?.view });
   try {
     const { month, view } = params;
-
+    
     // Create a new PDF document
     const pdfDoc = await PDFDocument.create();
     const page = pdfDoc.addPage([612, 792]); // Standard letter size
     const { width, height } = page.getSize();
-
+    
     // Load a font
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
     const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-
+    
     // Define colors
     const black = rgb(0, 0, 0);
     const gray = rgb(0.7, 0.7, 0.7);
     const lightGray = rgb(0.9, 0.9, 0.9);
-
+    
     // Parse month and year from the input (format: YYYY-MM)
-    const [year, monthNum] = month
-      ? month.split('-').map(Number)
-      : [new Date().getFullYear(), new Date().getMonth() + 1];
+    const [year, monthNum] = month ? month.split('-').map(Number) : [new Date().getFullYear(), new Date().getMonth() + 1];
     const monthNames = [
-      'January',
-      'February',
-      'March',
-      'April',
-      'May',
-      'June',
-      'July',
-      'August',
-      'September',
-      'October',
-      'November',
-      'December',
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
     ];
     const monthName = monthNames[monthNum - 1];
-
+    
     // Add header with company logo space and title
     const headerY = height - 50;
     page.drawText('AG Composites LLC', {
@@ -242,7 +204,7 @@ const generateBlankPDF = async (req: Request, res: Response) => {
       font: boldFont,
       color: black,
     });
-
+    
     page.drawText(`${monthName} ${year} Calendar`, {
       x: width / 2 - 80,
       y: headerY,
@@ -250,29 +212,21 @@ const generateBlankPDF = async (req: Request, res: Response) => {
       font: boldFont,
       color: black,
     });
-
+    
     // Add calendar grid based on view type
     const startY = headerY - 60;
-
+    
     if (view === 'month' || !view) {
       // Generate monthly calendar grid
       const cellWidth = (width - 100) / 7;
       const cellHeight = (startY - 100) / 6;
-
+      
       // Days of week header
-      const dayNames = [
-        'Sunday',
-        'Monday',
-        'Tuesday',
-        'Wednesday',
-        'Thursday',
-        'Friday',
-        'Saturday',
-      ];
+      const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
       dayNames.forEach((day, index) => {
-        const x = 50 + index * cellWidth;
+        const x = 50 + (index * cellWidth);
         const y = startY;
-
+        
         // Header background
         page.drawRectangle({
           x,
@@ -281,7 +235,7 @@ const generateBlankPDF = async (req: Request, res: Response) => {
           height: cellHeight / 4,
           color: lightGray,
         });
-
+        
         page.drawText(day.substring(0, 3), {
           x: x + 10,
           y: y - 15,
@@ -290,18 +244,18 @@ const generateBlankPDF = async (req: Request, res: Response) => {
           color: black,
         });
       });
-
+      
       // Get first day of month and number of days
       const firstDay = new Date(year, monthNum - 1, 1).getDay();
       const daysInMonth = new Date(year, monthNum, 0).getDate();
-
+      
       // Draw calendar grid and numbers
       let dayCounter = 1;
       for (let week = 0; week < 6; week++) {
         for (let day = 0; day < 7; day++) {
-          const x = 50 + day * cellWidth;
-          const y = startY - cellHeight / 4 - (week + 1) * cellHeight;
-
+          const x = 50 + (day * cellWidth);
+          const y = startY - (cellHeight / 4) - ((week + 1) * cellHeight);
+          
           // Draw cell border
           page.drawRectangle({
             x,
@@ -311,12 +265,9 @@ const generateBlankPDF = async (req: Request, res: Response) => {
             borderColor: gray,
             borderWidth: 1,
           });
-
+          
           // Add day number
-          if (
-            (week === 0 && day >= firstDay) ||
-            (week > 0 && dayCounter <= daysInMonth)
-          ) {
+          if ((week === 0 && day >= firstDay) || (week > 0 && dayCounter <= daysInMonth)) {
             if (week === 0 && day < firstDay) {
               // Skip days before month starts
             } else if (dayCounter <= daysInMonth) {
@@ -337,7 +288,7 @@ const generateBlankPDF = async (req: Request, res: Response) => {
       const cellWidth = (width - 150) / 7;
       const cellHeight = 30;
       const hoursPerDay = 12; // 8 AM to 8 PM
-
+      
       // Time column header
       page.drawText('Time', {
         x: 50,
@@ -346,19 +297,11 @@ const generateBlankPDF = async (req: Request, res: Response) => {
         font: boldFont,
         color: black,
       });
-
+      
       // Days of week header
-      const dayNames = [
-        'Sunday',
-        'Monday',
-        'Tuesday',
-        'Wednesday',
-        'Thursday',
-        'Friday',
-        'Saturday',
-      ];
+      const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
       dayNames.forEach((day, index) => {
-        const x = 150 + index * cellWidth;
+        const x = 150 + (index * cellWidth);
         page.drawText(day, {
           x: x + 10,
           y: startY,
@@ -367,12 +310,12 @@ const generateBlankPDF = async (req: Request, res: Response) => {
           color: black,
         });
       });
-
+      
       // Draw time slots and grid
       for (let hour = 8; hour <= 20; hour++) {
-        const y = startY - (hour - 7) * cellHeight;
+        const y = startY - ((hour - 7) * cellHeight);
         const timeText = hour <= 12 ? `${hour}:00 AM` : `${hour - 12}:00 PM`;
-
+        
         // Time label
         page.drawText(timeText, {
           x: 50,
@@ -381,10 +324,10 @@ const generateBlankPDF = async (req: Request, res: Response) => {
           font,
           color: black,
         });
-
+        
         // Draw day cells
         for (let day = 0; day < 7; day++) {
-          const x = 150 + day * cellWidth;
+          const x = 150 + (day * cellWidth);
           page.drawRectangle({
             x,
             y: y - cellHeight,
@@ -399,7 +342,7 @@ const generateBlankPDF = async (req: Request, res: Response) => {
       // Generate daily calendar view
       const cellWidth = width - 200;
       const cellHeight = 30;
-
+      
       page.drawText('Daily Schedule', {
         x: 100,
         y: startY,
@@ -407,12 +350,12 @@ const generateBlankPDF = async (req: Request, res: Response) => {
         font: boldFont,
         color: black,
       });
-
+      
       // Draw time slots
       for (let hour = 6; hour <= 22; hour++) {
-        const y = startY - (hour - 5) * cellHeight;
+        const y = startY - ((hour - 5) * cellHeight);
         const timeText = hour <= 12 ? `${hour}:00 AM` : `${hour - 12}:00 PM`;
-
+        
         page.drawText(timeText, {
           x: 50,
           y: y - 10,
@@ -420,7 +363,7 @@ const generateBlankPDF = async (req: Request, res: Response) => {
           font,
           color: black,
         });
-
+        
         page.drawRectangle({
           x: 150,
           y: y - cellHeight,
@@ -431,7 +374,7 @@ const generateBlankPDF = async (req: Request, res: Response) => {
         });
       }
     }
-
+    
     // Add footer
     page.drawText('Generated by EPOCH v8 Manufacturing ERP System', {
       x: 50,
@@ -440,34 +383,27 @@ const generateBlankPDF = async (req: Request, res: Response) => {
       font,
       color: gray,
     });
-
+    
     // Generate PDF bytes
     const pdfBytes = await pdfDoc.save();
-    console.log(
-      `📄 Generated PDF: ${pdfBytes.length} bytes for ${monthName} ${year}`
-    );
-
+    console.log(`📄 Generated PDF: ${pdfBytes.length} bytes for ${monthName} ${year}`);
+    
     // Set response headers for inline display
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader(
-      'Content-Disposition',
-      `inline; filename="calendar-${monthName}-${year}.pdf"`
-    );
+    res.setHeader('Content-Disposition', `inline; filename="calendar-${monthName}-${year}.pdf"`);
     res.setHeader('Content-Length', pdfBytes.length);
-
+    
     console.log('📤 Sending PDF response with headers:', {
       contentType: 'application/pdf',
-      contentLength: pdfBytes.length,
+      contentLength: pdfBytes.length
     });
-
+    
     // Send PDF
     res.send(Buffer.from(pdfBytes));
+    
   } catch (error) {
     console.error('❌ Generate blank calendar PDF error:', error);
-    console.error(
-      '❌ Full error stack:',
-      error instanceof Error ? error.stack : 'No stack trace'
-    );
+    console.error('❌ Full error stack:', error instanceof Error ? error.stack : 'No stack trace');
     res.status(500).json({ error: 'Failed to generate calendar PDF' });
   }
 };

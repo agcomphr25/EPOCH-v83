@@ -1,0 +1,201 @@
+import path from "path";
+import fs from "fs";
+import { Router } from "express";
+import { createShipment } from "../upsClient";
+import { buildPackingSlipPDF } from "../pdf";
+import type { NodePgDatabase } from "drizzle-orm/node-postgres";
+import { shipments } from "../../drizzle/schema/shipments";
+// import { orders } from "../../drizzle/schema/orders";
+
+type Ctx = { db: NodePgDatabase; projectRoot: string };
+
+export default function shippingRoutes({ db, projectRoot }: Ctx) {
+  const router = Router();
+
+  // Prepare file storage dirs (for Replit FS). For prod, switch to S3/GCS.
+  const filesDir = path.join(projectRoot, "files");
+  const labelsDir = path.join(filesDir, "labels");
+  const invoicesDir = path.join(filesDir, "invoices");
+  for (const d of [filesDir, labelsDir, invoicesDir]) {
+    if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true });
+  }
+
+  // Helpers — replace with your actual data access
+  async function getOrderById(orderId: number) {
+    // return db.select().from(orders).where(eq(orders.id, orderId)).then(r => r[0]);
+    throw new Error("TODO: implement getOrderById()");
+  }
+  async function getOrdersByIds(orderIds: number[]) {
+    // return db.select().from(orders).where(inArray(orders.id, orderIds));
+    throw new Error("TODO: implement getOrdersByIds()");
+  }
+  async function insertShipment(row: {
+    orderId: number;
+    trackingNumber: string;
+    labelUrl: string;
+    status: string;
+    labelFormat?: string;
+    serviceCode?: string;
+    packageWeightOz?: number;
+  }) {
+    await db.insert(shipments).values({
+      orderId: row.orderId,
+      trackingNumber: row.trackingNumber,
+      labelUrl: row.labelUrl,
+      status: row.status,
+      labelFormat: row.labelFormat,
+      serviceCode: row.serviceCode,
+      packageWeightOz: row.packageWeightOz,
+    });
+  }
+
+  // Single order → label (and optional invoice for just that order)
+  router.post("/ups/label", async (req, res) => {
+    try {
+      const { orderId, serviceCode = "03" } = req.body as { orderId: number; serviceCode?: string };
+      if (!orderId) return res.status(400).json({ error: "orderId is required" });
+
+      const order = await getOrderById(orderId);
+      if (!order) return res.status(404).json({ error: "Order not found" });
+
+      const shipTo = {
+        name: order.customer_name,
+        attention: order.attention,
+        phone: order.phone,
+        address1: order.ship_address1,
+        address2: order.ship_address2 ?? undefined,
+        city: order.ship_city,
+        state: order.ship_state,
+        postalCode: order.ship_postal,
+        country: order.ship_country ?? "US",
+      };
+
+      const { trackingNumber, labelBase64, returnedFormat } = await createShipment({
+        shipTo,
+        serviceCode,
+        weightLbs: order.weight_lbs ?? 2,
+        referenceNumber: String(order.id),
+      });
+
+      const labelFilename = `ups_${order.id}_${trackingNumber}.pdf`;
+      const labelPath = path.join(labelsDir, labelFilename);
+
+      // If we requested GIF (for PDF printing), UPS returns base64(GIF). Wrap into a simple one-page PDF.
+      if (returnedFormat === "GIF" && labelBase64) {
+        const PDFDocument = (await import("pdfkit")).default;
+        const doc = new PDFDocument({ size: "A4" });
+        const stream = fs.createWriteStream(labelPath);
+        doc.pipe(stream);
+        const tmpImg = path.join(labelsDir, `tmp_${trackingNumber}.gif`);
+        fs.writeFileSync(tmpImg, Buffer.from(labelBase64, "base64"));
+        doc.image(tmpImg, { fit: [400, 700], align: "center", valign: "center" });
+        doc.end();
+        await new Promise((r) => stream.on("finish", r));
+        fs.unlinkSync(tmpImg);
+      } else if (process.env.UPS_LABEL_FORMAT === "PDF" && labelBase64) {
+        fs.writeFileSync(labelPath, Buffer.from(labelBase64, "base64"));
+      } else if (process.env.UPS_LABEL_FORMAT === "ZPL" && labelBase64) {
+        // Save ZPL as .zpl and let a Zebra print pipeline handle it.
+        const zplPath = path.join(labelsDir, `ups_${order.id}_${trackingNumber}.zpl`);
+        fs.writeFileSync(zplPath, Buffer.from(labelBase64, "base64").toString());
+      }
+
+      const labelUrl = `/files/labels/${labelFilename}`;
+      await insertShipment({
+        orderId: order.id,
+        trackingNumber,
+        labelUrl,
+        status: "labeled",
+        labelFormat: process.env.UPS_LABEL_FORMAT ?? "PDF",
+        serviceCode,
+        packageWeightOz: Math.round((order.weight_lbs ?? 2) * 16),
+      });
+
+      res.json({ ok: true, trackingNumber, labelUrl });
+    } catch (err: any) {
+      console.error(err);
+      res.status(500).json({ error: err?.message ?? String(err) });
+    }
+  });
+
+  // Batch: multiple orders → many labels + one packing slip PDF
+  router.post("/ups/labels", async (req, res) => {
+    try {
+      const { orderIds, serviceCode = "03" } = req.body as { orderIds: number[]; serviceCode?: string };
+      if (!Array.isArray(orderIds) || orderIds.length === 0)
+        return res.status(400).json({ error: "orderIds is required" });
+
+      const orders = await getOrdersByIds(orderIds);
+      if (!orders?.length) return res.status(404).json({ error: "No orders found" });
+
+      const results: Array<{ orderId: number; trackingNumber: string; labelUrl: string }> = [];
+
+      for (const order of orders) {
+        const shipTo = {
+          name: order.customer_name,
+          attention: order.attention,
+          phone: order.phone,
+          address1: order.ship_address1,
+          address2: order.ship_address2 ?? undefined,
+          city: order.ship_city,
+          state: order.ship_state,
+          postalCode: order.ship_postal,
+          country: order.ship_country ?? "US",
+        };
+
+        const { trackingNumber, labelBase64, returnedFormat } = await createShipment({
+          shipTo,
+          serviceCode,
+          weightLbs: order.weight_lbs ?? 2,
+          referenceNumber: String(order.id),
+        });
+
+        const labelFilename = `ups_${order.id}_${trackingNumber}.pdf`;
+        const labelPath = path.join(labelsDir, labelFilename);
+
+        if (returnedFormat === "GIF" && labelBase64) {
+          const PDFDocument = (await import("pdfkit")).default;
+          const doc = new PDFDocument({ size: "A4" });
+          const stream = fs.createWriteStream(labelPath);
+          doc.pipe(stream);
+          const tmpImg = path.join(labelsDir, `tmp_${trackingNumber}.gif`);
+          fs.writeFileSync(tmpImg, Buffer.from(labelBase64, "base64"));
+          doc.image(tmpImg, { fit: [400, 700], align: "center", valign: "center" });
+          doc.end();
+          await new Promise((r) => stream.on("finish", r));
+          fs.unlinkSync(tmpImg);
+        } else if ((process.env.UPS_LABEL_FORMAT ?? "PDF") === "PDF" && labelBase64) {
+          fs.writeFileSync(labelPath, Buffer.from(labelBase64, "base64"));
+        }
+
+        const labelUrl = `/files/labels/${labelFilename}`;
+        await insertShipment({
+          orderId: order.id,
+          trackingNumber,
+          labelUrl,
+          status: "labeled",
+          labelFormat: process.env.UPS_LABEL_FORMAT ?? "PDF",
+          serviceCode,
+          packageWeightOz: Math.round((order.weight_lbs ?? 2) * 16),
+        });
+
+        results.push({ orderId: order.id, trackingNumber, labelUrl });
+      }
+
+      const invoiceFilename = `packing_slip_batch_${Date.now()}.pdf`;
+      const invoicePath = path.join(invoicesDir, invoiceFilename);
+      await buildPackingSlipPDF({ orders, filePath: invoicePath });
+
+      res.json({
+        ok: true,
+        labels: results,
+        invoiceUrl: `/files/invoices/${invoiceFilename}`,
+      });
+    } catch (err: any) {
+      console.error(err);
+      res.status(500).json({ error: err?.message ?? String(err) });
+    }
+  });
+
+  return router;
+}

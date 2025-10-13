@@ -1,4 +1,4 @@
-import { QueryClient, QueryFunction } from '@tanstack/react-query';
+import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
@@ -32,18 +32,15 @@ export async function apiRequest(url: string, options: ApiRequestOptions = {}) {
   const fullUrl = `${baseUrl}${url}`;
 
   // Check if we're on a deployment site
-  const isDeployment =
-    window.location.hostname.includes('.replit.app') ||
-    window.location.hostname.includes('.repl.co') ||
-    window.location.hostname.includes('agcompepoch.xyz');
-
+  const isDeployment = window.location.hostname.includes('.replit.app') || 
+                      window.location.hostname.includes('.repl.co') ||
+                      window.location.hostname.includes('agcompepoch.xyz');
+  
   // Use reasonable timeout for deployments (allow for database latency with large datasets)
   // Increased dev timeout to 120s to handle scheduling of 894 orders (takes ~60-90s)
   const timeoutDuration = isDeployment ? 15000 : 120000; // 15 seconds for deployment, 120 for dev
-
-  console.log(
-    `🌐 API Request to ${url} (timeout: ${timeoutDuration}ms, deployment: ${isDeployment})`
-  );
+  
+  console.log(`🌐 API Request to ${url} (timeout: ${timeoutDuration}ms, deployment: ${isDeployment})`);
 
   const defaultHeaders = {
     'Content-Type': 'application/json',
@@ -53,9 +50,7 @@ export async function apiRequest(url: string, options: ApiRequestOptions = {}) {
   // Add timeout protection
   const controller = new AbortController();
   const timeoutId = setTimeout(() => {
-    console.error(
-      `🚨 API TIMEOUT: ${url} took longer than ${timeoutDuration}ms`
-    );
+    console.error(`🚨 API TIMEOUT: ${url} took longer than ${timeoutDuration}ms`);
     controller.abort();
   }, timeoutDuration);
 
@@ -66,12 +61,7 @@ export async function apiRequest(url: string, options: ApiRequestOptions = {}) {
     signal: controller.signal,
   };
 
-  if (
-    options.body &&
-    typeof options.body === 'object' &&
-    !(options.body instanceof FormData) &&
-    !(options.headers as any)?.['Content-Type']?.includes('multipart/form-data')
-  ) {
+  if (options.body && typeof options.body === 'object' && !(options.body instanceof FormData) && !(options.headers as any)?.['Content-Type']?.includes('multipart/form-data')) {
     config.body = JSON.stringify(options.body);
   } else if (typeof options.body === 'string') {
     config.body = options.body;
@@ -96,22 +86,17 @@ export async function apiRequest(url: string, options: ApiRequestOptions = {}) {
           // Keep the default error message
         }
       }
-
+      
       // Special handling for deployment database timeouts
       if (response.status === 408 || errorMessage.includes('timeout')) {
-        throw new Error(
-          'Request timed out - possible database connectivity issues. Please try again.'
-        );
+        throw new Error('Request timed out - possible database connectivity issues. Please try again.');
       }
-
+      
       throw new Error(errorMessage);
     }
 
     // Handle empty responses (like 204 No Content)
-    if (
-      response.status === 204 ||
-      response.headers.get('content-length') === '0'
-    ) {
+    if (response.status === 204 || response.headers.get('content-length') === '0') {
       return null;
     }
 
@@ -125,54 +110,48 @@ export async function apiRequest(url: string, options: ApiRequestOptions = {}) {
   } catch (error: any) {
     clearTimeout(timeoutId);
     console.error(`💥 API Request failed for ${url}:`, error);
-
+    
     // Enhanced error handling for deployments
     if (error.name === 'AbortError') {
       if (isDeployment) {
-        throw new Error(
-          'Request timed out after 6 seconds. There may be database connectivity issues on the deployed site. Please try again.'
-        );
+        throw new Error('Request timed out after 6 seconds. There may be database connectivity issues on the deployed site. Please try again.');
       } else {
-        throw new Error(
-          'Request timed out. Please check your connection and try again.'
-        );
+        throw new Error('Request timed out. Please check your connection and try again.');
       }
     }
-
+    
     throw error;
   }
 }
 
-type UnauthorizedBehavior = 'returnNull' | 'throw';
+type UnauthorizedBehavior = "returnNull" | "throw";
 export const getQueryFn: <T>(options: {
   on401: UnauthorizedBehavior;
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
     // Deployment-aware timeout to prevent hanging
-    const isDeployment =
-      typeof window !== 'undefined' &&
-      (window.location.hostname.includes('.replit.app') ||
-        window.location.hostname.includes('.repl.co') ||
-        window.location.hostname.includes('agcompepoch.xyz'));
+    const isDeployment = typeof window !== 'undefined' && (
+      window.location.hostname.includes('.replit.app') || 
+      window.location.hostname.includes('.repl.co') ||
+      window.location.hostname.includes('agcompepoch.xyz')
+    );
     const timeoutDuration = isDeployment ? 15000 : 30000; // 15 seconds for deployment, 30 for dev
-
+    
     const controller = new AbortController();
     const timeoutId = setTimeout(() => {
-      console.error(
-        `🚨 QUERY TIMEOUT: ${queryKey.join('/')} took longer than ${timeoutDuration}ms`
-      );
+      console.error(`🚨 QUERY TIMEOUT: ${queryKey.join('/')} took longer than ${timeoutDuration}ms`);
       controller.abort();
     }, timeoutDuration);
-
+    
     try {
-      const res = await fetch(queryKey.join('/') as string, {
-        credentials: 'include',
+      const res = await fetch(queryKey.join("/") as string, {
+        credentials: "include",
         signal: controller.signal,
       });
       clearTimeout(timeoutId);
 
-      if (unauthorizedBehavior === 'returnNull' && res.status === 401) {
+      if (unauthorizedBehavior === "returnNull" && res.status === 401) {
         return null;
       }
 
@@ -187,7 +166,7 @@ export const getQueryFn: <T>(options: {
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      queryFn: getQueryFn({ on401: 'throw' }),
+      queryFn: getQueryFn({ on401: "throw" }),
       refetchInterval: false,
       refetchOnWindowFocus: false,
       staleTime: 60000, // 1 minute instead of Infinity for better data freshness

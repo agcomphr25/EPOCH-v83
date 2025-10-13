@@ -1,20 +1,13 @@
 import React, { useMemo, useState } from 'react';
 import { BarcodeScanner } from '@/components/BarcodeScanner';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Checkbox } from '@/components/ui/checkbox';
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { OrderTooltip } from '@/components/OrderTooltip';
-import {
-  Shield,
-  ArrowLeft,
-  ArrowRight,
-  Search,
-  CheckSquare,
-  Square,
-} from 'lucide-react';
+import { Shield, ArrowLeft, ArrowRight, Search, CheckSquare, Square } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { getDisplayOrderId } from '@/lib/orderUtils';
@@ -26,9 +19,7 @@ export default function FinishQCQueuePage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
   const [selectAll, setSelectAll] = useState(false);
-  const [highlightedOrderId, setHighlightedOrderId] = useState<string | null>(
-    null
-  );
+  const [highlightedOrderId, setHighlightedOrderId] = useState<string | null>(null);
 
   // Get all orders from production pipeline
   const { data: allOrders = [] } = useQuery({
@@ -37,47 +28,42 @@ export default function FinishQCQueuePage() {
 
   // Get orders in Finish QC department
   const finishQCOrders = useMemo(() => {
-    const filtered = (allOrders as any[]).filter((order: any) =>
+    const filtered = (allOrders as any[]).filter((order: any) => 
       isOrderInDepartment(order, 'Finish QC')
     );
-
+    
     return filtered;
   }, [allOrders]);
 
   // Filter orders based on search query
   const filteredOrders = useMemo(() => {
     if (!searchQuery.trim()) return finishQCOrders;
-
+    
     const query = searchQuery.toLowerCase().trim();
     return finishQCOrders.filter((order: any) => {
       const orderId = order.orderId?.toLowerCase() || '';
       const fbNumber = order.fbOrderNumber?.toLowerCase() || '';
-      const displayOrderId =
-        getDisplayOrderId(order.orderId)?.toLowerCase() || '';
-
-      return (
-        orderId.includes(query) ||
-        fbNumber.includes(query) ||
-        displayOrderId.includes(query)
-      );
+      const displayOrderId = getDisplayOrderId(order.orderId)?.toLowerCase() || '';
+      
+      return orderId.includes(query) || 
+             fbNumber.includes(query) || 
+             displayOrderId.includes(query);
     });
   }, [finishQCOrders, searchQuery]);
 
   // Count orders in previous department (CNC)
   const cncCount = useMemo(() => {
-    return (allOrders as any[]).filter(
-      (order: any) =>
-        order.currentDepartment === 'CNC' ||
-        (order.department === 'CNC' && order.status === 'IN_PROGRESS')
+    return (allOrders as any[]).filter((order: any) => 
+      order.currentDepartment === 'CNC' || 
+      (order.department === 'CNC' && order.status === 'IN_PROGRESS')
     ).length;
   }, [allOrders]);
 
   // Count orders in next department (Paint)
   const paintCount = useMemo(() => {
-    return (allOrders as any[]).filter(
-      (order: any) =>
-        order.currentDepartment === 'Paint' ||
-        (order.department === 'Paint' && order.status === 'IN_PROGRESS')
+    return (allOrders as any[]).filter((order: any) => 
+      order.currentDepartment === 'Paint' || 
+      (order.department === 'Paint' && order.status === 'IN_PROGRESS')
     ).length;
   }, [allOrders]);
 
@@ -88,9 +74,7 @@ export default function FinishQCQueuePage() {
 
   // Handle order search selection
   const handleOrderSearchSelect = (order: any) => {
-    const orderExists = finishQCOrders.some(
-      (o: any) => o.orderId === order.orderId
-    );
+    const orderExists = finishQCOrders.some((o: any) => o.orderId === order.orderId);
     if (orderExists) {
       setHighlightedOrderId(order.orderId);
       // Auto-scroll to the highlighted order
@@ -115,9 +99,7 @@ export default function FinishQCQueuePage() {
       newSelected.delete(orderId);
     }
     setSelectedOrders(newSelected);
-    setSelectAll(
-      newSelected.size === filteredOrders.length && filteredOrders.length > 0
-    );
+    setSelectAll(newSelected.size === filteredOrders.length && filteredOrders.length > 0);
   };
 
   // Handle select all toggle
@@ -125,9 +107,7 @@ export default function FinishQCQueuePage() {
     if (selectAll) {
       setSelectedOrders(new Set());
     } else {
-      setSelectedOrders(
-        new Set(filteredOrders.map((order: any) => order.orderId))
-      );
+      setSelectedOrders(new Set(filteredOrders.map((order: any) => order.orderId)));
     }
     setSelectAll(!selectAll);
   };
@@ -135,18 +115,14 @@ export default function FinishQCQueuePage() {
   // Handle search with auto-selection
   const handleSearchWithSelection = (query: string) => {
     setSearchQuery(query);
-
+    
     if (query.trim()) {
       // Auto-select matching orders after a short delay
       setTimeout(() => {
-        const matchingOrderIds = filteredOrders.map(
-          (order: any) => order.orderId
-        );
+        const matchingOrderIds = filteredOrders.map((order: any) => order.orderId);
         if (matchingOrderIds.length > 0) {
           setSelectedOrders(new Set(matchingOrderIds));
-          toast.success(
-            `${matchingOrderIds.length} matching order(s) selected`
-          );
+          toast.success(`${matchingOrderIds.length} matching order(s) selected`);
         }
       }, 300);
     }
@@ -154,9 +130,7 @@ export default function FinishQCQueuePage() {
 
   // Update select all state when filtered orders change
   React.useEffect(() => {
-    setSelectAll(
-      selectedOrders.size === filteredOrders.length && filteredOrders.length > 0
-    );
+    setSelectAll(selectedOrders.size === filteredOrders.length && filteredOrders.length > 0);
   }, [selectedOrders.size, filteredOrders.length]);
 
   return (
@@ -179,9 +153,7 @@ export default function FinishQCQueuePage() {
         </CardHeader>
         <CardContent>
           <div className="space-y-2">
-            <Label htmlFor="search-input">
-              Search by Order ID or FishBowl Number
-            </Label>
+            <Label htmlFor="search-input">Search by Order ID or FishBowl Number</Label>
             <div className="flex gap-2">
               <Input
                 id="search-input"
@@ -195,13 +167,9 @@ export default function FinishQCQueuePage() {
                 variant="outline"
                 onClick={() => {
                   if (searchQuery.trim()) {
-                    const matchingOrderIds = filteredOrders.map(
-                      (order: any) => order.orderId
-                    );
+                    const matchingOrderIds = filteredOrders.map((order: any) => order.orderId);
                     setSelectedOrders(new Set(matchingOrderIds));
-                    toast.success(
-                      `${matchingOrderIds.length} matching order(s) selected`
-                    );
+                    toast.success(`${matchingOrderIds.length} matching order(s) selected`);
                   }
                 }}
                 disabled={!searchQuery.trim() || filteredOrders.length === 0}
@@ -217,7 +185,7 @@ export default function FinishQCQueuePage() {
       <Card>
         <CardContent className="p-4">
           <div className="flex items-center gap-4">
-            <OrderSearchBox
+            <OrderSearchBox 
               orders={finishQCOrders}
               placeholder="Search orders by Order ID or FishBowl Number..."
               onOrderSelect={handleOrderSearchSelect}
@@ -314,9 +282,7 @@ export default function FinishQCQueuePage() {
         <CardContent>
           {filteredOrders.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
-              {searchQuery
-                ? `No orders found matching "${searchQuery}"`
-                : 'No orders in Finish QC queue'}
+              {searchQuery ? `No orders found matching "${searchQuery}"` : "No orders in Finish QC queue"}
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -324,16 +290,16 @@ export default function FinishQCQueuePage() {
                 const isSelected = selectedOrders.has(order.orderId);
                 return (
                   <div key={order.orderId} className="relative">
-                    <div
+                    <div 
                       className={`transition-all duration-200 ${
-                        isSelected
-                          ? 'ring-2 ring-blue-500 ring-offset-2 bg-blue-50 dark:bg-blue-900/20'
+                        isSelected 
+                          ? 'ring-2 ring-blue-500 ring-offset-2 bg-blue-50 dark:bg-blue-900/20' 
                           : 'hover:ring-1 hover:ring-gray-300'
                       }`}
                     >
-                      <OrderTooltip
-                        order={order}
-                        stockModels={stockModels}
+                      <OrderTooltip 
+                        order={order} 
+                        stockModels={stockModels} 
                         className={`border-l-purple-500 cursor-pointer ${
                           isSelected ? 'bg-blue-50 dark:bg-blue-900/20' : ''
                         }`}
@@ -342,9 +308,7 @@ export default function FinishQCQueuePage() {
                     <div className="absolute top-2 right-2">
                       <Checkbox
                         checked={isSelected}
-                        onCheckedChange={(checked) =>
-                          handleOrderSelect(order.orderId, checked as boolean)
-                        }
+                        onCheckedChange={(checked) => handleOrderSelect(order.orderId, checked as boolean)}
                         data-testid={`checkbox-order-${order.orderId}`}
                         className="bg-white dark:bg-gray-800 border-2"
                       />

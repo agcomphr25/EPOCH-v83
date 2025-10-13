@@ -1,9 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import {
-  fetchAPTransactions,
-  fetchARTransactions,
-  fetchCOGS,
-} from '../utils/financeUtils';
+import { fetchAPTransactions, fetchARTransactions, fetchCOGS } from '../utils/financeUtils';
 import toast from 'react-hot-toast';
 
 /**
@@ -18,7 +14,7 @@ export function useAPTransactions(dateRange) {
 
   const fetchData = useCallback(async () => {
     if (!dateRange.dateFrom || !dateRange.dateTo) return;
-
+    
     try {
       setLoading(true);
       setError(null);
@@ -40,7 +36,7 @@ export function useAPTransactions(dateRange) {
     data,
     loading,
     error,
-    refresh: fetchData,
+    refresh: fetchData
   };
 }
 
@@ -56,7 +52,7 @@ export function useARTransactions(dateRange) {
 
   const fetchData = useCallback(async () => {
     if (!dateRange.dateFrom || !dateRange.dateTo) return;
-
+    
     try {
       setLoading(true);
       setError(null);
@@ -78,7 +74,7 @@ export function useARTransactions(dateRange) {
     data,
     loading,
     error,
-    refresh: fetchData,
+    refresh: fetchData
   };
 }
 
@@ -88,17 +84,13 @@ export function useARTransactions(dateRange) {
  * @returns {Object} { data, loading, error, refresh }
  */
 export function useCOGS(dateRange) {
-  const [data, setData] = useState({
-    standardCost: 0,
-    actualCost: 0,
-    breakdown: [],
-  });
+  const [data, setData] = useState({ standardCost: 0, actualCost: 0, breakdown: [] });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   const fetchData = useCallback(async () => {
     if (!dateRange.dateFrom || !dateRange.dateTo) return;
-
+    
     try {
       setLoading(true);
       setError(null);
@@ -120,6 +112,6 @@ export function useCOGS(dateRange) {
     data,
     loading,
     error,
-    refresh: fetchData,
+    refresh: fetchData
   };
 }

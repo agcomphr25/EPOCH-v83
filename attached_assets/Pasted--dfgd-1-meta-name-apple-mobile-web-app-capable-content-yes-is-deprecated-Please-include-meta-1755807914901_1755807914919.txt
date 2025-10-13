@@ -1,0 +1,33 @@
+/dfgd:1 <meta name="apple-mobile-web-app-capable" content="yes"> is deprecated. Please include <meta name="mobile-web-app-capable" content="yes">Understand this warning
+/dfgd:1 Error while trying to use the following icon from the Manifest: https://c12e21b1-5fd6-431c-9fb3-816da6ed479c-00-vprztzvz79bh.worf.replit.dev/icons/icon-192.png (Download error or resource isn't a valid image)Understand this error
+useCameraScanner.ts:46 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+ShippingQueuePage.tsx:384 🚢 Ship Label button clicked!
+ShippingQueuePage.tsx:385 selectedCard: null
+ShippingQueuePage.tsx:386 selectedOrders: Array(1)
+ShippingQueuePage.tsx:387 showShippingDialog before: false
+ShippingQueuePage.tsx:402 Using checkbox selection: AG393
+ShippingQueuePage.tsx:423 Target order found: AG393
+ShippingQueuePage.tsx:426 FORCING DIALOG TO OPEN NOW
+ShippingQueuePage.tsx:432 Dialog state after timeout: false
+useCameraScanner.ts:46 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+ShippingQueuePage.tsx:384 🚢 Ship Label button clicked!
+ShippingQueuePage.tsx:385 selectedCard: null
+ShippingQueuePage.tsx:386 selectedOrders: Array(0)
+ShippingQueuePage.tsx:387 showShippingDialog before: false
+ShippingQueuePage.tsx:404 No valid selection found
+ShippingQueuePage.tsx:384 🚢 Ship Label button clicked!
+ShippingQueuePage.tsx:385 selectedCard: AG159
+ShippingQueuePage.tsx:386 selectedOrders: Array(1)
+ShippingQueuePage.tsx:387 showShippingDialog before: false
+ShippingQueuePage.tsx:397 Using card selection: AG159
+ShippingQueuePage.tsx:423 Target order found: AG159
+ShippingQueuePage.tsx:426 FORCING DIALOG TO OPEN NOW
+ShippingQueuePage.tsx:432 Dialog state after timeout: false
+ShippingQueuePage.tsx:384 🚢 Ship Label button clicked!
+ShippingQueuePage.tsx:385 selectedCard: AG159
+ShippingQueuePage.tsx:386 selectedOrders: Array(1)
+ShippingQueuePage.tsx:387 showShippingDialog before: true
+ShippingQueuePage.tsx:397 Using card selection: AG159
+ShippingQueuePage.tsx:423 Target order found: AG159
+ShippingQueuePage.tsx:426 FORCING DIALOG TO OPEN NOW
+ShippingQueuePage.tsx:432 Dialog state after timeout: true

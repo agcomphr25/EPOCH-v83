@@ -3,13 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ArrowRight, Search, AlertCircle, CheckCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
@@ -25,7 +19,7 @@ const DEPARTMENTS = [
   'Paint',
   'Shipping QC',
   'Shipping',
-  'Fulfilled',
+  'Fulfilled'
 ];
 
 export default function OrderDepartmentTransfer() {
@@ -43,7 +37,7 @@ export default function OrderDepartmentTransfer() {
       toast({
         title: 'Error',
         description: 'Please enter an order ID',
-        variant: 'destructive',
+        variant: 'destructive'
       });
       return;
     }
@@ -54,10 +48,10 @@ export default function OrderDepartmentTransfer() {
 
     try {
       const response = await fetch(`/api/orders/${orderId.trim()}`);
-
+      
       console.log('Response status:', response.status);
       console.log('Response ok:', response.ok);
-
+      
       if (response.ok || response.status === 304) {
         let order;
         try {
@@ -67,11 +61,10 @@ export default function OrderDepartmentTransfer() {
           console.error('Error parsing JSON:', jsonError);
           throw new Error('Invalid response format');
         }
-
-        const department =
-          order.currentDepartment || order.department || 'Unknown';
+        
+        const department = order.currentDepartment || order.department || 'Unknown';
         const realOrderId = order.orderId || order.id || orderId.trim(); // Store actual Order ID
-
+        
         setActualOrderId(realOrderId); // Save the actual Order ID for transfer
         setCurrentDepartment(department);
         setOrderFound(true);
@@ -83,14 +76,14 @@ export default function OrderDepartmentTransfer() {
         toast({
           title: 'Order Not Found',
           description: `Order ${orderId} does not exist`,
-          variant: 'destructive',
+          variant: 'destructive'
         });
         setOrderFound(false);
       } else {
         toast({
           title: 'Error',
           description: `Failed to search for order (Status: ${response.status})`,
-          variant: 'destructive',
+          variant: 'destructive'
         });
         setOrderFound(false);
       }
@@ -99,7 +92,7 @@ export default function OrderDepartmentTransfer() {
       toast({
         title: 'Error',
         description: 'Failed to search for order - please try again',
-        variant: 'destructive',
+        variant: 'destructive'
       });
       setOrderFound(false);
     } finally {
@@ -112,7 +105,7 @@ export default function OrderDepartmentTransfer() {
       toast({
         title: 'Error',
         description: 'Please select a target department',
-        variant: 'destructive',
+        variant: 'destructive'
       });
       return;
     }
@@ -121,7 +114,7 @@ export default function OrderDepartmentTransfer() {
       toast({
         title: 'Error',
         description: 'Order is already in the selected department',
-        variant: 'destructive',
+        variant: 'destructive'
       });
       return;
     }
@@ -135,8 +128,8 @@ export default function OrderDepartmentTransfer() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          department: targetDepartment,
-        }),
+          department: targetDepartment
+        })
       });
 
       console.log('Transfer response status:', response.status);
@@ -145,7 +138,7 @@ export default function OrderDepartmentTransfer() {
       if (response.ok) {
         const result = await response.json();
         console.log('Transfer result:', result);
-
+        
         setCurrentDepartment(targetDepartment);
         setTargetDepartment('');
         toast({
@@ -160,11 +153,11 @@ export default function OrderDepartmentTransfer() {
         } catch (jsonError) {
           console.error('Error parsing error response:', jsonError);
         }
-
+        
         toast({
           title: 'Transfer Failed',
           description: errorMessage,
-          variant: 'destructive',
+          variant: 'destructive'
         });
       }
     } catch (error) {
@@ -172,7 +165,7 @@ export default function OrderDepartmentTransfer() {
       toast({
         title: 'Error',
         description: 'Failed to transfer order',
-        variant: 'destructive',
+        variant: 'destructive'
       });
     } finally {
       setIsLoading(false);
@@ -190,9 +183,7 @@ export default function OrderDepartmentTransfer() {
   return (
     <div className="container mx-auto p-6 max-w-4xl">
       <div className="mb-6">
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
-          Order Department Transfer
-        </h1>
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Order Department Transfer</h1>
         <p className="text-gray-600 dark:text-gray-400 mt-2">
           Move orders between departments for corrections and adjustments
         </p>
@@ -219,8 +210,8 @@ export default function OrderDepartmentTransfer() {
                 onKeyPress={(e) => e.key === 'Enter' && searchOrder()}
               />
             </div>
-            <Button
-              onClick={searchOrder}
+            <Button 
+              onClick={searchOrder} 
               disabled={isSearching}
               data-testid="button-search-order"
             >
@@ -238,10 +229,7 @@ export default function OrderDepartmentTransfer() {
                   <p className="font-medium text-blue-900 dark:text-blue-100">
                     Order {orderId} Found
                   </p>
-                  <p
-                    className="text-blue-700 dark:text-blue-300"
-                    data-testid="text-current-department"
-                  >
+                  <p className="text-blue-700 dark:text-blue-300" data-testid="text-current-department">
                     Current Department: <strong>{currentDepartment}</strong>
                   </p>
                 </div>
@@ -254,17 +242,14 @@ export default function OrderDepartmentTransfer() {
             <div className="space-y-4">
               <div>
                 <Label htmlFor="targetDepartment">Target Department</Label>
-                <Select
-                  value={targetDepartment}
-                  onValueChange={setTargetDepartment}
-                >
+                <Select value={targetDepartment} onValueChange={setTargetDepartment}>
                   <SelectTrigger data-testid="select-target-department">
                     <SelectValue placeholder="Select target department" />
                   </SelectTrigger>
                   <SelectContent>
                     {DEPARTMENTS.map((dept) => (
-                      <SelectItem
-                        key={dept}
+                      <SelectItem 
+                        key={dept} 
                         value={dept}
                         disabled={dept === currentDepartment}
                       >
@@ -283,9 +268,7 @@ export default function OrderDepartmentTransfer() {
                   data-testid="button-transfer-order"
                 >
                   <ArrowRight className="w-4 h-4 mr-2" />
-                  {isLoading
-                    ? 'Transferring...'
-                    : `Move to ${targetDepartment || 'Selected Department'}`}
+                  {isLoading ? 'Transferring...' : `Move to ${targetDepartment || 'Selected Department'}`}
                 </Button>
                 <Button
                   variant="outline"
@@ -305,17 +288,10 @@ export default function OrderDepartmentTransfer() {
               <div className="text-sm text-yellow-800 dark:text-yellow-200">
                 <p className="font-medium mb-1">Important Notes:</p>
                 <ul className="list-disc list-inside space-y-1">
-                  <li>
-                    This tool should only be used for corrections and emergency
-                    moves
-                  </li>
+                  <li>This tool should only be used for corrections and emergency moves</li>
                   <li>All transfers are logged for audit purposes</li>
-                  <li>
-                    Orders moved manually may bypass normal workflow validations
-                  </li>
-                  <li>
-                    Use with caution to maintain production flow integrity
-                  </li>
+                  <li>Orders moved manually may bypass normal workflow validations</li>
+                  <li>Use with caution to maintain production flow integrity</li>
                 </ul>
               </div>
             </div>

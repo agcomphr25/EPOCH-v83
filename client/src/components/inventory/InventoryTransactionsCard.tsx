@@ -5,13 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Table,
   TableBody,
@@ -20,24 +14,18 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
-import {
-  Search,
-  Plus,
-  TrendingUp,
-  TrendingDown,
-  Package,
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { 
+  Search, 
+  Plus, 
+  TrendingUp, 
+  TrendingDown, 
+  Package, 
   FileText,
   RefreshCw,
   Calendar,
   ArrowRight,
-  Activity,
+  Activity
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
@@ -45,13 +33,7 @@ interface InventoryTransaction {
   transactionId: string;
   partId: string;
   locationId: string;
-  transactionType:
-    | 'RECEIPT'
-    | 'ISSUE'
-    | 'TRANSFER'
-    | 'ADJUSTMENT'
-    | 'ALLOCATION'
-    | 'CONSUMPTION';
+  transactionType: 'RECEIPT' | 'ISSUE' | 'TRANSFER' | 'ADJUSTMENT' | 'ALLOCATION' | 'CONSUMPTION';
   quantity: number;
   unitCost: number | null;
   totalCost: number | null;
@@ -84,76 +66,36 @@ export default function InventoryTransactionsCard() {
   const queryClient = useQueryClient();
 
   const transactionTypes = [
-    {
-      value: 'RECEIPT',
-      label: 'Receipt',
-      icon: TrendingUp,
-      color: 'text-green-600',
-    },
-    {
-      value: 'ISSUE',
-      label: 'Issue',
-      icon: TrendingDown,
-      color: 'text-red-600',
-    },
-    {
-      value: 'TRANSFER',
-      label: 'Transfer',
-      icon: ArrowRight,
-      color: 'text-blue-600',
-    },
-    {
-      value: 'ADJUSTMENT',
-      label: 'Adjustment',
-      icon: Activity,
-      color: 'text-orange-600',
-    },
-    {
-      value: 'ALLOCATION',
-      label: 'Allocation',
-      icon: Package,
-      color: 'text-purple-600',
-    },
-    {
-      value: 'CONSUMPTION',
-      label: 'Consumption',
-      icon: TrendingDown,
-      color: 'text-gray-600',
-    },
+    { value: 'RECEIPT', label: 'Receipt', icon: TrendingUp, color: 'text-green-600' },
+    { value: 'ISSUE', label: 'Issue', icon: TrendingDown, color: 'text-red-600' },
+    { value: 'TRANSFER', label: 'Transfer', icon: ArrowRight, color: 'text-blue-600' },
+    { value: 'ADJUSTMENT', label: 'Adjustment', icon: Activity, color: 'text-orange-600' },
+    { value: 'ALLOCATION', label: 'Allocation', icon: Package, color: 'text-purple-600' },
+    { value: 'CONSUMPTION', label: 'Consumption', icon: TrendingDown, color: 'text-gray-600' }
   ];
 
   // Fetch inventory transactions
-  const {
-    data: transactionsResult,
-    isLoading,
-    refetch,
-  } = useQuery({
-    queryKey: [
-      '/api/inventory/transactions',
-      {
-        partId: searchQuery,
-        transactionType: selectedTransactionType,
-        dateFrom,
-        dateTo,
-        page: currentPage,
-        limit: 50,
-      },
-    ],
+  const { data: transactionsResult, isLoading, refetch } = useQuery({
+    queryKey: ['/api/inventory/transactions', { 
+      partId: searchQuery,
+      transactionType: selectedTransactionType,
+      dateFrom,
+      dateTo,
+      page: currentPage,
+      limit: 50
+    }],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (searchQuery) params.append('partId', searchQuery);
-      if (selectedTransactionType)
-        params.append('transactionType', selectedTransactionType);
+      if (selectedTransactionType) params.append('transactionType', selectedTransactionType);
       if (dateFrom) params.append('dateFrom', dateFrom);
       if (dateTo) params.append('dateTo', dateTo);
       params.append('page', currentPage.toString());
       params.append('limit', '50');
-
-      const response = await apiRequest(
-        `/api/inventory/transactions?${params.toString()}`
-      );
+      
+      const response = await apiRequest(`/api/inventory/transactions?${params.toString()}`);
       return response;
-    },
+    }
   });
 
   const transactions = transactionsResult?.data || [];
@@ -162,10 +104,10 @@ export default function InventoryTransactionsCard() {
   // Create transaction mutation
   const createTransactionMutation = useMutation({
     mutationFn: async (data: NewTransactionData) => {
-      const endpoint = processTransaction
-        ? '/api/inventory/transactions/process'
+      const endpoint = processTransaction 
+        ? '/api/inventory/transactions/process' 
         : '/api/inventory/transactions';
-
+      
       return await apiRequest(endpoint, {
         method: 'POST',
         body: JSON.stringify(data),
@@ -175,89 +117,62 @@ export default function InventoryTransactionsCard() {
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ['/api/inventory/transactions'],
-      });
+      queryClient.invalidateQueries({ queryKey: ['/api/inventory/transactions'] });
       queryClient.invalidateQueries({ queryKey: ['/api/inventory/balances'] });
-      toast.success(
-        `Transaction ${processTransaction ? 'processed' : 'created'} successfully`
-      );
+      toast.success(`Transaction ${processTransaction ? 'processed' : 'created'} successfully`);
       setIsNewTransactionOpen(false);
     },
     onError: (error: any) => {
-      toast.error(
-        `Failed to ${processTransaction ? 'process' : 'create'} transaction: ${error.message}`
-      );
+      toast.error(`Failed to ${processTransaction ? 'process' : 'create'} transaction: ${error.message}`);
     },
   });
 
-  const handleCreateTransaction = useCallback(
-    (e: React.FormEvent<HTMLFormElement>) => {
-      e.preventDefault();
-      const formData = new FormData(e.currentTarget);
+  const handleCreateTransaction = useCallback((e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    
+    const transactionData: NewTransactionData = {
+      partId: formData.get('partId') as string,
+      locationId: formData.get('locationId') as string,
+      transactionType: formData.get('transactionType') as string,
+      quantity: Number(formData.get('quantity')),
+      unitCost: Number(formData.get('unitCost')) || undefined,
+      referenceNumber: formData.get('referenceNumber') as string || undefined,
+      notes: formData.get('notes') as string || undefined,
+    };
 
-      const transactionData: NewTransactionData = {
-        partId: formData.get('partId') as string,
-        locationId: formData.get('locationId') as string,
-        transactionType: formData.get('transactionType') as string,
-        quantity: Number(formData.get('quantity')),
-        unitCost: Number(formData.get('unitCost')) || undefined,
-        referenceNumber:
-          (formData.get('referenceNumber') as string) || undefined,
-        notes: (formData.get('notes') as string) || undefined,
-      };
-
-      createTransactionMutation.mutate(transactionData);
-    },
-    [createTransactionMutation, processTransaction]
-  );
+    createTransactionMutation.mutate(transactionData);
+  }, [createTransactionMutation, processTransaction]);
 
   const getTransactionTypeInfo = (type: string) => {
-    return (
-      transactionTypes.find((t) => t.value === type) || {
-        label: type,
-        icon: FileText,
-        color: 'text-gray-600',
-      }
-    );
+    return transactionTypes.find(t => t.value === type) || 
+           { label: type, icon: FileText, color: 'text-gray-600' };
   };
 
   const getTransactionBadgeColor = (type: string) => {
     switch (type) {
-      case 'RECEIPT':
-        return 'bg-green-100 text-green-800';
-      case 'ISSUE':
-        return 'bg-red-100 text-red-800';
-      case 'TRANSFER':
-        return 'bg-blue-100 text-blue-800';
-      case 'ADJUSTMENT':
-        return 'bg-orange-100 text-orange-800';
-      case 'ALLOCATION':
-        return 'bg-purple-100 text-purple-800';
-      case 'CONSUMPTION':
-        return 'bg-gray-100 text-gray-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
+      case 'RECEIPT': return 'bg-green-100 text-green-800';
+      case 'ISSUE': return 'bg-red-100 text-red-800';
+      case 'TRANSFER': return 'bg-blue-100 text-blue-800';
+      case 'ADJUSTMENT': return 'bg-orange-100 text-orange-800';
+      case 'ALLOCATION': return 'bg-purple-100 text-purple-800';
+      case 'CONSUMPTION': return 'bg-gray-100 text-gray-800';
+      default: return 'bg-gray-100 text-gray-800';
     }
   };
 
   // Calculate summary statistics
-  const summaryStats = transactions.reduce(
-    (acc, transaction) => {
-      if (transaction.transactionType === 'RECEIPT') {
-        acc.receipts += transaction.quantity;
-      } else if (
-        ['ISSUE', 'CONSUMPTION'].includes(transaction.transactionType)
-      ) {
-        acc.issues += transaction.quantity;
-      }
-      if (transaction.totalCost) {
-        acc.totalValue += transaction.totalCost;
-      }
-      return acc;
-    },
-    { receipts: 0, issues: 0, totalValue: 0 }
-  );
+  const summaryStats = transactions.reduce((acc, transaction) => {
+    if (transaction.transactionType === 'RECEIPT') {
+      acc.receipts += transaction.quantity;
+    } else if (['ISSUE', 'CONSUMPTION'].includes(transaction.transactionType)) {
+      acc.issues += transaction.quantity;
+    }
+    if (transaction.totalCost) {
+      acc.totalValue += transaction.totalCost;
+    }
+    return acc;
+  }, { receipts: 0, issues: 0, totalValue: 0 });
 
   return (
     <div className="space-y-6">
@@ -272,10 +187,7 @@ export default function InventoryTransactionsCard() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Dialog
-            open={isNewTransactionOpen}
-            onOpenChange={setIsNewTransactionOpen}
-          >
+          <Dialog open={isNewTransactionOpen} onOpenChange={setIsNewTransactionOpen}>
             <DialogTrigger asChild>
               <Button data-testid="button-new-transaction">
                 <Plus className="h-4 w-4 mr-1" />
@@ -283,9 +195,9 @@ export default function InventoryTransactionsCard() {
               </Button>
             </DialogTrigger>
           </Dialog>
-          <Button
-            variant="outline"
-            size="sm"
+          <Button 
+            variant="outline" 
+            size="sm" 
             onClick={() => refetch()}
             data-testid="button-refresh-transactions"
           >
@@ -316,7 +228,7 @@ export default function InventoryTransactionsCard() {
                 />
               </div>
             </div>
-
+            
             <div>
               <Label htmlFor="transactionType">Transaction Type</Label>
               <select
@@ -327,10 +239,8 @@ export default function InventoryTransactionsCard() {
                 data-testid="select-transaction-type"
               >
                 <option value="">All Types</option>
-                {transactionTypes.map((type) => (
-                  <option key={type.value} value={type.value}>
-                    {type.label}
-                  </option>
+                {transactionTypes.map(type => (
+                  <option key={type.value} value={type.value}>{type.label}</option>
                 ))}
               </select>
             </div>
@@ -358,8 +268,8 @@ export default function InventoryTransactionsCard() {
             </div>
 
             <div className="flex items-end">
-              <Button
-                variant="outline"
+              <Button 
+                variant="outline" 
                 onClick={() => {
                   setSearchQuery('');
                   setSelectedTransactionType('');
@@ -382,9 +292,7 @@ export default function InventoryTransactionsCard() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
-                  Total Transactions
-                </p>
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Total Transactions</p>
                 <p className="text-2xl font-bold text-gray-900 dark:text-white">
                   {totalTransactions.toLocaleString()}
                 </p>
@@ -398,9 +306,7 @@ export default function InventoryTransactionsCard() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
-                  Total Receipts
-                </p>
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Total Receipts</p>
                 <p className="text-2xl font-bold text-green-600">
                   {summaryStats.receipts.toLocaleString()}
                 </p>
@@ -414,9 +320,7 @@ export default function InventoryTransactionsCard() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
-                  Total Issues
-                </p>
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Total Issues</p>
                 <p className="text-2xl font-bold text-red-600">
                   {summaryStats.issues.toLocaleString()}
                 </p>
@@ -430,14 +334,9 @@ export default function InventoryTransactionsCard() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
-                  Total Value
-                </p>
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Total Value</p>
                 <p className="text-2xl font-bold text-purple-600">
-                  $
-                  {summaryStats.totalValue.toLocaleString('en-US', {
-                    minimumFractionDigits: 2,
-                  })}
+                  ${summaryStats.totalValue.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                 </p>
               </div>
               <Activity className="h-8 w-8 text-purple-500" />
@@ -458,9 +357,7 @@ export default function InventoryTransactionsCard() {
           {isLoading ? (
             <div className="flex items-center justify-center py-8">
               <RefreshCw className="h-6 w-6 animate-spin text-gray-400" />
-              <span className="ml-2 text-gray-500">
-                Loading transactions...
-              </span>
+              <span className="ml-2 text-gray-500">Loading transactions...</span>
             </div>
           ) : (
             <Table>
@@ -480,11 +377,9 @@ export default function InventoryTransactionsCard() {
               </TableHeader>
               <TableBody>
                 {transactions.map((transaction) => {
-                  const typeInfo = getTransactionTypeInfo(
-                    transaction.transactionType
-                  );
+                  const typeInfo = getTransactionTypeInfo(transaction.transactionType);
                   const IconComponent = typeInfo.icon;
-
+                  
                   return (
                     <TableRow key={transaction.transactionId}>
                       <TableCell className="font-mono text-sm">
@@ -493,50 +388,29 @@ export default function InventoryTransactionsCard() {
                       <TableCell>
                         <div className="flex items-center gap-1">
                           <Calendar className="h-3 w-3 text-gray-400" />
-                          {new Date(
-                            transaction.transactionDate
-                          ).toLocaleDateString()}
+                          {new Date(transaction.transactionDate).toLocaleDateString()}
                         </div>
                       </TableCell>
-                      <TableCell className="font-medium">
-                        {transaction.partId}
-                      </TableCell>
+                      <TableCell className="font-medium">{transaction.partId}</TableCell>
                       <TableCell>{transaction.locationId}</TableCell>
                       <TableCell>
-                        <Badge
-                          className={getTransactionBadgeColor(
-                            transaction.transactionType
-                          )}
-                        >
+                        <Badge className={getTransactionBadgeColor(transaction.transactionType)}>
                           <IconComponent className="h-3 w-3 mr-1" />
                           {typeInfo.label}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right font-mono">
-                        <span
-                          className={
-                            transaction.quantity >= 0
-                              ? 'text-green-600'
-                              : 'text-red-600'
-                          }
-                        >
-                          {transaction.quantity >= 0 ? '+' : ''}
-                          {transaction.quantity.toLocaleString()}
+                        <span className={transaction.quantity >= 0 ? 'text-green-600' : 'text-red-600'}>
+                          {transaction.quantity >= 0 ? '+' : ''}{transaction.quantity.toLocaleString()}
                         </span>
                       </TableCell>
                       <TableCell className="text-right font-mono">
-                        {transaction.unitCost
-                          ? `$${transaction.unitCost.toFixed(2)}`
-                          : '-'}
+                        {transaction.unitCost ? `$${transaction.unitCost.toFixed(2)}` : '-'}
                       </TableCell>
                       <TableCell className="text-right font-mono">
-                        {transaction.totalCost
-                          ? `$${transaction.totalCost.toFixed(2)}`
-                          : '-'}
+                        {transaction.totalCost ? `$${transaction.totalCost.toFixed(2)}` : '-'}
                       </TableCell>
-                      <TableCell>
-                        {transaction.referenceNumber || '-'}
-                      </TableCell>
+                      <TableCell>{transaction.referenceNumber || '-'}</TableCell>
                       <TableCell>{transaction.createdBy}</TableCell>
                     </TableRow>
                   );
@@ -544,7 +418,7 @@ export default function InventoryTransactionsCard() {
               </TableBody>
             </Table>
           )}
-
+          
           {!isLoading && transactions.length === 0 && (
             <div className="text-center py-8 text-gray-500">
               No transactions found matching your criteria.
@@ -557,9 +431,7 @@ export default function InventoryTransactionsCard() {
       {totalTransactions > 50 && (
         <div className="flex items-center justify-between">
           <div className="text-sm text-gray-500">
-            Showing {(currentPage - 1) * 50 + 1} to{' '}
-            {Math.min(currentPage * 50, totalTransactions)} of{' '}
-            {totalTransactions} transactions
+            Showing {((currentPage - 1) * 50) + 1} to {Math.min(currentPage * 50, totalTransactions)} of {totalTransactions} transactions
           </div>
           <div className="flex gap-2">
             <Button
@@ -585,10 +457,7 @@ export default function InventoryTransactionsCard() {
       )}
 
       {/* New Transaction Dialog */}
-      <Dialog
-        open={isNewTransactionOpen}
-        onOpenChange={setIsNewTransactionOpen}
-      >
+      <Dialog open={isNewTransactionOpen} onOpenChange={setIsNewTransactionOpen}>
         <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
             <DialogTitle>Create New Transaction</DialogTitle>
@@ -625,10 +494,8 @@ export default function InventoryTransactionsCard() {
                   className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background"
                 >
                   <option value="">Select type...</option>
-                  {transactionTypes.map((type) => (
-                    <option key={type.value} value={type.value}>
-                      {type.label}
-                    </option>
+                  {transactionTypes.map(type => (
+                    <option key={type.value} value={type.value}>{type.label}</option>
                   ))}
                 </select>
               </div>
@@ -683,32 +550,26 @@ export default function InventoryTransactionsCard() {
                 onChange={(e) => setProcessTransaction(e.target.checked)}
                 className="rounded border-gray-300"
               />
-              <Label
-                htmlFor="processTransaction"
-                className="text-sm font-medium"
-              >
+              <Label htmlFor="processTransaction" className="text-sm font-medium">
                 Process transaction (update balances automatically)
               </Label>
             </div>
 
             <div className="flex justify-end gap-2 pt-4">
-              <Button
-                type="button"
-                variant="outline"
+              <Button 
+                type="button" 
+                variant="outline" 
                 onClick={() => setIsNewTransactionOpen(false)}
               >
                 Cancel
               </Button>
-              <Button
-                type="submit"
+              <Button 
+                type="submit" 
                 disabled={createTransactionMutation.isPending}
                 data-testid="button-save-transaction"
               >
-                {createTransactionMutation.isPending
-                  ? 'Creating...'
-                  : processTransaction
-                    ? 'Process Transaction'
-                    : 'Create Transaction'}
+                {createTransactionMutation.isPending ? 'Creating...' : 
+                 processTransaction ? 'Process Transaction' : 'Create Transaction'}
               </Button>
             </div>
           </form>

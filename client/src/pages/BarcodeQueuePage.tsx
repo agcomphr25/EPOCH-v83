@@ -1,53 +1,18 @@
 import React, { useMemo, useState } from 'react';
 import { BarcodeScanner } from '@/components/BarcodeScanner';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from '@/components/ui/form';
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
-import {
-  Scan,
-  ArrowLeft,
-  ArrowRight,
-  QrCode,
-  ArrowUp,
-  Calendar,
-  Target,
-  Printer,
-  X,
-  CheckCircle,
-  AlertTriangle,
-  FileText,
-  Eye,
-  TrendingDown,
-  Edit,
-} from 'lucide-react';
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Scan, ArrowLeft, ArrowRight, QrCode, ArrowUp, Calendar, Target, Printer, X, CheckCircle, AlertTriangle, FileText, Eye, TrendingDown, Edit } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format, isAfter } from 'date-fns';
 import { getDisplayOrderId } from '@/lib/orderUtils';
@@ -60,26 +25,14 @@ import { SalesOrderModal } from '@/components/SalesOrderModal';
 // Kickback form validation schema
 const kickbackFormSchema = z.object({
   kickbackDept: z.enum(['CNC', 'Finish', 'Gunsmith', 'Paint'], {
-    required_error: 'Please select a department',
+    required_error: "Please select a department"
   }),
-  reasonCode: z.enum(
-    [
-      'MATERIAL_DEFECT',
-      'OPERATOR_ERROR',
-      'MACHINE_FAILURE',
-      'DESIGN_ISSUE',
-      'QUALITY_ISSUE',
-      'PROCESS_ISSUE',
-      'SUPPLIER_ISSUE',
-      'OTHER',
-    ],
-    {
-      required_error: 'Please select a reason code',
-    }
-  ),
-  reasonText: z.string().min(1, 'Please describe the issue'),
+  reasonCode: z.enum(['MATERIAL_DEFECT', 'OPERATOR_ERROR', 'MACHINE_FAILURE', 'DESIGN_ISSUE', 'QUALITY_ISSUE', 'PROCESS_ISSUE', 'SUPPLIER_ISSUE', 'OTHER'], {
+    required_error: "Please select a reason code"
+  }),
+  reasonText: z.string().min(1, "Please describe the issue"),
   priority: z.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']).default('MEDIUM'),
-  reportedBy: z.string().min(1, 'Reporter name is required'),
+  reportedBy: z.string().min(1, "Reporter name is required")
 });
 
 type KickbackFormData = z.infer<typeof kickbackFormSchema>;
@@ -92,9 +45,7 @@ export default function BarcodeQueuePage() {
   const [selectedOrderId, setSelectedOrderId] = useState<string>('');
   const [kickbackModalOpen, setKickbackModalOpen] = useState(false);
   const [kickbackOrderId, setKickbackOrderId] = useState('');
-  const [highlightedOrderId, setHighlightedOrderId] = useState<string | null>(
-    null
-  );
+  const [highlightedOrderId, setHighlightedOrderId] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
   // Kickback form
@@ -102,8 +53,8 @@ export default function BarcodeQueuePage() {
     resolver: zodResolver(kickbackFormSchema),
     defaultValues: {
       priority: 'MEDIUM',
-      reportedBy: 'Production Floor',
-    },
+      reportedBy: 'Production Floor'
+    }
   });
   const [, setLocation] = useLocation();
   const { toast } = useToast();
@@ -116,45 +67,35 @@ export default function BarcodeQueuePage() {
   // Fetch all kickbacks to determine which orders have kickbacks
   const { data: allKickbacks = [] } = useQuery({
     queryKey: ['/api/kickbacks'],
-    refetchInterval: 30000, // Refresh every 30 seconds
+    refetchInterval: 30000 // Refresh every 30 seconds
   });
 
   // Helper function to check if an order has kickbacks
   const hasKickbacks = (orderId: string) => {
-    return (allKickbacks as any[]).some(
-      (kickback: any) => kickback.orderId === orderId
-    );
+    return (allKickbacks as any[]).some((kickback: any) => kickback.orderId === orderId);
   };
 
   // Helper function to get the most severe kickback status for an order
   const getKickbackStatus = (orderId: string) => {
-    const orderKickbacks = (allKickbacks as any[]).filter(
-      (kickback: any) => kickback.orderId === orderId
-    );
+    const orderKickbacks = (allKickbacks as any[]).filter((kickback: any) => kickback.orderId === orderId);
     if (orderKickbacks.length === 0) return null;
 
     // Priority order: CRITICAL > HIGH > MEDIUM > LOW
     const priorities = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'];
-    const highestPriority = orderKickbacks.reduce(
-      (highest: string, kickback: any) => {
-        const currentIndex = priorities.indexOf(kickback.priority);
-        const highestIndex = priorities.indexOf(highest);
-        return currentIndex < highestIndex ? kickback.priority : highest;
-      },
-      'LOW'
-    );
+    const highestPriority = orderKickbacks.reduce((highest: string, kickback: any) => {
+      const currentIndex = priorities.indexOf(kickback.priority);
+      const highestIndex = priorities.indexOf(highest);
+      return currentIndex < highestIndex ? kickback.priority : highest;
+    }, 'LOW');
 
     return highestPriority;
   };
 
   // Create kickback and move order mutation
   const submitKickbackMutation = useMutation({
-    mutationFn: async (data: {
-      formData: KickbackFormData;
-      orderId: string;
-    }) => {
+    mutationFn: async (data: { formData: KickbackFormData; orderId: string }) => {
       const { formData, orderId } = data;
-
+      
       // Create kickback data
       const kickbackData = {
         orderId: orderId,
@@ -164,7 +105,7 @@ export default function BarcodeQueuePage() {
         kickbackDate: new Date().toISOString(),
         reportedBy: formData.reportedBy,
         priority: formData.priority,
-        status: 'OPEN',
+        status: 'OPEN'
       };
 
       // First create the kickback
@@ -181,10 +122,10 @@ export default function BarcodeQueuePage() {
       // Then move the order to the selected department
       const moveResponse = await apiRequest('/api/orders/progress-department', {
         method: 'POST',
-        body: {
-          orderIds: [orderId],
-          toDepartment: formData.kickbackDept,
-        },
+        body: { 
+          orderIds: [orderId], 
+          toDepartment: formData.kickbackDept 
+        }
       });
 
       return { kickback: await kickbackResponse.json(), move: moveResponse };
@@ -194,17 +135,17 @@ export default function BarcodeQueuePage() {
       queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
       setKickbackModalOpen(false);
       kickbackForm.reset();
-
+      
       toast({
-        title: 'Kickback submitted',
-        description: `Order ${variables.orderId} has been kicked back to ${variables.formData.kickbackDept} department`,
+        title: "Kickback submitted",
+        description: `Order ${variables.orderId} has been kicked back to ${variables.formData.kickbackDept} department`
       });
     },
     onError: (error) => {
       toast({
-        title: 'Error',
+        title: "Error",
         description: `Failed to submit kickback: ${error.message}`,
-        variant: 'destructive',
+        variant: "destructive"
       });
     },
   });
@@ -226,26 +167,27 @@ export default function BarcodeQueuePage() {
     setSalesOrderModalOpen(true);
   };
 
+
+
   // Get orders in barcode department
   const barcodeOrders = useMemo(() => {
-    return (allOrders as any[]).filter(
-      (order: any) => order.currentDepartment === 'Barcode'
+    return (allOrders as any[]).filter((order: any) => 
+      order.currentDepartment === 'Barcode'
     );
   }, [allOrders]);
 
   // Count orders in previous department (Layup/Plugging)
   const layupCount = useMemo(() => {
-    return (allOrders as any[]).filter(
-      (order: any) =>
-        order.currentDepartment === 'Layup' ||
-        order.currentDepartment === 'Layup/Plugging'
+    return (allOrders as any[]).filter((order: any) => 
+      order.currentDepartment === 'Layup' || 
+      order.currentDepartment === 'Layup/Plugging'
     ).length;
   }, [allOrders]);
 
   // Count orders in next department (CNC)
   const cncCount = useMemo(() => {
-    return (allOrders as any[]).filter(
-      (order: any) => order.currentDepartment === 'CNC'
+    return (allOrders as any[]).filter((order: any) => 
+      order.currentDepartment === 'CNC'
     ).length;
   }, [allOrders]);
 
@@ -266,11 +208,8 @@ export default function BarcodeQueuePage() {
 
     barcodeOrders.forEach((order: any) => {
       const modelId = order.modelId;
-      const stockModel = (stockModels as any[]).find(
-        (m: any) => m.id === modelId
-      );
-      const categoryKey =
-        stockModel?.displayName || stockModel?.name || modelId;
+      const stockModel = (stockModels as any[]).find((m: any) => m.id === modelId);
+      const categoryKey = stockModel?.displayName || stockModel?.name || modelId;
 
       if (!categories[categoryKey]) {
         categories[categoryKey] = [];
@@ -279,7 +218,7 @@ export default function BarcodeQueuePage() {
     });
 
     // Sort each category by due date (latest first) and overdue status
-    Object.keys(categories).forEach((key) => {
+    Object.keys(categories).forEach(key => {
       categories[key].sort((a, b) => {
         const aOverdue = isAfter(new Date(), new Date(a.dueDate));
         const bOverdue = isAfter(new Date(), new Date(b.dueDate));
@@ -312,9 +251,7 @@ export default function BarcodeQueuePage() {
     if (selectAll) {
       setSelectedOrders(new Set());
     } else {
-      setSelectedOrders(
-        new Set(barcodeOrders.map((order: any) => order.orderId))
-      );
+      setSelectedOrders(new Set(barcodeOrders.map((order: any) => order.orderId)));
     }
     setSelectAll(!selectAll);
   };
@@ -325,7 +262,7 @@ export default function BarcodeQueuePage() {
       const response = await fetch('/api/barcode/create-labels', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderIds }),
+        body: JSON.stringify({ orderIds })
       });
 
       if (!response.ok) {
@@ -335,11 +272,7 @@ export default function BarcodeQueuePage() {
       // Open PDF in new tab/popup for viewing and printing
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
-      const newWindow = window.open(
-        url,
-        '_blank',
-        'width=800,height=600,scrollbars=yes,resizable=yes'
-      );
+      const newWindow = window.open(url, '_blank', 'width=800,height=600,scrollbars=yes,resizable=yes');
 
       if (!newWindow) {
         // Fallback if popup blocked - create download link
@@ -360,19 +293,19 @@ export default function BarcodeQueuePage() {
     },
     onSuccess: () => {
       toast({
-        title: 'Barcode labels created',
-        description: `Barcode labels opened in new tab for ${selectedOrders.size} orders`,
+        title: "Barcode labels created",
+        description: `Barcode labels opened in new tab for ${selectedOrders.size} orders`
       });
       setShowLabelDialog(false);
     },
     onError: (error) => {
       console.error('Label creation error:', error);
       toast({
-        title: 'Error creating labels',
+        title: "Error creating labels",
         description: `Failed to create barcode labels: ${error.message}`,
-        variant: 'destructive',
+        variant: "destructive"
       });
-    },
+    }
   });
 
   // Progress to CNC mutation
@@ -380,16 +313,16 @@ export default function BarcodeQueuePage() {
     mutationFn: async (orderIds: string[]) => {
       return await apiRequest('/api/orders/progress-department', {
         method: 'POST',
-        body: {
-          orderIds,
-          toDepartment: 'CNC',
-        },
+        body: { 
+          orderIds, 
+          toDepartment: 'CNC' 
+        }
       });
     },
     onSuccess: () => {
       toast({
-        title: 'Orders progressed',
-        description: `Progressed ${selectedOrders.size} orders to CNC`,
+        title: "Orders progressed",
+        description: `Progressed ${selectedOrders.size} orders to CNC`
       });
       setSelectedOrders(new Set());
       setSelectAll(false);
@@ -398,19 +331,19 @@ export default function BarcodeQueuePage() {
     },
     onError: (error) => {
       toast({
-        title: 'Error progressing orders',
+        title: "Error progressing orders",
         description: `Failed to progress orders: ${error}`,
-        variant: 'destructive',
+        variant: "destructive"
       });
-    },
+    }
   });
 
   const handleCreateBarcodes = () => {
     if (selectedOrders.size === 0) {
       toast({
-        title: 'No orders selected',
-        description: 'Please select at least one order',
-        variant: 'destructive',
+        title: "No orders selected",
+        description: "Please select at least one order",
+        variant: "destructive"
       });
       return;
     }
@@ -424,9 +357,9 @@ export default function BarcodeQueuePage() {
   const handleProgressToCNC = () => {
     if (selectedOrders.size === 0) {
       toast({
-        title: 'No orders selected',
-        description: 'Please select at least one order',
-        variant: 'destructive',
+        title: "No orders selected",
+        description: "Please select at least one order",
+        variant: "destructive"
       });
       return;
     }
@@ -436,29 +369,25 @@ export default function BarcodeQueuePage() {
   // Auto-select order when scanned
   const handleOrderScanned = (orderId: string) => {
     // Check if the order exists in the current queue
-    const orderExists = barcodeOrders.some(
-      (order: any) => order.orderId === orderId
-    );
+    const orderExists = barcodeOrders.some((order: any) => order.orderId === orderId);
     if (orderExists) {
-      setSelectedOrders((prev) => new Set([...Array.from(prev), orderId]));
+      setSelectedOrders(prev => new Set([...Array.from(prev), orderId]));
       toast({
-        title: 'Order selected',
-        description: `Order ${orderId} selected automatically`,
+        title: "Order selected",
+        description: `Order ${orderId} selected automatically`
       });
     } else {
       toast({
-        title: 'Order not found',
+        title: "Order not found",
         description: `Order ${orderId} is not in the Barcode department`,
-        variant: 'destructive',
+        variant: "destructive"
       });
     }
   };
 
   // Handle order search selection
   const handleOrderSearchSelect = (order: any) => {
-    const orderExists = barcodeOrders.some(
-      (o: any) => o.orderId === order.orderId
-    );
+    const orderExists = barcodeOrders.some((o: any) => o.orderId === order.orderId);
     if (orderExists) {
       setHighlightedOrderId(order.orderId);
       // Auto-scroll to the highlighted order
@@ -469,23 +398,20 @@ export default function BarcodeQueuePage() {
         }
       }, 100);
       toast({
-        title: 'Order found',
-        description: `Order ${order.orderId} highlighted in the list`,
+        title: "Order found",
+        description: `Order ${order.orderId} highlighted in the list`
       });
     } else {
       toast({
-        title: 'Order not in this department',
+        title: "Order not in this department",
         description: `Order ${order.orderId} is not in the Barcode department`,
-        variant: 'destructive',
+        variant: "destructive"
       });
     }
   };
 
   return (
-    <div
-      className="container mx-auto px-6 pb-6 space-y-6"
-      style={{ paddingTop: '2px' }}
-    >
+    <div className="container mx-auto px-6 pb-6 space-y-6" style={{ paddingTop: '2px' }}>
       {/* Header with Actions */}
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-4">
         <div className="flex items-center gap-2">
@@ -501,10 +427,7 @@ export default function BarcodeQueuePage() {
               onCheckedChange={toggleSelectAll}
               id="select-all"
             />
-            <label
-              htmlFor="select-all"
-              className="text-sm font-medium cursor-pointer"
-            >
+            <label htmlFor="select-all" className="text-sm font-medium cursor-pointer">
               Select All ({selectedOrders.size}/{barcodeOrders.length})
             </label>
           </div>
@@ -540,7 +463,7 @@ export default function BarcodeQueuePage() {
       <Card>
         <CardContent className="p-4">
           <div className="flex items-center gap-4">
-            <OrderSearchBox
+            <OrderSearchBox 
               orders={barcodeOrders}
               placeholder="Search orders by Order ID or FishBowl Number..."
               onOrderSelect={handleOrderSearchSelect}
@@ -632,37 +555,27 @@ export default function BarcodeQueuePage() {
                   <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                     {orders.map((order: any) => {
                       const isSelected = selectedOrders.has(order.orderId);
-                      const isOverdue = isAfter(
-                        new Date(),
-                        new Date(order.dueDate)
-                      );
-                      const actionLength =
-                        order.features?.action_length || 'unknown';
+                      const isOverdue = isAfter(new Date(), new Date(order.dueDate));
+                      const actionLength = order.features?.action_length || 'unknown';
                       // Determine material type from stock model ID
-                      const materialType = order.modelId?.startsWith('cf_')
-                        ? 'Carbon Fiber'
-                        : order.modelId?.startsWith('fg_')
-                          ? 'Fiberglass'
-                          : order.modelId?.includes('tikka')
-                            ? 'Tikka'
-                            : order.modelId?.startsWith('m1a_')
-                              ? 'M1A'
-                              : order.modelId?.startsWith('apr_')
-                                ? 'APR'
-                                : 'Standard';
+                      const materialType = order.modelId?.startsWith('cf_') ? 'Carbon Fiber' : 
+                                         order.modelId?.startsWith('fg_') ? 'Fiberglass' : 
+                                         order.modelId?.includes('tikka') ? 'Tikka' : 
+                                         order.modelId?.startsWith('m1a_') ? 'M1A' :
+                                         order.modelId?.startsWith('apr_') ? 'APR' : 'Standard';
 
                       return (
-                        <Card
+                        <Card 
                           key={order.orderId}
                           id={`order-${order.orderId}`}
                           className={`cursor-pointer transition-all duration-200 border-l-4 ${
                             highlightedOrderId === order.orderId
                               ? 'ring-4 ring-yellow-400 bg-yellow-50 dark:bg-yellow-900/20 border-l-yellow-500 shadow-lg'
-                              : isSelected
-                                ? 'ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-900/20 border-l-blue-500'
-                                : isOverdue
-                                  ? 'border-l-red-500 bg-red-50 dark:bg-red-900/20'
-                                  : 'border-l-slate-400 hover:bg-slate-50 dark:hover:bg-slate-900/10'
+                              : isSelected 
+                              ? 'ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-900/20 border-l-blue-500' 
+                              : isOverdue
+                              ? 'border-l-red-500 bg-red-50 dark:bg-red-900/20'
+                              : 'border-l-slate-400 hover:bg-slate-50 dark:hover:bg-slate-900/10'
                           }`}
                           onClick={() => toggleOrderSelection(order.orderId)}
                         >
@@ -670,9 +583,7 @@ export default function BarcodeQueuePage() {
                             <div className="flex items-start gap-3">
                               <Checkbox
                                 checked={isSelected}
-                                onChange={() =>
-                                  toggleOrderSelection(order.orderId)
-                                }
+                                onChange={() => toggleOrderSelection(order.orderId)}
                                 className="mt-1"
                               />
 
@@ -682,10 +593,7 @@ export default function BarcodeQueuePage() {
                                     {getDisplayOrderId(order)}
                                   </span>
                                   {isOverdue && (
-                                    <Badge
-                                      variant="destructive"
-                                      className="text-xs"
-                                    >
+                                    <Badge variant="destructive" className="text-xs">
                                       OVERDUE
                                     </Badge>
                                   )}
@@ -694,57 +602,32 @@ export default function BarcodeQueuePage() {
                                 <div className="space-y-2 text-sm">
                                   <div className="flex items-center gap-2">
                                     <Calendar className="h-3 w-3 text-gray-500" />
-                                    <span
-                                      className={`font-medium ${isOverdue ? 'text-red-700' : ''}`}
-                                    >
-                                      Due:{' '}
-                                      {format(
-                                        new Date(order.dueDate),
-                                        'M/d/yy'
-                                      )}
+                                    <span className={`font-medium ${isOverdue ? 'text-red-700' : ''}`}>
+                                      Due: {format(new Date(order.dueDate), 'M/d/yy')}
                                     </span>
                                   </div>
 
                                   {/* Material Type and Action Badges */}
                                   <div className="flex gap-2 flex-wrap">
-                                    <Badge
-                                      variant="outline"
-                                      className={`text-xs ${
-                                        materialType === 'Carbon Fiber'
-                                          ? 'border-gray-800 text-gray-800 bg-gray-100'
-                                          : materialType === 'Fiberglass'
-                                            ? 'border-amber-600 text-amber-700 bg-amber-50'
-                                            : materialType === 'Tikka'
-                                              ? 'border-purple-600 text-purple-700 bg-purple-50'
-                                              : materialType === 'M1A'
-                                                ? 'border-green-600 text-green-700 bg-green-50'
-                                                : materialType === 'APR'
-                                                  ? 'border-indigo-600 text-indigo-700 bg-indigo-50'
-                                                  : 'border-blue-600 text-blue-700 bg-blue-50'
-                                      }`}
-                                    >
+                                    <Badge variant="outline" className={`text-xs ${
+                                      materialType === 'Carbon Fiber' ? 'border-gray-800 text-gray-800 bg-gray-100' :
+                                      materialType === 'Fiberglass' ? 'border-amber-600 text-amber-700 bg-amber-50' :
+                                      materialType === 'Tikka' ? 'border-purple-600 text-purple-700 bg-purple-50' :
+                                      materialType === 'M1A' ? 'border-green-600 text-green-700 bg-green-50' :
+                                      materialType === 'APR' ? 'border-indigo-600 text-indigo-700 bg-indigo-50' :
+                                      'border-blue-600 text-blue-700 bg-blue-50'
+                                    }`}>
                                       {materialType}
                                     </Badge>
-                                    <Badge
-                                      variant="outline"
-                                      className={`text-xs ${
-                                        actionLength === 'short'
-                                          ? 'border-red-500 text-red-700 bg-red-50'
-                                          : actionLength === 'medium'
-                                            ? 'border-orange-500 text-orange-700 bg-orange-50'
-                                            : actionLength === 'long'
-                                              ? 'border-blue-500 text-blue-700 bg-blue-50'
-                                              : 'border-gray-500 text-gray-700 bg-gray-50'
-                                      }`}
-                                    >
-                                      {actionLength === 'short'
-                                        ? 'Short'
-                                        : actionLength === 'medium'
-                                          ? 'Medium'
-                                          : actionLength === 'long'
-                                            ? 'Long'
-                                            : 'Unknown'}{' '}
-                                      Action
+                                    <Badge variant="outline" className={`text-xs ${
+                                      actionLength === 'short' ? 'border-red-500 text-red-700 bg-red-50' :
+                                      actionLength === 'medium' ? 'border-orange-500 text-orange-700 bg-orange-50' :
+                                      actionLength === 'long' ? 'border-blue-500 text-blue-700 bg-blue-50' :
+                                      'border-gray-500 text-gray-700 bg-gray-50'
+                                    }`}>
+                                      {actionLength === 'short' ? 'Short' : 
+                                       actionLength === 'medium' ? 'Medium' :
+                                       actionLength === 'long' ? 'Long' : 'Unknown'} Action
                                     </Badge>
                                   </div>
 
@@ -762,15 +645,8 @@ export default function BarcodeQueuePage() {
 
                                   {/* Action Buttons */}
                                   <div className="flex gap-1 pt-2">
-                                    <Link
-                                      href={`/order-entry?draft=${order.orderId}`}
-                                    >
-                                      <Button
-                                        variant="outline"
-                                        size="sm"
-                                        className="h-6 w-6 p-0"
-                                        title="View/Edit Order"
-                                      >
+                                    <Link href={`/order-entry?draft=${order.orderId}`}>
+                                      <Button variant="outline" size="sm" className="h-6 w-6 p-0" title="View/Edit Order">
                                         <Edit className="h-3 w-3" />
                                       </Button>
                                     </Link>
@@ -786,8 +662,8 @@ export default function BarcodeQueuePage() {
                                     >
                                       <FileText className="w-3 h-3" />
                                     </Button>
-                                    <Button
-                                      variant="outline"
+                                    <Button 
+                                      variant="outline" 
                                       size="sm"
                                       onClick={(e) => {
                                         e.stopPropagation();
@@ -829,47 +705,8 @@ export default function BarcodeQueuePage() {
             <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
               <h3 className="font-semibold mb-2">Selected Orders Summary:</h3>
               <div className="grid gap-2">
-                {Object.entries(categorizedOrders).map(
-                  ([categoryKey, orders]) => {
-                    const categoryOrders = orders.filter((order) =>
-                      selectedOrders.has(order.orderId)
-                    );
-                    if (categoryOrders.length === 0) return null;
-
-                    // Remove material prefixes from display name
-                    const modelName = categoryKey
-                      .replace(/^CF\s+/i, '')
-                      .replace(/^FG\s+/i, '')
-                      .replace(/^M1A\s+/i, '')
-                      .replace(/^APR\s+/i, '')
-                      .replace(/Tikka\s+/i, '');
-
-                    return (
-                      <div
-                        key={categoryKey}
-                        className="flex items-center justify-between"
-                      >
-                        <span className="font-medium">{modelName}</span>
-                        <Badge variant="outline">
-                          {categoryOrders.length} orders
-                        </Badge>
-                      </div>
-                    );
-                  }
-                )}
-              </div>
-            </div>
-
-            {/* Individual Order Cards for Label Selection */}
-            <div className="space-y-4">
-              <h3 className="font-semibold">
-                Individual Orders - Click to Print Labels:
-              </h3>
-              {Object.entries(categorizedOrders).map(
-                ([categoryKey, orders]) => {
-                  const categoryOrders = orders.filter((order) =>
-                    selectedOrders.has(order.orderId)
-                  );
+                {Object.entries(categorizedOrders).map(([categoryKey, orders]) => {
+                  const categoryOrders = orders.filter(order => selectedOrders.has(order.orderId));
                   if (categoryOrders.length === 0) return null;
 
                   // Remove material prefixes from display name
@@ -881,188 +718,163 @@ export default function BarcodeQueuePage() {
                     .replace(/Tikka\s+/i, '');
 
                   return (
-                    <Card key={categoryKey} className="overflow-hidden">
-                      <CardHeader className="pb-3 bg-slate-50 dark:bg-slate-900/20">
-                        <CardTitle className="text-lg flex items-center gap-2">
-                          <Target className="h-4 w-4 text-slate-600" />
-                          {modelName}
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="p-4">
-                        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-                          {categoryOrders.map((order: any) => {
-                            const isOverdue = isAfter(
-                              new Date(),
-                              new Date(order.dueDate)
-                            );
-                            const actionLength =
-                              order.features?.action_length || 'unknown';
-                            // Determine material type from stock model ID
-                            const materialType = order.modelId?.startsWith(
-                              'cf_'
-                            )
-                              ? 'Carbon Fiber'
-                              : order.modelId?.startsWith('fg_')
-                                ? 'Fiberglass'
-                                : order.modelId?.includes('tikka')
-                                  ? 'Tikka'
-                                  : order.modelId?.startsWith('m1a_')
-                                    ? 'M1A'
-                                    : order.modelId?.startsWith('apr_')
-                                      ? 'APR'
-                                      : 'Standard';
-
-                            return (
-                              <Card
-                                key={order.orderId}
-                                className={`cursor-pointer transition-all duration-200 border-l-4 hover:shadow-md ${
-                                  isOverdue
-                                    ? 'border-l-red-500 bg-red-50 dark:bg-red-900/20'
-                                    : 'border-l-slate-400 hover:bg-slate-50 dark:hover:bg-slate-900/10'
-                                }`}
-                                onClick={() =>
-                                  handlePrintLabels([order.orderId])
-                                }
-                              >
-                                <CardContent className="p-3">
-                                  <div className="space-y-2">
-                                    <div className="flex items-center justify-between">
-                                      <span className="font-semibold text-lg">
-                                        {getDisplayOrderId(order)}
-                                      </span>
-                                      {isOverdue && (
-                                        <Badge
-                                          variant="destructive"
-                                          className="text-xs"
-                                        >
-                                          OVERDUE
-                                        </Badge>
-                                      )}
-                                    </div>
-
-                                    <div className="space-y-2 text-sm">
-                                      <div className="flex items-center gap-2">
-                                        <Calendar className="h-3 w-3 text-gray-500" />
-                                        <span
-                                          className={`font-medium ${isOverdue ? 'text-red-700' : ''}`}
-                                        >
-                                          Due:{' '}
-                                          {format(
-                                            new Date(order.dueDate),
-                                            'M/d/yy'
-                                          )}
-                                        </span>
-                                      </div>
-
-                                      {/* Material Type and Action Badges */}
-                                      <div className="flex gap-2 flex-wrap">
-                                        <Badge
-                                          variant="outline"
-                                          className={`text-xs ${
-                                            materialType === 'Carbon Fiber'
-                                              ? 'border-gray-800 text-gray-800 bg-gray-100'
-                                              : materialType === 'Fiberglass'
-                                                ? 'border-amber-600 text-amber-700 bg-amber-50'
-                                                : materialType === 'Tikka'
-                                                  ? 'border-purple-600 text-purple-700 bg-purple-50'
-                                                  : materialType === 'M1A'
-                                                    ? 'border-green-600 text-green-700 bg-green-50'
-                                                    : materialType === 'APR'
-                                                      ? 'border-indigo-600 text-indigo-700 bg-indigo-50'
-                                                      : 'border-blue-600 text-blue-700 bg-blue-50'
-                                          }`}
-                                        >
-                                          {materialType}
-                                        </Badge>
-                                        <Badge
-                                          variant="outline"
-                                          className={`text-xs ${
-                                            actionLength === 'short'
-                                              ? 'border-red-500 text-red-700 bg-red-50'
-                                              : actionLength === 'medium'
-                                                ? 'border-orange-500 text-orange-700 bg-orange-50'
-                                                : actionLength === 'long'
-                                                  ? 'border-blue-500 text-blue-700 bg-blue-50'
-                                                  : 'border-gray-500 text-gray-700 bg-gray-50'
-                                          }`}
-                                        >
-                                          {actionLength === 'short'
-                                            ? 'Short'
-                                            : actionLength === 'medium'
-                                              ? 'Medium'
-                                              : actionLength === 'long'
-                                                ? 'Long'
-                                                : 'Unknown'}{' '}
-                                          Action
-                                        </Badge>
-                                        <Link
-                                          href={`/order-entry?draft=${order.orderId}`}
-                                        >
-                                          <Button
-                                            variant="outline"
-                                            size="sm"
-                                            className="h-6 w-6 p-0"
-                                            title="View/Edit Order"
-                                          >
-                                            <Edit className="h-3 w-3" />
-                                          </Button>
-                                        </Link>
-                                        <Button
-                                          variant="outline"
-                                          size="sm"
-                                          className="h-6 w-6 p-0 ml-1"
-                                          title="View Sales Order"
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            handleSalesOrderView(order.orderId);
-                                          }}
-                                        >
-                                          <FileText className="w-3 h-3" />
-                                        </Button>
-                                        <Button
-                                          variant="outline"
-                                          size="sm"
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            handleKickbackClick(order.orderId);
-                                          }}
-                                          title="Report Kickback"
-                                          className="h-6 w-6 p-0 ml-1"
-                                        >
-                                          <TrendingDown className="h-3 w-3" />
-                                        </Button>
-                                      </div>
-
-                                      <div className="flex items-center gap-2">
-                                        <Printer className="h-3 w-3 text-gray-500" />
-                                        <span className="text-xs text-gray-600">
-                                          Click to print individual label
-                                        </span>
-                                      </div>
-
-                                      {order.customerPO && (
-                                        <div className="text-xs text-gray-600">
-                                          PO: {order.customerPO}
-                                        </div>
-                                      )}
-
-                                      {order.fbOrderNumber && (
-                                        <div className="text-xs text-gray-600">
-                                          FB: {order.fbOrderNumber}
-                                        </div>
-                                      )}
-                                    </div>
-                                  </div>
-                                </CardContent>
-                              </Card>
-                            );
-                          })}
-                        </div>
-                      </CardContent>
-                    </Card>
+                    <div key={categoryKey} className="flex items-center justify-between">
+                      <span className="font-medium">{modelName}</span>
+                      <Badge variant="outline">{categoryOrders.length} orders</Badge>
+                    </div>
                   );
-                }
-              )}
+                })}
+              </div>
+            </div>
+
+            {/* Individual Order Cards for Label Selection */}
+            <div className="space-y-4">
+              <h3 className="font-semibold">Individual Orders - Click to Print Labels:</h3>
+              {Object.entries(categorizedOrders).map(([categoryKey, orders]) => {
+                const categoryOrders = orders.filter(order => selectedOrders.has(order.orderId));
+                if (categoryOrders.length === 0) return null;
+
+                // Remove material prefixes from display name
+                const modelName = categoryKey
+                  .replace(/^CF\s+/i, '')
+                  .replace(/^FG\s+/i, '')
+                  .replace(/^M1A\s+/i, '')
+                  .replace(/^APR\s+/i, '')
+                  .replace(/Tikka\s+/i, '');
+
+                return (
+                  <Card key={categoryKey} className="overflow-hidden">
+                    <CardHeader className="pb-3 bg-slate-50 dark:bg-slate-900/20">
+                      <CardTitle className="text-lg flex items-center gap-2">
+                        <Target className="h-4 w-4 text-slate-600" />
+                        {modelName}
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-4">
+                      <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+                        {categoryOrders.map((order: any) => {
+                          const isOverdue = isAfter(new Date(), new Date(order.dueDate));
+                          const actionLength = order.features?.action_length || 'unknown';
+                          // Determine material type from stock model ID
+                          const materialType = order.modelId?.startsWith('cf_') ? 'Carbon Fiber' : 
+                                             order.modelId?.startsWith('fg_') ? 'Fiberglass' : 
+                                             order.modelId?.includes('tikka') ? 'Tikka' : 
+                                             order.modelId?.startsWith('m1a_') ? 'M1A' :
+                                             order.modelId?.startsWith('apr_') ? 'APR' : 'Standard';
+
+                          return (
+                            <Card 
+                              key={order.orderId} 
+                              className={`cursor-pointer transition-all duration-200 border-l-4 hover:shadow-md ${
+                                isOverdue
+                                  ? 'border-l-red-500 bg-red-50 dark:bg-red-900/20'
+                                  : 'border-l-slate-400 hover:bg-slate-50 dark:hover:bg-slate-900/10'
+                              }`}
+                              onClick={() => handlePrintLabels([order.orderId])}
+                            >
+                              <CardContent className="p-3">
+                                <div className="space-y-2">
+                                  <div className="flex items-center justify-between">
+                                    <span className="font-semibold text-lg">
+                                      {getDisplayOrderId(order)}
+                                    </span>
+                                    {isOverdue && (
+                                      <Badge variant="destructive" className="text-xs">
+                                        OVERDUE
+                                      </Badge>
+                                    )}
+                                  </div>
+
+                                  <div className="space-y-2 text-sm">
+                                    <div className="flex items-center gap-2">
+                                      <Calendar className="h-3 w-3 text-gray-500" />
+                                      <span className={`font-medium ${isOverdue ? 'text-red-700' : ''}`}>
+                                        Due: {format(new Date(order.dueDate), 'M/d/yy')}
+                                      </span>
+                                    </div>
+
+                                    {/* Material Type and Action Badges */}
+                                    <div className="flex gap-2 flex-wrap">
+                                      <Badge variant="outline" className={`text-xs ${
+                                        materialType === 'Carbon Fiber' ? 'border-gray-800 text-gray-800 bg-gray-100' :
+                                        materialType === 'Fiberglass' ? 'border-amber-600 text-amber-700 bg-amber-50' :
+                                        materialType === 'Tikka' ? 'border-purple-600 text-purple-700 bg-purple-50' :
+                                        materialType === 'M1A' ? 'border-green-600 text-green-700 bg-green-50' :
+                                        materialType === 'APR' ? 'border-indigo-600 text-indigo-700 bg-indigo-50' :
+                                        'border-blue-600 text-blue-700 bg-blue-50'
+                                      }`}>
+                                        {materialType}
+                                      </Badge>
+                                      <Badge variant="outline" className={`text-xs ${
+                                        actionLength === 'short' ? 'border-red-500 text-red-700 bg-red-50' :
+                                        actionLength === 'medium' ? 'border-orange-500 text-orange-700 bg-orange-50' :
+                                        actionLength === 'long' ? 'border-blue-500 text-blue-700 bg-blue-50' :
+                                        'border-gray-500 text-gray-700 bg-gray-50'
+                                      }`}>
+                                        {actionLength === 'short' ? 'Short' : 
+                                         actionLength === 'medium' ? 'Medium' :
+                                         actionLength === 'long' ? 'Long' : 'Unknown'} Action
+                                      </Badge>
+                                      <Link href={`/order-entry?draft=${order.orderId}`}>
+                                        <Button variant="outline" size="sm" className="h-6 w-6 p-0" title="View/Edit Order">
+                                          <Edit className="h-3 w-3" />
+                                        </Button>
+                                      </Link>
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="h-6 w-6 p-0 ml-1"
+                                        title="View Sales Order"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleSalesOrderView(order.orderId);
+                                        }}
+                                      >
+                                        <FileText className="w-3 h-3" />
+                                      </Button>
+                                      <Button 
+                                        variant="outline" 
+                                        size="sm"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleKickbackClick(order.orderId);
+                                        }}
+                                        title="Report Kickback"
+                                        className="h-6 w-6 p-0 ml-1"
+                                      >
+                                        <TrendingDown className="h-3 w-3" />
+                                      </Button>
+                                    </div>
+
+                                    <div className="flex items-center gap-2">
+                                      <Printer className="h-3 w-3 text-gray-500" />
+                                      <span className="text-xs text-gray-600">
+                                        Click to print individual label
+                                      </span>
+                                    </div>
+
+                                    {order.customerPO && (
+                                      <div className="text-xs text-gray-600">
+                                        PO: {order.customerPO}
+                                      </div>
+                                    )}
+
+                                    {order.fbOrderNumber && (
+                                      <div className="text-xs text-gray-600">
+                                        FB: {order.fbOrderNumber}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </CardContent>
+                            </Card>
+                          );
+                        })}
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </div>
 
             {/* Action Buttons */}
@@ -1098,8 +910,7 @@ export default function BarcodeQueuePage() {
               <div className="flex items-center gap-2">
                 <CheckCircle className="h-5 w-5 text-orange-600 dark:text-orange-400" />
                 <span className="font-medium text-orange-800 dark:text-orange-200">
-                  {selectedOrders.size} order
-                  {selectedOrders.size > 1 ? 's' : ''} selected for progression
+                  {selectedOrders.size} order{selectedOrders.size > 1 ? 's' : ''} selected for progression
                 </span>
               </div>
               <div className="flex items-center gap-2">
@@ -1120,14 +931,12 @@ export default function BarcodeQueuePage() {
                 </Button>
                 <Button
                   onClick={handleProgressToCNC}
-                  disabled={
-                    selectedOrders.size === 0 || progressToCNC.isPending
-                  }
+                  disabled={selectedOrders.size === 0 || progressToCNC.isPending}
                   className="bg-orange-600 hover:bg-orange-700 text-white"
                 >
                   <ArrowRight className="h-4 w-4 mr-2" />
-                  {progressToCNC.isPending
-                    ? 'Progressing...'
+                  {progressToCNC.isPending 
+                    ? 'Progressing...' 
                     : `Progress to CNC (${selectedOrders.size})`}
                 </Button>
               </div>
@@ -1136,30 +945,23 @@ export default function BarcodeQueuePage() {
         </div>
       )}
 
+
       {/* Kickback Modal */}
       <Dialog open={kickbackModalOpen} onOpenChange={setKickbackModalOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>
-              Report Kickback for Order {kickbackOrderId}
-            </DialogTitle>
+            <DialogTitle>Report Kickback for Order {kickbackOrderId}</DialogTitle>
           </DialogHeader>
-
+          
           <Form {...kickbackForm}>
-            <form
-              onSubmit={kickbackForm.handleSubmit(onKickbackSubmit)}
-              className="space-y-4"
-            >
+            <form onSubmit={kickbackForm.handleSubmit(onKickbackSubmit)} className="space-y-4">
               <FormField
                 control={kickbackForm.control}
                 name="kickbackDept"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Kick Back To Department *</FormLabel>
-                    <Select
-                      onValueChange={field.onChange}
-                      defaultValue={field.value}
-                    >
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Select department to kick back to" />
@@ -1187,37 +989,20 @@ export default function BarcodeQueuePage() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Reason Code *</FormLabel>
-                    <Select
-                      onValueChange={field.onChange}
-                      defaultValue={field.value}
-                    >
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Select reason for kickback" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="MATERIAL_DEFECT">
-                          Material Defect
-                        </SelectItem>
-                        <SelectItem value="OPERATOR_ERROR">
-                          Operator Error
-                        </SelectItem>
-                        <SelectItem value="MACHINE_FAILURE">
-                          Machine Failure
-                        </SelectItem>
-                        <SelectItem value="DESIGN_ISSUE">
-                          Design Issue
-                        </SelectItem>
-                        <SelectItem value="QUALITY_ISSUE">
-                          Quality Issue
-                        </SelectItem>
-                        <SelectItem value="PROCESS_ISSUE">
-                          Process Issue
-                        </SelectItem>
-                        <SelectItem value="SUPPLIER_ISSUE">
-                          Supplier Issue
-                        </SelectItem>
+                        <SelectItem value="MATERIAL_DEFECT">Material Defect</SelectItem>
+                        <SelectItem value="OPERATOR_ERROR">Operator Error</SelectItem>
+                        <SelectItem value="MACHINE_FAILURE">Machine Failure</SelectItem>
+                        <SelectItem value="DESIGN_ISSUE">Design Issue</SelectItem>
+                        <SelectItem value="QUALITY_ISSUE">Quality Issue</SelectItem>
+                        <SelectItem value="PROCESS_ISSUE">Process Issue</SelectItem>
+                        <SelectItem value="SUPPLIER_ISSUE">Supplier Issue</SelectItem>
                         <SelectItem value="OTHER">Other</SelectItem>
                       </SelectContent>
                     </Select>
@@ -1233,7 +1018,7 @@ export default function BarcodeQueuePage() {
                   <FormItem>
                     <FormLabel>Description *</FormLabel>
                     <FormControl>
-                      <Textarea
+                      <Textarea 
                         placeholder="Describe the issue in detail..."
                         className="min-h-[80px]"
                         {...field}
@@ -1250,10 +1035,7 @@ export default function BarcodeQueuePage() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Priority</FormLabel>
-                    <Select
-                      onValueChange={field.onChange}
-                      defaultValue={field.value}
-                    >
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue />
@@ -1286,20 +1068,18 @@ export default function BarcodeQueuePage() {
               />
 
               <div className="flex justify-end gap-2 pt-4">
-                <Button
-                  type="button"
-                  variant="outline"
+                <Button 
+                  type="button" 
+                  variant="outline" 
                   onClick={() => setKickbackModalOpen(false)}
                 >
                   Cancel
                 </Button>
-                <Button
+                <Button 
                   type="submit"
                   disabled={submitKickbackMutation.isPending}
                 >
-                  {submitKickbackMutation.isPending
-                    ? 'Submitting...'
-                    : 'Submit Kickback'}
+                  {submitKickbackMutation.isPending ? 'Submitting...' : 'Submit Kickback'}
                 </Button>
               </div>
             </form>
@@ -1308,7 +1088,7 @@ export default function BarcodeQueuePage() {
       </Dialog>
 
       {/* Sales Order Modal */}
-      <SalesOrderModal
+      <SalesOrderModal 
         isOpen={salesOrderModalOpen}
         onClose={() => setSalesOrderModalOpen(false)}
         orderId={selectedOrderId}

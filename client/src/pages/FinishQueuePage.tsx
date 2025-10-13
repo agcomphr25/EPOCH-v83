@@ -1,28 +1,11 @@
 import React, { useMemo, useState } from 'react';
 import { BarcodeScanner } from '@/components/BarcodeScanner';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import {
-  Paintbrush,
-  ArrowLeft,
-  ArrowRight,
-  Users,
-  ArrowUp,
-  CheckSquare,
-  Square,
-  CheckCircle,
-  AlertTriangle,
-  FileText,
-} from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Paintbrush, ArrowLeft, ArrowRight, Users, ArrowUp, CheckSquare, Square, CheckCircle, AlertTriangle, FileText } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { getDisplayOrderId } from '@/lib/orderUtils';
@@ -40,14 +23,16 @@ export default function FinishQueuePage() {
   const [selectedTechnician, setSelectedTechnician] = useState<string>('');
   const [salesOrderModalOpen, setSalesOrderModalOpen] = useState(false);
   const [selectedOrderId, setSelectedOrderId] = useState<string>('');
-  const [highlightedOrderId, setHighlightedOrderId] = useState<string | null>(
-    null
-  );
+  const [highlightedOrderId, setHighlightedOrderId] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
 
   // Finish technicians list
-  const finishTechnicians = ['Tomas', 'AG', 'Timmy'];
+  const finishTechnicians = [
+    'Tomas',
+    'AG',
+    'Timmy'
+  ];
 
   // Get all orders from production pipeline
   const { data: allOrders = [] } = useQuery({
@@ -57,33 +42,26 @@ export default function FinishQueuePage() {
   // Fetch all kickbacks to determine which orders have kickbacks
   const { data: allKickbacks = [] } = useQuery({
     queryKey: ['/api/kickbacks'],
-    refetchInterval: 30000, // Refresh every 30 seconds
+    refetchInterval: 30000 // Refresh every 30 seconds
   });
 
   // Helper function to check if an order has kickbacks
   const hasKickbacks = (orderId: string) => {
-    return (allKickbacks as any[]).some(
-      (kickback: any) => kickback.orderId === orderId
-    );
+    return (allKickbacks as any[]).some((kickback: any) => kickback.orderId === orderId);
   };
 
   // Helper function to get the most severe kickback status for an order
   const getKickbackStatus = (orderId: string) => {
-    const orderKickbacks = (allKickbacks as any[]).filter(
-      (kickback: any) => kickback.orderId === orderId
-    );
+    const orderKickbacks = (allKickbacks as any[]).filter((kickback: any) => kickback.orderId === orderId);
     if (orderKickbacks.length === 0) return null;
 
     // Priority order: CRITICAL > HIGH > MEDIUM > LOW
     const priorities = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'];
-    const highestPriority = orderKickbacks.reduce(
-      (highest: string, kickback: any) => {
-        const currentIndex = priorities.indexOf(kickback.priority);
-        const highestIndex = priorities.indexOf(highest);
-        return currentIndex < highestIndex ? kickback.priority : highest;
-      },
-      'LOW'
-    );
+    const highestPriority = orderKickbacks.reduce((highest: string, kickback: any) => {
+      const currentIndex = priorities.indexOf(kickback.priority);
+      const highestIndex = priorities.indexOf(highest);
+      return currentIndex < highestIndex ? kickback.priority : highest;
+    }, 'LOW');
 
     return highestPriority;
   };
@@ -101,46 +79,36 @@ export default function FinishQueuePage() {
 
   // Get orders in Finish department
   const finishOrders = useMemo(() => {
-    console.log(
-      '🔍 FINISH QUEUE DEBUG: Total orders from API:',
-      allOrders?.length || 0
-    );
-
+    console.log('🔍 FINISH QUEUE DEBUG: Total orders from API:', allOrders?.length || 0);
+    
     const filtered = (allOrders as any[]).filter((order: any) => {
       const matches = isOrderInDepartment(order, 'Finish');
-
+      
       // Debug log for orders that don't match but might be expected to
       if (!matches && order.currentDepartment) {
         const dept = order.currentDepartment.trim().toLowerCase();
         if (dept.includes('finish')) {
-          console.log(
-            '⚠️ FINISH QUEUE: Order not matching but has finish in department:',
-            {
-              orderId: order.orderId,
-              currentDepartment: order.currentDepartment,
-              status: order.status,
-              dept: order.department,
-            }
-          );
+          console.log('⚠️ FINISH QUEUE: Order not matching but has finish in department:', {
+            orderId: order.orderId,
+            currentDepartment: order.currentDepartment,
+            status: order.status,
+            dept: order.department
+          });
         }
       }
-
+      
       return matches;
     });
-
-    console.log(
-      '🔍 FINISH QUEUE DEBUG: Filtered to',
-      filtered.length,
-      'orders in Finish department'
-    );
+    
+    console.log('🔍 FINISH QUEUE DEBUG: Filtered to', filtered.length, 'orders in Finish department');
     if (filtered.length > 0) {
       console.log('🔍 FINISH QUEUE DEBUG: Sample order:', {
         orderId: filtered[0].orderId,
         currentDepartment: filtered[0].currentDepartment,
-        status: filtered[0].status,
+        status: filtered[0].status
       });
     }
-
+    
     return filtered;
   }, [allOrders]);
 
@@ -151,7 +119,7 @@ export default function FinishQueuePage() {
     tomorrow.setDate(tomorrow.getDate() + 1);
     const nextWeek = new Date(today);
     nextWeek.setDate(nextWeek.getDate() + 7);
-
+    
     const overdue = [];
     const dueToday = [];
     const dueTomorrow = [];
@@ -177,13 +145,9 @@ export default function FinishQueuePage() {
         dueToday.push(order);
       } else if (dueDate.getTime() === tomorrow.getTime()) {
         dueTomorrow.push(order);
-      } else if (
-        dueDate <= new Date(todayNorm.getTime() + 7 * 24 * 60 * 60 * 1000)
-      ) {
+      } else if (dueDate <= new Date(todayNorm.getTime() + 7 * 24 * 60 * 60 * 1000)) {
         dueThisWeek.push(order);
-      } else if (
-        dueDate <= new Date(todayNorm.getTime() + 14 * 24 * 60 * 60 * 1000)
-      ) {
+      } else if (dueDate <= new Date(todayNorm.getTime() + 14 * 24 * 60 * 60 * 1000)) {
         dueNextWeek.push(order);
       } else {
         futureDue.push(order);
@@ -193,8 +157,7 @@ export default function FinishQueuePage() {
     // Sort each category by due date and order ID
     const sortFn = (a: any, b: any) => {
       if (a.dueDate && b.dueDate) {
-        const dateCompare =
-          new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+        const dateCompare = new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
         if (dateCompare !== 0) return dateCompare;
       }
       return a.orderId.localeCompare(b.orderId);
@@ -207,21 +170,21 @@ export default function FinishQueuePage() {
       dueThisWeek: dueThisWeek.sort(sortFn),
       dueNextWeek: dueNextWeek.sort(sortFn),
       futureDue: futureDue.sort(sortFn),
-      noDueDate: noDueDate.sort((a, b) => a.orderId.localeCompare(b.orderId)),
+      noDueDate: noDueDate.sort((a, b) => a.orderId.localeCompare(b.orderId))
     };
   }, [finishOrders]);
 
   // Count orders in previous department (CNC)
   const cncCount = useMemo(() => {
-    return (allOrders as any[]).filter(
-      (order: any) => order.currentDepartment === 'CNC'
+    return (allOrders as any[]).filter((order: any) => 
+      order.currentDepartment === 'CNC'
     ).length;
   }, [allOrders]);
 
   // Count orders in next department (Paint)
   const paintCount = useMemo(() => {
-    return (allOrders as any[]).filter(
-      (order: any) => order.currentDepartment === 'Paint'
+    return (allOrders as any[]).filter((order: any) => 
+      order.currentDepartment === 'Paint'
     ).length;
   }, [allOrders]);
 
@@ -238,7 +201,7 @@ export default function FinishQueuePage() {
 
   // Multi-select functions
   const handleSelectOrder = (orderId: string) => {
-    setSelectedOrders((prev) => {
+    setSelectedOrders(prev => {
       const newSet = new Set(prev);
       if (newSet.has(orderId)) {
         newSet.delete(orderId);
@@ -254,9 +217,7 @@ export default function FinishQueuePage() {
       setSelectedOrders(new Set());
       setSelectAll(false);
     } else {
-      setSelectedOrders(
-        new Set(finishOrders.map((order: any) => order.orderId))
-      );
+      setSelectedOrders(new Set(finishOrders.map((order: any) => order.orderId)));
       setSelectAll(true);
     }
   };
@@ -268,39 +229,29 @@ export default function FinishQueuePage() {
 
   // Move orders to Finish QC with technician assignment
   const moveToFinishQCMutation = useMutation({
-    mutationFn: async ({
-      orderIds,
-      technician,
-    }: {
-      orderIds: string[];
-      technician: string;
-    }) => {
+    mutationFn: async ({ orderIds, technician }: { orderIds: string[], technician: string }) => {
       const response = await apiRequest('/api/orders/update-department', {
         method: 'POST',
         body: JSON.stringify({
           orderIds: orderIds,
           department: 'Finish QC',
           status: 'IN_PROGRESS',
-          assignedTechnician: technician,
-        }),
+          assignedTechnician: technician
+        })
       });
       return response;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
-      queryClient.invalidateQueries({
-        queryKey: ['/api/orders/department', 'Finish QC'],
-      });
-      toast.success(
-        `${selectedOrders.size} orders moved to Finish QC (${selectedTechnician})`
-      );
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/department', 'Finish QC'] });
+      toast.success(`${selectedOrders.size} orders moved to Finish QC (${selectedTechnician})`);
       setSelectedOrders(new Set());
       setSelectAll(false);
       setSelectedTechnician('');
     },
     onError: () => {
-      toast.error('Failed to move orders to Finish QC');
-    },
+      toast.error("Failed to move orders to Finish QC");
+    }
   });
 
   // Move orders directly to Paint (skip Finish QC)
@@ -311,57 +262,47 @@ export default function FinishQueuePage() {
         body: JSON.stringify({
           orderIds: orderIds,
           department: 'Paint',
-          status: 'IN_PROGRESS',
-        }),
+          status: 'IN_PROGRESS'
+        })
       });
       return response;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
-      queryClient.invalidateQueries({
-        queryKey: ['/api/orders/department', 'Paint'],
-      });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/department', 'Paint'] });
       toast.success(`${selectedOrders.size} orders moved to Paint`);
       setSelectedOrders(new Set());
       setSelectAll(false);
     },
     onError: () => {
-      toast.error('Failed to move orders to Paint');
-    },
+      toast.error("Failed to move orders to Paint");
+    }
   });
 
   // Progress mutation for moving orders to next department (Paint)
   const progressMutation = useMutation({
-    mutationFn: async ({
-      orderIds,
-      technician,
-    }: {
-      orderIds: string[];
-      technician: string;
-    }) => {
+    mutationFn: async ({ orderIds, technician }: { orderIds: string[], technician: string }) => {
       const response = await apiRequest('/api/orders/update-department', {
         method: 'POST',
         body: JSON.stringify({
           orderIds: orderIds,
           department: 'Paint',
           status: 'Active',
-          assignedTechnician: technician,
-        }),
+          assignedTechnician: technician
+        })
       });
       return response;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
-      queryClient.invalidateQueries({
-        queryKey: ['/api/orders/department', 'Paint'],
-      });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/department', 'Paint'] });
       toast.success(`${selectedOrders.size} orders progressed to Paint`);
       setSelectedOrders(new Set());
       setSelectAll(false);
     },
     onError: () => {
-      toast.error('Failed to progress orders');
-    },
+      toast.error("Failed to progress orders");
+    }
   });
 
   const handleMoveToFinishQC = () => {
@@ -373,9 +314,9 @@ export default function FinishQueuePage() {
       toast.error('Please select a technician');
       return;
     }
-    moveToFinishQCMutation.mutate({
-      orderIds: Array.from(selectedOrders),
-      technician: selectedTechnician,
+    moveToFinishQCMutation.mutate({ 
+      orderIds: Array.from(selectedOrders), 
+      technician: selectedTechnician 
     });
   };
 
@@ -384,8 +325,8 @@ export default function FinishQueuePage() {
       toast.error('Please select orders to move');
       return;
     }
-    moveToPaintMutation.mutate({
-      orderIds: Array.from(selectedOrders),
+    moveToPaintMutation.mutate({ 
+      orderIds: Array.from(selectedOrders)
     });
   };
 
@@ -395,21 +336,19 @@ export default function FinishQueuePage() {
       toast.error('Please select orders to progress');
       return;
     }
-
+    
     progressMutation.mutate({
       orderIds: Array.from(selectedOrders),
-      technician: selectedTechnician || '',
+      technician: selectedTechnician || ''
     });
   };
 
   // Auto-select order when scanned
   const handleOrderScanned = (orderId: string) => {
     // Check if the order exists in the current queue
-    const orderExists = finishOrders.some(
-      (order: any) => order.orderId === orderId
-    );
+    const orderExists = finishOrders.some((order: any) => order.orderId === orderId);
     if (orderExists) {
-      setSelectedOrders((prev) => new Set([...prev, orderId]));
+      setSelectedOrders(prev => new Set([...prev, orderId]));
       toast.success(`Order ${orderId} selected automatically`);
     } else {
       toast.error(`Order ${orderId} is not in the Finish department`);
@@ -418,9 +357,7 @@ export default function FinishQueuePage() {
 
   // Handle order search selection
   const handleOrderSearchSelect = (order: any) => {
-    const orderExists = finishOrders.some(
-      (o: any) => o.orderId === order.orderId
-    );
+    const orderExists = finishOrders.some((o: any) => o.orderId === order.orderId);
     if (orderExists) {
       setHighlightedOrderId(order.orderId);
       // Auto-scroll to the highlighted order
@@ -450,7 +387,7 @@ export default function FinishQueuePage() {
       <Card>
         <CardContent className="p-4">
           <div className="flex items-center gap-4">
-            <OrderSearchBox
+            <OrderSearchBox 
               orders={finishOrders}
               placeholder="Search orders by Order ID or FishBowl Number..."
               onOrderSelect={handleOrderSearchSelect}
@@ -523,10 +460,7 @@ export default function FinishQueuePage() {
               {/* Technician Selection */}
               <div className="flex items-center gap-2">
                 <Users className="h-4 w-4 text-gray-600" />
-                <Select
-                  value={selectedTechnician}
-                  onValueChange={setSelectedTechnician}
-                >
+                <Select value={selectedTechnician} onValueChange={setSelectedTechnician}>
                   <SelectTrigger className="w-40">
                     <SelectValue placeholder="Select Technician" />
                   </SelectTrigger>
@@ -554,11 +488,9 @@ export default function FinishQueuePage() {
                     ) : (
                       <Square className="h-4 w-4" />
                     )}
-                    {selectedOrders.size === finishOrders.length
-                      ? 'Deselect All'
-                      : 'Select All'}
+                    {selectedOrders.size === finishOrders.length ? 'Deselect All' : 'Select All'}
                   </Button>
-
+                  
                   {selectedOrders.size > 0 && (
                     <Button
                       variant="outline"
@@ -582,7 +514,7 @@ export default function FinishQueuePage() {
                           Move to Paint ({selectedOrders.size})
                         </Button>
                       )}
-
+                      
                       <Button
                         onClick={handleMoveToPaint}
                         disabled={moveToPaintMutation.isPending}
@@ -599,8 +531,7 @@ export default function FinishQueuePage() {
             </div>
           </CardTitle>
           <p className="text-sm text-blue-600 dark:text-blue-400 mt-2">
-            Assigned to {selectedTechnician || 'No technician selected'} •
-            Select orders and route to next department
+            Assigned to {selectedTechnician || 'No technician selected'} • Select orders and route to next department
           </p>
         </CardHeader>
         <CardContent className="p-4">
@@ -624,39 +555,28 @@ export default function FinishQueuePage() {
                         <div className="absolute top-2 left-2 z-10">
                           <Checkbox
                             checked={selectedOrders.has(order.orderId)}
-                            onCheckedChange={() =>
-                              handleSelectOrder(order.orderId)
-                            }
+                            onCheckedChange={() => handleSelectOrder(order.orderId)}
                             className="bg-white dark:bg-gray-800 border-2"
                           />
                         </div>
-                        <Card
-                          className={`${
-                            selectedOrders.has(order.orderId)
-                              ? 'bg-red-100 dark:bg-red-800/40 border-red-400 dark:border-red-600 ring-2 ring-red-300 dark:ring-red-700'
-                              : 'bg-red-50 dark:bg-red-900/20 border-red-300 dark:border-red-700'
+                        <Card 
+                          className={`${selectedOrders.has(order.orderId) 
+                            ? 'bg-red-100 dark:bg-red-800/40 border-red-400 dark:border-red-600 ring-2 ring-red-300 dark:ring-red-700' 
+                            : 'bg-red-50 dark:bg-red-900/20 border-red-300 dark:border-red-700'
                           } pl-8`}
                         >
                           <CardContent className="p-3">
                             <div className="flex items-center justify-between mb-2">
                               <div className="flex items-center gap-1.5">
-                                <span className="font-semibold">
-                                  {getDisplayOrderId(order)}
-                                </span>
+                                <span className="font-semibold">{getDisplayOrderId(order)}</span>
                                 {order.fbOrderNumber && (
-                                  <Badge
-                                    variant="outline"
-                                    className="text-xs px-1 py-0 bg-blue-50 dark:bg-blue-900/20 border-blue-300"
-                                  >
+                                  <Badge variant="outline" className="text-xs px-1 py-0 bg-blue-50 dark:bg-blue-900/20 border-blue-300">
                                     FB: {order.fbOrderNumber}
                                   </Badge>
                                 )}
                               </div>
                               {order.dueDate && (
-                                <Badge
-                                  variant="destructive"
-                                  className="text-xs"
-                                >
+                                <Badge variant="destructive" className="text-xs">
                                   Due: {format(new Date(order.dueDate), 'M/d')}
                                 </Badge>
                               )}
@@ -676,9 +596,7 @@ export default function FinishQueuePage() {
                               <Badge
                                 variant="outline"
                                 className="cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 text-xs border-blue-300 text-blue-700 dark:text-blue-300"
-                                onClick={() =>
-                                  handleSalesOrderView(order.orderId)
-                                }
+                                onClick={() => handleSalesOrderView(order.orderId)}
                               >
                                 <FileText className="w-3 h-3 mr-1" />
                                 Sales Order
@@ -687,20 +605,12 @@ export default function FinishQueuePage() {
                                 <Badge
                                   variant="destructive"
                                   className={`cursor-pointer hover:opacity-80 transition-opacity text-xs ${
-                                    getKickbackStatus(order.orderId) ===
-                                    'CRITICAL'
-                                      ? 'bg-red-600 hover:bg-red-700'
-                                      : getKickbackStatus(order.orderId) ===
-                                          'HIGH'
-                                        ? 'bg-orange-600 hover:bg-orange-700'
-                                        : getKickbackStatus(order.orderId) ===
-                                            'MEDIUM'
-                                          ? 'bg-yellow-600 hover:bg-yellow-700'
-                                          : 'bg-gray-600 hover:bg-gray-700'
+                                    getKickbackStatus(order.orderId) === 'CRITICAL' ? 'bg-red-600 hover:bg-red-700' :
+                                    getKickbackStatus(order.orderId) === 'HIGH' ? 'bg-orange-600 hover:bg-orange-700' :
+                                    getKickbackStatus(order.orderId) === 'MEDIUM' ? 'bg-yellow-600 hover:bg-yellow-700' :
+                                    'bg-gray-600 hover:bg-gray-700'
                                   }`}
-                                  onClick={() =>
-                                    handleKickbackClick(order.orderId)
-                                  }
+                                  onClick={() => handleKickbackClick(order.orderId)}
                                 >
                                   <AlertTriangle className="w-3 h-3 mr-1" />
                                   Kickback
@@ -729,39 +639,28 @@ export default function FinishQueuePage() {
                         <div className="absolute top-2 left-2 z-10">
                           <Checkbox
                             checked={selectedOrders.has(order.orderId)}
-                            onCheckedChange={() =>
-                              handleSelectOrder(order.orderId)
-                            }
+                            onCheckedChange={() => handleSelectOrder(order.orderId)}
                             className="bg-white dark:bg-gray-800 border-2"
                           />
                         </div>
-                        <Card
-                          className={`${
-                            selectedOrders.has(order.orderId)
-                              ? 'bg-orange-100 dark:bg-orange-800/40 border-orange-400 dark:border-orange-600 ring-2 ring-orange-300 dark:ring-orange-700'
-                              : 'bg-orange-50 dark:bg-orange-900/20 border-orange-300 dark:border-orange-700'
+                        <Card 
+                          className={`${selectedOrders.has(order.orderId) 
+                            ? 'bg-orange-100 dark:bg-orange-800/40 border-orange-400 dark:border-orange-600 ring-2 ring-orange-300 dark:ring-orange-700' 
+                            : 'bg-orange-50 dark:bg-orange-900/20 border-orange-300 dark:border-orange-700'
                           } pl-8`}
                         >
                           <CardContent className="p-3">
                             <div className="flex items-center justify-between mb-2">
                               <div className="flex items-center gap-1.5">
-                                <span className="font-semibold">
-                                  {getDisplayOrderId(order)}
-                                </span>
+                                <span className="font-semibold">{getDisplayOrderId(order)}</span>
                                 {order.fbOrderNumber && (
-                                  <Badge
-                                    variant="outline"
-                                    className="text-xs px-1 py-0 bg-blue-50 dark:bg-blue-900/20 border-blue-300"
-                                  >
+                                  <Badge variant="outline" className="text-xs px-1 py-0 bg-blue-50 dark:bg-blue-900/20 border-blue-300">
                                     FB: {order.fbOrderNumber}
                                   </Badge>
                                 )}
                               </div>
                               {order.dueDate && (
-                                <Badge
-                                  variant="destructive"
-                                  className="text-xs"
-                                >
+                                <Badge variant="destructive" className="text-xs">
                                   Due: {format(new Date(order.dueDate), 'M/d')}
                                 </Badge>
                               )}
@@ -781,9 +680,7 @@ export default function FinishQueuePage() {
                               <Badge
                                 variant="outline"
                                 className="cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 text-xs border-blue-300 text-blue-700 dark:text-blue-300"
-                                onClick={() =>
-                                  handleSalesOrderView(order.orderId)
-                                }
+                                onClick={() => handleSalesOrderView(order.orderId)}
                               >
                                 <FileText className="w-3 h-3 mr-1" />
                                 Sales Order
@@ -792,20 +689,12 @@ export default function FinishQueuePage() {
                                 <Badge
                                   variant="destructive"
                                   className={`cursor-pointer hover:opacity-80 transition-opacity text-xs ${
-                                    getKickbackStatus(order.orderId) ===
-                                    'CRITICAL'
-                                      ? 'bg-red-600 hover:bg-red-700'
-                                      : getKickbackStatus(order.orderId) ===
-                                          'HIGH'
-                                        ? 'bg-orange-600 hover:bg-orange-700'
-                                        : getKickbackStatus(order.orderId) ===
-                                            'MEDIUM'
-                                          ? 'bg-yellow-600 hover:bg-yellow-700'
-                                          : 'bg-gray-600 hover:bg-gray-700'
+                                    getKickbackStatus(order.orderId) === 'CRITICAL' ? 'bg-red-600 hover:bg-red-700' :
+                                    getKickbackStatus(order.orderId) === 'HIGH' ? 'bg-orange-600 hover:bg-orange-700' :
+                                    getKickbackStatus(order.orderId) === 'MEDIUM' ? 'bg-yellow-600 hover:bg-yellow-700' :
+                                    'bg-gray-600 hover:bg-gray-700'
                                   }`}
-                                  onClick={() =>
-                                    handleKickbackClick(order.orderId)
-                                  }
+                                  onClick={() => handleKickbackClick(order.orderId)}
                                 >
                                   <AlertTriangle className="w-3 h-3 mr-1" />
                                   Kickback
@@ -834,30 +723,22 @@ export default function FinishQueuePage() {
                         <div className="absolute top-2 left-2 z-10">
                           <Checkbox
                             checked={selectedOrders.has(order.orderId)}
-                            onCheckedChange={() =>
-                              handleSelectOrder(order.orderId)
-                            }
+                            onCheckedChange={() => handleSelectOrder(order.orderId)}
                             className="bg-white dark:bg-gray-800 border-2"
                           />
                         </div>
-                        <Card
-                          className={`${
-                            selectedOrders.has(order.orderId)
-                              ? 'bg-yellow-100 dark:bg-yellow-800/40 border-yellow-400 dark:border-yellow-600 ring-2 ring-yellow-300 dark:ring-yellow-700'
-                              : 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-300 dark:border-yellow-700'
+                        <Card 
+                          className={`${selectedOrders.has(order.orderId) 
+                            ? 'bg-yellow-100 dark:bg-yellow-800/40 border-yellow-400 dark:border-yellow-600 ring-2 ring-yellow-300 dark:ring-yellow-700' 
+                            : 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-300 dark:border-yellow-700'
                           } pl-8`}
                         >
                           <CardContent className="p-3">
                             <div className="flex items-center justify-between mb-2">
                               <div className="flex items-center gap-1.5">
-                                <span className="font-semibold">
-                                  {getDisplayOrderId(order)}
-                                </span>
+                                <span className="font-semibold">{getDisplayOrderId(order)}</span>
                                 {order.fbOrderNumber && (
-                                  <Badge
-                                    variant="outline"
-                                    className="text-xs px-1 py-0 bg-blue-50 dark:bg-blue-900/20 border-blue-300"
-                                  >
+                                  <Badge variant="outline" className="text-xs px-1 py-0 bg-blue-50 dark:bg-blue-900/20 border-blue-300">
                                     FB: {order.fbOrderNumber}
                                   </Badge>
                                 )}
@@ -883,9 +764,7 @@ export default function FinishQueuePage() {
                               <Badge
                                 variant="outline"
                                 className="cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 text-xs border-blue-300 text-blue-700 dark:text-blue-300"
-                                onClick={() =>
-                                  handleSalesOrderView(order.orderId)
-                                }
+                                onClick={() => handleSalesOrderView(order.orderId)}
                               >
                                 <FileText className="w-3 h-3 mr-1" />
                                 Sales Order
@@ -894,20 +773,12 @@ export default function FinishQueuePage() {
                                 <Badge
                                   variant="destructive"
                                   className={`cursor-pointer hover:opacity-80 transition-opacity text-xs ${
-                                    getKickbackStatus(order.orderId) ===
-                                    'CRITICAL'
-                                      ? 'bg-red-600 hover:bg-red-700'
-                                      : getKickbackStatus(order.orderId) ===
-                                          'HIGH'
-                                        ? 'bg-orange-600 hover:bg-orange-700'
-                                        : getKickbackStatus(order.orderId) ===
-                                            'MEDIUM'
-                                          ? 'bg-yellow-600 hover:bg-yellow-700'
-                                          : 'bg-gray-600 hover:bg-gray-700'
+                                    getKickbackStatus(order.orderId) === 'CRITICAL' ? 'bg-red-600 hover:bg-red-700' :
+                                    getKickbackStatus(order.orderId) === 'HIGH' ? 'bg-orange-600 hover:bg-orange-700' :
+                                    getKickbackStatus(order.orderId) === 'MEDIUM' ? 'bg-yellow-600 hover:bg-yellow-700' :
+                                    'bg-gray-600 hover:bg-gray-700'
                                   }`}
-                                  onClick={() =>
-                                    handleKickbackClick(order.orderId)
-                                  }
+                                  onClick={() => handleKickbackClick(order.orderId)}
                                 >
                                   <AlertTriangle className="w-3 h-3 mr-1" />
                                   Kickback
@@ -936,30 +807,22 @@ export default function FinishQueuePage() {
                         <div className="absolute top-2 left-2 z-10">
                           <Checkbox
                             checked={selectedOrders.has(order.orderId)}
-                            onCheckedChange={() =>
-                              handleSelectOrder(order.orderId)
-                            }
+                            onCheckedChange={() => handleSelectOrder(order.orderId)}
                             className="bg-white dark:bg-gray-800 border-2"
                           />
                         </div>
-                        <Card
-                          className={`${
-                            selectedOrders.has(order.orderId)
-                              ? 'bg-blue-100 dark:bg-blue-800/40 border-blue-400 dark:border-blue-600 ring-2 ring-blue-300 dark:ring-blue-700'
-                              : 'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-700'
+                        <Card 
+                          className={`${selectedOrders.has(order.orderId) 
+                            ? 'bg-blue-100 dark:bg-blue-800/40 border-blue-400 dark:border-blue-600 ring-2 ring-blue-300 dark:ring-blue-700' 
+                            : 'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-700'
                           } pl-8`}
                         >
                           <CardContent className="p-3">
                             <div className="flex items-center justify-between mb-2">
                               <div className="flex items-center gap-1.5">
-                                <span className="font-semibold">
-                                  {getDisplayOrderId(order)}
-                                </span>
+                                <span className="font-semibold">{getDisplayOrderId(order)}</span>
                                 {order.fbOrderNumber && (
-                                  <Badge
-                                    variant="outline"
-                                    className="text-xs px-1 py-0 bg-blue-50 dark:bg-blue-900/20 border-blue-300"
-                                  >
+                                  <Badge variant="outline" className="text-xs px-1 py-0 bg-blue-50 dark:bg-blue-900/20 border-blue-300">
                                     FB: {order.fbOrderNumber}
                                   </Badge>
                                 )}
@@ -985,9 +848,7 @@ export default function FinishQueuePage() {
                               <Badge
                                 variant="outline"
                                 className="cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 text-xs border-blue-300 text-blue-700 dark:text-blue-300"
-                                onClick={() =>
-                                  handleSalesOrderView(order.orderId)
-                                }
+                                onClick={() => handleSalesOrderView(order.orderId)}
                               >
                                 <FileText className="w-3 h-3 mr-1" />
                                 Sales Order
@@ -996,20 +857,12 @@ export default function FinishQueuePage() {
                                 <Badge
                                   variant="destructive"
                                   className={`cursor-pointer hover:opacity-80 transition-opacity text-xs ${
-                                    getKickbackStatus(order.orderId) ===
-                                    'CRITICAL'
-                                      ? 'bg-red-600 hover:bg-red-700'
-                                      : getKickbackStatus(order.orderId) ===
-                                          'HIGH'
-                                        ? 'bg-orange-600 hover:bg-orange-700'
-                                        : getKickbackStatus(order.orderId) ===
-                                            'MEDIUM'
-                                          ? 'bg-yellow-600 hover:bg-yellow-700'
-                                          : 'bg-gray-600 hover:bg-gray-700'
+                                    getKickbackStatus(order.orderId) === 'CRITICAL' ? 'bg-red-600 hover:bg-red-700' :
+                                    getKickbackStatus(order.orderId) === 'HIGH' ? 'bg-orange-600 hover:bg-orange-700' :
+                                    getKickbackStatus(order.orderId) === 'MEDIUM' ? 'bg-yellow-600 hover:bg-yellow-700' :
+                                    'bg-gray-600 hover:bg-gray-700'
                                   }`}
-                                  onClick={() =>
-                                    handleKickbackClick(order.orderId)
-                                  }
+                                  onClick={() => handleKickbackClick(order.orderId)}
                                 >
                                   <AlertTriangle className="w-3 h-3 mr-1" />
                                   Kickback
@@ -1038,30 +891,22 @@ export default function FinishQueuePage() {
                         <div className="absolute top-2 left-2 z-10">
                           <Checkbox
                             checked={selectedOrders.has(order.orderId)}
-                            onCheckedChange={() =>
-                              handleSelectOrder(order.orderId)
-                            }
+                            onCheckedChange={() => handleSelectOrder(order.orderId)}
                             className="bg-white dark:bg-gray-800 border-2"
                           />
                         </div>
-                        <Card
-                          className={`${
-                            selectedOrders.has(order.orderId)
-                              ? 'bg-green-100 dark:bg-green-800/40 border-green-400 dark:border-green-600 ring-2 ring-green-300 dark:ring-green-700'
-                              : 'bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700'
+                        <Card 
+                          className={`${selectedOrders.has(order.orderId) 
+                            ? 'bg-green-100 dark:bg-green-800/40 border-green-400 dark:border-green-600 ring-2 ring-green-300 dark:ring-green-700' 
+                            : 'bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700'
                           } pl-8`}
                         >
                           <CardContent className="p-3">
                             <div className="flex items-center justify-between mb-2">
                               <div className="flex items-center gap-1.5">
-                                <span className="font-semibold">
-                                  {getDisplayOrderId(order)}
-                                </span>
+                                <span className="font-semibold">{getDisplayOrderId(order)}</span>
                                 {order.fbOrderNumber && (
-                                  <Badge
-                                    variant="outline"
-                                    className="text-xs px-1 py-0 bg-blue-50 dark:bg-blue-900/20 border-blue-300"
-                                  >
+                                  <Badge variant="outline" className="text-xs px-1 py-0 bg-blue-50 dark:bg-blue-900/20 border-blue-300">
                                     FB: {order.fbOrderNumber}
                                   </Badge>
                                 )}
@@ -1087,9 +932,7 @@ export default function FinishQueuePage() {
                               <Badge
                                 variant="outline"
                                 className="cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 text-xs border-blue-300 text-blue-700 dark:text-blue-300"
-                                onClick={() =>
-                                  handleSalesOrderView(order.orderId)
-                                }
+                                onClick={() => handleSalesOrderView(order.orderId)}
                               >
                                 <FileText className="w-3 h-3 mr-1" />
                                 Sales Order
@@ -1098,20 +941,12 @@ export default function FinishQueuePage() {
                                 <Badge
                                   variant="destructive"
                                   className={`cursor-pointer hover:opacity-80 transition-opacity text-xs ${
-                                    getKickbackStatus(order.orderId) ===
-                                    'CRITICAL'
-                                      ? 'bg-red-600 hover:bg-red-700'
-                                      : getKickbackStatus(order.orderId) ===
-                                          'HIGH'
-                                        ? 'bg-orange-600 hover:bg-orange-700'
-                                        : getKickbackStatus(order.orderId) ===
-                                            'MEDIUM'
-                                          ? 'bg-yellow-600 hover:bg-yellow-700'
-                                          : 'bg-gray-600 hover:bg-gray-700'
+                                    getKickbackStatus(order.orderId) === 'CRITICAL' ? 'bg-red-600 hover:bg-red-700' :
+                                    getKickbackStatus(order.orderId) === 'HIGH' ? 'bg-orange-600 hover:bg-orange-700' :
+                                    getKickbackStatus(order.orderId) === 'MEDIUM' ? 'bg-yellow-600 hover:bg-yellow-700' :
+                                    'bg-gray-600 hover:bg-gray-700'
                                   }`}
-                                  onClick={() =>
-                                    handleKickbackClick(order.orderId)
-                                  }
+                                  onClick={() => handleKickbackClick(order.orderId)}
                                 >
                                   <AlertTriangle className="w-3 h-3 mr-1" />
                                   Kickback
@@ -1140,30 +975,22 @@ export default function FinishQueuePage() {
                         <div className="absolute top-2 left-2 z-10">
                           <Checkbox
                             checked={selectedOrders.has(order.orderId)}
-                            onCheckedChange={() =>
-                              handleSelectOrder(order.orderId)
-                            }
+                            onCheckedChange={() => handleSelectOrder(order.orderId)}
                             className="bg-white dark:bg-gray-800 border-2"
                           />
                         </div>
-                        <Card
-                          className={`${
-                            selectedOrders.has(order.orderId)
-                              ? 'bg-gray-100 dark:bg-gray-800/40 border-gray-400 dark:border-gray-600 ring-2 ring-gray-300 dark:ring-gray-700'
-                              : 'bg-gray-50 dark:bg-gray-900/20 border-gray-300 dark:border-gray-700'
+                        <Card 
+                          className={`${selectedOrders.has(order.orderId) 
+                            ? 'bg-gray-100 dark:bg-gray-800/40 border-gray-400 dark:border-gray-600 ring-2 ring-gray-300 dark:ring-gray-700' 
+                            : 'bg-gray-50 dark:bg-gray-900/20 border-gray-300 dark:border-gray-700'
                           } pl-8`}
                         >
                           <CardContent className="p-3">
                             <div className="flex items-center justify-between mb-2">
                               <div className="flex items-center gap-1.5">
-                                <span className="font-semibold">
-                                  {getDisplayOrderId(order)}
-                                </span>
+                                <span className="font-semibold">{getDisplayOrderId(order)}</span>
                                 {order.fbOrderNumber && (
-                                  <Badge
-                                    variant="outline"
-                                    className="text-xs px-1 py-0 bg-blue-50 dark:bg-blue-900/20 border-blue-300"
-                                  >
+                                  <Badge variant="outline" className="text-xs px-1 py-0 bg-blue-50 dark:bg-blue-900/20 border-blue-300">
                                     FB: {order.fbOrderNumber}
                                   </Badge>
                                 )}
@@ -1189,9 +1016,7 @@ export default function FinishQueuePage() {
                               <Badge
                                 variant="outline"
                                 className="cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 text-xs border-blue-300 text-blue-700 dark:text-blue-300"
-                                onClick={() =>
-                                  handleSalesOrderView(order.orderId)
-                                }
+                                onClick={() => handleSalesOrderView(order.orderId)}
                               >
                                 <FileText className="w-3 h-3 mr-1" />
                                 Sales Order
@@ -1200,20 +1025,12 @@ export default function FinishQueuePage() {
                                 <Badge
                                   variant="destructive"
                                   className={`cursor-pointer hover:opacity-80 transition-opacity text-xs ${
-                                    getKickbackStatus(order.orderId) ===
-                                    'CRITICAL'
-                                      ? 'bg-red-600 hover:bg-red-700'
-                                      : getKickbackStatus(order.orderId) ===
-                                          'HIGH'
-                                        ? 'bg-orange-600 hover:bg-orange-700'
-                                        : getKickbackStatus(order.orderId) ===
-                                            'MEDIUM'
-                                          ? 'bg-yellow-600 hover:bg-yellow-700'
-                                          : 'bg-gray-600 hover:bg-gray-700'
+                                    getKickbackStatus(order.orderId) === 'CRITICAL' ? 'bg-red-600 hover:bg-red-700' :
+                                    getKickbackStatus(order.orderId) === 'HIGH' ? 'bg-orange-600 hover:bg-orange-700' :
+                                    getKickbackStatus(order.orderId) === 'MEDIUM' ? 'bg-yellow-600 hover:bg-yellow-700' :
+                                    'bg-gray-600 hover:bg-gray-700'
                                   }`}
-                                  onClick={() =>
-                                    handleKickbackClick(order.orderId)
-                                  }
+                                  onClick={() => handleKickbackClick(order.orderId)}
                                 >
                                   <AlertTriangle className="w-3 h-3 mr-1" />
                                   Kickback
@@ -1242,30 +1059,22 @@ export default function FinishQueuePage() {
                         <div className="absolute top-2 left-2 z-10">
                           <Checkbox
                             checked={selectedOrders.has(order.orderId)}
-                            onCheckedChange={() =>
-                              handleSelectOrder(order.orderId)
-                            }
+                            onCheckedChange={() => handleSelectOrder(order.orderId)}
                             className="bg-white dark:bg-gray-800 border-2"
                           />
                         </div>
-                        <Card
-                          className={`${
-                            selectedOrders.has(order.orderId)
-                              ? 'bg-gray-100 dark:bg-gray-800/40 border-gray-400 dark:border-gray-600 ring-2 ring-gray-300 dark:ring-gray-700'
-                              : 'bg-gray-50 dark:bg-gray-900/20 border-gray-300 dark:border-gray-700'
+                        <Card 
+                          className={`${selectedOrders.has(order.orderId) 
+                            ? 'bg-gray-100 dark:bg-gray-800/40 border-gray-400 dark:border-gray-600 ring-2 ring-gray-300 dark:ring-gray-700' 
+                            : 'bg-gray-50 dark:bg-gray-900/20 border-gray-300 dark:border-gray-700'
                           } pl-8`}
                         >
                           <CardContent className="p-3">
                             <div className="flex items-center justify-between mb-2">
                               <div className="flex items-center gap-1.5">
-                                <span className="font-semibold">
-                                  {getDisplayOrderId(order)}
-                                </span>
+                                <span className="font-semibold">{getDisplayOrderId(order)}</span>
                                 {order.fbOrderNumber && (
-                                  <Badge
-                                    variant="outline"
-                                    className="text-xs px-1 py-0 bg-blue-50 dark:bg-blue-900/20 border-blue-300"
-                                  >
+                                  <Badge variant="outline" className="text-xs px-1 py-0 bg-blue-50 dark:bg-blue-900/20 border-blue-300">
                                     FB: {order.fbOrderNumber}
                                   </Badge>
                                 )}
@@ -1289,9 +1098,7 @@ export default function FinishQueuePage() {
                               <Badge
                                 variant="outline"
                                 className="cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 text-xs border-blue-300 text-blue-700 dark:text-blue-300"
-                                onClick={() =>
-                                  handleSalesOrderView(order.orderId)
-                                }
+                                onClick={() => handleSalesOrderView(order.orderId)}
                               >
                                 <FileText className="w-3 h-3 mr-1" />
                                 Sales Order
@@ -1300,20 +1107,12 @@ export default function FinishQueuePage() {
                                 <Badge
                                   variant="destructive"
                                   className={`cursor-pointer hover:opacity-80 transition-opacity text-xs ${
-                                    getKickbackStatus(order.orderId) ===
-                                    'CRITICAL'
-                                      ? 'bg-red-600 hover:bg-red-700'
-                                      : getKickbackStatus(order.orderId) ===
-                                          'HIGH'
-                                        ? 'bg-orange-600 hover:bg-orange-700'
-                                        : getKickbackStatus(order.orderId) ===
-                                            'MEDIUM'
-                                          ? 'bg-yellow-600 hover:bg-yellow-700'
-                                          : 'bg-gray-600 hover:bg-gray-700'
+                                    getKickbackStatus(order.orderId) === 'CRITICAL' ? 'bg-red-600 hover:bg-red-700' :
+                                    getKickbackStatus(order.orderId) === 'HIGH' ? 'bg-orange-600 hover:bg-orange-700' :
+                                    getKickbackStatus(order.orderId) === 'MEDIUM' ? 'bg-yellow-600 hover:bg-yellow-700' :
+                                    'bg-gray-600 hover:bg-gray-700'
                                   }`}
-                                  onClick={() =>
-                                    handleKickbackClick(order.orderId)
-                                  }
+                                  onClick={() => handleKickbackClick(order.orderId)}
                                 >
                                   <AlertTriangle className="w-3 h-3 mr-1" />
                                   Kickback
@@ -1340,8 +1139,7 @@ export default function FinishQueuePage() {
               <div className="flex items-center gap-2">
                 <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400" />
                 <span className="font-medium text-green-800 dark:text-green-200">
-                  {selectedOrders.size} order
-                  {selectedOrders.size > 1 ? 's' : ''} selected for progression
+                  {selectedOrders.size} order{selectedOrders.size > 1 ? 's' : ''} selected for progression
                 </span>
               </div>
               <div className="flex items-center gap-2">
@@ -1354,14 +1152,12 @@ export default function FinishQueuePage() {
                 </Button>
                 <Button
                   onClick={handleProgressOrders}
-                  disabled={
-                    selectedOrders.size === 0 || progressMutation.isPending
-                  }
+                  disabled={selectedOrders.size === 0 || progressMutation.isPending}
                   className="bg-green-600 hover:bg-green-700 text-white"
                 >
                   <ArrowRight className="h-4 w-4 mr-2" />
-                  {progressMutation.isPending
-                    ? 'Progressing...'
+                  {progressMutation.isPending 
+                    ? 'Progressing...' 
                     : `Progress to Paint (${selectedOrders.size})`}
                 </Button>
               </div>
@@ -1371,7 +1167,7 @@ export default function FinishQueuePage() {
       )}
 
       {/* Sales Order Modal */}
-      <SalesOrderModal
+      <SalesOrderModal 
         isOpen={salesOrderModalOpen}
         onClose={() => setSalesOrderModalOpen(false)}
         orderId={selectedOrderId}

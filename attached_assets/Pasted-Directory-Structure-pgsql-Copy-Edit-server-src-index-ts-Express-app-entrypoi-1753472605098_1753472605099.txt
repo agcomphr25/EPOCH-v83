@@ -1,0 +1,172 @@
+Directory Structure
+pgsql
+Copy
+Edit
+server/
+└─ src/
+   ├─ index.ts            # Express app entrypoint
+   └─ routes/
+      ├─ auth.ts
+      ├─ employees.ts
+      ├─ orders.ts
+      └─ index.ts         # re‑exports and mounts sub‑routers
+2. server/src/routes/auth.ts
+ts
+Copy
+Edit
+import { Router, Request, Response } from 'express';
+import { loginHandler, logoutHandler } from '../controllers/authController';
+
+const router = Router();
+
+// POST /api/auth/login
+router.post('/login', async (req: Request, res: Response) => {
+  try {
+    const token = await loginHandler(req.body);
+    res.json({ token });
+  } catch (err) {
+    res.status(401).json({ error: err.message });
+  }
+});
+
+// POST /api/auth/logout
+router.post('/logout', (req: Request, res: Response) => {
+  logoutHandler(req.user);
+  res.status(204).end();
+});
+
+export default router;
+3. server/src/routes/employees.ts
+ts
+Copy
+Edit
+import { Router, Request, Response } from 'express';
+import {
+  listEmployees,
+  getEmployee,
+  createEmployee,
+  updateEmployee,
+  deleteEmployee,
+} from '../controllers/employeeController';
+
+const router = Router();
+
+// GET /api/employees
+router.get('/', async (req: Request, res: Response) => {
+  const employees = await listEmployees();
+  res.json(employees);
+});
+
+// GET /api/employees/:id
+router.get('/:id', async (req: Request, res: Response) => {
+  const emp = await getEmployee(+req.params.id);
+  res.json(emp);
+});
+
+// POST /api/employees
+router.post('/', async (req: Request, res: Response) => {
+  const newEmp = await createEmployee(req.body);
+  res.status(201).json(newEmp);
+});
+
+// PUT /api/employees/:id
+router.put('/:id', async (req: Request, res: Response) => {
+  const updated = await updateEmployee(+req.params.id, req.body);
+  res.json(updated);
+});
+
+// DELETE /api/employees/:id
+router.delete('/:id', async (req: Request, res: Response) => {
+  await deleteEmployee(+req.params.id);
+  res.status(204).end();
+});
+
+export default router;
+4. server/src/routes/orders.ts
+ts
+Copy
+Edit
+import { Router, Request, Response } from 'express';
+import {
+  listOrders,
+  getOrder,
+  createOrder,
+  updateOrder,
+  progressOrder,
+  scrapOrder,
+} from '../controllers/orderController';
+
+const router = Router();
+
+// GET /api/orders
+router.get('/', async (req: Request, res: Response) => {
+  const orders = await listOrders(req.query);
+  res.json(orders);
+});
+
+// GET /api/orders/:id
+router.get('/:id', async (req: Request, res: Response) => {
+  const order = await getOrder(+req.params.id);
+  res.json(order);
+});
+
+// POST /api/orders
+router.post('/', async (req: Request, res: Response) => {
+  const newOrder = await createOrder(req.body);
+  res.status(201).json(newOrder);
+});
+
+// PUT /api/orders/:id
+router.put('/:id', async (req: Request, res: Response) => {
+  const updated = await updateOrder(+req.params.id, req.body);
+  res.json(updated);
+});
+
+// POST /api/orders/:id/progress
+router.post('/:id/progress', async (req: Request, res: Response) => {
+  await progressOrder(+req.params.id, req.body.nextDepartment);
+  res.status(204).end();
+});
+
+// POST /api/orders/:id/scrap
+router.post('/:id/scrap', async (req: Request, res: Response) => {
+  await scrapOrder(+req.params.id, req.body);
+  res.status(204).end();
+});
+
+export default router;
+5. server/src/routes/index.ts
+ts
+Copy
+Edit
+import { Express } from 'express';
+import authRoutes from './auth';
+import employeesRoutes from './employees';
+import ordersRoutes from './orders';
+
+export function registerRoutes(app: Express) {
+  app.use('/api/auth', authRoutes);
+  app.use('/api/employees', employeesRoutes);
+  app.use('/api/orders', ordersRoutes);
+  // add more: app.use('/api/vendors', vendorRoutes), etc.
+}
+6. server/src/index.ts
+ts
+Copy
+Edit
+import express from 'express';
+import bodyParser from 'body-parser';
+import { registerRoutes } from './routes';
+
+const app = express();
+
+// middlewares
+app.use(bodyParser.json());
+// ... auth middleware, logging, CORS, etc.
+
+registerRoutes(app);
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`API listening on port ${PORT}`);
+});

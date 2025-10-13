@@ -48,14 +48,10 @@ export const showInstallPrompt = async (): Promise<boolean> => {
 
 // Check if app is installed
 export const isAppInstalled = (): boolean => {
-  return (
-    window.matchMedia && window.matchMedia('(display-mode: standalone)').matches
-  );
+  return window.matchMedia && window.matchMedia('(display-mode: standalone)').matches;
 };
 
 // Check if running on mobile device
 export const isMobileDevice = (): boolean => {
-  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
-    navigator.userAgent
-  );
+  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 };

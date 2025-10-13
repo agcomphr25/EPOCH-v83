@@ -7,23 +7,19 @@ interface RouteDebuggerProps {
 
 export function RouteDebugger({ routes }: RouteDebuggerProps) {
   const [location] = useLocation();
-
+  
   React.useEffect(() => {
     console.log('🛣️ Route Debug Info:');
     console.log('Current location:', location);
     console.log('Available routes:', routes.length);
     console.log('Route match found:', routes.includes(location));
-
+    
     if (!routes.includes(location) && location !== '/') {
       console.warn('⚠️ Current route not found in registered routes!');
-      console.log(
-        'Possible matches:',
-        routes.filter(
-          (route) =>
-            route.includes(location.split('/')[1]) ||
-            location.includes(route.split('/')[1])
-        )
-      );
+      console.log('Possible matches:', routes.filter(route => 
+        route.includes(location.split('/')[1]) || 
+        location.includes(route.split('/')[1])
+      ));
     }
   }, [location, routes]);
 

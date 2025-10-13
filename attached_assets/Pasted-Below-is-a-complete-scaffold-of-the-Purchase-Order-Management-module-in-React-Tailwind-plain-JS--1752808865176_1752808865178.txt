@@ -1,0 +1,691 @@
+Below is a complete scaffold of the Purchase Order Management module in React + Tailwind + plain-JS (with Headless UI Combobox). Make sure you’ve run:
+
+bash
+Copy
+Edit
+npm install axios papaparse react-hot-toast @headlessui/react
+src/utils/poUtils.js
+js
+Copy
+Edit
+// src/utils/poUtils.js
+import axios from 'axios';
+import Papa from 'papaparse';
+
+// Fetch all POs
+export async function fetchPOs() {
+  const res = await axios.get('/api/pos');
+  return res.data; // [ { id, poNumber, customerName, ... } ]
+}
+
+// Fetch single PO (optionally with items/order count)
+export async function fetchPO(id, { includeItems = false, includeOrderCount = false } = {}) {
+  const params = {};
+  if (includeItems) params.includeItems = true;
+  if (includeOrderCount) params.includeOrderCount = true;
+  const res = await axios.get(`/api/pos/${id}`, { params });
+  return res.data;
+}
+
+// Create PO
+export async function createPO(data) {
+  // data: { poNumber, customerId, poDate, expectedDelivery, status, notes }
+  const res = await axios.post('/api/pos', data);
+  return res.data;
+}
+
+// Update PO
+export async function updatePO(id, data) {
+  const res = await axios.put(`/api/pos/${id}`, data);
+  return res.data;
+}
+
+// Delete PO
+export async function deletePO(id) {
+  await axios.delete(`/api/pos/${id}`);
+}
+
+// Fetch items for a PO
+export async function fetchPOItems(poId) {
+  const res = await axios.get(`/api/pos/${poId}/items`);
+  return res.data; // [ { id, modelName, quantity, notes } ]
+}
+
+// Create PO item
+export async function createPOItem(poId, data) {
+  // data: { modelId, quantity, notes }
+  const res = await axios.post(`/api/pos/${poId}/items`, data);
+  return res.data;
+}
+
+// Update PO item
+export async function updatePOItem(poId, itemId, data) {
+  const res = await axios.put(`/api/pos/${poId}/items/${itemId}`, data);
+  return res.data;
+}
+
+// Delete PO item
+export async function deletePOItem(poId, itemId) {
+  await axios.delete(`/api/pos/${poId}/items/${itemId}`);
+}
+
+// Ensure a stock model exists: GET search, else POST create
+export async function ensureStockModelExists(name) {
+  const searchRes = await axios.get('/api/stock-models', { params: { search: name } });
+  const found = searchRes.data.find(m => m.name.toLowerCase() === name.toLowerCase());
+  if (found) return found.id;
+  const createRes = await axios.post('/api/stock-models', { name });
+  return createRes.data.id;
+}
+
+// Generate orders from PO
+export async function generateOrdersFromPO(poId) {
+  const res = await axios.post(`/api/pos/${poId}/generate-orders`);
+  return res.data;
+}
+
+// Import POs from CSV file
+export async function importPOsFromCsv(file, onProgress = () => {}) {
+  return new Promise((resolve, reject) => {
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      complete: async results => {
+        const rows = results.data;
+        // Group by poNumber
+        const groups = rows.reduce((acc, row) => {
+          acc[row.poNumber] = acc[row.poNumber] || [];
+          acc[row.poNumber].push(row);
+          return acc;
+        }, {});
+        const total = Object.keys(groups).length;
+        let done = 0;
+        for (const poNumber of Object.keys(groups)) {
+          const group = groups[poNumber];
+          // 1. Find or create customer
+          const custName = group[0].customerName;
+          const custSearch = await axios.get('/api/customers', { params: { search: custName } });
+          let customer = custSearch.data.find(c => c.name.toLowerCase() === custName.toLowerCase());
+          if (!customer) {
+            const newCust = await axios.post('/api/customers', { name: custName });
+            customer = newCust.data;
+          }
+          // 2. Create PO header
+          const headerRes = await axios.post('/api/pos', {
+            poNumber,
+            customerId: customer.id,
+            poDate: group[0].poDate,
+            expectedDelivery: group[0].expectedDelivery,
+            status: 'OPEN',
+            notes: ''
+          });
+          const po = headerRes.data;
+          // 3. Create items
+          for (const row of group) {
+            const modelId = await ensureStockModelExists(row.modelName);
+            await axios.post(`/api/pos/${po.id}/items`, {
+              modelId,
+              quantity: Number(row.quantity),
+              notes: row.notes || ''
+            });
+          }
+          done += 1;
+          onProgress({ done, total });
+        }
+        resolve();
+      },
+      error: err => reject(err)
+    });
+  });
+}
+src/components/POAdmin.jsx
+jsx
+Copy
+Edit
+// src/components/POAdmin.jsx
+import React, { useEffect, useState } from 'react';
+import {
+  fetchPOs,
+  createPO,
+  updatePO,
+  deletePO
+} from '../utils/poUtils';
+import { Combobox } from '@headlessui/react';
+import axios from 'axios';
+import toast, { Toaster } from 'react-hot-toast';
+
+export default function POAdmin() {
+  const [pos, setPOs] = useState([]);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editPO, setEditPO] = useState(null);
+  const [customers, setCustomers] = useState([]);
+  const [customerQuery, setCustomerQuery] = useState('');
+  const [form, setForm] = useState({
+    poNumber: '',
+    customer: null,
+    poDate: '',
+    expectedDelivery: '',
+    status: 'OPEN',
+    notes: ''
+  });
+
+  useEffect(() => {
+    loadPOs();
+  }, []);
+
+  async function loadPOs() {
+    const data = await fetchPOs();
+    setPOs(data);
+  }
+
+  async function searchCustomers(query) {
+    const res = await axios.get('/api/customers', { params: { search: query } });
+    setCustomers(res.data);
+  }
+
+  function openAdd() {
+    setEditPO(null);
+    setForm({
+      poNumber: '',
+      customer: null,
+      poDate: '',
+      expectedDelivery: '',
+      status: 'OPEN',
+      notes: ''
+    });
+    setModalOpen(true);
+  }
+
+  function openEdit(po) {
+    setEditPO(po);
+    setForm({
+      poNumber: po.poNumber,
+      customer: { name: po.customerName, id: po.customerId },
+      poDate: po.poDate,
+      expectedDelivery: po.expectedDelivery,
+      status: po.status,
+      notes: po.notes
+    });
+    setModalOpen(true);
+  }
+
+  async function handleSubmit() {
+    const payload = {
+      poNumber: form.poNumber,
+      customerId: form.customer.id,
+      poDate: form.poDate,
+      expectedDelivery: form.expectedDelivery,
+      status: form.status,
+      notes: form.notes
+    };
+    try {
+      if (editPO) {
+        await updatePO(editPO.id, payload);
+        toast.success('PO updated');
+      } else {
+        await createPO(payload);
+        toast.success('PO created');
+      }
+      setModalOpen(false);
+      loadPOs();
+    } catch (e) {
+      toast.error('Error saving PO');
+    }
+  }
+
+  async function handleDelete(id) {
+    if (!confirm('Delete this PO?')) return;
+    await deletePO(id);
+    toast.success('PO deleted');
+    loadPOs();
+  }
+
+  return (
+    <div className="p-4">
+      <Toaster />
+      <button
+        className="mb-4 px-4 py-2 bg-blue-600 text-white rounded"
+        onClick={openAdd}
+      >
+        Add PO
+      </button>
+
+      <table className="w-full border">
+        <thead>
+          <tr className="bg-gray-100">
+            {['PO #','Customer','PO Date','Expected Delivery','Status','Notes','Actions'].map(h => (
+              <th key={h} className="p-2 border">{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {pos.map(po => (
+            <tr key={po.id}>
+              <td className="p-2 border">{po.poNumber}</td>
+              <td className="p-2 border">{po.customerName}</td>
+              <td className="p-2 border">{po.poDate}</td>
+              <td className="p-2 border">{po.expectedDelivery}</td>
+              <td className="p-2 border">{po.status}</td>
+              <td className="p-2 border">{po.notes}</td>
+              <td className="p-2 border space-x-2">
+                <button
+                  className="px-2 py-1 bg-yellow-400"
+                  onClick={() => openEdit(po)}
+                >Edit</button>
+                <button
+                  className="px-2 py-1 bg-red-500 text-white"
+                  onClick={() => handleDelete(po.id)}
+                >Delete</button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      {/* Modal */}
+      {modalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
+          <div className="bg-white p-6 rounded w-full max-w-lg">
+            <h2 className="text-xl font-bold mb-4">
+              {editPO ? 'Edit PO' : 'Add PO'}
+            </h2>
+            <div className="space-y-3">
+              <div>
+                <label className="block">PO Number</label>
+                <input
+                  className="w-full border p-2 rounded"
+                  value={form.poNumber}
+                  onChange={e => setForm({...form, poNumber: e.target.value})}
+                />
+              </div>
+              <div>
+                <label className="block">Customer</label>
+                <Combobox
+                  value={form.customer}
+                  onChange={val => setForm({...form, customer: val})}
+                >
+                  <div className="relative">
+                    <Combobox.Input
+                      className="w-full border p-2 rounded"
+                      onChange={e => {
+                        setCustomerQuery(e.target.value);
+                        searchCustomers(e.target.value);
+                      }}
+                      displayValue={c => c?.name}
+                    />
+                    <Combobox.Options className="absolute z-10 bg-white border mt-1 w-full max-h-60 overflow-auto">
+                      {customers.map(c => (
+                        <Combobox.Option key={c.id} value={c}>
+                          {c.name}
+                        </Combobox.Option>
+                      ))}
+                    </Combobox.Options>
+                  </div>
+                </Combobox>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block">PO Date</label>
+                  <input
+                    type="date"
+                    className="w-full border p-2 rounded"
+                    value={form.poDate}
+                    onChange={e => setForm({...form, poDate: e.target.value})}
+                  />
+                </div>
+                <div>
+                  <label className="block">Expected Delivery</label>
+                  <input
+                    type="date"
+                    className="w-full border p-2 rounded"
+                    value={form.expectedDelivery}
+                    onChange={e => setForm({...form, expectedDelivery: e.target.value})}
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block">Status</label>
+                <select
+                  className="w-full border p-2 rounded"
+                  value={form.status}
+                  onChange={e => setForm({...form, status: e.target.value})}
+                >
+                  {['OPEN','CLOSED','CANCELED'].map(s => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block">Notes</label>
+                <textarea
+                  className="w-full border p-2 rounded"
+                  value={form.notes}
+                  onChange={e => setForm({...form, notes: e.target.value})}
+                />
+              </div>
+            </div>
+            <div className="mt-4 flex justify-end space-x-2">
+              <button onClick={() => setModalOpen(false)} className="px-4 py-2">Cancel</button>
+              <button onClick={handleSubmit} className="px-4 py-2 bg-blue-600 text-white rounded">
+                {editPO ? 'Update' : 'Create'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+src/components/POLineItemsForm.jsx
+jsx
+Copy
+Edit
+// src/components/POLineItemsForm.jsx
+import React, { useEffect, useState } from 'react';
+import {
+  fetchPOItems,
+  createPOItem,
+  updatePOItem,
+  deletePOItem,
+  ensureStockModelExists
+} from '../utils/poUtils';
+import { Combobox } from '@headlessui/react';
+import axios from 'axios';
+import toast from 'react-hot-toast';
+
+export default function POLineItemsForm({ poId }) {
+  const [items, setItems] = useState([]);
+  const [models, setModels] = useState([]);
+  const [query, setQuery] = useState('');
+  const [newItem, setNewItem] = useState({ model: null, quantity: 1, notes: '' });
+  const [editingId, setEditingId] = useState(null);
+
+  useEffect(() => {
+    loadItems();
+  }, [poId]);
+
+  async function loadItems() {
+    const data = await fetchPOItems(poId);
+    setItems(data);
+  }
+
+  async function searchModels(q) {
+    const res = await axios.get('/api/stock-models', { params: { search: q } });
+    setModels(res.data);
+  }
+
+  async function handleAddOrUpdate() {
+    // ensure model exists
+    let modelId;
+    if (newItem.model.id) {
+      modelId = newItem.model.id;
+    } else {
+      modelId = await ensureStockModelExists(newItem.model.name);
+    }
+    const payload = { modelId, quantity: newItem.quantity, notes: newItem.notes };
+    if (editingId) {
+      await updatePOItem(poId, editingId, payload);
+      toast.success('Item updated');
+    } else {
+      await createPOItem(poId, payload);
+      toast.success('Item added');
+    }
+    setNewItem({ model: null, quantity: 1, notes: '' });
+    setEditingId(null);
+    loadItems();
+  }
+
+  async function handleEdit(item) {
+    setEditingId(item.id);
+    setNewItem({ model: { id: item.modelId, name: item.modelName }, quantity: item.quantity, notes: item.notes });
+  }
+
+  async function handleDelete(id) {
+    if (!confirm('Delete this item?')) return;
+    await deletePOItem(poId, id);
+    toast.success('Item deleted');
+    loadItems();
+  }
+
+  return (
+    <div className="p-4 border rounded">
+      <h3 className="text-lg font-semibold mb-2">Line Items</h3>
+      <table className="w-full border mb-4">
+        <thead className="bg-gray-100">
+          <tr>
+            {['Model Name','Quantity','Notes','Actions'].map(h => (
+              <th key={h} className="p-2 border">{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {items.map(i => (
+            <tr key={i.id}>
+              <td className="p-2 border">{i.modelName}</td>
+              <td className="p-2 border">{i.quantity}</td>
+              <td className="p-2 border">{i.notes}</td>
+              <td className="p-2 border space-x-2">
+                <button onClick={() => handleEdit(i)} className="px-2 py-1 bg-yellow-400">Edit</button>
+                <button onClick={() => handleDelete(i.id)} className="px-2 py-1 bg-red-500 text-white">Delete</button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      <div className="space-y-2">
+        {/* Add / Edit Row */}
+        <div className="grid grid-cols-5 gap-2 items-end">
+          <div className="col-span-2">
+            <Combobox
+              value={newItem.model}
+              onChange={model => setNewItem({...newItem, model})}
+            >
+              <label className="block">Model Name</label>
+              <Combobox.Input
+                className="w-full border p-2 rounded"
+                onChange={e => {
+                  setQuery(e.target.value);
+                  searchModels(e.target.value);
+                }}
+                displayValue={m => m?.name}
+              />
+              <Combobox.Options className="border mt-1 max-h-40 overflow-auto">
+                {models.map(m => (
+                  <Combobox.Option key={m.id} value={m}>{m.name}</Combobox.Option>
+                ))}
+              </Combobox.Options>
+            </Combobox>
+          </div>
+          <div>
+            <label className="block">Quantity</label>
+            <input
+              type="number"
+              className="border p-2 rounded w-full"
+              value={newItem.quantity}
+              onChange={e => setNewItem({...newItem, quantity: Number(e.target.value)})}
+            />
+          </div>
+          <div className="col-span-2">
+            <label className="block">Notes</label>
+            <input
+              className="border p-2 rounded w-full"
+              value={newItem.notes}
+              onChange={e => setNewItem({...newItem, notes: e.target.value})}
+            />
+          </div>
+          <div>
+            <button
+              onClick={handleAddOrUpdate}
+              className="px-4 py-2 bg-green-600 text-white rounded"
+            >
+              {editingId ? 'Update' : 'Add'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+src/components/POImport.jsx
+jsx
+Copy
+Edit
+// src/components/POImport.jsx
+import React, { useState } from 'react';
+import { importPOsFromCsv } from '../utils/poUtils';
+import toast, { Toaster } from 'react-hot-toast';
+
+export default function POImport() {
+  const [file, setFile] = useState(null);
+  const [progress, setProgress] = useState({ done: 0, total: 0 });
+
+  async function handleImport() {
+    if (!file) return toast.error('Please select a CSV file');
+    try {
+      await importPOsFromCsv(file, ({ done, total }) => {
+        setProgress({ done, total });
+      });
+      toast.success('Import complete');
+    } catch (e) {
+      console.error(e);
+      toast.error('Import failed');
+    }
+  }
+
+  return (
+    <div className="p-4 border rounded space-y-4">
+      <Toaster />
+      <input
+        type="file"
+        accept=".csv"
+        onChange={e => setFile(e.target.files[0])}
+      />
+      {progress.total > 0 && (
+        <p>Imported {progress.done} of {progress.total} POs...</p>
+      )}
+      <button
+        className="px-4 py-2 bg-blue-600 text-white rounded"
+        onClick={handleImport}
+      >
+        Start Import
+      </button>
+    </div>
+  );
+}
+src/components/POViewer.jsx
+jsx
+Copy
+Edit
+// src/components/POViewer.jsx
+import React, { useEffect, useState } from 'react';
+import { fetchPO, generateOrdersFromPO } from '../utils/poUtils';
+import toast from 'react-hot-toast';
+
+export default function POViewer({ poId }) {
+  const [po, setPO] = useState(null);
+
+  useEffect(() => {
+    loadPO();
+  }, [poId]);
+
+  async function loadPO() {
+    const data = await fetchPO(poId, { includeItems: true, includeOrderCount: true });
+    setPO(data);
+  }
+
+  async function handleGenerate() {
+    try {
+      await generateOrdersFromPO(poId);
+      toast.success('Orders generated');
+      loadPO();
+    } catch (e) {
+      toast.error('Failed to generate orders');
+    }
+  }
+
+  if (!po) return <p>Loading...</p>;
+
+  return (
+    <div className="p-4 border rounded space-y-4">
+      <div className="space-y-1">
+        <h2 className="text-xl font-bold">{po.poNumber} – {po.customerName}</h2>
+        <p>PO Date: {po.poDate}</p>
+        <p>Expected Delivery: {po.expectedDelivery}</p>
+        <p>Status: {po.status}</p>
+        <p>Notes: {po.notes}</p>
+      </div>
+
+      <table className="w-full border">
+        <thead className="bg-gray-100">
+          <tr>
+            {['Model Name','Quantity','Notes','Created Orders'].map(h => (
+              <th key={h} className="p-2 border">{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {po.items.map(i => (
+            <tr key={i.id}>
+              <td className="p-2 border">{i.modelName}</td>
+              <td className="p-2 border">{i.quantity}</td>
+              <td className="p-2 border">{i.notes}</td>
+              <td className="p-2 border">{i.orderCount}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      <button
+        className="mt-4 px-4 py-2 bg-green-600 text-white rounded"
+        onClick={handleGenerate}
+      >
+        Generate Orders
+      </button>
+    </div>
+  );
+}
+Example Usage Pages
+jsx
+Copy
+Edit
+// src/pages/AdminPOsPage.jsx
+import React from 'react';
+import POAdmin from '../components/POAdmin';
+
+export default function AdminPOsPage() {
+  return (
+    <div className="p-6">
+      <h1 className="text-2xl font-bold mb-4">Purchase Orders</h1>
+      <POAdmin />
+    </div>
+  );
+}
+
+// src/pages/POImportPage.jsx
+import React from 'react';
+import POImport from '../components/POImport';
+
+export default function POImportPage() {
+  return (
+    <div className="p-6">
+      <h1 className="text-2xl font-bold mb-4">Import Purchase Orders</h1>
+      <POImport />
+    </div>
+  );
+}
+
+// src/pages/POViewerPage.jsx
+import React from 'react';
+import { useParams } from 'react-router-dom';
+import POViewer from '../components/POViewer';
+
+export default function POViewerPage() {
+  const { poId } = useParams();
+  return (
+    <div className="p-6">
+      <h1 className="text-2xl font-bold mb-4">PO Details</h1>
+      <POViewer poId={poId} />
+    </div>
+  );
+}

@@ -10,9 +10,7 @@ export default function JENSTestDashboard() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
-            JENS Dashboard
-          </h1>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">JENS Dashboard</h1>
           <p className="text-gray-600 dark:text-gray-400 mt-1">
             Quality Control & Production Management
           </p>
@@ -28,12 +26,8 @@ export default function JENSTestDashboard() {
           <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-blue-200">
             <CardContent className="p-4 text-center">
               <Shield className="w-8 h-8 text-blue-600 mx-auto mb-3" />
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                Finish QC Queue
-              </h3>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                Quality control queue
-              </p>
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Finish QC Queue</h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Quality control queue</p>
             </CardContent>
           </Card>
         </Link>
@@ -42,12 +36,8 @@ export default function JENSTestDashboard() {
           <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-green-200">
             <CardContent className="p-4 text-center">
               <FileText className="w-8 h-8 text-green-600 mx-auto mb-3" />
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                All Orders
-              </h3>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                View all orders
-              </p>
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">All Orders</h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">View all orders</p>
             </CardContent>
           </Card>
         </Link>
@@ -56,12 +46,8 @@ export default function JENSTestDashboard() {
           <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-purple-200">
             <CardContent className="p-4 text-center">
               <ScanBarcode className="w-8 h-8 text-purple-600 mx-auto mb-3" />
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                Barcode Scanner
-              </h3>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                Scan order barcodes
-              </p>
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Barcode Scanner</h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Scan order barcodes</p>
             </CardContent>
           </Card>
         </Link>
@@ -83,6 +69,7 @@ export default function JENSTestDashboard() {
           </CardContent>
         </Card>
       </div>
+
     </div>
   );
 }

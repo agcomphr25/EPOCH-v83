@@ -2,13 +2,7 @@ import React, { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Settings, Play, Clock, CheckCircle } from 'lucide-react';
 import { toast } from 'react-hot-toast';
@@ -28,15 +22,9 @@ export default function MRPCalculationCard() {
       });
     },
     onSuccess: (result) => {
-      toast.success(
-        `MRP calculated: ${result.requirementsGenerated} requirements, ${result.shortagesIdentified} shortages`
-      );
-      queryClient.invalidateQueries({
-        queryKey: ['/api/enhanced/mrp/requirements'],
-      });
-      queryClient.invalidateQueries({
-        queryKey: ['/api/enhanced/mrp/shortages'],
-      });
+      toast.success(`MRP calculated: ${result.requirementsGenerated} requirements, ${result.shortagesIdentified} shortages`);
+      queryClient.invalidateQueries({ queryKey: ['/api/enhanced/mrp/requirements'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/enhanced/mrp/shortages'] });
     },
     onError: (error: any) => {
       toast.error(`MRP calculation failed: ${error.message}`);
@@ -46,16 +34,12 @@ export default function MRPCalculationCard() {
   // Get MRP history
   const { data: history = [] } = useQuery({
     queryKey: ['/api/enhanced/mrp/calculation-history'],
-    queryFn: () => apiRequest('/api/enhanced/mrp/calculation-history?limit=5'),
+    queryFn: () => apiRequest('/api/enhanced/mrp/calculation-history?limit=5')
   });
 
   const handleRunMRP = () => {
     const data: any = { scope: selectedScope };
-    if (
-      (selectedScope === 'SPECIFIC_PART' ||
-        selectedScope === 'SPECIFIC_ORDER') &&
-      scopeId
-    ) {
+    if ((selectedScope === 'SPECIFIC_PART' || selectedScope === 'SPECIFIC_ORDER') && scopeId) {
       data.scopeId = scopeId;
     }
     runMrpMutation.mutate(data);
@@ -64,9 +48,7 @@ export default function MRPCalculationCard() {
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-          MRP Calculation
-        </h3>
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">MRP Calculation</h3>
         <p className="text-sm text-gray-500 dark:text-gray-400">
           Run material requirements planning calculations
         </p>
@@ -75,15 +57,11 @@ export default function MRPCalculationCard() {
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Run MRP Calculation</CardTitle>
-          <CardDescription>
-            Calculate material requirements and identify shortages
-          </CardDescription>
+          <CardDescription>Calculate material requirements and identify shortages</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div>
-            <label className="block text-sm font-medium mb-2">
-              Calculation Scope
-            </label>
+            <label className="block text-sm font-medium mb-2">Calculation Scope</label>
             <select
               value={selectedScope}
               onChange={(e) => setSelectedScope(e.target.value)}
@@ -96,8 +74,7 @@ export default function MRPCalculationCard() {
             </select>
           </div>
 
-          {(selectedScope === 'SPECIFIC_PART' ||
-            selectedScope === 'SPECIFIC_ORDER') && (
+          {(selectedScope === 'SPECIFIC_PART' || selectedScope === 'SPECIFIC_ORDER') && (
             <div>
               <label className="block text-sm font-medium mb-2">
                 {selectedScope === 'SPECIFIC_PART' ? 'Part ID' : 'Order ID'}
@@ -113,16 +90,14 @@ export default function MRPCalculationCard() {
             </div>
           )}
 
-          <Button
+          <Button 
             onClick={handleRunMRP}
             disabled={runMrpMutation.isPending}
             className="w-full"
             data-testid="button-run-mrp"
           >
             <Play className="h-4 w-4 mr-2" />
-            {runMrpMutation.isPending
-              ? 'Calculating...'
-              : 'Run MRP Calculation'}
+            {runMrpMutation.isPending ? 'Calculating...' : 'Run MRP Calculation'}
           </Button>
         </CardContent>
       </Card>
@@ -135,17 +110,16 @@ export default function MRPCalculationCard() {
           {history.length > 0 ? (
             <div className="space-y-2">
               {history.map((calc: any, index: number) => (
-                <div
-                  key={index}
-                  className="flex items-center justify-between p-2 border rounded"
-                >
+                <div key={index} className="flex items-center justify-between p-2 border rounded">
                   <div className="flex items-center gap-2">
                     <CheckCircle className="h-4 w-4 text-green-500" />
                     <span className="text-sm">
                       {new Date(calc.runDate || Date.now()).toLocaleString()}
                     </span>
                   </div>
-                  <Badge variant="outline">{calc.scope || 'ALL'}</Badge>
+                  <Badge variant="outline">
+                    {calc.scope || 'ALL'}
+                  </Badge>
                 </div>
               ))}
             </div>

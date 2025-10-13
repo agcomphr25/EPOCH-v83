@@ -7,7 +7,7 @@ const router = Router();
 router.post('/test-ups', async (req: Request, res: Response) => {
   try {
     console.log('Testing UPS API with minimal payload...');
-
+    
     // Minimal UPS test payload
     const testPayload = {
       UPSSecurity: {
@@ -30,9 +30,8 @@ router.post('/test-ups', async (req: Request, res: Response) => {
           Description: 'Test Package',
           Shipper: {
             Name: process.env.SHIP_FROM_NAME || 'AG Composites',
-            AttentionName: process.env.SHIP_FROM_ATTENTION || 'Shipping',
-            CompanyDisplayableName:
-              process.env.SHIP_FROM_NAME || 'AG Composites',
+            AttentionName: process.env.SHIP_FROM_ATTENTION || 'Shipping', 
+            CompanyDisplayableName: process.env.SHIP_FROM_NAME || 'AG Composites',
             Phone: {
               Number: process.env.SHIP_FROM_PHONE || '256-723-8381',
             },
@@ -96,29 +95,24 @@ router.post('/test-ups', async (req: Request, res: Response) => {
     console.log('UPS Test Payload:', JSON.stringify(testPayload, null, 2));
 
     const upsEndpoint = 'https://wwwcie.ups.com/rest/Ship';
-
+    
     const response = await axios.post(upsEndpoint, testPayload, {
-      headers: {
+      headers: { 
         'Content-Type': 'application/json',
-        Accept: 'application/json',
+        'Accept': 'application/json'
       },
       timeout: 30000,
     });
 
-    console.log(
-      'UPS API Success Response:',
-      JSON.stringify(response.data, null, 2)
-    );
+    console.log('UPS API Success Response:', JSON.stringify(response.data, null, 2));
     res.json({ success: true, data: response.data });
+
   } catch (error: any) {
-    console.error(
-      'UPS Test Error:',
-      JSON.stringify(error.response?.data, null, 2)
-    );
-    res.status(500).json({
+    console.error('UPS Test Error:', JSON.stringify(error.response?.data, null, 2));
+    res.status(500).json({ 
       error: 'UPS Test Failed',
       details: error.response?.data,
-      message: error.message,
+      message: error.message
     });
   }
 });

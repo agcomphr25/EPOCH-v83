@@ -4,6 +4,13 @@
 EPOCH v8 is a comprehensive Manufacturing ERP system designed for small manufacturing companies specializing in customizable products. It aims to streamline operations, enhance efficiency, and improve scalability by providing end-to-end order management, inventory tracking, employee portal functionality, and quality control workflows. The project's vision is to become the leading ERP solution for small-to-medium customizable product manufacturers. It is a full-stack TypeScript application with a React frontend and Express backend, featuring Progressive Web App (PWA) capabilities for deployment to web and mobile platforms via Capacitor.
 
 ## Recent Changes
+**October 13, 2025 - Barcode Label Information Update**
+- **Enhanced Barcode Labels**: Updated PDF label generation to include complete order information:
+  - Paint option now displayed on label (e.g., "Chalkbranch - SA - TERRAINE")
+  - Swivel studs changes shown in orange (e.g., "SWIVEL: QD FLUSH CUP")
+  - Texture options shown in purple (e.g., "TEXTURE: CHECKERED")
+  - All special features properly color-coded for quick identification
+  
 **October 13, 2025 - OEM Priority Clarification & Material-Based Colors**
 - **Clarified OEM Priority Settings**: OEM priority settings are ONLY for Purchase Orders (items with `poId` or `productionOrderId`), NOT for regular production orders. This prevents confusion between:
   - **Purchase Orders (OEM Priority)**: Items from purchase orders with GREEN BORDERS and "PO" badge for priority indication

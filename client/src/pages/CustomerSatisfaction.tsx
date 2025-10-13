@@ -26,9 +26,11 @@ import {
   XCircle,
   Eye,
   Download,
-  Filter
+  Filter,
+  FileText
 } from 'lucide-react';
 import CustomerSatisfactionSurvey from '@/components/CustomerSatisfactionSurvey';
+import { pdf, Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer';
 
 interface Survey {
   id: number;
@@ -52,6 +54,7 @@ interface SurveyResponse {
   responses: Record<string, any>;
   overallSatisfaction?: number;
   npsScore?: number;
+  aggregateScore?: number;
   responseTimeSeconds?: number;
   isComplete: boolean;
   submittedAt?: string;
@@ -73,6 +76,144 @@ interface Analytics {
   averageResponseTimeMinutes: number;
 }
 
+// PDF Styles
+const pdfStyles = StyleSheet.create({
+  page: {
+    padding: 40,
+    fontSize: 11,
+    fontFamily: 'Helvetica',
+  },
+  header: {
+    marginBottom: 20,
+    borderBottom: '2 solid #333',
+    paddingBottom: 10,
+  },
+  title: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 5,
+  },
+  subtitle: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 3,
+  },
+  section: {
+    marginTop: 15,
+    marginBottom: 10,
+  },
+  sectionTitle: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    marginBottom: 8,
+    color: '#333',
+  },
+  row: {
+    flexDirection: 'row',
+    marginBottom: 5,
+  },
+  label: {
+    fontWeight: 'bold',
+    width: '30%',
+  },
+  value: {
+    width: '70%',
+  },
+  question: {
+    marginBottom: 12,
+    padding: 8,
+    backgroundColor: '#f5f5f5',
+    borderRadius: 4,
+  },
+  questionText: {
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  answer: {
+    color: '#333',
+    marginLeft: 10,
+  },
+  footer: {
+    position: 'absolute',
+    bottom: 30,
+    left: 40,
+    right: 40,
+    textAlign: 'center',
+    color: '#999',
+    fontSize: 9,
+  },
+});
+
+// PDF Document Component
+const SurveyResponsePDF = ({ response, survey }: { response: SurveyResponse; survey: Survey | null }) => (
+  <Document>
+    <Page size="A4" style={pdfStyles.page}>
+      <View style={pdfStyles.header}>
+        <Text style={pdfStyles.title}>Customer Satisfaction Survey Response</Text>
+        <Text style={pdfStyles.subtitle}>{response.surveyTitle}</Text>
+        <Text style={pdfStyles.subtitle}>
+          Submitted: {response.submittedAt ? new Date(response.submittedAt).toLocaleDateString() : 'N/A'}
+        </Text>
+      </View>
+
+      <View style={pdfStyles.section}>
+        <Text style={pdfStyles.sectionTitle}>Customer Information</Text>
+        <View style={pdfStyles.row}>
+          <Text style={pdfStyles.label}>Name:</Text>
+          <Text style={pdfStyles.value}>{response.customerName}</Text>
+        </View>
+        {response.customerEmail && (
+          <View style={pdfStyles.row}>
+            <Text style={pdfStyles.label}>Email:</Text>
+            <Text style={pdfStyles.value}>{response.customerEmail}</Text>
+          </View>
+        )}
+        {response.orderId && (
+          <View style={pdfStyles.row}>
+            <Text style={pdfStyles.label}>Order #:</Text>
+            <Text style={pdfStyles.value}>{response.orderId}</Text>
+          </View>
+        )}
+      </View>
+
+      <View style={pdfStyles.section}>
+        <Text style={pdfStyles.sectionTitle}>Overall Scores</Text>
+        <View style={pdfStyles.row}>
+          <Text style={pdfStyles.label}>Aggregate Score:</Text>
+          <Text style={pdfStyles.value}>{response.aggregateScore || 0}/50</Text>
+        </View>
+        <View style={pdfStyles.row}>
+          <Text style={pdfStyles.label}>NPS Score:</Text>
+          <Text style={pdfStyles.value}>{response.npsScore}/10</Text>
+        </View>
+      </View>
+
+      <View style={pdfStyles.section}>
+        <Text style={pdfStyles.sectionTitle}>Survey Responses</Text>
+        {survey?.questions.map((question: any, index: number) => {
+          const answer = response.responses[question.id];
+          if (!answer && answer !== 0) return null;
+          
+          return (
+            <View key={question.id} style={pdfStyles.question}>
+              <Text style={pdfStyles.questionText}>
+                {index + 1}. {question.question}
+              </Text>
+              <Text style={pdfStyles.answer}>
+                {typeof answer === 'number' ? `${answer}/10` : answer}
+              </Text>
+            </View>
+          );
+        })}
+      </View>
+
+      <Text style={pdfStyles.footer}>
+        Generated on {new Date().toLocaleDateString()} • Customer Satisfaction Survey System
+      </Text>
+    </Page>
+  </Document>
+);
+
 export default function CustomerSatisfaction() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -84,6 +225,31 @@ export default function CustomerSatisfaction() {
   const [isTakeSurveyOpen, setIsTakeSurveyOpen] = useState(false);
   const [isEditResponseOpen, setIsEditResponseOpen] = useState(false);
   const [editingResponse, setEditingResponse] = useState<SurveyResponse | null>(null);
+
+  // Export response as PDF
+  const exportResponseToPDF = async (response: SurveyResponse) => {
+    try {
+      const survey = surveys.find((s: Survey) => s.id === response.surveyId);
+      const blob = await pdf(<SurveyResponsePDF response={response} survey={survey || null} />).toBlob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `survey-response-${response.customerName.replace(/\s+/g, '-')}-${response.id}.pdf`;
+      link.click();
+      URL.revokeObjectURL(url);
+      
+      toast({
+        title: "PDF Downloaded",
+        description: "Survey response has been exported as PDF.",
+      });
+    } catch (error) {
+      toast({
+        title: "Export Failed",
+        description: "Failed to export PDF",
+        variant: "destructive",
+      });
+    }
+  };
 
   // Fetch surveys
   const { data: surveys = [], isLoading: surveysLoading } = useQuery({
@@ -243,7 +409,7 @@ export default function CustomerSatisfaction() {
                 <Star className="h-5 w-5 text-yellow-600" />
                 <div>
                   <p className="text-sm text-gray-600">Avg Satisfaction</p>
-                  <p className="text-2xl font-bold">{analytics.averageOverallSatisfaction?.toFixed(1) || '0'}/5</p>
+                  <p className="text-2xl font-bold">{analytics.averageOverallSatisfaction?.toFixed(1) || '0'}/10</p>
                 </div>
               </div>
             </CardContent>
@@ -262,51 +428,6 @@ export default function CustomerSatisfaction() {
           </Card>
         </div>
       )}
-
-      {/* Quick Actions */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Quick Actions</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Button 
-              onClick={() => setIsCreateSurveyOpen(true)}
-              className="flex items-center space-x-2 h-auto p-4"
-            >
-              <Plus className="h-5 w-5" />
-              <div className="text-left">
-                <div className="font-medium">Create Survey</div>
-                <div className="text-sm opacity-80">Start with default template</div>
-              </div>
-            </Button>
-
-            <Button 
-              variant="outline"
-              onClick={() => setIsTakeSurveyOpen(true)}
-              className="flex items-center space-x-2 h-auto p-4"
-            >
-              <Send className="h-5 w-5" />
-              <div className="text-left">
-                <div className="font-medium">Complete Survey</div>
-                <div className="text-sm opacity-60">Fill out as customer</div>
-              </div>
-            </Button>
-
-            <Button 
-              variant="outline"
-              onClick={() => setActiveTab('analytics')}
-              className="flex items-center space-x-2 h-auto p-4"
-            >
-              <BarChart3 className="h-5 w-5" />
-              <div className="text-left">
-                <div className="font-medium">View Analytics</div>
-                <div className="text-sm opacity-60">Detailed insights</div>
-              </div>
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
 
       {/* Recent Responses */}
       <Card>
@@ -331,10 +452,10 @@ export default function CustomerSatisfaction() {
                     </div>
                   </div>
                   <div className="flex items-center space-x-2">
-                    {response.overallSatisfaction && (
+                    {response.aggregateScore !== undefined && response.aggregateScore !== null && (
                       <div className="flex items-center space-x-1">
                         <Star className="h-4 w-4 text-yellow-500" />
-                        <span className="text-sm">{response.overallSatisfaction}/5</span>
+                        <span className="text-sm">{response.aggregateScore}/50</span>
                       </div>
                     )}
                     <Badge variant={response.isComplete ? "default" : "secondary"}>
@@ -521,10 +642,10 @@ export default function CustomerSatisfaction() {
                         {response.surveyTitle}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        {response.overallSatisfaction ? (
+                        {response.aggregateScore !== undefined && response.aggregateScore !== null ? (
                           <div className="flex items-center space-x-1">
                             <Star className="h-4 w-4 text-yellow-500" />
-                            <span className="text-sm">{response.overallSatisfaction}/5</span>
+                            <span className="text-sm">{response.aggregateScore}/50</span>
                           </div>
                         ) : (
                           <span className="text-gray-400">-</span>
@@ -546,11 +667,21 @@ export default function CustomerSatisfaction() {
                           <Button
                             variant="outline"
                             size="sm"
+                            onClick={() => exportResponseToPDF(response)}
+                            className="text-green-600 hover:text-green-900"
+                            title="Export to PDF"
+                          >
+                            <FileText className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
                             onClick={() => {
                               setEditingResponse(response);
                               setIsEditResponseOpen(true);
                             }}
                             className="text-blue-600 hover:text-blue-900"
+                            title="Edit Response"
                           >
                             <Edit className="h-4 w-4" />
                           </Button>
@@ -563,6 +694,7 @@ export default function CustomerSatisfaction() {
                               }
                             }}
                             className="text-red-600 hover:text-red-900"
+                            title="Delete Response"
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
@@ -586,7 +718,7 @@ export default function CustomerSatisfaction() {
       {analytics ? (
         <div className="space-y-6">
           {/* Key Metrics */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             <Card>
               <CardContent className="p-6">
                 <div className="flex items-center space-x-2">
@@ -609,7 +741,7 @@ export default function CustomerSatisfaction() {
                   <div>
                     <p className="text-sm text-gray-600">Avg Satisfaction</p>
                     <p className="text-3xl font-bold">{analytics.averageOverallSatisfaction?.toFixed(1) || '0'}</p>
-                    <p className="text-sm text-gray-600">out of 5.0</p>
+                    <p className="text-sm text-gray-600">out of 10</p>
                   </div>
                 </div>
               </CardContent>
@@ -629,58 +761,7 @@ export default function CustomerSatisfaction() {
                 </div>
               </CardContent>
             </Card>
-
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center space-x-2">
-                  <Calendar className="h-8 w-8 text-green-600" />
-                  <div>
-                    <p className="text-sm text-gray-600">Avg Response Time</p>
-                    <p className="text-3xl font-bold">{analytics.averageResponseTimeMinutes?.toFixed(0) || '0'}</p>
-                    <p className="text-sm text-gray-600">minutes</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
           </div>
-
-          {/* NPS Breakdown */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Net Promoter Score Breakdown</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="text-center p-4 bg-green-50 rounded-lg">
-                    <div className="text-2xl font-bold text-green-600">
-                      {analytics.npsBreakdown.promoters}
-                    </div>
-                    <div className="text-sm text-green-600">Promoters (9-10)</div>
-                  </div>
-                  <div className="text-center p-4 bg-yellow-50 rounded-lg">
-                    <div className="text-2xl font-bold text-yellow-600">
-                      {analytics.npsBreakdown.passives}
-                    </div>
-                    <div className="text-sm text-yellow-600">Passives (7-8)</div>
-                  </div>
-                  <div className="text-center p-4 bg-red-50 rounded-lg">
-                    <div className="text-2xl font-bold text-red-600">
-                      {analytics.npsBreakdown.detractors}
-                    </div>
-                    <div className="text-sm text-red-600">Detractors (0-6)</div>
-                  </div>
-                </div>
-                
-                <div className="text-center">
-                  <div className="text-4xl font-bold text-purple-600">
-                    {analytics.netPromoterScore?.toFixed(0) || '0'}
-                  </div>
-                  <div className="text-sm text-gray-600">Overall NPS Score</div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
         </div>
       ) : (
         <Card>

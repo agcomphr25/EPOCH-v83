@@ -4,6 +4,14 @@
 EPOCH v8 is a comprehensive Manufacturing ERP system designed for small manufacturing companies specializing in customizable products.
 
 ## Recent Changes
+**October 13, 2025 - Database Migration Fix & GitHub Integration Complete**
+- **Critical Database Issue Resolved**: Fixed invalid `serial` type conversion error in customer satisfaction tables
+  - **Root Cause**: Drizzle attempted to ALTER existing `integer` columns to `serial` type (invalid PostgreSQL operation)
+  - **Solution**: Dropped and recreated `customer_satisfaction_surveys` and `customer_satisfaction_responses` tables with correct schema
+  - **Result**: Clean database schema matching schema.ts definitions, deployment now successful
+  - **Key Learning**: `serial` is a PostgreSQL pseudo-type only valid during CREATE TABLE, not ALTER TABLE
+- **Missing Package Fixed**: Installed `googleapis` package for Google Calendar integration
+
 **October 13, 2025 - Complete GitHub Integration Verified & Calendar TypeScript Fixes**
 - **New Features from GitHub Pull**:
   1. **Manual Tracking Entry Component** - Added ability to manually enter tracking numbers for external carriers (UPS, USPS, FedEx, DHL, Other) with notification options

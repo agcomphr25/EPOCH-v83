@@ -29,16 +29,45 @@ router.get('/google-events', async (req: Request, res: Response) => {
     
     console.log('📅 Fetching Google Calendar events from', oneYearAgo.toISOString(), 'to', oneYearFromNow.toISOString());
     
-    const response = await calendar.events.list({
-      calendarId: 'primary',
-      timeMin: oneYearAgo.toISOString(),
-      timeMax: oneYearFromNow.toISOString(),
-      singleEvents: true,
-      orderBy: 'startTime',
-      maxResults: 2500, // Increased limit to get more events
+    // First, get all calendars the user has access to
+    const calendarListResponse = await calendar.calendarList.list();
+    const calendars = calendarListResponse.data.items || [];
+    
+    console.log(`📅 Found ${calendars.length} calendars:`, calendars.map((c: any) => ({
+      id: c.id,
+      summary: c.summary,
+      primary: c.primary,
+      accessRole: c.accessRole
+    })));
+    
+    // Fetch events from ALL calendars
+    const allEventsPromises = calendars.map(async (cal: any) => {
+      try {
+        const response = await calendar.events.list({
+          calendarId: cal.id,
+          timeMin: oneYearAgo.toISOString(),
+          timeMax: oneYearFromNow.toISOString(),
+          singleEvents: true,
+          orderBy: 'startTime',
+          maxResults: 2500,
+        });
+        
+        const events = (response.data.items || []).map((event: any) => ({
+          ...event,
+          calendarName: cal.summary,
+          calendarId: cal.id,
+        }));
+        
+        console.log(`📅 Calendar "${cal.summary}": ${events.length} events`);
+        return events;
+      } catch (error) {
+        console.error(`📅 Error fetching events from calendar "${cal.summary}":`, error);
+        return [];
+      }
     });
-
-    const events = response.data.items || [];
+    
+    const allEventsArrays = await Promise.all(allEventsPromises);
+    const events = allEventsArrays.flat();
     
     // Google Calendar color mapping
     const colorMap: { [key: string]: string } = {
@@ -72,24 +101,20 @@ router.get('/google-events', async (req: Request, res: Response) => {
       organizer: event.organizer?.email || '',
       creator: event.creator?.email || '',
       attendees: event.attendees?.map((a: any) => a.email) || [],
+      calendarName: event.calendarName || 'Primary',
+      calendarId: event.calendarId || 'primary',
     }));
 
-    console.log(`📅 Fetched ${formattedEvents.length} Google Calendar events`);
-    console.log('📅 Event color summary:', formattedEvents.reduce((acc: any, event: any) => {
-      const colorName = event.colorId ? `Color ${event.colorId}` : 'Default Blue';
-      acc[colorName] = (acc[colorName] || 0) + 1;
-      return acc;
-    }, {}));
+    console.log(`📅 Fetched ${formattedEvents.length} total Google Calendar events from ${calendars.length} calendars`);
     
-    // Log creator information
-    const creatorSummary = formattedEvents.reduce((acc: any, event: any) => {
-      const creator = event.creator || 'Unknown';
-      if (!acc[creator]) acc[creator] = [];
-      acc[creator].push(event.title);
+    // Log events by calendar
+    const calendarSummary = formattedEvents.reduce((acc: any, event: any) => {
+      const cal = event.calendarName || 'Unknown';
+      acc[cal] = (acc[cal] || 0) + 1;
       return acc;
     }, {});
-    console.log('📅 Events by creator:', Object.keys(creatorSummary).map(creator => 
-      `${creator}: ${creatorSummary[creator].length} events`
+    console.log('📅 Events by calendar:', Object.keys(calendarSummary).map(cal => 
+      `"${cal}": ${calendarSummary[cal]} events`
     ).join(', '));
 
     res.json(formattedEvents);

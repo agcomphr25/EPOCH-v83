@@ -84,26 +84,57 @@ router.get('/google-events', async (req: Request, res: Response) => {
       '11': '#dc2127', // Tomato
     };
     
-    const formattedEvents = events.map((event: any) => ({
-      id: event.id,
-      title: event.summary || 'Untitled Event',
-      description: event.description || '',
-      startDate: event.start?.dateTime || event.start?.date,
-      endDate: event.end?.dateTime || event.end?.date,
-      location: event.location || '',
-      allDay: !event.start?.dateTime,
-      isPublic: event.visibility === 'public',
-      eventType: 'meeting',
-      createdBy: event.creator?.email || event.organizer?.email || 'Google Calendar',
-      source: 'google',
-      color: event.colorId ? colorMap[event.colorId] : '#3b82f6', // Default to blue
-      colorId: event.colorId || null,
-      organizer: event.organizer?.email || '',
-      creator: event.creator?.email || '',
-      attendees: event.attendees?.map((a: any) => a.email) || [],
-      calendarName: event.calendarName || 'Primary',
-      calendarId: event.calendarId || 'primary',
-    }));
+    const formattedEvents = events.map((event: any) => {
+      const isAllDay = !event.start?.dateTime;
+      let startDate = event.start?.dateTime || event.start?.date;
+      let endDate = event.end?.dateTime || event.end?.date;
+      
+      // Log sample all-day events to debug date issues
+      if (isAllDay && events.indexOf(event) < 3) {
+        console.log('📅 Sample all-day event:', {
+          title: event.summary,
+          originalStart: event.start?.date,
+          originalEnd: event.end?.date,
+        });
+      }
+      
+      // Fix all-day events: Google Calendar uses exclusive end dates
+      // A birthday on Nov 15 shows as start: Nov 15, end: Nov 16
+      // We subtract one day from the end date string directly to avoid timezone issues
+      if (isAllDay && endDate && typeof endDate === 'string') {
+        const [year, month, day] = endDate.split('-').map(Number);
+        const endDateObj = new Date(year, month - 1, day - 1); // Month is 0-indexed, subtract 1 day
+        const adjustedYear = endDateObj.getFullYear();
+        const adjustedMonth = String(endDateObj.getMonth() + 1).padStart(2, '0');
+        const adjustedDay = String(endDateObj.getDate()).padStart(2, '0');
+        endDate = `${adjustedYear}-${adjustedMonth}-${adjustedDay}`;
+        
+        if (events.indexOf(event) < 3) {
+          console.log('  → Adjusted end date:', endDate);
+        }
+      }
+      
+      return {
+        id: event.id,
+        title: event.summary || 'Untitled Event',
+        description: event.description || '',
+        startDate,
+        endDate,
+        location: event.location || '',
+        allDay: isAllDay,
+        isPublic: event.visibility === 'public',
+        eventType: 'meeting',
+        createdBy: event.creator?.email || event.organizer?.email || 'Google Calendar',
+        source: 'google',
+        color: event.colorId ? colorMap[event.colorId] : '#3b82f6', // Default to blue
+        colorId: event.colorId || null,
+        organizer: event.organizer?.email || '',
+        creator: event.creator?.email || '',
+        attendees: event.attendees?.map((a: any) => a.email) || [],
+        calendarName: event.calendarName || 'Primary',
+        calendarId: event.calendarId || 'primary',
+      };
+    });
 
     console.log(`📅 Fetched ${formattedEvents.length} total Google Calendar events from ${calendars.length} calendars`);
     
@@ -116,6 +147,23 @@ router.get('/google-events', async (req: Request, res: Response) => {
     console.log('📅 Events by calendar:', Object.keys(calendarSummary).map(cal => 
       `"${cal}": ${calendarSummary[cal]} events`
     ).join(', '));
+    
+    // Log color distribution
+    const colorSummary = formattedEvents.reduce((acc: any, event: any) => {
+      const color = event.colorId ? `Color ${event.colorId} (${event.color})` : `Default Blue (${event.color})`;
+      acc[color] = (acc[color] || 0) + 1;
+      return acc;
+    }, {});
+    console.log('📅 Color distribution:', colorSummary);
+    
+    // Log sample events with colors
+    const sampleWithColors = formattedEvents.slice(0, 5).map((e: any) => ({
+      title: e.title,
+      colorId: e.colorId,
+      color: e.color,
+      calendar: e.calendarName
+    }));
+    console.log('📅 Sample events with colors:', sampleWithColors);
 
     res.json(formattedEvents);
   } catch (error) {

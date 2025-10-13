@@ -130,56 +130,43 @@ export default function FinishQCQueuePage() {
     setSelectAll(!selectAll);
   };
 
-  // Handle search - highlight only, select on exact match
+  // Handle search - auto-select matching orders
   const handleSearchWithSelection = (query: string) => {
     setSearchQuery(query);
     
     if (query.trim()) {
       const searchTerm = query.toLowerCase().trim();
       
-      // Check for exact match immediately
-      const exactMatch = finishQCOrders.find((order: any) => 
-        order.orderId?.toLowerCase() === searchTerm ||
-        order.fbOrderNumber?.toLowerCase() === searchTerm ||
-        getDisplayOrderId(order.orderId)?.toLowerCase() === searchTerm
-      );
-      
-      if (exactMatch) {
-        // Exact match - select the order
-        setSelectedOrders(new Set([exactMatch.orderId]));
-        setHighlightedOrderId(exactMatch.orderId);
-        toast.success(`Exact match: Order ${exactMatch.orderId} selected`);
+      // Find all matching orders
+      const matchingOrders = finishQCOrders.filter((order: any) => {
+        const orderId = order.orderId?.toLowerCase() || '';
+        const fbNumber = order.fbOrderNumber?.toLowerCase() || '';
+        const displayOrderId = getDisplayOrderId(order.orderId)?.toLowerCase() || '';
         
-        // Scroll to the order
+        return orderId.includes(searchTerm) || 
+               fbNumber.includes(searchTerm) || 
+               displayOrderId.includes(searchTerm);
+      });
+      
+      if (matchingOrders.length > 0) {
+        // Select all matching orders
+        const orderIds = matchingOrders.map((order: any) => order.orderId);
+        setSelectedOrders(new Set(orderIds));
+        setHighlightedOrderId(matchingOrders[0].orderId);
+        
+        // Scroll to first match
         setTimeout(() => {
-          const element = document.getElementById(`order-${exactMatch.orderId}`);
+          const element = document.getElementById(`order-${matchingOrders[0].orderId}`);
           if (element) {
             element.scrollIntoView({ behavior: 'smooth', block: 'center' });
           }
         }, 100);
-      } else {
-        // Calculate partial matches
-        const partialMatches = finishQCOrders.filter((order: any) => {
-          const orderId = order.orderId?.toLowerCase() || '';
-          const fbNumber = order.fbOrderNumber?.toLowerCase() || '';
-          const displayOrderId = getDisplayOrderId(order.orderId)?.toLowerCase() || '';
-          
-          return orderId.includes(searchTerm) || 
-                 fbNumber.includes(searchTerm) || 
-                 displayOrderId.includes(searchTerm);
-        });
         
-        if (partialMatches.length > 0) {
-          // Clear selection but keep highlight for first match
-          setSelectedOrders(new Set());
-          if (partialMatches.length === 1) {
-            setHighlightedOrderId(partialMatches[0].orderId);
-          }
-          toast.success(`${partialMatches.length} order(s) highlighted - type exact order number to select`);
-        } else {
-          setSelectedOrders(new Set());
-          setHighlightedOrderId(null);
-        }
+        toast.success(`${matchingOrders.length} order(s) selected`);
+      } else {
+        setSelectedOrders(new Set());
+        setHighlightedOrderId(null);
+        toast.error('No matching orders found');
       }
     } else {
       setSelectedOrders(new Set());

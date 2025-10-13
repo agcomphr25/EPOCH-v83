@@ -79,20 +79,36 @@ export default function Calendar() {
         console.warn('Local events response is not an array:', data);
         return [];
       }
-      const transformed = data.map((event: any) => ({
-        id: event.id,
-        start: new Date(event.startDate),
-        end: new Date(event.endDate),
-        title: event.title || 'Untitled',
-        description: event.description || '',
-        location: event.location || '',
-        isAllDay: event.allDay || false,
-        isPublic: event.isPublic !== undefined ? event.isPublic : true,
-        eventType: event.eventType || 'meeting',
-        createdBy: event.createdBy || 'Unknown',
-        source: 'local',
-        resource: event,
-      })) as CalendarEventExtended[];
+      const transformed = data.map((event: any) => {
+        // For all-day events, create Date in local timezone to avoid day-shift issues
+        let start, end;
+        if (event.allDay) {
+          // Parse date string as local time, not UTC
+          const [startYear, startMonth, startDay] = event.startDate.split('T')[0].split('-').map(Number);
+          const [endYear, endMonth, endDay] = event.endDate.split('T')[0].split('-').map(Number);
+          start = new Date(startYear, startMonth - 1, startDay);
+          end = new Date(endYear, endMonth - 1, endDay);
+        } else {
+          // For timed events, use standard Date parsing (includes timezone)
+          start = new Date(event.startDate);
+          end = new Date(event.endDate);
+        }
+        
+        return {
+          id: event.id,
+          start,
+          end,
+          title: event.title || 'Untitled',
+          description: event.description || '',
+          location: event.location || '',
+          isAllDay: event.allDay || false,
+          isPublic: event.isPublic !== undefined ? event.isPublic : true,
+          eventType: event.eventType || 'meeting',
+          createdBy: event.createdBy || 'Unknown',
+          source: 'local',
+          resource: event,
+        };
+      }) as CalendarEventExtended[];
       console.log('📅 Local events transformed:', transformed.length);
       return transformed;
     },
@@ -120,22 +136,38 @@ export default function Calendar() {
     staleTime: 1000 * 30, // Refresh every 30 seconds for testing
     select: (data: any) => {
       if (!Array.isArray(data)) return [];
-      return data.map((event: any) => ({
-        id: event.id,
-        start: new Date(event.startDate),
-        end: new Date(event.endDate),
-        title: event.title,
-        description: event.description,
-        location: event.location,
-        isAllDay: event.allDay,
-        isPublic: event.isPublic,
-        eventType: event.eventType || 'meeting',
-        createdBy: event.createdBy,
-        source: 'google',
-        color: event.color,
-        colorId: event.colorId,
-        resource: event,
-      })) as CalendarEventExtended[];
+      return data.map((event: any) => {
+        // For all-day events, create Date in local timezone to avoid day-shift issues
+        let start, end;
+        if (event.allDay) {
+          // Parse date string as local time, not UTC
+          const [startYear, startMonth, startDay] = event.startDate.split('T')[0].split('-').map(Number);
+          const [endYear, endMonth, endDay] = event.endDate.split('T')[0].split('-').map(Number);
+          start = new Date(startYear, startMonth - 1, startDay);
+          end = new Date(endYear, endMonth - 1, endDay);
+        } else {
+          // For timed events, use standard Date parsing (includes timezone)
+          start = new Date(event.startDate);
+          end = new Date(event.endDate);
+        }
+        
+        return {
+          id: event.id,
+          start,
+          end,
+          title: event.title,
+          description: event.description,
+          location: event.location,
+          isAllDay: event.allDay,
+          isPublic: event.isPublic,
+          eventType: event.eventType || 'meeting',
+          createdBy: event.createdBy,
+          source: 'google',
+          color: event.color,
+          colorId: event.colorId,
+          resource: event,
+        };
+      }) as CalendarEventExtended[];
     },
   });
 

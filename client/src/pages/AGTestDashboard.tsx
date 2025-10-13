@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { BarChart3, Calendar, List, Maximize2, Minimize2, Search, ArrowRight, Edit, QrCode, Users, ExternalLink, LogOut, ListOrdered, Repeat } from 'lucide-react';
+import { BarChart3, Calendar, List, Maximize2, Minimize2, Search, ArrowRight, Edit, QrCode, Users, ExternalLink, LogOut, ListOrdered, Repeat, Package } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import PipelineVisualization from '@/components/PipelineVisualization';
@@ -206,6 +206,25 @@ export default function AGTestDashboard() {
             </div>
             <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
               Transfer orders between production departments
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card 
+          className="hover:shadow-md transition-all duration-200 cursor-pointer hover:bg-amber-50 dark:hover:bg-amber-900/20"
+          onClick={() => navigateTo('/metal-accessories')}
+          data-testid="card-metal-accessories"
+        >
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <Package className="w-5 h-5 text-amber-600" />
+                <span className="text-sm font-medium">Metal Accessories</span>
+              </div>
+              <ExternalLink className="w-4 h-4 text-gray-400" />
+            </div>
+            <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+              Track metal parts demand and production forecasting
             </p>
           </CardContent>
         </Card>

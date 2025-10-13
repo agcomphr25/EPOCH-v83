@@ -159,3 +159,119 @@ export async function extractReceiptData(fileBuffer: Buffer) {
     ...result
   };
 }
+
+export interface TrainingContent {
+  title: string;
+  description: string;
+  content: string;
+  contentHtml: string;
+  category: string | null;
+  estimatedMinutes: number;
+  questions: Array<{
+    questionText: string;
+    questionType: 'MULTIPLE_CHOICE' | 'TRUE_FALSE' | 'SHORT_ANSWER';
+    correctAnswer: string | null;
+    explanation: string | null;
+    options?: Array<{
+      optionText: string;
+      isCorrect: boolean;
+    }>;
+  }>;
+}
+
+export async function extractTrainingContent(fileBuffer: Buffer): Promise<TrainingContent> {
+  const result = await analyzeDocument(fileBuffer, 'layout');
+  
+  const content = result.content || '';
+  const lines = content.split('\n').filter(line => line.trim());
+  
+  const title = lines[0]?.trim() || 'Untitled Training Module';
+  
+  const descriptionMatch = content.match(/(?:description|summary|overview):?\s*([^\n]+)/i);
+  const description = descriptionMatch ? descriptionMatch[1].trim() : '';
+  
+  const categoryMatch = content.match(/(?:category|topic|subject):?\s*([^\n]+)/i);
+  const category = categoryMatch ? categoryMatch[1].trim() : null;
+  
+  const wordCount = content.split(/\s+/).length;
+  const estimatedMinutes = Math.max(5, Math.ceil(wordCount / 200));
+  
+  const contentHtml = `<div class="training-content">${lines.map(line => `<p>${line}</p>`).join('')}</div>`;
+  
+  const questions = parseQuestions(content);
+  
+  return {
+    title,
+    description,
+    content,
+    contentHtml,
+    category,
+    estimatedMinutes,
+    questions
+  };
+}
+
+function parseQuestions(content: string): TrainingContent['questions'] {
+  const questions: TrainingContent['questions'] = [];
+  
+  // Split content into question blocks
+  const questionPattern = /(?:question|q)\s*(\d+)[:\.\)]\s*([^\n]+)/gi;
+  const matches = Array.from(content.matchAll(questionPattern));
+  
+  for (let i = 0; i < matches.length; i++) {
+    const match = matches[i];
+    const questionText = match[2].trim();
+    const questionStartIndex = match.index || 0;
+    
+    // Find the end of this question block (start of next question or end of content)
+    const nextQuestionIndex = i < matches.length - 1 
+      ? (matches[i + 1].index || content.length)
+      : content.length;
+    
+    // Extract just this question's block
+    const questionBlock = content.substring(questionStartIndex, nextQuestionIndex);
+    
+    // Check if it's a true/false question
+    if (questionText.toLowerCase().includes('true or false') || 
+        questionBlock.toLowerCase().includes('true or false')) {
+      questions.push({
+        questionText: questionText.replace(/\s*\(true or false\)/i, '').trim(),
+        questionType: 'TRUE_FALSE',
+        correctAnswer: null,
+        explanation: null,
+        options: [
+          { optionText: 'True', isCorrect: false },
+          { optionText: 'False', isCorrect: false }
+        ]
+      });
+    } else {
+      // Look for multiple choice options only within this question block
+      const optionPattern = /^[a-d][\.\)]\s*([^\n]+)/gim;
+      const optionMatches = Array.from(questionBlock.matchAll(optionPattern));
+      
+      if (optionMatches.length >= 2) {
+        // Multiple choice question
+        questions.push({
+          questionText,
+          questionType: 'MULTIPLE_CHOICE',
+          correctAnswer: null,
+          explanation: null,
+          options: optionMatches.slice(0, 4).map(opt => ({
+            optionText: opt[1].trim(),
+            isCorrect: false
+          }))
+        });
+      } else {
+        // Short answer question
+        questions.push({
+          questionText,
+          questionType: 'SHORT_ANSWER',
+          correctAnswer: null,
+          explanation: null
+        });
+      }
+    }
+  }
+  
+  return questions;
+}

@@ -4,6 +4,14 @@
 EPOCH v8 is a comprehensive Manufacturing ERP system designed for small manufacturing companies specializing in customizable products. It aims to streamline operations, enhance efficiency, and improve scalability by providing end-to-end order management, inventory tracking, employee portal functionality, and quality control workflows. The project's vision is to become the leading ERP solution for small-to-medium customizable product manufacturers. It is a full-stack TypeScript application with a React frontend and Express backend, featuring Progressive Web App (PWA) capabilities for deployment to web and mobile platforms via Capacitor.
 
 ## Recent Changes
+**October 13, 2025 - OEM Priority Clarification**
+- **Clarified OEM Priority Settings**: OEM priority settings are ONLY for Purchase Orders (items with `poId` or `productionOrderId`), NOT for regular production orders. This prevents confusion between:
+  - **Purchase Orders (OEM Priority)**: Items from purchase orders that get GREEN cards and priority scheduling
+  - **Production Orders**: Regular P1 production orders that use material-based color coding (CF/FG)
+- **Updated LayupScheduler Logic**: Removed incorrect association between `source === 'production_order'` and OEM priority
+- **Badge Update**: Changed "OEM" badge to "PO" badge for purchase order items to avoid confusion
+- **Documentation**: Added clear distinction in code comments and system documentation
+
 **October 11, 2025 - CI/CD Implementation & Code Quality Automation**
 - **Implemented Three-Layer Protection System**:
   1. **Pre-Commit Hooks (Husky + lint-staged)** - ✅ ACTIVE - Blocks commits with TypeScript/ESLint errors

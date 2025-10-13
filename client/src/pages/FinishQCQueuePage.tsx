@@ -324,6 +324,7 @@ export default function FinishQCQueuePage() {
                       <OrderTooltip 
                         order={order} 
                         stockModels={stockModels as any[]} 
+                        showPaintAndTexture={true}
                         className={`border-l-purple-500 cursor-pointer ${
                           isSelected ? 'bg-blue-50 dark:bg-blue-900/20' : ''
                         }`}

@@ -51,9 +51,10 @@ The application adopts a monorepo structure utilizing a full-stack TypeScript ap
     - **Shipping Integration**: UPS API for label generation and a Shipping Tracker.
     - **Communications System**: Customer communication management with inbox, email, and SMS integration.
     - **Personalized Dashboards**: Secure auto-redirect system to user-specific dashboards upon login with role-based navbar.
-    - **Training System**: Certification and quiz system with PDF viewer and automatic certificate generation.
+    - **Training Management System**: Comprehensive training platform with PDF import using Azure Document Intelligence for automatic content extraction, module creation with quizzes and evaluations, employee training records tracking, certification management, legacy training matrix import (CSV and PDF), and automatic certificate generation. Supports MULTIPLE_CHOICE, TRUE_FALSE, and SHORT_ANSWER question types with detailed attempt tracking and scoring. Includes visual Training Matrix View showing employee training completion status with green checkmarks for completed trainings (with dates and notes) and red circles for pending trainings, plus progress tracking and search functionality.
     - **AI-Powered Smart Sorting**: Intelligent dropdown sorting for Action Inlet options based on user behavior (selection frequency).
     - **Calendar Integration**: Displays Google Calendar events via OAuth.
+    - **Azure Document Intelligence**: AI-powered document analysis for extracting data from invoices, receipts, and other documents using Azure's prebuilt models. Supports multiple document types with automatic field extraction and table detection.
 
 ## External Dependencies
 
@@ -80,3 +81,4 @@ The application adopts a monorepo structure utilizing a full-stack TypeScript ap
 - SendGrid (Email)
 - Twilio (SMS)
 - Google Calendar (Event Integration)
+- Azure Document Intelligence (AI-powered document analysis)

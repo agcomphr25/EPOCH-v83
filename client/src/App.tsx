@@ -81,6 +81,8 @@ import ShutdownProceduresTraining from "@/pages/ShutdownProceduresTraining";
 import CounterfeitPreventionTraining from "@/pages/CounterfeitPreventionTraining";
 import Training from "@/pages/Training";
 import TrainingModule from "@/pages/TrainingModule";
+import TrainingManagement from "@/pages/TrainingManagement";
+import TrainingMatrixView from "@/pages/TrainingMatrixView";
 import Calendar from "./pages/Calendar";
 import LayupPluggingQueuePage from "./pages/LayupPluggingQueuePage";
 import BarcodeQueuePage from "./pages/BarcodeQueuePage";
@@ -111,6 +113,7 @@ import CustomerSatisfaction from "./pages/CustomerSatisfaction";
 import VendorsPage from "./pages/VendorsPage";
 import VendorPOPage from "./pages/VendorPOPage";
 import MetalAccessoriesTracker from "./pages/MetalAccessoriesTracker";
+import DocumentIntelligence from "./pages/DocumentIntelligence";
 
 import { Toaster as HotToaster } from 'react-hot-toast';
 import DeploymentAuthWrapper from './components/DeploymentAuthWrapper';
@@ -305,9 +308,12 @@ function App() {
                   <Route path="/task-tracker" component={TaskTracker} />
                   <Route path="/kickback-tracking" component={KickbackTracking} />
                   <Route path="/document-management" component={DocumentManagement} />
+                  <Route path="/document-intelligence" component={DocumentIntelligence} />
                   
                   {/* Training Routes */}
                   <Route path="/training" component={Training} />
+                  <Route path="/training-management" component={TrainingManagement} />
+                  <Route path="/training-matrix" component={TrainingMatrixView} />
                   <Route path="/training/:moduleId" component={TrainingModule} />
                   <Route path="/shutdown-training" component={ShutdownProceduresTraining} />
                   <Route path="/counterfeit-prevention-training" component={CounterfeitPreventionTraining} />

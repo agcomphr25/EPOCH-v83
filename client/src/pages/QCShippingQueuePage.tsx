@@ -74,6 +74,31 @@ export default function QCShippingQueuePage() {
     setLocation('/kickback-tracking');
   };
 
+  // Auto-select order when scanned
+  const handleOrderScanned = (orderId: string) => {
+    const orderExists = qcShippingOrders.some((order: any) => order.orderId === orderId);
+    if (orderExists) {
+      setSelectedOrders(prev => new Set([...Array.from(prev), orderId]));
+      setHighlightedOrderId(orderId);
+      setTimeout(() => {
+        const element = document.getElementById(`order-${orderId}`);
+        if (element) {
+          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 100);
+      toast({
+        title: "Order selected",
+        description: `Order ${orderId} selected automatically`,
+      });
+    } else {
+      toast({
+        title: "Order not found",
+        description: `Order ${orderId} is not in the Shipping QC department`,
+        variant: "destructive",
+      });
+    }
+  };
+
   // Handle order search selection
   const handleOrderSearchSelect = (order: any) => {
     const orderExists = qcShippingOrders.some((o: any) => o.orderId === order.orderId);
@@ -628,7 +653,7 @@ export default function QCShippingQueuePage() {
       </div>
 
       {/* Barcode Scanner at top */}
-      <BarcodeScanner />
+      <BarcodeScanner onOrderScanned={handleOrderScanned} />
 
       {/* Order Search Box */}
       <Card>

@@ -359,7 +359,7 @@ export function BarcodeScanner({ onOrderScanned }: BarcodeScannerProps = {}) {
                     <div className="text-sm font-medium text-blue-700 mb-1">Action Length</div>
                     <Badge variant="default" className="text-lg px-4 py-2 bg-blue-600">
                       {(orderSummary.features?.action_length || orderSummary.specifications?.action_length)
-                        ?.toString().replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                        ?.toString().replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}
                     </Badge>
                   </div>
                 </div>

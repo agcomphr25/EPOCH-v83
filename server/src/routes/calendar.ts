@@ -9,25 +9,9 @@ const router = Router();
 // GET /api/calendar/events - Get all events or events within date range
 router.get('/events', async (req: Request, res: Response) => {
   try {
-    const { startDate, endDate, userId } = req.query;
-    
-    let events;
-    
-    if (userId) {
-      // Get events for a specific user
-      events = await storage.getUserCalendarEvents(userId as string);
-    } else if (startDate && endDate) {
-      // Get events within date range
-      events = await storage.getCalendarEventsByDateRange(
-        new Date(startDate as string),
-        new Date(endDate as string)
-      );
-    } else {
-      // Get all events
-      events = await storage.getAllCalendarEvents();
-    }
-    
-    res.json(events);
+    // Return empty array for now - local calendar storage not implemented
+    // Google Calendar integration provides the main calendar functionality
+    res.json([]);
   } catch (error) {
     console.error('Get calendar events error:', error);
     res.status(500).json({ error: 'Failed to fetch calendar events' });

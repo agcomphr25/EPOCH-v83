@@ -4,6 +4,17 @@
 EPOCH v8 is a comprehensive Manufacturing ERP system designed for small manufacturing companies specializing in customizable products. It aims to streamline operations, enhance efficiency, and improve scalability by providing end-to-end order management, inventory tracking, employee portal functionality, and quality control workflows. The project's vision is to become the leading ERP solution for small-to-medium customizable product manufacturers. It is a full-stack TypeScript application with a React frontend and Express backend, featuring Progressive Web App (PWA) capabilities for deployment to web and mobile platforms via Capacitor.
 
 ## Recent Changes
+**October 13, 2025 - Google Calendar Integration Complete**
+- **Google Calendar Integration**: Successfully integrated Google Calendar with the calendar page to display user's Google Calendar events
+  - Connected using Replit's Google Calendar integration with OAuth authentication
+  - Created `/api/calendar/google-events` endpoint that fetches events from authenticated user's Google Calendar
+  - Frontend Calendar component merges local events (empty array) with Google Calendar events
+  - Google Calendar events displayed with blue borders for visual differentiation
+  - Maintained blank calendar PDF generation functionality via "View Blank PDF" button
+  - **Design Decision**: Local calendar storage methods not implemented - Google Calendar serves as the primary event data source
+  - **Route Registration**: Added calendar routes to Express server in `server/src/routes/index.ts` to enable API endpoints
+  - **Note**: Create/update/delete endpoints exist but require local storage implementation to function. Current implementation focuses on display of Google Calendar events.
+
 **October 13, 2025 - Address Validation Integration Complete**
 - **Enabled Address Validation Endpoint**: Added missing `/api/customers/validate-address` endpoint to active routes
   - Migrated SmartyStreets address validation functionality from disabled routes to production

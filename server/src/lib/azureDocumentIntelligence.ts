@@ -310,29 +310,78 @@ export async function extractTrainingMatrixData(fileBuffer: Buffer): Promise<Tra
       !headers.some(h => h.includes('training') && h.includes('name'));
     
     if (isMatrixStyle) {
-      // Matrix-style: First column is training names, other columns are employees
-      const employeeNames = headerCells.slice(1).map(cell => cell.content.trim()).filter(n => n);
+      // Matrix-style: Detect which column has training names dynamically
       const maxRow = Math.max(...table.cells.map(c => c.rowIndex));
+      const maxCol = Math.max(...table.cells.map(c => c.columnIndex));
+      
+      // Analyze each column to find the one with training names
+      const columnStats: Array<{ colIdx: number; textCount: number; dateCount: number; hasEmptyHeader: boolean }> = [];
+      
+      for (let colIdx = 0; colIdx <= maxCol; colIdx++) {
+        let textCount = 0;
+        let dateCount = 0;
+        const headerCell = headerCells.find(c => c.columnIndex === colIdx);
+        const hasEmptyHeader = !headerCell || !headerCell.content.trim();
+        
+        // Analyze data rows for this column
+        for (let rowIdx = 1; rowIdx <= maxRow; rowIdx++) {
+          const cell = table.cells.find(c => c.rowIndex === rowIdx && c.columnIndex === colIdx);
+          const value = cell?.content.trim() || '';
+          
+          if (value) {
+            // Check if it looks like a date
+            if (/\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4}/.test(value) || value === ':unselected:') {
+              dateCount++;
+            } else if (value.length > 3) {
+              textCount++;
+            }
+          }
+        }
+        
+        columnStats.push({ colIdx, textCount, dateCount, hasEmptyHeader });
+      }
+      
+      // Find training column: highest text count with low date count, or empty header
+      const trainingColIdx = columnStats.reduce((best, curr) => {
+        const currScore = curr.textCount * 10 - curr.dateCount + (curr.hasEmptyHeader ? 5 : 0);
+        const bestScore = best.textCount * 10 - best.dateCount + (best.hasEmptyHeader ? 5 : 0);
+        return currScore > bestScore ? curr : best;
+      }).colIdx;
+      
+      // Extract employee names from headers (excluding training column)
+      const employeeColumns: Array<{ colIdx: number; name: string }> = [];
+      for (let colIdx = 0; colIdx <= maxCol; colIdx++) {
+        if (colIdx !== trainingColIdx) {
+          const headerCell = headerCells.find(c => c.columnIndex === colIdx);
+          const name = headerCell?.content.trim() || '';
+          if (name && !name.toLowerCase().includes('training')) {
+            employeeColumns.push({ colIdx, name });
+          }
+        }
+      }
+      
+      // Extract training data
+      const processedRows = new Set<number>();
       
       for (let rowIdx = 1; rowIdx <= maxRow; rowIdx++) {
-        const rowCells = table.cells.filter(cell => cell.rowIndex === rowIdx);
+        if (processedRows.has(rowIdx)) continue;
         
-        // First cell in each row is the training name
-        const trainingCell = rowCells.find(cell => cell.columnIndex === 0);
-        const trainingName = trainingCell?.content.trim() || 'Unknown Training';
+        const trainingCell = table.cells.find(c => c.rowIndex === rowIdx && c.columnIndex === trainingColIdx);
+        const trainingName = trainingCell?.content.trim() || '';
         
-        // Skip if training name is empty or looks like a header
-        if (!trainingName || trainingName.toLowerCase().includes('employee')) {
+        // Skip empty or header-like training names
+        if (!trainingName || trainingName.toLowerCase().includes('employee') || trainingName === ':unselected:') {
           continue;
         }
         
+        processedRows.add(rowIdx);
+        
         // Process each employee column
-        employeeNames.forEach((employeeName, idx) => {
-          const colIdx = idx + 1; // +1 because first column is training name
-          const cell = rowCells.find(c => c.columnIndex === colIdx);
+        employeeColumns.forEach(({ colIdx, name }) => {
+          const cell = table.cells.find(c => c.rowIndex === rowIdx && c.columnIndex === colIdx);
           const cellValue = cell?.content.trim() || '';
           
-          // Only create entry if there's a date or status indicator
+          // Only create entry if there's meaningful data
           if (cellValue && cellValue !== ':unselected:' && cellValue !== '-') {
             let lastCompleted: Date | null = null;
             let status: 'PENDING' | 'COMPLETED' | 'OVERDUE' | 'NOT_REQUIRED' = 'PENDING';
@@ -355,7 +404,7 @@ export async function extractTrainingMatrixData(fileBuffer: Buffer): Promise<Tra
             }
             
             entries.push({
-              employeeName,
+              employeeName: name,
               jobTitle: null,
               department: null,
               trainingName,

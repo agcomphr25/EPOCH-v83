@@ -16,9 +16,7 @@ export const submitForm = async (formId: number, data: Record<string, any>): Pro
 };
 
 export const getSubmissions = async (formId: number): Promise<FormSubmission[]> => {
-  return apiRequest('/api/enhanced-forms/submissions', {
-    params: { formId }
-  });
+  return apiRequest(`/api/enhanced-forms/submissions?formId=${formId}`);
 };
 
 export const getSubmission = async (id: number): Promise<FormSubmission> => {

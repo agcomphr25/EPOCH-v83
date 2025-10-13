@@ -4,6 +4,15 @@
 EPOCH v8 is a comprehensive Manufacturing ERP system designed for small manufacturing companies specializing in customizable products. It aims to streamline operations, enhance efficiency, and improve scalability by providing end-to-end order management, inventory tracking, employee portal functionality, and quality control workflows. The project's vision is to become the leading ERP solution for small-to-medium customizable product manufacturers. It is a full-stack TypeScript application with a React frontend and Express backend, featuring Progressive Web App (PWA) capabilities for deployment to web and mobile platforms via Capacitor.
 
 ## Recent Changes
+**October 13, 2025 - GitHub CI/CD TypeScript Fixes**
+- **Fixed All TypeScript Errors**: Resolved 11 TypeScript errors identified by GitHub Actions CI/CD checks:
+  - Fixed `Array().fill()` calls missing required argument - changed to `Array().fill(null)` in BarcodeDisplay.tsx and AveryLabelPrint.tsx
+  - Added type annotation for regex replace callback parameter in BarcodeScanner.tsx: `(l: string) => l.toUpperCase()`
+  - Removed explicit `any` type annotations in BOMDetails.tsx and added proper type for hierarchyData query
+  - Fixed API files using invalid `params` option - converted to URL query strings in submissions.ts, enhancedForms.ts, and schema.ts
+  - Removed unused ProtectedRoute import from App.tsx (component doesn't exist)
+- **CI/CD Status**: All quality checks now pass successfully - TypeScript, ESLint, Prettier, and build verification all green ✅
+
 **October 13, 2025 - Barcode Label Information Update**
 - **Enhanced Barcode Labels**: Updated PDF label generation to include complete order information with paint subcategories:
   - Paint options now show subcategory + name (e.g., "Chalkbranch - SA - STANDARD: PRIMED ONLY")

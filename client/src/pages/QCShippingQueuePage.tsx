@@ -556,7 +556,7 @@ export default function QCShippingQueuePage() {
       <CardHeader className="pb-2">
         <CardTitle className="text-sm flex items-center justify-between">
           <div className="flex flex-col gap-0.5">
-            <span>{getDisplayOrderId(order)}</span>
+            <span>{order.orderId}</span>
             {order.fbOrderNumber && (
               <span className="text-xs text-gray-600 font-normal">
                 FB: {order.fbOrderNumber}

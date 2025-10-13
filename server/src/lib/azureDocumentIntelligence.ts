@@ -1,13 +1,21 @@
 import { DocumentAnalysisClient, AzureKeyCredential, AnalyzeResult } from "@azure/ai-form-recognizer";
 
-const endpoint = process.env.AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT;
-const apiKey = process.env.AZURE_DOCUMENT_INTELLIGENCE_KEY;
+let client: DocumentAnalysisClient | null = null;
 
-if (!endpoint || !apiKey) {
-  throw new Error("Azure Document Intelligence credentials not configured");
+function getClient(): DocumentAnalysisClient {
+  const endpoint = process.env.AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT;
+  const apiKey = process.env.AZURE_DOCUMENT_INTELLIGENCE_KEY;
+
+  if (!endpoint || !apiKey) {
+    throw new Error("Azure Document Intelligence credentials not configured. Please set AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT and AZURE_DOCUMENT_INTELLIGENCE_KEY environment variables.");
+  }
+
+  if (!client) {
+    client = new DocumentAnalysisClient(endpoint, new AzureKeyCredential(apiKey));
+  }
+
+  return client;
 }
-
-const client = new DocumentAnalysisClient(endpoint, new AzureKeyCredential(apiKey));
 
 export type DocumentType = 'invoice' | 'receipt' | 'document' | 'layout' | 'businessCard' | 'idDocument';
 
@@ -35,8 +43,9 @@ export async function analyzeDocument(
   documentType: DocumentType = 'document'
 ): Promise<AnalysisResult> {
   const modelId = getModelId(documentType);
+  const azureClient = getClient();
   
-  const poller = await client.beginAnalyzeDocument(modelId, fileBuffer);
+  const poller = await azureClient.beginAnalyzeDocument(modelId, fileBuffer);
   const result: AnalyzeResult = await poller.pollUntilDone();
 
   return formatAnalysisResult(result, documentType);
@@ -47,8 +56,9 @@ export async function analyzeDocumentFromUrl(
   documentType: DocumentType = 'document'
 ): Promise<AnalysisResult> {
   const modelId = getModelId(documentType);
+  const azureClient = getClient();
   
-  const poller = await client.beginAnalyzeDocumentFromUrl(modelId, documentUrl);
+  const poller = await azureClient.beginAnalyzeDocumentFromUrl(modelId, documentUrl);
   const result: AnalyzeResult = await poller.pollUntilDone();
 
   return formatAnalysisResult(result, documentType);

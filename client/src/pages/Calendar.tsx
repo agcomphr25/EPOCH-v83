@@ -117,7 +117,7 @@ export default function Calendar() {
     },
     retry: false,
     enabled: true,
-    staleTime: 1000 * 60 * 5,
+    staleTime: 1000 * 30, // Refresh every 30 seconds for testing
     select: (data: any) => {
       if (!Array.isArray(data)) return [];
       return data.map((event: any) => ({

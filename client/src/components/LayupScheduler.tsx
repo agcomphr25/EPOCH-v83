@@ -139,7 +139,9 @@ const DraggableOrderItem = React.memo(({ order, priority, totalOrdersInCell, mol
       orderModelId: order.modelId,
       materialType: materialType,
       expectedColor:
+
         order.source === 'production_order' ? 'GREEN (OEM Priority)' :
+
         materialType === 'CF' ? 'DEEP ORANGE (CF)' :
         materialType === 'FG' ? 'LIGHT ORANGE (FG)' : 'GRAY (Unknown)'
     });
@@ -147,13 +149,16 @@ const DraggableOrderItem = React.memo(({ order, priority, totalOrdersInCell, mol
 
   // Determine card styling based on source and material
   const getCardStyling = () => {
+
     // Check if this is a purchase order (has poId or productionOrderId)
     // ALL OEM Production orders get GREEN badges for priority indication - regardless of model ID
     if (order.poId || order.productionOrderId || order.source === 'production_order') {
+
       return {
         bg: 'bg-green-100 dark:bg-green-800/50 hover:bg-green-200 dark:hover:bg-green-800/70 border-2 border-green-300 dark:border-green-600',
         text: 'text-green-800 dark:text-green-200'
       };
+
     } else if (materialType === 'CF') {
       // CF cards: Orange-200 (light orange)
       return {
@@ -190,7 +195,9 @@ const DraggableOrderItem = React.memo(({ order, priority, totalOrdersInCell, mol
       <div className={`${cardStyling.text} ${sizing.textSize} text-center flex flex-col items-center justify-center h-full`}>
         <div className="flex items-center font-bold">
           {getDisplayOrderId(order) || 'No ID'}
+
           {order.source === 'production_order' && <span className="text-xs ml-1 bg-green-200 dark:bg-green-700 px-1 rounded font-semibold">OEM</span>}
+
         </div>
         {/* Show stock model display name with material type */}
         {(() => {
@@ -1116,7 +1123,7 @@ export default function LayupScheduler() {
   const { employees, saveEmployee, deleteEmployee, toggleEmployeeStatus, loading: employeesLoading, refetch: refetchEmployees } = useEmployeeSettings();
 
   // Load existing schedule data from database, filtering out Friday assignments
-  const { data: existingSchedule, isLoading: scheduleLoading } = useQuery({
+  const { data: rawScheduleData, isLoading: scheduleLoading } = useQuery({
     queryKey: ['/api/layup-schedule'],
     enabled: true,
     select: (data) => {
@@ -1158,6 +1165,32 @@ export default function LayupScheduler() {
       return filteredData;
     }
   });
+  
+  // Filter schedules to only load from LOCKED weeks
+  const existingSchedule = useMemo(() => {
+    if (!rawScheduleData || !Array.isArray(rawScheduleData)) return rawScheduleData;
+    
+    const filteredByLock = rawScheduleData.filter(assignment => {
+      const dateParts = assignment.scheduledDate.split('T')[0].split('-');
+      const date = new Date(parseInt(dateParts[0]), parseInt(dateParts[1]) - 1, parseInt(dateParts[2]));
+      const monday = startOfWeek(date, { weekStartsOn: 1 });
+      const weekKey = format(monday, 'yyyy-MM-dd');
+      const isWeekLocked = lockedWeeks[weekKey] || false;
+      
+      if (!isWeekLocked) {
+        console.log(`🔓 LOCK FILTER: Removing schedule from UNLOCKED week ${weekKey} - ${assignment.orderId}`);
+        return false;
+      }
+      
+      console.log(`✅ LOCK FILTER: Keeping schedule from LOCKED week ${weekKey} - ${assignment.orderId}`);
+      return true;
+    });
+    
+    console.log(`🔒 Lock filter: ${rawScheduleData.length} total → ${filteredByLock.length} from locked weeks`);
+    console.log(`🔒 Locked weeks: ${Object.keys(lockedWeeks).filter(k => lockedWeeks[k]).join(', ') || 'none'}`);
+    
+    return filteredByLock;
+  }, [rawScheduleData, lockedWeeks]);
 
   // Update local assignments when schedule data loads
   useEffect(() => {
@@ -1566,8 +1599,8 @@ export default function LayupScheduler() {
       return orders;
     },
     retry: 3,
-    staleTime: 5000,
-    gcTime: 60000,
+    staleTime: 1000 * 60 * 5, // Consider data fresh for 5 minutes
+    gcTime: 1000 * 60 * 10, // Keep data in cache for 10 minutes
     refetchOnWindowFocus: false,
     refetchOnMount: true,
     refetchInterval: false
@@ -1755,8 +1788,10 @@ export default function LayupScheduler() {
 
     // Enhanced intelligent stock model detection (define before usage)
     const getOrderStockModelId = (order: any) => {
+
       // CRITICAL FIX: Preserve PO/OEM order model IDs to prevent Mesa fallback regression
       if (order.source === 'production_order' || order.poId || order.productionOrderId || order.orderId?.startsWith('PO-')) {
+
         // FRONTEND MAPPING FIX: Map numeric item IDs to proper stock models for PO orders
         if (order.orderId?.startsWith('PO-')) {
           // Extract item ID from orderId pattern: PO-P18261-1-1, PO-P18261-2-1, PO-P18261-3-1
@@ -2009,9 +2044,11 @@ export default function LayupScheduler() {
     schedulableOrders.forEach((order, index) => {
       const compatibleMolds = getCompatibleMolds(order);
 
+
       // Special logging for production orders and P1 purchase orders
       if (order.source === 'production_order' || order.source === 'p1_purchase_order') {
         console.log(`🏭 PROCESSING PRODUCTION ORDER ${order.orderId}:`, {
+
           stockModelId: order.stockModelId,
           modelId: order.modelId,
           product: order.product,
@@ -2024,8 +2061,10 @@ export default function LayupScheduler() {
 
       if (compatibleMolds.length === 0) {
         console.log('⚠️ No compatible molds for order:', order.orderId, 'Source:', order.source);
+
         if (order.source === 'production_order') {
           console.log('❌ CRITICAL: Production order has no compatible molds!', {
+
             orderId: order.orderId,
             stockModelId: order.stockModelId,
             modelId: order.modelId,
@@ -2082,7 +2121,9 @@ export default function LayupScheduler() {
 
         assigned = true;
         const logPrefix = isMesaUniversal ? '🏔️ MESA UNIVERSAL ASSIGNED:' :
-                         order.source === 'production_order' ? '🏭 PRODUCTION ORDER ASSIGNED:' : '✅ Assigned';
+
+                         order.source === 'p1_purchase_order' ? '🏭 P1 PO ORDER ASSIGNED:' : '✅ Assigned';
+
         console.log(`${logPrefix} ${order.orderId} to ${bestMold.moldId} on ${format(targetDate, 'MM/dd')} (${dailyAssignments[dateKey]}/${maxOrdersPerDay} daily capacity)`);
       }
 
@@ -2152,7 +2193,9 @@ export default function LayupScheduler() {
           workDays: selectedWorkDays, // Pass current work day settings  
           employees: employees, // Pass employee settings
           molds: molds.filter(m => m.enabled), // Pass enabled molds only
-          excludeOEMOrders: false // Include ALL orders: regular + OEM production orders
+
+          excludeOEMOrders: false // Include ALL orders: regular + P1 PO orders
+
         }),
       });
 
@@ -2223,7 +2266,7 @@ export default function LayupScheduler() {
         variant: "destructive"
       });
     }
-  }, [orders, molds, employees]);
+  }, [orders, molds, employees, currentDate, selectedWorkDays]);
 
   // DISABLED: Auto-loading of generated schedule - Manual control only  
   useEffect(() => {
@@ -3241,27 +3284,31 @@ export default function LayupScheduler() {
     }
   }
 
-  // Debug production orders and P1 purchase orders specifically
-  const productionOrders = orders.filter(order => order.source === 'production_order' || order.source === 'p1_purchase_order');
-  console.log('🏭 LayupScheduler - Production/P1 orders:', productionOrders.length);
-  if (productionOrders.length > 0) {
-    console.log('🏭 LayupScheduler - Sample production/P1 order:', productionOrders[0]);
-    console.log('🏭 LayupScheduler - Production/P1 order stockModelId:', productionOrders[0].stockModelId);
-    console.log('🏭 LayupScheduler - Production/P1 order modelId:', productionOrders[0].modelId);
 
-    // Check if production/P1 orders are being assigned
-    const assignedProductionOrders = productionOrders.filter(order => orderAssignments[order.orderId]);
-    console.log('🏭 LayupScheduler - Assigned production/P1 orders:', assignedProductionOrders.length);
-    if (assignedProductionOrders.length === 0) {
-      console.log('❌ NO PRODUCTION/P1 ORDERS ASSIGNED! This is why they are not visible');
+  // Debug P1 purchase orders specifically
+  const p1POOrders = orders.filter(order => order.source === 'p1_purchase_order');
+  console.log('🏭 LayupScheduler - P1 PO orders:', p1POOrders.length);
+  if (p1POOrders.length > 0) {
+    console.log('🏭 LayupScheduler - Sample P1 PO order:', p1POOrders[0]);
+    console.log('🏭 LayupScheduler - P1 PO order stockModelId:', p1POOrders[0].stockModelId);
+    console.log('🏭 LayupScheduler - P1 PO order modelId:', p1POOrders[0].modelId);
+
+    // Check if P1 PO orders are being assigned
+    const assignedP1POOrders = p1POOrders.filter(order => orderAssignments[order.orderId]);
+    console.log('🏭 LayupScheduler - Assigned P1 PO orders:', assignedP1POOrders.length);
+    if (assignedP1POOrders.length === 0) {
+      console.log('❌ NO P1 PO ORDERS ASSIGNED! This is why they are not visible');
     } else {
-      console.log('✅ Production/P1 orders assigned:', assignedProductionOrders.map(o => o.orderId));
+      console.log('✅ P1 PO orders assigned:', assignedP1POOrders.map(o => o.orderId));
+
     }
   }
 
   // Manual scheduling only - auto-schedule disabled
-  if (productionOrders.length > 0 && molds?.length > 0 && employees?.length > 0) {
-    console.log('🏭 Production/P1 orders loaded and ready for manual scheduling via Generate Schedule button');
+
+  if (p1POOrders.length > 0 && molds?.length > 0 && employees?.length > 0) {
+    console.log('🏭 P1 PO orders loaded and ready for manual scheduling via Generate Schedule button');
+
   }
 
   // Debug Mesa Universal molds
@@ -3272,11 +3319,13 @@ export default function LayupScheduler() {
   console.log('🏭 LayupScheduler - All Molds:', molds?.map(m => ({ moldId: m.moldId, instanceNumber: m.instanceNumber, stockModels: m.stockModels })));
   console.log('⚙️ LayupScheduler - Employees:', employees?.length, 'employees loaded');
 
-  // Debug unassigned orders - especially production and P1 purchase orders
+
+  // Debug unassigned orders - especially P1 purchase orders
   const unassignedOrders = orders.filter(order => !orderAssignments[order.orderId]);
-  const unassignedProductionOrders = unassignedOrders.filter(o => o.source === 'production_order' || o.source === 'p1_purchase_order');
+  const unassignedP1POOrders = unassignedOrders.filter(o => o.source === 'p1_purchase_order');
   console.log('🔄 Unassigned orders:', unassignedOrders.length, unassignedOrders.map(o => o.orderId));
-  console.log('🏭 Unassigned PRODUCTION/P1 orders:', unassignedProductionOrders.length, unassignedProductionOrders.map(o => o.orderId));
+  console.log('🏭 Unassigned P1 PO orders:', unassignedP1POOrders.length, unassignedP1POOrders.map(o => o.orderId));
+
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -4489,19 +4538,23 @@ export default function LayupScheduler() {
                       <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
                         {isCurrentWeekLocked() 
                           ? `Current week (${format(currentDate, 'MM/dd')}) is locked with assignments • ${Object.keys(orderAssignments).length} total orders scheduled`
-                          : `${processedOrders.filter(o => !orderAssignments[o.orderId] && o.source !== 'production_order' && o.source !== 'p1_purchase_order').length} regular orders + ${processedOrders.filter(o => !orderAssignments[o.orderId] && (o.source === 'production_order' || o.source === 'p1_purchase_order')).length} production orders ready • ${Object.keys(orderAssignments).length} scheduled`
+
+                          : `${processedOrders.filter(o => !orderAssignments[o.orderId] && o.source !== 'p1_purchase_order').length} regular orders + ${processedOrders.filter(o => !orderAssignments[o.orderId] && o.source === 'p1_purchase_order').length} P1 PO orders ready • ${Object.keys(orderAssignments).length} scheduled`
+
                         }
                       </p>
                     </div>
                     <div className="space-x-2">
                       <Button
                         onClick={addRegularOrders}
+
                         disabled={processedOrders.filter(o => !orderAssignments[o.orderId] && o.source !== 'production_order' && o.source !== 'p1_purchase_order').length === 0}
                         className="bg-green-600 hover:bg-green-700"
                         size="sm"
                       >
                         <Plus className="w-4 h-4 mr-1" />
                         Add Regular Orders ({processedOrders.filter(o => !orderAssignments[o.orderId] && o.source !== 'production_order' && o.source !== 'p1_purchase_order').length} orders)
+
                       </Button>
                       <Button
                         onClick={clearSchedule}

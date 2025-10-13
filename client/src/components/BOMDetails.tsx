@@ -82,7 +82,7 @@ export function BOMDetails({ bomId, onBack }: BOMDetailsProps) {
   });
 
   // Also fetch hierarchical structure
-  const { data: hierarchyData } = useQuery({
+  const { data: hierarchyData } = useQuery<{ hierarchicalItems: HierarchicalBomItem[] }>({
     queryKey: [`/api/boms/${bomId}/hierarchy`],
     enabled: viewMode === 'hierarchical',
   });
@@ -122,7 +122,7 @@ export function BOMDetails({ bomId, onBack }: BOMDetailsProps) {
   ) || [];
 
   // Filter hierarchical items based on search term
-  const filteredHierarchicalItems = hierarchyData?.hierarchicalItems?.filter((item: any) => 
+  const filteredHierarchicalItems = hierarchyData?.hierarchicalItems?.filter((item) => 
     item.partName.toLowerCase().includes(searchTerm.toLowerCase()) ||
     item.firstDept.toLowerCase().includes(searchTerm.toLowerCase()) ||
     getPartNumber(item.partName).toLowerCase().includes(searchTerm.toLowerCase())
@@ -412,7 +412,7 @@ export function BOMDetails({ bomId, onBack }: BOMDetailsProps) {
                   </TableHeader>
                   <TableBody>
                     {viewMode === 'hierarchical' 
-                      ? itemsToDisplay.map((item: any) => renderHierarchicalItem(item, 0))
+                      ? itemsToDisplay.map((item) => renderHierarchicalItem(item, 0))
                       : itemsToDisplay.map((item) => (
                           <TableRow key={item.id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
                             <TableCell className="font-mono text-sm">{getPartNumber(item.partName)}</TableCell>

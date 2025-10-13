@@ -187,7 +187,7 @@ export function BarcodeDisplay({ orderId, barcode, showTitle = true, size = 'med
             <body>
               <div class="labels-container">
                 <!-- Print 6 copies for easy use -->
-                ${Array(6).fill().map((_, i) => `
+                ${Array(6).fill(null).map((_, i) => `
                   <div class="avery-label">
                     <div class="label-content">
                       <div class="order-header">P1 ORDER</div>

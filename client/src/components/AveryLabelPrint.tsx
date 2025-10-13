@@ -309,7 +309,7 @@ export function AveryLabelPrint({
             </head>
             <body>
               <div class="labels-container">
-                ${Array(copies).fill().map((_, i) => `
+                ${Array(copies).fill(null).map((_, i) => `
                   ${generateLabelContent(i)}
                 `).join('')}
               </div>

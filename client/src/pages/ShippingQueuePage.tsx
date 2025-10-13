@@ -914,8 +914,15 @@ export default function ShippingQueuePage() {
                 onCheckedChange={(checked) => handleOrderSelection(order.orderId, checked as boolean)}
                 onClick={(e) => e.stopPropagation()} // Prevent card selection when clicking checkbox
               />
-              <div className={`text-sm font-semibold ${isSelected ? 'text-blue-700' : 'text-blue-600'}`}>
-                {getDisplayOrderId(order)}
+              <div className="flex flex-col gap-0.5">
+                <div className={`text-sm font-semibold ${isSelected ? 'text-blue-700' : 'text-blue-600'}`}>
+                  {getDisplayOrderId(order)}
+                </div>
+                {order.fbOrderNumber && (
+                  <div className="text-xs text-gray-600">
+                    FB: {order.fbOrderNumber}
+                  </div>
+                )}
               </div>
             </div>
             <div className="flex items-center gap-2">

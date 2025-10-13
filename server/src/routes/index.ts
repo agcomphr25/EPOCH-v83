@@ -35,11 +35,15 @@ import reportsRoutes from './reports';
 import oemSettingsRoutes from './oemSettings';
 import metalAccessoriesRoutes from './metalAccessories';
 import featureSelectionsRoutes from './featureSelections';
+import calendarRoutes from './calendar';
 import { getAccessToken } from '../utils/upsShipping';
 
 export function registerRoutes(app: Express): Server {
   // Authentication routes
   app.use('/api/auth', authRoutes);
+  
+  // Calendar routes
+  app.use('/api/calendar', calendarRoutes);
   
   // User management routes
   app.use('/api/users', usersRoutes);

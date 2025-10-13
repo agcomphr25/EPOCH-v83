@@ -6,13 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Camera, Scan } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { Employee } from '@shared/schema';
@@ -24,19 +18,19 @@ export default function InventoryScanner() {
   const scannedCode = useScanner();
   const queryClient = useQueryClient();
   const [showCameraScanner, setShowCameraScanner] = useState(false);
-
+  
   // Device detection for smart UI
   const { isMobile, hasCamera } = useDeviceDetection();
-
+  
   // Unified barcode input handling
   const {
     barcode,
     scannedBarcode,
     isValidBarcode,
     handleBarcodeDetected,
-    clearScan,
+    clearScan
   } = useBarcodeInput();
-
+  
   const [formData, setFormData] = useState({
     itemCode: '',
     quantity: '1',
@@ -73,7 +67,7 @@ export default function InventoryScanner() {
         }, 1000);
       } else {
         // Regular inventory item
-        setFormData((fd) => ({ ...fd, itemCode: scannedBarcode }));
+        setFormData(fd => ({ ...fd, itemCode: scannedBarcode }));
         toast.success(`Inventory item scanned: ${scannedBarcode}`);
       }
     }
@@ -85,11 +79,10 @@ export default function InventoryScanner() {
   };
 
   const scanMutation = useMutation({
-    mutationFn: (data: any) =>
-      apiRequest('/api/inventory/scan', {
-        method: 'POST',
-        body: data,
-      }),
+    mutationFn: (data: any) => apiRequest('/api/inventory/scan', {
+      method: 'POST',
+      body: data
+    }),
     onSuccess: () => {
       toast.success('Scan recorded ✔️');
       setFormData({
@@ -109,7 +102,7 @@ export default function InventoryScanner() {
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
     const { name, value } = e.target;
-    setFormData((fd) => ({ ...fd, [name]: value }));
+    setFormData(fd => ({ ...fd, [name]: value }));
   }
 
   function handleSubmit(e: React.FormEvent) {
@@ -118,12 +111,12 @@ export default function InventoryScanner() {
       toast.error('Item code is required');
       return;
     }
-
+    
     const submitData = {
       ...formData,
-      quantity: parseInt(formData.quantity) || 1,
+      quantity: parseInt(formData.quantity) || 1
     };
-
+    
     scanMutation.mutate(submitData);
   }
 
@@ -135,8 +128,8 @@ export default function InventoryScanner() {
           Inventory In Scanner
         </CardTitle>
         <p className="text-sm text-gray-600">
-          {hasCamera && isMobile
-            ? 'Scan barcodes with your camera or enter manually'
+          {hasCamera && isMobile 
+            ? 'Scan barcodes with your camera or enter manually' 
             : 'Press Ctrl+S to simulate scanning a barcode'}
         </p>
       </CardHeader>
@@ -154,7 +147,7 @@ export default function InventoryScanner() {
                   className="bg-gray-50"
                   placeholder="Scan or enter item code"
                 />
-
+                
                 {/* Camera scanning option */}
                 {hasCamera && (
                   <Button
@@ -169,7 +162,7 @@ export default function InventoryScanner() {
                 )}
               </div>
             </div>
-
+            
             <div>
               <Label htmlFor="quantity">Quantity</Label>
               <Input
@@ -183,7 +176,7 @@ export default function InventoryScanner() {
               />
             </div>
           </div>
-
+          
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <Label htmlFor="quantity">Quantity</Label>
@@ -198,7 +191,7 @@ export default function InventoryScanner() {
               />
             </div>
           </div>
-
+          
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <Label htmlFor="expirationDate">Expiration Date</Label>
@@ -241,20 +234,17 @@ export default function InventoryScanner() {
               />
             </div>
           </div>
-
+          
           <div>
             <Label htmlFor="technicianId">Technician</Label>
-            <Select
-              value={formData.technicianId}
-              onValueChange={(value) =>
-                setFormData((fd) => ({ ...fd, technicianId: value }))
-              }
-            >
+            <Select value={formData.technicianId} onValueChange={(value) => 
+              setFormData(fd => ({ ...fd, technicianId: value }))
+            }>
               <SelectTrigger>
                 <SelectValue placeholder="Select Technician" />
               </SelectTrigger>
               <SelectContent>
-                {technicians.map((t) => (
+                {technicians.map(t => (
                   <SelectItem key={t.id} value={t.id.toString()}>
                     {t.name}
                   </SelectItem>
@@ -263,8 +253,8 @@ export default function InventoryScanner() {
             </Select>
           </div>
 
-          <Button
-            type="submit"
+          <Button 
+            type="submit" 
             className="w-full"
             disabled={scanMutation.isPending}
           >
@@ -272,7 +262,7 @@ export default function InventoryScanner() {
           </Button>
         </form>
       </CardContent>
-
+      
       {/* Camera Scanner Modal */}
       <CameraScanner
         isOpen={showCameraScanner}

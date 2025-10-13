@@ -2,10 +2,10 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { and, desc, eq, gte, ilike, lte, or, sql } from 'drizzle-orm';
 import { db } from '../db';
-import {
-  nonconformanceRecords,
+import { 
+  nonconformanceRecords, 
   insertNonconformanceRecordSchema,
-  orders,
+  orders 
 } from '../schema';
 
 const router = Router();
@@ -21,7 +21,7 @@ router.get('/', async (req, res) => {
       status,
       search,
       limit = '50',
-      offset = '0',
+      offset = '0'
     } = req.query;
 
     let baseQuery = db.select().from(nonconformanceRecords);
@@ -29,26 +29,18 @@ router.get('/', async (req, res) => {
 
     // Date range filtering
     if (dateFrom) {
-      conditions.push(
-        gte(nonconformanceRecords.dispositionDate, dateFrom as string)
-      );
+      conditions.push(gte(nonconformanceRecords.dispositionDate, dateFrom as string));
     }
     if (dateTo) {
-      conditions.push(
-        lte(nonconformanceRecords.dispositionDate, dateTo as string)
-      );
+      conditions.push(lte(nonconformanceRecords.dispositionDate, dateTo as string));
     }
 
     // Field-specific filtering
     if (stockModel) {
-      conditions.push(
-        ilike(nonconformanceRecords.stockModel, `%${stockModel}%`)
-      );
+      conditions.push(ilike(nonconformanceRecords.stockModel, `%${stockModel}%`));
     }
     if (issueCause) {
-      conditions.push(
-        eq(nonconformanceRecords.issueCause, issueCause as string)
-      );
+      conditions.push(eq(nonconformanceRecords.issueCause, issueCause as string));
     }
     if (status) {
       conditions.push(eq(nonconformanceRecords.status, status as string));
@@ -63,21 +55,19 @@ router.get('/', async (req, res) => {
         ilike(nonconformanceRecords.poNumber, `%${search}%`),
         ilike(nonconformanceRecords.stockModel, `%${search}%`),
       ].filter(Boolean);
-
+      
       if (searchConditions.length > 0) {
         conditions.push(or(...searchConditions));
       }
     }
 
     // Apply conditions and build final query
-    let finalQuery = baseQuery
-      .orderBy(desc(nonconformanceRecords.createdAt))
+    let finalQuery = baseQuery.orderBy(desc(nonconformanceRecords.createdAt))
       .limit(parseInt(limit as string))
       .offset(parseInt(offset as string));
 
     if (conditions.length > 0) {
-      finalQuery = baseQuery
-        .where(and(...conditions))
+      finalQuery = baseQuery.where(and(...conditions))
         .orderBy(desc(nonconformanceRecords.createdAt))
         .limit(parseInt(limit as string))
         .offset(parseInt(offset as string));
@@ -117,7 +107,7 @@ router.get('/:id', async (req, res) => {
 router.post('/', async (req, res) => {
   try {
     const validatedData = insertNonconformanceRecordSchema.parse(req.body);
-
+    
     const [newRecord] = await db
       .insert(nonconformanceRecords)
       .values({
@@ -130,14 +120,14 @@ router.post('/', async (req, res) => {
     res.status(201).json(newRecord);
   } catch (error) {
     console.error('Error creating nonconformance record:', error);
-
+    
     if (error instanceof z.ZodError) {
-      return res.status(400).json({
-        error: 'Validation failed',
-        details: error.errors,
+      return res.status(400).json({ 
+        error: 'Validation failed', 
+        details: error.errors 
       });
     }
-
+    
     res.status(500).json({ error: 'Failed to create record' });
   }
 });
@@ -147,13 +137,13 @@ router.put('/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const validatedData = insertNonconformanceRecordSchema.parse(req.body);
-
+    
     // Set resolvedAt timestamp if status is changing to Resolved
     const updateData: any = {
       ...validatedData,
       updatedAt: new Date(),
     };
-
+    
     if (validatedData.status === 'Resolved' && req.body.status !== 'Resolved') {
       updateData.resolvedAt = new Date();
     }
@@ -171,14 +161,14 @@ router.put('/:id', async (req, res) => {
     res.json(updatedRecord);
   } catch (error) {
     console.error('Error updating nonconformance record:', error);
-
+    
     if (error instanceof z.ZodError) {
-      return res.status(400).json({
-        error: 'Validation failed',
-        details: error.errors,
+      return res.status(400).json({ 
+        error: 'Validation failed', 
+        details: error.errors 
       });
     }
-
+    
     res.status(500).json({ error: 'Failed to update record' });
   }
 });
@@ -187,7 +177,7 @@ router.put('/:id', async (req, res) => {
 router.delete('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-
+    
     const [deletedRecord] = await db
       .delete(nonconformanceRecords)
       .where(eq(nonconformanceRecords.id, parseInt(id)))
@@ -207,30 +197,27 @@ router.delete('/:id', async (req, res) => {
 // GET /analytics - Get analytics data
 router.get('/analytics', async (req, res) => {
   try {
-    const { dateFrom, dateTo, stockModel, issueCause } = req.query;
+    const {
+      dateFrom,
+      dateTo,
+      stockModel,
+      issueCause
+    } = req.query;
 
     const conditions = [];
 
     // Date range filtering
     if (dateFrom) {
-      conditions.push(
-        gte(nonconformanceRecords.dispositionDate, dateFrom as string)
-      );
+      conditions.push(gte(nonconformanceRecords.dispositionDate, dateFrom as string));
     }
     if (dateTo) {
-      conditions.push(
-        lte(nonconformanceRecords.dispositionDate, dateTo as string)
-      );
+      conditions.push(lte(nonconformanceRecords.dispositionDate, dateTo as string));
     }
     if (stockModel) {
-      conditions.push(
-        ilike(nonconformanceRecords.stockModel, `%${stockModel}%`)
-      );
+      conditions.push(ilike(nonconformanceRecords.stockModel, `%${stockModel}%`));
     }
     if (issueCause) {
-      conditions.push(
-        eq(nonconformanceRecords.issueCause, issueCause as string)
-      );
+      conditions.push(eq(nonconformanceRecords.issueCause, issueCause as string));
     }
 
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
@@ -304,7 +291,7 @@ router.get('/analytics', async (req, res) => {
     const analytics = {
       ...totalStats,
       byDept,
-      byModel: byModel.filter((item) => item.model),
+      byModel: byModel.filter(item => item.model),
       byCause,
       byDisposition,
       monthlyTrend,

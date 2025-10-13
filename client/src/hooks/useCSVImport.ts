@@ -1,5 +1,5 @@
-import { useState, useCallback } from 'react';
-import Papa from 'papaparse';
+import { useState, useCallback } from "react";
+import Papa from "papaparse";
 
 export interface CSVData {
   [key: string]: string | number;
@@ -23,7 +23,7 @@ export function useCSVImport() {
   });
 
   const parseCSV = useCallback((file: File, hasHeaders: boolean = true) => {
-    setState((prev) => ({
+    setState(prev => ({
       ...prev,
       isLoading: true,
       error: null,
@@ -34,10 +34,8 @@ export function useCSVImport() {
       complete: (results) => {
         try {
           if (results.errors.length > 0) {
-            const errorMessage = results.errors
-              .map((err) => err.message)
-              .join(', ');
-            setState((prev) => ({
+            const errorMessage = results.errors.map(err => err.message).join(", ");
+            setState(prev => ({
               ...prev,
               isLoading: false,
               error: `CSV parsing errors: ${errorMessage}`,
@@ -46,21 +44,21 @@ export function useCSVImport() {
           }
 
           const data = results.data as string[][];
-
+          
           if (data.length === 0) {
-            setState((prev) => ({
+            setState(prev => ({
               ...prev,
               isLoading: false,
-              error: 'CSV file is empty',
+              error: "CSV file is empty",
             }));
             return;
           }
 
           let processedData: CSVData[] = [];
-
+          
           if (hasHeaders && data.length > 1) {
             const headers = data[0];
-            processedData = data.slice(1).map((row) => {
+            processedData = data.slice(1).map(row => {
               const obj: CSVData = {};
               headers.forEach((header, index) => {
                 if (header) {
@@ -71,7 +69,7 @@ export function useCSVImport() {
             });
           } else {
             // No headers, use generic column names
-            processedData = data.map((row) => {
+            processedData = data.map(row => {
               const obj: CSVData = {};
               row.forEach((value, index) => {
                 obj[`Column ${index + 1}`] = value || '';
@@ -80,14 +78,14 @@ export function useCSVImport() {
             });
           }
 
-          setState((prev) => ({
+          setState(prev => ({
             ...prev,
             isLoading: false,
             data: processedData,
             rowCount: processedData.length,
           }));
         } catch (error) {
-          setState((prev) => ({
+          setState(prev => ({
             ...prev,
             isLoading: false,
             error: `Error processing CSV: ${error instanceof Error ? error.message : 'Unknown error'}`,
@@ -95,7 +93,7 @@ export function useCSVImport() {
         }
       },
       error: (error) => {
-        setState((prev) => ({
+        setState(prev => ({
           ...prev,
           isLoading: false,
           error: `Failed to parse CSV: ${error.message}`,

@@ -42,20 +42,13 @@ git commit --no-verify -m "emergency fix"
 **Runs automatically on every PR and push to main**
 
 The CI workflow includes:
-- ℹ️ TypeScript type checking (advisory only - shows warnings but doesn't block)
-- ℹ️ ESLint code quality checks (advisory only - shows warnings but doesn't block)
-- ℹ️ Prettier formatting validation (advisory only - shows warnings but doesn't block)
-- ✅ **Build verification (REQUIRED - BLOCKS merges - this is the real validation)**
-- ✅ Security audit (moderate level - advisory only)
+- ✅ TypeScript type checking
+- ✅ ESLint code quality checks
+- ✅ Prettier formatting validation
+- ✅ Build verification
+- ✅ Security audit (moderate level)
 
-**Only the BUILD check is required to pass. It catches real breaking issues - missing imports, broken code, etc.**
-
-**Why checks are advisory:**
-- **TypeScript**: 379 existing type warnings (Drizzle ORM compatibility issues) - technical debt that doesn't affect runtime
-- **ESLint**: Mix of real issues and formatting/style drift - scheduled for cleanup sprint
-- **Prettier**: Formatting consistency issues - can be fixed in batches
-- **Build**: This is the true validator - if the build passes, the code actually works
-- Making linting checks blocking would fail PRs unnecessarily when code is functional
+**Status checks appear on your PR - must pass before merging!**
 
 ---
 
@@ -121,8 +114,7 @@ npm run db:push      # Push schema changes to database
 
 ## ❌ What Would've Prevented Your Issue
 
-
-With this setup, incomplete GitHub pulls will be caught:
+With this setup, the incomplete GitHub pull would have been caught:
 
 ### Before Your Scenario:
 ```
@@ -138,50 +130,12 @@ Developer pushes to PR anyway
   ↓
 GitHub Actions CI runs...
   ↓
-❌ Build check fails: "Cannot find module 'User'"
+❌ TypeScript check fails: 126 errors
 ⛔ PR shows "Checks failed"
 🚫 Merge button disabled
   ↓
 Developer must fix before merging
 ```
-
-**Note:** TypeScript check is advisory only (shows 379 warnings but doesn't block). The **build check is the real validator** - it catches missing imports, broken code, and other breaking changes while allowing existing type warnings.
-
----
-
-## 📁 ESLint Ignore Configuration
-
-ESLint is configured to ignore the following directories to prevent linting errors on non-source files:
-- `node_modules/` - Dependencies
-- `dist/`, `build/` - Build outputs
-- `coverage/` - Test coverage reports
-- **`attached_assets/`** - User-uploaded assets (should not be linted)
-- `*.config.js`, `*.config.ts` - Configuration files
-
-**Important:** The `attached_assets/` directory contains user-uploaded files and should NOT be committed to the repository. If you see ESLint errors from this directory:
-1. Files are already ignored by ESLint (see `eslint.config.js`)
-2. Files are excluded from future commits (see `.gitignore`)
-3. **Manual cleanup needed:** Run `git rm -r --cached attached_assets/` to untrack files already in the repository
-
----
-
-## 🧹 Code Quality Debt & Cleanup Plan
-
-**Current Status:**
-- **TypeScript**: 379 warnings (Drizzle ORM type compatibility) - non-blocking, doesn't affect runtime
-- **ESLint**: Various linting issues - now advisory-only to prevent blocking development
-- **Prettier**: Some formatting inconsistencies
-
-**Strategy:**
-1. **Build check** remains the gatekeeper - catches real breaking issues
-2. **Linting checks** are advisory - show warnings but don't block PRs
-3. **Cleanup sprint planned** - Will address ESLint/Prettier technical debt in focused effort
-4. **Service worker globals fixed** - Added `/* eslint-env serviceworker */` to `client/public/sw.js`
-
-**Next Steps:**
-- Monitor advisory warnings in CI output
-- Schedule cleanup sprint when feature velocity stabilizes
-- Address high-priority linting issues as they arise
 
 ---
 

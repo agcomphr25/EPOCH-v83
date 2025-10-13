@@ -42,12 +42,10 @@ export class OrderPriorityService {
    */
   private determineOrderType(order: Order): PriorityOrder['orderType'] {
     // Check if order has sufficient information to be scheduled
-    if (
-      !order.stockModelId ||
-      order.stockModelId.toLowerCase() === 'none' ||
-      order.stockModelId.toLowerCase() === 'unprocessed' ||
-      order.stockModelId.toLowerCase() === 'universal'
-    ) {
+    if (!order.stockModelId || 
+        order.stockModelId.toLowerCase() === 'none' ||
+        order.stockModelId.toLowerCase() === 'unprocessed' ||
+        order.stockModelId.toLowerCase() === 'universal') {
       return 'needs_information';
     }
 
@@ -64,9 +62,7 @@ export class OrderPriorityService {
 
     const now = new Date();
     const dueDate = new Date(order.dueDate);
-    const daysUntilDue = Math.ceil(
-      (dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
-    );
+    const daysUntilDue = Math.ceil((dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
 
     if (daysUntilDue < 0) return 'critical'; // Overdue
     if (daysUntilDue <= 2) return 'critical';
@@ -78,11 +74,7 @@ export class OrderPriorityService {
   /**
    * Calculates priority score for a single order
    */
-  private calculatePriorityScore(
-    order: Order,
-    orderType: PriorityOrder['orderType'],
-    urgencyLevel: PriorityOrder['urgencyLevel']
-  ): number {
+  private calculatePriorityScore(order: Order, orderType: PriorityOrder['orderType'], urgencyLevel: PriorityOrder['urgencyLevel']): number {
     let baseScore: number;
 
     // Base score by order type
@@ -100,15 +92,13 @@ export class OrderPriorityService {
 
     // Apply urgency bonus (negative numbers = higher priority)
     const urgencyBonus = this.rules.urgencyBonus[urgencyLevel];
-
+    
     // Apply due date weight
     let dueDateAdjustment = 0;
     if (order.dueDate) {
       const now = new Date();
       const dueDate = new Date(order.dueDate);
-      const daysUntilDue = Math.ceil(
-        (dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
-      );
+      const daysUntilDue = Math.ceil((dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
       dueDateAdjustment = daysUntilDue * this.rules.dueDateWeight;
     }
 
@@ -118,10 +108,7 @@ export class OrderPriorityService {
   /**
    * Generates a human-readable reason for the priority assignment
    */
-  private generatePriorityReason(
-    orderType: PriorityOrder['orderType'],
-    urgencyLevel: PriorityOrder['urgencyLevel']
-  ): string {
+  private generatePriorityReason(orderType: PriorityOrder['orderType'], urgencyLevel: PriorityOrder['urgencyLevel']): string {
     const typeReasons = {
       production_order: 'Production order (ready for scheduling)',
       needs_information: 'Needs more information to schedule',
@@ -143,11 +130,7 @@ export class OrderPriorityService {
   assignPriority(order: Order): PriorityOrder {
     const orderType = this.determineOrderType(order);
     const urgencyLevel = this.calculateUrgencyLevel(order);
-    const priorityScore = this.calculatePriorityScore(
-      order,
-      orderType,
-      urgencyLevel
-    );
+    const priorityScore = this.calculatePriorityScore(order, orderType, urgencyLevel);
     const priorityReason = this.generatePriorityReason(orderType, urgencyLevel);
 
     return {
@@ -163,7 +146,7 @@ export class OrderPriorityService {
    * Sorts a list of orders by priority (lowest score = highest priority)
    */
   sortOrdersByPriority(orders: Order[]): PriorityOrder[] {
-    const prioritizedOrders = orders.map((order) => this.assignPriority(order));
+    const prioritizedOrders = orders.map(order => this.assignPriority(order));
 
     return prioritizedOrders.sort((a, b) => {
       // Primary sort: priority score (lower = higher priority)
@@ -178,9 +161,7 @@ export class OrderPriorityService {
 
       // Tertiary sort: order entry time (earlier = higher priority)
       if (a.orderDate && b.orderDate) {
-        return (
-          new Date(a.orderDate).getTime() - new Date(b.orderDate).getTime()
-        );
+        return new Date(a.orderDate).getTime() - new Date(b.orderDate).getTime();
       }
 
       // Final sort: order ID
@@ -191,29 +172,21 @@ export class OrderPriorityService {
   /**
    * Filters orders by type for specialized processing
    */
-  filterOrdersByType(
-    orders: PriorityOrder[],
-    orderType: PriorityOrder['orderType']
-  ): PriorityOrder[] {
-    return orders.filter((order) => order.orderType === orderType);
+  filterOrdersByType(orders: PriorityOrder[], orderType: PriorityOrder['orderType']): PriorityOrder[] {
+    return orders.filter(order => order.orderType === orderType);
   }
 
   /**
    * Groups orders by urgency level
    */
-  groupOrdersByUrgency(
-    orders: PriorityOrder[]
-  ): Record<PriorityOrder['urgencyLevel'], PriorityOrder[]> {
-    return orders.reduce(
-      (groups, order) => {
-        if (!groups[order.urgencyLevel]) {
-          groups[order.urgencyLevel] = [];
-        }
-        groups[order.urgencyLevel].push(order);
-        return groups;
-      },
-      {} as Record<PriorityOrder['urgencyLevel'], PriorityOrder[]>
-    );
+  groupOrdersByUrgency(orders: PriorityOrder[]): Record<PriorityOrder['urgencyLevel'], PriorityOrder[]> {
+    return orders.reduce((groups, order) => {
+      if (!groups[order.urgencyLevel]) {
+        groups[order.urgencyLevel] = [];
+      }
+      groups[order.urgencyLevel].push(order);
+      return groups;
+    }, {} as Record<PriorityOrder['urgencyLevel'], PriorityOrder[]>);
   }
 
   /**
@@ -232,9 +205,7 @@ export class OrderPriorityService {
 }
 
 // Factory function for easy instantiation
-export function createOrderPriorityService(
-  rules?: Partial<PriorityRules>
-): OrderPriorityService {
+export function createOrderPriorityService(rules?: Partial<PriorityRules>): OrderPriorityService {
   return new OrderPriorityService(rules);
 }
 

@@ -1,4 +1,4 @@
-import React from 'react';
+import React from "react";
 
 function App() {
   return (
@@ -15,11 +15,13 @@ function App() {
 
 function TestComponent() {
   const [count, setCount] = React.useState(0);
-
+  
   return (
     <div>
       <p>React Hook Test: {count}</p>
-      <button onClick={() => setCount(count + 1)}>Increment</button>
+      <button onClick={() => setCount(count + 1)}>
+        Increment
+      </button>
     </div>
   );
 }

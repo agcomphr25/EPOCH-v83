@@ -1,47 +1,15 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link, useLocation } from 'wouter';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import {
-  ArrowLeft,
-  User,
-  Mail,
-  Phone,
-  Calendar,
-  Shield,
-  FileText,
-  Award,
-  ExternalLink,
-  Copy,
-  Edit,
-  Save,
-  X,
-} from 'lucide-react';
+import { ArrowLeft, User, Mail, Phone, Calendar, Shield, FileText, Award, ExternalLink, Copy, Edit, Save, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import AddCertificationModal from '@/components/employee/AddCertificationModal';
 import AddEvaluationModal from '@/components/employee/AddEvaluationModal';
@@ -123,11 +91,7 @@ export default function EmployeeDetail() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const {
-    data: employee,
-    isLoading,
-    error,
-  } = useQuery({
+  const { data: employee, isLoading, error } = useQuery({
     queryKey: ['/api/employees', id],
     queryFn: async () => {
       const response = await fetch(`/api/employees/${id}`);
@@ -140,9 +104,7 @@ export default function EmployeeDetail() {
   const { data: certifications = [] } = useQuery({
     queryKey: ['/api/employee-certifications', { employeeId: id }],
     queryFn: async () => {
-      const response = await fetch(
-        `/api/employee-certifications?employeeId=${id}`
-      );
+      const response = await fetch(`/api/employee-certifications?employeeId=${id}`);
       if (!response.ok) throw new Error('Failed to fetch certifications');
       return response.json();
     },
@@ -172,8 +134,7 @@ export default function EmployeeDetail() {
     queryKey: ['/api/employees', id, 'capabilities'],
     queryFn: async () => {
       const response = await fetch(`/api/employees/${id}/capabilities`);
-      if (!response.ok)
-        throw new Error('Failed to fetch employee capabilities');
+      if (!response.ok) throw new Error('Failed to fetch employee capabilities');
       return response.json();
     },
     enabled: !!id,
@@ -192,14 +153,10 @@ export default function EmployeeDetail() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/employees', id] });
       setIsEditing(false);
-      toast({ title: 'Success', description: 'Employee updated successfully' });
+      toast({ title: "Success", description: "Employee updated successfully" });
     },
     onError: () => {
-      toast({
-        title: 'Error',
-        description: 'Failed to update employee',
-        variant: 'destructive',
-      });
+      toast({ title: "Error", description: "Failed to update employee", variant: "destructive" });
     },
   });
 
@@ -215,17 +172,10 @@ export default function EmployeeDetail() {
     onSuccess: (data) => {
       setPortalUrl(data.portalUrl);
       queryClient.invalidateQueries({ queryKey: ['/api/employees', id] });
-      toast({
-        title: 'Success',
-        description: 'Portal link generated successfully',
-      });
+      toast({ title: "Success", description: "Portal link generated successfully" });
     },
     onError: () => {
-      toast({
-        title: 'Error',
-        description: 'Failed to generate portal link',
-        variant: 'destructive',
-      });
+      toast({ title: "Error", description: "Failed to generate portal link", variant: "destructive" });
     },
   });
 
@@ -240,83 +190,46 @@ export default function EmployeeDetail() {
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ['/api/employees', id, 'capabilities'],
-      });
-      toast({
-        title: 'Success',
-        description: 'Capability granted successfully',
-      });
+      queryClient.invalidateQueries({ queryKey: ['/api/employees', id, 'capabilities'] });
+      toast({ title: "Success", description: "Capability granted successfully" });
     },
     onError: () => {
-      toast({
-        title: 'Error',
-        description: 'Failed to grant capability',
-        variant: 'destructive',
-      });
+      toast({ title: "Error", description: "Failed to grant capability", variant: "destructive" });
     },
   });
 
   const revokeCapabilityMutation = useMutation({
     mutationFn: async (employeeCapabilityId: number) => {
-      const response = await fetch(
-        `/api/employees/employee-capabilities/${employeeCapabilityId}`,
-        {
-          method: 'DELETE',
-        }
-      );
+      const response = await fetch(`/api/employees/employee-capabilities/${employeeCapabilityId}`, {
+        method: 'DELETE',
+      });
       if (!response.ok) throw new Error('Failed to revoke capability');
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ['/api/employees', id, 'capabilities'],
-      });
-      toast({
-        title: 'Success',
-        description: 'Capability revoked successfully',
-      });
+      queryClient.invalidateQueries({ queryKey: ['/api/employees', id, 'capabilities'] });
+      toast({ title: "Success", description: "Capability revoked successfully" });
     },
     onError: () => {
-      toast({
-        title: 'Error',
-        description: 'Failed to revoke capability',
-        variant: 'destructive',
-      });
+      toast({ title: "Error", description: "Failed to revoke capability", variant: "destructive" });
     },
   });
 
   const toggleHardcodedMutation = useMutation({
-    mutationFn: async ({
-      employeeCapabilityId,
-      useHardcoded,
-    }: {
-      employeeCapabilityId: number;
-      useHardcoded: boolean;
-    }) => {
-      const response = await fetch(
-        `/api/employees/employee-capabilities/${employeeCapabilityId}/toggle`,
-        {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ useHardcoded }),
-        }
-      );
-      if (!response.ok)
-        throw new Error('Failed to toggle hardcoded capability');
+    mutationFn: async ({ employeeCapabilityId, useHardcoded }: { employeeCapabilityId: number; useHardcoded: boolean }) => {
+      const response = await fetch(`/api/employees/employee-capabilities/${employeeCapabilityId}/toggle`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ useHardcoded }),
+      });
+      if (!response.ok) throw new Error('Failed to toggle hardcoded capability');
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ['/api/employees', id, 'capabilities'],
-      });
-      toast({ title: 'Success', description: 'Capability setting updated' });
+      queryClient.invalidateQueries({ queryKey: ['/api/employees', id, 'capabilities'] });
+      toast({ title: "Success", description: "Capability setting updated" });
     },
     onError: () => {
-      toast({
-        title: 'Error',
-        description: 'Failed to update capability setting',
-        variant: 'destructive',
-      });
+      toast({ title: "Error", description: "Failed to update capability setting", variant: "destructive" });
     },
   });
 
@@ -324,9 +237,7 @@ export default function EmployeeDetail() {
     if (employee) {
       setEditData(employee);
       if (employee.portalToken) {
-        setPortalUrl(
-          `${window.location.origin}/employee-portal/${employee.portalToken}`
-        );
+        setPortalUrl(`${window.location.origin}/employee-portal/${employee.portalToken}`);
       }
     }
   }, [employee]);
@@ -342,7 +253,7 @@ export default function EmployeeDetail() {
 
   const copyPortalUrl = () => {
     navigator.clipboard.writeText(portalUrl);
-    toast({ title: 'Copied', description: 'Portal URL copied to clipboard' });
+    toast({ title: "Copied", description: "Portal URL copied to clipboard" });
   };
 
   const formatDate = (dateString: string) => {
@@ -359,14 +270,9 @@ export default function EmployeeDetail() {
       SUBMITTED: 'bg-blue-100 text-blue-800',
       COMPLETED: 'bg-green-100 text-green-800',
     };
-
+    
     return (
-      <Badge
-        className={
-          statusColors[status as keyof typeof statusColors] ||
-          'bg-gray-100 text-gray-800'
-        }
-      >
+      <Badge className={statusColors[status as keyof typeof statusColors] || 'bg-gray-100 text-gray-800'}>
         {status}
       </Badge>
     );
@@ -395,9 +301,7 @@ export default function EmployeeDetail() {
       <div className="p-6">
         <Card className="border-red-200 bg-red-50">
           <CardContent className="pt-6">
-            <p className="text-red-700">
-              Employee not found or failed to load.
-            </p>
+            <p className="text-red-700">Employee not found or failed to load.</p>
             <Link href="/employee">
               <Button variant="outline" className="mt-4">
                 <ArrowLeft className="w-4 h-4 mr-2" />
@@ -422,12 +326,8 @@ export default function EmployeeDetail() {
             </Button>
           </Link>
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">
-              {employee.name}
-            </h1>
-            <p className="text-gray-600">
-              {employee.jobTitle || 'No Title'} • {employee.department}
-            </p>
+            <h1 className="text-3xl font-bold text-gray-900">{employee.name}</h1>
+            <p className="text-gray-600">{employee.jobTitle || 'No Title'} • {employee.department}</p>
           </div>
         </div>
         <div className="flex items-center space-x-2">
@@ -437,10 +337,7 @@ export default function EmployeeDetail() {
                 <X className="w-4 h-4 mr-2" />
                 Cancel
               </Button>
-              <Button
-                onClick={handleSave}
-                disabled={updateEmployeeMutation.isPending}
-              >
+              <Button onClick={handleSave} disabled={updateEmployeeMutation.isPending}>
                 <Save className="w-4 h-4 mr-2" />
                 {updateEmployeeMutation.isPending ? 'Saving...' : 'Save'}
               </Button>
@@ -469,13 +366,7 @@ export default function EmployeeDetail() {
                 <div className="w-20 h-20 bg-gradient-to-br from-blue-400 to-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
                   <User className="w-10 h-10 text-white" />
                 </div>
-                <Badge
-                  className={
-                    employee.isActive
-                      ? 'bg-green-100 text-green-800'
-                      : 'bg-red-100 text-red-800'
-                  }
-                >
+                <Badge className={employee.isActive ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}>
                   {employee.isActive ? 'Active' : 'Inactive'}
                 </Badge>
               </div>
@@ -486,12 +377,7 @@ export default function EmployeeDetail() {
                   {isEditing ? (
                     <Input
                       value={editData.email || ''}
-                      onChange={(e) =>
-                        setEditData((prev) => ({
-                          ...prev,
-                          email: e.target.value,
-                        }))
-                      }
+                      onChange={(e) => setEditData(prev => ({ ...prev, email: e.target.value }))}
                       placeholder="Email"
                     />
                   ) : (
@@ -504,12 +390,7 @@ export default function EmployeeDetail() {
                   {isEditing ? (
                     <Input
                       value={editData.phone || ''}
-                      onChange={(e) =>
-                        setEditData((prev) => ({
-                          ...prev,
-                          phone: e.target.value,
-                        }))
-                      }
+                      onChange={(e) => setEditData(prev => ({ ...prev, phone: e.target.value }))}
                       placeholder="Phone"
                     />
                   ) : (
@@ -526,50 +407,30 @@ export default function EmployeeDetail() {
                   <div className="flex items-center space-x-2">
                     <Shield className="w-4 h-4 text-gray-400" />
                     {isEditing ? (
-                      <Select
-                        value={editData.jobTitle || ''}
-                        onValueChange={(value) =>
-                          setEditData((prev) => ({ ...prev, jobTitle: value }))
-                        }
-                      >
+                      <Select value={editData.jobTitle || ''} onValueChange={(value) => setEditData(prev => ({ ...prev, jobTitle: value }))}>
                         <SelectTrigger className="w-full">
                           <SelectValue placeholder="Select job title" />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="HR Manager">HR Manager</SelectItem>
-                          <SelectItem value="Production Manager">
-                            Production Manager
-                          </SelectItem>
-                          <SelectItem value="Quality Control">
-                            Quality Control
-                          </SelectItem>
+                          <SelectItem value="Production Manager">Production Manager</SelectItem>
+                          <SelectItem value="Quality Control">Quality Control</SelectItem>
                           <SelectItem value="Technician">Technician</SelectItem>
                           <SelectItem value="Operator">Operator</SelectItem>
-                          <SelectItem value="Maintenance">
-                            Maintenance
-                          </SelectItem>
+                          <SelectItem value="Maintenance">Maintenance</SelectItem>
                           <SelectItem value="Supervisor">Supervisor</SelectItem>
-                          <SelectItem value="Administrator">
-                            Administrator
-                          </SelectItem>
+                          <SelectItem value="Administrator">Administrator</SelectItem>
                         </SelectContent>
                       </Select>
                     ) : (
                       <span>{employee.jobTitle || 'No Title'}</span>
                     )}
                   </div>
-
+                  
                   <div className="flex items-center space-x-2">
-                    <Label className="text-xs text-gray-500">
-                      System Access:
-                    </Label>
+                    <Label className="text-xs text-gray-500">System Access:</Label>
                     {isEditing ? (
-                      <Select
-                        value={editData.userRole || ''}
-                        onValueChange={(value) =>
-                          setEditData((prev) => ({ ...prev, userRole: value }))
-                        }
-                      >
+                      <Select value={editData.userRole || ''} onValueChange={(value) => setEditData(prev => ({ ...prev, userRole: value }))}>
                         <SelectTrigger className="w-full">
                           <SelectValue placeholder="Select system role" />
                         </SelectTrigger>
@@ -580,14 +441,12 @@ export default function EmployeeDetail() {
                         </SelectContent>
                       </Select>
                     ) : (
-                      <Badge
+                      <Badge 
                         variant="outline"
                         className={
-                          employee.userRole === 'ADMIN'
-                            ? 'bg-red-50 text-red-700 border-red-200'
-                            : employee.userRole === 'OWNER'
-                              ? 'bg-purple-50 text-purple-700 border-purple-200'
-                              : 'bg-blue-50 text-blue-700 border-blue-200'
+                          employee.userRole === 'ADMIN' ? 'bg-red-50 text-red-700 border-red-200' :
+                          employee.userRole === 'OWNER' ? 'bg-purple-50 text-purple-700 border-purple-200' :
+                          'bg-blue-50 text-blue-700 border-blue-200'
                         }
                       >
                         {employee.userRole}
@@ -604,19 +463,11 @@ export default function EmployeeDetail() {
                   <div className="mt-2 space-y-2">
                     <div className="flex items-center space-x-2">
                       <Input value={portalUrl} readOnly className="text-xs" />
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={copyPortalUrl}
-                      >
+                      <Button size="sm" variant="outline" onClick={copyPortalUrl}>
                         <Copy className="w-3 h-3" />
                       </Button>
                     </div>
-                    <a
-                      href={portalUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
+                    <a href={portalUrl} target="_blank" rel="noopener noreferrer">
                       <Button size="sm" variant="outline" className="w-full">
                         <ExternalLink className="w-3 h-3 mr-1" />
                         Open Portal
@@ -624,16 +475,14 @@ export default function EmployeeDetail() {
                     </a>
                   </div>
                 ) : (
-                  <Button
-                    size="sm"
-                    variant="outline"
+                  <Button 
+                    size="sm" 
+                    variant="outline" 
                     className="w-full mt-2"
                     onClick={() => generatePortalTokenMutation.mutate()}
                     disabled={generatePortalTokenMutation.isPending}
                   >
-                    {generatePortalTokenMutation.isPending
-                      ? 'Generating...'
-                      : 'Generate Portal Link'}
+                    {generatePortalTokenMutation.isPending ? 'Generating...' : 'Generate Portal Link'}
                   </Button>
                 )}
               </div>
@@ -662,15 +511,7 @@ export default function EmployeeDetail() {
                     <div>
                       <Label>Employment Type</Label>
                       {isEditing ? (
-                        <Select
-                          value={editData.employmentType || ''}
-                          onValueChange={(value) =>
-                            setEditData((prev) => ({
-                              ...prev,
-                              employmentType: value,
-                            }))
-                          }
-                        >
+                        <Select value={editData.employmentType || ''} onValueChange={(value) => setEditData(prev => ({ ...prev, employmentType: value }))}>
                           <SelectTrigger>
                             <SelectValue />
                           </SelectTrigger>
@@ -681,50 +522,28 @@ export default function EmployeeDetail() {
                           </SelectContent>
                         </Select>
                       ) : (
-                        <p className="text-sm text-gray-600">
-                          {employee.employmentType || 'Not specified'}
-                        </p>
+                        <p className="text-sm text-gray-600">{employee.employmentType || 'Not specified'}</p>
                       )}
                     </div>
 
                     <div>
                       <Label>Department</Label>
                       {isEditing ? (
-                        <Select
-                          value={editData.department || ''}
-                          onValueChange={(value) =>
-                            setEditData((prev) => ({
-                              ...prev,
-                              department: value,
-                            }))
-                          }
-                        >
+                        <Select value={editData.department || ''} onValueChange={(value) => setEditData(prev => ({ ...prev, department: value }))}>
                           <SelectTrigger>
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="Human Resources">
-                              Human Resources
-                            </SelectItem>
-                            <SelectItem value="Production">
-                              Production
-                            </SelectItem>
-                            <SelectItem value="Quality Control">
-                              Quality Control
-                            </SelectItem>
-                            <SelectItem value="Maintenance">
-                              Maintenance
-                            </SelectItem>
-                            <SelectItem value="Administration">
-                              Administration
-                            </SelectItem>
+                            <SelectItem value="Human Resources">Human Resources</SelectItem>
+                            <SelectItem value="Production">Production</SelectItem>
+                            <SelectItem value="Quality Control">Quality Control</SelectItem>
+                            <SelectItem value="Maintenance">Maintenance</SelectItem>
+                            <SelectItem value="Administration">Administration</SelectItem>
                             <SelectItem value="Warehouse">Warehouse</SelectItem>
                           </SelectContent>
                         </Select>
                       ) : (
-                        <p className="text-sm text-gray-600">
-                          {employee.department || 'Not specified'}
-                        </p>
+                        <p className="text-sm text-gray-600">{employee.department || 'Not specified'}</p>
                       )}
                     </div>
 
@@ -733,12 +552,7 @@ export default function EmployeeDetail() {
                       {isEditing ? (
                         <Input
                           value={editData.gateCardNumber || ''}
-                          onChange={(e) =>
-                            setEditData((prev) => ({
-                              ...prev,
-                              gateCardNumber: e.target.value,
-                            }))
-                          }
+                          onChange={(e) => setEditData(prev => ({ ...prev, gateCardNumber: e.target.value }))}
                           placeholder="Gate card number"
                         />
                       ) : (
@@ -753,12 +567,7 @@ export default function EmployeeDetail() {
                       {isEditing ? (
                         <Input
                           value={editData.vehicleType || ''}
-                          onChange={(e) =>
-                            setEditData((prev) => ({
-                              ...prev,
-                              vehicleType: e.target.value,
-                            }))
-                          }
+                          onChange={(e) => setEditData(prev => ({ ...prev, vehicleType: e.target.value }))}
                           placeholder="Vehicle type"
                         />
                       ) : (
@@ -774,18 +583,11 @@ export default function EmployeeDetail() {
                     {isEditing ? (
                       <Input
                         value={editData.address || ''}
-                        onChange={(e) =>
-                          setEditData((prev) => ({
-                            ...prev,
-                            address: e.target.value,
-                          }))
-                        }
+                        onChange={(e) => setEditData(prev => ({ ...prev, address: e.target.value }))}
                         placeholder="Address"
                       />
                     ) : (
-                      <p className="text-sm text-gray-600">
-                        {employee.address || 'Not specified'}
-                      </p>
+                      <p className="text-sm text-gray-600">{employee.address || 'Not specified'}</p>
                     )}
                   </div>
 
@@ -795,18 +597,11 @@ export default function EmployeeDetail() {
                       {isEditing ? (
                         <Input
                           value={editData.emergencyContact || ''}
-                          onChange={(e) =>
-                            setEditData((prev) => ({
-                              ...prev,
-                              emergencyContact: e.target.value,
-                            }))
-                          }
+                          onChange={(e) => setEditData(prev => ({ ...prev, emergencyContact: e.target.value }))}
                           placeholder="Emergency contact name"
                         />
                       ) : (
-                        <p className="text-sm text-gray-600">
-                          {employee.emergencyContact || 'Not specified'}
-                        </p>
+                        <p className="text-sm text-gray-600">{employee.emergencyContact || 'Not specified'}</p>
                       )}
                     </div>
 
@@ -815,18 +610,11 @@ export default function EmployeeDetail() {
                       {isEditing ? (
                         <Input
                           value={editData.emergencyPhone || ''}
-                          onChange={(e) =>
-                            setEditData((prev) => ({
-                              ...prev,
-                              emergencyPhone: e.target.value,
-                            }))
-                          }
+                          onChange={(e) => setEditData(prev => ({ ...prev, emergencyPhone: e.target.value }))}
                           placeholder="Emergency contact phone"
                         />
                       ) : (
-                        <p className="text-sm text-gray-600">
-                          {employee.emergencyPhone || 'Not specified'}
-                        </p>
+                        <p className="text-sm text-gray-600">{employee.emergencyPhone || 'Not specified'}</p>
                       )}
                     </div>
                   </div>
@@ -840,17 +628,10 @@ export default function EmployeeDetail() {
                           <input
                             type="checkbox"
                             checked={editData.buildingKeyAccess || false}
-                            onChange={(e) =>
-                              setEditData((prev) => ({
-                                ...prev,
-                                buildingKeyAccess: e.target.checked,
-                              }))
-                            }
+                            onChange={(e) => setEditData(prev => ({ ...prev, buildingKeyAccess: e.target.checked }))}
                             className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                           />
-                          <span className="text-sm">
-                            Has building key access
-                          </span>
+                          <span className="text-sm">Has building key access</span>
                         </div>
                       ) : (
                         <p className="text-sm text-gray-600">
@@ -866,12 +647,7 @@ export default function EmployeeDetail() {
                           <input
                             type="checkbox"
                             checked={editData.tciAccess || false}
-                            onChange={(e) =>
-                              setEditData((prev) => ({
-                                ...prev,
-                                tciAccess: e.target.checked,
-                              }))
-                            }
+                            onChange={(e) => setEditData(prev => ({ ...prev, tciAccess: e.target.checked }))}
                             className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                           />
                           <span className="text-sm">Has TCI access</span>
@@ -892,128 +668,92 @@ export default function EmployeeDetail() {
                 <CardHeader>
                   <CardTitle>Individual Capabilities</CardTitle>
                   <CardDescription>
-                    Assign specific permissions to {employee.name} based on
-                    their actual responsibilities
+                    Assign specific permissions to {employee.name} based on their actual responsibilities
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
                   {/* Granted Capabilities */}
                   <div>
-                    <h3 className="text-sm font-medium text-gray-700 mb-3">
-                      Granted Capabilities
-                    </h3>
+                    <h3 className="text-sm font-medium text-gray-700 mb-3">Granted Capabilities</h3>
                     {employeeCapabilities.length === 0 ? (
                       <div className="text-center py-8 bg-gray-50 rounded-lg">
                         <Shield className="w-12 h-12 text-gray-400 mx-auto mb-2" />
-                        <p className="text-sm text-gray-500">
-                          No capabilities assigned yet
-                        </p>
+                        <p className="text-sm text-gray-500">No capabilities assigned yet</p>
                       </div>
                     ) : (
                       <div className="space-y-3">
-                        {employeeCapabilities.map(
-                          (empCap: EmployeeCapability) => (
-                            <div
-                              key={empCap.id}
-                              className="border rounded-lg p-4 bg-white hover:bg-gray-50 transition-colors"
-                            >
-                              <div className="flex items-start justify-between">
-                                <div className="flex-1">
+                        {employeeCapabilities.map((empCap: EmployeeCapability) => (
+                          <div key={empCap.id} className="border rounded-lg p-4 bg-white hover:bg-gray-50 transition-colors">
+                            <div className="flex items-start justify-between">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2">
+                                  <h4 className="font-medium text-gray-900">
+                                    {empCap.capability.displayName}
+                                  </h4>
+                                  <Badge variant="outline" className="text-xs">
+                                    {empCap.capability.category}
+                                  </Badge>
+                                </div>
+                                <p className="text-sm text-gray-600 mt-1">
+                                  {empCap.capability.description}
+                                </p>
+                                <div className="flex items-center gap-4 mt-3">
                                   <div className="flex items-center gap-2">
-                                    <h4 className="font-medium text-gray-900">
-                                      {empCap.capability.displayName}
-                                    </h4>
-                                    <Badge
-                                      variant="outline"
-                                      className="text-xs"
-                                    >
-                                      {empCap.capability.category}
-                                    </Badge>
-                                  </div>
-                                  <p className="text-sm text-gray-600 mt-1">
-                                    {empCap.capability.description}
-                                  </p>
-                                  <div className="flex items-center gap-4 mt-3">
-                                    <div className="flex items-center gap-2">
-                                      <Label className="text-xs text-gray-500">
-                                        Use Hardcoded:
-                                      </Label>
-                                      <input
-                                        type="checkbox"
-                                        checked={empCap.useHardcoded}
-                                        onChange={(e) => {
-                                          toggleHardcodedMutation.mutate({
-                                            employeeCapabilityId: empCap.id,
-                                            useHardcoded: e.target.checked,
-                                          });
-                                        }}
-                                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                                        data-testid={`toggle-hardcoded-${empCap.id}`}
-                                      />
-                                    </div>
+                                    <Label className="text-xs text-gray-500">Use Hardcoded:</Label>
+                                    <input
+                                      type="checkbox"
+                                      checked={empCap.useHardcoded}
+                                      onChange={(e) => {
+                                        toggleHardcodedMutation.mutate({
+                                          employeeCapabilityId: empCap.id,
+                                          useHardcoded: e.target.checked
+                                        });
+                                      }}
+                                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                      data-testid={`toggle-hardcoded-${empCap.id}`}
+                                    />
                                   </div>
                                 </div>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() =>
-                                    revokeCapabilityMutation.mutate(empCap.id)
-                                  }
-                                  disabled={revokeCapabilityMutation.isPending}
-                                  className="text-red-600 hover:text-red-700"
-                                  data-testid={`button-revoke-${empCap.id}`}
-                                >
-                                  Revoke
-                                </Button>
                               </div>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => revokeCapabilityMutation.mutate(empCap.id)}
+                                disabled={revokeCapabilityMutation.isPending}
+                                className="text-red-600 hover:text-red-700"
+                                data-testid={`button-revoke-${empCap.id}`}
+                              >
+                                Revoke
+                              </Button>
                             </div>
-                          )
-                        )}
+                          </div>
+                        ))}
                       </div>
                     )}
                   </div>
 
                   {/* Available Capabilities */}
                   <div>
-                    <h3 className="text-sm font-medium text-gray-700 mb-3">
-                      Available Capabilities
-                    </h3>
+                    <h3 className="text-sm font-medium text-gray-700 mb-3">Available Capabilities</h3>
                     <div className="space-y-2">
                       {allCapabilities
-                        .filter(
-                          (cap: Capability) =>
-                            !employeeCapabilities.some(
-                              (empCap: EmployeeCapability) =>
-                                empCap.capabilityId === cap.id
-                            )
+                        .filter((cap: Capability) => 
+                          !employeeCapabilities.some((empCap: EmployeeCapability) => empCap.capabilityId === cap.id)
                         )
                         .map((cap: Capability) => (
-                          <div
-                            key={cap.id}
-                            className="border rounded-lg p-3 bg-white hover:bg-gray-50 transition-colors"
-                          >
+                          <div key={cap.id} className="border rounded-lg p-3 bg-white hover:bg-gray-50 transition-colors">
                             <div className="flex items-center justify-between">
                               <div className="flex-1">
                                 <div className="flex items-center gap-2">
-                                  <h4 className="text-sm font-medium text-gray-900">
-                                    {cap.displayName}
-                                  </h4>
-                                  <Badge variant="outline" className="text-xs">
-                                    {cap.category}
-                                  </Badge>
+                                  <h4 className="text-sm font-medium text-gray-900">{cap.displayName}</h4>
+                                  <Badge variant="outline" className="text-xs">{cap.category}</Badge>
                                 </div>
-                                <p className="text-xs text-gray-600 mt-1">
-                                  {cap.description}
-                                </p>
+                                <p className="text-xs text-gray-600 mt-1">{cap.description}</p>
                               </div>
                               <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={() =>
-                                  grantCapabilityMutation.mutate({
-                                    capabilityId: cap.id,
-                                  })
-                                }
+                                onClick={() => grantCapabilityMutation.mutate({ capabilityId: cap.id })}
                                 disabled={grantCapabilityMutation.isPending}
                                 className="text-blue-600 hover:text-blue-700"
                                 data-testid={`button-grant-${cap.id}`}
@@ -1023,17 +763,11 @@ export default function EmployeeDetail() {
                             </div>
                           </div>
                         ))}
-                      {allCapabilities.filter(
-                        (cap: Capability) =>
-                          !employeeCapabilities.some(
-                            (empCap: EmployeeCapability) =>
-                              empCap.capabilityId === cap.id
-                          )
+                      {allCapabilities.filter((cap: Capability) => 
+                        !employeeCapabilities.some((empCap: EmployeeCapability) => empCap.capabilityId === cap.id)
                       ).length === 0 && (
                         <div className="text-center py-6 bg-gray-50 rounded-lg">
-                          <p className="text-sm text-gray-500">
-                            All capabilities have been granted
-                          </p>
+                          <p className="text-sm text-gray-500">All capabilities have been granted</p>
                         </div>
                       )}
                     </div>
@@ -1047,9 +781,7 @@ export default function EmployeeDetail() {
                 <CardHeader className="flex flex-row items-center justify-between">
                   <div>
                     <CardTitle>Certifications</CardTitle>
-                    <CardDescription>
-                      Employee training and certification records
-                    </CardDescription>
+                    <CardDescription>Employee training and certification records</CardDescription>
                   </div>
                   <AddCertificationModal employeeId={parseInt(id)} />
                 </CardHeader>
@@ -1057,9 +789,7 @@ export default function EmployeeDetail() {
                   {certifications.length === 0 ? (
                     <div className="text-center py-8">
                       <Award className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                      <p className="text-gray-500">
-                        No certifications on record
-                      </p>
+                      <p className="text-gray-500">No certifications on record</p>
                     </div>
                   ) : (
                     <div className="space-y-4">
@@ -1067,21 +797,12 @@ export default function EmployeeDetail() {
                         <div key={cert.id} className="border rounded-lg p-4">
                           <div className="flex items-start justify-between">
                             <div>
-                              <h4 className="font-medium">
-                                {cert.certification?.name ||
-                                  'Unknown Certification'}
-                              </h4>
-                              <p className="text-sm text-gray-600">
-                                {cert.issuingAuthority}
-                              </p>
+                              <h4 className="font-medium">{cert.certification?.name || 'Unknown Certification'}</h4>
+                              <p className="text-sm text-gray-600">{cert.issuingAuthority}</p>
                               <div className="flex items-center space-x-4 mt-2 text-xs text-gray-500">
-                                <span>
-                                  Obtained: {formatDate(cert.dateObtained)}
-                                </span>
+                                <span>Obtained: {formatDate(cert.dateObtained)}</span>
                                 {cert.dateExpiry && (
-                                  <span>
-                                    Expires: {formatDate(cert.dateExpiry)}
-                                  </span>
+                                  <span>Expires: {formatDate(cert.dateExpiry)}</span>
                                 )}
                                 {cert.certificateNumber && (
                                   <span>#{cert.certificateNumber}</span>
@@ -1103,9 +824,7 @@ export default function EmployeeDetail() {
                 <CardHeader className="flex flex-row items-center justify-between">
                   <div>
                     <CardTitle>Performance Evaluations</CardTitle>
-                    <CardDescription>
-                      Employee performance review history
-                    </CardDescription>
+                    <CardDescription>Employee performance review history</CardDescription>
                   </div>
                   <AddEvaluationModal employeeId={parseInt(id)} />
                 </CardHeader>
@@ -1118,33 +837,21 @@ export default function EmployeeDetail() {
                   ) : (
                     <div className="space-y-4">
                       {evaluations.map((evaluation: Evaluation) => (
-                        <div
-                          key={evaluation.id}
-                          className="border rounded-lg p-4"
-                        >
+                        <div key={evaluation.id} className="border rounded-lg p-4">
                           <div className="flex items-start justify-between">
                             <div>
                               <h4 className="font-medium">
-                                {formatDate(evaluation.evaluationPeriodStart)} -{' '}
-                                {formatDate(evaluation.evaluationPeriodEnd)}
+                                {formatDate(evaluation.evaluationPeriodStart)} - {formatDate(evaluation.evaluationPeriodEnd)}
                               </h4>
                               {evaluation.overallRating && (
-                                <p className="text-sm text-gray-600">
-                                  Overall Rating: {evaluation.overallRating}/5.0
-                                </p>
+                                <p className="text-sm text-gray-600">Overall Rating: {evaluation.overallRating}/5.0</p>
                               )}
                               <div className="flex items-center space-x-4 mt-2 text-xs text-gray-500">
                                 {evaluation.submittedAt && (
-                                  <span>
-                                    Submitted:{' '}
-                                    {formatDate(evaluation.submittedAt)}
-                                  </span>
+                                  <span>Submitted: {formatDate(evaluation.submittedAt)}</span>
                                 )}
                                 {evaluation.reviewedAt && (
-                                  <span>
-                                    Reviewed:{' '}
-                                    {formatDate(evaluation.reviewedAt)}
-                                  </span>
+                                  <span>Reviewed: {formatDate(evaluation.reviewedAt)}</span>
                                 )}
                               </div>
                             </div>
@@ -1162,16 +869,12 @@ export default function EmployeeDetail() {
               <Card>
                 <CardHeader>
                   <CardTitle>Documents</CardTitle>
-                  <CardDescription>
-                    Employee documents and files
-                  </CardDescription>
+                  <CardDescription>Employee documents and files</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="text-center py-8">
                     <FileText className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-500">
-                      Document management coming soon
-                    </p>
+                    <p className="text-gray-500">Document management coming soon</p>
                   </div>
                 </CardContent>
               </Card>

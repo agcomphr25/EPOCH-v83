@@ -9,12 +9,12 @@ export default function useNonconformance(filters) {
   useEffect(() => {
     setLoading(true);
     setError(null);
-
+    
     fetchRecords(filters)
-      .then((data) => {
+      .then(data => {
         setRecords(data || []);
       })
-      .catch((err) => {
+      .catch(err => {
         console.error('Error fetching nonconformance records:', err);
         setError(err.message || 'Failed to fetch records');
         setRecords([]);

@@ -11,7 +11,7 @@ router.get('/', async (req: Request, res: Response) => {
     res.json(tasks);
   } catch (error) {
     console.error('Get tasks error:', error);
-    res.status(500).json({ error: 'Failed to fetch tasks' });
+    res.status(500).json({ error: "Failed to fetch tasks" });
   }
 });
 
@@ -19,15 +19,15 @@ router.get('/:id', async (req: Request, res: Response) => {
   try {
     const taskId = parseInt(req.params.id);
     const task = await storage.getTaskItemById(taskId);
-
+    
     if (!task) {
-      return res.status(404).json({ error: 'Task not found' });
+      return res.status(404).json({ error: "Task not found" });
     }
-
+    
     res.json(task);
   } catch (error) {
     console.error('Get task error:', error);
-    res.status(500).json({ error: 'Failed to fetch task' });
+    res.status(500).json({ error: "Failed to fetch task" });
   }
 });
 
@@ -41,7 +41,7 @@ router.post('/', async (req: Request, res: Response) => {
     if (error instanceof Error) {
       return res.status(400).json({ error: error.message });
     }
-    res.status(500).json({ error: 'Failed to create task' });
+    res.status(500).json({ error: "Failed to create task" });
   }
 });
 
@@ -53,7 +53,7 @@ router.put('/:id', async (req: Request, res: Response) => {
     res.json(updatedTask);
   } catch (error) {
     console.error('Update task error:', error);
-    res.status(500).json({ error: 'Failed to update task' });
+    res.status(500).json({ error: "Failed to update task" });
   }
 });
 
@@ -65,7 +65,7 @@ router.patch('/:id/status', async (req: Request, res: Response) => {
     res.json(updatedTask);
   } catch (error) {
     console.error('Update task status error:', error);
-    res.status(500).json({ error: 'Failed to update task status' });
+    res.status(500).json({ error: "Failed to update task status" });
   }
 });
 
@@ -76,7 +76,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
     res.status(204).end();
   } catch (error) {
     console.error('Delete task error:', error);
-    res.status(500).json({ error: 'Failed to delete task' });
+    res.status(500).json({ error: "Failed to delete task" });
   }
 });
 

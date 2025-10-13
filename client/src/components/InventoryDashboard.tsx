@@ -2,14 +2,7 @@ import React from 'react';
 import { useInventory } from '../hooks/useInventory';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { RefreshCw } from 'lucide-react';
 
@@ -67,32 +60,28 @@ export default function InventoryDashboard() {
                 </TableRow>
               ) : (
                 inventory.map((item) => (
-                  <TableRow
-                    key={item.id}
-                    className={!item.isActive ? 'bg-gray-50' : ''}
-                  >
-                    <TableCell className="font-medium">
-                      {item.agPartNumber}
-                    </TableCell>
-                    <TableCell>{item.name}</TableCell>
-                    <TableCell>{item.source || 'N/A'}</TableCell>
-                    <TableCell>{item.supplierPartNumber || 'N/A'}</TableCell>
-                    <TableCell className="text-right">
-                      {item.costPer ? `$${item.costPer.toFixed(2)}` : 'N/A'}
-                    </TableCell>
-                    <TableCell>{item.department || 'N/A'}</TableCell>
-                    <TableCell>
-                      {item.orderDate
-                        ? new Date(item.orderDate).toLocaleDateString()
-                        : 'N/A'}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={item.isActive ? 'default' : 'secondary'}>
-                        {item.isActive ? 'Active' : 'Inactive'}
-                      </Badge>
-                    </TableCell>
-                  </TableRow>
-                ))
+                    <TableRow 
+                      key={item.id} 
+                      className={!item.isActive ? 'bg-gray-50' : ''}
+                    >
+                      <TableCell className="font-medium">{item.agPartNumber}</TableCell>
+                      <TableCell>{item.name}</TableCell>
+                      <TableCell>{item.source || 'N/A'}</TableCell>
+                      <TableCell>{item.supplierPartNumber || 'N/A'}</TableCell>
+                      <TableCell className="text-right">
+                        {item.costPer ? `$${item.costPer.toFixed(2)}` : 'N/A'}
+                      </TableCell>
+                      <TableCell>{item.department || 'N/A'}</TableCell>
+                      <TableCell>
+                        {item.orderDate ? new Date(item.orderDate).toLocaleDateString() : 'N/A'}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={item.isActive ? "default" : "secondary"}>
+                          {item.isActive ? "Active" : "Inactive"}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))
               )}
             </TableBody>
           </Table>

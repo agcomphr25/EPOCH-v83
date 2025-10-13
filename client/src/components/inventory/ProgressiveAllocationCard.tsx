@@ -4,13 +4,7 @@ import { apiRequest } from '@/lib/queryClient';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Target, ArrowRight, CheckCircle, AlertCircle } from 'lucide-react';
 import { toast } from 'react-hot-toast';
@@ -20,16 +14,12 @@ export default function ProgressiveAllocationCard() {
   const [quantity, setQuantity] = useState('');
   const [customerOrderId, setCustomerOrderId] = useState('');
   const [productionOrderId, setProductionOrderId] = useState('');
-
+  
   const queryClient = useQueryClient();
 
   // Allocation mutation
   const allocateMutation = useMutation({
-    mutationFn: async (data: {
-      partId: string;
-      quantity: number;
-      customerOrderId: string;
-    }) => {
+    mutationFn: async (data: { partId: string; quantity: number; customerOrderId: string }) => {
       return await apiRequest('/api/inventory/allocate', {
         method: 'POST',
         body: JSON.stringify(data),
@@ -37,9 +27,7 @@ export default function ProgressiveAllocationCard() {
       });
     },
     onSuccess: (result) => {
-      toast.success(
-        `Allocated ${result.allocated} units. Shortage: ${result.shortage}`
-      );
+      toast.success(`Allocated ${result.allocated} units. Shortage: ${result.shortage}`);
       queryClient.invalidateQueries({ queryKey: ['/api/inventory/balances'] });
     },
     onError: (error: any) => {
@@ -49,11 +37,7 @@ export default function ProgressiveAllocationCard() {
 
   // Commit mutation
   const commitMutation = useMutation({
-    mutationFn: async (data: {
-      partId: string;
-      quantity: number;
-      customerOrderId: string;
-    }) => {
+    mutationFn: async (data: { partId: string; quantity: number; customerOrderId: string }) => {
       return await apiRequest('/api/inventory/commit', {
         method: 'POST',
         body: JSON.stringify(data),
@@ -71,11 +55,7 @@ export default function ProgressiveAllocationCard() {
 
   // Consume mutation
   const consumeMutation = useMutation({
-    mutationFn: async (data: {
-      partId: string;
-      quantity: number;
-      productionOrderId: string;
-    }) => {
+    mutationFn: async (data: { partId: string; quantity: number; productionOrderId: string }) => {
       return await apiRequest('/api/inventory/consume', {
         method: 'POST',
         body: JSON.stringify(data),
@@ -114,11 +94,7 @@ export default function ProgressiveAllocationCard() {
       toast.error('Please fill in all fields for allocation');
       return;
     }
-    allocateMutation.mutate({
-      partId,
-      quantity: Number(quantity),
-      customerOrderId,
-    });
+    allocateMutation.mutate({ partId, quantity: Number(quantity), customerOrderId });
   };
 
   const handleCommit = () => {
@@ -126,11 +102,7 @@ export default function ProgressiveAllocationCard() {
       toast.error('Please fill in all fields for commit');
       return;
     }
-    commitMutation.mutate({
-      partId,
-      quantity: Number(quantity),
-      customerOrderId,
-    });
+    commitMutation.mutate({ partId, quantity: Number(quantity), customerOrderId });
   };
 
   const handleConsume = () => {
@@ -138,11 +110,7 @@ export default function ProgressiveAllocationCard() {
       toast.error('Please fill in all fields for consumption');
       return;
     }
-    consumeMutation.mutate({
-      partId,
-      quantity: Number(quantity),
-      productionOrderId,
-    });
+    consumeMutation.mutate({ partId, quantity: Number(quantity), productionOrderId });
   };
 
   const handleRelease = () => {
@@ -156,12 +124,9 @@ export default function ProgressiveAllocationCard() {
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-          Progressive Allocation
-        </h3>
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Progressive Allocation</h3>
         <p className="text-sm text-gray-500 dark:text-gray-400">
-          Manage inventory through Available → Allocated → Committed → Consumed
-          workflow
+          Manage inventory through Available → Allocated → Committed → Consumed workflow
         </p>
       </div>
 
@@ -201,9 +166,7 @@ export default function ProgressiveAllocationCard() {
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Allocate & Commit</CardTitle>
-            <CardDescription>
-              Reserve inventory for customer orders
-            </CardDescription>
+            <CardDescription>Reserve inventory for customer orders</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
@@ -238,7 +201,7 @@ export default function ProgressiveAllocationCard() {
               />
             </div>
             <div className="flex gap-2">
-              <Button
+              <Button 
                 onClick={handleAllocate}
                 disabled={allocateMutation.isPending}
                 className="flex-1"
@@ -246,7 +209,7 @@ export default function ProgressiveAllocationCard() {
               >
                 {allocateMutation.isPending ? 'Allocating...' : 'Allocate'}
               </Button>
-              <Button
+              <Button 
                 onClick={handleCommit}
                 disabled={commitMutation.isPending}
                 variant="outline"
@@ -263,9 +226,7 @@ export default function ProgressiveAllocationCard() {
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Consume & Release</CardTitle>
-            <CardDescription>
-              Finalize or release inventory reservations
-            </CardDescription>
+            <CardDescription>Finalize or release inventory reservations</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
@@ -279,7 +240,7 @@ export default function ProgressiveAllocationCard() {
               />
             </div>
             <div className="flex gap-2">
-              <Button
+              <Button 
                 onClick={handleConsume}
                 disabled={consumeMutation.isPending}
                 className="flex-1"
@@ -287,7 +248,7 @@ export default function ProgressiveAllocationCard() {
               >
                 {consumeMutation.isPending ? 'Consuming...' : 'Consume'}
               </Button>
-              <Button
+              <Button 
                 onClick={handleRelease}
                 disabled={releaseMutation.isPending}
                 variant="outline"
@@ -308,22 +269,10 @@ export default function ProgressiveAllocationCard() {
         </CardHeader>
         <CardContent>
           <div className="space-y-2 text-sm text-gray-600 dark:text-gray-400">
-            <div>
-              <strong>Allocate:</strong> Reserve inventory for a customer order
-              (Available → Allocated)
-            </div>
-            <div>
-              <strong>Commit:</strong> Confirm the allocation when order is
-              processed (Allocated → Committed)
-            </div>
-            <div>
-              <strong>Consume:</strong> Mark inventory as used in production
-              (Committed → Consumed)
-            </div>
-            <div>
-              <strong>Release:</strong> Return allocated inventory back to
-              available pool
-            </div>
+            <div><strong>Allocate:</strong> Reserve inventory for a customer order (Available → Allocated)</div>
+            <div><strong>Commit:</strong> Confirm the allocation when order is processed (Allocated → Committed)</div>
+            <div><strong>Consume:</strong> Mark inventory as used in production (Committed → Consumed)</div>
+            <div><strong>Release:</strong> Return allocated inventory back to available pool</div>
           </div>
         </CardContent>
       </Card>

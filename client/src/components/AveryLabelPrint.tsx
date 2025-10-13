@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import JsBarcode from 'jsbarcode';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Printer, Package, Calendar, User } from 'lucide-react';
 
 interface AveryLabelPrintProps {
@@ -41,7 +41,7 @@ export function AveryLabelPrint({
   isHighPriority,
   isLate,
   labelType = 'detailed',
-  copies = 6,
+  copies = 6
 }: AveryLabelPrintProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [barcodeGenerated, setBarcodeGenerated] = useState(false);
@@ -52,58 +52,49 @@ export function AveryLabelPrint({
     if (isHighPriority || isLate) {
       return '#FF0000'; // Red
     }
-
+    
     // Blue for painted stock (terraine, premium, standard, rattlesnake rogue, fg* models)
-    const paintedOptions = [
-      'terraine',
-      'premium',
-      'standard',
-      'rattlesnake_rogue',
-    ];
-    const isPaintedOption = paintedOptions.some((option) =>
+    const paintedOptions = ['terraine', 'premium', 'standard', 'rattlesnake_rogue'];
+    const isPaintedOption = paintedOptions.some(option => 
       paintOption?.toLowerCase().includes(option)
     );
     const isFiberglassModel = modelId?.toLowerCase().startsWith('fg');
-
+    
     if (isPaintedOption || isFiberglassModel) {
       return '#0066FF'; // Blue
     }
-
+    
     return '#000000'; // Black (default)
   };
 
   // Extract swivel studs and texture options from features
   const getSwivelStudsText = () => {
     if (!features?.swivel_studs) return null;
-    return features.swivel_studs !== 'standard_swivel_studs' &&
-      features.swivel_studs !== 'standard'
-      ? features.swivel_studs.replace(/_/g, ' ')
-      : null;
+    return features.swivel_studs !== 'standard_swivel_studs' && features.swivel_studs !== 'standard' 
+      ? features.swivel_studs.replace(/_/g, ' ') : null;
   };
 
   const getTextureText = () => {
     if (!features?.texture_options) return null;
-    return features.texture_options !== 'no_texture' &&
-      features.texture_options !== 'none'
-      ? features.texture_options.replace(/_/g, ' ')
-      : null;
+    return features.texture_options !== 'no_texture' && features.texture_options !== 'none'
+      ? features.texture_options.replace(/_/g, ' ') : null;
   };
 
   useEffect(() => {
     if (canvasRef.current && barcode) {
       try {
         JsBarcode(canvasRef.current, barcode, {
-          format: 'CODE39',
+          format: "CODE39",
           width: 2,
           height: 40,
           displayValue: false, // Hide text to save space on label
           fontSize: 10,
-          textAlign: 'center',
-          textPosition: 'bottom',
+          textAlign: "center",
+          textPosition: "bottom",
           textMargin: 2,
-          fontOptions: '',
-          font: 'monospace',
-          background: '#ffffff',
+          fontOptions: "",
+          font: "monospace",
+          background: "#ffffff",
           lineColor: getBarcodeColor(),
           margin: 5,
         });
@@ -120,7 +111,7 @@ export function AveryLabelPrint({
     return new Date(dateString).toLocaleDateString('en-US', {
       month: '2-digit',
       day: '2-digit',
-      year: '2-digit',
+      year: '2-digit'
     });
   };
 
@@ -133,21 +124,18 @@ export function AveryLabelPrint({
         const currentDate = new Date().toLocaleDateString('en-US', {
           month: '2-digit',
           day: '2-digit',
-          year: '2-digit',
+          year: '2-digit'
         });
 
         const generateLabelContent = (index: number) => {
           // Format: "SA CF Chalkbranch" (Action Length + Stock Model)
-          const actionLengthModel =
-            actionLength && stockModel
-              ? `${actionLength} ${stockModel}`
-              : actionLength || stockModel || orderId;
+          const actionLengthModel = actionLength && stockModel ?
+            `${actionLength} ${stockModel}` :
+            (actionLength || stockModel || orderId);
 
           const swivelStudsText = getSwivelStudsText();
           const textureText = getTextureText();
-          const specialOptionsLine = [swivelStudsText, textureText]
-            .filter(Boolean)
-            .join(' | ');
+          const specialOptionsLine = [swivelStudsText, textureText].filter(Boolean).join(' | ');
 
           return `
             <div class="avery-label">
@@ -321,14 +309,9 @@ export function AveryLabelPrint({
             </head>
             <body>
               <div class="labels-container">
-                ${Array(copies)
-                  .fill()
-                  .map(
-                    (_, i) => `
+                ${Array(copies).fill().map((_, i) => `
                   ${generateLabelContent(i)}
-                `
-                  )
-                  .join('')}
+                `).join('')}
               </div>
             </body>
           </html>
@@ -339,13 +322,11 @@ export function AveryLabelPrint({
         // After writing content, generate barcodes in the print window
         setTimeout(() => {
           for (let i = 0; i < copies; i++) {
-            const canvas = printWindow.document.getElementById(
-              `barcode-${i}`
-            ) as HTMLCanvasElement;
+            const canvas = printWindow.document.getElementById(`barcode-${i}`) as HTMLCanvasElement;
             if (canvas && barcode) {
               try {
                 JsBarcode(canvas, barcode, {
-                  format: 'CODE39',
+                  format: "CODE39",
                   width: 1.5, // Adjusted for smaller canvas
                   height: 25,
                   displayValue: false,
@@ -353,10 +334,7 @@ export function AveryLabelPrint({
                   lineColor: getBarcodeColor(),
                 });
               } catch (error) {
-                console.error(
-                  `Error generating barcode for label ${i}:`,
-                  error
-                );
+                console.error(`Error generating barcode for label ${i}:`, error);
               }
             }
           }
@@ -385,41 +363,27 @@ export function AveryLabelPrint({
             <div className="text-sm font-semibold mb-2">Label Preview:</div>
             <div
               className="bg-white border border-gray-400 p-2 text-center flex flex-col justify-between"
-              style={{
-                width: '2.625in',
-                height: '1in',
-                fontSize: '8px',
-                lineHeight: '1.1',
-              }}
+              style={{ width: '2.625in', height: '1in', fontSize: '8px', lineHeight: '1.1' }}
             >
-              <div className="font-bold text-xs">{orderId}</div>
-              {customerName && <div className="text-xs">{customerName}</div>}
-              {stockModel || paintOption ? (
-                <div
-                  className="text-xs font-bold"
-                  style={{ fontSize: '7px' }}
-                  title={`${stockModel || ''}${stockModel && paintOption ? ' - ' : ''}${paintOption || ''}`}
-                >
-                  {`${stockModel || ''}${stockModel && paintOption ? ' - ' : ''}${paintOption || ''}`}
-                </div>
-              ) : (
-                ''
+              <div className="font-bold text-xs">
+                {orderId}
+              </div>
+              {customerName && (
+                <div className="text-xs">{customerName}</div>
               )}
+              {stockModel || paintOption ? (
+                <div className="text-xs font-bold" style={{ fontSize: '7px' }} title={`${stockModel || ''}${stockModel && paintOption ? ' - ' : ''}${paintOption || ''}`}>
+                  {`${stockModel || ''}${(stockModel && paintOption) ? ' - ' : ''}${paintOption || ''}`}
+                </div>
+              ) : ''}
               {(getSwivelStudsText() || getTextureText()) && (
-                <div
-                  className="text-xs"
-                  style={{ fontSize: '6px', lineHeight: '1.1' }}
-                >
+                <div className="text-xs" style={{ fontSize: '6px', lineHeight: '1.1' }}>
                   {getSwivelStudsText() && (
-                    <span style={{ color: '#FF6600', fontWeight: 'bold' }}>
-                      {getSwivelStudsText()}
-                    </span>
+                    <span style={{ color: '#FF6600', fontWeight: 'bold' }}>{getSwivelStudsText()}</span>
                   )}
                   {getSwivelStudsText() && getTextureText() && ' | '}
                   {getTextureText() && (
-                    <span style={{ color: '#9933CC', fontWeight: 'bold' }}>
-                      {getTextureText()}
-                    </span>
+                    <span style={{ color: '#9933CC', fontWeight: 'bold' }}>{getTextureText()}</span>
                   )}
                 </div>
               )}
@@ -435,10 +399,7 @@ export function AveryLabelPrint({
                   />
                 )}
                 {!barcodeGenerated && (
-                  <div
-                    style={{ height: '0.3in' }}
-                    className="flex items-center"
-                  >
+                  <div style={{ height: '0.3in' }} className="flex items-center">
                     <span className="text-xs text-gray-500">{barcode}</span>
                   </div>
                 )}
@@ -481,19 +442,16 @@ export function AveryLabelPrint({
             )}
             {getSwivelStudsText() && (
               <div>
-                <strong>Swivel Studs:</strong>{' '}
-                <span style={{ color: '#FF6600' }}>{getSwivelStudsText()}</span>
+                <strong>Swivel Studs:</strong> <span style={{ color: '#FF6600' }}>{getSwivelStudsText()}</span>
               </div>
             )}
             {getTextureText() && (
               <div>
-                <strong>Texture:</strong>{' '}
-                <span style={{ color: '#9933CC' }}>{getTextureText()}</span>
+                <strong>Texture:</strong> <span style={{ color: '#9933CC' }}>{getTextureText()}</span>
               </div>
             )}
             <div>
-              <strong>Label Type:</strong>{' '}
-              {labelType === 'basic' ? 'Basic' : 'Detailed'}
+              <strong>Label Type:</strong> {labelType === 'basic' ? 'Basic' : 'Detailed'}
             </div>
             <div>
               <strong>Copies:</strong> {copies}
@@ -501,20 +459,17 @@ export function AveryLabelPrint({
           </div>
 
           {/* Print Button */}
-          <Button onClick={handlePrintLabels} className="w-full">
+          <Button
+            onClick={handlePrintLabels}
+            className="w-full"
+          >
             <Printer className="h-4 w-4 mr-2" />
             Print {copies} Avery Labels (5160)
           </Button>
 
           <div className="text-xs text-gray-600 mt-2">
-            <p>
-              <strong>Compatible with:</strong> Avery 5160 labels (2.625" x 1",
-              30 labels per sheet)
-            </p>
-            <p>
-              <strong>Note:</strong> Ensure your printer is set to actual size
-              (100% scale) for proper alignment
-            </p>
+            <p><strong>Compatible with:</strong> Avery 5160 labels (2.625" x 1", 30 labels per sheet)</p>
+            <p><strong>Note:</strong> Ensure your printer is set to actual size (100% scale) for proper alignment</p>
           </div>
         </div>
       </CardContent>

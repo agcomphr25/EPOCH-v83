@@ -1,26 +1,15 @@
 import React, { useState } from 'react';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import {
-  Package,
-  TrendingUp,
-  AlertTriangle,
-  Factory,
-  ShoppingCart,
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { 
+  Package, 
+  TrendingUp, 
+  AlertTriangle, 
+  Factory, 
+  ShoppingCart, 
   BarChart3,
   Users,
   Truck,
@@ -28,7 +17,7 @@ import {
   FileText,
   Target,
   Clock,
-  CheckCircle,
+  CheckCircle
 } from 'lucide-react';
 
 // Import enhanced inventory components
@@ -44,8 +33,7 @@ import POSuggestionsCard from '../components/inventory/POSuggestionsCard';
 
 export default function EnhancedInventoryMRPPage() {
   const [activeCard, setActiveCard] = useState<string | null>(null);
-  const [isInventoryItemsModalOpen, setIsInventoryItemsModalOpen] =
-    useState(false);
+  const [isInventoryItemsModalOpen, setIsInventoryItemsModalOpen] = useState(false);
 
   const handleCardClick = (cardType: string) => {
     if (cardType === 'inventory-items') {
@@ -64,22 +52,15 @@ export default function EnhancedInventoryMRPPage() {
             Enhanced Inventory & MRP System
           </h1>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            Comprehensive inventory management with material requirements
-            planning and progressive allocation
+            Comprehensive inventory management with material requirements planning and progressive allocation
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Badge
-            variant="outline"
-            className="bg-green-50 text-green-700 border-green-200"
-          >
+          <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
             <CheckCircle className="h-3 w-3 mr-1" />
             System Active
           </Badge>
-          <Badge
-            variant="outline"
-            className="bg-blue-50 text-blue-700 border-blue-200"
-          >
+          <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
             <Clock className="h-3 w-3 mr-1" />
             Real-time
           </Badge>
@@ -94,10 +75,10 @@ export default function EnhancedInventoryMRPPage() {
           <Package className="h-5 w-5 text-blue-600" />
           Real-time Inventory Management
         </h2>
-
+        
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {/* Inventory Items Card */}
-          <Card
+          <Card 
             className="cursor-pointer hover:shadow-lg transition-shadow duration-200 border-2 hover:border-green-500"
             onClick={() => handleCardClick('inventory-items')}
             data-testid="card-inventory-items"
@@ -123,7 +104,7 @@ export default function EnhancedInventoryMRPPage() {
           </Card>
 
           {/* Inventory Balances Card */}
-          <Card
+          <Card 
             className="cursor-pointer hover:shadow-lg transition-shadow duration-200 border-2 hover:border-blue-500"
             onClick={() => handleCardClick('inventory-balances')}
             data-testid="card-inventory-balances"
@@ -134,8 +115,7 @@ export default function EnhancedInventoryMRPPage() {
                 Inventory Balances
               </CardTitle>
               <CardDescription>
-                Real-time inventory levels, stock locations, and low-stock
-                alerts
+                Real-time inventory levels, stock locations, and low-stock alerts
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -150,7 +130,7 @@ export default function EnhancedInventoryMRPPage() {
           </Card>
 
           {/* Inventory Transactions Card */}
-          <Card
+          <Card 
             className="cursor-pointer hover:shadow-lg transition-shadow duration-200 border-2 hover:border-green-500"
             onClick={() => handleCardClick('inventory-transactions')}
             data-testid="card-inventory-transactions"
@@ -166,16 +146,14 @@ export default function EnhancedInventoryMRPPage() {
             </CardHeader>
             <CardContent>
               <div className="flex items-center justify-between">
-                <div className="text-2xl font-bold text-green-600">
-                  Transactions
-                </div>
+                <div className="text-2xl font-bold text-green-600">Transactions</div>
                 <FileText className="h-4 w-4 text-gray-400" />
               </div>
             </CardContent>
           </Card>
 
           {/* Progressive Allocation Card */}
-          <Card
+          <Card 
             className="cursor-pointer hover:shadow-lg transition-shadow duration-200 border-2 hover:border-purple-500"
             onClick={() => handleCardClick('progressive-allocation')}
             data-testid="card-progressive-allocation"
@@ -191,9 +169,7 @@ export default function EnhancedInventoryMRPPage() {
             </CardHeader>
             <CardContent>
               <div className="flex items-center justify-between">
-                <div className="text-2xl font-bold text-purple-600">
-                  Allocation
-                </div>
+                <div className="text-2xl font-bold text-purple-600">Allocation</div>
                 <Settings className="h-4 w-4 text-gray-400" />
               </div>
             </CardContent>
@@ -209,10 +185,10 @@ export default function EnhancedInventoryMRPPage() {
           <Factory className="h-5 w-5 text-orange-600" />
           Material Requirements Planning (MRP)
         </h2>
-
+        
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {/* MRP Calculation Card */}
-          <Card
+          <Card 
             className="cursor-pointer hover:shadow-lg transition-shadow duration-200 border-2 hover:border-orange-500"
             onClick={() => handleCardClick('mrp-calculation')}
             data-testid="card-mrp-calculation"
@@ -228,16 +204,14 @@ export default function EnhancedInventoryMRPPage() {
             </CardHeader>
             <CardContent>
               <div className="flex items-center justify-between">
-                <div className="text-2xl font-bold text-orange-600">
-                  Calculate
-                </div>
+                <div className="text-2xl font-bold text-orange-600">Calculate</div>
                 <Factory className="h-4 w-4 text-gray-400" />
               </div>
             </CardContent>
           </Card>
 
           {/* MRP Shortages Card */}
-          <Card
+          <Card 
             className="cursor-pointer hover:shadow-lg transition-shadow duration-200 border-2 hover:border-red-500"
             onClick={() => handleCardClick('mrp-shortages')}
             data-testid="card-mrp-shortages"
@@ -260,7 +234,7 @@ export default function EnhancedInventoryMRPPage() {
           </Card>
 
           {/* PO Suggestions Card */}
-          <Card
+          <Card 
             className="cursor-pointer hover:shadow-lg transition-shadow duration-200 border-2 hover:border-indigo-500"
             onClick={() => handleCardClick('po-suggestions')}
             data-testid="card-po-suggestions"
@@ -276,9 +250,7 @@ export default function EnhancedInventoryMRPPage() {
             </CardHeader>
             <CardContent>
               <div className="flex items-center justify-between">
-                <div className="text-2xl font-bold text-indigo-600">
-                  Suggestions
-                </div>
+                <div className="text-2xl font-bold text-indigo-600">Suggestions</div>
                 <ShoppingCart className="h-4 w-4 text-gray-400" />
               </div>
             </CardContent>
@@ -294,10 +266,10 @@ export default function EnhancedInventoryMRPPage() {
           <Users className="h-5 w-5 text-cyan-600" />
           Vendor & Processing Management
         </h2>
-
+        
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Outside Processing Card */}
-          <Card
+          <Card 
             className="cursor-pointer hover:shadow-lg transition-shadow duration-200 border-2 hover:border-cyan-500"
             onClick={() => handleCardClick('outside-processing')}
             data-testid="card-outside-processing"
@@ -313,16 +285,14 @@ export default function EnhancedInventoryMRPPage() {
             </CardHeader>
             <CardContent>
               <div className="flex items-center justify-between">
-                <div className="text-2xl font-bold text-cyan-600">
-                  Processing
-                </div>
+                <div className="text-2xl font-bold text-cyan-600">Processing</div>
                 <Truck className="h-4 w-4 text-gray-400" />
               </div>
             </CardContent>
           </Card>
 
           {/* Vendor Parts Card */}
-          <Card
+          <Card 
             className="cursor-pointer hover:shadow-lg transition-shadow duration-200 border-2 hover:border-pink-500"
             onClick={() => handleCardClick('vendor-parts')}
             data-testid="card-vendor-parts"
@@ -347,10 +317,7 @@ export default function EnhancedInventoryMRPPage() {
       </div>
 
       {/* Inventory Items Modal */}
-      <Dialog
-        open={isInventoryItemsModalOpen}
-        onOpenChange={setIsInventoryItemsModalOpen}
-      >
+      <Dialog open={isInventoryItemsModalOpen} onOpenChange={setIsInventoryItemsModalOpen}>
         <DialogContent className="max-w-7xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-xl">
@@ -369,57 +336,17 @@ export default function EnhancedInventoryMRPPage() {
             <CardHeader>
               <div className="flex justify-between items-center">
                 <CardTitle className="text-xl flex items-center gap-2">
-                  {activeCard === 'inventory-balances' && (
-                    <>
-                      <BarChart3 className="h-5 w-5" />
-                      Inventory Balances Management
-                    </>
-                  )}
-                  {activeCard === 'inventory-transactions' && (
-                    <>
-                      <TrendingUp className="h-5 w-5" />
-                      Inventory Transactions
-                    </>
-                  )}
-                  {activeCard === 'progressive-allocation' && (
-                    <>
-                      <Target className="h-5 w-5" />
-                      Progressive Allocation
-                    </>
-                  )}
-                  {activeCard === 'mrp-calculation' && (
-                    <>
-                      <Settings className="h-5 w-5" />
-                      MRP Calculation
-                    </>
-                  )}
-                  {activeCard === 'mrp-shortages' && (
-                    <>
-                      <AlertTriangle className="h-5 w-5" />
-                      Material Shortages
-                    </>
-                  )}
-                  {activeCard === 'po-suggestions' && (
-                    <>
-                      <ShoppingCart className="h-5 w-5" />
-                      Purchase Order Suggestions
-                    </>
-                  )}
-                  {activeCard === 'outside-processing' && (
-                    <>
-                      <Truck className="h-5 w-5" />
-                      Outside Processing
-                    </>
-                  )}
-                  {activeCard === 'vendor-parts' && (
-                    <>
-                      <Users className="h-5 w-5" />
-                      Vendor Parts Management
-                    </>
-                  )}
+                  {activeCard === 'inventory-balances' && <><BarChart3 className="h-5 w-5" />Inventory Balances Management</>}
+                  {activeCard === 'inventory-transactions' && <><TrendingUp className="h-5 w-5" />Inventory Transactions</>}
+                  {activeCard === 'progressive-allocation' && <><Target className="h-5 w-5" />Progressive Allocation</>}
+                  {activeCard === 'mrp-calculation' && <><Settings className="h-5 w-5" />MRP Calculation</>}
+                  {activeCard === 'mrp-shortages' && <><AlertTriangle className="h-5 w-5" />Material Shortages</>}
+                  {activeCard === 'po-suggestions' && <><ShoppingCart className="h-5 w-5" />Purchase Order Suggestions</>}
+                  {activeCard === 'outside-processing' && <><Truck className="h-5 w-5" />Outside Processing</>}
+                  {activeCard === 'vendor-parts' && <><Users className="h-5 w-5" />Vendor Parts Management</>}
                 </CardTitle>
-                <Button
-                  variant="outline"
+                <Button 
+                  variant="outline" 
                   size="sm"
                   onClick={() => setActiveCard(null)}
                   data-testid="button-close-card"
@@ -430,12 +357,8 @@ export default function EnhancedInventoryMRPPage() {
             </CardHeader>
             <CardContent>
               {activeCard === 'inventory-balances' && <InventoryBalancesCard />}
-              {activeCard === 'inventory-transactions' && (
-                <InventoryTransactionsCard />
-              )}
-              {activeCard === 'progressive-allocation' && (
-                <ProgressiveAllocationCard />
-              )}
+              {activeCard === 'inventory-transactions' && <InventoryTransactionsCard />}
+              {activeCard === 'progressive-allocation' && <ProgressiveAllocationCard />}
               {activeCard === 'mrp-calculation' && <MRPCalculationCard />}
               {activeCard === 'mrp-shortages' && <MRPShortagesCard />}
               {activeCard === 'po-suggestions' && <POSuggestionsCard />}

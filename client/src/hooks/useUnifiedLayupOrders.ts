@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery } from "@tanstack/react-query";
 
 export interface UnifiedLayupOrder {
   id: string;
@@ -27,11 +27,7 @@ export interface UnifiedLayupOrder {
 export function useUnifiedLayupOrders() {
   // Get P1 orders only (regular orders + P1 purchase order items)
   // P2 orders are now handled separately in P2LayupScheduler
-  const {
-    data: p1Orders = [],
-    isLoading: p1Loading,
-    error,
-  } = useQuery({
+  const { data: p1Orders = [], isLoading: p1Loading, error } = useQuery({
     queryKey: ['/api/p1-layup-queue'],
     queryFn: async () => {
       console.log('🚀 Making direct API call to /api/p1-layup-queue');
@@ -43,7 +39,7 @@ export function useUnifiedLayupOrders() {
       console.log('🎯 Direct API response:', {
         status: response.status,
         length: data?.length,
-        firstItem: data?.[0]?.orderId,
+        firstItem: data?.[0]?.orderId
       });
       return Array.isArray(data) ? data : [];
     },
@@ -58,10 +54,10 @@ export function useUnifiedLayupOrders() {
     },
     retry: 3,
     staleTime: 1000 * 60 * 5, // Consider data fresh for 5 minutes
-    refetchOnWindowFocus: false, // DISABLED: Prevent auto-refresh when window focus changes
+    refetchOnWindowFocus: false, // DISABLED: Prevent auto-refresh when window focus changes  
     refetchOnMount: true,
     refetchInterval: false, // DISABLED: Stop 30-second auto-refresh to prevent continuous reloading
-    gcTime: 1000 * 60 * 10, // Keep data in cache for 10 minutes
+    gcTime: 1000 * 60 * 10 // Keep data in cache for 10 minutes
   });
 
   console.log('🔧 useUnifiedLayupOrders hook state:', {
@@ -69,7 +65,7 @@ export function useUnifiedLayupOrders() {
     loading: p1Loading,
     error: error,
     hasData: !!p1Orders,
-    p1OrdersFirst3: p1Orders?.slice(0, 3),
+    p1OrdersFirst3: p1Orders?.slice(0, 3)
   });
 
   if (error) {
@@ -93,13 +89,13 @@ export function useUnifiedLayupOrders() {
     ordersReturned: combinedOrders.length,
     isLoading: loading,
     hasError: !!error,
-    firstOrderId: combinedOrders[0]?.orderId,
+    firstOrderId: combinedOrders[0]?.orderId
   });
 
   return {
     orders: combinedOrders,
     loading,
     reloadOrders,
-    error,
+    error
   };
 }

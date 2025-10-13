@@ -50,42 +50,30 @@ export function generateLayupSchedule(
   employeeSettings: EmployeeSettings[]
 ): ScheduleResult[] {
   // 1. Compute capacities with 10-hour work days
-  const enabledMolds = moldSettings.filter((m) => m.enabled);
-  const totalDailyMoldCapacity = enabledMolds.reduce(
-    (sum, m) => sum + m.multiplier,
-    0
-  );
+  const enabledMolds = moldSettings.filter(m => m.enabled);
+  const totalDailyMoldCapacity = enabledMolds.reduce((sum, m) => sum + m.multiplier, 0);
 
-  const employeeDailyCapacities = employeeSettings.reduce(
-    (map, emp) => {
-      // Use actual employee hours (stored in system) for capacity calculation
-      map[emp.employeeId] = emp.rate * (emp.hours || 10); // fallback to 10 hours if not set
-      return map;
-    },
-    {} as Record<string, number>
-  );
+  const employeeDailyCapacities = employeeSettings.reduce((map, emp) => {
+    // Use actual employee hours (stored in system) for capacity calculation
+    map[emp.employeeId] = emp.rate * (emp.hours || 10); // fallback to 10 hours if not set
+    return map;
+  }, {} as Record<string, number>);
 
-  const totalDailyEmployeeCapacity = Object.values(
-    employeeDailyCapacities
-  ).reduce((a, b) => a + b, 0);
+  const totalDailyEmployeeCapacity = Object.values(employeeDailyCapacities).reduce((a, b) => a + b, 0);
 
   // 2. Enhanced sorting for P1 PO priority scheduling
-  console.log(
-    `🔄 Scheduling ${orders.length} orders - checking for P1 PO priority...`
-  );
-  const p1POOrders = orders.filter((o) => o.source === 'p1_purchase_order');
-  const regularOrders = orders.filter((o) => o.source !== 'p1_purchase_order');
-  console.log(
-    `📋 Found ${p1POOrders.length} P1 PO orders, ${regularOrders.length} regular orders`
-  );
-
+  console.log(`🔄 Scheduling ${orders.length} orders - checking for P1 PO priority...`);
+  const p1POOrders = orders.filter(o => o.source === 'p1_purchase_order');
+  const regularOrders = orders.filter(o => o.source !== 'p1_purchase_order');
+  console.log(`📋 Found ${p1POOrders.length} P1 PO orders, ${regularOrders.length} regular orders`);
+  
   const sortedOrders = [...orders].sort((a, b) => {
     // Priority 1: P1 Purchase Orders get scheduled FIRST before regular orders
     const aIsP1PO = a.source === 'p1_purchase_order';
     const bIsP1PO = b.source === 'p1_purchase_order';
-
+    
     if (aIsP1PO && !bIsP1PO) return -1; // a (P1 PO) goes first
-    if (!aIsP1PO && bIsP1PO) return 1; // b (P1 PO) goes first
+    if (!aIsP1PO && bIsP1PO) return 1;  // b (P1 PO) goes first
 
     // Priority 2: Production orders have priority scores 20-35 (urgent), regular orders 50+
     const aPriority = a.priorityScore || 99; // Default to lowest priority if not set
@@ -137,10 +125,7 @@ export function generateLayupSchedule(
   };
 
   // 5. Track usage per date and week distribution
-  const dateMoldUsage: Record<
-    string,
-    Record<string, number> & { totalUsed: number }
-  > = {};
+  const dateMoldUsage: Record<string, Record<string, number> & { totalUsed: number }> = {};
   const dateEmployeeUsage: Record<string, Record<string, number>> = {};
   const weeklyDistribution: Record<string, number> = {}; // Track orders per week
 
@@ -149,9 +134,7 @@ export function generateLayupSchedule(
   const getWeekKey = (d: Date) => {
     const monday = new Date(d);
     while (monday.getDay() !== 1) {
-      monday.setDate(
-        monday.getDate() - (monday.getDay() === 0 ? 6 : monday.getDay() - 1)
-      );
+      monday.setDate(monday.getDate() - (monday.getDay() === 0 ? 6 : monday.getDay() - 1));
     }
     return toKey(monday);
   };
@@ -164,16 +147,10 @@ export function generateLayupSchedule(
 
     // Start scheduling date logic: production orders and P1 purchase orders should start ASAP to meet due dates
     let attemptDate = new Date();
-    if (
-      (order.source === 'production_order' ||
-        order.source === 'p1_purchase_order') &&
-      order.dueDate
-    ) {
+    if ((order.source === 'production_order' || order.source === 'p1_purchase_order') && order.dueDate) {
       // For production orders and P1 purchase orders, start from current date to meet due date
       attemptDate = new Date();
-      console.log(
-        `🏭 Production/P1 order ${order.orderId} due ${order.dueDate} - starting schedule from today`
-      );
+      console.log(`🏭 Production/P1 order ${order.orderId} due ${order.dueDate} - starting schedule from today`);
     } else {
       // Regular orders can start from order date
       attemptDate = new Date(order.orderDate);
@@ -194,18 +171,14 @@ export function generateLayupSchedule(
       // Initialize tracking if needed - each day starts fresh with 0 usage for all molds
       if (!dateMoldUsage[dateKey]) {
         dateMoldUsage[dateKey] = { totalUsed: 0 };
-        enabledMolds.forEach((m) => (dateMoldUsage[dateKey][m.moldId] = 0));
+        enabledMolds.forEach(m => dateMoldUsage[dateKey][m.moldId] = 0);
 
         // Debug logging for mold capacity reset
-        console.log(
-          `🔄 New day ${dateKey}: Initialized ${enabledMolds.length} molds with fresh capacity`
-        );
+        console.log(`🔄 New day ${dateKey}: Initialized ${enabledMolds.length} molds with fresh capacity`);
       }
       if (!dateEmployeeUsage[dateKey]) {
         dateEmployeeUsage[dateKey] = {};
-        employeeSettings.forEach(
-          (emp) => (dateEmployeeUsage[dateKey][emp.employeeId] = 0)
-        );
+        employeeSettings.forEach(emp => dateEmployeeUsage[dateKey][emp.employeeId] = 0);
       }
       if (!(weekKey in weeklyDistribution)) {
         weeklyDistribution[weekKey] = 0;
@@ -215,30 +188,15 @@ export function generateLayupSchedule(
       const orderStockModel = order.stockModelId || order.modelId;
 
       // Debug production orders and P1 purchase orders specifically
-      if (
-        order.source === 'production_order' ||
-        order.source === 'p1_purchase_order'
-      ) {
-        console.log(
-          `🏭 PRODUCTION/P1 ORDER SCHEDULING: ${order.orderId} (source: ${order.source})`
-        );
-        console.log(
-          `🏭 Order stock model: ${orderStockModel} (stockModelId: ${order.stockModelId}, modelId: ${order.modelId})`
-        );
-        console.log(
-          `🏭 Available molds:`,
-          enabledMolds.map((m) => ({
-            moldId: m.moldId,
-            stockModels: m.stockModels,
-          }))
-        );
+      if (order.source === 'production_order' || order.source === 'p1_purchase_order') {
+        console.log(`🏭 PRODUCTION/P1 ORDER SCHEDULING: ${order.orderId} (source: ${order.source})`);
+        console.log(`🏭 Order stock model: ${orderStockModel} (stockModelId: ${order.stockModelId}, modelId: ${order.modelId})`);
+        console.log(`🏭 Available molds:`, enabledMolds.map(m => ({ moldId: m.moldId, stockModels: m.stockModels })));
       }
-      console.log(
-        `🔍 Finding molds for order ${order.orderId} with stock model: ${orderStockModel}`
-      );
+      console.log(`🔍 Finding molds for order ${order.orderId} with stock model: ${orderStockModel}`);
 
       // First filter for compatible molds based on stock model
-      const compatibleMolds = enabledMolds.filter((m) => {
+      const compatibleMolds = enabledMolds.filter(m => {
         if (m.stockModels && Array.isArray(m.stockModels) && orderStockModel) {
           const isCompatible = m.stockModels.includes(orderStockModel);
           if (isCompatible) {
@@ -250,58 +208,35 @@ export function generateLayupSchedule(
       });
 
       // Enhanced debug logging for production orders and P1 purchase orders
-      if (
-        order.source === 'production_order' ||
-        order.source === 'p1_purchase_order'
-      ) {
-        console.log(
-          `🏭 PRODUCTION/P1 ORDER DEBUG: ${order.orderId} (source: ${order.source})`
-        );
+      if (order.source === 'production_order' || order.source === 'p1_purchase_order') {
+        console.log(`🏭 PRODUCTION/P1 ORDER DEBUG: ${order.orderId} (source: ${order.source})`);
         console.log(`🏭 Stock Model: ${orderStockModel}`);
-        console.log(
-          `🏭 All enabled molds:`,
-          enabledMolds.map((m) => ({
-            moldId: m.moldId,
-            stockModels: m.stockModels,
-          }))
-        );
-        console.log(
-          `🏭 Compatible molds found: ${compatibleMolds.length}`,
-          compatibleMolds.map((m) => m.moldId)
-        );
+        console.log(`🏭 All enabled molds:`, enabledMolds.map(m => ({ moldId: m.moldId, stockModels: m.stockModels })));
+        console.log(`🏭 Compatible molds found: ${compatibleMolds.length}`, compatibleMolds.map(m => m.moldId));
         if (compatibleMolds.length === 0) {
-          console.error(
-            `🏭 ❌ NO COMPATIBLE MOLDS for production/P1 order ${order.orderId} with stock model ${orderStockModel}`
-          );
+          console.error(`🏭 ❌ NO COMPATIBLE MOLDS for production/P1 order ${order.orderId} with stock model ${orderStockModel}`);
         }
       }
 
       // Then find available capacity among compatible molds
-      const moldSlot = compatibleMolds.find((m) => {
+      const moldSlot = compatibleMolds.find(m => {
         const currentUsage = dateMoldUsage[dateKey][m.moldId];
         const availableCapacity = m.multiplier - currentUsage;
 
         // Debug logging for mold availability
         if (availableCapacity > 0) {
-          console.log(
-            `🔧 Compatible mold ${m.moldId} available on ${dateKey}: ${currentUsage}/${m.multiplier} used`
-          );
+          console.log(`🔧 Compatible mold ${m.moldId} available on ${dateKey}: ${currentUsage}/${m.multiplier} used`);
         }
 
         return currentUsage < m.multiplier;
       });
 
       if (!moldSlot && compatibleMolds.length === 0) {
-        console.warn(
-          `⚠️ No compatible molds found for stock model ${orderStockModel} on order ${order.orderId}`
-        );
+        console.warn(`⚠️ No compatible molds found for stock model ${orderStockModel} on order ${order.orderId}`);
       }
 
-      const hasMoldCapacity =
-        dateMoldUsage[dateKey].totalUsed < totalDailyMoldCapacity && !!moldSlot;
-      const currentEmployeeUsage = Object.values(
-        dateEmployeeUsage[dateKey]
-      ).reduce((a, b) => a + b, 0);
+      const hasMoldCapacity = dateMoldUsage[dateKey].totalUsed < totalDailyMoldCapacity && !!moldSlot;
+      const currentEmployeeUsage = Object.values(dateEmployeeUsage[dateKey]).reduce((a, b) => a + b, 0);
 
       // Use actual employee capacity instead of artificial targets
       const hasEmpCapacity = currentEmployeeUsage < totalDailyEmployeeCapacity;
@@ -313,27 +248,20 @@ export function generateLayupSchedule(
       const capacityThreshold = Math.floor(totalDailyEmployeeCapacity * 0.8);
       if (currentEmployeeUsage >= capacityThreshold) {
         const currentWorkWeekDays = getWorkDaysInWeek(attemptDate);
-        const weekDayLoads = currentWorkWeekDays.map((day) => {
+        const weekDayLoads = currentWorkWeekDays.map(day => {
           const dayKey = toKey(day);
-          const dayUsage = dateEmployeeUsage[dayKey]
-            ? Object.values(dateEmployeeUsage[dayKey]).reduce(
-                (a, b) => a + b,
-                0
-              )
-            : 0;
+          const dayUsage = dateEmployeeUsage[dayKey] ? Object.values(dateEmployeeUsage[dayKey]).reduce((a, b) => a + b, 0) : 0;
           return { date: day, load: dayUsage };
         });
 
         // Find the lightest loaded day in this week
-        const lightestDay = weekDayLoads.reduce((min, current) =>
+        const lightestDay = weekDayLoads.reduce((min, current) => 
           current.load < min.load ? current : min
         );
 
         // If there's a significantly lighter day available (at least 25% less load), skip to it
         const loadDifference = currentEmployeeUsage - lightestDay.load;
-        const significantDifference = Math.floor(
-          totalDailyEmployeeCapacity * 0.25
-        );
+        const significantDifference = Math.floor(totalDailyEmployeeCapacity * 0.25);
         if (loadDifference >= significantDifference) {
           shouldScheduleHere = false;
           attemptDate = new Date(lightestDay.date);
@@ -348,60 +276,36 @@ export function generateLayupSchedule(
         weeklyDistribution[weekKey]++;
 
         // Debug logging for successful assignment
-        console.log(
-          `✅ Assigned ${order.orderId} to mold ${moldSlot.moldId} on ${dateKey} (now ${dateMoldUsage[dateKey][moldSlot.moldId]}/${moldSlot.multiplier})`
-        );
+        console.log(`✅ Assigned ${order.orderId} to mold ${moldSlot.moldId} on ${dateKey} (now ${dateMoldUsage[dateKey][moldSlot.moldId]}/${moldSlot.multiplier})`);
 
         // Assign to employee with most available capacity
         const availableEmployee = employeeSettings
-          .filter(
-            (e) =>
-              dateEmployeeUsage[dateKey][e.employeeId] <
-              employeeDailyCapacities[e.employeeId]
-          )
-          .sort(
-            (a, b) =>
-              dateEmployeeUsage[dateKey][a.employeeId] -
-              dateEmployeeUsage[dateKey][b.employeeId]
-          )[0];
+          .filter(e => dateEmployeeUsage[dateKey][e.employeeId] < employeeDailyCapacities[e.employeeId])
+          .sort((a, b) => dateEmployeeUsage[dateKey][a.employeeId] - dateEmployeeUsage[dateKey][b.employeeId])[0];
 
         if (availableEmployee) {
           dateEmployeeUsage[dateKey][availableEmployee.employeeId]++;
 
           // Check FG stock limiting (3-5 FG stocks per day)
           const orderStockModel = order.stockModelId || order.modelId;
-          const isFGStock =
-            orderStockModel &&
-            (orderStockModel.startsWith('fg_') ||
-              orderStockModel.includes('fiberglass'));
+          const isFGStock = orderStockModel && (orderStockModel.startsWith('fg_') || orderStockModel.includes('fiberglass'));
 
           if (isFGStock) {
             // Count existing FG orders for this day
-            const existingFGCount = result.filter((r) => {
+            const existingFGCount = result.filter(r => {
               const sameDate = toKey(r.scheduledDate) === dateKey;
-              const orderModel =
-                orders.find((o) => o.orderId === r.orderId)?.stockModelId ||
-                orders.find((o) => o.orderId === r.orderId)?.modelId;
-              return (
-                sameDate &&
-                orderModel &&
-                (orderModel.startsWith('fg_') ||
-                  orderModel.includes('fiberglass'))
-              );
+              const orderModel = orders.find(o => o.orderId === r.orderId)?.stockModelId || orders.find(o => o.orderId === r.orderId)?.modelId;
+              return sameDate && orderModel && (orderModel.startsWith('fg_') || orderModel.includes('fiberglass'));
             }).length;
 
             if (existingFGCount >= 5) {
-              console.log(
-                `🚫 FG limit reached for ${dateKey}: ${existingFGCount}/5 FG stocks already scheduled`
-              );
+              console.log(`🚫 FG limit reached for ${dateKey}: ${existingFGCount}/5 FG stocks already scheduled`);
               // Skip to next day for FG orders
               attemptDate = getNextWorkDay(attemptDate);
               maxAttempts--;
               continue;
             } else {
-              console.log(
-                `✅ FG stock ${order.orderId} scheduled: ${existingFGCount + 1}/5 for ${dateKey}`
-              );
+              console.log(`✅ FG stock ${order.orderId} scheduled: ${existingFGCount + 1}/5 for ${dateKey}`);
             }
           }
 
@@ -410,8 +314,8 @@ export function generateLayupSchedule(
             scheduledDate: new Date(attemptDate),
             moldId: moldSlot.moldId,
             employeeAssignments: [
-              { employeeId: availableEmployee.employeeId, workload: 1 },
-            ],
+              { employeeId: availableEmployee.employeeId, workload: 1 }
+            ]
           });
 
           scheduled = true;
@@ -427,9 +331,7 @@ export function generateLayupSchedule(
 
     // If we couldn't schedule within timeframe, force schedule on next available day
     if (!scheduled) {
-      console.warn(
-        `Could not optimally schedule order ${order.orderId}, forcing placement`
-      );
+      console.warn(`Could not optimally schedule order ${order.orderId}, forcing placement`);
       // Force schedule logic could go here if needed
     }
   }

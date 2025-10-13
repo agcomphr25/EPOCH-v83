@@ -49,13 +49,7 @@ export default function MessageNotificationPopup() {
 
   // Show popup on login when user has unread messages
   useEffect(() => {
-    if (
-      !isLoading &&
-      unreadData &&
-      unreadData.hasUnread &&
-      !hasBeenShown &&
-      currentUser?.id
-    ) {
+    if (!isLoading && unreadData && unreadData.hasUnread && !hasBeenShown && currentUser?.id) {
       setIsOpen(true);
       setHasBeenShown(true);
     }
@@ -76,29 +70,25 @@ export default function MessageNotificationPopup() {
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogContent
-        className="sm:max-w-md"
-        data-testid="dialog-message-notification"
-      >
+      <DialogContent className="sm:max-w-md" data-testid="dialog-message-notification">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Bell className="h-5 w-5 text-blue-500 animate-bounce" />
             New Messages
           </DialogTitle>
           <DialogDescription>
-            You have {unreadData.unreadCount} unread{' '}
-            {unreadData.unreadCount === 1 ? 'message' : 'messages'}
+            You have {unreadData.unreadCount} unread {unreadData.unreadCount === 1 ? 'message' : 'messages'}
           </DialogDescription>
         </DialogHeader>
-
+        
         <div className="flex flex-col gap-4 py-4">
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-start gap-3">
             <Mail className="h-5 w-5 text-blue-600 mt-0.5" />
             <div>
               <p className="font-medium text-blue-900">Unread Messages</p>
               <p className="text-sm text-blue-700 mt-1">
-                {unreadData.unreadCount === 1
-                  ? 'You have 1 unread message waiting for you.'
+                {unreadData.unreadCount === 1 
+                  ? 'You have 1 unread message waiting for you.' 
                   : `You have ${unreadData.unreadCount} unread messages waiting for you.`}
               </p>
             </div>

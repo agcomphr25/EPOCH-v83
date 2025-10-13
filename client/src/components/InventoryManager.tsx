@@ -5,20 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 
 import { Textarea } from '@/components/ui/textarea';
 import { Plus, Edit, Trash2, Package, Download, Upload } from 'lucide-react';
@@ -46,6 +34,7 @@ export default function InventoryManager() {
   const [importFile, setImportFile] = useState<File | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
 
+
   // Export CSV functionality
   const handleExportCSV = async () => {
     try {
@@ -53,7 +42,7 @@ export default function InventoryManager() {
       if (!response.ok) {
         throw new Error('Failed to export CSV');
       }
-
+      
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -88,13 +77,13 @@ export default function InventoryManager() {
     try {
       const csvData = await importFile.text();
       console.log('CSV data to import:', csvData);
-
+      
       const response = await apiRequest('/api/inventory/import/csv', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ csvData }),
+        body: JSON.stringify({ csvData })
       });
 
       console.log('Import response:', response);
@@ -102,23 +91,17 @@ export default function InventoryManager() {
       if (response.success) {
         const message = `Successfully imported ${response.importedCount} items`;
         toast.success(message);
-
+        
         if (response.errors && response.errors.length > 0) {
           console.warn('Import errors:', response.errors);
-          const errorMessage =
-            response.errors.slice(0, 3).join(', ') +
-            (response.errors.length > 3 ? '...' : '');
-          toast.error(
-            `${response.errors.length} rows had errors: ${errorMessage}`
-          );
+          const errorMessage = response.errors.slice(0, 3).join(', ') + (response.errors.length > 3 ? '...' : '');
+          toast.error(`${response.errors.length} rows had errors: ${errorMessage}`);
         }
-
+        
         setIsImportDialogOpen(false);
         setImportFile(null);
         // Reset file input
-        const fileInput = document.getElementById(
-          'csvFile'
-        ) as HTMLInputElement;
+        const fileInput = document.getElementById('csvFile') as HTMLInputElement;
         if (fileInput) {
           fileInput.value = '';
         }
@@ -128,12 +111,14 @@ export default function InventoryManager() {
       }
     } catch (error) {
       console.error('Import error:', error);
-      toast.error(
-        `Import failed: ${error instanceof Error ? error.message : 'Unknown error'}`
-      );
+      toast.error(`Import failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
+
+
+
+  
   const [formData, setFormData] = useState<InventoryFormData>({
     agPartNumber: '',
     name: '',
@@ -143,7 +128,7 @@ export default function InventoryManager() {
     orderDate: '',
     department: '',
     secondarySource: '',
-    notes: '',
+    notes: ''
   });
 
   // Load inventory items
@@ -153,31 +138,27 @@ export default function InventoryManager() {
   });
 
   // Filter items based on search term
-  const items = allItems.filter((item) => {
+  const items = allItems.filter(item => {
     if (!searchTerm.trim()) return true;
-
+    
     const searchLower = searchTerm.toLowerCase();
     return (
       item.agPartNumber.toLowerCase().includes(searchLower) ||
       item.name.toLowerCase().includes(searchLower) ||
       (item.source && item.source.toLowerCase().includes(searchLower)) ||
-      (item.supplierPartNumber &&
-        item.supplierPartNumber.toLowerCase().includes(searchLower)) ||
-      (item.department &&
-        item.department.toLowerCase().includes(searchLower)) ||
-      (item.secondarySource &&
-        item.secondarySource.toLowerCase().includes(searchLower)) ||
+      (item.supplierPartNumber && item.supplierPartNumber.toLowerCase().includes(searchLower)) ||
+      (item.department && item.department.toLowerCase().includes(searchLower)) ||
+      (item.secondarySource && item.secondarySource.toLowerCase().includes(searchLower)) ||
       (item.notes && item.notes.toLowerCase().includes(searchLower))
     );
   });
 
   // Create mutation
   const createMutation = useMutation({
-    mutationFn: (data: any) =>
-      apiRequest('/api/inventory', {
-        method: 'POST',
-        body: data,
-      }),
+    mutationFn: (data: any) => apiRequest('/api/inventory', {
+      method: 'POST',
+      body: data
+    }),
     onSuccess: () => {
       toast.success('Inventory item created successfully');
       setIsCreateOpen(false);
@@ -189,11 +170,10 @@ export default function InventoryManager() {
 
   // Update mutation
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: number; data: any }) =>
-      apiRequest(`/api/inventory/${id}`, {
-        method: 'PUT',
-        body: data,
-      }),
+    mutationFn: ({ id, data }: { id: number; data: any }) => apiRequest(`/api/inventory/${id}`, {
+      method: 'PUT',
+      body: data
+    }),
     onSuccess: () => {
       toast.success('Inventory item updated successfully');
       setIsEditOpen(false);
@@ -206,10 +186,9 @@ export default function InventoryManager() {
 
   // Delete mutation
   const deleteMutation = useMutation({
-    mutationFn: (id: number) =>
-      apiRequest(`/api/inventory/${id}`, {
-        method: 'DELETE',
-      }),
+    mutationFn: (id: number) => apiRequest(`/api/inventory/${id}`, {
+      method: 'DELETE'
+    }),
     onSuccess: () => {
       toast.success('Inventory item deleted successfully');
       queryClient.invalidateQueries({ queryKey: ['/api/inventory'] });
@@ -227,29 +206,27 @@ export default function InventoryManager() {
       orderDate: '',
       department: '',
       secondarySource: '',
-      notes: '',
+      notes: ''
     });
   };
 
-  const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
-  ) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     // For number inputs, allow empty string and any valid number input
     if (e.target.type === 'number') {
-      setFormData((prev) => ({ ...prev, [name]: value }));
+      setFormData(prev => ({ ...prev, [name]: value }));
     } else {
-      setFormData((prev) => ({ ...prev, [name]: value }));
+      setFormData(prev => ({ ...prev, [name]: value }));
     }
   };
 
   const handleSelectChange = (name: string, value: string) => {
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    setFormData(prev => ({ ...prev, [name]: value }));
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-
+    
     if (!formData.agPartNumber || !formData.name) {
       toast.error('Please fill in AG Part# and Name (required fields)');
       return;
@@ -282,9 +259,7 @@ export default function InventoryManager() {
       source: item.source || '',
       supplierPartNumber: item.supplierPartNumber || '',
       costPer: item.costPer ? item.costPer.toString() : '',
-      orderDate: item.orderDate
-        ? new Date(item.orderDate).toISOString().split('T')[0]
-        : '',
+      orderDate: item.orderDate ? new Date(item.orderDate).toISOString().split('T')[0] : '',
       department: item.department || '',
       secondarySource: item.secondarySource || '',
       notes: item.notes || '',
@@ -293,12 +268,12 @@ export default function InventoryManager() {
   };
 
   const handleDelete = (id: number) => {
-    if (
-      window.confirm('Are you sure you want to delete this inventory item?')
-    ) {
+    if (window.confirm('Are you sure you want to delete this inventory item?')) {
       deleteMutation.mutate(id);
     }
   };
+
+
 
   const FormContent = React.memo(() => (
     <form onSubmit={handleSubmit} className="space-y-4">
@@ -326,6 +301,8 @@ export default function InventoryManager() {
           />
         </div>
       </div>
+
+
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
@@ -411,9 +388,9 @@ export default function InventoryManager() {
       </div>
 
       <div className="flex justify-end space-x-2">
-        <Button
-          type="button"
-          variant="outline"
+        <Button 
+          type="button" 
+          variant="outline" 
           onClick={() => {
             if (editingItem) {
               setIsEditOpen(false);
@@ -426,8 +403,8 @@ export default function InventoryManager() {
         >
           Cancel
         </Button>
-        <Button
-          type="submit"
+        <Button 
+          type="submit" 
           disabled={createMutation.isPending || updateMutation.isPending}
         >
           {editingItem ? 'Update' : 'Create'} Item
@@ -442,35 +419,24 @@ export default function InventoryManager() {
         <h2 className="text-2xl font-bold">Inventory Management</h2>
         <div className="flex items-center gap-2">
           {/* Export Button */}
-          <Button
-            variant="outline"
-            onClick={handleExportCSV}
-            className="flex items-center gap-2"
-          >
+          <Button variant="outline" onClick={handleExportCSV} className="flex items-center gap-2">
             <Download className="h-4 w-4" />
             Export CSV
           </Button>
-
+          
           {/* Import Button */}
-          <Button
-            variant="outline"
-            onClick={() => setIsImportDialogOpen(true)}
-            className="flex items-center gap-2"
-          >
+          <Button variant="outline" onClick={() => setIsImportDialogOpen(true)} className="flex items-center gap-2">
             <Upload className="h-4 w-4" />
             Import CSV
           </Button>
-
+          
           {/* Add Item Button */}
-          <Dialog
-            open={isCreateOpen}
-            onOpenChange={(open) => {
-              setIsCreateOpen(open);
-              if (open) {
-                resetForm();
-              }
-            }}
-          >
+          <Dialog open={isCreateOpen} onOpenChange={(open) => {
+            setIsCreateOpen(open);
+            if (open) {
+              resetForm();
+            }
+          }}>
             <DialogTrigger asChild>
               <Button>
                 <Plus className="h-4 w-4 mr-2" />
@@ -510,23 +476,17 @@ export default function InventoryManager() {
               </p>
             )}
             <div className="text-sm text-gray-500">
-              Expected columns: AG Part#, Name, Source, Supplier Part #, Cost
-              per, Order Date, Dept., Secondary Source, Notes
+              Expected columns: AG Part#, Name, Source, Supplier Part #, Cost per, Order Date, Dept., Secondary Source, Notes
             </div>
             <div className="flex justify-end space-x-2">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setIsImportDialogOpen(false);
-                  setImportFile(null);
-                  const fileInput = document.getElementById(
-                    'csvFile'
-                  ) as HTMLInputElement;
-                  if (fileInput) {
-                    fileInput.value = '';
-                  }
-                }}
-              >
+              <Button variant="outline" onClick={() => {
+                setIsImportDialogOpen(false);
+                setImportFile(null);
+                const fileInput = document.getElementById('csvFile') as HTMLInputElement;
+                if (fileInput) {
+                  fileInput.value = '';
+                }
+              }}>
                 Cancel
               </Button>
               <Button onClick={handleImportCSV} disabled={!importFile}>
@@ -537,6 +497,8 @@ export default function InventoryManager() {
           </div>
         </DialogContent>
       </Dialog>
+
+
 
       <Card>
         <CardHeader>
@@ -565,68 +527,33 @@ export default function InventoryManager() {
               <table className="w-full border-collapse border border-gray-200">
                 <thead>
                   <tr className="bg-gray-50">
-                    <th className="border border-gray-200 px-4 py-2 text-left">
-                      AG Part#
-                    </th>
-                    <th className="border border-gray-200 px-4 py-2 text-left">
-                      Name
-                    </th>
-                    <th className="border border-gray-200 px-4 py-2 text-left">
-                      Source
-                    </th>
-                    <th className="border border-gray-200 px-4 py-2 text-left">
-                      Supplier Part #
-                    </th>
-                    <th className="border border-gray-200 px-4 py-2 text-left">
-                      Cost per
-                    </th>
-                    <th className="border border-gray-200 px-4 py-2 text-left">
-                      Notes
-                    </th>
-                    <th className="border border-gray-200 px-4 py-2 text-left">
-                      Dept.
-                    </th>
-                    <th className="border border-gray-200 px-4 py-2 text-left">
-                      Secondary Source
-                    </th>
-                    <th className="border border-gray-200 px-4 py-2 text-left">
-                      Actions
-                    </th>
+                    <th className="border border-gray-200 px-4 py-2 text-left">AG Part#</th>
+                    <th className="border border-gray-200 px-4 py-2 text-left">Name</th>
+                    <th className="border border-gray-200 px-4 py-2 text-left">Source</th>
+                    <th className="border border-gray-200 px-4 py-2 text-left">Supplier Part #</th>
+                    <th className="border border-gray-200 px-4 py-2 text-left">Cost per</th>
+                    <th className="border border-gray-200 px-4 py-2 text-left">Notes</th>
+                    <th className="border border-gray-200 px-4 py-2 text-left">Dept.</th>
+                    <th className="border border-gray-200 px-4 py-2 text-left">Secondary Source</th>
+                    <th className="border border-gray-200 px-4 py-2 text-left">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {items.map((item) => {
+                  {items.map((item) => {                    
                     return (
                       <tr key={item.id} className="hover:bg-gray-50">
-                        <td className="border border-gray-200 px-4 py-2 font-medium">
-                          {item.agPartNumber}
-                        </td>
+                        <td className="border border-gray-200 px-4 py-2 font-medium">{item.agPartNumber}</td>
+                        <td className="border border-gray-200 px-4 py-2">{item.name}</td>
+                        <td className="border border-gray-200 px-4 py-2">{item.source || '-'}</td>
+                        <td className="border border-gray-200 px-4 py-2">{item.supplierPartNumber || '-'}</td>
+                        <td className="border border-gray-200 px-4 py-2">{item.costPer ? `$${item.costPer.toFixed(2)}` : '-'}</td>
                         <td className="border border-gray-200 px-4 py-2">
-                          {item.name}
-                        </td>
-                        <td className="border border-gray-200 px-4 py-2">
-                          {item.source || '-'}
-                        </td>
-                        <td className="border border-gray-200 px-4 py-2">
-                          {item.supplierPartNumber || '-'}
-                        </td>
-                        <td className="border border-gray-200 px-4 py-2">
-                          {item.costPer ? `$${item.costPer.toFixed(2)}` : '-'}
-                        </td>
-                        <td className="border border-gray-200 px-4 py-2">
-                          <div
-                            className="max-w-xs truncate"
-                            title={item.notes || 'No notes'}
-                          >
+                          <div className="max-w-xs truncate" title={item.notes || 'No notes'}>
                             {item.notes || '-'}
                           </div>
                         </td>
-                        <td className="border border-gray-200 px-4 py-2">
-                          {item.department || '-'}
-                        </td>
-                        <td className="border border-gray-200 px-4 py-2">
-                          {item.secondarySource || '-'}
-                        </td>
+                        <td className="border border-gray-200 px-4 py-2">{item.department || '-'}</td>
+                        <td className="border border-gray-200 px-4 py-2">{item.secondarySource || '-'}</td>
                         <td className="border border-gray-200 px-4 py-2">
                           <div className="flex space-x-2">
                             <Button
@@ -659,16 +586,13 @@ export default function InventoryManager() {
       </Card>
 
       {/* Edit Dialog */}
-      <Dialog
-        open={isEditOpen}
-        onOpenChange={(open) => {
-          setIsEditOpen(open);
-          if (!open) {
-            setEditingItem(null);
-            resetForm();
-          }
-        }}
-      >
+      <Dialog open={isEditOpen} onOpenChange={(open) => {
+        setIsEditOpen(open);
+        if (!open) {
+          setEditingItem(null);
+          resetForm();
+        }
+      }}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Edit Inventory Item</DialogTitle>

@@ -1,4 +1,4 @@
-import POManager from '@/components/POManager';
+import POManager from "@/components/POManager";
 
 export default function PurchaseOrders() {
   return (

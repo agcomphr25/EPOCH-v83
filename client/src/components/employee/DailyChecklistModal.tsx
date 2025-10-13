@@ -1,27 +1,10 @@
 import { useState, useEffect } from 'react';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { CheckSquare, AlertCircle, CheckCircle, X, Clock } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -45,28 +28,17 @@ interface DailyChecklistModalProps {
   onClose: () => void;
 }
 
-export default function DailyChecklistModal({
-  employeeId,
-  department,
-  isOpen,
-  onClose,
-}: DailyChecklistModalProps) {
+export default function DailyChecklistModal({ employeeId, department, isOpen, onClose }: DailyChecklistModalProps) {
   const [checklistItems, setChecklistItems] = useState<ChecklistItem[]>([]);
   const { toast } = useToast();
   const queryClient = useQueryClient();
-
+  
   const today = new Date().toISOString().split('T')[0];
 
-  const {
-    data: checklist = [],
-    isLoading,
-    refetch,
-  } = useQuery({
+  const { data: checklist = [], isLoading, refetch } = useQuery({
     queryKey: ['/api/checklist', employeeId, today],
     queryFn: async () => {
-      const response = await fetch(
-        `/api/checklist?employeeId=${employeeId}&date=${today}`
-      );
+      const response = await fetch(`/api/checklist?employeeId=${employeeId}&date=${today}`);
       if (!response.ok) {
         // If no checklist exists yet, return default items based on department
         if (response.status === 404 || response.status === 500) {
@@ -89,9 +61,7 @@ export default function DailyChecklistModal({
   });
 
   const updateChecklistMutation = useMutation({
-    mutationFn: async (
-      updates: { itemId: number; value: string | boolean }[]
-    ) => {
+    mutationFn: async (updates: { itemId: number; value: string | boolean }[]) => {
       const response = await fetch('/api/checklist/complete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -120,9 +90,9 @@ export default function DailyChecklistModal({
   }, [checklist]);
 
   const handleItemUpdate = (itemId: number, value: string | boolean) => {
-    setChecklistItems((prev) =>
-      prev.map((item) =>
-        item.id === itemId
+    setChecklistItems(prev => 
+      prev.map(item => 
+        item.id === itemId 
           ? { ...item, value, completed: Boolean(value) }
           : item
       )
@@ -130,102 +100,58 @@ export default function DailyChecklistModal({
   };
 
   const handleSave = () => {
-    const updates = checklistItems.map((item) => ({
+    const updates = checklistItems.map(item => ({
       itemId: item.id,
       value: item.value || false,
     }));
-
+    
     updateChecklistMutation.mutate(updates);
   };
 
   const stats = {
     total: checklistItems.length,
-    completed: checklistItems.filter((item) => item.completed).length,
-    required: checklistItems.filter((item) => item.required).length,
-    requiredCompleted: checklistItems.filter(
-      (item) => item.required && item.completed
-    ).length,
+    completed: checklistItems.filter(item => item.completed).length,
+    required: checklistItems.filter(item => item.required).length,
+    requiredCompleted: checklistItems.filter(item => item.required && item.completed).length,
   };
 
   const allRequiredComplete = stats.required === stats.requiredCompleted;
-  const completionPercentage =
-    stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0;
+  const completionPercentage = stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0;
 
   const getDepartmentItems = () => {
     const departmentSpecificItems = {
       'Human Resources': [
         { item: 'Review employee records', required: true, type: 'checkbox' },
-        {
-          item: 'Process new hire paperwork',
-          required: true,
-          type: 'checkbox',
-        },
+        { item: 'Process new hire paperwork', required: true, type: 'checkbox' },
         { item: 'Update policy documents', required: false, type: 'text' },
         { item: 'Conduct safety briefings', required: true, type: 'checkbox' },
       ],
-      Production: [
+      'Production': [
         { item: 'Safety equipment check', required: true, type: 'checkbox' },
-        {
-          item: 'Machine calibration verification',
-          required: true,
-          type: 'checkbox',
-        },
-        {
-          item: 'Quality control inspection',
-          required: true,
-          type: 'checkbox',
-        },
+        { item: 'Machine calibration verification', required: true, type: 'checkbox' },
+        { item: 'Quality control inspection', required: true, type: 'checkbox' },
         { item: 'Material inventory check', required: false, type: 'text' },
-        {
-          item: 'Work area cleanliness',
-          required: true,
-          type: 'select',
-          options: ['Excellent', 'Good', 'Needs Improvement'],
-        },
+        { item: 'Work area cleanliness', required: true, type: 'select', options: ['Excellent', 'Good', 'Needs Improvement'] },
       ],
       'Quality Control': [
-        {
-          item: 'Test equipment calibration',
-          required: true,
-          type: 'checkbox',
-        },
-        {
-          item: 'Sample inspection completion',
-          required: true,
-          type: 'number',
-        },
+        { item: 'Test equipment calibration', required: true, type: 'checkbox' },
+        { item: 'Sample inspection completion', required: true, type: 'number' },
         { item: 'Documentation review', required: true, type: 'checkbox' },
         { item: 'Non-conformance reports', required: false, type: 'text' },
       ],
-      Warehouse: [
-        {
-          item: 'Inventory count verification',
-          required: true,
-          type: 'checkbox',
-        },
+      'Warehouse': [
+        { item: 'Inventory count verification', required: true, type: 'checkbox' },
         { item: 'Shipping dock inspection', required: true, type: 'checkbox' },
-        {
-          item: 'Equipment maintenance check',
-          required: true,
-          type: 'checkbox',
-        },
+        { item: 'Equipment maintenance check', required: true, type: 'checkbox' },
         { item: 'Safety walkthrough', required: true, type: 'checkbox' },
       ],
-      Maintenance: [
-        {
-          item: 'Equipment inspection rounds',
-          required: true,
-          type: 'checkbox',
-        },
-        {
-          item: 'Preventive maintenance tasks',
-          required: true,
-          type: 'number',
-        },
+      'Maintenance': [
+        { item: 'Equipment inspection rounds', required: true, type: 'checkbox' },
+        { item: 'Preventive maintenance tasks', required: true, type: 'number' },
         { item: 'Safety system checks', required: true, type: 'checkbox' },
         { item: 'Work order completions', required: false, type: 'number' },
       ],
-      General: [
+      'General': [
         { item: 'Safety inspection', required: true, type: 'checkbox' },
         { item: 'Equipment check', required: true, type: 'checkbox' },
         { item: 'Work area cleanliness', required: true, type: 'checkbox' },
@@ -233,17 +159,13 @@ export default function DailyChecklistModal({
       ],
     };
 
-    return (
-      departmentSpecificItems[
-        department as keyof typeof departmentSpecificItems
-      ] || departmentSpecificItems['General']
-    );
+    return departmentSpecificItems[department as keyof typeof departmentSpecificItems] || departmentSpecificItems['General'];
   };
 
   const renderChecklistItem = (item: ChecklistItem) => {
     const baseProps = {
       key: item.id,
-      className: 'flex items-center justify-between p-3 border rounded-lg',
+      className: "flex items-center justify-between p-3 border rounded-lg"
     };
 
     return (
@@ -254,7 +176,7 @@ export default function DailyChecklistModal({
             <Label className="font-medium">{item.item}</Label>
           </div>
         </div>
-
+        
         <div className="flex items-center space-x-2">
           {item.inputType === 'checkbox' && (
             <Checkbox
@@ -262,7 +184,7 @@ export default function DailyChecklistModal({
               onCheckedChange={(checked) => handleItemUpdate(item.id, checked)}
             />
           )}
-
+          
           {item.inputType === 'text' && (
             <Input
               value={String(item.value || '')}
@@ -271,7 +193,7 @@ export default function DailyChecklistModal({
               className="w-32"
             />
           )}
-
+          
           {item.inputType === 'number' && (
             <Input
               type="number"
@@ -281,10 +203,10 @@ export default function DailyChecklistModal({
               className="w-20"
             />
           )}
-
+          
           {item.inputType === 'select' && (
-            <Select
-              value={String(item.value || '')}
+            <Select 
+              value={String(item.value || '')} 
               onValueChange={(value) => handleItemUpdate(item.id, value)}
             >
               <SelectTrigger className="w-32">
@@ -299,8 +221,10 @@ export default function DailyChecklistModal({
               </SelectContent>
             </Select>
           )}
-
-          {item.completed && <CheckCircle className="w-4 h-4 text-green-500" />}
+          
+          {item.completed && (
+            <CheckCircle className="w-4 h-4 text-green-500" />
+          )}
         </div>
       </div>
     );
@@ -352,20 +276,18 @@ export default function DailyChecklistModal({
                 </div>
               </CardContent>
             </Card>
-
+            
             <Card className="bg-green-50">
               <CardContent className="pt-4">
                 <div className="text-center">
                   <div className="text-2xl font-bold text-green-600">
                     {stats.requiredCompleted}/{stats.required}
                   </div>
-                  <div className="text-sm text-green-700">
-                    Required Completed
-                  </div>
+                  <div className="text-sm text-green-700">Required Completed</div>
                 </div>
               </CardContent>
             </Card>
-
+            
             <Card className="bg-yellow-50">
               <CardContent className="pt-4">
                 <div className="text-center">
@@ -382,16 +304,13 @@ export default function DailyChecklistModal({
           {allRequiredComplete ? (
             <div className="flex items-center space-x-2 p-3 bg-green-50 border border-green-200 rounded-lg">
               <CheckCircle className="w-5 h-5 text-green-600" />
-              <span className="text-green-800 font-medium">
-                All required tasks completed!
-              </span>
+              <span className="text-green-800 font-medium">All required tasks completed!</span>
             </div>
           ) : (
             <div className="flex items-center space-x-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
               <AlertCircle className="w-5 h-5 text-yellow-600" />
               <span className="text-yellow-800">
-                Complete all required tasks before clocking out (
-                {stats.required - stats.requiredCompleted} remaining)
+                Complete all required tasks before clocking out ({stats.required - stats.requiredCompleted} remaining)
               </span>
             </div>
           )}
@@ -402,15 +321,12 @@ export default function DailyChecklistModal({
               <Clock className="w-4 h-4" />
               <span>Today's Tasks</span>
             </h3>
-
+            
             {checklistItems.length === 0 ? (
               <div className="text-center py-8 text-gray-500">
                 <CheckSquare className="w-12 h-12 mx-auto mb-4 text-gray-300" />
                 <p>No checklist items found for {department}</p>
-                <p className="text-sm">
-                  Items will be automatically generated based on your
-                  department.
-                </p>
+                <p className="text-sm">Items will be automatically generated based on your department.</p>
               </div>
             ) : (
               checklistItems.map(renderChecklistItem)
@@ -422,14 +338,12 @@ export default function DailyChecklistModal({
             <Button variant="outline" onClick={onClose}>
               Close
             </Button>
-            <Button
+            <Button 
               onClick={handleSave}
               disabled={updateChecklistMutation.isPending}
               className="bg-blue-600 hover:bg-blue-700"
             >
-              {updateChecklistMutation.isPending
-                ? 'Saving...'
-                : 'Save Progress'}
+              {updateChecklistMutation.isPending ? 'Saving...' : 'Save Progress'}
             </Button>
           </div>
         </div>

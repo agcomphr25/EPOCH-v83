@@ -3,32 +3,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import {
-  Package,
-  Truck,
-  Download,
-  DollarSign,
-  Weight,
-  Ruler,
-  MapPin,
-} from 'lucide-react';
+import { Package, Truck, Download, DollarSign, Weight, Ruler, MapPin } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
 
@@ -69,14 +50,9 @@ interface ShippingRate {
   guaranteedDaysToDelivery?: string;
 }
 
-export default function UPSLabelCreator({
-  orderId,
-  isOpen,
-  onClose,
-  onSuccess,
-}: UPSLabelCreatorProps) {
+export default function UPSLabelCreator({ orderId, isOpen, onClose, onSuccess }: UPSLabelCreatorProps) {
   const { toast } = useToast();
-
+  
   // Form state
   const [shipToAddress, setShipToAddress] = useState<Address>({
     name: '',
@@ -86,7 +62,7 @@ export default function UPSLabelCreator({
     zipCode: '',
     country: 'US',
   });
-
+  
   const [shipFromAddress, setShipFromAddress] = useState<Address>({
     name: 'AG Composites',
     company: 'AG Composites',
@@ -99,14 +75,14 @@ export default function UPSLabelCreator({
     phone: '256-723-8381',
     email: 'shipping@agcomposites.com',
   });
-
+  
   const [packageInfo, setPackageInfo] = useState<PackageInfo>({
     weight: 1,
     length: 12,
     width: 12,
     height: 6,
   });
-
+  
   const [selectedService, setSelectedService] = useState('03'); // UPS Ground
   const [reference1, setReference1] = useState('');
   const [reference2, setReference2] = useState('');
@@ -119,7 +95,7 @@ export default function UPSLabelCreator({
     enabled: !!orderId && isOpen,
   });
 
-  const order = orderData as any;
+  const order = (orderData as any);
   const customer = (orderData as any)?.customer;
   const addresses = (orderData as any)?.addresses;
 
@@ -128,23 +104,21 @@ export default function UPSLabelCreator({
     if (customer) {
       console.log('🚚 Auto-populating shipping info for:', customer.name);
       console.log('📍 Available addresses:', addresses);
-
+      
       let shippingAddress = null;
-
+      
       // Try to find shipping address from customer addresses
       if (Array.isArray(addresses) && addresses.length > 0) {
-        shippingAddress =
-          addresses.find(
-            (addr: any) =>
-              addr.type === 'shipping' || addr.type === 'both' || addr.isDefault
-          ) || addresses[0];
+        shippingAddress = addresses.find((addr: any) => 
+          addr.type === 'shipping' || addr.type === 'both' || addr.isDefault
+        ) || addresses[0];
       }
-
+      
       // Fallback: Use order address data if available
       if (!shippingAddress && order?.shippingAddress) {
         shippingAddress = order.shippingAddress;
       }
-
+      
       // Set customer info regardless of address availability
       const customerInfo = {
         name: customer.name || '',
@@ -168,15 +142,13 @@ export default function UPSLabelCreator({
         console.log('✅ Auto-populated full shipping address');
       } else {
         // At least set customer info, user can fill address manually
-        setShipToAddress((prev) => ({
+        setShipToAddress(prev => ({
           ...prev,
           ...customerInfo,
         }));
-        console.log(
-          'ℹ️ Auto-populated customer info only, address needs manual entry'
-        );
+        console.log('ℹ️ Auto-populated customer info only, address needs manual entry');
       }
-
+      
       setReference1(orderId);
       setReference2(customer.name || '');
     }
@@ -184,11 +156,10 @@ export default function UPSLabelCreator({
 
   // Get shipping rates mutation
   const getRatesMutation = useMutation({
-    mutationFn: (data: any) =>
-      apiRequest('/api/shipping/get-rates', {
-        method: 'POST',
-        body: data,
-      }),
+    mutationFn: (data: any) => apiRequest('/api/shipping/get-rates', {
+      method: 'POST',
+      body: data,
+    }),
     onSuccess: (data) => {
       setRates(data.rates || []);
       setShowRates(true);
@@ -212,37 +183,34 @@ export default function UPSLabelCreator({
       // Show extended loading message for deployment environments
       toast({
         title: 'Creating Label',
-        description:
-          'Generating UPS shipping label... This may take up to 2 minutes in deployment.',
+        description: 'Generating UPS shipping label... This may take up to 2 minutes in deployment.',
       });
-
+      
       // Create abort controller for extended timeout
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 minute timeout
-
+      
       try {
         const response = await fetch('/api/shipping/create-label', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(data),
-          signal: controller.signal,
+          signal: controller.signal
         });
-
+        
         clearTimeout(timeoutId);
-
+        
         if (!response.ok) {
           const errorData = await response.json();
           throw new Error(errorData.error || 'Failed to create shipping label');
         }
-
+        
         return await response.json();
       } catch (error: any) {
         clearTimeout(timeoutId);
-
+        
         if (error.name === 'AbortError') {
-          throw new Error(
-            'Label creation timed out. This can happen in slow network conditions. Please try again.'
-          );
+          throw new Error('Label creation timed out. This can happen in slow network conditions. Please try again.');
         }
         throw error;
       }
@@ -266,36 +234,32 @@ export default function UPSLabelCreator({
 
   const handleGetRates = () => {
     if (!validateAddresses()) return;
-
+    
     getRatesMutation.mutate({
       shipToAddress,
       shipFromAddress,
       packageWeight: packageInfo.weight,
-      packageDimensions: packageInfo.length
-        ? {
-            length: packageInfo.length,
-            width: packageInfo.width,
-            height: packageInfo.height,
-          }
-        : undefined,
+      packageDimensions: packageInfo.length ? {
+        length: packageInfo.length,
+        width: packageInfo.width,
+        height: packageInfo.height,
+      } : undefined,
     });
   };
 
   const handleCreateLabel = () => {
     if (!validateAddresses()) return;
-
+    
     createLabelMutation.mutate({
       orderId,
       shipToAddress,
       shipFromAddress,
       packageWeight: packageInfo.weight,
-      packageDimensions: packageInfo.length
-        ? {
-            length: packageInfo.length,
-            width: packageInfo.width,
-            height: packageInfo.height,
-          }
-        : undefined,
+      packageDimensions: packageInfo.length ? {
+        length: packageInfo.length,
+        width: packageInfo.width,
+        height: packageInfo.height,
+      } : undefined,
       serviceType: selectedService,
       reference1,
       reference2,
@@ -303,13 +267,8 @@ export default function UPSLabelCreator({
   };
 
   const validateAddresses = () => {
-    if (
-      !shipToAddress.name ||
-      !shipToAddress.street ||
-      !shipToAddress.city ||
-      !shipToAddress.state ||
-      !shipToAddress.zipCode
-    ) {
+    if (!shipToAddress.name || !shipToAddress.street || !shipToAddress.city || 
+        !shipToAddress.state || !shipToAddress.zipCode) {
       toast({
         title: 'Invalid Ship To Address',
         description: 'Please fill in all required shipping address fields',
@@ -352,76 +311,46 @@ export default function UPSLabelCreator({
                   <Label>Company Name</Label>
                   <Input
                     value={shipFromAddress.name}
-                    onChange={(e) =>
-                      setShipFromAddress((prev) => ({
-                        ...prev,
-                        name: e.target.value,
-                      }))
-                    }
+                    onChange={(e) => setShipFromAddress(prev => ({ ...prev, name: e.target.value }))}
                   />
                 </div>
                 <div>
                   <Label>Contact</Label>
                   <Input
                     value={shipFromAddress.contact}
-                    onChange={(e) =>
-                      setShipFromAddress((prev) => ({
-                        ...prev,
-                        contact: e.target.value,
-                      }))
-                    }
+                    onChange={(e) => setShipFromAddress(prev => ({ ...prev, contact: e.target.value }))}
                   />
                 </div>
               </div>
-
+              
               <div>
                 <Label>Street Address</Label>
                 <Input
                   value={shipFromAddress.street}
-                  onChange={(e) =>
-                    setShipFromAddress((prev) => ({
-                      ...prev,
-                      street: e.target.value,
-                    }))
-                  }
+                  onChange={(e) => setShipFromAddress(prev => ({ ...prev, street: e.target.value }))}
                 />
               </div>
-
+              
               <div className="grid grid-cols-3 gap-4">
                 <div>
                   <Label>City</Label>
                   <Input
                     value={shipFromAddress.city}
-                    onChange={(e) =>
-                      setShipFromAddress((prev) => ({
-                        ...prev,
-                        city: e.target.value,
-                      }))
-                    }
+                    onChange={(e) => setShipFromAddress(prev => ({ ...prev, city: e.target.value }))}
                   />
                 </div>
                 <div>
                   <Label>State</Label>
                   <Input
                     value={shipFromAddress.state}
-                    onChange={(e) =>
-                      setShipFromAddress((prev) => ({
-                        ...prev,
-                        state: e.target.value,
-                      }))
-                    }
+                    onChange={(e) => setShipFromAddress(prev => ({ ...prev, state: e.target.value }))}
                   />
                 </div>
                 <div>
                   <Label>ZIP Code</Label>
                   <Input
                     value={shipFromAddress.zipCode}
-                    onChange={(e) =>
-                      setShipFromAddress((prev) => ({
-                        ...prev,
-                        zipCode: e.target.value,
-                      }))
-                    }
+                    onChange={(e) => setShipFromAddress(prev => ({ ...prev, zipCode: e.target.value }))}
                   />
                 </div>
               </div>
@@ -442,89 +371,54 @@ export default function UPSLabelCreator({
                   <Label>Customer Name *</Label>
                   <Input
                     value={shipToAddress.name}
-                    onChange={(e) =>
-                      setShipToAddress((prev) => ({
-                        ...prev,
-                        name: e.target.value,
-                      }))
-                    }
+                    onChange={(e) => setShipToAddress(prev => ({ ...prev, name: e.target.value }))}
                   />
                 </div>
                 <div>
                   <Label>Company</Label>
                   <Input
                     value={shipToAddress.company}
-                    onChange={(e) =>
-                      setShipToAddress((prev) => ({
-                        ...prev,
-                        company: e.target.value,
-                      }))
-                    }
+                    onChange={(e) => setShipToAddress(prev => ({ ...prev, company: e.target.value }))}
                   />
                 </div>
               </div>
-
+              
               <div>
                 <Label>Street Address *</Label>
                 <Input
                   value={shipToAddress.street}
-                  onChange={(e) =>
-                    setShipToAddress((prev) => ({
-                      ...prev,
-                      street: e.target.value,
-                    }))
-                  }
+                  onChange={(e) => setShipToAddress(prev => ({ ...prev, street: e.target.value }))}
                 />
               </div>
-
+              
               <div>
                 <Label>Apt/Suite/Unit</Label>
                 <Input
                   value={shipToAddress.street2}
-                  onChange={(e) =>
-                    setShipToAddress((prev) => ({
-                      ...prev,
-                      street2: e.target.value,
-                    }))
-                  }
+                  onChange={(e) => setShipToAddress(prev => ({ ...prev, street2: e.target.value }))}
                 />
               </div>
-
+              
               <div className="grid grid-cols-3 gap-4">
                 <div>
                   <Label>City *</Label>
                   <Input
                     value={shipToAddress.city}
-                    onChange={(e) =>
-                      setShipToAddress((prev) => ({
-                        ...prev,
-                        city: e.target.value,
-                      }))
-                    }
+                    onChange={(e) => setShipToAddress(prev => ({ ...prev, city: e.target.value }))}
                   />
                 </div>
                 <div>
                   <Label>State *</Label>
                   <Input
                     value={shipToAddress.state}
-                    onChange={(e) =>
-                      setShipToAddress((prev) => ({
-                        ...prev,
-                        state: e.target.value,
-                      }))
-                    }
+                    onChange={(e) => setShipToAddress(prev => ({ ...prev, state: e.target.value }))}
                   />
                 </div>
                 <div>
                   <Label>ZIP Code *</Label>
                   <Input
                     value={shipToAddress.zipCode}
-                    onChange={(e) =>
-                      setShipToAddress((prev) => ({
-                        ...prev,
-                        zipCode: e.target.value,
-                      }))
-                    }
+                    onChange={(e) => setShipToAddress(prev => ({ ...prev, zipCode: e.target.value }))}
                   />
                 </div>
               </div>
@@ -534,12 +428,7 @@ export default function UPSLabelCreator({
                   <Label>Phone</Label>
                   <Input
                     value={shipToAddress.phone}
-                    onChange={(e) =>
-                      setShipToAddress((prev) => ({
-                        ...prev,
-                        phone: e.target.value,
-                      }))
-                    }
+                    onChange={(e) => setShipToAddress(prev => ({ ...prev, phone: e.target.value }))}
                   />
                 </div>
                 <div>
@@ -547,12 +436,7 @@ export default function UPSLabelCreator({
                   <Input
                     type="email"
                     value={shipToAddress.email}
-                    onChange={(e) =>
-                      setShipToAddress((prev) => ({
-                        ...prev,
-                        email: e.target.value,
-                      }))
-                    }
+                    onChange={(e) => setShipToAddress(prev => ({ ...prev, email: e.target.value }))}
                   />
                 </div>
               </div>
@@ -577,12 +461,7 @@ export default function UPSLabelCreator({
                   step="0.1"
                   min="0.1"
                   value={packageInfo.weight}
-                  onChange={(e) =>
-                    setPackageInfo((prev) => ({
-                      ...prev,
-                      weight: parseFloat(e.target.value) || 1,
-                    }))
-                  }
+                  onChange={(e) => setPackageInfo(prev => ({ ...prev, weight: parseFloat(e.target.value) || 1 }))}
                 />
               </div>
               <div>
@@ -591,12 +470,7 @@ export default function UPSLabelCreator({
                   type="number"
                   step="0.1"
                   value={packageInfo.length}
-                  onChange={(e) =>
-                    setPackageInfo((prev) => ({
-                      ...prev,
-                      length: parseFloat(e.target.value),
-                    }))
-                  }
+                  onChange={(e) => setPackageInfo(prev => ({ ...prev, length: parseFloat(e.target.value) }))}
                 />
               </div>
               <div>
@@ -605,12 +479,7 @@ export default function UPSLabelCreator({
                   type="number"
                   step="0.1"
                   value={packageInfo.width}
-                  onChange={(e) =>
-                    setPackageInfo((prev) => ({
-                      ...prev,
-                      width: parseFloat(e.target.value),
-                    }))
-                  }
+                  onChange={(e) => setPackageInfo(prev => ({ ...prev, width: parseFloat(e.target.value) }))}
                 />
               </div>
               <div>
@@ -619,12 +488,7 @@ export default function UPSLabelCreator({
                   type="number"
                   step="0.1"
                   value={packageInfo.height}
-                  onChange={(e) =>
-                    setPackageInfo((prev) => ({
-                      ...prev,
-                      height: parseFloat(e.target.value),
-                    }))
-                  }
+                  onChange={(e) => setPackageInfo(prev => ({ ...prev, height: parseFloat(e.target.value) }))}
                 />
               </div>
             </div>
@@ -659,9 +523,7 @@ export default function UPSLabelCreator({
             className="flex items-center gap-2"
           >
             <DollarSign className="w-4 h-4" />
-            {getRatesMutation.isPending
-              ? 'Getting Rates...'
-              : 'Get Shipping Rates'}
+            {getRatesMutation.isPending ? 'Getting Rates...' : 'Get Shipping Rates'}
           </Button>
 
           {showRates && rates.length > 0 && (
@@ -674,9 +536,7 @@ export default function UPSLabelCreator({
                   <SelectItem key={rate.serviceCode} value={rate.serviceCode}>
                     <div className="flex justify-between w-full">
                       <span>{rate.serviceName}</span>
-                      <span className="ml-4 font-bold">
-                        ${rate.totalCharges.toFixed(2)}
-                      </span>
+                      <span className="ml-4 font-bold">${rate.totalCharges.toFixed(2)}</span>
                     </div>
                   </SelectItem>
                 ))}
@@ -696,9 +556,7 @@ export default function UPSLabelCreator({
             className="flex items-center gap-2"
           >
             <Truck className="w-4 h-4" />
-            {createLabelMutation.isPending
-              ? 'Creating Label...'
-              : 'Create Shipping Label'}
+            {createLabelMutation.isPending ? 'Creating Label...' : 'Create Shipping Label'}
           </Button>
         </div>
       </DialogContent>

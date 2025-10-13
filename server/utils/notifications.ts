@@ -12,9 +12,7 @@ export interface NotificationData {
   preferredMethods?: string[];
 }
 
-export async function sendCustomerNotification(
-  data: NotificationData
-): Promise<{
+export async function sendCustomerNotification(data: NotificationData): Promise<{
   success: boolean;
   methods: string[];
   errors?: string[];
@@ -22,7 +20,7 @@ export async function sendCustomerNotification(
   const results = {
     success: false,
     methods: [] as string[],
-    errors: [] as string[],
+    errors: [] as string[]
   };
 
   // Get customer preferences - look in both finalized and draft orders
@@ -33,9 +31,7 @@ export async function sendCustomerNotification(
   try {
     const { storage } = await import('../storage.js');
     const finalizedOrders = await storage.getAllFinalizedOrders();
-    const finalizedOrder = finalizedOrders.find(
-      (order: any) => order.orderId === data.orderId
-    );
+    const finalizedOrder = finalizedOrders.find((order: any) => order.orderId === data.orderId);
     if (finalizedOrder?.customerId) {
       order = finalizedOrder;
       const { storage } = await import('../storage.js');
@@ -50,9 +46,7 @@ export async function sendCustomerNotification(
     try {
       const { storage } = await import('../storage.js');
       const draftOrders = await storage.getAllOrderDrafts();
-      const draftOrder = draftOrders.find(
-        (order: any) => order.orderId === data.orderId
-      );
+      const draftOrder = draftOrders.find((order: any) => order.orderId === data.orderId);
 
       if (draftOrder?.customerId) {
         order = draftOrder;
@@ -64,57 +58,44 @@ export async function sendCustomerNotification(
   }
 
   if (!order || !customer) {
-    results.errors.push(
-      'Order or customer not found in either finalized or draft orders'
-    );
+    results.errors.push('Order or customer not found in either finalized or draft orders');
     return results;
   }
 
   // Determine notification methods
-  const preferredMethods = data.preferredMethods ||
-    (customer.preferredCommunicationMethod as string[]) || ['email'];
+  const preferredMethods = data.preferredMethods || customer.preferredCommunicationMethod as string[] || ['email'];
   const email = data.customerEmail || customer.email;
   const phone = data.customerPhone || customer.phone;
 
   // Send email notification if preferred and email available
   if (preferredMethods.includes('email') && email) {
     try {
-      await sendEmailNotification(
-        {
-          email,
-          orderId: data.orderId,
-          trackingNumber: data.trackingNumber,
-          carrier: data.carrier,
-          estimatedDelivery: data.estimatedDelivery,
-        },
-        customer?.id.toString()
-      );
+      await sendEmailNotification({
+        email,
+        orderId: data.orderId,
+        trackingNumber: data.trackingNumber,
+        carrier: data.carrier,
+        estimatedDelivery: data.estimatedDelivery
+      }, customer?.id.toString());
       results.methods.push('email');
     } catch (error) {
-      results.errors.push(
-        `Email failed: ${error instanceof Error ? error.message : 'Unknown error'}`
-      );
+      results.errors.push(`Email failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
   // Send SMS notification if preferred and phone available
   if (preferredMethods.includes('sms') && phone) {
     try {
-      await sendSMSNotification(
-        {
-          phone,
-          orderId: data.orderId,
-          trackingNumber: data.trackingNumber,
-          carrier: data.carrier,
-          estimatedDelivery: data.estimatedDelivery,
-        },
-        customer?.id.toString()
-      );
+      await sendSMSNotification({
+        phone,
+        orderId: data.orderId,
+        trackingNumber: data.trackingNumber,
+        carrier: data.carrier,
+        estimatedDelivery: data.estimatedDelivery
+      }, customer?.id.toString());
       results.methods.push('sms');
     } catch (error) {
-      results.errors.push(
-        `SMS failed: ${error instanceof Error ? error.message : 'Unknown error'}`
-      );
+      results.errors.push(`SMS failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
@@ -125,29 +106,26 @@ export async function sendCustomerNotification(
       .set({
         customerNotified: true,
         notificationMethod: results.methods.join(', '),
-        notificationSentAt: new Date(),
+        notificationSentAt: new Date()
       })
       .where(eq(orderDrafts.orderId, data.orderId));
-
+    
     results.success = true;
   }
 
   return results;
 }
 
-async function sendEmailNotification(
-  data: {
-    email: string;
-    orderId: string;
-    trackingNumber: string;
-    carrier: string;
-    estimatedDelivery?: Date;
-  },
-  customerId?: string
-) {
+async function sendEmailNotification(data: {
+  email: string;
+  orderId: string;
+  trackingNumber: string;
+  carrier: string;
+  estimatedDelivery?: Date;
+}, customerId?: string) {
   // Email notification logic
   const subject = `Your Order ${data.orderId} Has Shipped - AG Composites`;
-  const deliveryText = data.estimatedDelivery
+  const deliveryText = data.estimatedDelivery 
     ? `Estimated delivery: ${data.estimatedDelivery.toLocaleDateString()}`
     : 'Delivery information will be updated shortly.';
 
@@ -175,25 +153,24 @@ Phone: 256-723-8381
   console.log('Sending email shipping notification:', {
     to: data.email,
     subject,
-    message: message.substring(0, 100) + '...',
+    message: message.substring(0, 100) + '...'
   });
 
   // Use the actual email API endpoint
   try {
-    const baseUrl =
-      process.env.NODE_ENV === 'production' ? '' : 'http://localhost:5000';
+    const baseUrl = process.env.NODE_ENV === 'production' ? '' : 'http://localhost:5000';
     const response = await fetch(`${baseUrl}/api/communications/email`, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
+        'Content-Type': 'application/json'
       },
       body: JSON.stringify({
         to: data.email,
         subject: subject,
         message: message,
         customerId: customerId || data.orderId, // Use actual customer ID or fallback to order ID
-        orderId: data.orderId,
-      }),
+        orderId: data.orderId
+      })
     });
 
     if (!response.ok) {
@@ -202,10 +179,7 @@ Phone: 256-723-8381
     }
 
     const result = await response.json();
-    console.log(
-      'Email shipping notification sent successfully:',
-      result.externalId
-    );
+    console.log('Email shipping notification sent successfully:', result.externalId);
     return result;
   } catch (error) {
     console.error('Failed to send email shipping notification:', error);
@@ -213,38 +187,34 @@ Phone: 256-723-8381
   }
 }
 
-async function sendSMSNotification(
-  data: {
-    phone: string;
-    orderId: string;
-    trackingNumber: string;
-    carrier: string;
-    estimatedDelivery?: Date;
-  },
-  customerId?: string
-) {
+async function sendSMSNotification(data: {
+  phone: string;
+  orderId: string;
+  trackingNumber: string;
+  carrier: string;
+  estimatedDelivery?: Date;
+}, customerId?: string) {
   const message = `AG Composites: Your order ${data.orderId} has shipped! Track with ${data.trackingNumber} on ${data.carrier}. ${data.estimatedDelivery ? `Est. delivery: ${data.estimatedDelivery.toLocaleDateString()}` : ''}`;
 
   console.log('Sending SMS shipping notification:', {
     to: data.phone,
-    message: message.substring(0, 50) + '...',
+    message: message.substring(0, 50) + '...'
   });
 
   // Use the actual SMS API endpoint
   try {
-    const baseUrl =
-      process.env.NODE_ENV === 'production' ? '' : 'http://localhost:5000';
+    const baseUrl = process.env.NODE_ENV === 'production' ? '' : 'http://localhost:5000';
     const response = await fetch(`${baseUrl}/api/communications/sms`, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
+        'Content-Type': 'application/json'
       },
       body: JSON.stringify({
         to: data.phone,
         message: message,
         customerId: customerId || data.orderId, // Use actual customer ID or fallback to order ID
-        orderId: data.orderId,
-      }),
+        orderId: data.orderId
+      })
     });
 
     if (!response.ok) {
@@ -253,10 +223,7 @@ async function sendSMSNotification(
     }
 
     const result = await response.json();
-    console.log(
-      'SMS shipping notification sent successfully:',
-      result.externalId
-    );
+    console.log('SMS shipping notification sent successfully:', result.externalId);
     return result;
   } catch (error) {
     console.error('Failed to send SMS shipping notification:', error);
@@ -264,15 +231,12 @@ async function sendSMSNotification(
   }
 }
 
-export async function updateTrackingInfo(
-  orderId: string,
-  trackingData: {
-    trackingNumber: string;
-    carrier?: string;
-    shippedDate?: Date;
-    estimatedDelivery?: Date;
-  }
-) {
+export async function updateTrackingInfo(orderId: string, trackingData: {
+  trackingNumber: string;
+  carrier?: string;
+  shippedDate?: Date;
+  estimatedDelivery?: Date;
+}) {
   return await db
     .update(orderDrafts)
     .set({
@@ -280,7 +244,7 @@ export async function updateTrackingInfo(
       shippingCarrier: trackingData.carrier || 'UPS',
       shippedDate: trackingData.shippedDate || new Date(),
       estimatedDelivery: trackingData.estimatedDelivery,
-      shippingLabelGenerated: true,
+      shippingLabelGenerated: true
     })
     .where(eq(orderDrafts.orderId, orderId));
 }

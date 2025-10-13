@@ -1,12 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Download, FileText, AlertCircle } from 'lucide-react';
 import { fetchPdf, downloadPdf } from '@/utils/pdfUtils';
 import { useToast } from '@/hooks/use-toast';
@@ -19,12 +13,12 @@ interface PdfViewerProps {
   description?: string;
 }
 
-export default function PdfViewer({
-  endpoint,
-  orderId,
-  filename,
-  title = 'PDF Document',
-  description = 'Preview and download PDF document',
+export default function PdfViewer({ 
+  endpoint, 
+  orderId, 
+  filename, 
+  title = "PDF Document", 
+  description = "Preview and download PDF document" 
 }: PdfViewerProps) {
   const [pdfBlob, setPdfBlob] = useState<Blob | null>(null);
   const [objectUrl, setObjectUrl] = useState<string>('');
@@ -106,7 +100,10 @@ export default function PdfViewer({
         <CardContent>
           <div className="text-center py-8">
             <p className="text-destructive mb-4">{error}</p>
-            <Button onClick={() => window.location.reload()} variant="outline">
+            <Button
+              onClick={() => window.location.reload()}
+              variant="outline"
+            >
               Try Again
             </Button>
           </div>
@@ -126,12 +123,15 @@ export default function PdfViewer({
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex justify-end">
-          <Button onClick={handleDownload} className="flex items-center gap-2">
+          <Button
+            onClick={handleDownload}
+            className="flex items-center gap-2"
+          >
             <Download className="h-4 w-4" />
             Download PDF
           </Button>
         </div>
-
+        
         {objectUrl && (
           <div className="border rounded-lg overflow-hidden">
             <iframe

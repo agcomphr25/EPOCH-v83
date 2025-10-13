@@ -1,48 +1,14 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import {
-  Clock,
-  Edit,
-  Trash2,
-  Plus,
-  Search,
-  Calendar,
-  Filter,
-} from 'lucide-react';
+import { Clock, Edit, Trash2, Plus, Search, Calendar, Filter } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import type { TimeClockEntry, Employee } from '@shared/schema';
@@ -52,15 +18,13 @@ interface TimeClockAdminProps {
 }
 
 export default function TimeClockAdmin({ className }: TimeClockAdminProps) {
-  const [selectedDate, setSelectedDate] = useState(
-    new Date().toISOString().split('T')[0]
-  );
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [selectedEmployee, setSelectedEmployee] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [editingEntry, setEditingEntry] = useState<TimeClockEntry | null>(null);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-
+  
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -71,26 +35,21 @@ export default function TimeClockAdmin({ className }: TimeClockAdminProps) {
       const response = await fetch('/api/employees');
       if (!response.ok) throw new Error('Failed to fetch employees');
       return response.json() as Promise<Employee[]>;
-    },
+    }
   });
 
   // Fetch time clock entries
-  const {
-    data: timeEntries = [],
-    isLoading,
-    refetch,
-  } = useQuery({
+  const { data: timeEntries = [], isLoading, refetch } = useQuery({
     queryKey: ['/api/timeclock/entries', selectedEmployee, selectedDate],
     queryFn: async () => {
       const params = new URLSearchParams();
-      if (selectedEmployee && selectedEmployee !== 'all')
-        params.append('employeeId', selectedEmployee);
+      if (selectedEmployee && selectedEmployee !== 'all') params.append('employeeId', selectedEmployee);
       if (selectedDate) params.append('date', selectedDate);
-
+      
       const response = await fetch(`/api/timeclock/entries?${params}`);
       if (!response.ok) throw new Error('Failed to fetch time entries');
       return response.json() as Promise<TimeClockEntry[]>;
-    },
+    }
   });
 
   // Create entry mutation
@@ -99,7 +58,7 @@ export default function TimeClockAdmin({ className }: TimeClockAdminProps) {
       const response = await fetch('/api/timeclock/entries', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(entry),
+        body: JSON.stringify(entry)
       });
       if (!response.ok) throw new Error('Failed to create entry');
       return response.json();
@@ -112,19 +71,16 @@ export default function TimeClockAdmin({ className }: TimeClockAdminProps) {
     },
     onError: () => {
       toast({ title: 'Failed to create time entry', variant: 'destructive' });
-    },
+    }
   });
 
   // Update entry mutation
   const updateEntryMutation = useMutation({
-    mutationFn: async ({
-      id,
-      ...entry
-    }: Partial<TimeClockEntry> & { id: number }) => {
+    mutationFn: async ({ id, ...entry }: Partial<TimeClockEntry> & { id: number }) => {
       const response = await fetch(`/api/timeclock/entries/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(entry),
+        body: JSON.stringify(entry)
       });
       if (!response.ok) throw new Error('Failed to update entry');
       return response.json();
@@ -138,14 +94,14 @@ export default function TimeClockAdmin({ className }: TimeClockAdminProps) {
     },
     onError: () => {
       toast({ title: 'Failed to update time entry', variant: 'destructive' });
-    },
+    }
   });
 
   // Delete entry mutation
   const deleteEntryMutation = useMutation({
     mutationFn: async (id: number) => {
       const response = await fetch(`/api/timeclock/entries/${id}`, {
-        method: 'DELETE',
+        method: 'DELETE'
       });
       if (!response.ok) throw new Error('Failed to delete entry');
       return response.json();
@@ -157,19 +113,15 @@ export default function TimeClockAdmin({ className }: TimeClockAdminProps) {
     },
     onError: () => {
       toast({ title: 'Failed to delete time entry', variant: 'destructive' });
-    },
+    }
   });
 
   // Filter entries based on search
-  const filteredEntries = timeEntries.filter((entry) => {
+  const filteredEntries = timeEntries.filter(entry => {
     if (!searchTerm) return true;
-    const employee = employees.find(
-      (emp) => emp.employeeCode === entry.employeeId
-    );
-    return (
-      employee?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      entry.employeeId.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    const employee = employees.find(emp => emp.employeeCode === entry.employeeId);
+    return employee?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+           entry.employeeId.toLowerCase().includes(searchTerm.toLowerCase());
   });
 
   const handleEdit = (entry: TimeClockEntry) => {
@@ -183,15 +135,10 @@ export default function TimeClockAdmin({ className }: TimeClockAdminProps) {
     }
   };
 
-  const calculateHours = (
-    clockIn: Date | string | null,
-    clockOut: Date | string | null
-  ) => {
+  const calculateHours = (clockIn: Date | string | null, clockOut: Date | string | null) => {
     if (!clockIn || !clockOut) return 'In Progress';
-    const clockInTime =
-      typeof clockIn === 'string' ? new Date(clockIn) : clockIn;
-    const clockOutTime =
-      typeof clockOut === 'string' ? new Date(clockOut) : clockOut;
+    const clockInTime = typeof clockIn === 'string' ? new Date(clockIn) : clockIn;
+    const clockOutTime = typeof clockOut === 'string' ? new Date(clockOut) : clockOut;
     const diff = clockOutTime.getTime() - clockInTime.getTime();
     const hours = Math.floor(diff / (1000 * 60 * 60));
     const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
@@ -199,12 +146,12 @@ export default function TimeClockAdmin({ className }: TimeClockAdminProps) {
   };
 
   const getEmployeeName = (employeeId: string) => {
-    const employee = employees.find((emp) => emp.employeeCode === employeeId);
+    const employee = employees.find(emp => emp.employeeCode === employeeId);
     return employee?.name || `Employee ${employeeId}`;
   };
 
   const getEmployeeById = (employeeId: string) => {
-    return employees.find((emp) => emp.employeeCode === employeeId);
+    return employees.find(emp => emp.employeeCode === employeeId);
   };
 
   return (
@@ -219,7 +166,7 @@ export default function TimeClockAdmin({ className }: TimeClockAdminProps) {
             Manage employee time clock entries and punches
           </CardDescription>
         </CardHeader>
-
+        
         <CardContent className="space-y-4">
           {/* Filters and Controls */}
           <div className="flex flex-col md:flex-row gap-4">
@@ -236,30 +183,24 @@ export default function TimeClockAdmin({ className }: TimeClockAdminProps) {
                 />
               </div>
             </div>
-
+            
             <div className="flex-1">
               <Label htmlFor="employee">Filter by Employee</Label>
-              <Select
-                value={selectedEmployee}
-                onValueChange={setSelectedEmployee}
-              >
+              <Select value={selectedEmployee} onValueChange={setSelectedEmployee}>
                 <SelectTrigger>
                   <SelectValue placeholder="All Employees" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Employees</SelectItem>
                   {employees.map((employee) => (
-                    <SelectItem
-                      key={employee.id}
-                      value={employee.employeeCode || employee.id.toString()}
-                    >
+                    <SelectItem key={employee.id} value={employee.employeeCode || employee.id.toString()}>
                       {employee.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
-
+            
             <div className="flex-1">
               <Label htmlFor="date">Filter by Date</Label>
               <Input
@@ -269,7 +210,7 @@ export default function TimeClockAdmin({ className }: TimeClockAdminProps) {
                 onChange={(e) => setSelectedDate(e.target.value)}
               />
             </div>
-
+            
             <div className="flex items-end">
               <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
                 <DialogTrigger asChild>
@@ -285,7 +226,7 @@ export default function TimeClockAdmin({ className }: TimeClockAdminProps) {
                       Create a new time clock entry for an employee
                     </DialogDescription>
                   </DialogHeader>
-                  <TimeEntryForm
+                  <TimeEntryForm 
                     employees={employees}
                     onSubmit={(data) => createEntryMutation.mutate(data)}
                     isLoading={createEntryMutation.isPending}
@@ -320,10 +261,7 @@ export default function TimeClockAdmin({ className }: TimeClockAdminProps) {
                   </TableRow>
                 ) : filteredEntries.length === 0 ? (
                   <TableRow>
-                    <TableCell
-                      colSpan={7}
-                      className="text-center py-8 text-gray-500"
-                    >
+                    <TableCell colSpan={7} className="text-center py-8 text-gray-500">
                       No time entries found
                     </TableCell>
                   </TableRow>
@@ -335,22 +273,16 @@ export default function TimeClockAdmin({ className }: TimeClockAdminProps) {
                       </TableCell>
                       <TableCell>{entry.date}</TableCell>
                       <TableCell>
-                        {entry.clockIn
-                          ? format(new Date(entry.clockIn), 'h:mm a')
-                          : '-'}
+                        {entry.clockIn ? format(new Date(entry.clockIn), 'h:mm a') : '-'}
                       </TableCell>
                       <TableCell>
-                        {entry.clockOut
-                          ? format(new Date(entry.clockOut), 'h:mm a')
-                          : '-'}
+                        {entry.clockOut ? format(new Date(entry.clockOut), 'h:mm a') : '-'}
                       </TableCell>
                       <TableCell>
                         {calculateHours(entry.clockIn, entry.clockOut)}
                       </TableCell>
                       <TableCell>
-                        <Badge
-                          variant={entry.clockOut ? 'secondary' : 'default'}
-                        >
+                        <Badge variant={entry.clockOut ? 'secondary' : 'default'}>
                           {entry.clockOut ? 'Complete' : 'In Progress'}
                         </Badge>
                       </TableCell>
@@ -392,12 +324,10 @@ export default function TimeClockAdmin({ className }: TimeClockAdminProps) {
             </DialogDescription>
           </DialogHeader>
           {editingEntry && (
-            <TimeEntryForm
+            <TimeEntryForm 
               employees={employees}
               initialData={editingEntry}
-              onSubmit={(data) =>
-                updateEntryMutation.mutate({ ...data, id: editingEntry.id })
-              }
+              onSubmit={(data) => updateEntryMutation.mutate({ ...data, id: editingEntry.id })}
               isLoading={updateEntryMutation.isPending}
             />
           )}
@@ -415,20 +345,13 @@ interface TimeEntryFormProps {
   isLoading: boolean;
 }
 
-function TimeEntryForm({
-  employees,
-  initialData,
-  onSubmit,
-  isLoading,
-}: TimeEntryFormProps) {
+function TimeEntryForm({ employees, initialData, onSubmit, isLoading }: TimeEntryFormProps) {
   // Convert UTC timestamp to local datetime-local format
   const toLocalDateTimeString = (timestamp: string | Date | null) => {
     if (!timestamp) return '';
     const date = new Date(timestamp);
     // Get local timezone offset and adjust
-    const localDate = new Date(
-      date.getTime() - date.getTimezoneOffset() * 60000
-    );
+    const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
     return localDate.toISOString().slice(0, 16);
   };
 
@@ -437,7 +360,7 @@ function TimeEntryForm({
     date: initialData?.date || new Date().toISOString().split('T')[0],
     currentDate: new Date().toISOString().split('T')[0],
     clockIn: toLocalDateTimeString(initialData?.clockIn),
-    clockOut: toLocalDateTimeString(initialData?.clockOut),
+    clockOut: toLocalDateTimeString(initialData?.clockOut)
   });
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -446,7 +369,7 @@ function TimeEntryForm({
       employeeId: formData.employeeId,
       date: formData.date,
       clockIn: formData.clockIn ? new Date(formData.clockIn) : null,
-      clockOut: formData.clockOut ? new Date(formData.clockOut) : null,
+      clockOut: formData.clockOut ? new Date(formData.clockOut) : null
     });
   };
 
@@ -454,21 +377,16 @@ function TimeEntryForm({
     <form onSubmit={handleSubmit} className="space-y-4">
       <div>
         <Label htmlFor="employee">Employee</Label>
-        <Select
-          value={formData.employeeId}
-          onValueChange={(value) =>
-            setFormData((prev) => ({ ...prev, employeeId: value }))
-          }
+        <Select 
+          value={formData.employeeId} 
+          onValueChange={(value) => setFormData(prev => ({ ...prev, employeeId: value }))}
         >
           <SelectTrigger>
             <SelectValue placeholder="Select Employee" />
           </SelectTrigger>
           <SelectContent>
             {employees.map((employee) => (
-              <SelectItem
-                key={employee.id}
-                value={employee.employeeCode || employee.id.toString()}
-              >
+              <SelectItem key={employee.id} value={employee.employeeCode || employee.id.toString()}>
                 {employee.name}
               </SelectItem>
             ))}
@@ -482,9 +400,7 @@ function TimeEntryForm({
           id="date"
           type="date"
           value={formData.date}
-          onChange={(e) =>
-            setFormData((prev) => ({ ...prev, date: e.target.value }))
-          }
+          onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
           required
         />
       </div>
@@ -495,9 +411,7 @@ function TimeEntryForm({
           id="currentDate"
           type="date"
           value={formData.currentDate}
-          onChange={(e) =>
-            setFormData((prev) => ({ ...prev, currentDate: e.target.value }))
-          }
+          onChange={(e) => setFormData(prev => ({ ...prev, currentDate: e.target.value }))}
           required
         />
       </div>
@@ -508,9 +422,7 @@ function TimeEntryForm({
           id="clockIn"
           type="datetime-local"
           value={formData.clockIn}
-          onChange={(e) =>
-            setFormData((prev) => ({ ...prev, clockIn: e.target.value }))
-          }
+          onChange={(e) => setFormData(prev => ({ ...prev, clockIn: e.target.value }))}
         />
       </div>
 
@@ -520,9 +432,7 @@ function TimeEntryForm({
           id="clockOut"
           type="datetime-local"
           value={formData.clockOut}
-          onChange={(e) =>
-            setFormData((prev) => ({ ...prev, clockOut: e.target.value }))
-          }
+          onChange={(e) => setFormData(prev => ({ ...prev, clockOut: e.target.value }))}
         />
       </div>
 
@@ -532,11 +442,7 @@ function TimeEntryForm({
           disabled={isLoading || !formData.employeeId || !formData.date}
           className="bg-blue-500 hover:bg-blue-600"
         >
-          {isLoading
-            ? 'Saving...'
-            : initialData
-              ? 'Update Entry'
-              : 'Create Entry'}
+          {isLoading ? 'Saving...' : initialData ? 'Update Entry' : 'Create Entry'}
         </Button>
       </div>
     </form>

@@ -1,4 +1,4 @@
-import { apiRequest } from '@/lib/queryClient';
+import { apiRequest } from "@/lib/queryClient";
 
 // Production Order Types
 export interface ProductionOrder {
@@ -36,29 +36,21 @@ export async function fetchProductionOrders(): Promise<ProductionOrder[]> {
   return response;
 }
 
-export async function updateProductionOrder(
-  id: number,
-  data: ProductionOrderUpdate
-): Promise<ProductionOrder> {
+export async function updateProductionOrder(id: number, data: ProductionOrderUpdate): Promise<ProductionOrder> {
   const response = await apiRequest(`/api/production-orders/${id}`, {
     method: 'PUT',
     body: JSON.stringify(data),
     headers: {
-      'Content-Type': 'application/json',
-    },
+      'Content-Type': 'application/json'
+    }
   });
   return response;
 }
 
-export async function generateProductionOrdersFromPO(
-  poId: number
-): Promise<{ success: boolean; message: string; orders: ProductionOrder[] }> {
-  const response = await apiRequest(
-    `/api/pos/${poId}/generate-production-orders`,
-    {
-      method: 'POST',
-    }
-  );
+export async function generateProductionOrdersFromPO(poId: number): Promise<{ success: boolean; message: string; orders: ProductionOrder[] }> {
+  const response = await apiRequest(`/api/pos/${poId}/generate-production-orders`, {
+    method: 'POST'
+  });
   return response;
 }
 
@@ -68,10 +60,10 @@ export function getProductionSummary(orders: ProductionOrder[]) {
     total: orders.length,
     pending: 0,
     laidUp: 0,
-    shipped: 0,
+    shipped: 0
   };
 
-  orders.forEach((order) => {
+  orders.forEach(order => {
     switch (order.productionStatus) {
       case 'PENDING':
         summary.pending++;
@@ -89,23 +81,20 @@ export function getProductionSummary(orders: ProductionOrder[]) {
 }
 
 export function getProductionSummaryByPO(orders: ProductionOrder[]) {
-  const summaryByPO: Record<
-    string,
-    {
-      poNumber: string;
-      customerName: string;
-      total: number;
-      pending: number;
-      laidUp: number;
-      shipped: number;
-      remainingToLayup: number;
-      remainingToShip: number;
-    }
-  > = {};
+  const summaryByPO: Record<string, {
+    poNumber: string;
+    customerName: string;
+    total: number;
+    pending: number;
+    laidUp: number;
+    shipped: number;
+    remainingToLayup: number;
+    remainingToShip: number;
+  }> = {};
 
-  orders.forEach((order) => {
+  orders.forEach(order => {
     const key = `${order.poId}-${order.poNumber}`;
-
+    
     if (!summaryByPO[key]) {
       summaryByPO[key] = {
         poNumber: order.poNumber,
@@ -115,7 +104,7 @@ export function getProductionSummaryByPO(orders: ProductionOrder[]) {
         laidUp: 0,
         shipped: 0,
         remainingToLayup: 0,
-        remainingToShip: 0,
+        remainingToShip: 0
       };
     }
 
@@ -136,7 +125,7 @@ export function getProductionSummaryByPO(orders: ProductionOrder[]) {
   });
 
   // Calculate remaining counts
-  Object.values(summaryByPO).forEach((summary) => {
+  Object.values(summaryByPO).forEach(summary => {
     summary.remainingToLayup = summary.pending;
     summary.remainingToShip = summary.pending + summary.laidUp;
   });

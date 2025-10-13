@@ -2,12 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useLocation } from 'wouter';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
@@ -18,13 +13,7 @@ import { BarcodeScanner } from '@/components/BarcodeScanner';
 import { toast } from 'react-hot-toast';
 import { format, isAfter } from 'date-fns';
 import { OrderTooltip } from '@/components/OrderTooltip';
-import {
-  AlertTriangle,
-  FileText,
-  Eye,
-  TrendingDown,
-  Search,
-} from 'lucide-react';
+import { AlertTriangle, FileText, Eye, TrendingDown, Search } from 'lucide-react';
 import { apiRequest } from '@/lib/queryClient';
 import { SalesOrderModal } from '@/components/SalesOrderModal';
 import { getDisplayOrderId } from '@/lib/orderUtils';
@@ -32,60 +21,49 @@ import { OrderSearchBox } from '@/components/OrderSearchBox';
 
 export default function FinishQCPage() {
   const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
-  const [selectAllByTechnician, setSelectAllByTechnician] = useState<
-    Record<string, boolean>
-  >({});
+  const [selectAllByTechnician, setSelectAllByTechnician] = useState<Record<string, boolean>>({});
   const [salesOrderModalOpen, setSalesOrderModalOpen] = useState(false);
   const [selectedOrderId, setSelectedOrderId] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState('');
-  const [highlightedOrderId, setHighlightedOrderId] = useState<string | null>(
-    null
-  );
+  const [highlightedOrderId, setHighlightedOrderId] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
 
   // Fetch orders in Finish QC
   const { data: orders = [], isLoading } = useQuery({
     queryKey: ['/api/orders/department', 'Finish QC'],
-    enabled: true,
-  }) as { data: any[]; isLoading: boolean };
+    enabled: true
+  }) as { data: any[], isLoading: boolean };
 
   // Fetch stock models for tooltips
   const { data: stockModels = [] } = useQuery({
     queryKey: ['/api/stock-models'],
-    enabled: true,
+    enabled: true
   });
 
   // Fetch all kickbacks to determine which orders have kickbacks
   const { data: allKickbacks = [] } = useQuery({
     queryKey: ['/api/kickbacks'],
-    refetchInterval: 30000, // Refresh every 30 seconds
+    refetchInterval: 30000 // Refresh every 30 seconds
   });
 
   // Helper function to check if an order has kickbacks
   const hasKickbacks = (orderId: string) => {
-    return (allKickbacks as any[]).some(
-      (kickback: any) => kickback.orderId === orderId
-    );
+    return (allKickbacks as any[]).some((kickback: any) => kickback.orderId === orderId);
   };
 
   // Helper function to get the most severe kickback status for an order
   const getKickbackStatus = (orderId: string) => {
-    const orderKickbacks = (allKickbacks as any[]).filter(
-      (kickback: any) => kickback.orderId === orderId
-    );
+    const orderKickbacks = (allKickbacks as any[]).filter((kickback: any) => kickback.orderId === orderId);
     if (orderKickbacks.length === 0) return null;
 
     // Priority order: CRITICAL > HIGH > MEDIUM > LOW
     const priorities = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'];
-    const highestPriority = orderKickbacks.reduce(
-      (highest: string, kickback: any) => {
-        const currentIndex = priorities.indexOf(kickback.priority);
-        const highestIndex = priorities.indexOf(highest);
-        return currentIndex < highestIndex ? kickback.priority : highest;
-      },
-      'LOW'
-    );
+    const highestPriority = orderKickbacks.reduce((highest: string, kickback: any) => {
+      const currentIndex = priorities.indexOf(kickback.priority);
+      const highestIndex = priorities.indexOf(highest);
+      return currentIndex < highestIndex ? kickback.priority : highest;
+    }, 'LOW');
 
     return highestPriority;
   };
@@ -104,27 +82,22 @@ export default function FinishQCPage() {
   // Filter orders based on search query
   const filteredOrders = useMemo(() => {
     if (!searchQuery.trim()) return orders;
-
+    
     const query = searchQuery.toLowerCase().trim();
     return orders.filter((order: any) => {
       const orderId = order.orderId?.toLowerCase() || '';
       const fbNumber = order.fbOrderNumber?.toLowerCase() || '';
-      const displayOrderId =
-        getDisplayOrderId(order.orderId)?.toLowerCase() || '';
-
-      return (
-        orderId.includes(query) ||
-        fbNumber.includes(query) ||
-        displayOrderId.includes(query)
-      );
+      const displayOrderId = getDisplayOrderId(order.orderId)?.toLowerCase() || '';
+      
+      return orderId.includes(query) || 
+             fbNumber.includes(query) || 
+             displayOrderId.includes(query);
     });
   }, [orders, searchQuery]);
 
   // Handle order search selection
   const handleOrderSearchSelect = (order: any) => {
-    const orderExists = filteredOrders.some(
-      (o: any) => o.orderId === order.orderId
-    );
+    const orderExists = filteredOrders.some((o: any) => o.orderId === order.orderId);
     if (orderExists) {
       setHighlightedOrderId(order.orderId);
       // Auto-scroll to the highlighted order
@@ -143,18 +116,14 @@ export default function FinishQCPage() {
   // Handle search with auto-selection
   const handleSearchWithSelection = (query: string) => {
     setSearchQuery(query);
-
+    
     if (query.trim()) {
       // Auto-select matching orders after a short delay
       setTimeout(() => {
-        const matchingOrderIds = filteredOrders.map(
-          (order: any) => order.orderId
-        );
+        const matchingOrderIds = filteredOrders.map((order: any) => order.orderId);
         if (matchingOrderIds.length > 0) {
           setSelectedOrders(new Set(matchingOrderIds));
-          toast.success(
-            `${matchingOrderIds.length} matching order(s) selected`
-          );
+          toast.success(`${matchingOrderIds.length} matching order(s) selected`);
         }
       }, 300);
     }
@@ -162,50 +131,46 @@ export default function FinishQCPage() {
 
   // Group orders by technician and sort (memoized to prevent re-renders)
   const ordersByTechnician = useMemo(() => {
-    const grouped = filteredOrders.reduce(
-      (acc: Record<string, any[]>, order: any) => {
-        // Use the assigned technician from the database, or default to 'Unassigned' if empty
-        const technician = order.assignedTechnician || 'Unassigned';
-        if (!acc[technician]) {
-          acc[technician] = [];
-        }
-        acc[technician].push(order);
-        return acc;
-      },
-      {}
-    );
+    const grouped = filteredOrders.reduce((acc: Record<string, any[]>, order: any) => {
+      // Use the assigned technician from the database, or default to 'Unassigned' if empty
+      const technician = order.assignedTechnician || 'Unassigned';
+      if (!acc[technician]) {
+        acc[technician] = [];
+      }
+      acc[technician].push(order);
+      return acc;
+    }, {});
 
     // Sort orders within each technician group: overdue first, then alphabetically/numerically
-    Object.keys(grouped).forEach((technician) => {
+    Object.keys(grouped).forEach(technician => {
       grouped[technician].sort((a: any, b: any) => {
         const now = new Date();
         const aIsOverdue = a.dueDate && isAfter(now, new Date(a.dueDate));
         const bIsOverdue = b.dueDate && isAfter(now, new Date(b.dueDate));
-
+        
         // Prioritize overdue orders at the top
         if (aIsOverdue && !bIsOverdue) return -1;
         if (!aIsOverdue && bIsOverdue) return 1;
-
+        
         // If both overdue or both not overdue, sort by due date first (if available)
         if (a.dueDate && b.dueDate) {
-          const dateCompare =
-            new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+          const dateCompare = new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
           if (dateCompare !== 0) return dateCompare;
         }
-
+        
         // Extract numeric part from order ID for proper sorting
         const getNumeric = (orderId: string) => {
           const match = orderId.match(/(\d+)/);
           return match ? parseInt(match[1]) : 0;
         };
-
+        
         const aNum = getNumeric(a.orderId);
         const bNum = getNumeric(b.orderId);
-
+        
         if (aNum !== bNum) {
           return aNum - bNum;
         }
-
+        
         // If numeric parts are same, sort alphabetically
         return a.orderId.localeCompare(b.orderId);
       });
@@ -222,8 +187,8 @@ export default function FinishQCPage() {
         body: JSON.stringify({
           orderIds: orderIds,
           department: 'Paint',
-          status: 'IN_PROGRESS',
-        }),
+          status: 'IN_PROGRESS'
+        })
       });
       return response;
     },
@@ -232,20 +197,14 @@ export default function FinishQCPage() {
       setSelectedOrders(new Set());
       setSelectAllByTechnician({});
       queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
-      queryClient.invalidateQueries({
-        queryKey: ['/api/orders/with-payment-status'],
-      });
-      queryClient.invalidateQueries({
-        queryKey: ['/api/orders/department', 'Finish QC'],
-      });
-      queryClient.invalidateQueries({
-        queryKey: ['/api/orders/department', 'Paint'],
-      });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/department', 'Finish QC'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/department', 'Paint'] });
     },
     onError: (error) => {
       console.error('Error moving orders to Paint:', error);
       toast.error('Failed to move orders to Paint');
-    },
+    }
   });
 
   // Handle individual order selection
@@ -263,30 +222,28 @@ export default function FinishQCPage() {
   const handleSelectAllTechnician = (technician: string, checked: boolean) => {
     const newSelected = new Set(selectedOrders);
     const technicianOrders = ordersByTechnician[technician] || [];
-
+    
     if (checked) {
-      technicianOrders.forEach((order) => newSelected.add(order.orderId));
+      technicianOrders.forEach(order => newSelected.add(order.orderId));
     } else {
-      technicianOrders.forEach((order) => newSelected.delete(order.orderId));
+      technicianOrders.forEach(order => newSelected.delete(order.orderId));
     }
-
+    
     setSelectedOrders(newSelected);
-    setSelectAllByTechnician((prev) => ({ ...prev, [technician]: checked }));
+    setSelectAllByTechnician(prev => ({ ...prev, [technician]: checked }));
   };
 
   // Update select all checkboxes based on individual selections
   useEffect(() => {
     const newSelectAll: Record<string, boolean> = {};
-    Object.keys(ordersByTechnician).forEach((technician) => {
+    Object.keys(ordersByTechnician).forEach(technician => {
       const technicianOrders = ordersByTechnician[technician];
-      const selectedInTechnician = technicianOrders.filter((order: any) =>
+      const selectedInTechnician = technicianOrders.filter((order: any) => 
         selectedOrders.has(order.orderId)
       ).length;
-      newSelectAll[technician] =
-        selectedInTechnician === technicianOrders.length &&
-        technicianOrders.length > 0;
+      newSelectAll[technician] = selectedInTechnician === technicianOrders.length && technicianOrders.length > 0;
     });
-
+    
     // Only update if the state has actually changed
     const currentState = JSON.stringify(selectAllByTechnician);
     const newState = JSON.stringify(newSelectAll);
@@ -307,7 +264,7 @@ export default function FinishQCPage() {
   const getTextureInfo = (order: any) => {
     if (!order.features) return 'No texture';
     const features = order.features;
-
+    
     if (features.texture_options) {
       if (features.texture_options === 'no_texture') {
         return 'No texture';
@@ -321,7 +278,7 @@ export default function FinishQCPage() {
         return features.texture_options.replace(/_/g, ' ');
       }
     }
-
+    
     return 'No texture';
   };
 
@@ -329,7 +286,7 @@ export default function FinishQCPage() {
   const getPaintColor = (order: any) => {
     if (!order.features) return 'No paint';
     const features = order.features;
-
+    
     // Check paint_options_combined first (newer format)
     if (features.paint_options_combined) {
       const paintOption = features.paint_options_combined;
@@ -343,7 +300,7 @@ export default function FinishQCPage() {
       }
       return paintOption.replace(/_/g, ' ');
     }
-
+    
     // Check paint_options (older format)
     if (features.paint_options) {
       if (features.paint_options === 'no_paint') {
@@ -351,7 +308,7 @@ export default function FinishQCPage() {
       }
       return features.paint_options.replace(/_/g, ' ');
     }
-
+    
     return 'No paint';
   };
 
@@ -374,18 +331,16 @@ export default function FinishQCPage() {
             Quality control review organized by technician
           </p>
         </div>
-
+        
         <div className="flex gap-2">
           <Button
             onClick={handleMoveToPaint}
-            disabled={
-              selectedOrders.size === 0 || moveToPaintMutation.isPending
-            }
+            disabled={selectedOrders.size === 0 || moveToPaintMutation.isPending}
             className="bg-blue-600 hover:bg-blue-700"
           >
             Move to Paint ({selectedOrders.size})
           </Button>
-
+          
           {selectedOrders.size > 0 && (
             <Button
               variant="outline"
@@ -404,7 +359,7 @@ export default function FinishQCPage() {
       <Card>
         <CardContent className="p-4">
           <div className="flex items-center gap-4">
-            <OrderSearchBox
+            <OrderSearchBox 
               orders={orders}
               placeholder="Search orders by Order ID or FishBowl Number..."
               onOrderSelect={handleOrderSearchSelect}
@@ -431,9 +386,9 @@ export default function FinishQCPage() {
         </Card>
       ) : (
         <div className="space-y-6">
-          {technicians.map((technician) => {
+          {technicians.map(technician => {
             const technicianOrders = ordersByTechnician[technician];
-            const selectedCount = technicianOrders.filter((order: any) =>
+            const selectedCount = technicianOrders.filter((order: any) => 
               selectedOrders.has(order.orderId)
             ).length;
 
@@ -444,17 +399,12 @@ export default function FinishQCPage() {
                     <div className="flex items-center gap-3">
                       <Checkbox
                         checked={selectAllByTechnician[technician] || false}
-                        onCheckedChange={(checked) =>
-                          handleSelectAllTechnician(
-                            technician,
-                            checked as boolean
-                          )
+                        onCheckedChange={(checked) => 
+                          handleSelectAllTechnician(technician, checked as boolean)
                         }
                       />
                       <CardTitle className="text-xl">
-                        {technician === 'Unassigned'
-                          ? 'Unassigned Orders'
-                          : `${technician}'s QC`}
+                        {technician === 'Unassigned' ? 'Unassigned Orders' : `${technician}'s QC`}
                       </CardTitle>
                       <Badge variant="secondary">
                         {technicianOrders.length} orders
@@ -467,18 +417,15 @@ export default function FinishQCPage() {
                     </div>
                   </div>
                 </CardHeader>
-
+                
                 <CardContent className="p-4">
                   <div className="grid gap-1.5 md:grid-cols-2 lg:grid-cols-3">
                     {technicianOrders.map((order: any) => {
                       const isSelected = selectedOrders.has(order.orderId);
-                      const isOverdue = isAfter(
-                        new Date(),
-                        new Date(order.dueDate)
-                      );
-
+                      const isOverdue = isAfter(new Date(), new Date(order.dueDate));
+                      
                       return (
-                        <div
+                        <div 
                           key={order.orderId}
                           className={`p-2 border rounded cursor-pointer transition-all duration-200 ${
                             isOverdue
@@ -492,28 +439,20 @@ export default function FinishQCPage() {
                             <div className="flex items-start gap-2 flex-1 min-w-0">
                               <Checkbox
                                 checked={isSelected}
-                                onCheckedChange={(checked) =>
-                                  handleOrderSelect(
-                                    order.orderId,
-                                    checked as boolean
-                                  )
+                                onCheckedChange={(checked) => 
+                                  handleOrderSelect(order.orderId, checked as boolean)
                                 }
                                 onClick={(e) => e.stopPropagation()}
                                 className="mt-0.5 flex-shrink-0"
                               />
-
+                              
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-1.5 mb-1">
                                   <span className="font-medium text-sm truncate">
-                                    {order.fbOrderNumber
-                                      ? order.fbOrderNumber
-                                      : order.orderId}
+                                    {order.fbOrderNumber ? order.fbOrderNumber : order.orderId}
                                   </span>
                                   {order.fbOrderNumber && (
-                                    <Badge
-                                      variant="outline"
-                                      className="text-xs px-1 py-0"
-                                    >
+                                    <Badge variant="outline" className="text-xs px-1 py-0">
                                       {order.orderId}
                                     </Badge>
                                   )}
@@ -523,22 +462,16 @@ export default function FinishQCPage() {
                                     </Badge>
                                   )}
                                 </div>
-
+                                
                                 <div className="text-xs text-gray-600 dark:text-gray-400 truncate mb-1">
                                   {order.customerName}
                                 </div>
-
+                                
                                 <div className="flex gap-1 flex-wrap">
-                                  <Badge
-                                    variant="secondary"
-                                    className="text-xs px-1 py-0 bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-100"
-                                  >
+                                  <Badge variant="secondary" className="text-xs px-1 py-0 bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-100">
                                     {getTextureInfo(order)}
                                   </Badge>
-                                  <Badge
-                                    variant="secondary"
-                                    className="text-xs px-1 py-0 bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-100"
-                                  >
+                                  <Badge variant="secondary" className="text-xs px-1 py-0 bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-100">
                                     {getPaintColor(order)}
                                   </Badge>
                                   <Badge
@@ -555,21 +488,12 @@ export default function FinishQCPage() {
                                     <Badge
                                       variant="destructive"
                                       className={`cursor-pointer hover:opacity-80 transition-opacity text-xs px-1 py-0 ${
-                                        getKickbackStatus(order.orderId) ===
-                                        'CRITICAL'
-                                          ? 'bg-red-600 hover:bg-red-700'
-                                          : getKickbackStatus(order.orderId) ===
-                                              'HIGH'
-                                            ? 'bg-orange-600 hover:bg-orange-700'
-                                            : getKickbackStatus(
-                                                  order.orderId
-                                                ) === 'MEDIUM'
-                                              ? 'bg-yellow-600 hover:bg-yellow-700'
-                                              : 'bg-gray-600 hover:bg-gray-700'
+                                        getKickbackStatus(order.orderId) === 'CRITICAL' ? 'bg-red-600 hover:bg-red-700' :
+                                        getKickbackStatus(order.orderId) === 'HIGH' ? 'bg-orange-600 hover:bg-orange-700' :
+                                        getKickbackStatus(order.orderId) === 'MEDIUM' ? 'bg-yellow-600 hover:bg-yellow-700' :
+                                        'bg-gray-600 hover:bg-gray-700'
                                       }`}
-                                      onClick={() =>
-                                        handleKickbackClick(order.orderId)
-                                      }
+                                      onClick={() => handleKickbackClick(order.orderId)}
                                     >
                                       <AlertTriangle className="w-3 h-3 mr-1" />
                                       Kickback
@@ -578,13 +502,11 @@ export default function FinishQCPage() {
                                 </div>
                               </div>
                             </div>
-
+                            
                             <div className="flex flex-col items-end gap-0.5 flex-shrink-0">
                               {order.dueDate && (
-                                <Badge
-                                  variant={
-                                    isOverdue ? 'destructive' : 'outline'
-                                  }
+                                <Badge 
+                                  variant={isOverdue ? "destructive" : "outline"} 
                                   className="text-xs px-1 py-0"
                                 >
                                   {format(new Date(order.dueDate), 'M/d')}
@@ -604,7 +526,7 @@ export default function FinishQCPage() {
       )}
 
       {/* Sales Order Modal */}
-      <SalesOrderModal
+      <SalesOrderModal 
         isOpen={salesOrderModalOpen}
         onClose={() => setSalesOrderModalOpen(false)}
         orderId={selectedOrderId}

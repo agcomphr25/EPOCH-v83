@@ -2,20 +2,9 @@ import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
@@ -40,12 +29,7 @@ interface PaymentManagerProps {
   isInline?: boolean;
 }
 
-export default function PaymentManager({
-  orderId,
-  totalAmount,
-  onPaymentsChange,
-  isInline = false,
-}: PaymentManagerProps) {
+export default function PaymentManager({ orderId, totalAmount, onPaymentsChange, isInline = false }: PaymentManagerProps) {
   const { toast } = useToast();
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [editingPayment, setEditingPayment] = useState<Payment | null>(null);
@@ -53,41 +37,31 @@ export default function PaymentManager({
   // Form state
   const [paymentType, setPaymentType] = useState('');
   const [paymentAmount, setPaymentAmount] = useState('');
-  const [paymentDate, setPaymentDate] = useState(
-    new Date().toISOString().split('T')[0]
-  );
+  const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split('T')[0]);
   const [notes, setNotes] = useState('');
 
   // Fetch payments for this order
-  const {
-    data: payments = [],
-    isLoading,
-    refetch,
-  } = useQuery({
+  const { data: payments = [], isLoading, refetch } = useQuery({
     queryKey: ['/api/orders', orderId, 'payments'],
     queryFn: () => apiRequest(`/api/orders/${orderId}/payments`),
     enabled: !!orderId && orderId !== 'undefined',
   });
 
   // Calculate totals
-  const totalPaid = payments.reduce(
-    (sum: number, payment: Payment) => sum + payment.paymentAmount,
-    0
-  );
+  const totalPaid = payments.reduce((sum: number, payment: Payment) => sum + payment.paymentAmount, 0);
   const balanceDue = totalAmount - totalPaid;
   const isCredit = balanceDue < 0;
 
   // Create payment mutation
   const createPaymentMutation = useMutation({
-    mutationFn: (data: any) =>
-      apiRequest(`/api/orders/${orderId}/payments`, {
-        method: 'POST',
-        body: data,
-      }),
+    mutationFn: (data: any) => apiRequest(`/api/orders/${orderId}/payments`, {
+      method: 'POST',
+      body: data,
+    }),
     onSuccess: () => {
       toast({
-        title: 'Payment Added',
-        description: 'Payment has been successfully recorded.',
+        title: "Payment Added",
+        description: "Payment has been successfully recorded.",
       });
       refetch();
       resetForm();
@@ -95,24 +69,24 @@ export default function PaymentManager({
     },
     onError: (error: any) => {
       toast({
-        title: 'Error',
-        description: error.message || 'Failed to add payment.',
-        variant: 'destructive',
+        title: "Error",
+        description: error.message || "Failed to add payment.",
+        variant: "destructive",
       });
     },
   });
 
   // Update payment mutation
   const updatePaymentMutation = useMutation({
-    mutationFn: ({ id, data }: { id: number; data: any }) =>
+    mutationFn: ({ id, data }: { id: number; data: any }) => 
       apiRequest(`/api/orders/payments/${id}`, {
         method: 'PUT',
         body: data,
       }),
     onSuccess: () => {
       toast({
-        title: 'Payment Updated',
-        description: 'Payment has been successfully updated.',
+        title: "Payment Updated",
+        description: "Payment has been successfully updated.",
       });
       refetch();
       resetForm();
@@ -120,31 +94,30 @@ export default function PaymentManager({
     },
     onError: (error: any) => {
       toast({
-        title: 'Error',
-        description: error.message || 'Failed to update payment.',
-        variant: 'destructive',
+        title: "Error",
+        description: error.message || "Failed to update payment.",
+        variant: "destructive",
       });
     },
   });
 
   // Delete payment mutation
   const deletePaymentMutation = useMutation({
-    mutationFn: (id: number) =>
-      apiRequest(`/api/orders/payments/${id}`, {
-        method: 'DELETE',
-      }),
+    mutationFn: (id: number) => apiRequest(`/api/orders/payments/${id}`, {
+      method: 'DELETE',
+    }),
     onSuccess: () => {
       toast({
-        title: 'Payment Deleted',
-        description: 'Payment has been successfully removed.',
+        title: "Payment Deleted",
+        description: "Payment has been successfully removed.",
       });
       refetch();
     },
     onError: (error: any) => {
       toast({
-        title: 'Error',
-        description: error.message || 'Failed to delete payment.',
-        variant: 'destructive',
+        title: "Error",
+        description: error.message || "Failed to delete payment.",
+        variant: "destructive",
       });
     },
   });
@@ -184,9 +157,9 @@ export default function PaymentManager({
   const handleSubmit = () => {
     if (!paymentType || !paymentAmount) {
       toast({
-        title: 'Missing Information',
-        description: 'Please select a payment type and enter an amount.',
-        variant: 'destructive',
+        title: "Missing Information",
+        description: "Please select a payment type and enter an amount.",
+        variant: "destructive",
       });
       return;
     }
@@ -214,7 +187,7 @@ export default function PaymentManager({
       style: 'currency',
       currency: 'USD',
       minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
+      maximumFractionDigits: 2
     }).format(amount);
   };
 
@@ -245,17 +218,13 @@ export default function PaymentManager({
         </div>
         <div className="flex justify-between items-center">
           <span className="font-medium">Total Paid:</span>
-          <span className="font-bold text-green-600">
-            {formatCurrency(totalPaid)}
-          </span>
+          <span className="font-bold text-green-600">{formatCurrency(totalPaid)}</span>
         </div>
         <div className="flex justify-between items-center border-t pt-2">
           <span className="font-bold">
             {isCredit ? 'Credit Balance:' : 'Balance Due:'}
           </span>
-          <span
-            className={`font-bold ${isCredit ? 'text-green-600' : 'text-red-600'}`}
-          >
+          <span className={`font-bold ${isCredit ? 'text-green-600' : 'text-red-600'}`}>
             {formatCurrency(Math.abs(balanceDue))}
           </span>
         </div>
@@ -281,26 +250,16 @@ export default function PaymentManager({
               <div key={payment.id} className="border rounded p-2 text-sm">
                 <div className="flex justify-between items-center">
                   <div className="flex items-center gap-2">
-                    <span className="font-medium">
-                      {formatCurrency(payment.paymentAmount)}
-                    </span>
+                    <span className="font-medium">{formatCurrency(payment.paymentAmount)}</span>
                     <span className="text-xs text-gray-600">
                       {payment.paymentType.replace('_', ' ').toUpperCase()}
                     </span>
                   </div>
                   <div className="flex gap-1">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleEditPayment(payment)}
-                    >
+                    <Button variant="outline" size="sm" onClick={() => handleEditPayment(payment)}>
                       <Edit2 className="h-3 w-3" />
                     </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleDeletePayment(payment.id)}
-                    >
+                    <Button variant="outline" size="sm" onClick={() => handleDeletePayment(payment.id)}>
                       <Trash2 className="h-3 w-3" />
                     </Button>
                   </div>
@@ -343,6 +302,7 @@ export default function PaymentManager({
                     <SelectItem value="cash">Cash</SelectItem>
                     <SelectItem value="ach">ACH</SelectItem>
                     <SelectItem value="aaaa">AAAA</SelectItem>
+
                   </SelectContent>
                 </Select>
               </div>
@@ -384,8 +344,8 @@ export default function PaymentManager({
 
             {/* Modal Buttons */}
             <div className="flex gap-2 justify-end">
-              <Button
-                variant="outline"
+              <Button 
+                variant="outline" 
                 onClick={() => {
                   setShowPaymentModal(false);
                   resetForm();
@@ -393,19 +353,16 @@ export default function PaymentManager({
               >
                 Cancel
               </Button>
-              <Button
+              <Button 
                 onClick={handleSubmit}
-                disabled={
-                  createPaymentMutation.isPending ||
-                  updatePaymentMutation.isPending
-                }
+                disabled={createPaymentMutation.isPending || updatePaymentMutation.isPending}
               >
-                {createPaymentMutation.isPending ||
-                updatePaymentMutation.isPending
-                  ? 'Saving...'
-                  : editingPayment
-                    ? 'Update Payment'
-                    : 'Add Payment'}
+                {createPaymentMutation.isPending || updatePaymentMutation.isPending
+                  ? "Saving..." 
+                  : editingPayment 
+                    ? "Update Payment" 
+                    : "Add Payment"
+                }
               </Button>
             </div>
           </DialogContent>
@@ -449,6 +406,7 @@ export default function PaymentManager({
                     <SelectItem value="cash">Cash</SelectItem>
                     <SelectItem value="ach">ACH</SelectItem>
                     <SelectItem value="aaaa">AAAA</SelectItem>
+
                   </SelectContent>
                 </Select>
               </div>
@@ -490,8 +448,8 @@ export default function PaymentManager({
 
             {/* Modal Buttons */}
             <div className="flex gap-2 justify-end">
-              <Button
-                variant="outline"
+              <Button 
+                variant="outline" 
                 onClick={() => {
                   setShowPaymentModal(false);
                   resetForm();
@@ -499,19 +457,16 @@ export default function PaymentManager({
               >
                 Cancel
               </Button>
-              <Button
+              <Button 
                 onClick={handleSubmit}
-                disabled={
-                  createPaymentMutation.isPending ||
-                  updatePaymentMutation.isPending
-                }
+                disabled={createPaymentMutation.isPending || updatePaymentMutation.isPending}
               >
-                {createPaymentMutation.isPending ||
-                updatePaymentMutation.isPending
-                  ? 'Saving...'
-                  : editingPayment
-                    ? 'Update Payment'
-                    : 'Add Payment'}
+                {createPaymentMutation.isPending || updatePaymentMutation.isPending
+                  ? "Saving..." 
+                  : editingPayment 
+                    ? "Update Payment" 
+                    : "Add Payment"
+                }
               </Button>
             </div>
           </DialogContent>

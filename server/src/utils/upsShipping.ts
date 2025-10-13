@@ -1,14 +1,15 @@
-import fetch from 'node-fetch';
+
+import fetch from "node-fetch";
 
 const UPS_OAUTH_URL =
-  process.env.UPS_ENV === 'production'
-    ? 'https://onlinetools.ups.com/security/v1/oauth/token'
-    : 'https://wwwcie.ups.com/security/v1/oauth/token';
+  process.env.UPS_ENV === "production"
+    ? "https://onlinetools.ups.com/security/v1/oauth/token"
+    : "https://wwwcie.ups.com/security/v1/oauth/token";
 
 const UPS_SHIP_URL_BASE =
-  process.env.UPS_ENV === 'production'
-    ? 'https://onlinetools.ups.com/api/shipments/v1801/ship'
-    : 'https://wwwcie.ups.com/api/shipments/v1801/ship';
+  process.env.UPS_ENV === "production"
+    ? "https://onlinetools.ups.com/api/shipments/v1801/ship"
+    : "https://wwwcie.ups.com/api/shipments/v1801/ship";
 
 let cachedToken: string | null = null;
 let tokenExpiresAt = 0;
@@ -18,24 +19,21 @@ export async function getAccessToken(): Promise<string> {
   if (cachedToken && now < tokenExpiresAt - 60_000) return cachedToken;
 
   const res = await fetch(UPS_OAUTH_URL, {
-    method: 'POST',
+    method: "POST",
     headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      'x-merchant-id': process.env.UPS_ACCOUNT_NUMBER ?? '',
+      "Content-Type": "application/x-www-form-urlencoded",
+      "x-merchant-id": process.env.UPS_ACCOUNT_NUMBER ?? "",
       Authorization:
-        'Basic ' +
+        "Basic " +
         Buffer.from(
           `${process.env.UPS_CLIENT_ID}:${process.env.UPS_CLIENT_SECRET}`
-        ).toString('base64'),
+        ).toString("base64"),
     },
-    body: new URLSearchParams({ grant_type: 'client_credentials' }).toString(),
+    body: new URLSearchParams({ grant_type: "client_credentials" }).toString(),
   });
 
   if (!res.ok) throw new Error(`UPS OAuth failed: ${await res.text()}`);
-  const data = (await res.json()) as {
-    access_token: string;
-    expires_in: number;
-  };
+  const data = (await res.json()) as { access_token: string; expires_in: number };
   cachedToken = data.access_token;
   tokenExpiresAt = Date.now() + data.expires_in * 1000;
   return cachedToken;
@@ -54,10 +52,10 @@ export type ShipTo = {
 };
 
 function getCountryCode(country?: string): string {
-  if (!country) return 'US';
-  if (country === 'United States' || country === 'USA') return 'US';
-  if (country === 'Canada') return 'CA';
-  return country.length === 2 ? country : 'US';
+  if (!country) return "US";
+  if (country === "United States" || country === "USA") return "US";
+  if (country === "Canada") return "CA";
+  return country.length === 2 ? country : "US";
 }
 
 export async function createShipment(opts: {
@@ -68,8 +66,8 @@ export async function createShipment(opts: {
 }) {
   const token = await getAccessToken();
 
-  const labelFormatEnv = (process.env.UPS_LABEL_FORMAT ?? 'PDF').toUpperCase();
-  const labelImageCode = labelFormatEnv === 'ZPL' ? 'ZPL' : 'GIF'; // UPS returns base64(ZPL or GIF). We'll wrap GIF into PDF later.
+  const labelFormatEnv = (process.env.UPS_LABEL_FORMAT ?? "PDF").toUpperCase();
+  const labelImageCode = labelFormatEnv === "ZPL" ? "ZPL" : "GIF"; // UPS returns base64(ZPL or GIF). We'll wrap GIF into PDF later.
 
   const body = {
     ShipmentRequest: {
@@ -90,16 +88,13 @@ export async function createShipment(opts: {
         ShipTo: {
           Name: opts.shipTo.name,
           AttentionName: opts.shipTo.attention ?? opts.shipTo.name,
-          Phone: { Number: opts.shipTo.phone ?? '0000000000' },
+          Phone: { Number: opts.shipTo.phone ?? "0000000000" },
           Address: {
-            AddressLine: [
-              opts.shipTo.address1,
-              opts.shipTo.address2 ?? '',
-            ].filter(Boolean),
+            AddressLine: [opts.shipTo.address1, opts.shipTo.address2 ?? ""].filter(Boolean),
             City: opts.shipTo.city,
             StateProvinceCode: opts.shipTo.state,
             PostalCode: opts.shipTo.postalCode,
-            CountryCode: opts.shipTo.country ?? 'US',
+            CountryCode: opts.shipTo.country ?? "US",
           },
         },
         ShipFrom: {
@@ -116,68 +111,61 @@ export async function createShipment(opts: {
         },
         PaymentInformation: {
           ShipmentCharge: {
-            Type: '01', // Transportation
+            Type: "01", // Transportation
             BillShipper: { AccountNumber: process.env.UPS_ACCOUNT_NUMBER },
           },
         },
         Service: { Code: opts.serviceCode }, // "03" Ground
         Package: [
           {
-            Packaging: { Code: '02' }, // Customer supplied package
+            Packaging: { Code: "02" }, // Customer supplied package
             PackageWeight: {
-              UnitOfMeasurement: { Code: 'LBS' },
+              UnitOfMeasurement: { Code: "LBS" },
               Weight: String(Math.max(opts.weightLbs, 1)),
             },
             ReferenceNumber: opts.referenceNumber
-              ? [{ Code: 'PO', Value: opts.referenceNumber }]
+              ? [{ Code: "PO", Value: opts.referenceNumber }]
               : undefined,
           },
         ],
       },
       LabelSpecification: {
         LabelImageFormat: { Code: labelImageCode },
-        HTTPUserAgent: 'AGC-Shipping',
+        HTTPUserAgent: "AGC-Shipping",
       },
     },
   };
 
   const res = await fetch(UPS_SHIP_URL_BASE, {
-    method: 'POST',
+    method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-      'x-merchant-id': process.env.UPS_ACCOUNT_NUMBER ?? '',
+      "Content-Type": "application/json",
+      "x-merchant-id": process.env.UPS_ACCOUNT_NUMBER ?? "",
     },
     body: JSON.stringify(body),
   });
 
   const responseText = await res.text();
   console.log(`UPS Request URL: ${UPS_SHIP_URL_BASE}`);
-  console.log(
-    `UPS Request Headers:`,
-    JSON.stringify({
-      Authorization: `Bearer ${token.substring(0, 20)}...`,
-      'Content-Type': 'application/json',
-      'x-merchant-id': process.env.UPS_ACCOUNT_NUMBER ?? '',
-    })
-  );
+  console.log(`UPS Request Headers:`, JSON.stringify({
+    'Authorization': `Bearer ${token.substring(0, 20)}...`,
+    'Content-Type': 'application/json',
+    'x-merchant-id': process.env.UPS_ACCOUNT_NUMBER ?? ""
+  }));
   console.log(`UPS Response Status: ${res.status}`);
   console.log(`UPS Response Headers:`, JSON.stringify(res.headers.raw()));
   console.log(`UPS Response Text: ${responseText.substring(0, 500)}`);
-
+  
   let data: any;
   try {
     data = JSON.parse(responseText);
   } catch (error) {
-    throw new Error(
-      `UPS Shipment creation failed: ${res.status} - Invalid JSON response: ${responseText.substring(0, 200)}`
-    );
+    throw new Error(`UPS Shipment creation failed: ${res.status} - Invalid JSON response: ${responseText.substring(0, 200)}`);
   }
-
+  
   if (!res.ok) {
-    throw new Error(
-      `UPS Shipment creation failed: ${res.status} ${res.statusText} - ${JSON.stringify(data)}`
-    );
+    throw new Error(`UPS Shipment creation failed: ${res.status} ${res.statusText} - ${JSON.stringify(data)}`);
   }
 
   const pkg =

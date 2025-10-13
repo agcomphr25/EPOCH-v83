@@ -1,0 +1,14 @@
+Cannot access 'currentWeekOrders' before initialization
+
+Stack trace:
+ReferenceError: Cannot access 'currentWeekOrders' before initialization
+    at LayupPluggingQueuePage (https://c12e21b1-5fd6-431c-9fb3-816da6ed479c-00-vprztzvz79bh.worf.replit.dev/src/pages/LayupPluggingQueuePage.tsx:102:76)
+    at renderWithHooks (https://c12e21b1-5fd6-431c-9fb3-816da6ed479c-00-vprztzvz79bh.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-276SZO74.js?v=de9f1df8:11548:26)
+    at mountIndeterminateComponent (https://c12e21b1-5fd6-431c-9fb3-816da6ed479c-00-vprztzvz79bh.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-276SZO74.js?v=de9f1df8:14926:21)
+    at beginWork (https://c12e21b1-5fd6-431c-9fb3-816da6ed479c-00-vprztzvz79bh.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-276SZO74.js?v=de9f1df8:15914:22)
+    at beginWork$1 (https://c12e21b1-5fd6-431c-9fb3-816da6ed479c-00-vprztzvz79bh.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-276SZO74.js?v=de9f1df8:19753:22)
+    at performUnitOfWork (https://c12e21b1-5fd6-431c-9fb3-816da6ed479c-00-vprztzvz79bh.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-276SZO74.js?v=de9f1df8:19198:20)
+    at workLoopSync (https://c12e21b1-5fd6-431c-9fb3-816da6ed479c-00-vprztzvz79bh.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-276SZO74.js?v=de9f1df8:19137:13)
+    at renderRootSync (https://c12e21b1-5fd6-431c-9fb3-816da6ed479c-00-vprztzvz79bh.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-276SZO74.js?v=de9f1df8:19116:15)
+    at performSyncWorkOnRoot (https://c12e21b1-5fd6-431c-9fb3-816da6ed479c-00-vprztzvz79bh.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-276SZO74.js?v=de9f1df8:18874:28)
+    at flushSyncCallbacks (https://c12e21b1-5fd6-431c-9fb3-816da6ed479c-00-vprztzvz79bh.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-276SZO74.js?v=de9f1df8:9119:30)

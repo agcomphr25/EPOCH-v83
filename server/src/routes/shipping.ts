@@ -1,3 +1,4 @@
+
 import { Router, Request, Response } from 'express';
 import { storage } from '../../storage';
 import { db } from '../../db';
@@ -11,15 +12,15 @@ const router = Router();
 router.get('/order/:orderId', async (req: Request, res: Response) => {
   try {
     const { orderId } = req.params;
-
+    
     // Try finalized orders first
     let order = await storage.getFinalizedOrderById(orderId);
-
+    
     // If not found, try draft orders
     if (!order) {
       order = await storage.getOrderDraft(orderId);
     }
-
+    
     if (!order) {
       return res.status(404).json({ error: 'Order not found' });
     }
@@ -28,18 +29,16 @@ router.get('/order/:orderId', async (req: Request, res: Response) => {
     let customer: any = null;
     let addresses: any[] = [];
     let shippingAddress: any = null;
-
+    
     if (order.customerId) {
       try {
         customer = await storage.getCustomer(parseInt(order.customerId));
-        addresses = await storage.getCustomerAddresses(
-          parseInt(order.customerId)
-        );
+        addresses = await storage.getCustomerAddresses(parseInt(order.customerId));
       } catch (customerError) {
         console.warn('Could not fetch customer data:', customerError);
       }
     }
-
+    
     // Priority 1: Check for order-specific alternate shipping address
     if (order.hasAltShipTo && order.altShipToAddress) {
       const altAddr = order.altShipToAddress as any;
@@ -53,15 +52,11 @@ router.get('/order/:orderId', async (req: Request, res: Response) => {
         city: altAddr?.city || '',
         state: altAddr?.state || '',
         zipCode: altAddr?.zip || altAddr?.zipCode || '',
-        country: altAddr?.country || 'United States',
+        country: altAddr?.country || 'United States'
       };
     }
     // Priority 2: Check if using existing customer as alternate shipping
-    else if (
-      order.hasAltShipTo &&
-      order.altShipToCustomerId &&
-      addresses.length > 0
-    ) {
+    else if (order.hasAltShipTo && order.altShipToCustomerId && addresses.length > 0) {
       try {
         const altCustomerId = parseInt(order.altShipToCustomerId);
         const altCustomer = await storage.getCustomer(altCustomerId);
@@ -77,7 +72,7 @@ router.get('/order/:orderId', async (req: Request, res: Response) => {
             city: altAddresses[0].city || '',
             state: altAddresses[0].state || '',
             zipCode: altAddresses[0].zipCode || '',
-            country: altAddresses[0].country || 'United States',
+            country: altAddresses[0].country || 'United States'
           };
         }
       } catch (customerIdError) {
@@ -96,15 +91,15 @@ router.get('/order/:orderId', async (req: Request, res: Response) => {
         city: addresses[0].city || '',
         state: addresses[0].state || '',
         zipCode: addresses[0].zipCode || '',
-        country: addresses[0].country || 'United States',
+        country: addresses[0].country || 'United States'
       };
     }
-
+    
     res.json({
       ...order,
       customer,
       addresses,
-      shippingAddress,
+      shippingAddress
     });
   } catch (error) {
     console.error('Error getting order:', error);
@@ -116,41 +111,37 @@ router.get('/order/:orderId', async (req: Request, res: Response) => {
 router.get('/orders/bulk', async (req: Request, res: Response) => {
   try {
     const { orderIds } = req.query;
-
+    
     if (!orderIds || typeof orderIds !== 'string') {
-      return res
-        .status(400)
-        .json({ error: 'orderIds query parameter is required' });
+      return res.status(400).json({ error: 'orderIds query parameter is required' });
     }
-
-    const ids = orderIds.split(',').map((id) => id.trim());
-
+    
+    const ids = orderIds.split(',').map(id => id.trim());
+    
     // Get from both finalized and draft orders
-    const finalizedOrders = await db
-      .select()
+    const finalizedOrders = await db.select()
       .from(allOrders)
       .where(inArray(allOrders.orderId, ids));
-
-    const draftOrders = await db
-      .select()
+    
+    const draftOrders = await db.select()
       .from(orderDrafts)
       .where(inArray(orderDrafts.orderId, ids));
-
+    
     // Combine and deduplicate (prioritize finalized over draft)
     const orderMap = new Map();
-
+    
     // Add draft orders first
-    draftOrders.forEach((order) => {
+    draftOrders.forEach(order => {
       orderMap.set(order.orderId, { ...order, isFinalized: false });
     });
-
+    
     // Add finalized orders (will overwrite drafts if same ID)
-    finalizedOrders.forEach((order) => {
+    finalizedOrders.forEach(order => {
       orderMap.set(order.orderId, { ...order, isFinalized: true });
     });
-
+    
     const orders = Array.from(orderMap.values());
-
+    
     res.json(orders);
   } catch (error) {
     console.error('Error getting orders in bulk:', error);
@@ -164,19 +155,18 @@ router.get('/ready-for-shipping', async (req: Request, res: Response) => {
     // Get orders from both finalized and draft tables
     const finalizedOrders = await storage.getAllFinalizedOrders();
     const draftOrders = await storage.getAllOrderDrafts();
-
+    
     // Combine and filter for shipping-ready orders
     const allOrders = [...finalizedOrders, ...draftOrders];
-    const shippingOrders = allOrders.filter(
-      (order: any) =>
-        order.currentDepartment === 'Shipping' ||
-        order.currentDepartment === 'Fulfilled' ||
-        order.status === 'Ready for Shipping' ||
-        order.status === 'FULFILLED' ||
-        (order.qcCompletedAt && !order.shippedDate) ||
-        (order.currentDepartment === 'QC' && order.qcPassed)
+    const shippingOrders = allOrders.filter((order: any) => 
+      order.currentDepartment === 'Shipping' ||
+      order.currentDepartment === 'Fulfilled' ||
+      order.status === 'Ready for Shipping' ||
+      order.status === 'FULFILLED' ||
+      (order.qcCompletedAt && !order.shippedDate) ||
+      (order.currentDepartment === 'QC' && order.qcPassed)
     );
-
+    
     res.json(shippingOrders);
   } catch (error) {
     console.error('Error getting shipping-ready orders:', error);
@@ -188,13 +178,13 @@ router.get('/ready-for-shipping', async (req: Request, res: Response) => {
 router.post('/mark-shipped/:orderId', async (req: Request, res: Response) => {
   try {
     const { orderId } = req.params;
-    const {
-      trackingNumber,
-      shippingCarrier = 'UPS',
+    const { 
+      trackingNumber, 
+      shippingCarrier = 'UPS', 
       shippingMethod = 'Ground',
       estimatedDelivery,
       sendNotification = true,
-      notificationMethod = 'email',
+      notificationMethod = 'email'
     } = req.body;
 
     if (!trackingNumber) {
@@ -227,31 +217,25 @@ router.post('/mark-shipped/:orderId', async (req: Request, res: Response) => {
     // Send customer notification if requested
     if (sendNotification) {
       try {
-        const { sendCustomerNotification } = await import(
-          '../../utils/notifications'
-        );
+        const { sendCustomerNotification } = await import('../../utils/notifications');
         await sendCustomerNotification({
           orderId,
           trackingNumber,
           carrier: shippingCarrier,
-          estimatedDelivery: estimatedDelivery
-            ? new Date(estimatedDelivery)
-            : undefined,
+          estimatedDelivery: estimatedDelivery ? new Date(estimatedDelivery) : undefined
         });
       } catch (notificationError) {
-        console.error(
-          'Failed to send customer notification:',
-          notificationError
-        );
+        console.error('Failed to send customer notification:', notificationError);
         // Don't fail the entire request if notification fails
       }
     }
 
-    res.json({
-      success: true,
+    res.json({ 
+      success: true, 
       message: 'Order marked as shipped',
-      order: updatedOrder,
+      order: updatedOrder 
     });
+
   } catch (error) {
     console.error('Error marking order as shipped:', error);
     res.status(500).json({ error: 'Failed to mark order as shipped' });
@@ -262,38 +246,30 @@ router.post('/mark-shipped/:orderId', async (req: Request, res: Response) => {
 router.put('/tracking/:orderId', async (req: Request, res: Response) => {
   try {
     const { orderId } = req.params;
-    const {
+    const { 
       trackingNumber,
       shippingCarrier,
       shippingMethod,
       estimatedDelivery,
       deliveryConfirmed,
       customerNotified,
-      notificationMethod,
+      notificationMethod 
     } = req.body;
 
     const updateData: any = {};
-
-    if (trackingNumber !== undefined)
-      updateData.trackingNumber = trackingNumber;
-    if (shippingCarrier !== undefined)
-      updateData.shippingCarrier = shippingCarrier;
-    if (shippingMethod !== undefined)
-      updateData.shippingMethod = shippingMethod;
-    if (estimatedDelivery !== undefined)
-      updateData.estimatedDelivery = estimatedDelivery
-        ? new Date(estimatedDelivery)
-        : null;
+    
+    if (trackingNumber !== undefined) updateData.trackingNumber = trackingNumber;
+    if (shippingCarrier !== undefined) updateData.shippingCarrier = shippingCarrier;
+    if (shippingMethod !== undefined) updateData.shippingMethod = shippingMethod;
+    if (estimatedDelivery !== undefined) updateData.estimatedDelivery = estimatedDelivery ? new Date(estimatedDelivery) : null;
     if (deliveryConfirmed !== undefined) {
       updateData.deliveryConfirmed = deliveryConfirmed;
       if (deliveryConfirmed) {
         updateData.deliveryConfirmedAt = new Date();
       }
     }
-    if (customerNotified !== undefined)
-      updateData.customerNotified = customerNotified;
-    if (notificationMethod !== undefined)
-      updateData.notificationMethod = notificationMethod;
+    if (customerNotified !== undefined) updateData.customerNotified = customerNotified;
+    if (notificationMethod !== undefined) updateData.notificationMethod = notificationMethod;
 
     // Try to update in finalized orders first
     let updatedOrder;
@@ -304,11 +280,12 @@ router.put('/tracking/:orderId', async (req: Request, res: Response) => {
       updatedOrder = await storage.updateOrderDraft(orderId, updateData);
     }
 
-    res.json({
-      success: true,
+    res.json({ 
+      success: true, 
       message: 'Tracking information updated',
-      order: updatedOrder,
+      order: updatedOrder 
     });
+
   } catch (error) {
     console.error('Error updating tracking information:', error);
     res.status(500).json({ error: 'Failed to update tracking information' });
@@ -319,20 +296,16 @@ router.put('/tracking/:orderId', async (req: Request, res: Response) => {
 router.get('/stats', async (req: Request, res: Response) => {
   try {
     const orders = await storage.getAllFinalizedOrders();
-
+    
     const stats = {
-      readyForShipping: orders.filter(
-        (o: any) =>
-          (o.currentDepartment === 'Shipping QC' ||
-            o.currentDepartment === 'Shipping') &&
-          !o.shippedDate
+      readyForShipping: orders.filter((o: any) => 
+        (o.currentDepartment === 'Shipping QC' || o.currentDepartment === 'Shipping') && !o.shippedDate
       ).length,
       shipped: orders.filter((o: any) => o.shippedDate).length,
       delivered: orders.filter((o: any) => o.deliveryConfirmed).length,
-      pending: orders.filter((o: any) => o.shippedDate && !o.deliveryConfirmed)
-        .length,
+      pending: orders.filter((o: any) => o.shippedDate && !o.deliveryConfirmed).length
     };
-
+    
     res.json(stats);
   } catch (error) {
     console.error('Error getting shipping stats:', error);
@@ -353,7 +326,7 @@ function buildUPSShipmentPayload(details: any) {
     reference1,
     reference2,
     billingOption = 'sender',
-    receiverAccount,
+    receiverAccount
   } = details;
 
   const upsUsername = process.env.UPS_USERNAME?.trim();
@@ -390,10 +363,7 @@ function buildUPSShipmentPayload(details: any) {
           },
           ShipperNumber: upsShipperNumber,
           Address: {
-            AddressLine: [
-              shipFromAddress.street,
-              shipFromAddress.street2,
-            ].filter(Boolean),
+            AddressLine: [shipFromAddress.street, shipFromAddress.street2].filter(Boolean),
             City: shipFromAddress.city,
             StateProvinceCode: shipFromAddress.state,
             PostalCode: shipFromAddress.zipCode,
@@ -402,53 +372,34 @@ function buildUPSShipmentPayload(details: any) {
         },
         ShipTo: {
           Name: (shipToAddress.name || '').substring(0, 35), // UPS limit
-          AttentionName: (
-            shipToAddress.contact ||
-            shipToAddress.name ||
-            ''
-          ).substring(0, 35),
-          CompanyDisplayableName: (shipToAddress.company || '').substring(
-            0,
-            35
-          ),
-          Phone:
-            shipToAddress.phone && shipToAddress.phone.length >= 10
-              ? {
-                  Number: shipToAddress.phone
-                    .replace(/\D/g, '')
-                    .substring(0, 15),
-                }
-              : undefined,
+          AttentionName: (shipToAddress.contact || shipToAddress.name || '').substring(0, 35),
+          CompanyDisplayableName: (shipToAddress.company || '').substring(0, 35),
+          Phone: shipToAddress.phone && shipToAddress.phone.length >= 10 ? {
+            Number: shipToAddress.phone.replace(/\D/g, '').substring(0, 15),
+          } : undefined,
           Address: {
-            AddressLine: [shipToAddress.street, shipToAddress.street2]
-              .filter(Boolean)
-              .map((line) => line.substring(0, 35)),
+            AddressLine: [shipToAddress.street, shipToAddress.street2].filter(Boolean).map(line => line.substring(0, 35)),
             City: (shipToAddress.city || '').substring(0, 30),
             StateProvinceCode: (shipToAddress.state || '').substring(0, 2),
-            PostalCode: (shipToAddress.zipCode || '')
-              .replace(/\D/g, '')
-              .substring(0, 9),
+            PostalCode: (shipToAddress.zipCode || '').replace(/\D/g, '').substring(0, 9),
             CountryCode: shipToAddress.country || 'US',
           },
         },
         PaymentInformation: {
-          ShipmentCharge:
-            billingOption === 'receiver'
-              ? {
-                  Type: '01', // Transportation
-                  BillReceiver: {
-                    AccountNumber: receiverAccount?.accountNumber,
-                    Address: {
-                      PostalCode: receiverAccount?.zipCode,
-                    },
-                  },
-                }
-              : {
-                  Type: '01', // Transportation
-                  BillShipper: {
-                    AccountNumber: process.env.UPS_SHIPPER_NUMBER?.trim(),
-                  },
-                },
+          ShipmentCharge: billingOption === 'receiver' ? {
+            Type: '01', // Transportation
+            BillReceiver: {
+              AccountNumber: receiverAccount?.accountNumber,
+              Address: {
+                PostalCode: receiverAccount?.zipCode,
+              },
+            },
+          } : {
+            Type: '01', // Transportation
+            BillShipper: {
+              AccountNumber: process.env.UPS_SHIPPER_NUMBER?.trim(),
+            },
+          },
         },
         Service: {
           Code: serviceType,
@@ -458,16 +409,14 @@ function buildUPSShipmentPayload(details: any) {
           Packaging: {
             Code: packageType,
           },
-          Dimensions: packageDimensions
-            ? {
-                UnitOfMeasurement: {
-                  Code: 'IN',
-                },
-                Length: packageDimensions.length.toString(),
-                Width: packageDimensions.width.toString(),
-                Height: packageDimensions.height.toString(),
-              }
-            : undefined,
+          Dimensions: packageDimensions ? {
+            UnitOfMeasurement: {
+              Code: 'IN',
+            },
+            Length: packageDimensions.length.toString(),
+            Width: packageDimensions.width.toString(),
+            Height: packageDimensions.height.toString(),
+          } : undefined,
           PackageWeight: {
             UnitOfMeasurement: {
               Code: 'LBS',
@@ -498,16 +447,10 @@ function buildUPSShipmentPayload(details: any) {
 // Create shipping label using UPS API
 router.post('/create-label', async (req: Request, res: Response) => {
   try {
-    const { orderId, shipTo, packageDetails, billingOption, receiverAccount } =
-      req.body;
-
-    console.log(
-      '⚡ Creating UPS label for:',
-      orderId,
-      'billing:',
-      billingOption
-    );
-
+    const { orderId, shipTo, packageDetails, billingOption, receiverAccount } = req.body;
+    
+    console.log('⚡ Creating UPS label for:', orderId, 'billing:', billingOption);
+    
     // Build shipment details from request body
     const shipmentDetails = {
       orderId,
@@ -541,11 +484,10 @@ router.post('/create-label', async (req: Request, res: Response) => {
     const upsClientId = process.env.UPS_CLIENT_ID?.trim();
     const upsClientSecret = process.env.UPS_CLIENT_SECRET?.trim();
     const upsShipperNumber = process.env.UPS_SHIPPER_NUMBER?.trim();
-
+    
     if (!upsClientId || !upsClientSecret || !upsShipperNumber) {
-      return res.status(500).json({
-        error:
-          'UPS OAuth credentials not configured. Please set UPS_CLIENT_ID, UPS_CLIENT_SECRET, and UPS_SHIPPER_NUMBER environment variables for the new UPS API.',
+      return res.status(500).json({ 
+        error: 'UPS OAuth credentials not configured. Please set UPS_CLIENT_ID, UPS_CLIENT_SECRET, and UPS_SHIPPER_NUMBER environment variables for the new UPS API.' 
       });
     }
 
@@ -571,17 +513,14 @@ router.post('/create-label', async (req: Request, res: Response) => {
       console.log('⚡ UPS OAuth token ready');
     } catch (tokenError: any) {
       console.error('Failed to get UPS OAuth token:', tokenError.message);
-      return res.status(500).json({
+      return res.status(500).json({ 
         error: 'Failed to authenticate with UPS OAuth API',
-        details: tokenError.message,
+        details: tokenError.message
       });
     }
 
     // Step 2: Build shipment payload for new REST API
-    const payload = buildUPSShipmentPayloadOAuth(
-      shipmentDetails,
-      upsShipperNumber
-    );
+    const payload = buildUPSShipmentPayloadOAuth(shipmentDetails, upsShipperNumber);
 
     // Use UPS Production REST API endpoints (2024+) for real tracking numbers
     let upsEndpoint = 'https://onlinetools.ups.com/api/shipments/v1/ship'; // Production endpoint for real tracking
@@ -595,29 +534,24 @@ router.post('/create-label', async (req: Request, res: Response) => {
     let response;
     try {
       console.log(`Attempting UPS OAuth API call to: ${upsEndpoint}`);
-
+      
       // Check if we're in deployment environment and add extra logging
       const isDeployment = process.env.REPLIT_DEPLOYMENT === '1';
       if (isDeployment) {
-        console.log(
-          '🚀 Running in deployment environment - using extended timeouts'
-        );
+        console.log('🚀 Running in deployment environment - using extended timeouts');
       }
-
+      
       response = await axios.post(upsEndpoint, payload, {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
+        headers: { 
+          'Authorization': `Bearer ${accessToken}`,
           'Content-Type': 'application/json',
-          Accept: 'application/json',
+          'Accept': 'application/json'
         },
         timeout: isDeployment ? 45000 : 30000, // 45 seconds in deployment, 30 seconds in development
       });
       console.log('UPS OAuth API call successful');
     } catch (error: any) {
-      console.error(
-        'UPS Production OAuth endpoint failed:',
-        error.response?.data || error.message
-      );
+      console.error('UPS Production OAuth endpoint failed:', error.response?.data || error.message);
       throw error; // Re-throw the error for handling
     }
 
@@ -627,12 +561,10 @@ router.post('/create-label', async (req: Request, res: Response) => {
 
     // UPS OAuth API returns the label in new format
     const shipmentResults = response.data?.ShipmentResponse?.ShipmentResults;
-    const labelBase64 =
-      shipmentResults?.PackageResults?.[0]?.ShippingLabel?.GraphicImage ||
-      shipmentResults?.PackageResults?.ShippingLabel?.GraphicImage;
+    const labelBase64 = shipmentResults?.PackageResults?.[0]?.ShippingLabel?.GraphicImage || 
+                       shipmentResults?.PackageResults?.ShippingLabel?.GraphicImage;
     const trackingNumber = shipmentResults?.ShipmentIdentificationNumber;
-    const shipmentCost =
-      shipmentResults?.ShipmentCharges?.TotalCharges?.MonetaryValue;
+    const shipmentCost = shipmentResults?.ShipmentCharges?.TotalCharges?.MonetaryValue;
 
     if (labelBase64 && trackingNumber) {
       // Update order with tracking information
@@ -656,64 +588,44 @@ router.post('/create-label', async (req: Request, res: Response) => {
 
           // Send automated customer shipping notification
           try {
-            console.log(
-              `🚚 Attempting to send shipping notification for order ${orderId} with tracking ${trackingNumber}`
-            );
-
+            console.log(`🚚 Attempting to send shipping notification for order ${orderId} with tracking ${trackingNumber}`);
+            
             // Get customer information for the order
             let customer = null;
             if (order.customerId) {
               try {
                 customer = await storage.getCustomerById(order.customerId);
               } catch (customerError) {
-                console.log(
-                  'Could not fetch customer details for notification:',
-                  customerError
-                );
+                console.log('Could not fetch customer details for notification:', customerError);
               }
             }
 
             if (customer && customer.phone) {
               // Send SMS notification automatically when label is created
-              const { sendCustomerNotification } = await import(
-                '../../utils/notifications'
-              );
+              const { sendCustomerNotification } = await import('../../utils/notifications');
               const notificationResult = await sendCustomerNotification({
                 orderId,
                 trackingNumber,
                 carrier: 'UPS',
                 customerPhone: customer.phone,
                 customerEmail: customer.email || undefined,
-                preferredMethods: ['sms'], // Force SMS for shipping notifications
+                preferredMethods: ['sms'] // Force SMS for shipping notifications
               });
 
               if (notificationResult.success) {
-                console.log(
-                  `✅ Automated shipping notification sent via ${notificationResult.methods.join(', ')} for order ${orderId}`
-                );
+                console.log(`✅ Automated shipping notification sent via ${notificationResult.methods.join(', ')} for order ${orderId}`);
               } else {
-                console.log(
-                  `⚠️ Shipping notification failed for order ${orderId}:`,
-                  notificationResult.errors
-                );
+                console.log(`⚠️ Shipping notification failed for order ${orderId}:`, notificationResult.errors);
               }
             } else {
-              console.log(
-                `📱 No customer phone number available for automated shipping notification (Order: ${orderId})`
-              );
+              console.log(`📱 No customer phone number available for automated shipping notification (Order: ${orderId})`);
             }
           } catch (notificationError) {
-            console.error(
-              'Failed to send automated shipping notification:',
-              notificationError
-            );
+            console.error('Failed to send automated shipping notification:', notificationError);
             // Don't fail the label creation if notification fails
           }
         } catch (updateError) {
-          console.error(
-            'Failed to update order with tracking info:',
-            updateError
-          );
+          console.error('Failed to update order with tracking info:', updateError);
           // Don't fail the entire request
         }
       }
@@ -724,48 +636,42 @@ router.post('/create-label', async (req: Request, res: Response) => {
         trackingNumber,
         shipmentCost: shipmentCost ? parseFloat(shipmentCost) : null,
         orderId,
-        message: 'Shipping label created successfully',
+        message: 'Shipping label created successfully'
       });
     } else {
       console.error('UPS API response missing required fields:', response.data);
-      res.status(500).json({
+      res.status(500).json({ 
         error: 'No label or tracking number returned from UPS.',
-        details: response.data,
+        details: response.data 
       });
     }
   } catch (error: any) {
     console.error('UPS API error:', error.response?.data || error.message);
-    console.error(
-      'Full error object:',
-      JSON.stringify(error.response?.data, null, 2)
-    );
-
+    console.error('Full error object:', JSON.stringify(error.response?.data, null, 2));
+    
     if (error.response?.data) {
       // Extract detailed error information
       const faultDetails = error.response.data.Fault?.detail;
       let errorMessage = 'UPS API error';
-
+      
       if (faultDetails?.Errors) {
-        const errors = Array.isArray(faultDetails.Errors)
-          ? faultDetails.Errors
-          : [faultDetails.Errors];
+        const errors = Array.isArray(faultDetails.Errors) ? faultDetails.Errors : [faultDetails.Errors];
         console.error('UPS Error Details:', JSON.stringify(errors, null, 2));
-
+        
         if (errors[0]) {
-          errorMessage =
-            errors[0].ErrorDescription || errors[0].Description || errorMessage;
+          errorMessage = errors[0].ErrorDescription || errors[0].Description || errorMessage;
         }
       }
-
-      res.status(500).json({
+      
+      res.status(500).json({ 
         error: errorMessage,
         details: error.response.data,
-        faultString: error.response.data.Fault?.faultstring,
+        faultString: error.response.data.Fault?.faultstring
       });
     } else {
-      res.status(500).json({
+      res.status(500).json({ 
         error: error.message || 'UPS API error.',
-        message: 'Failed to create shipping label',
+        message: 'Failed to create shipping label'
       });
     }
   }
@@ -793,16 +699,11 @@ function getServiceName(serviceCode: string): string {
 // Get UPS service rates for an address
 router.post('/get-rates', async (req: Request, res: Response) => {
   try {
-    const { shipToAddress, shipFromAddress, packageWeight, packageDimensions } =
-      req.body;
+    const { shipToAddress, shipFromAddress, packageWeight, packageDimensions } = req.body;
 
-    if (
-      !process.env.UPS_USERNAME ||
-      !process.env.UPS_PASSWORD ||
-      !process.env.UPS_ACCESS_KEY
-    ) {
-      return res.status(500).json({
-        error: 'UPS API credentials not configured.',
+    if (!process.env.UPS_USERNAME || !process.env.UPS_PASSWORD || !process.env.UPS_ACCESS_KEY) {
+      return res.status(500).json({ 
+        error: 'UPS API credentials not configured.' 
       });
     }
 
@@ -843,16 +744,14 @@ router.post('/get-rates', async (req: Request, res: Response) => {
             PackagingType: {
               Code: '02', // Customer Package
             },
-            Dimensions: packageDimensions
-              ? {
-                  UnitOfMeasurement: {
-                    Code: 'IN',
-                  },
-                  Length: packageDimensions.length.toString(),
-                  Width: packageDimensions.width.toString(),
-                  Height: packageDimensions.height.toString(),
-                }
-              : undefined,
+            Dimensions: packageDimensions ? {
+              UnitOfMeasurement: {
+                Code: 'IN',
+              },
+              Length: packageDimensions.length.toString(),
+              Width: packageDimensions.width.toString(),
+              Height: packageDimensions.height.toString(),
+            } : undefined,
             PackageWeight: {
               UnitOfMeasurement: {
                 Code: 'LBS',
@@ -865,23 +764,21 @@ router.post('/get-rates', async (req: Request, res: Response) => {
     };
 
     const isProduction = process.env.NODE_ENV === 'production';
-    const upsEndpoint = isProduction
+    const upsEndpoint = isProduction 
       ? 'https://onlinetools.ups.com/rest/Rate'
       : 'https://wwwcie.ups.com/rest/Rate';
 
     const response = await axios.post(upsEndpoint, ratePayload, {
-      headers: {
+      headers: { 
         'Content-Type': 'application/json',
-        Accept: 'application/json',
+        'Accept': 'application/json'
       },
       timeout: 30000,
     });
 
     const ratedShipments = response.data?.RateResponse?.RatedShipment;
     if (ratedShipments) {
-      const rates = Array.isArray(ratedShipments)
-        ? ratedShipments
-        : [ratedShipments];
+      const rates = Array.isArray(ratedShipments) ? ratedShipments : [ratedShipments];
       const formattedRates = rates.map((rate: any) => ({
         serviceCode: rate.Service?.Code,
         serviceName: getServiceName(rate.Service?.Code),
@@ -893,19 +790,19 @@ router.post('/get-rates', async (req: Request, res: Response) => {
 
       res.json({
         success: true,
-        rates: formattedRates,
+        rates: formattedRates
       });
     } else {
-      res.status(500).json({
+      res.status(500).json({ 
         error: 'No rates returned from UPS',
-        details: response.data,
+        details: response.data 
       });
     }
   } catch (error: any) {
     console.error('UPS Rate API error:', error.response?.data || error.message);
-    res.status(500).json({
+    res.status(500).json({ 
       error: 'Failed to get shipping rates',
-      details: error.response?.data || error.message,
+      details: error.response?.data || error.message
     });
   }
 });
@@ -914,240 +811,181 @@ router.post('/get-rates', async (req: Request, res: Response) => {
 router.post('/test-ups-shipment', async (req: Request, res: Response) => {
   try {
     const { createShipment } = await import('../utils/upsShipping');
-
+    
     const testShipment = {
       shipTo: {
-        name: 'Test Customer',
-        address1: '123 Test Street',
-        city: 'Austin',
-        state: 'TX',
-        postalCode: '78701',
+        name: "Test Customer",
+        address1: "123 Test Street",
+        city: "Austin", 
+        state: "TX",
+        postalCode: "78701"
       },
-      serviceCode: '03', // UPS Ground
+      serviceCode: "03", // UPS Ground
       weightLbs: 5,
-      referenceNumber: 'TEST-SHIPMENT',
+      referenceNumber: "TEST-SHIPMENT"
     };
 
     console.log('🚚 Testing UPS shipment creation...');
     const result = await createShipment(testShipment);
     console.log('✅ UPS shipment creation successful');
-
+    
     res.json({
       success: true,
       message: 'UPS shipment creation successful',
       trackingNumber: result.trackingNumber,
-      labelBase64: result.labelBase64 ? 'Generated' : 'None',
+      labelBase64: result.labelBase64 ? 'Generated' : 'None'
     });
   } catch (error) {
     console.error('❌ UPS shipment creation failed:', error);
     res.status(500).json({
       success: false,
       error: 'UPS shipment creation failed',
-      message: error instanceof Error ? error.message : 'Unknown error',
+      message: error instanceof Error ? error.message : 'Unknown error'
     });
   }
 });
 
 // UPS OAuth 2.0 Authentication (2024+ API)
-async function getUPSOAuthToken(
-  clientId: string,
-  clientSecret: string
-): Promise<string> {
+async function getUPSOAuthToken(clientId: string, clientSecret: string): Promise<string> {
   // Use production OAuth endpoint for real tracking numbers
   const tokenEndpoint = 'https://onlinetools.ups.com/security/v1/oauth/token';
-
+    
   console.log('UPS OAuth Token Endpoint:', tokenEndpoint);
-
-  const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString(
-    'base64'
-  );
-
+  
+  const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+  
   try {
-    const response = await axios.post(
-      tokenEndpoint,
+    const response = await axios.post(tokenEndpoint, 
       'grant_type=client_credentials',
       {
         headers: {
-          Authorization: `Basic ${credentials}`,
+          'Authorization': `Basic ${credentials}`,
           'Content-Type': 'application/x-www-form-urlencoded',
-          Accept: 'application/json',
+          'Accept': 'application/json'
         },
-        timeout: process.env.REPLIT_DEPLOYMENT === '1' ? 20000 : 15000, // Shorter timeout for OAuth token
+        timeout: process.env.REPLIT_DEPLOYMENT === '1' ? 20000 : 15000 // Shorter timeout for OAuth token
       }
     );
-
+    
     console.log('OAuth token response status:', response.status);
-
+    
     if (response.data?.access_token) {
       return response.data.access_token;
     } else {
       throw new Error('No access token in response');
     }
   } catch (error: any) {
-    console.error(
-      'OAuth token error details:',
-      error.response?.data || error.message
-    );
-    throw new Error(
-      `Failed to get UPS OAuth token: ${error.response?.data?.error_description || error.message}`
-    );
+    console.error('OAuth token error details:', error.response?.data || error.message);
+    throw new Error(`Failed to get UPS OAuth token: ${error.response?.data?.error_description || error.message}`);
   }
 }
 
 // Convert full state names to 2-letter abbreviations for UPS API
 function convertStateToAbbreviation(state: string): string {
   const stateMap: { [key: string]: string } = {
-    Alabama: 'AL',
-    Alaska: 'AK',
-    Arizona: 'AZ',
-    Arkansas: 'AR',
-    California: 'CA',
-    Colorado: 'CO',
-    Connecticut: 'CT',
-    Delaware: 'DE',
-    Florida: 'FL',
-    Georgia: 'GA',
-    Hawaii: 'HI',
-    Idaho: 'ID',
-    Illinois: 'IL',
-    Indiana: 'IN',
-    Iowa: 'IA',
-    Kansas: 'KS',
-    Kentucky: 'KY',
-    Louisiana: 'LA',
-    Maine: 'ME',
-    Maryland: 'MD',
-    Massachusetts: 'MA',
-    Michigan: 'MI',
-    Minnesota: 'MN',
-    Mississippi: 'MS',
-    Missouri: 'MO',
-    Montana: 'MT',
-    Nebraska: 'NE',
-    Nevada: 'NV',
-    'New Hampshire': 'NH',
-    'New Jersey': 'NJ',
-    'New Mexico': 'NM',
-    'New York': 'NY',
-    'North Carolina': 'NC',
-    'North Dakota': 'ND',
-    Ohio: 'OH',
-    Oklahoma: 'OK',
-    Oregon: 'OR',
-    Pennsylvania: 'PA',
-    'Rhode Island': 'RI',
-    'South Carolina': 'SC',
-    'South Dakota': 'SD',
-    Tennessee: 'TN',
-    Texas: 'TX',
-    Utah: 'UT',
-    Vermont: 'VT',
-    Virginia: 'VA',
-    Washington: 'WA',
-    'West Virginia': 'WV',
-    Wisconsin: 'WI',
-    Wyoming: 'WY',
-    'District of Columbia': 'DC',
+    'Alabama': 'AL', 'Alaska': 'AK', 'Arizona': 'AZ', 'Arkansas': 'AR', 'California': 'CA',
+    'Colorado': 'CO', 'Connecticut': 'CT', 'Delaware': 'DE', 'Florida': 'FL', 'Georgia': 'GA',
+    'Hawaii': 'HI', 'Idaho': 'ID', 'Illinois': 'IL', 'Indiana': 'IN', 'Iowa': 'IA',
+    'Kansas': 'KS', 'Kentucky': 'KY', 'Louisiana': 'LA', 'Maine': 'ME', 'Maryland': 'MD',
+    'Massachusetts': 'MA', 'Michigan': 'MI', 'Minnesota': 'MN', 'Mississippi': 'MS', 'Missouri': 'MO',
+    'Montana': 'MT', 'Nebraska': 'NE', 'Nevada': 'NV', 'New Hampshire': 'NH', 'New Jersey': 'NJ',
+    'New Mexico': 'NM', 'New York': 'NY', 'North Carolina': 'NC', 'North Dakota': 'ND', 'Ohio': 'OH',
+    'Oklahoma': 'OK', 'Oregon': 'OR', 'Pennsylvania': 'PA', 'Rhode Island': 'RI', 'South Carolina': 'SC',
+    'South Dakota': 'SD', 'Tennessee': 'TN', 'Texas': 'TX', 'Utah': 'UT', 'Vermont': 'VT',
+    'Virginia': 'VA', 'Washington': 'WA', 'West Virginia': 'WV', 'Wisconsin': 'WI', 'Wyoming': 'WY',
+    'District of Columbia': 'DC'
   };
-
+  
   // If already an abbreviation, return as-is
   if (state && state.length === 2) {
     return state.toUpperCase();
   }
-
+  
   // Convert full name to abbreviation
   return stateMap[state] || state;
 }
 
 // Build UPS shipment payload for OAuth REST API (2024+) - No notification to avoid validation errors
-function buildUPSShipmentPayloadOAuth(
-  shipmentDetails: any,
-  shipperNumber: string
-): any {
+function buildUPSShipmentPayloadOAuth(shipmentDetails: any, shipperNumber: string): any {
   return {
-    ShipmentRequest: {
-      Request: {
-        RequestOption: 'nonvalidate',
-        TransactionReference: {
-          CustomerContext: `Order ${shipmentDetails.orderId}`,
-        },
+    "ShipmentRequest": {
+      "Request": {
+        "RequestOption": "nonvalidate",
+        "TransactionReference": {
+          "CustomerContext": `Order ${shipmentDetails.orderId}`
+        }
       },
-      Shipment: {
-        Description: `Order ${shipmentDetails.orderId} - Manufacturing Product`,
-        Shipper: {
-          Name: process.env.SHIP_FROM_NAME || 'AG Composites',
-          AttentionName: process.env.SHIP_FROM_ATTENTION || 'Shipping',
-          CompanyDisplayableName: process.env.SHIP_FROM_NAME || 'AG Composites',
-          Phone: {
-            Number: process.env.SHIP_FROM_PHONE || '256-723-8381',
+      "Shipment": {
+        "Description": `Order ${shipmentDetails.orderId} - Manufacturing Product`,
+        "Shipper": {
+          "Name": process.env.SHIP_FROM_NAME || "AG Composites",
+          "AttentionName": process.env.SHIP_FROM_ATTENTION || "Shipping",
+          "CompanyDisplayableName": process.env.SHIP_FROM_NAME || "AG Composites",
+          "Phone": {
+            "Number": process.env.SHIP_FROM_PHONE || "256-723-8381"
           },
-          ShipperNumber: shipperNumber,
-          Address: {
-            AddressLine: [process.env.SHIP_FROM_ADDRESS1 || '230 Hamer Rd.'],
-            City: process.env.SHIP_FROM_CITY || 'Owens Crossroads',
-            StateProvinceCode: process.env.SHIP_FROM_STATE || 'AL',
-            PostalCode: process.env.SHIP_FROM_POSTAL || '35763',
-            CountryCode: 'US',
-          },
+          "ShipperNumber": shipperNumber,
+          "Address": {
+            "AddressLine": [process.env.SHIP_FROM_ADDRESS1 || "230 Hamer Rd."],
+            "City": process.env.SHIP_FROM_CITY || "Owens Crossroads",
+            "StateProvinceCode": process.env.SHIP_FROM_STATE || "AL",
+            "PostalCode": process.env.SHIP_FROM_POSTAL || "35763",
+            "CountryCode": "US"
+          }
         },
-        ShipTo: {
-          Name: shipmentDetails.shipToAddress.name,
-          AttentionName: shipmentDetails.shipToAddress.name,
-          Address: {
-            AddressLine: [shipmentDetails.shipToAddress.street],
-            City: shipmentDetails.shipToAddress.city,
-            StateProvinceCode: convertStateToAbbreviation(
-              shipmentDetails.shipToAddress.state
-            ),
-            PostalCode: shipmentDetails.shipToAddress.zipCode.replace(
-              /\D/g,
-              ''
-            ),
-            CountryCode: shipmentDetails.shipToAddress.country || 'US',
-          },
+        "ShipTo": {
+          "Name": shipmentDetails.shipToAddress.name,
+          "AttentionName": shipmentDetails.shipToAddress.name,
+          "Address": {
+            "AddressLine": [shipmentDetails.shipToAddress.street],
+            "City": shipmentDetails.shipToAddress.city,
+            "StateProvinceCode": convertStateToAbbreviation(shipmentDetails.shipToAddress.state),
+            "PostalCode": shipmentDetails.shipToAddress.zipCode.replace(/\D/g, ''),
+            "CountryCode": shipmentDetails.shipToAddress.country || "US"
+          }
         },
-        PaymentInformation: {
-          ShipmentCharge: {
-            Type: '01',
-            BillShipper: {
-              AccountNumber: shipperNumber,
+        "PaymentInformation": {
+          "ShipmentCharge": {
+            "Type": "01",
+            "BillShipper": {
+              "AccountNumber": shipperNumber
+            }
+          }
+        },
+        "Service": {
+          "Code": "03"  // UPS Ground
+        },
+        "Package": {
+          "Description": `Order ${shipmentDetails.orderId}`,
+          "Packaging": {
+            "Code": "02"  // Customer Supplied Package
+          },
+          "Dimensions": {
+            "UnitOfMeasurement": {
+              "Code": "IN"
             },
+            "Length": shipmentDetails.packageDimensions.length.toString(),
+            "Width": shipmentDetails.packageDimensions.width.toString(),
+            "Height": shipmentDetails.packageDimensions.height.toString()
           },
-        },
-        Service: {
-          Code: '03', // UPS Ground
-        },
-        Package: {
-          Description: `Order ${shipmentDetails.orderId}`,
-          Packaging: {
-            Code: '02', // Customer Supplied Package
-          },
-          Dimensions: {
-            UnitOfMeasurement: {
-              Code: 'IN',
+          "PackageWeight": {
+            "UnitOfMeasurement": {
+              "Code": "LBS"
             },
-            Length: shipmentDetails.packageDimensions.length.toString(),
-            Width: shipmentDetails.packageDimensions.width.toString(),
-            Height: shipmentDetails.packageDimensions.height.toString(),
-          },
-          PackageWeight: {
-            UnitOfMeasurement: {
-              Code: 'LBS',
-            },
-            Weight: shipmentDetails.packageWeight.toString(),
-          },
+            "Weight": shipmentDetails.packageWeight.toString()
+          }
         },
-        LabelSpecification: {
-          LabelImageFormat: {
-            Code: 'GIF',
+        "LabelSpecification": {
+          "LabelImageFormat": {
+            "Code": "GIF"
           },
-          LabelStockSize: {
-            Height: '6',
-            Width: '4',
-          },
-        },
-      },
-    },
+          "LabelStockSize": {
+            "Height": "6",
+            "Width": "4"
+          }
+        }
+      }
+    }
   };
 }
 
@@ -1156,47 +994,42 @@ router.post('/add-tracking/:orderId', async (req: Request, res: Response) => {
   try {
     const { orderId } = req.params;
     const { trackingNumber, shippingCarrier } = req.body;
-
+    
     if (!trackingNumber) {
       return res.status(400).json({ error: 'Tracking number is required' });
     }
-
+    
     // Try to update finalized order first
     try {
-      const result = await db
-        .update(allOrders)
+      const result = await db.update(allOrders)
         .set({
           trackingNumber: trackingNumber.trim(),
           shippingCarrier: shippingCarrier || 'UPS',
-          updatedAt: new Date(),
+          updatedAt: new Date()
         })
         .where(eq(allOrders.orderId, orderId));
-
-      console.log(
-        `Updated finalized order ${orderId} with tracking number ${trackingNumber}`
-      );
+      
+      console.log(`Updated finalized order ${orderId} with tracking number ${trackingNumber}`);
     } catch (finalizedError) {
       // If finalized update fails, try draft orders table
-      await db
-        .update(orderDrafts)
+      await db.update(orderDrafts)
         .set({
           trackingNumber: trackingNumber.trim(),
           shippingCarrier: shippingCarrier || 'UPS',
-          updatedAt: new Date(),
+          updatedAt: new Date()
         })
         .where(eq(orderDrafts.orderId, orderId));
-
-      console.log(
-        `Updated draft order ${orderId} with tracking number ${trackingNumber}`
-      );
+      
+      console.log(`Updated draft order ${orderId} with tracking number ${trackingNumber}`);
     }
-
-    res.json({
-      success: true,
+    
+    res.json({ 
+      success: true, 
       message: 'Tracking number added successfully',
       trackingNumber: trackingNumber.trim(),
-      shippingCarrier: shippingCarrier || 'UPS',
+      shippingCarrier: shippingCarrier || 'UPS'
     });
+    
   } catch (error) {
     console.error('Error adding tracking number:', error);
     res.status(500).json({ error: 'Failed to add tracking number' });

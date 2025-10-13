@@ -1,17 +1,7 @@
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import {
-  FileText,
-  Download,
-  Printer,
-  ClipboardList,
-  Package,
-  Receipt,
-  Barcode,
-  Calendar,
-  Award,
-} from 'lucide-react';
-import { Link } from 'wouter';
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { FileText, Download, Printer, ClipboardList, Package, Receipt, Barcode, Calendar, Award } from "lucide-react";
+import { Link } from "wouter";
 
 export default function P2Forms() {
   return (
@@ -21,13 +11,13 @@ export default function P2Forms() {
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">P2 Forms</h1>
           <p className="text-gray-600">
-            Specialized forms and documentation for P2 operations and workflow
-            management
+            Specialized forms and documentation for P2 operations and workflow management
           </p>
         </div>
 
         {/* Forms Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          
           {/* Production Order Forms */}
           <Card className="hover:shadow-lg transition-shadow">
             <CardHeader className="pb-3">
@@ -233,6 +223,7 @@ export default function P2Forms() {
               </div>
             </CardContent>
           </Card>
+
         </div>
 
         {/* Quick Actions Footer */}

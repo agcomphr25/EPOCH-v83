@@ -5,13 +5,7 @@ import toast from 'react-hot-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
@@ -54,8 +48,8 @@ export default function FormRenderer({ formId, userRole }: FormRendererProps) {
     if (formDef) {
       const initial: Record<string, any> = {};
       formDef.fields
-        .filter((f) => f.roles.includes(userRole))
-        .forEach((f) => {
+        .filter(f => f.roles.includes(userRole))
+        .forEach(f => {
           initial[f.key] = f.type === 'checkbox' ? false : '';
         });
       setFormData(initial);
@@ -70,7 +64,7 @@ export default function FormRenderer({ formId, userRole }: FormRendererProps) {
       toast.success('Submission saved');
       // Reset form
       const cleared: Record<string, any> = {};
-      visibleFields.forEach((f) => {
+      visibleFields.forEach(f => {
         cleared[f.key] = f.type === 'checkbox' ? false : '';
       });
       setFormData(cleared);
@@ -81,22 +75,20 @@ export default function FormRenderer({ formId, userRole }: FormRendererProps) {
   if (isLoading) return <div>Loading form...</div>;
   if (!formDef) return <div>Form not found</div>;
 
-  const visibleFields = formDef.fields.filter((f) =>
-    f.roles.includes(userRole)
-  );
+  const visibleFields = formDef.fields.filter(f => f.roles.includes(userRole));
 
   const handleChange = (key: string, value: any) => {
-    setFormData((prev) => ({ ...prev, [key]: value }));
+    setFormData(prev => ({ ...prev, [key]: value }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
+    
     // Validate required fields
     const missingFields = visibleFields
-      .filter((f) => f.required && !formData[f.key])
-      .map((f) => f.label);
-
+      .filter(f => f.required && !formData[f.key])
+      .map(f => f.label);
+    
     if (missingFields.length > 0) {
       toast.error(`Required fields missing: ${missingFields.join(', ')}`);
       return;
@@ -104,7 +96,7 @@ export default function FormRenderer({ formId, userRole }: FormRendererProps) {
 
     submitFormMutation.mutate({
       formId: formDef.id,
-      data: formData,
+      data: formData
     });
   };
 
@@ -170,7 +162,7 @@ export default function FormRenderer({ formId, userRole }: FormRendererProps) {
               <SelectValue placeholder="— Select —" />
             </SelectTrigger>
             <SelectContent>
-              {field.options?.map((option) => (
+              {field.options?.map(option => (
                 <SelectItem key={option} value={option}>
                   {option}
                 </SelectItem>
@@ -189,7 +181,7 @@ export default function FormRenderer({ formId, userRole }: FormRendererProps) {
               onChange={(e) => handleChange(field.key, e.target.value)}
             />
             <datalist id={`dl-${field.key}`}>
-              {field.options?.map((option) => (
+              {field.options?.map(option => (
                 <option key={option} value={option} />
               ))}
             </datalist>
@@ -218,18 +210,22 @@ export default function FormRenderer({ formId, userRole }: FormRendererProps) {
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-6">
-          {visibleFields.map((field) => (
+          {visibleFields.map(field => (
             <div key={field.key} className="space-y-2">
               <Label htmlFor={field.key}>
                 {field.label}
-                {field.required && <span className="text-red-500 ml-1">*</span>}
+                {field.required && (
+                  <span className="text-red-500 ml-1">*</span>
+                )}
               </Label>
-              <div id={field.key}>{renderField(field)}</div>
+              <div id={field.key}>
+                {renderField(field)}
+              </div>
             </div>
           ))}
 
-          <Button
-            type="submit"
+          <Button 
+            type="submit" 
             className="w-full"
             disabled={submitFormMutation.isPending}
           >

@@ -6,38 +6,24 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import {
-  Save,
-  FileText,
-  Download,
-  PenTool,
+import { 
+  Save, 
+  FileText, 
+  Download, 
+  PenTool, 
   Eye,
   AlertCircle,
-  CheckCircle,
+  CheckCircle
 } from 'lucide-react';
 
 import { apiRequest } from '@/lib/queryClient';
 
 interface FormElement {
   id: string;
-  type:
-    | 'text'
-    | 'input'
-    | 'signature'
-    | 'column'
-    | 'repeat'
-    | 'dropdown'
-    | 'textarea'
-    | 'checkbox';
+  type: 'text' | 'input' | 'signature' | 'column' | 'repeat' | 'dropdown' | 'textarea' | 'checkbox';
   x: number;
   y: number;
   width: number;
@@ -65,10 +51,10 @@ interface EnhancedForm {
   version: number;
 }
 
-export default function EnhancedFormRenderer({
-  formId,
-  userRole = 'user',
-}: {
+export default function EnhancedFormRenderer({ 
+  formId, 
+  userRole = 'user' 
+}: { 
   formId: number;
   userRole?: string;
 }) {
@@ -87,7 +73,7 @@ export default function EnhancedFormRenderer({
         setLoading(true);
         const response = await apiRequest(`/api/enhanced-forms/${formId}`);
         setFormDef(response);
-
+        
         // Initialize form data
         const initData: Record<string, any> = {};
         (response.layout || []).forEach((el: FormElement) => {
@@ -123,27 +109,26 @@ export default function EnhancedFormRenderer({
 
   // Handle form field changes
   const handleChange = (key: string, value: any) => {
-    setData((prev) => ({ ...prev, [key]: value }));
+    setData(prev => ({ ...prev, [key]: value }));
     // Clear error when user starts typing
     if (errors[key]) {
-      setErrors((prev) => ({ ...prev, [key]: '' }));
+      setErrors(prev => ({ ...prev, [key]: '' }));
     }
   };
 
   // Validate form data
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
-
+    
     if (!formDef?.layout) return false;
 
-    formDef.layout.forEach((element) => {
+    formDef.layout.forEach(element => {
       if (element.config.required) {
         const key = element.config.key || element.id;
         const value = data[key];
-
+        
         if (!value || (typeof value === 'string' && value.trim() === '')) {
-          newErrors[key] =
-            `${element.config.label || 'This field'} is required`;
+          newErrors[key] = `${element.config.label || 'This field'} is required`;
         }
       }
     });
@@ -155,7 +140,7 @@ export default function EnhancedFormRenderer({
   // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
+    
     if (!validateForm()) {
       toast.error('Please fix the errors before submitting');
       return;
@@ -165,13 +150,13 @@ export default function EnhancedFormRenderer({
       setSubmitting(true);
       await apiRequest('/api/enhanced-forms/submissions', {
         method: 'POST',
-        body: { formId, data },
+        body: { formId, data }
       });
       toast.success('Form submitted successfully');
-
+      
       // Clear form after successful submission
       const initData: Record<string, any> = {};
-      (formDef?.layout || []).forEach((el) => {
+      (formDef?.layout || []).forEach(el => {
         if (el.type === 'repeat') {
           initData[el.id] = [];
         } else if (el.type === 'signature') {
@@ -198,13 +183,13 @@ export default function EnhancedFormRenderer({
   // Handle print/PDF generation
   const handlePrint = () => {
     if (!formRef.current) return;
-
+    
     const opt = {
       margin: 1,
       filename: `${formDef?.name || 'form'}.pdf`,
       image: { type: 'jpeg', quality: 0.98 },
       html2canvas: { scale: 2 },
-      jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' },
+      jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
     };
 
     html2pdf().from(formRef.current).set(opt).save();
@@ -213,18 +198,15 @@ export default function EnhancedFormRenderer({
   // Check if element should be visible based on conditions
   const isElementVisible = (element: FormElement): boolean => {
     if (!element.config.visibleIf) return true;
-
+    
     try {
       // Simple condition evaluation - you might want to use a proper expression parser
-      const condition = element.config.visibleIf.replace(
-        /\b(\w+)\b/g,
-        (match) => {
-          const value = data[match];
-          if (typeof value === 'string') return `"${value}"`;
-          return String(value);
-        }
-      );
-
+      const condition = element.config.visibleIf.replace(/\b(\w+)\b/g, (match) => {
+        const value = data[match];
+        if (typeof value === 'string') return `"${value}"`;
+        return String(value);
+      });
+      
       // Using Function constructor for safer evaluation than eval
       return new Function(`return ${condition}`)();
     } catch (error) {
@@ -248,7 +230,7 @@ export default function EnhancedFormRenderer({
       id: key,
       className: error ? 'border-red-500' : '',
       'aria-invalid': !!error,
-      'aria-describedby': error ? `${key}-error` : undefined,
+      'aria-describedby': error ? `${key}-error` : undefined
     };
 
     switch (element.type) {
@@ -275,10 +257,7 @@ export default function EnhancedFormRenderer({
               placeholder={element.config.placeholder || element.config.label}
             />
             {error && (
-              <p
-                id={`${key}-error`}
-                className="mt-1 text-sm text-red-600 flex items-center gap-1"
-              >
+              <p id={`${key}-error`} className="mt-1 text-sm text-red-600 flex items-center gap-1">
                 <AlertCircle className="h-4 w-4" />
                 {error}
               </p>
@@ -301,10 +280,7 @@ export default function EnhancedFormRenderer({
               rows={4}
             />
             {error && (
-              <p
-                id={`${key}-error`}
-                className="mt-1 text-sm text-red-600 flex items-center gap-1"
-              >
+              <p id={`${key}-error`} className="mt-1 text-sm text-red-600 flex items-center gap-1">
                 <AlertCircle className="h-4 w-4" />
                 {error}
               </p>
@@ -319,15 +295,12 @@ export default function EnhancedFormRenderer({
               {element.config.label}
               {isRequired && <span className="text-red-500">*</span>}
             </Label>
-            <Select
-              value={value || ''}
-              onValueChange={(val) => handleChange(key, val)}
-            >
+            <Select value={value || ''} onValueChange={(val) => handleChange(key, val)}>
               <SelectTrigger className={error ? 'border-red-500' : ''}>
                 <SelectValue placeholder={`Select ${element.config.label}`} />
               </SelectTrigger>
               <SelectContent>
-                {(element.config.options || []).map((option) => (
+                {(element.config.options || []).map(option => (
                   <SelectItem key={option} value={option}>
                     {option}
                   </SelectItem>
@@ -335,10 +308,7 @@ export default function EnhancedFormRenderer({
               </SelectContent>
             </Select>
             {error && (
-              <p
-                id={`${key}-error`}
-                className="mt-1 text-sm text-red-600 flex items-center gap-1"
-              >
+              <p id={`${key}-error`} className="mt-1 text-sm text-red-600 flex items-center gap-1">
                 <AlertCircle className="h-4 w-4" />
                 {error}
               </p>
@@ -363,10 +333,7 @@ export default function EnhancedFormRenderer({
               </Label>
             </div>
             {error && (
-              <p
-                id={`${key}-error`}
-                className="mt-1 text-sm text-red-600 flex items-center gap-1"
-              >
+              <p id={`${key}-error`} className="mt-1 text-sm text-red-600 flex items-center gap-1">
                 <AlertCircle className="h-4 w-4" />
                 {error}
               </p>
@@ -384,9 +351,7 @@ export default function EnhancedFormRenderer({
             </Label>
             <div className="border border-gray-300 rounded-md p-2">
               <div className="w-full h-32 bg-gray-100 rounded border-2 border-dashed border-gray-300 flex items-center justify-center">
-                <span className="text-gray-500">
-                  Signature pad temporarily disabled
-                </span>
+                <span className="text-gray-500">Signature pad temporarily disabled</span>
               </div>
               <div className="mt-2 flex justify-between items-center">
                 <Button
@@ -408,10 +373,7 @@ export default function EnhancedFormRenderer({
               </div>
             </div>
             {error && (
-              <p
-                id={`${key}-error`}
-                className="mt-1 text-sm text-red-600 flex items-center gap-1"
-              >
+              <p id={`${key}-error`} className="mt-1 text-sm text-red-600 flex items-center gap-1">
                 <AlertCircle className="h-4 w-4" />
                 {error}
               </p>
@@ -443,8 +405,7 @@ export default function EnhancedFormRenderer({
             </Label>
             <div className="border border-gray-300 rounded-md p-4">
               <p className="text-sm text-gray-500">
-                Repeat group functionality will be implemented based on specific
-                requirements
+                Repeat group functionality will be implemented based on specific requirements
               </p>
             </div>
           </div>
@@ -472,9 +433,7 @@ export default function EnhancedFormRenderer({
         <CardContent className="p-8 text-center">
           <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
           <p className="text-lg font-semibold">Form not found</p>
-          <p className="text-gray-600">
-            The requested form could not be loaded.
-          </p>
+          <p className="text-gray-600">The requested form could not be loaded.</p>
         </CardContent>
       </Card>
     );
@@ -508,7 +467,7 @@ export default function EnhancedFormRenderer({
                 <Download className="h-4 w-4" />
                 Print/PDF
               </Button>
-
+              
               <Button
                 type="submit"
                 disabled={submitting}

@@ -44,10 +44,7 @@ export default function OfflineIndicator() {
           {isOnline ? (
             <>
               <Wifi className="h-4 w-4 text-green-600" />
-              <Badge
-                variant="outline"
-                className="text-green-600 border-green-600"
-              >
+              <Badge variant="outline" className="text-green-600 border-green-600">
                 Connected
               </Badge>
             </>

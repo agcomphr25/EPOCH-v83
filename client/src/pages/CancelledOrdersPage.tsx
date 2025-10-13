@@ -4,21 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import {
-  Search,
-  Calendar,
-  User,
-  AlertTriangle,
-  XCircle,
-  RotateCcw,
-} from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Search, Calendar, User, AlertTriangle, XCircle, RotateCcw } from 'lucide-react';
 import { apiRequest } from '@/lib/queryClient';
 import { toast } from 'react-hot-toast';
 
@@ -48,9 +35,7 @@ interface Order {
 
 export default function CancelledOrdersPage() {
   const [searchTerm, setSearchTerm] = useState('');
-  const [sortBy, setSortBy] = useState<
-    'orderDate' | 'cancelledAt' | 'orderId' | 'customer'
-  >('cancelledAt');
+  const [sortBy, setSortBy] = useState<'orderDate' | 'cancelledAt' | 'orderId' | 'customer'>('cancelledAt');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const queryClient = useQueryClient();
 
@@ -68,10 +53,9 @@ export default function CancelledOrdersPage() {
 
   // Undo cancellation mutation
   const undoCancellationMutation = useMutation({
-    mutationFn: (orderId: string) =>
-      apiRequest(`/api/orders/undo-cancel/${orderId}`, {
-        method: 'POST',
-      }),
+    mutationFn: (orderId: string) => apiRequest(`/api/orders/undo-cancel/${orderId}`, {
+      method: 'POST'
+    }),
     onSuccess: () => {
       toast.success('Order restored successfully!');
       // Invalidate and refetch cancelled orders
@@ -79,27 +63,27 @@ export default function CancelledOrdersPage() {
     },
     onError: (error: any) => {
       toast.error(error.message || 'Failed to restore order');
-    },
+    }
   });
 
   const getCustomerName = (customerId: string) => {
     if (!customers || !customerId) return customerId || '';
-    const customer = customers.find((c) => c.id.toString() === customerId);
+    const customer = customers.find(c => c.id.toString() === customerId);
     return customer?.name || customerId || '';
   };
 
   const getCustomerPhone = (customerId: string) => {
     if (!customers || !customerId) return '';
-    const customer = customers.find((c) => c.id.toString() === customerId);
+    const customer = customers.find(c => c.id.toString() === customerId);
     return customer?.phone || '';
   };
 
   // Filter and sort cancelled orders (already cancelled from API)
   const cancelledOrders = useMemo(() => {
     if (!orders) return [];
-
+    
     let filtered = orders; // Orders are already cancelled from the API
-
+    
     // Apply search filter
     if (searchTerm.trim()) {
       const term = searchTerm.toLowerCase().trim();
@@ -108,43 +92,37 @@ export default function CancelledOrdersPage() {
         if (order.orderId && order.orderId.toLowerCase().includes(term)) {
           return true;
         }
-
+        
         // Search by Customer Name
         const customerName = getCustomerName(order.customerId);
         if (customerName && customerName.toLowerCase().includes(term)) {
           return true;
         }
-
+        
         // Search by Customer Phone
         const customerPhone = getCustomerPhone(order.customerId);
         if (customerPhone && customerPhone.toLowerCase().includes(term)) {
           return true;
         }
-
+        
         // Search by FB Order Number
-        if (
-          order.fbOrderNumber &&
-          order.fbOrderNumber.toLowerCase().includes(term)
-        ) {
+        if (order.fbOrderNumber && order.fbOrderNumber.toLowerCase().includes(term)) {
           return true;
         }
-
+        
         // Search by cancellation reason
-        if (
-          order.cancelReason &&
-          order.cancelReason.toLowerCase().includes(term)
-        ) {
+        if (order.cancelReason && order.cancelReason.toLowerCase().includes(term)) {
           return true;
         }
-
+        
         return false;
       });
     }
-
+    
     // Apply sorting
     filtered.sort((a, b) => {
       let aValue: any, bValue: any;
-
+      
       switch (sortBy) {
         case 'orderId':
           aValue = a.orderId;
@@ -164,12 +142,12 @@ export default function CancelledOrdersPage() {
           bValue = new Date(b.orderDate);
           break;
       }
-
+      
       if (aValue < bValue) return sortOrder === 'asc' ? -1 : 1;
       if (aValue > bValue) return sortOrder === 'asc' ? 1 : -1;
       return 0;
     });
-
+    
     return filtered;
   }, [orders, customers, searchTerm, sortBy, sortOrder]);
 
@@ -182,11 +160,7 @@ export default function CancelledOrdersPage() {
   };
 
   const handleUndoCancel = (orderId: string) => {
-    if (
-      confirm(
-        'Are you sure you want to restore this cancelled order? It will be returned to the production queue.'
-      )
-    ) {
+    if (confirm('Are you sure you want to restore this cancelled order? It will be returned to the production queue.')) {
       undoCancellationMutation.mutate(orderId);
     }
   };
@@ -212,9 +186,7 @@ export default function CancelledOrdersPage() {
               <XCircle className="h-6 w-6 text-red-600" />
             </div>
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">
-                Cancelled Orders
-              </h1>
+              <h1 className="text-3xl font-bold text-gray-900">Cancelled Orders</h1>
               <p className="text-gray-600">View and manage cancelled orders</p>
             </div>
           </div>
@@ -234,10 +206,7 @@ export default function CancelledOrdersPage() {
               </div>
 
               {/* Sort By */}
-              <Select
-                value={sortBy}
-                onValueChange={(value: any) => setSortBy(value)}
-              >
+              <Select value={sortBy} onValueChange={(value: any) => setSortBy(value)}>
                 <SelectTrigger className="w-48">
                   <SelectValue />
                 </SelectTrigger>
@@ -250,10 +219,7 @@ export default function CancelledOrdersPage() {
               </Select>
 
               {/* Sort Order */}
-              <Select
-                value={sortOrder}
-                onValueChange={(value: any) => setSortOrder(value)}
-              >
+              <Select value={sortOrder} onValueChange={(value: any) => setSortOrder(value)}>
                 <SelectTrigger className="w-32">
                   <SelectValue />
                 </SelectTrigger>
@@ -266,8 +232,7 @@ export default function CancelledOrdersPage() {
 
             {/* Results Summary */}
             <div className="mt-4 text-sm text-gray-600">
-              Showing {cancelledOrders.length} cancelled order
-              {cancelledOrders.length !== 1 ? 's' : ''}
+              Showing {cancelledOrders.length} cancelled order{cancelledOrders.length !== 1 ? 's' : ''}
             </div>
           </div>
         </div>
@@ -277,13 +242,9 @@ export default function CancelledOrdersPage() {
           <Card>
             <CardContent className="p-12 text-center">
               <XCircle className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                No Cancelled Orders Found
-              </h3>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">No Cancelled Orders Found</h3>
               <p className="text-gray-600">
-                {searchTerm
-                  ? 'Try adjusting your search criteria.'
-                  : 'No orders have been cancelled yet.'}
+                {searchTerm ? 'Try adjusting your search criteria.' : 'No orders have been cancelled yet.'}
               </p>
             </CardContent>
           </Card>
@@ -303,12 +264,11 @@ export default function CancelledOrdersPage() {
                           <h3 className="text-lg font-semibold text-gray-900">
                             {getDisplayOrderId(order)}
                           </h3>
-                          {order.fbOrderNumber &&
-                            order.orderId !== order.fbOrderNumber && (
-                              <Badge variant="outline" className="text-xs">
-                                AG: {order.orderId}
-                              </Badge>
-                            )}
+                          {order.fbOrderNumber && order.orderId !== order.fbOrderNumber && (
+                            <Badge variant="outline" className="text-xs">
+                              AG: {order.orderId}
+                            </Badge>
+                          )}
                         </div>
                       </div>
 
@@ -344,12 +304,8 @@ export default function CancelledOrdersPage() {
                           <div className="flex items-start gap-2">
                             <AlertTriangle className="h-4 w-4 text-red-600 mt-0.5 flex-shrink-0" />
                             <div>
-                              <span className="font-medium text-red-900">
-                                Cancellation Reason:
-                              </span>
-                              <p className="text-red-800 mt-1">
-                                {order.cancelReason}
-                              </p>
+                              <span className="font-medium text-red-900">Cancellation Reason:</span>
+                              <p className="text-red-800 mt-1">{order.cancelReason}</p>
                             </div>
                           </div>
                         </div>
@@ -366,14 +322,14 @@ export default function CancelledOrdersPage() {
                         data-testid={`button-undo-${order.orderId}`}
                       >
                         <RotateCcw className="h-4 w-4 mr-2" />
-                        {undoCancellationMutation.isPending
-                          ? 'Restoring...'
-                          : 'Undo Cancellation'}
+                        {undoCancellationMutation.isPending ? 'Restoring...' : 'Undo Cancellation'}
                       </Button>
-
+                      
                       <div className="text-right text-sm text-gray-500">
                         {order.cancelledAt && (
-                          <div>Cancelled: {formatDate(order.cancelledAt)}</div>
+                          <div>
+                            Cancelled: {formatDate(order.cancelledAt)}
+                          </div>
                         )}
                       </div>
                     </div>

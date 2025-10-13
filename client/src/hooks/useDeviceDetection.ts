@@ -18,18 +18,15 @@ export function useDeviceDetection(): DeviceCapabilities {
   useEffect(() => {
     const detectCapabilities = async () => {
       // Detect mobile device
-      const isMobile =
-        /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
-          navigator.userAgent
-        ) || window.innerWidth <= 768;
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+        navigator.userAgent
+      ) || window.innerWidth <= 768;
 
       // Detect touch screen
-      const hasTouchScreen =
-        'ontouchstart' in window || navigator.maxTouchPoints > 0;
+      const hasTouchScreen = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
 
       // Detect PWA standalone mode
-      const isStandalone =
-        window.matchMedia('(display-mode: standalone)').matches ||
+      const isStandalone = window.matchMedia('(display-mode: standalone)').matches ||
         (window.navigator as any).standalone === true;
 
       // Detect camera capability
@@ -38,7 +35,7 @@ export function useDeviceDetection(): DeviceCapabilities {
         if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
           // Check if camera is available
           const devices = await navigator.mediaDevices.enumerateDevices();
-          hasCamera = devices.some((device) => device.kind === 'videoinput');
+          hasCamera = devices.some(device => device.kind === 'videoinput');
         }
       } catch (error) {
         console.log('Camera detection failed:', error);

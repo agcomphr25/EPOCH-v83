@@ -1,21 +1,12 @@
-import React, {
-  createContext,
-  useContext,
-  useState,
-  useCallback,
-  ReactNode,
-  useEffect,
-} from 'react';
+import React, { createContext, useContext, useState, useCallback, ReactNode, useEffect } from "react";
 
 // Ensure React is available before using hooks
 if (!React || !React.useState) {
-  console.error('React or React.useState is not available in CSVContext');
-  throw new Error(
-    'React hooks are not available. React may not be properly initialized.'
-  );
+  console.error("React or React.useState is not available in CSVContext");
+  throw new Error("React hooks are not available. React may not be properly initialized.");
 }
-import Papa from 'papaparse';
-import { apiRequest } from '@/lib/queryClient';
+import Papa from "papaparse";
+import { apiRequest } from "@/lib/queryClient";
 
 export interface CSVData {
   [key: string]: string | number;
@@ -54,7 +45,7 @@ export function CSVProvider({ children }: { children: ReactNode }) {
       try {
         const savedData = await apiRequest('/api/csv-data');
         if (savedData && Array.isArray(savedData.data)) {
-          setState((prev) => ({
+          setState(prev => ({
             ...prev,
             data: savedData.data,
             fileName: savedData.fileName || null,
@@ -66,12 +57,12 @@ export function CSVProvider({ children }: { children: ReactNode }) {
         console.log('No saved CSV data found');
       }
     };
-
+    
     loadSavedData();
   }, []);
 
   const parseCSV = useCallback((file: File, hasHeaders: boolean = true) => {
-    setState((prev) => ({
+    setState(prev => ({
       ...prev,
       isLoading: true,
       error: null,
@@ -82,10 +73,8 @@ export function CSVProvider({ children }: { children: ReactNode }) {
       complete: async (results) => {
         try {
           if (results.errors.length > 0) {
-            const errorMessage = results.errors
-              .map((err) => err.message)
-              .join(', ');
-            setState((prev) => ({
+            const errorMessage = results.errors.map(err => err.message).join(", ");
+            setState(prev => ({
               ...prev,
               isLoading: false,
               error: `CSV parsing errors: ${errorMessage}`,
@@ -94,18 +83,18 @@ export function CSVProvider({ children }: { children: ReactNode }) {
           }
 
           const rawData = results.data as string[][];
-
+          
           if (rawData.length === 0) {
-            setState((prev) => ({
+            setState(prev => ({
               ...prev,
               isLoading: false,
-              error: 'CSV file is empty',
+              error: "CSV file is empty",
             }));
             return;
           }
 
           // Store raw data and process it initially
-          setState((prev) => ({
+          setState(prev => ({
             ...prev,
             isLoading: false,
             rawData: rawData,
@@ -115,7 +104,7 @@ export function CSVProvider({ children }: { children: ReactNode }) {
           // Process the data with current header setting
           await processDataInternal(rawData, hasHeaders);
         } catch (error) {
-          setState((prev) => ({
+          setState(prev => ({
             ...prev,
             isLoading: false,
             error: `Error processing CSV: ${error instanceof Error ? error.message : 'Unknown error'}`,
@@ -123,7 +112,7 @@ export function CSVProvider({ children }: { children: ReactNode }) {
         }
       },
       error: (error) => {
-        setState((prev) => ({
+        setState(prev => ({
           ...prev,
           isLoading: false,
           error: `Failed to parse CSV: ${error.message}`,
@@ -134,27 +123,23 @@ export function CSVProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  const processDataInternal = async (
-    rawData: string[][],
-    hasHeaders: boolean
-  ) => {
+  const processDataInternal = async (rawData: string[][], hasHeaders: boolean) => {
     try {
       let processedData: CSVData[] = [];
-
+      
       if (hasHeaders && rawData.length > 1) {
         const headers = rawData[0];
         const dataRows = rawData.slice(1);
-
+        
         processedData = dataRows.map((row, index) => {
           const rowData: CSVData = {};
           headers.forEach((header, headerIndex) => {
             const cleanHeader = header.trim();
             const value = row[headerIndex] || '';
-
+            
             // Try to convert to number if possible
             const numValue = Number(value);
-            rowData[cleanHeader] =
-              !isNaN(numValue) && value !== '' ? numValue : value;
+            rowData[cleanHeader] = !isNaN(numValue) && value !== '' ? numValue : value;
           });
           return rowData;
         });
@@ -164,14 +149,13 @@ export function CSVProvider({ children }: { children: ReactNode }) {
           const rowData: CSVData = {};
           row.forEach((value, colIndex) => {
             const numValue = Number(value);
-            rowData[`Column ${colIndex + 1}`] =
-              !isNaN(numValue) && value !== '' ? numValue : value;
+            rowData[`Column ${colIndex + 1}`] = !isNaN(numValue) && value !== '' ? numValue : value;
           });
           return rowData;
         });
       }
 
-      setState((prev) => ({
+      setState(prev => ({
         ...prev,
         data: processedData,
         rowCount: processedData.length,
@@ -185,22 +169,20 @@ export function CSVProvider({ children }: { children: ReactNode }) {
           fileName: state.fileName,
         }),
       });
+      
     } catch (error) {
-      setState((prev) => ({
+      setState(prev => ({
         ...prev,
         error: `Error processing data: ${error instanceof Error ? error.message : 'Unknown error'}`,
       }));
     }
   };
 
-  const processData = useCallback(
-    (hasHeaders: boolean) => {
-      if (state.rawData) {
-        processDataInternal(state.rawData, hasHeaders);
-      }
-    },
-    [state.rawData, state.fileName]
-  );
+  const processData = useCallback((hasHeaders: boolean) => {
+    if (state.rawData) {
+      processDataInternal(state.rawData, hasHeaders);
+    }
+  }, [state.rawData, state.fileName]);
 
   const clearData = useCallback(() => {
     setState({
@@ -214,14 +196,12 @@ export function CSVProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <CSVContext.Provider
-      value={{
-        ...state,
-        parseCSV,
-        processData,
-        clearData,
-      }}
-    >
+    <CSVContext.Provider value={{
+      ...state,
+      parseCSV,
+      processData,
+      clearData,
+    }}>
       {children}
     </CSVContext.Provider>
   );

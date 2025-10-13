@@ -1,12 +1,12 @@
-import { useState } from 'react';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
-import { useMutation, useQuery } from '@tanstack/react-query';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Switch } from '@/components/ui/switch';
+import { useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 import {
   Form,
   FormControl,
@@ -15,14 +15,14 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-} from '@/components/ui/form';
+} from "@/components/ui/form";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select';
+} from "@/components/ui/select";
 import {
   Command,
   CommandEmpty,
@@ -30,35 +30,23 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
-} from '@/components/ui/command';
+} from "@/components/ui/command";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-} from '@/components/ui/popover';
-import { Check, ChevronsUpDown } from 'lucide-react';
-import { cn } from '@/lib/utils';
-import { apiRequest } from '@/lib/queryClient';
-import { toast } from 'react-hot-toast';
+} from "@/components/ui/popover";
+import { Check, ChevronsUpDown } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { apiRequest } from "@/lib/queryClient";
+import { toast } from "react-hot-toast";
 import type { InventoryItem } from '@shared/schema';
 
 const bomItemSchema = z.object({
-  partName: z.string().min(1, 'Part name is required'),
-  quantity: z.number().min(1, 'Quantity must be at least 1'),
-  purchasingUnitConversion: z
-    .number()
-    .min(0.001, 'Conversion must be greater than 0')
-    .default(1),
-  firstDept: z
-    .enum([
-      'Layup',
-      'Assembly/Disassembly',
-      'Finish',
-      'Paint',
-      'QC',
-      'Shipping',
-    ])
-    .default('Layup'),
+  partName: z.string().min(1, "Part name is required"),
+  quantity: z.number().min(1, "Quantity must be at least 1"),
+  purchasingUnitConversion: z.number().min(0.001, "Conversion must be greater than 0").default(1),
+  firstDept: z.enum(['Layup', 'Assembly/Disassembly', 'Finish', 'Paint', 'QC', 'Shipping']).default('Layup'),
   itemType: z.enum(['manufactured', 'material']).default('manufactured'),
   isActive: z.boolean().default(true),
 });
@@ -87,65 +75,58 @@ interface BOMItemFormProps {
 
 // Common units of measure for manufacturing
 const commonUnits = [
-  'EA', // Each
-  'PC', // Piece
-  'FT', // Feet
-  'IN', // Inches
-  'LB', // Pounds
-  'KG', // Kilograms
-  'GAL', // Gallons
-  'L', // Liters
-  'SQ FT', // Square Feet
-  'SQ IN', // Square Inches
-  'CU FT', // Cubic Feet
-  'CU IN', // Cubic Inches
-  'HR', // Hours
-  'SET', // Set
-  'KIT', // Kit
-  'BOX', // Box
-  'PKG', // Package
+  "EA", // Each
+  "PC", // Piece
+  "FT", // Feet
+  "IN", // Inches
+  "LB", // Pounds
+  "KG", // Kilograms
+  "GAL", // Gallons
+  "L", // Liters
+  "SQ FT", // Square Feet
+  "SQ IN", // Square Inches
+  "CU FT", // Cubic Feet
+  "CU IN", // Cubic Inches
+  "HR", // Hours
+  "SET", // Set
+  "KIT", // Kit
+  "BOX", // Box
+  "PKG", // Package
 ];
 
 // Common component categories
 const commonCategories = [
-  'Raw Materials',
-  'Fasteners',
-  'Electronics',
-  'Hardware',
-  'Mechanical',
-  'Electrical',
-  'Finishing',
-  'Packaging',
-  'Assembly',
-  'Tools',
-  'Consumables',
-  'Other',
+  "Raw Materials",
+  "Fasteners",
+  "Electronics",
+  "Hardware",
+  "Mechanical",
+  "Electrical",
+  "Finishing",
+  "Packaging",
+  "Assembly",
+  "Tools",
+  "Consumables",
+  "Other"
 ];
 
-export function BOMItemForm({
-  bomId,
-  item,
-  onSuccess,
-  onCancel,
-}: BOMItemFormProps) {
+export function BOMItemForm({ bomId, item, onSuccess, onCancel }: BOMItemFormProps) {
   const isEditing = !!item;
   const [open, setOpen] = useState(false);
 
   // Fetch inventory items
-  const { data: inventoryItems, isLoading: isLoadingInventory } = useQuery<
-    InventoryItem[]
-  >({
+  const { data: inventoryItems, isLoading: isLoadingInventory } = useQuery<InventoryItem[]>({
     queryKey: ['/api/inventory'],
   });
 
   const form = useForm<BomItemFormData>({
     resolver: zodResolver(bomItemSchema),
     defaultValues: {
-      partName: item?.partName || '',
+      partName: item?.partName || "",
       quantity: item?.quantity || 1,
       purchasingUnitConversion: item?.quantityMultiplier || 1,
-      firstDept: (item?.firstDept as any) || 'Layup',
-      itemType: (item?.itemType as any) || 'manufactured',
+      firstDept: item?.firstDept as any || "Layup",
+      itemType: item?.itemType as any || "manufactured",
       isActive: item?.isActive ?? true,
     },
   });
@@ -154,12 +135,12 @@ export function BOMItemForm({
     mutationFn: async (data: BomItemFormData) => {
       if (isEditing) {
         return apiRequest(`/api/boms/${bomId}/items/${item.id}`, {
-          method: 'PUT',
+          method: "PUT",
           body: data,
         });
       } else {
         return apiRequest(`/api/boms/${bomId}/items`, {
-          method: 'POST',
+          method: "POST",
           body: data,
         });
       }
@@ -168,8 +149,8 @@ export function BOMItemForm({
       onSuccess();
     },
     onError: (error: any) => {
-      console.error('BOM item operation error:', error);
-      toast.error(isEditing ? 'Failed to update item' : 'Failed to add item');
+      console.error("BOM item operation error:", error);
+      toast.error(isEditing ? "Failed to update item" : "Failed to add item");
     },
   });
 
@@ -194,8 +175,8 @@ export function BOMItemForm({
                       role="combobox"
                       aria-expanded={open}
                       className={cn(
-                        'w-full justify-between',
-                        !field.value && 'text-muted-foreground'
+                        "w-full justify-between",
+                        !field.value && "text-muted-foreground"
                       )}
                       disabled={isLoadingInventory}
                     >
@@ -203,11 +184,11 @@ export function BOMItemForm({
                         ? inventoryItems?.find(
                             (item) => item.name === field.value
                           )
-                          ? `${inventoryItems.find((item) => item.name === field.value)?.agPartNumber} - ${field.value}`
+                          ? `${inventoryItems.find(item => item.name === field.value)?.agPartNumber} - ${field.value}`
                           : field.value
-                        : isLoadingInventory
-                          ? 'Loading inventory...'
-                          : 'Select inventory item...'}
+                        : isLoadingInventory 
+                        ? "Loading inventory..."
+                        : "Select inventory item..."}
                       <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                     </Button>
                   </FormControl>
@@ -218,33 +199,31 @@ export function BOMItemForm({
                     <CommandList>
                       <CommandEmpty>No inventory items found.</CommandEmpty>
                       <CommandGroup>
-                        {inventoryItems
-                          ?.filter((item) => item.isActive)
-                          .map((item) => (
-                            <CommandItem
-                              key={item.id}
-                              value={`${item.agPartNumber} ${item.name}`}
-                              onSelect={() => {
-                                field.onChange(item.name);
-                                setOpen(false);
-                              }}
-                            >
-                              <Check
-                                className={cn(
-                                  'mr-2 h-4 w-4',
-                                  item.name === field.value
-                                    ? 'opacity-100'
-                                    : 'opacity-0'
-                                )}
-                              />
-                              <div className="flex items-center">
-                                <span className="font-mono text-sm text-muted-foreground mr-2">
-                                  {item.agPartNumber}
-                                </span>
-                                <span>{item.name}</span>
-                              </div>
-                            </CommandItem>
-                          ))}
+                        {inventoryItems?.filter(item => item.isActive).map((item) => (
+                          <CommandItem
+                            key={item.id}
+                            value={`${item.agPartNumber} ${item.name}`}
+                            onSelect={() => {
+                              field.onChange(item.name);
+                              setOpen(false);
+                            }}
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4",
+                                item.name === field.value
+                                  ? "opacity-100"
+                                  : "opacity-0"
+                              )}
+                            />
+                            <div className="flex items-center">
+                              <span className="font-mono text-sm text-muted-foreground mr-2">
+                                {item.agPartNumber}
+                              </span>
+                              <span>{item.name}</span>
+                            </div>
+                          </CommandItem>
+                        ))}
                       </CommandGroup>
                     </CommandList>
                   </Command>
@@ -266,17 +245,17 @@ export function BOMItemForm({
               <FormItem>
                 <FormLabel>Quantity *</FormLabel>
                 <FormControl>
-                  <Input
+                  <Input 
                     type="number"
                     min="1"
                     placeholder="1"
                     {...field}
-                    onChange={(e) =>
-                      field.onChange(parseInt(e.target.value) || 1)
-                    }
+                    onChange={(e) => field.onChange(parseInt(e.target.value) || 1)}
                   />
                 </FormControl>
-                <FormDescription>Required quantity</FormDescription>
+                <FormDescription>
+                  Required quantity
+                </FormDescription>
                 <FormMessage />
               </FormItem>
             )}
@@ -289,20 +268,17 @@ export function BOMItemForm({
               <FormItem>
                 <FormLabel>Purchasing Unit Conversion</FormLabel>
                 <FormControl>
-                  <Input
+                  <Input 
                     type="number"
                     step="0.01"
                     min="0.001"
                     placeholder="1.00"
                     {...field}
-                    onChange={(e) =>
-                      field.onChange(parseFloat(e.target.value) || 1)
-                    }
+                    onChange={(e) => field.onChange(parseFloat(e.target.value) || 1)}
                   />
                 </FormControl>
                 <FormDescription>
-                  Conversion factor for procurement (e.g., 0.02 if screws come
-                  in packs of 50)
+                  Conversion factor for procurement (e.g., 0.02 if screws come in packs of 50)
                 </FormDescription>
                 <FormMessage />
               </FormItem>
@@ -311,16 +287,14 @@ export function BOMItemForm({
         </div>
 
         <div className="grid grid-cols-2 gap-4">
-          <FormField
-            control={form.control}
-            name="firstDept"
-            render={({ field }) => (
+
+        <FormField
+          control={form.control}
+          name="firstDept"
+          render={({ field }) => (
               <FormItem>
                 <FormLabel>First Department *</FormLabel>
-                <Select
-                  onValueChange={field.onChange}
-                  defaultValue={field.value}
-                >
+                <Select onValueChange={field.onChange} defaultValue={field.value}>
                   <FormControl>
                     <SelectTrigger>
                       <SelectValue placeholder="Select department" />
@@ -328,9 +302,7 @@ export function BOMItemForm({
                   </FormControl>
                   <SelectContent>
                     <SelectItem value="Layup">Layup</SelectItem>
-                    <SelectItem value="Assembly/Disassembly">
-                      Assembly/Disassembly
-                    </SelectItem>
+                    <SelectItem value="Assembly/Disassembly">Assembly/Disassembly</SelectItem>
                     <SelectItem value="Finish">Finish</SelectItem>
                     <SelectItem value="Paint">Paint</SelectItem>
                     <SelectItem value="QC">QC</SelectItem>
@@ -359,17 +331,12 @@ export function BOMItemForm({
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
-                  <SelectItem value="manufactured">
-                    Manufactured Part (Creates Production Orders)
-                  </SelectItem>
-                  <SelectItem value="material">
-                    Material (Quantity Tracking Only)
-                  </SelectItem>
+                  <SelectItem value="manufactured">Manufactured Part (Creates Production Orders)</SelectItem>
+                  <SelectItem value="material">Material (Quantity Tracking Only)</SelectItem>
                 </SelectContent>
               </Select>
               <FormDescription>
-                Manufactured parts create individual production orders.
-                Materials only track quantities.
+                Manufactured parts create individual production orders. Materials only track quantities.
               </FormDescription>
               <FormMessage />
             </FormItem>
@@ -401,20 +368,18 @@ export function BOMItemForm({
           <Button type="button" variant="outline" onClick={onCancel}>
             Cancel
           </Button>
-          <Button
-            type="submit"
+          <Button 
+            type="submit" 
             disabled={mutation.isPending}
             className="bg-blue-600 hover:bg-blue-700"
           >
             {mutation.isPending ? (
               <>
                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
-                {isEditing ? 'Updating...' : 'Adding...'}
+                {isEditing ? "Updating..." : "Adding..."}
               </>
-            ) : isEditing ? (
-              'Update Item'
             ) : (
-              'Add Item'
+              isEditing ? "Update Item" : "Add Item"
             )}
           </Button>
         </div>

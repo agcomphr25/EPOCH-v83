@@ -1,31 +1,13 @@
 import React, { useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
-import {
-  UserCheck,
-  ClipboardList,
-  FileText,
-  CheckCircle,
-  AlertCircle,
-} from 'lucide-react';
+import { UserCheck, ClipboardList, FileText, CheckCircle, AlertCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import TimeClock from './TimeClock';
@@ -37,7 +19,7 @@ interface EmployeePortalProps {
 }
 
 export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
-  const [activeTab, setActiveTab] = useState('checklist');
+  const [activeTab, setActiveTab] = useState("checklist");
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -47,12 +29,10 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
   const { data: checklist = [], isLoading: checklistLoading } = useQuery({
     queryKey: ['/api/checklist', employeeId, today],
     queryFn: async () => {
-      const response = await fetch(
-        `/api/checklist?employeeId=${employeeId}&date=${today}`
-      );
+      const response = await fetch(`/api/checklist?employeeId=${employeeId}&date=${today}`);
       if (!response.ok) throw new Error('Failed to fetch checklist');
       return response.json() as Promise<ChecklistItem[]>;
-    },
+    }
   });
 
   // Save checklist mutation
@@ -71,9 +51,7 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ['/api/checklist', employeeId, today],
-      });
+      queryClient.invalidateQueries({ queryKey: ['/api/checklist', employeeId, today] });
       toast({ title: 'Checklist saved successfully!' });
     },
     onError: (error) => {
@@ -83,15 +61,12 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
 
   // Update checklist item
   const updateItem = (id: number, value: string | boolean) => {
-    queryClient.setQueryData(
-      ['/api/checklist', employeeId, today],
-      (old: ChecklistItem[] | undefined) => {
-        if (!old) return [];
-        return old.map((item) =>
-          item.id === id ? { ...item, value: String(value) } : item
-        );
-      }
-    );
+    queryClient.setQueryData(['/api/checklist', employeeId, today], (old: ChecklistItem[] | undefined) => {
+      if (!old) return [];
+      return old.map((item) =>
+        item.id === id ? { ...item, value: String(value) } : item
+      );
+    });
   };
 
   // Check if all required fields are complete
@@ -104,13 +79,11 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
   };
 
   const getCompletionStats = () => {
-    const completed = checklist.filter((item) => Boolean(item.value)).length;
+    const completed = checklist.filter(item => Boolean(item.value)).length;
     const total = checklist.length;
-    const required = checklist.filter((item) => item.required).length;
-    const requiredCompleted = checklist.filter(
-      (item) => item.required && Boolean(item.value)
-    ).length;
-
+    const required = checklist.filter(item => item.required).length;
+    const requiredCompleted = checklist.filter(item => item.required && Boolean(item.value)).length;
+    
     return { completed, total, required, requiredCompleted };
   };
 
@@ -148,7 +121,7 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
               <CardDescription>
                 Complete your daily tasks and requirements
               </CardDescription>
-
+              
               {/* Progress Summary */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
                 <div className="text-center p-4 bg-blue-50 rounded-lg">
@@ -157,29 +130,23 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
                   </div>
                   <div className="text-sm text-blue-700">Total Completed</div>
                 </div>
-
+                
                 <div className="text-center p-4 bg-green-50 rounded-lg">
                   <div className="text-2xl font-bold text-green-600">
                     {stats.requiredCompleted}/{stats.required}
                   </div>
-                  <div className="text-sm text-green-700">
-                    Required Completed
-                  </div>
+                  <div className="text-sm text-green-700">Required Completed</div>
                 </div>
-
+                
                 <div className="text-center p-4 bg-yellow-50 rounded-lg">
                   <div className="text-2xl font-bold text-yellow-600">
-                    {allComplete
-                      ? '100%'
-                      : Math.round(
-                          (stats.requiredCompleted / stats.required) * 100
-                        ) + '%'}
+                    {allComplete ? '100%' : Math.round((stats.requiredCompleted / stats.required) * 100) + '%'}
                   </div>
                   <div className="text-sm text-yellow-700">Progress</div>
                 </div>
               </div>
             </CardHeader>
-
+            
             <CardContent>
               {checklistLoading ? (
                 <div className="flex justify-center py-8">
@@ -193,73 +160,60 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
               ) : (
                 <div className="space-y-4">
                   {checklist.map((item) => (
-                    <div
-                      key={item.id}
-                      className="flex items-center justify-between p-4 border rounded-lg"
-                    >
+                    <div key={item.id} className="flex items-center justify-between p-4 border rounded-lg">
                       <div className="flex items-center gap-3">
                         <Label className="flex-1 font-medium">
                           {item.label}
-                          {item.required && (
-                            <span className="text-red-500 ml-1">*</span>
-                          )}
+                          {item.required && <span className="text-red-500 ml-1">*</span>}
                         </Label>
                       </div>
-
+                      
                       <div className="flex items-center gap-2">
                         {item.type === 'checkbox' && (
                           <Checkbox
                             checked={Boolean(item.value)}
-                            onCheckedChange={(checked) =>
-                              updateItem(item.id, checked)
-                            }
+                            onCheckedChange={(checked) => updateItem(item.id, checked)}
                           />
                         )}
-
+                        
                         {item.type === 'dropdown' && (
-                          <Select
-                            value={item.value || ''}
-                            onValueChange={(value) =>
-                              updateItem(item.id, value)
-                            }
+                          <Select 
+                            value={item.value || ''} 
+                            onValueChange={(value) => updateItem(item.id, value)}
                           >
                             <SelectTrigger className="w-48">
                               <SelectValue placeholder="Select..." />
                             </SelectTrigger>
                             <SelectContent>
-                              {((item.options as string[]) || []).map(
-                                (option) => (
-                                  <SelectItem key={option} value={option}>
-                                    {option}
-                                  </SelectItem>
-                                )
-                              )}
+                              {(item.options as string[] || []).map((option) => (
+                                <SelectItem key={option} value={option}>
+                                  {option}
+                                </SelectItem>
+                              ))}
                             </SelectContent>
                           </Select>
                         )}
-
+                        
                         {item.type === 'text' && (
                           <Input
                             value={item.value || ''}
-                            onChange={(e) =>
-                              updateItem(item.id, e.target.value)
-                            }
+                            onChange={(e) => updateItem(item.id, e.target.value)}
                             placeholder="Enter value..."
                             className="w-48"
                           />
                         )}
-
+                        
                         {Boolean(item.value) && (
                           <CheckCircle className="h-5 w-5 text-green-500" />
                         )}
-
+                        
                         {item.required && !Boolean(item.value) && (
                           <AlertCircle className="h-5 w-5 text-red-500" />
                         )}
                       </div>
                     </div>
                   ))}
-
+                  
                   <div className="flex justify-center pt-4">
                     <Button
                       onClick={handleSaveChecklist}
@@ -270,12 +224,10 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
                           : 'bg-gray-400 cursor-not-allowed'
                       }`}
                     >
-                      {saveChecklistMutation.isPending
-                        ? 'Saving...'
-                        : 'Save Checklist'}
+                      {saveChecklistMutation.isPending ? 'Saving...' : 'Save Checklist'}
                     </Button>
                   </div>
-
+                  
                   {!allComplete && (
                     <div className="text-center text-sm text-gray-500">
                       Complete all required items to save and enable clock out

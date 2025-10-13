@@ -1,0 +1,531 @@
+📁 Project Structure
+/ (root)
+  server.js
+  package.json
+  /client
+    vite.config.js
+    package.json
+    /src
+      main.jsx
+      App.jsx
+      /api
+        index.js
+      /components
+        ItemForm.jsx
+        ItemsList.jsx
+        DemandAccordion.jsx
+      styles.css
+
+
+We’ll have a “server” part in root, and a React “client” inside /client.
+
+1. Root package.json
+{
+  "name": "cnc-tracker-full",
+  "version": "1.0.0",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "client": "cd client && npm run dev",
+    "dev": "concurrently \"npm run start\" \"npm run client\""
+  },
+  "dependencies": {
+    "body-parser": "^1.20.2",
+    "cors": "^2.8.5",
+    "express": "^4.18.2"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.0"
+  }
+}
+
+
+You may need to add concurrently so you can run server + client together in Replit.
+
+2. server.js (backend)
+const express = require("express");
+const bodyParser = require("body-parser");
+const cors = require("cors");
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+app.use(cors());
+app.use(bodyParser.json());
+
+// In‑memory store
+let items = [];
+let nextItemId = 1;
+
+// Simulated order demands (same shape as before)
+function fetchOrderDemands() {
+  return items.map(it => {
+    // produce dummy weekly demands
+    return {
+      itemId: it.id,
+      weeklyDemand: [
+        Math.floor(Math.random() * 20),
+        Math.floor(Math.random() * 20),
+        Math.floor(Math.random() * 20),
+        Math.floor(Math.random() * 20),
+      ],
+    };
+  });
+}
+
+// --- REST APIs ---
+
+// Get items
+app.get("/api/items", (req, res) => {
+  res.json(items);
+});
+
+// Create item
+app.post("/api/items", (req, res) => {
+  const { name, category, inventory, machined = 0, atAnodizer = 0 } = req.body;
+  if (!name || !category || inventory == null) {
+    return res.status(400).json({ error: "Missing required fields" });
+  }
+  const newItem = {
+    id: nextItemId++,
+    name,
+    category,
+    inventory: Number(inventory),
+    machined: Number(machined),
+    atAnodizer: Number(atAnodizer),
+  };
+  items.push(newItem);
+  res.json(newItem);
+});
+
+// Update item
+app.put("/api/items/:id", (req, res) => {
+  const id = Number(req.params.id);
+  const it = items.find(i => i.id === id);
+  if (!it) {
+    return res.status(404).json({ error: "Not found" });
+  }
+  const { name, category, inventory, machined, atAnodizer } = req.body;
+  if (name != null) it.name = name;
+  if (category != null) it.category = category;
+  if (inventory != null) it.inventory = Number(inventory);
+  if (machined != null) it.machined = Number(machined);
+  if (atAnodizer != null) it.atAnodizer = Number(atAnodizer);
+  res.json(it);
+});
+
+// Delete item
+app.delete("/api/items/:id", (req, res) => {
+  const id = Number(req.params.id);
+  const idx = items.findIndex(i => i.id === id);
+  if (idx < 0) {
+    return res.status(404).json({ error: "Not found" });
+  }
+  items.splice(idx, 1);
+  res.json({ success: true });
+});
+
+// Get demands & production plan
+app.get("/api/demands", (req, res) => {
+  const orderDemands = fetchOrderDemands();
+  const results = orderDemands.map(d => {
+    const it = items.find(i => i.id === d.itemId);
+    if (!it) return null;
+    const totalDemandNext4 = d.weeklyDemand.reduce((a, b) => a + b, 0);
+
+    // Production logic (naive):
+    // Current “available supply” = inventory + machined + atAnodizer
+    const available = it.inventory + it.machined + it.atAnodizer;
+    const need = totalDemandNext4 - available;
+
+    return {
+      itemId: d.itemId,
+      name: it.name,
+      category: it.category,
+      inventory: it.inventory,
+      machined: it.machined,
+      atAnodizer: it.atAnodizer,
+      weeklyDemand: d.weeklyDemand,
+      totalDemandNext4,
+      productionNeeded: need > 0 ? need : 0,
+    };
+  }).filter(r => r !== null);
+  res.json(results);
+});
+
+// Start
+app.listen(PORT, () => {
+  console.log(`Server listening on port ${PORT}`);
+});
+
+3. Client side — React + Vite
+3.1 client/package.json
+{
+  "name": "client",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^5.0.0",
+    "vite": "^5.0.0"
+  }
+}
+
+3.2 client/vite.config.js
+import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
+
+export default defineConfig({
+  plugins: [react()],
+  server: {
+    proxy: {
+      "/api": {
+        target: "http://localhost:3000",
+        changeOrigin: true,
+      }
+    }
+  }
+});
+
+3.3 client/src/api/index.js
+const apiFetch = async (path, opts = {}) => {
+  const res = await fetch(path, {
+    headers: { "Content-Type": "application/json" },
+    ...opts,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `API error ${res.status}`);
+  }
+  return await res.json();
+};
+
+export const getItems = () => apiFetch("/api/items");
+export const createItem = data =>
+  apiFetch("/api/items", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+export const updateItem = (id, data) =>
+  apiFetch(`/api/items/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+export const deleteItem = id =>
+  apiFetch(`/api/items/${id}`, {
+    method: "DELETE",
+  });
+export const getDemands = () => apiFetch("/api/demands");
+
+3.4 client/src/components/ItemForm.jsx
+import { useState, useEffect } from "react";
+
+function ItemForm({ currentItem, onSave, onCancel }) {
+  const [name, setName] = useState("");
+  const [category, setCategory] = useState("Bottom Metals");
+  const [inventory, setInventory] = useState(0);
+  const [machined, setMachined] = useState(0);
+  const [atAnodizer, setAtAnodizer] = useState(0);
+
+  useEffect(() => {
+    if (currentItem) {
+      setName(currentItem.name);
+      setCategory(currentItem.category);
+      setInventory(currentItem.inventory || 0);
+      setMachined(currentItem.machined || 0);
+      setAtAnodizer(currentItem.atAnodizer || 0);
+    } else {
+      setName("");
+      setCategory("Bottom Metals");
+      setInventory(0);
+      setMachined(0);
+      setAtAnodizer(0);
+    }
+  }, [currentItem]);
+
+  const handleSubmit = e => {
+    e.preventDefault();
+    onSave({
+      id: currentItem?.id,
+      name,
+      category,
+      inventory: Number(inventory),
+      machined: Number(machined),
+      atAnodizer: Number(atAnodizer),
+    });
+  };
+
+  return (
+    <form onSubmit={handleSubmit} style={{ marginBottom: "1rem" }}>
+      <input
+        type="text"
+        placeholder="Name"
+        value={name}
+        onChange={e => setName(e.target.value)}
+        required
+      />
+      <select
+        value={category}
+        onChange={e => setCategory(e.target.value)}
+      >
+        <option>Bottom Metals</option>
+        <option>Rails</option>
+        <option>Other</option>
+      </select>
+      <input
+        type="number"
+        placeholder="Inventory"
+        value={inventory}
+        min={0}
+        onChange={e => setInventory(e.target.value)}
+        required
+      />
+      <input
+        type="number"
+        placeholder="Quantity Machined"
+        value={machined}
+        min={0}
+        onChange={e => setMachined(e.target.value)}
+        required
+      />
+      <input
+        type="number"
+        placeholder="Quantity at Anodizer"
+        value={atAnodizer}
+        min={0}
+        onChange={e => setAtAnodizer(e.target.value)}
+        required
+      />
+      <button type="submit">Save</button>
+      {onCancel && <button type="button" onClick={onCancel}>Cancel</button>}
+    </form>
+  );
+}
+
+export default ItemForm;
+
+3.5 client/src/components/ItemsList.jsx
+function ItemsList({ items, onEdit, onDelete }) {
+  return (
+    <table border="1" cellPadding="4" style={{ marginTop: "1rem" }}>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Category</th>
+          <th>Inventory</th>
+          <th>Machined</th>
+          <th>At Anodizer</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {items.map(it => (
+          <tr key={it.id}>
+            <td>{it.name}</td>
+            <td>{it.category}</td>
+            <td>{it.inventory}</td>
+            <td>{it.machined}</td>
+            <td>{it.atAnodizer}</td>
+            <td>
+              <button onClick={() => onEdit(it)}>Edit</button>
+              <button onClick={() => onDelete(it.id)}>Delete</button>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+export default ItemsList;
+
+3.6 client/src/components/DemandAccordion.jsx
+import { useState } from "react";
+
+function DemandAccordion({ demands }) {
+  return (
+    <div style={{ marginTop: "1rem" }}>
+      {demands.map(d => (
+        <AccordionItem key={d.itemId} item={d} />
+      ))}
+    </div>
+  );
+}
+
+function AccordionItem({ item }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{
+      border: "1px solid #aaa",
+      marginBottom: 8,
+      padding: 8,
+    }}>
+      <div
+        style={{ cursor: "pointer" }}
+        onClick={() => setOpen(!open)}
+      >
+        <strong>{item.name}</strong> — Produce: {item.productionNeeded}
+      </div>
+      {open && (
+        <div style={{ marginTop: "0.5rem" }}>
+          <p>Category: {item.category}</p>
+          <p>Inventory: {item.inventory}</p>
+          <p>Machined: {item.machined}</p>
+          <p>At Anodizer: {item.atAnodizer}</p>
+          <p>Total Demand Next 4 Weeks: {item.totalDemandNext4}</p>
+          <ul>
+            {item.weeklyDemand.map((w, i) => (
+              <li key={i}>Week {i + 1}: {w}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default DemandAccordion;
+
+3.7 client/src/App.jsx
+import { useState, useEffect } from "react";
+import {
+  getItems, createItem, updateItem, deleteItem, getDemands,
+} from "./api";
+import ItemForm from "./components/ItemForm";
+import ItemsList from "./components/ItemsList";
+import DemandAccordion from "./components/DemandAccordion";
+import "./styles.css";
+
+function App() {
+  const [items, setItems] = useState([]);
+  const [editingItem, setEditingItem] = useState(null);
+  const [demands, setDemands] = useState([]);
+
+  const loadItems = async () => {
+    const data = await getItems();
+    setItems(data);
+  };
+
+  const loadDemands = async () => {
+    const d = await getDemands();
+    setDemands(d);
+  };
+
+  useEffect(() => {
+    loadItems();
+    loadDemands();
+  }, []);
+
+  const handleSave = async (item) => {
+    if (item.id != null) {
+      await updateItem(item.id, item);
+    } else {
+      await createItem(item);
+    }
+    setEditingItem(null);
+    await loadItems();
+    await loadDemands();
+  };
+
+  const handleCancel = () => {
+    setEditingItem(null);
+  };
+
+  const handleEdit = (it) => {
+    setEditingItem(it);
+  };
+
+  const handleDelete = async (id) => {
+    if (window.confirm("Delete this item?")) {
+      await deleteItem(id);
+      if (editingItem && editingItem.id === id) {
+        setEditingItem(null);
+      }
+      await loadItems();
+      await loadDemands();
+    }
+  };
+
+  return (
+    <div style={{ padding: 20, fontFamily: "sans-serif" }}>
+      <h1>CNC Accessory Tracker</h1>
+
+      <section>
+        <h2>Manage Items / Inventory</h2>
+        <ItemForm
+          currentItem={editingItem}
+          onSave={handleSave}
+          onCancel={editingItem ? handleCancel : null}
+        />
+        <ItemsList
+          items={items}
+          onEdit={handleEdit}
+          onDelete={handleDelete}
+        />
+      </section>
+
+      <hr />
+
+      <section>
+        <h2>Demand & Production Plan (Next 4 Weeks)</h2>
+        <DemandAccordion demands={demands} />
+      </section>
+    </div>
+  );
+}
+
+export default App;
+
+3.8 client/src/main.jsx
+import React from "react";
+import ReactDOM from "react-dom/client";
+import App from "./App";
+import "./styles.css";
+
+ReactDOM.createRoot(document.getElementById("root")).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);
+
+3.9 client/src/styles.css
+body {
+  margin: 0;
+  padding: 0;
+  font-family: sans-serif;
+}
+input, select {
+  margin: 0 8px 8px 0;
+}
+button {
+  margin: 0 4px;
+}
+
+🚀 Usage Instructions (in Replit)
+
+Create a new Replit (Node.js) or full-stack Replit.
+
+Add all those files & folders exactly as above.
+
+Run npm install in the root to install express, body-parser, cors, concurrently.
+
+Then cd client && npm install to install React + Vite dependencies.
+
+Use npm run dev (or npm run dev if your package.json scripts are set) to start both server + client.
+
+Your React client should run (usually at localhost:5173 or similar) and proxy /api to your Express server (on port 3000).
+
+In the UI you can now:
+
+Create / edit / delete items
+
+For each item, set inventory, machined, at anodizer
+
+See demand simulations and see how many more need to be produced

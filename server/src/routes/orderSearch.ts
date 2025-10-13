@@ -9,7 +9,7 @@ const router = Router();
 router.get('/search', async (req, res) => {
   try {
     const { query } = req.query;
-
+    
     if (!query || typeof query !== 'string' || query.length < 2) {
       return res.json([]);
     }

@@ -1,0 +1,1662 @@
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG620 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG690 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG546 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG501 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG681 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG680 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG688 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG552 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG468 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG473 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG624 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG664 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG631 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG621 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG674 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG613 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG476 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG493 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG673 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG679 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG544 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG557 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG561 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG563 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG603 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG474 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG602 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG638 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG593 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG553 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG487 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG672 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG623 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG617 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG491 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG466 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG619 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG489 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG464 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG530 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG598 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG585 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG582 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG475 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG579 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG583 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG584 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG574 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG569 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG452 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG456 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG572 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG444 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG457 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG422 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - EH223 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG331 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - EH191 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG286 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - EH160 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - EH126 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG013 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG144 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG125 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG575 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG307 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG164 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG591 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG644 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG649 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG654 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG756 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG775 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG796 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG152 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG656 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG774 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG786 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG156 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG151 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG533 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG049 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH215 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG803 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH088 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG082 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG079 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG099 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG147 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG105 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG109 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG492 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG478 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG500 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG595 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH207 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH118 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH063 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH178 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH164 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG588 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG406 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG461 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG469 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH030 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG463 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG571 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH217 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG479 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH135 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG562 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH112 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG495 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG524 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH092 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG790 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH093 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH113 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG017 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH111 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH209 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG098 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG543 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG036 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG047 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG124 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH145 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG061 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - EH071 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG815 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG642 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - EH150 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG011 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - EH227 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG509 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG645 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG753 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - EH107 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG755 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG007 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG521 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG048 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG480 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG482 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG555 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG564 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG483 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG481 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG459 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG458 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG040 on Thu Oct 02 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG581 on Thu Oct 02 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG455 on Thu Oct 02 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - EH211 on Thu Oct 02 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG568 on Thu Oct 02 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG745 on Thu Oct 02 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG651 on Thu Oct 02 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG647 on Thu Oct 02 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG434 on Thu Oct 02 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG039 on Thu Oct 02 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG092 on Thu Oct 02 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG467 on Thu Oct 02 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - EH067 on Thu Oct 02 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG441 on Thu Oct 02 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - EH055 on Mon Oct 06 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - EH158 on Mon Oct 06 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG359 on Mon Oct 06 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG056 on Mon Oct 06 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - EH162 on Mon Oct 06 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG548 on Mon Oct 06 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG345 on Mon Oct 06 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - EH134 on Mon Oct 06 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - EH212 on Mon Oct 06 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG004 on Mon Oct 06 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG122 on Mon Oct 06 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG104 on Tue Oct 07 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG141 on Tue Oct 07 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG161 on Tue Oct 07 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG726 on Tue Oct 07 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG641 on Tue Oct 07 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG634 on Tue Oct 07 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG145 on Wed Oct 08 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG769 on Wed Oct 08 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG121 on Wed Oct 08 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG149 on Wed Oct 08 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG119 on Wed Oct 08 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG062 on Wed Oct 08 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - EH114 on Thu Oct 09 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - EH139 on Thu Oct 09 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - EH133 on Thu Oct 09 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - EH128 on Thu Oct 09 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - EH137 on Thu Oct 09 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - EH078 on Thu Oct 09 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - EH143 on Mon Oct 13 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - EH213 on Mon Oct 13 2025
+LayupScheduler.tsx:1060 📋 Database filter: Removed 0 non-work-day assignments, kept 215 work-day assignments
+LayupScheduler.tsx:1061 📋 Selected work days: Mon, Tue, Wed, Thu
+useUnifiedLayupOrders.ts:47 🔧 RAW API RESPONSE: {dataType: 'object', isArray: true, length: 215, hasData: true, firstItem: {…}, …}
+useUnifiedLayupOrders.ts:69 ✅ Successfully loaded 215 orders from API
+useUnifiedLayupOrders.ts:71 ✅ Sample order data: {id: 1616, orderId: 'AG501', orderDate: '2025-03-21T00:00:00.000Z', dueDate: '2025-06-17T00:00:00.000Z', customerId: '209', …}
+useUnifiedLayupOrders.ts:83 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 215, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+useUnifiedLayupOrders.ts:108 🔧 Final hook return: {ordersReturned: 215, isLoading: false, hasError: false, firstOrderId: 'AG501'}
+LayupScheduler.tsx:1417 🏔️ MESA UNIVERSAL DEBUG: {totalOrders: 215, mesaUniversalCount: 0, mesaOrders: Array(0)}
+LayupScheduler.tsx:1423 🔍 LayupScheduler orders debug: {allOrdersCount: 215, loading: false, rawData: 'has data', dataType: 'object', isArray: true, …}
+LayupScheduler.tsx:1444 🏔️ FINAL ORDERS: Returning 215 total orders, 0 are Mesa Universal
+lopScheduler.ts:82 🔧 Order EH178 needs LOP adjustment: {lopValue: 'lop_adj_12.5', hasLOPFeatures: true, needsLOPTest: true}
+lopScheduler.ts:82 🔧 Order EH055 needs LOP adjustment: {lopValue: 'lop_adj_14.5', hasLOPFeatures: true, needsLOPTest: true}
+lopScheduler.ts:82 🔧 Order AG062 needs LOP adjustment: {lopValue: 'lop_adj_14.5', hasLOPFeatures: true, needsLOPTest: true}
+lopScheduler.ts:82 🔧 Order AG286 needs LOP adjustment: {lopValue: 'lop_adj_13', hasLOPFeatures: true, needsLOPTest: true}
+lopScheduler.ts:82 🔧 Order AG555 needs LOP adjustment: {lopValue: 'lop_adj_12.5', hasLOPFeatures: true, needsLOPTest: true}
+lopScheduler.ts:82 🔧 Order AG562 needs LOP adjustment: {lopValue: 'lop_adj_14.5', hasLOPFeatures: true, needsLOPTest: true}
+lopScheduler.ts:82 🔧 Order AG559 needs LOP adjustment: {lopValue: 'lop_adj_14', hasLOPFeatures: true, needsLOPTest: true}
+lopScheduler.ts:82 🔧 Order AG456 needs LOP adjustment: {lopValue: 'lop_adj_13.25', hasLOPFeatures: true, needsLOPTest: true}
+lopScheduler.ts:82 🔧 Order AG144 needs LOP adjustment: {lopValue: 'lop_adj_13.25', hasLOPFeatures: true, needsLOPTest: true}
+lopScheduler.ts:82 🔧 Order AG092 needs LOP adjustment: {lopValue: 'lop_adj_12.5', hasLOPFeatures: true, needsLOPTest: true}
+lopScheduler.ts:82 🔧 Order EH227 needs LOP adjustment: {lopValue: 'lop_adj_12.5', hasLOPFeatures: true, needsLOPTest: true}
+lopScheduler.ts:82 🔧 Order EH093 needs LOP adjustment: {lopValue: 'lop_adj_12.5', hasLOPFeatures: true, needsLOPTest: true}
+lopScheduler.ts:31 🔧 LOP Scheduler Debug: {today: 'Thu Sep 25 2025', isMonday: false, dayOfWeek: 4, nextMondayWouldBe: 'Mon Sep 29 2025'}
+lopScheduler.ts:61 🔧 Order EH178: LOP scheduled for Mon Sep 29 2025 (Deferred for Monday)
+lopScheduler.ts:61 🔧 Order EH055: LOP scheduled for Mon Sep 29 2025 (Deferred for Monday)
+lopScheduler.ts:61 🔧 Order AG062: LOP scheduled for Mon Sep 29 2025 (Deferred for Monday)
+lopScheduler.ts:61 🔧 Order AG286: LOP scheduled for Mon Sep 29 2025 (Deferred for Monday)
+lopScheduler.ts:61 🔧 Order AG555: LOP scheduled for Mon Sep 29 2025 (Deferred for Monday)
+lopScheduler.ts:61 🔧 Order AG562: LOP scheduled for Mon Sep 29 2025 (Deferred for Monday)
+lopScheduler.ts:61 🔧 Order AG559: LOP scheduled for Mon Sep 29 2025 (Deferred for Monday)
+lopScheduler.ts:61 🔧 Order AG456: LOP scheduled for Mon Sep 29 2025 (Deferred for Monday)
+lopScheduler.ts:61 🔧 Order AG144: LOP scheduled for Mon Sep 29 2025 (Deferred for Monday)
+lopScheduler.ts:61 🔧 Order AG092: LOP scheduled for Mon Sep 29 2025 (Deferred for Monday)
+lopScheduler.ts:61 🔧 Order EH227: LOP scheduled for Mon Sep 29 2025 (Deferred for Monday)
+lopScheduler.ts:61 🔧 Order EH093: LOP scheduled for Mon Sep 29 2025 (Deferred for Monday)
+LayupScheduler.tsx:1459 🔧 LOP Scheduler auto-run: {totalOrders: 215, lopOrdersNeedingAdjustment: 12, today: 'Thu Sep 25 2025', isMonday: false, sampleLOPOrders: Array(3)}
+LayupScheduler.tsx:3029 🏭 LayupScheduler - Production/P1 orders: 0
+LayupScheduler.tsx:3052 🏔️ LayupScheduler - Mesa molds: (4) [{…}, {…}, {…}, {…}]
+LayupScheduler.tsx:3054 📋 LayupScheduler - Order Assignments: {}
+LayupScheduler.tsx:3055 🏭 LayupScheduler - All Molds: (67) [{…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}]
+LayupScheduler.tsx:3056 ⚙️ LayupScheduler - Employees: 3 employees loaded
+LayupScheduler.tsx:3061 🔄 Unassigned orders: 215 (215) ['AG501', 'AG493', 'AG491', 'AG489', 'AG466', 'AG464', 'AG487', 'EH223', 'AG125', 'AG079', 'AG122', 'AG098', 'AG049', 'AG109', 'AG756', 'AG786', 'EH191', 'AG753', 'AG571', 'EH178', 'EH164', 'EH160', 'EH158', 'EH126', 'EH055', 'AG651', 'AG441', 'AG656', 'AG654', 'AG444', 'AG452', 'AG406', 'AG434', 'AG359', 'AG307', 'AG345', 'AG119', 'AG455', 'AG121', 'AG479', 'AG480', 'AG481', 'AG482', 'AG483', 'AG530', 'AG463', 'AG492', 'AG495', 'AG500', 'AG082', 'AG062', 'AG104', 'AG056', 'AG141', 'AG151', 'AG161', 'AG164', 'AG286', 'AG145', 'AG331', 'AG467', 'AG473', 'AG544', 'AG553', 'AG555', 'AG564', 'AG565', 'AG566', 'AG579', 'AG638', 'AG639', 'AG658', 'AG666', 'AG670', 'AG568', 'AG581', 'AG582', 'AG583', 'AG584', 'AG595', 'AG688', 'AG625', 'AG635', 'AG149', 'AG644', 'AG796', 'AG679', 'AG389', 'AG548', 'AG634', 'AG641', 'AG642', 'AG645', 'AG755', 'AG726', 'AG474', 'AG624', 'AG803', 'AG775', 'AG774', …]
+LayupScheduler.tsx:3062 🏭 Unassigned PRODUCTION/P1 orders: 0 []
+LayupScheduler.tsx:4836 📅 MONDAY DEBUG: Date 2025-09-29, 0 assignments found
+LayupScheduler.tsx:1034 🔍 RAW SCHEDULE DATA FROM DATABASE: 215 total entries
+LayupScheduler.tsx:1041   Entry 0: AG639 → 2025-09-25T20:05:26.996Z → Thu Sep 25 2025 (Thursday, day 4)
+LayupScheduler.tsx:1041   Entry 1: AG522 → 2025-09-25T20:05:26.996Z → Thu Sep 25 2025 (Thursday, day 4)
+LayupScheduler.tsx:1041   Entry 2: AG556 → 2025-09-25T20:05:26.996Z → Thu Sep 25 2025 (Thursday, day 4)
+LayupScheduler.tsx:1041   Entry 3: AG559 → 2025-09-25T20:05:26.996Z → Thu Sep 25 2025 (Thursday, day 4)
+LayupScheduler.tsx:1041   Entry 4: AG580 → 2025-09-25T20:05:26.996Z → Thu Sep 25 2025 (Thursday, day 4)
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG639 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG522 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG556 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG559 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG580 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG565 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG566 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG532 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG658 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG601 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG596 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG592 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG586 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG666 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG625 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG670 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG635 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG669 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG633 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG389 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG620 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG690 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG546 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG501 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG681 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG680 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG688 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG552 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG468 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG473 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG624 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG664 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG631 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG621 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG674 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG613 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG476 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG493 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG673 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG679 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG544 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG557 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG561 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG563 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG603 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG474 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG602 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG638 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG593 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG553 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG487 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG672 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG623 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG617 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG491 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG466 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG619 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG489 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG464 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG530 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG598 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG585 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG582 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG475 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG579 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG583 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG584 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG574 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG569 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG452 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG456 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG572 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG444 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG457 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG422 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - EH223 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG331 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - EH191 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG286 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - EH160 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - EH126 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG013 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG144 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG125 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG575 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG307 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG164 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG591 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG644 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG649 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG654 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG756 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG775 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG796 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG152 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG656 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG774 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG786 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG156 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG151 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG533 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG049 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH215 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG803 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH088 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG082 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG079 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG099 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG147 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG105 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG109 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG492 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG478 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG500 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG595 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH207 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH118 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH063 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH178 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH164 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG588 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG406 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG461 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG469 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH030 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG463 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG571 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH217 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG479 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH135 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG562 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH112 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG495 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG524 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH092 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG790 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH093 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH113 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG017 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH111 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH209 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG098 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG543 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG036 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG047 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG124 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH145 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG061 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - EH071 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG815 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG642 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - EH150 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG011 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - EH227 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG509 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG645 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG753 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - EH107 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG755 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG007 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG521 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG048 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG480 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG482 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG555 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG564 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG483 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG481 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG459 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG458 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG040 on Thu Oct 02 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG581 on Thu Oct 02 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG455 on Thu Oct 02 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - EH211 on Thu Oct 02 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG568 on Thu Oct 02 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG745 on Thu Oct 02 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG651 on Thu Oct 02 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG647 on Thu Oct 02 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG434 on Thu Oct 02 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG039 on Thu Oct 02 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG092 on Thu Oct 02 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG467 on Thu Oct 02 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - EH067 on Thu Oct 02 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG441 on Thu Oct 02 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - EH055 on Mon Oct 06 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - EH158 on Mon Oct 06 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG359 on Mon Oct 06 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG056 on Mon Oct 06 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - EH162 on Mon Oct 06 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG548 on Mon Oct 06 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG345 on Mon Oct 06 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - EH134 on Mon Oct 06 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - EH212 on Mon Oct 06 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG004 on Mon Oct 06 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG122 on Mon Oct 06 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG104 on Tue Oct 07 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG141 on Tue Oct 07 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG161 on Tue Oct 07 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG726 on Tue Oct 07 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG641 on Tue Oct 07 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG634 on Tue Oct 07 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG145 on Wed Oct 08 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG769 on Wed Oct 08 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG121 on Wed Oct 08 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG149 on Wed Oct 08 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG119 on Wed Oct 08 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG062 on Wed Oct 08 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - EH114 on Thu Oct 09 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - EH139 on Thu Oct 09 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - EH133 on Thu Oct 09 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - EH128 on Thu Oct 09 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - EH137 on Thu Oct 09 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - EH078 on Thu Oct 09 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - EH143 on Mon Oct 13 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - EH213 on Mon Oct 13 2025
+LayupScheduler.tsx:1060 📋 Database filter: Removed 0 non-work-day assignments, kept 215 work-day assignments
+LayupScheduler.tsx:1061 📋 Selected work days: Mon, Tue, Wed, Thu
+useUnifiedLayupOrders.ts:47 🔧 RAW API RESPONSE: {dataType: 'object', isArray: true, length: 215, hasData: true, firstItem: {…}, …}
+useUnifiedLayupOrders.ts:69 ✅ Successfully loaded 215 orders from API
+useUnifiedLayupOrders.ts:71 ✅ Sample order data: {id: 1616, orderId: 'AG501', orderDate: '2025-03-21T00:00:00.000Z', dueDate: '2025-06-17T00:00:00.000Z', customerId: '209', …}
+useUnifiedLayupOrders.ts:83 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 215, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+useUnifiedLayupOrders.ts:108 🔧 Final hook return: {ordersReturned: 215, isLoading: false, hasError: false, firstOrderId: 'AG501'}
+LayupScheduler.tsx:1417 🏔️ MESA UNIVERSAL DEBUG: {totalOrders: 215, mesaUniversalCount: 0, mesaOrders: Array(0)}
+LayupScheduler.tsx:1423 🔍 LayupScheduler orders debug: {allOrdersCount: 215, loading: false, rawData: 'has data', dataType: 'object', isArray: true, …}
+LayupScheduler.tsx:1444 🏔️ FINAL ORDERS: Returning 215 total orders, 0 are Mesa Universal
+lopScheduler.ts:82 🔧 Order EH178 needs LOP adjustment: {lopValue: 'lop_adj_12.5', hasLOPFeatures: true, needsLOPTest: true}
+lopScheduler.ts:82 🔧 Order EH055 needs LOP adjustment: {lopValue: 'lop_adj_14.5', hasLOPFeatures: true, needsLOPTest: true}
+lopScheduler.ts:82 🔧 Order AG062 needs LOP adjustment: {lopValue: 'lop_adj_14.5', hasLOPFeatures: true, needsLOPTest: true}
+lopScheduler.ts:82 🔧 Order AG286 needs LOP adjustment: {lopValue: 'lop_adj_13', hasLOPFeatures: true, needsLOPTest: true}
+lopScheduler.ts:82 🔧 Order AG555 needs LOP adjustment: {lopValue: 'lop_adj_12.5', hasLOPFeatures: true, needsLOPTest: true}
+lopScheduler.ts:82 🔧 Order AG562 needs LOP adjustment: {lopValue: 'lop_adj_14.5', hasLOPFeatures: true, needsLOPTest: true}
+lopScheduler.ts:82 🔧 Order AG559 needs LOP adjustment: {lopValue: 'lop_adj_14', hasLOPFeatures: true, needsLOPTest: true}
+lopScheduler.ts:82 🔧 Order AG456 needs LOP adjustment: {lopValue: 'lop_adj_13.25', hasLOPFeatures: true, needsLOPTest: true}
+lopScheduler.ts:82 🔧 Order AG144 needs LOP adjustment: {lopValue: 'lop_adj_13.25', hasLOPFeatures: true, needsLOPTest: true}
+lopScheduler.ts:82 🔧 Order AG092 needs LOP adjustment: {lopValue: 'lop_adj_12.5', hasLOPFeatures: true, needsLOPTest: true}
+lopScheduler.ts:82 🔧 Order EH227 needs LOP adjustment: {lopValue: 'lop_adj_12.5', hasLOPFeatures: true, needsLOPTest: true}
+lopScheduler.ts:82 🔧 Order EH093 needs LOP adjustment: {lopValue: 'lop_adj_12.5', hasLOPFeatures: true, needsLOPTest: true}
+lopScheduler.ts:31 🔧 LOP Scheduler Debug: {today: 'Thu Sep 25 2025', isMonday: false, dayOfWeek: 4, nextMondayWouldBe: 'Mon Sep 29 2025'}
+lopScheduler.ts:61 🔧 Order EH178: LOP scheduled for Mon Sep 29 2025 (Deferred for Monday)
+lopScheduler.ts:61 🔧 Order EH055: LOP scheduled for Mon Sep 29 2025 (Deferred for Monday)
+lopScheduler.ts:61 🔧 Order AG062: LOP scheduled for Mon Sep 29 2025 (Deferred for Monday)
+lopScheduler.ts:61 🔧 Order AG286: LOP scheduled for Mon Sep 29 2025 (Deferred for Monday)
+lopScheduler.ts:61 🔧 Order AG555: LOP scheduled for Mon Sep 29 2025 (Deferred for Monday)
+lopScheduler.ts:61 🔧 Order AG562: LOP scheduled for Mon Sep 29 2025 (Deferred for Monday)
+lopScheduler.ts:61 🔧 Order AG559: LOP scheduled for Mon Sep 29 2025 (Deferred for Monday)
+lopScheduler.ts:61 🔧 Order AG456: LOP scheduled for Mon Sep 29 2025 (Deferred for Monday)
+lopScheduler.ts:61 🔧 Order AG144: LOP scheduled for Mon Sep 29 2025 (Deferred for Monday)
+lopScheduler.ts:61 🔧 Order AG092: LOP scheduled for Mon Sep 29 2025 (Deferred for Monday)
+lopScheduler.ts:61 🔧 Order EH227: LOP scheduled for Mon Sep 29 2025 (Deferred for Monday)
+lopScheduler.ts:61 🔧 Order EH093: LOP scheduled for Mon Sep 29 2025 (Deferred for Monday)
+LayupScheduler.tsx:1459 🔧 LOP Scheduler auto-run: {totalOrders: 215, lopOrdersNeedingAdjustment: 12, today: 'Thu Sep 25 2025', isMonday: false, sampleLOPOrders: Array(3)}
+LayupScheduler.tsx:3029 🏭 LayupScheduler - Production/P1 orders: 0
+LayupScheduler.tsx:3052 🏔️ LayupScheduler - Mesa molds: (4) [{…}, {…}, {…}, {…}]
+LayupScheduler.tsx:3054 📋 LayupScheduler - Order Assignments: {}
+LayupScheduler.tsx:3055 🏭 LayupScheduler - All Molds: (67) [{…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}]
+LayupScheduler.tsx:3056 ⚙️ LayupScheduler - Employees: 3 employees loaded
+LayupScheduler.tsx:3061 🔄 Unassigned orders: 215 (215) ['AG501', 'AG493', 'AG491', 'AG489', 'AG466', 'AG464', 'AG487', 'EH223', 'AG125', 'AG079', 'AG122', 'AG098', 'AG049', 'AG109', 'AG756', 'AG786', 'EH191', 'AG753', 'AG571', 'EH178', 'EH164', 'EH160', 'EH158', 'EH126', 'EH055', 'AG651', 'AG441', 'AG656', 'AG654', 'AG444', 'AG452', 'AG406', 'AG434', 'AG359', 'AG307', 'AG345', 'AG119', 'AG455', 'AG121', 'AG479', 'AG480', 'AG481', 'AG482', 'AG483', 'AG530', 'AG463', 'AG492', 'AG495', 'AG500', 'AG082', 'AG062', 'AG104', 'AG056', 'AG141', 'AG151', 'AG161', 'AG164', 'AG286', 'AG145', 'AG331', 'AG467', 'AG473', 'AG544', 'AG553', 'AG555', 'AG564', 'AG565', 'AG566', 'AG579', 'AG638', 'AG639', 'AG658', 'AG666', 'AG670', 'AG568', 'AG581', 'AG582', 'AG583', 'AG584', 'AG595', 'AG688', 'AG625', 'AG635', 'AG149', 'AG644', 'AG796', 'AG679', 'AG389', 'AG548', 'AG634', 'AG641', 'AG642', 'AG645', 'AG755', 'AG726', 'AG474', 'AG624', 'AG803', 'AG775', 'AG774', …]
+LayupScheduler.tsx:3062 🏭 Unassigned PRODUCTION/P1 orders: 0 []
+LayupScheduler.tsx:4836 📅 MONDAY DEBUG: Date 2025-09-29, 0 assignments found
+LayupScheduler.tsx:1478 🏭 LayupScheduler: Total orders from API: 215
+LayupScheduler.tsx:1479 🏭 LayupScheduler: Regular orders for scheduling: 215
+LayupScheduler.tsx:1480 🏭 LayupScheduler: P1 PO orders for scheduling: 0
+LayupScheduler.tsx:1482 🏭 LayupScheduler: Sample regular order for scheduling: {id: 1616, orderId: 'AG501', orderDate: '2025-03-21T00:00:00.000Z', dueDate: '2025-06-17T00:00:00.000Z', customerId: '209', …}
+LayupScheduler.tsx:1483 🏭 LayupScheduler: First 5 regular orders: (5) [{…}, {…}, {…}, {…}, {…}]
+LayupScheduler.tsx:1496 🏭 LayupScheduler: Filtered orders by source: {main_orders: 215}
+LayupScheduler.tsx:1500 🚀 LayupScheduler: All data loaded, checking if auto-schedule needed
+LayupScheduler.tsx:1505 🎯 One-time auto-scheduling triggered for: 215 orders
+LayupScheduler.tsx:2071 🎯 Production Flow Auto-schedule check: {orders: 215, molds: 67, employees: 3, isLoading: false, ordersLoading: false, …}
+LayupScheduler.tsx:2095 📊 SCHEDULE ANALYSIS: {totalOrders: 215, scheduledOrders: 0, unscheduledOrders: 215, assignmentKeys: 0, hasTooManyAssignments: false, …}
+LayupScheduler.tsx:2113 📊 SCHEDULE STATUS: Ready for manual scheduling (2-week limit) - 215 unscheduled orders
+LayupScheduler.tsx:1958 🤖 Generating algorithmic schedule...
+LayupScheduler.tsx:1961 🏭 PRODUCTION FLOW: Processing production queue with algorithmic scheduler...
+queryClient.ts:42 🌐 API Request to /api/algorithmic-schedule (timeout: 30000ms, deployment: false)
+queryClient.ts:78 ✅ API Response from /api/algorithmic-schedule: 200
+LayupScheduler.tsx:1977 🏭 PRODUCTION FLOW: Algorithmic schedule response: {success: true, allocations: Array(210), scheduledAllocations: Array(210), analytics: {…}}
+LayupScheduler.tsx:1980 ✅ PRODUCTION FLOW: Generated 210 order allocations
+LayupScheduler.tsx:1981 ✅ PRODUCTION FLOW: Sample allocations: (3) [{…}, {…}, {…}]
+LayupScheduler.tsx:1993 📅 PRODUCTION FLOW: Assigning 210 orders to schedule
+LayupScheduler.tsx:2004 🔧 PRODUCTION FLOW: Mold assignments: {Privateer-1: 10, Alpine Hunter Adjustable-1: 8, Alpine Hunter-1: 8, Gladius-1: 6, Adj Chalk Branch-1: 7, …}
+LayupScheduler.tsx:2006 📅 PRODUCTION FLOW: Schedule ready for review and adjustment
+LayupScheduler.tsx:1034 🔍 RAW SCHEDULE DATA FROM DATABASE: 215 total entries
+LayupScheduler.tsx:1041   Entry 0: AG639 → 2025-09-25T20:05:26.996Z → Thu Sep 25 2025 (Thursday, day 4)
+LayupScheduler.tsx:1041   Entry 1: AG522 → 2025-09-25T20:05:26.996Z → Thu Sep 25 2025 (Thursday, day 4)
+LayupScheduler.tsx:1041   Entry 2: AG556 → 2025-09-25T20:05:26.996Z → Thu Sep 25 2025 (Thursday, day 4)
+LayupScheduler.tsx:1041   Entry 3: AG559 → 2025-09-25T20:05:26.996Z → Thu Sep 25 2025 (Thursday, day 4)
+LayupScheduler.tsx:1041   Entry 4: AG580 → 2025-09-25T20:05:26.996Z → Thu Sep 25 2025 (Thursday, day 4)
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG639 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG522 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG556 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG559 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG580 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG565 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG566 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG532 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG658 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG601 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG596 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG592 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG586 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG666 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG625 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG670 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG635 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG669 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG633 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG389 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG620 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG690 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG546 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG501 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG681 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG680 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG688 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG552 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG468 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG473 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG624 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG664 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG631 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG621 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG674 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG613 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG476 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG493 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG673 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG679 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG544 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG557 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG561 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG563 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG603 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG474 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG602 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG638 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG593 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG553 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG487 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG672 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG623 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG617 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG491 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG466 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG619 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG489 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG464 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG530 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG598 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG585 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG582 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG475 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG579 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG583 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG584 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG574 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG569 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG452 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG456 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG572 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG444 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG457 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG422 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - EH223 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG331 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - EH191 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG286 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - EH160 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - EH126 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG013 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG144 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG125 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG575 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG307 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG164 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG591 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG644 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG649 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG654 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG756 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG775 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG796 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG152 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG656 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG774 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG786 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG156 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG151 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG533 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG049 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH215 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG803 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH088 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG082 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG079 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG099 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG147 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG105 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG109 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG492 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG478 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG500 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG595 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH207 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH118 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH063 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH178 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH164 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG588 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG406 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG461 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG469 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH030 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG463 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG571 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH217 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG479 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH135 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG562 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH112 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG495 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG524 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH092 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG790 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH093 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH113 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG017 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH111 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH209 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG098 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG543 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG036 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG047 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG124 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH145 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG061 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - EH071 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG815 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG642 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - EH150 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG011 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - EH227 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG509 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG645 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG753 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - EH107 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG755 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG007 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG521 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG048 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG480 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG482 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG555 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG564 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG483 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG481 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG459 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG458 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG040 on Thu Oct 02 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG581 on Thu Oct 02 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG455 on Thu Oct 02 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - EH211 on Thu Oct 02 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG568 on Thu Oct 02 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG745 on Thu Oct 02 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG651 on Thu Oct 02 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG647 on Thu Oct 02 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG434 on Thu Oct 02 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG039 on Thu Oct 02 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG092 on Thu Oct 02 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG467 on Thu Oct 02 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - EH067 on Thu Oct 02 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG441 on Thu Oct 02 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - EH055 on Mon Oct 06 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - EH158 on Mon Oct 06 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG359 on Mon Oct 06 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG056 on Mon Oct 06 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - EH162 on Mon Oct 06 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG548 on Mon Oct 06 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG345 on Mon Oct 06 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - EH134 on Mon Oct 06 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - EH212 on Mon Oct 06 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG004 on Mon Oct 06 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG122 on Mon Oct 06 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG104 on Tue Oct 07 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG141 on Tue Oct 07 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG161 on Tue Oct 07 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG726 on Tue Oct 07 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG641 on Tue Oct 07 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG634 on Tue Oct 07 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG145 on Wed Oct 08 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG769 on Wed Oct 08 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG121 on Wed Oct 08 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG149 on Wed Oct 08 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG119 on Wed Oct 08 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG062 on Wed Oct 08 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - EH114 on Thu Oct 09 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - EH139 on Thu Oct 09 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - EH133 on Thu Oct 09 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - EH128 on Thu Oct 09 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - EH137 on Thu Oct 09 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - EH078 on Thu Oct 09 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - EH143 on Mon Oct 13 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - EH213 on Mon Oct 13 2025
+LayupScheduler.tsx:1060 📋 Database filter: Removed 0 non-work-day assignments, kept 215 work-day assignments
+LayupScheduler.tsx:1061 📋 Selected work days: Mon, Tue, Wed, Thu
+useUnifiedLayupOrders.ts:47 🔧 RAW API RESPONSE: {dataType: 'object', isArray: true, length: 215, hasData: true, firstItem: {…}, …}
+useUnifiedLayupOrders.ts:69 ✅ Successfully loaded 215 orders from API
+useUnifiedLayupOrders.ts:71 ✅ Sample order data: {id: 1616, orderId: 'AG501', orderDate: '2025-03-21T00:00:00.000Z', dueDate: '2025-06-17T00:00:00.000Z', customerId: '209', …}
+useUnifiedLayupOrders.ts:83 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 215, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+useUnifiedLayupOrders.ts:108 🔧 Final hook return: {ordersReturned: 215, isLoading: false, hasError: false, firstOrderId: 'AG501'}
+LayupScheduler.tsx:1417 🏔️ MESA UNIVERSAL DEBUG: {totalOrders: 215, mesaUniversalCount: 0, mesaOrders: Array(0)}
+LayupScheduler.tsx:1423 🔍 LayupScheduler orders debug: {allOrdersCount: 215, loading: false, rawData: 'has data', dataType: 'object', isArray: true, …}
+LayupScheduler.tsx:1444 🏔️ FINAL ORDERS: Returning 215 total orders, 0 are Mesa Universal
+lopScheduler.ts:82 🔧 Order EH178 needs LOP adjustment: {lopValue: 'lop_adj_12.5', hasLOPFeatures: true, needsLOPTest: true}
+lopScheduler.ts:82 🔧 Order EH055 needs LOP adjustment: {lopValue: 'lop_adj_14.5', hasLOPFeatures: true, needsLOPTest: true}
+lopScheduler.ts:82 🔧 Order AG062 needs LOP adjustment: {lopValue: 'lop_adj_14.5', hasLOPFeatures: true, needsLOPTest: true}
+lopScheduler.ts:82 🔧 Order AG286 needs LOP adjustment: {lopValue: 'lop_adj_13', hasLOPFeatures: true, needsLOPTest: true}
+lopScheduler.ts:82 🔧 Order AG555 needs LOP adjustment: {lopValue: 'lop_adj_12.5', hasLOPFeatures: true, needsLOPTest: true}
+lopScheduler.ts:82 🔧 Order AG562 needs LOP adjustment: {lopValue: 'lop_adj_14.5', hasLOPFeatures: true, needsLOPTest: true}
+lopScheduler.ts:82 🔧 Order AG559 needs LOP adjustment: {lopValue: 'lop_adj_14', hasLOPFeatures: true, needsLOPTest: true}
+lopScheduler.ts:82 🔧 Order AG456 needs LOP adjustment: {lopValue: 'lop_adj_13.25', hasLOPFeatures: true, needsLOPTest: true}
+lopScheduler.ts:82 🔧 Order AG144 needs LOP adjustment: {lopValue: 'lop_adj_13.25', hasLOPFeatures: true, needsLOPTest: true}
+lopScheduler.ts:82 🔧 Order AG092 needs LOP adjustment: {lopValue: 'lop_adj_12.5', hasLOPFeatures: true, needsLOPTest: true}
+lopScheduler.ts:82 🔧 Order EH227 needs LOP adjustment: {lopValue: 'lop_adj_12.5', hasLOPFeatures: true, needsLOPTest: true}
+lopScheduler.ts:82 🔧 Order EH093 needs LOP adjustment: {lopValue: 'lop_adj_12.5', hasLOPFeatures: true, needsLOPTest: true}
+lopScheduler.ts:31 🔧 LOP Scheduler Debug: {today: 'Thu Sep 25 2025', isMonday: false, dayOfWeek: 4, nextMondayWouldBe: 'Mon Sep 29 2025'}
+lopScheduler.ts:61 🔧 Order EH178: LOP scheduled for Mon Sep 29 2025 (Deferred for Monday)
+lopScheduler.ts:61 🔧 Order EH055: LOP scheduled for Mon Sep 29 2025 (Deferred for Monday)
+lopScheduler.ts:61 🔧 Order AG062: LOP scheduled for Mon Sep 29 2025 (Deferred for Monday)
+lopScheduler.ts:61 🔧 Order AG286: LOP scheduled for Mon Sep 29 2025 (Deferred for Monday)
+lopScheduler.ts:61 🔧 Order AG555: LOP scheduled for Mon Sep 29 2025 (Deferred for Monday)
+lopScheduler.ts:61 🔧 Order AG562: LOP scheduled for Mon Sep 29 2025 (Deferred for Monday)
+lopScheduler.ts:61 🔧 Order AG559: LOP scheduled for Mon Sep 29 2025 (Deferred for Monday)
+lopScheduler.ts:61 🔧 Order AG456: LOP scheduled for Mon Sep 29 2025 (Deferred for Monday)
+lopScheduler.ts:61 🔧 Order AG144: LOP scheduled for Mon Sep 29 2025 (Deferred for Monday)
+lopScheduler.ts:61 🔧 Order AG092: LOP scheduled for Mon Sep 29 2025 (Deferred for Monday)
+lopScheduler.ts:61 🔧 Order EH227: LOP scheduled for Mon Sep 29 2025 (Deferred for Monday)
+lopScheduler.ts:61 🔧 Order EH093: LOP scheduled for Mon Sep 29 2025 (Deferred for Monday)
+LayupScheduler.tsx:1459 🔧 LOP Scheduler auto-run: {totalOrders: 215, lopOrdersNeedingAdjustment: 12, today: 'Thu Sep 25 2025', isMonday: false, sampleLOPOrders: Array(3)}
+LayupScheduler.tsx:3023 ✅ FRIDAY VALIDATION PASSED: 210 assignments, no Friday conflicts
+LayupScheduler.tsx:3029 🏭 LayupScheduler - Production/P1 orders: 0
+LayupScheduler.tsx:3052 🏔️ LayupScheduler - Mesa molds: (4) [{…}, {…}, {…}, {…}]
+LayupScheduler.tsx:3054 📋 LayupScheduler - Order Assignments: {AG688: {…}, AG679: {…}, AG389: {…}, AG690: {…}, AG681: {…}, …}
+LayupScheduler.tsx:3055 🏭 LayupScheduler - All Molds: (67) [{…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}]
+LayupScheduler.tsx:3056 ⚙️ LayupScheduler - Employees: 3 employees loaded
+LayupScheduler.tsx:3061 🔄 Unassigned orders: 5 (5) ['AG040', 'EH211', 'EH162', 'EH135', 'EH067']
+LayupScheduler.tsx:3062 🏭 Unassigned PRODUCTION/P1 orders: 0 []
+LayupScheduler.tsx:4836 📅 MONDAY DEBUG: Date 2025-09-29, 26 assignments found
+LayupScheduler.tsx:4838    📅 AG633 → Privateer-1
+LayupScheduler.tsx:4838    📅 AG613 → Gladius Adjustable-1
+LayupScheduler.tsx:4838    📅 AG546 → Visigoth-1
+LayupScheduler.tsx:4838    📅 AG533 → Alpine Hunter Adjustable-1
+LayupScheduler.tsx:4838    📅 AG501 → Alpine Hunter-1
+LayupScheduler.tsx:4838    📅 AG493 → Alpine Hunter-2
+LayupScheduler.tsx:4838    📅 AG491 → Alpine Hunter-3
+LayupScheduler.tsx:4838    📅 AG489 → Alpine Hunter-4
+LayupScheduler.tsx:4838    📅 AG466 → Alpine Hunter-5
+LayupScheduler.tsx:4838    📅 AG464 → Alpine Hunter-6
+LayupScheduler.tsx:4838    📅 AG487 → Alpine Hunter-7
+LayupScheduler.tsx:4838    📅 AG530 → Alpine Hunter-8
+LayupScheduler.tsx:4838    📅 AG463 → Alpine Hunter-9
+LayupScheduler.tsx:4838    📅 AG492 → Alpine Hunter-10
+LayupScheduler.tsx:4838    📅 AG495 → Alpine Hunter-11
+LayupScheduler.tsx:4838    📅 AG500 → Alpine Hunter-12
+LayupScheduler.tsx:4838    📅 AG473 → Privateer-2
+LayupScheduler.tsx:4838    📅 AG595 → Alpine Hunter-13
+LayupScheduler.tsx:4838    📅 AG474 → Adj Chalk Branch-1
+LayupScheduler.tsx:4838    📅 AG603 → Alpine Hunter-14
+LayupScheduler.tsx:4838    📅 AG602 → Visigoth-2
+LayupScheduler.tsx:4838    📅 AG593 → K2-3
+LayupScheduler.tsx:4838    📅 AG592 → Cat-1
+LayupScheduler.tsx:4838    📅 AG588 → Alpine Hunter Adjustable-2
+LayupScheduler.tsx:4838    📅 AG586 → Adj Chalk Branch-2
+LayupScheduler.tsx:4838    📅 AG585 → Adj Chalk Branch-3
+LayupScheduler.tsx:1034 🔍 RAW SCHEDULE DATA FROM DATABASE: 215 total entries
+LayupScheduler.tsx:1041   Entry 0: AG639 → 2025-09-25T20:05:26.996Z → Thu Sep 25 2025 (Thursday, day 4)
+LayupScheduler.tsx:1041   Entry 1: AG522 → 2025-09-25T20:05:26.996Z → Thu Sep 25 2025 (Thursday, day 4)
+LayupScheduler.tsx:1041   Entry 2: AG556 → 2025-09-25T20:05:26.996Z → Thu Sep 25 2025 (Thursday, day 4)
+LayupScheduler.tsx:1041   Entry 3: AG559 → 2025-09-25T20:05:26.996Z → Thu Sep 25 2025 (Thursday, day 4)
+LayupScheduler.tsx:1041   Entry 4: AG580 → 2025-09-25T20:05:26.996Z → Thu Sep 25 2025 (Thursday, day 4)
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG639 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG522 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG556 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG559 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG580 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG565 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG566 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG532 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG658 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG601 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG596 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG592 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG586 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG666 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG625 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG670 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG635 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG669 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG633 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG389 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG620 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG690 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG546 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG501 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG681 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG680 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG688 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG552 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG468 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG473 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG624 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG664 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG631 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG621 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG674 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG613 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG476 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG493 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG673 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG679 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG544 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG557 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG561 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG563 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG603 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG474 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG602 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG638 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG593 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG553 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG487 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG672 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG623 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG617 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG491 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG466 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG619 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG489 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG464 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG530 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG598 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG585 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG582 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG475 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG579 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG583 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG584 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG574 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG569 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG452 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG456 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG572 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG444 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG457 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG422 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - EH223 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG331 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - EH191 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG286 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - EH160 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - EH126 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG013 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG144 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG125 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG575 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG307 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG164 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG591 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG644 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG649 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG654 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG756 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG775 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG796 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG152 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG656 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG774 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG786 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG156 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG151 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG533 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG049 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH215 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG803 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH088 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG082 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG079 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG099 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG147 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG105 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG109 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG492 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG478 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG500 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG595 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH207 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH118 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH063 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH178 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH164 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG588 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG406 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG461 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG469 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH030 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG463 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG571 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH217 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG479 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH135 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG562 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH112 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG495 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG524 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH092 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG790 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH093 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH113 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG017 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH111 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH209 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG098 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG543 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG036 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG047 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG124 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH145 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG061 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - EH071 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG815 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG642 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - EH150 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG011 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - EH227 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG509 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG645 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG753 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - EH107 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG755 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG007 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG521 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG048 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG480 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG482 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG555 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG564 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG483 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG481 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG459 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG458 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG040 on Thu Oct 02 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG581 on Thu Oct 02 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG455 on Thu Oct 02 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - EH211 on Thu Oct 02 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG568 on Thu Oct 02 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG745 on Thu Oct 02 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG651 on Thu Oct 02 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG647 on Thu Oct 02 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG434 on Thu Oct 02 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG039 on Thu Oct 02 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG092 on Thu Oct 02 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG467 on Thu Oct 02 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - EH067 on Thu Oct 02 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG441 on Thu Oct 02 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - EH055 on Mon Oct 06 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - EH158 on Mon Oct 06 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG359 on Mon Oct 06 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG056 on Mon Oct 06 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - EH162 on Mon Oct 06 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG548 on Mon Oct 06 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG345 on Mon Oct 06 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - EH134 on Mon Oct 06 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - EH212 on Mon Oct 06 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG004 on Mon Oct 06 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG122 on Mon Oct 06 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG104 on Tue Oct 07 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG141 on Tue Oct 07 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG161 on Tue Oct 07 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG726 on Tue Oct 07 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG641 on Tue Oct 07 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG634 on Tue Oct 07 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG145 on Wed Oct 08 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG769 on Wed Oct 08 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG121 on Wed Oct 08 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG149 on Wed Oct 08 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG119 on Wed Oct 08 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG062 on Wed Oct 08 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - EH114 on Thu Oct 09 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - EH139 on Thu Oct 09 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - EH133 on Thu Oct 09 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - EH128 on Thu Oct 09 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - EH137 on Thu Oct 09 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - EH078 on Thu Oct 09 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - EH143 on Mon Oct 13 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - EH213 on Mon Oct 13 2025
+LayupScheduler.tsx:1060 📋 Database filter: Removed 0 non-work-day assignments, kept 215 work-day assignments
+LayupScheduler.tsx:1061 📋 Selected work days: Mon, Tue, Wed, Thu
+useUnifiedLayupOrders.ts:47 🔧 RAW API RESPONSE: {dataType: 'object', isArray: true, length: 215, hasData: true, firstItem: {…}, …}
+useUnifiedLayupOrders.ts:69 ✅ Successfully loaded 215 orders from API
+useUnifiedLayupOrders.ts:71 ✅ Sample order data: {id: 1616, orderId: 'AG501', orderDate: '2025-03-21T00:00:00.000Z', dueDate: '2025-06-17T00:00:00.000Z', customerId: '209', …}
+useUnifiedLayupOrders.ts:83 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 215, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+useUnifiedLayupOrders.ts:108 🔧 Final hook return: {ordersReturned: 215, isLoading: false, hasError: false, firstOrderId: 'AG501'}
+LayupScheduler.tsx:1417 🏔️ MESA UNIVERSAL DEBUG: {totalOrders: 215, mesaUniversalCount: 0, mesaOrders: Array(0)}
+LayupScheduler.tsx:1423 🔍 LayupScheduler orders debug: {allOrdersCount: 215, loading: false, rawData: 'has data', dataType: 'object', isArray: true, …}
+LayupScheduler.tsx:1444 🏔️ FINAL ORDERS: Returning 215 total orders, 0 are Mesa Universal
+lopScheduler.ts:82 🔧 Order EH178 needs LOP adjustment: {lopValue: 'lop_adj_12.5', hasLOPFeatures: true, needsLOPTest: true}
+lopScheduler.ts:82 🔧 Order EH055 needs LOP adjustment: {lopValue: 'lop_adj_14.5', hasLOPFeatures: true, needsLOPTest: true}
+lopScheduler.ts:82 🔧 Order AG062 needs LOP adjustment: {lopValue: 'lop_adj_14.5', hasLOPFeatures: true, needsLOPTest: true}
+lopScheduler.ts:82 🔧 Order AG286 needs LOP adjustment: {lopValue: 'lop_adj_13', hasLOPFeatures: true, needsLOPTest: true}
+lopScheduler.ts:82 🔧 Order AG555 needs LOP adjustment: {lopValue: 'lop_adj_12.5', hasLOPFeatures: true, needsLOPTest: true}
+lopScheduler.ts:82 🔧 Order AG562 needs LOP adjustment: {lopValue: 'lop_adj_14.5', hasLOPFeatures: true, needsLOPTest: true}
+lopScheduler.ts:82 🔧 Order AG559 needs LOP adjustment: {lopValue: 'lop_adj_14', hasLOPFeatures: true, needsLOPTest: true}
+lopScheduler.ts:82 🔧 Order AG456 needs LOP adjustment: {lopValue: 'lop_adj_13.25', hasLOPFeatures: true, needsLOPTest: true}
+lopScheduler.ts:82 🔧 Order AG144 needs LOP adjustment: {lopValue: 'lop_adj_13.25', hasLOPFeatures: true, needsLOPTest: true}
+lopScheduler.ts:82 🔧 Order AG092 needs LOP adjustment: {lopValue: 'lop_adj_12.5', hasLOPFeatures: true, needsLOPTest: true}
+lopScheduler.ts:82 🔧 Order EH227 needs LOP adjustment: {lopValue: 'lop_adj_12.5', hasLOPFeatures: true, needsLOPTest: true}
+lopScheduler.ts:82 🔧 Order EH093 needs LOP adjustment: {lopValue: 'lop_adj_12.5', hasLOPFeatures: true, needsLOPTest: true}
+lopScheduler.ts:31 🔧 LOP Scheduler Debug: {today: 'Thu Sep 25 2025', isMonday: false, dayOfWeek: 4, nextMondayWouldBe: 'Mon Sep 29 2025'}
+lopScheduler.ts:61 🔧 Order EH178: LOP scheduled for Mon Sep 29 2025 (Deferred for Monday)
+lopScheduler.ts:61 🔧 Order EH055: LOP scheduled for Mon Sep 29 2025 (Deferred for Monday)
+lopScheduler.ts:61 🔧 Order AG062: LOP scheduled for Mon Sep 29 2025 (Deferred for Monday)
+lopScheduler.ts:61 🔧 Order AG286: LOP scheduled for Mon Sep 29 2025 (Deferred for Monday)
+lopScheduler.ts:61 🔧 Order AG555: LOP scheduled for Mon Sep 29 2025 (Deferred for Monday)
+lopScheduler.ts:61 🔧 Order AG562: LOP scheduled for Mon Sep 29 2025 (Deferred for Monday)
+lopScheduler.ts:61 🔧 Order AG559: LOP scheduled for Mon Sep 29 2025 (Deferred for Monday)
+lopScheduler.ts:61 🔧 Order AG456: LOP scheduled for Mon Sep 29 2025 (Deferred for Monday)
+lopScheduler.ts:61 🔧 Order AG144: LOP scheduled for Mon Sep 29 2025 (Deferred for Monday)
+lopScheduler.ts:61 🔧 Order AG092: LOP scheduled for Mon Sep 29 2025 (Deferred for Monday)
+lopScheduler.ts:61 🔧 Order EH227: LOP scheduled for Mon Sep 29 2025 (Deferred for Monday)
+lopScheduler.ts:61 🔧 Order EH093: LOP scheduled for Mon Sep 29 2025 (Deferred for Monday)
+LayupScheduler.tsx:1459 🔧 LOP Scheduler auto-run: {totalOrders: 215, lopOrdersNeedingAdjustment: 12, today: 'Thu Sep 25 2025', isMonday: false, sampleLOPOrders: Array(3)}
+LayupScheduler.tsx:3023 ✅ FRIDAY VALIDATION PASSED: 210 assignments, no Friday conflicts
+LayupScheduler.tsx:3029 🏭 LayupScheduler - Production/P1 orders: 0
+LayupScheduler.tsx:3052 🏔️ LayupScheduler - Mesa molds: (4) [{…}, {…}, {…}, {…}]
+LayupScheduler.tsx:3054 📋 LayupScheduler - Order Assignments: {AG688: {…}, AG679: {…}, AG389: {…}, AG690: {…}, AG681: {…}, …}
+LayupScheduler.tsx:3055 🏭 LayupScheduler - All Molds: (67) [{…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}]
+LayupScheduler.tsx:3056 ⚙️ LayupScheduler - Employees: 3 employees loaded
+LayupScheduler.tsx:3061 🔄 Unassigned orders: 5 (5) ['AG040', 'EH211', 'EH162', 'EH135', 'EH067']
+LayupScheduler.tsx:3062 🏭 Unassigned PRODUCTION/P1 orders: 0 []
+LayupScheduler.tsx:4836 📅 MONDAY DEBUG: Date 2025-09-29, 26 assignments found
+LayupScheduler.tsx:4838    📅 AG633 → Privateer-1
+LayupScheduler.tsx:4838    📅 AG613 → Gladius Adjustable-1
+LayupScheduler.tsx:4838    📅 AG546 → Visigoth-1
+LayupScheduler.tsx:4838    📅 AG533 → Alpine Hunter Adjustable-1
+LayupScheduler.tsx:4838    📅 AG501 → Alpine Hunter-1
+LayupScheduler.tsx:4838    📅 AG493 → Alpine Hunter-2
+LayupScheduler.tsx:4838    📅 AG491 → Alpine Hunter-3
+LayupScheduler.tsx:4838    📅 AG489 → Alpine Hunter-4
+LayupScheduler.tsx:4838    📅 AG466 → Alpine Hunter-5
+LayupScheduler.tsx:4838    📅 AG464 → Alpine Hunter-6
+LayupScheduler.tsx:4838    📅 AG487 → Alpine Hunter-7
+LayupScheduler.tsx:4838    📅 AG530 → Alpine Hunter-8
+LayupScheduler.tsx:4838    📅 AG463 → Alpine Hunter-9
+LayupScheduler.tsx:4838    📅 AG492 → Alpine Hunter-10
+LayupScheduler.tsx:4838    📅 AG495 → Alpine Hunter-11
+LayupScheduler.tsx:4838    📅 AG500 → Alpine Hunter-12
+LayupScheduler.tsx:4838    📅 AG473 → Privateer-2
+LayupScheduler.tsx:4838    📅 AG595 → Alpine Hunter-13
+LayupScheduler.tsx:4838    📅 AG474 → Adj Chalk Branch-1
+LayupScheduler.tsx:4838    📅 AG603 → Alpine Hunter-14
+LayupScheduler.tsx:4838    📅 AG602 → Visigoth-2
+LayupScheduler.tsx:4838    📅 AG593 → K2-3
+LayupScheduler.tsx:4838    📅 AG592 → Cat-1
+LayupScheduler.tsx:4838    📅 AG588 → Alpine Hunter Adjustable-2
+LayupScheduler.tsx:4838    📅 AG586 → Adj Chalk Branch-2
+LayupScheduler.tsx:4838    📅 AG585 → Adj Chalk Branch-3
+LayupScheduler.tsx:1478 🏭 LayupScheduler: Total orders from API: 215
+LayupScheduler.tsx:1479 🏭 LayupScheduler: Regular orders for scheduling: 215
+LayupScheduler.tsx:1480 🏭 LayupScheduler: P1 PO orders for scheduling: 0
+LayupScheduler.tsx:1482 🏭 LayupScheduler: Sample regular order for scheduling: {id: 1616, orderId: 'AG501', orderDate: '2025-03-21T00:00:00.000Z', dueDate: '2025-06-17T00:00:00.000Z', customerId: '209', …}
+LayupScheduler.tsx:1483 🏭 LayupScheduler: First 5 regular orders: (5) [{…}, {…}, {…}, {…}, {…}]
+LayupScheduler.tsx:1496 🏭 LayupScheduler: Filtered orders by source: {main_orders: 215}
+LayupScheduler.tsx:1500 🚀 LayupScheduler: All data loaded, checking if auto-schedule needed
+LayupScheduler.tsx:1514 📋 Assignments already exist, skipping auto-schedule
+LayupScheduler.tsx:2071 🎯 Production Flow Auto-schedule check: {orders: 215, molds: 67, employees: 3, isLoading: false, ordersLoading: false, …}
+LayupScheduler.tsx:2095 📊 SCHEDULE ANALYSIS: {totalOrders: 215, scheduledOrders: 210, unscheduledOrders: 5, assignmentKeys: 210, hasTooManyAssignments: true, …}
+LayupScheduler.tsx:2106 🧹 DETECTED STALE ASSIGNMENTS: Clearing old schedule data
+LayupScheduler.tsx:2107    Had 210 assignments for 215 orders - clearing stale data
+LayupScheduler.tsx:1034 🔍 RAW SCHEDULE DATA FROM DATABASE: 215 total entries
+LayupScheduler.tsx:1041   Entry 0: AG639 → 2025-09-25T20:05:26.996Z → Thu Sep 25 2025 (Thursday, day 4)
+LayupScheduler.tsx:1041   Entry 1: AG522 → 2025-09-25T20:05:26.996Z → Thu Sep 25 2025 (Thursday, day 4)
+LayupScheduler.tsx:1041   Entry 2: AG556 → 2025-09-25T20:05:26.996Z → Thu Sep 25 2025 (Thursday, day 4)
+LayupScheduler.tsx:1041   Entry 3: AG559 → 2025-09-25T20:05:26.996Z → Thu Sep 25 2025 (Thursday, day 4)
+LayupScheduler.tsx:1041   Entry 4: AG580 → 2025-09-25T20:05:26.996Z → Thu Sep 25 2025 (Thursday, day 4)
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG639 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG522 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG556 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG559 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG580 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG565 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG566 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG532 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG658 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG601 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG596 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG592 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG586 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG666 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG625 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG670 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG635 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG669 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG633 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG389 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG620 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG690 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG546 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG501 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG681 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG680 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG688 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG552 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG468 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG473 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG624 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG664 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG631 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG621 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG674 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG613 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG476 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG493 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG673 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG679 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG544 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG557 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG561 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG563 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG603 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG474 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG602 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG638 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG593 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG553 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG487 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG672 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG623 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG617 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG491 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG466 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG619 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG489 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG464 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG530 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG598 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG585 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG582 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG475 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG579 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG583 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG584 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG574 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG569 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG452 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG456 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG572 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG444 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG457 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG422 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - EH223 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG331 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - EH191 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG286 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - EH160 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - EH126 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG013 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG144 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG125 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG575 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG307 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG164 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG591 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG644 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG649 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG654 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG756 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG775 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG796 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG152 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG656 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG774 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG786 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG156 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG151 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG533 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG049 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH215 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG803 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH088 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG082 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG079 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG099 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG147 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG105 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG109 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG492 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG478 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG500 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG595 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH207 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH118 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH063 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH178 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH164 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG588 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG406 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG461 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG469 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH030 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG463 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG571 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH217 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG479 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH135 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG562 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH112 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG495 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG524 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH092 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG790 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH093 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH113 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG017 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH111 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH209 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG098 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG543 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG036 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG047 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG124 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH145 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG061 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - EH071 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG815 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG642 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - EH150 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG011 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - EH227 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG509 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG645 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG753 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - EH107 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG755 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG007 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG521 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG048 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG480 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG482 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG555 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG564 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG483 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG481 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG459 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG458 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG040 on Thu Oct 02 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG581 on Thu Oct 02 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG455 on Thu Oct 02 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - EH211 on Thu Oct 02 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG568 on Thu Oct 02 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG745 on Thu Oct 02 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG651 on Thu Oct 02 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG647 on Thu Oct 02 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG434 on Thu Oct 02 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG039 on Thu Oct 02 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG092 on Thu Oct 02 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG467 on Thu Oct 02 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - EH067 on Thu Oct 02 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG441 on Thu Oct 02 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - EH055 on Mon Oct 06 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - EH158 on Mon Oct 06 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG359 on Mon Oct 06 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG056 on Mon Oct 06 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - EH162 on Mon Oct 06 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG548 on Mon Oct 06 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG345 on Mon Oct 06 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - EH134 on Mon Oct 06 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - EH212 on Mon Oct 06 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG004 on Mon Oct 06 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG122 on Mon Oct 06 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG104 on Tue Oct 07 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG141 on Tue Oct 07 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG161 on Tue Oct 07 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG726 on Tue Oct 07 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG641 on Tue Oct 07 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG634 on Tue Oct 07 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG145 on Wed Oct 08 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG769 on Wed Oct 08 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG121 on Wed Oct 08 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG149 on Wed Oct 08 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG119 on Wed Oct 08 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG062 on Wed Oct 08 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - EH114 on Thu Oct 09 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - EH139 on Thu Oct 09 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - EH133 on Thu Oct 09 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - EH128 on Thu Oct 09 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - EH137 on Thu Oct 09 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - EH078 on Thu Oct 09 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - EH143 on Mon Oct 13 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - EH213 on Mon Oct 13 2025
+LayupScheduler.tsx:1060 📋 Database filter: Removed 0 non-work-day assignments, kept 215 work-day assignments
+LayupScheduler.tsx:1061 📋 Selected work days: Mon, Tue, Wed, Thu
+useUnifiedLayupOrders.ts:47 🔧 RAW API RESPONSE: {dataType: 'object', isArray: true, length: 215, hasData: true, firstItem: {…}, …}
+useUnifiedLayupOrders.ts:69 ✅ Successfully loaded 215 orders from API
+useUnifiedLayupOrders.ts:71 ✅ Sample order data: {id: 1616, orderId: 'AG501', orderDate: '2025-03-21T00:00:00.000Z', dueDate: '2025-06-17T00:00:00.000Z', customerId: '209', …}
+useUnifiedLayupOrders.ts:83 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 215, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+useUnifiedLayupOrders.ts:108 🔧 Final hook return: {ordersReturned: 215, isLoading: false, hasError: false, firstOrderId: 'AG501'}
+LayupScheduler.tsx:1417 🏔️ MESA UNIVERSAL DEBUG: {totalOrders: 215, mesaUniversalCount: 0, mesaOrders: Array(0)}
+LayupScheduler.tsx:1423 🔍 LayupScheduler orders debug: {allOrdersCount: 215, loading: false, rawData: 'has data', dataType: 'object', isArray: true, …}
+LayupScheduler.tsx:1444 🏔️ FINAL ORDERS: Returning 215 total orders, 0 are Mesa Universal
+lopScheduler.ts:82 🔧 Order EH178 needs LOP adjustment: {lopValue: 'lop_adj_12.5', hasLOPFeatures: true, needsLOPTest: true}
+lopScheduler.ts:82 🔧 Order EH055 needs LOP adjustment: {lopValue: 'lop_adj_14.5', hasLOPFeatures: true, needsLOPTest: true}
+lopScheduler.ts:82 🔧 Order AG062 needs LOP adjustment: {lopValue: 'lop_adj_14.5', hasLOPFeatures: true, needsLOPTest: true}
+lopScheduler.ts:82 🔧 Order AG286 needs LOP adjustment: {lopValue: 'lop_adj_13', hasLOPFeatures: true, needsLOPTest: true}
+lopScheduler.ts:82 🔧 Order AG555 needs LOP adjustment: {lopValue: 'lop_adj_12.5', hasLOPFeatures: true, needsLOPTest: true}
+lopScheduler.ts:82 🔧 Order AG562 needs LOP adjustment: {lopValue: 'lop_adj_14.5', hasLOPFeatures: true, needsLOPTest: true}
+lopScheduler.ts:82 🔧 Order AG559 needs LOP adjustment: {lopValue: 'lop_adj_14', hasLOPFeatures: true, needsLOPTest: true}
+lopScheduler.ts:82 🔧 Order AG456 needs LOP adjustment: {lopValue: 'lop_adj_13.25', hasLOPFeatures: true, needsLOPTest: true}
+lopScheduler.ts:82 🔧 Order AG144 needs LOP adjustment: {lopValue: 'lop_adj_13.25', hasLOPFeatures: true, needsLOPTest: true}
+lopScheduler.ts:82 🔧 Order AG092 needs LOP adjustment: {lopValue: 'lop_adj_12.5', hasLOPFeatures: true, needsLOPTest: true}
+lopScheduler.ts:82 🔧 Order EH227 needs LOP adjustment: {lopValue: 'lop_adj_12.5', hasLOPFeatures: true, needsLOPTest: true}
+lopScheduler.ts:82 🔧 Order EH093 needs LOP adjustment: {lopValue: 'lop_adj_12.5', hasLOPFeatures: true, needsLOPTest: true}
+lopScheduler.ts:31 🔧 LOP Scheduler Debug: {today: 'Thu Sep 25 2025', isMonday: false, dayOfWeek: 4, nextMondayWouldBe: 'Mon Sep 29 2025'}
+lopScheduler.ts:61 🔧 Order EH178: LOP scheduled for Mon Sep 29 2025 (Deferred for Monday)
+lopScheduler.ts:61 🔧 Order EH055: LOP scheduled for Mon Sep 29 2025 (Deferred for Monday)
+lopScheduler.ts:61 🔧 Order AG062: LOP scheduled for Mon Sep 29 2025 (Deferred for Monday)
+lopScheduler.ts:61 🔧 Order AG286: LOP scheduled for Mon Sep 29 2025 (Deferred for Monday)
+lopScheduler.ts:61 🔧 Order AG555: LOP scheduled for Mon Sep 29 2025 (Deferred for Monday)
+lopScheduler.ts:61 🔧 Order AG562: LOP scheduled for Mon Sep 29 2025 (Deferred for Monday)
+lopScheduler.ts:61 🔧 Order AG559: LOP scheduled for Mon Sep 29 2025 (Deferred for Monday)
+lopScheduler.ts:61 🔧 Order AG456: LOP scheduled for Mon Sep 29 2025 (Deferred for Monday)
+lopScheduler.ts:61 🔧 Order AG144: LOP scheduled for Mon Sep 29 2025 (Deferred for Monday)
+lopScheduler.ts:61 🔧 Order AG092: LOP scheduled for Mon Sep 29 2025 (Deferred for Monday)
+lopScheduler.ts:61 🔧 Order EH227: LOP scheduled for Mon Sep 29 2025 (Deferred for Monday)
+lopScheduler.ts:61 🔧 Order EH093: LOP scheduled for Mon Sep 29 2025 (Deferred for Monday)
+LayupScheduler.tsx:1459 🔧 LOP Scheduler auto-run: {totalOrders: 215, lopOrdersNeedingAdjustment: 12, today: 'Thu Sep 25 2025', isMonday: false, sampleLOPOrders: Array(3)}
+LayupScheduler.tsx:3029 🏭 LayupScheduler - Production/P1 orders: 0
+LayupScheduler.tsx:3052 🏔️ LayupScheduler - Mesa molds: (4) [{…}, {…}, {…}, {…}]
+LayupScheduler.tsx:3054 📋 LayupScheduler - Order Assignments: {}
+LayupScheduler.tsx:3055 🏭 LayupScheduler - All Molds: (67) [{…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}]
+LayupScheduler.tsx:3056 ⚙️ LayupScheduler - Employees: 3 employees loaded
+LayupScheduler.tsx:3061 🔄 Unassigned orders: 215 (215) ['AG501', 'AG493', 'AG491', 'AG489', 'AG466', 'AG464', 'AG487', 'EH223', 'AG125', 'AG079', 'AG122', 'AG098', 'AG049', 'AG109', 'AG756', 'AG786', 'EH191', 'AG753', 'AG571', 'EH178', 'EH164', 'EH160', 'EH158', 'EH126', 'EH055', 'AG651', 'AG441', 'AG656', 'AG654', 'AG444', 'AG452', 'AG406', 'AG434', 'AG359', 'AG307', 'AG345', 'AG119', 'AG455', 'AG121', 'AG479', 'AG480', 'AG481', 'AG482', 'AG483', 'AG530', 'AG463', 'AG492', 'AG495', 'AG500', 'AG082', 'AG062', 'AG104', 'AG056', 'AG141', 'AG151', 'AG161', 'AG164', 'AG286', 'AG145', 'AG331', 'AG467', 'AG473', 'AG544', 'AG553', 'AG555', 'AG564', 'AG565', 'AG566', 'AG579', 'AG638', 'AG639', 'AG658', 'AG666', 'AG670', 'AG568', 'AG581', 'AG582', 'AG583', 'AG584', 'AG595', 'AG688', 'AG625', 'AG635', 'AG149', 'AG644', 'AG796', 'AG679', 'AG389', 'AG548', 'AG634', 'AG641', 'AG642', 'AG645', 'AG755', 'AG726', 'AG474', 'AG624', 'AG803', 'AG775', 'AG774', …]
+LayupScheduler.tsx:3062 🏭 Unassigned PRODUCTION/P1 orders: 0 []
+LayupScheduler.tsx:4836 📅 MONDAY DEBUG: Date 2025-09-29, 0 assignments found
+LayupScheduler.tsx:1034 🔍 RAW SCHEDULE DATA FROM DATABASE: 215 total entries
+LayupScheduler.tsx:1041   Entry 0: AG639 → 2025-09-25T20:05:26.996Z → Thu Sep 25 2025 (Thursday, day 4)
+LayupScheduler.tsx:1041   Entry 1: AG522 → 2025-09-25T20:05:26.996Z → Thu Sep 25 2025 (Thursday, day 4)
+LayupScheduler.tsx:1041   Entry 2: AG556 → 2025-09-25T20:05:26.996Z → Thu Sep 25 2025 (Thursday, day 4)
+LayupScheduler.tsx:1041   Entry 3: AG559 → 2025-09-25T20:05:26.996Z → Thu Sep 25 2025 (Thursday, day 4)
+LayupScheduler.tsx:1041   Entry 4: AG580 → 2025-09-25T20:05:26.996Z → Thu Sep 25 2025 (Thursday, day 4)
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG639 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG522 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG556 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG559 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG580 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG565 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG566 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG532 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG658 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG601 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG596 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG592 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG586 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG666 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG625 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG670 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG635 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG669 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG633 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG389 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG620 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG690 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG546 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG501 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG681 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG680 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG688 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG552 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG468 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG473 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG624 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG664 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG631 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG621 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG674 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG613 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG476 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG493 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG673 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG679 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG544 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG557 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG561 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG563 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG603 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG474 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG602 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG638 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG593 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG553 on Thu Sep 25 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG487 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG672 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG623 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG617 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG491 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG466 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG619 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG489 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG464 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG530 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG598 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG585 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG582 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG475 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG579 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG583 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG584 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG574 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG569 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG452 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG456 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG572 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG444 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG457 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG422 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - EH223 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG331 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - EH191 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG286 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - EH160 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - EH126 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG013 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG144 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG125 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG575 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG307 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG164 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG591 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG644 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG649 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG654 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG756 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG775 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG796 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG152 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG656 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG774 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG786 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG156 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG151 on Mon Sep 29 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG533 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG049 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH215 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG803 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH088 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG082 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG079 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG099 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG147 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG105 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG109 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG492 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG478 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG500 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG595 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH207 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH118 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH063 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH178 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH164 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG588 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG406 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG461 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG469 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH030 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG463 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG571 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH217 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG479 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH135 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG562 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH112 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG495 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG524 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH092 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG790 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH093 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH113 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG017 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH111 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH209 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG098 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG543 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG036 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG047 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG124 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - EH145 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG061 on Tue Sep 30 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - EH071 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG815 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG642 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - EH150 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG011 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - EH227 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG509 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG645 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG753 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - EH107 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG755 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG007 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG521 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG048 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG480 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG482 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG555 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG564 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG483 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG481 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG459 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG458 on Wed Oct 01 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG040 on Thu Oct 02 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG581 on Thu Oct 02 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG455 on Thu Oct 02 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - EH211 on Thu Oct 02 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG568 on Thu Oct 02 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG745 on Thu Oct 02 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG651 on Thu Oct 02 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG647 on Thu Oct 02 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG434 on Thu Oct 02 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG039 on Thu Oct 02 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG092 on Thu Oct 02 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG467 on Thu Oct 02 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - EH067 on Thu Oct 02 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - AG441 on Thu Oct 02 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - EH055 on Mon Oct 06 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - EH158 on Mon Oct 06 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG359 on Mon Oct 06 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG056 on Mon Oct 06 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - EH162 on Mon Oct 06 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG548 on Mon Oct 06 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG345 on Mon Oct 06 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - EH134 on Mon Oct 06 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - EH212 on Mon Oct 06 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG004 on Mon Oct 06 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - AG122 on Mon Oct 06 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG104 on Tue Oct 07 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG141 on Tue Oct 07 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG161 on Tue Oct 07 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG726 on Tue Oct 07 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG641 on Tue Oct 07 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Tuesday assignment - AG634 on Tue Oct 07 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG145 on Wed Oct 08 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG769 on Wed Oct 08 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG121 on Wed Oct 08 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG149 on Wed Oct 08 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG119 on Wed Oct 08 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Wednesday assignment - AG062 on Wed Oct 08 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - EH114 on Thu Oct 09 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - EH139 on Thu Oct 09 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - EH133 on Thu Oct 09 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - EH128 on Thu Oct 09 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - EH137 on Thu Oct 09 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Thursday assignment - EH078 on Thu Oct 09 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - EH143 on Mon Oct 13 2025
+LayupScheduler.tsx:1054 ✅ DATABASE FILTER: Keeping Monday assignment - EH213 on Mon Oct 13 2025
+LayupScheduler.tsx:1060 📋 Database filter: Removed 0 non-work-day assignments, kept 215 work-day assignments
+LayupScheduler.tsx:1061 📋 Selected work days: Mon, Tue, Wed, Thu
+useUnifiedLayupOrders.ts:47 🔧 RAW API RESPONSE: {dataType: 'object', isArray: true, length: 215, hasData: true, firstItem: {…}, …}
+useUnifiedLayupOrders.ts:69 ✅ Successfully loaded 215 orders from API
+useUnifiedLayupOrders.ts:71 ✅ Sample order data: {id: 1616, orderId: 'AG501', orderDate: '2025-03-21T00:00:00.000Z', dueDate: '2025-06-17T00:00:00.000Z', customerId: '209', …}
+useUnifiedLayupOrders.ts:83 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 215, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+useUnifiedLayupOrders.ts:108 🔧 Final hook return: {ordersReturned: 215, isLoading: false, hasError: false, firstOrderId: 'AG501'}
+LayupScheduler.tsx:1417 🏔️ MESA UNIVERSAL DEBUG: {totalOrders: 215, mesaUniversalCount: 0, mesaOrders: Array(0)}
+LayupScheduler.tsx:1423 🔍 LayupScheduler orders debug: {allOrdersCount: 215, loading: false, rawData: 'has data', dataType: 'object', isArray: true, …}
+LayupScheduler.tsx:1444 🏔️ FINAL ORDERS: Returning 215 total orders, 0 are Mesa Universal
+lopScheduler.ts:82 🔧 Order EH178 needs LOP adjustment: {lopValue: 'lop_adj_12.5', hasLOPFeatures: true, needsLOPTest: true}
+lopScheduler.ts:82 🔧 Order EH055 needs LOP adjustment: {lopValue: 'lop_adj_14.5', hasLOPFeatures: true, needsLOPTest: true}
+lopScheduler.ts:82 🔧 Order AG062 needs LOP adjustment: {lopValue: 'lop_adj_14.5', hasLOPFeatures: true, needsLOPTest: true}
+lopScheduler.ts:82 🔧 Order AG286 needs LOP adjustment: {lopValue: 'lop_adj_13', hasLOPFeatures: true, needsLOPTest: true}
+lopScheduler.ts:82 🔧 Order AG555 needs LOP adjustment: {lopValue: 'lop_adj_12.5', hasLOPFeatures: true, needsLOPTest: true}
+lopScheduler.ts:82 🔧 Order AG562 needs LOP adjustment: {lopValue: 'lop_adj_14.5', hasLOPFeatures: true, needsLOPTest: true}
+lopScheduler.ts:82 🔧 Order AG559 needs LOP adjustment: {lopValue: 'lop_adj_14', hasLOPFeatures: true, needsLOPTest: true}
+lopScheduler.ts:82 🔧 Order AG456 needs LOP adjustment: {lopValue: 'lop_adj_13.25', hasLOPFeatures: true, needsLOPTest: true}
+lopScheduler.ts:82 🔧 Order AG144 needs LOP adjustment: {lopValue: 'lop_adj_13.25', hasLOPFeatures: true, needsLOPTest: true}
+lopScheduler.ts:82 🔧 Order AG092 needs LOP adjustment: {lopValue: 'lop_adj_12.5', hasLOPFeatures: true, needsLOPTest: true}
+lopScheduler.ts:82 🔧 Order EH227 needs LOP adjustment: {lopValue: 'lop_adj_12.5', hasLOPFeatures: true, needsLOPTest: true}
+lopScheduler.ts:82 🔧 Order EH093 needs LOP adjustment: {lopValue: 'lop_adj_12.5', hasLOPFeatures: true, needsLOPTest: true}
+lopScheduler.ts:31 🔧 LOP Scheduler Debug: {today: 'Thu Sep 25 2025', isMonday: false, dayOfWeek: 4, nextMondayWouldBe: 'Mon Sep 29 2025'}
+lopScheduler.ts:61 🔧 Order EH178: LOP scheduled for Mon Sep 29 2025 (Deferred for Monday)
+lopScheduler.ts:61 🔧 Order EH055: LOP scheduled for Mon Sep 29 2025 (Deferred for Monday)
+lopScheduler.ts:61 🔧 Order AG062: LOP scheduled for Mon Sep 29 2025 (Deferred for Monday)
+lopScheduler.ts:61 🔧 Order AG286: LOP scheduled for Mon Sep 29 2025 (Deferred for Monday)
+lopScheduler.ts:61 🔧 Order AG555: LOP scheduled for Mon Sep 29 2025 (Deferred for Monday)
+lopScheduler.ts:61 🔧 Order AG562: LOP scheduled for Mon Sep 29 2025 (Deferred for Monday)
+lopScheduler.ts:61 🔧 Order AG559: LOP scheduled for Mon Sep 29 2025 (Deferred for Monday)
+lopScheduler.ts:61 🔧 Order AG456: LOP scheduled for Mon Sep 29 2025 (Deferred for Monday)
+lopScheduler.ts:61 🔧 Order AG144: LOP scheduled for Mon Sep 29 2025 (Deferred for Monday)
+lopScheduler.ts:61 🔧 Order AG092: LOP scheduled for Mon Sep 29 2025 (Deferred for Monday)
+lopScheduler.ts:61 🔧 Order EH227: LOP scheduled for Mon Sep 29 2025 (Deferred for Monday)
+lopScheduler.ts:61 🔧 Order EH093: LOP scheduled for Mon Sep 29 2025 (Deferred for Monday)
+LayupScheduler.tsx:1459 🔧 LOP Scheduler auto-run: {totalOrders: 215, lopOrdersNeedingAdjustment: 12, today: 'Thu Sep 25 2025', isMonday: false, sampleLOPOrders: Array(3)}
+LayupScheduler.tsx:3029 🏭 LayupScheduler - Production/P1 orders: 0
+LayupScheduler.tsx:3052 🏔️ LayupScheduler - Mesa molds: (4) [{…}, {…}, {…}, {…}]
+LayupScheduler.tsx:3054 📋 LayupScheduler - Order Assignments: {}
+LayupScheduler.tsx:3055 🏭 LayupScheduler - All Molds: (67) [{…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}]
+LayupScheduler.tsx:3056 ⚙️ LayupScheduler - Employees: 3 employees loaded
+LayupScheduler.tsx:3061 🔄 Unassigned orders: 215 (215) ['AG501', 'AG493', 'AG491', 'AG489', 'AG466', 'AG464', 'AG487', 'EH223', 'AG125', 'AG079', 'AG122', 'AG098', 'AG049', 'AG109', 'AG756', 'AG786', 'EH191', 'AG753', 'AG571', 'EH178', 'EH164', 'EH160', 'EH158', 'EH126', 'EH055', 'AG651', 'AG441', 'AG656', 'AG654', 'AG444', 'AG452', 'AG406', 'AG434', 'AG359', 'AG307', 'AG345', 'AG119', 'AG455', 'AG121', 'AG479', 'AG480', 'AG481', 'AG482', 'AG483', 'AG530', 'AG463', 'AG492', 'AG495', 'AG500', 'AG082', 'AG062', 'AG104', 'AG056', 'AG141', 'AG151', 'AG161', 'AG164', 'AG286', 'AG145', 'AG331', 'AG467', 'AG473', 'AG544', 'AG553', 'AG555', 'AG564', 'AG565', 'AG566', 'AG579', 'AG638', 'AG639', 'AG658', 'AG666', 'AG670', 'AG568', 'AG581', 'AG582', 'AG583', 'AG584', 'AG595', 'AG688', 'AG625', 'AG635', 'AG149', 'AG644', 'AG796', 'AG679', 'AG389', 'AG548', 'AG634', 'AG641', 'AG642', 'AG645', 'AG755', 'AG726', 'AG474', 'AG624', 'AG803', 'AG775', 'AG774', …]
+LayupScheduler.tsx:3062 🏭 Unassigned PRODUCTION/P1 orders: 0 []
+LayupScheduler.tsx:4836 📅 MONDAY DEBUG: Date 2025-09-29, 0 assignments found
+LayupScheduler.tsx:1478 🏭 LayupScheduler: Total orders from API: 215
+LayupScheduler.tsx:1479 🏭 LayupScheduler: Regular orders for scheduling: 215
+LayupScheduler.tsx:1480 🏭 LayupScheduler: P1 PO orders for scheduling: 0
+LayupScheduler.tsx:1482 🏭 LayupScheduler: Sample regular order for scheduling: {id: 1616, orderId: 'AG501', orderDate: '2025-03-21T00:00:00.000Z', dueDate: '2025-06-17T00:00:00.000Z', customerId: '209', …}
+LayupScheduler.tsx:1483 🏭 LayupScheduler: First 5 regular orders: (5) [{…}, {…}, {…}, {…}, {…}]
+LayupScheduler.tsx:1496 🏭 LayupScheduler: Filtered orders by source: {main_orders: 215}
+LayupScheduler.tsx:1500 🚀 LayupScheduler: All data loaded, checking if auto-schedule needed
+LayupScheduler.tsx:1505 🎯 One-time auto-scheduling triggered for: 215 orders
+LayupScheduler.tsx:2071 🎯 Production Flow Auto-schedule check: {orders: 215, molds: 67, employees: 3, isLoading: false, ordersLoading: false, …}
+LayupScheduler.tsx:2095 📊 SCHEDULE ANALYSIS: {totalOrders: 215, scheduledOrders: 0, unscheduledOrders: 215, assignmentKeys: 0, hasTooManyAssignments: false, …}
+LayupScheduler.tsx:2113 📊 SCHEDULE STATUS: Ready for manual scheduling (2-week limit) - 215 unscheduled order

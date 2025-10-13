@@ -1,15 +1,17 @@
-import express, { type Request, Response, NextFunction } from 'express';
-import cookieParser from 'cookie-parser';
-import cors from 'cors';
-import path from 'path';
-import fs from 'fs';
-import { registerRoutes } from './src/routes/index';
-import { setupVite, serveStatic, log } from './vite';
+import express, { type Request, Response, NextFunction } from "express";
+import cookieParser from "cookie-parser";
+import cors from "cors";
+import path from "path";
+import fs from "fs";
+import { registerRoutes } from "./src/routes/index";
+import { setupVite, serveStatic, log } from "./vite";
 
 // Validate required environment variables
-const requiredEnvVars = ['DATABASE_URL'];
+const requiredEnvVars = [
+  'DATABASE_URL'
+];
 
-const missingEnvVars = requiredEnvVars.filter((envVar) => !process.env[envVar]);
+const missingEnvVars = requiredEnvVars.filter(envVar => !process.env[envVar]);
 if (missingEnvVars.length > 0) {
   console.error('Missing required environment variables:', missingEnvVars);
 }
@@ -18,32 +20,29 @@ if (missingEnvVars.length > 0) {
 console.log('Environment check:', {
   DATABASE_URL: process.env.DATABASE_URL ? 'Set' : 'Missing',
   NODE_ENV: process.env.NODE_ENV || 'Not set',
-  PORT: process.env.PORT || 'Not set (defaulting to 5000)',
+  PORT: process.env.PORT || 'Not set (defaulting to 5000)'
 });
 
 const app = express();
 
 // CORS configuration - critical for production authentication
 // Check if we're on Replit deployment (agcompepoch.xyz) or development
-const isReplitDeployment =
-  process.env.REPL_DEPLOYMENT === 'true' ||
-  process.env.REPLIT_DEPLOYMENT === 'true';
-const isProduction =
-  process.env.NODE_ENV === 'production' || isReplitDeployment;
+const isReplitDeployment = process.env.REPL_DEPLOYMENT === 'true' || process.env.REPLIT_DEPLOYMENT === 'true';
+const isProduction = process.env.NODE_ENV === 'production' || isReplitDeployment;
 
 const corsOptions = {
   origin: isProduction
     ? ['https://agcompepoch.xyz', 'https://www.agcompepoch.xyz']
     : true, // Allow all origins in development
   credentials: true, // Allow cookies to be sent
-  optionsSuccessStatus: 200,
+  optionsSuccessStatus: 200
 };
 
 console.log('🔒 CORS Configuration:', {
   NODE_ENV: process.env.NODE_ENV,
   REPL_DEPLOYMENT: process.env.REPL_DEPLOYMENT,
   isProduction,
-  allowedOrigins: corsOptions.origin,
+  allowedOrigins: corsOptions.origin
 });
 
 app.use(cors(corsOptions));
@@ -51,28 +50,23 @@ app.use(cors(corsOptions));
 // Serve attached assets (PDFs, documents, etc.) - Must be before other routes
 // In production, assets are copied to dist/attached_assets
 // In development, assets are in the root attached_assets folder
-const assetsPath =
-  process.env.NODE_ENV === 'production'
-    ? path.join(import.meta.dirname, 'attached_assets')
-    : path.join(process.cwd(), 'attached_assets');
+const assetsPath = process.env.NODE_ENV === 'production' 
+  ? path.join(import.meta.dirname, 'attached_assets')
+  : path.join(process.cwd(), 'attached_assets');
 
 console.log('📁 Assets path configuration:', {
   NODE_ENV: process.env.NODE_ENV,
   assetsPath,
   dirname: import.meta.dirname,
-  cwd: process.cwd(),
+  cwd: process.cwd()
 });
 
 app.get('/attached_assets/*', (req, res, next) => {
   const fileName = req.path.replace('/attached_assets/', '');
   const filePath = path.join(assetsPath, fileName);
-
-  console.log('📄 Asset request:', {
-    fileName,
-    filePath,
-    exists: fs.existsSync(filePath),
-  });
-
+  
+  console.log('📄 Asset request:', { fileName, filePath, exists: fs.existsSync(filePath) });
+  
   if (fs.existsSync(filePath)) {
     // Set correct content type for PDFs
     if (filePath.endsWith('.pdf')) {
@@ -107,16 +101,16 @@ app.use((req, res, next) => {
     return originalResJson.apply(res, [bodyJson, ...args]);
   };
 
-  res.on('finish', () => {
+  res.on("finish", () => {
     const duration = Date.now() - start;
-    if (path.startsWith('/api')) {
+    if (path.startsWith("/api")) {
       let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
       if (capturedJsonResponse) {
         logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
       }
 
       if (logLine.length > 80) {
-        logLine = logLine.slice(0, 79) + '…';
+        logLine = logLine.slice(0, 79) + "…";
       }
 
       log(logLine);
@@ -129,20 +123,18 @@ app.use((req, res, next) => {
 (async () => {
   try {
     // Test database connection first
-    const { testDatabaseConnection } = await import('./db');
+    const { testDatabaseConnection } = await import("./db");
     const dbConnected = await testDatabaseConnection();
-
+    
     if (!dbConnected) {
-      console.error(
-        'Failed to connect to database. Server may not function properly.'
-      );
+      console.error("Failed to connect to database. Server may not function properly.");
     }
-
+    
     const server = await registerRoutes(app);
 
     app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
       const status = err.status || err.statusCode || 500;
-      const message = err.message || 'Internal Server Error';
+      const message = err.message || "Internal Server Error";
 
       // Enhanced error logging
       console.error('=== SERVER ERROR ===');
@@ -154,16 +146,16 @@ app.use((req, res, next) => {
       console.error('===================');
 
       log(`Error ${status}: ${message}`);
-      res.status(status).json({
+      res.status(status).json({ 
         message,
-        ...(process.env.NODE_ENV === 'development' && { stack: err.stack }),
+        ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
       });
     });
 
     // importantly only setup vite in development and after
     // setting up all the other routes so the catch-all route
     // doesn't interfere with the other routes
-    if (app.get('env') === 'development') {
+    if (app.get("env") === "development") {
       await setupVite(app, server);
     } else {
       serveStatic(app);
@@ -179,25 +171,20 @@ app.use((req, res, next) => {
     // this serves both the API and the client.
     // It is the only port that is not firewalled.
     const port = parseInt(process.env.PORT || '5000', 10);
-    server.listen(
-      {
-        port,
-        host: '0.0.0.0',
-        reusePort: true,
-      },
-      () => {
-        console.log(`Server started successfully`);
-        console.log(`- Port: ${port}`);
-        console.log(`- Host: 0.0.0.0`);
-        console.log(`- Environment: ${process.env.NODE_ENV || 'development'}`);
-        console.log(
-          `- Server accessible at: https://${process.env.REPL_ID || 'localhost'}.${process.env.REPL_OWNER || 'local'}.repl.co`
-        );
-        log(`serving on port ${port}`);
-      }
-    );
+    server.listen({
+      port,
+      host: "0.0.0.0",
+      reusePort: true,
+    }, () => {
+      console.log(`Server started successfully`);
+      console.log(`- Port: ${port}`);
+      console.log(`- Host: 0.0.0.0`);
+      console.log(`- Environment: ${process.env.NODE_ENV || 'development'}`);
+      console.log(`- Server accessible at: https://${process.env.REPL_ID || 'localhost'}.${process.env.REPL_OWNER || 'local'}.repl.co`);
+      log(`serving on port ${port}`);
+    });
   } catch (error) {
-    console.error('Failed to start server:', error);
+    console.error("Failed to start server:", error);
     process.exit(1);
   }
 })();

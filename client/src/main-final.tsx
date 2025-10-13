@@ -1,27 +1,23 @@
 // Final solution: Disable React refresh and restore full app
-import { StrictMode, createElement } from 'react';
-import { createRoot } from 'react-dom/client';
-import './index.css';
+import { StrictMode, createElement } from "react";
+import { createRoot } from "react-dom/client";
+import "./index.css";
 
 // Complete React refresh override
 if (typeof window !== 'undefined') {
   // Prevent any React refresh from loading
   Object.defineProperty(window, '$RefreshReg$', {
-    value: function () {},
+    value: function() {},
     writable: true,
-    configurable: true,
+    configurable: true
   });
-
+  
   Object.defineProperty(window, '$RefreshSig$', {
-    value: function () {
-      return function (type: any) {
-        return type;
-      };
-    },
+    value: function() { return function(type: any) { return type; }; },
     writable: true,
-    configurable: true,
+    configurable: true
   });
-
+  
   // Mark as installed to prevent further setup
   (window as any).__vite_plugin_react_preamble_installed__ = true;
 }
@@ -29,38 +25,39 @@ if (typeof window !== 'undefined') {
 // Import App component dynamically to avoid any plugin conflicts
 async function loadApp() {
   try {
-    const { default: App } = await import('./App');
+    const { default: App } = await import("./App");
     return App;
   } catch (error) {
-    console.error('Failed to load App component:', error);
+    console.error("Failed to load App component:", error);
     return null;
   }
 }
 
 // Initialize React application
 async function initializeApp() {
-  const rootElement = document.getElementById('root');
+  const rootElement = document.getElementById("root");
   if (!rootElement) {
-    console.error('Root element not found');
+    console.error("Root element not found");
     return;
   }
 
   try {
-    rootElement.innerHTML = '';
-    console.log('Initializing React application with refresh disabled...');
-
+    rootElement.innerHTML = "";
+    console.log("Initializing React application with refresh disabled...");
+    
     const App = await loadApp();
     if (!App) {
-      throw new Error('Failed to load App component');
+      throw new Error("Failed to load App component");
     }
-
+    
     const root = createRoot(rootElement);
     root.render(createElement(StrictMode, null, createElement(App)));
-
-    console.log('React application initialized successfully');
+    
+    console.log("React application initialized successfully");
+    
   } catch (error) {
-    console.error('Error initializing React app:', error);
-
+    console.error("Error initializing React app:", error);
+    
     // Fallback to basic HTML interface
     rootElement.innerHTML = `
       <div style="padding: 20px; max-width: 600px; margin: 0 auto; font-family: Arial, sans-serif;">

@@ -5,20 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Plus, ShoppingCart, Package, CheckCircle2 } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -34,13 +22,13 @@ export default function OrderPlacementCard() {
   const [formData, setFormData] = useState<OrderFormData>({
     supplierName: '',
     selectedItemIds: [],
-    notes: '',
+    notes: ''
   });
 
   // Get inventory items to extract suppliers
   const { data: inventoryItems = [], isLoading } = useQuery({
     queryKey: ['/api/inventory'],
-    enabled: true,
+    enabled: true
   });
 
   // Extract unique suppliers from inventory items (excluding department codes)
@@ -48,24 +36,16 @@ export default function OrderPlacementCard() {
   const normalizeSupplierName = (name: string): string => {
     if (!name) return name;
     const trimmed = name.trim();
-
+    
     // Handle common variations
     if (trimmed.toLowerCase() === 'lowes') return "Lowe's";
-    if (
-      trimmed.toLowerCase() === 'homedepot' ||
-      trimmed.toLowerCase() === 'home depot'
-    )
-      return 'Home Depot';
-    if (trimmed.toLowerCase() === 'walmart') return 'Walmart';
-    if (trimmed.toLowerCase() === 'machining resource')
-      return 'Machining Resources';
-    if (
-      trimmed.toLowerCase() === 'n al chem' ||
-      trimmed.toLowerCase() === 'n al chemials' ||
-      trimmed.toLowerCase() === 'n al chemical'
-    )
-      return 'N AL Chemical';
-
+    if (trimmed.toLowerCase() === 'homedepot' || trimmed.toLowerCase() === 'home depot') return "Home Depot";
+    if (trimmed.toLowerCase() === 'walmart') return "Walmart";
+    if (trimmed.toLowerCase() === 'machining resource') return "Machining Resources";
+    if (trimmed.toLowerCase() === 'n al chem' || 
+        trimmed.toLowerCase() === 'n al chemials' || 
+        trimmed.toLowerCase() === 'n al chemical') return "N AL Chemical";
+    
     return trimmed;
   };
 
@@ -73,27 +53,19 @@ export default function OrderPlacementCard() {
     if (!inventoryItems || inventoryItems.length === 0) {
       return [];
     }
-
+    
     const suppliers = new Set<string>();
     const departmentCodes = ['PL1', 'PL2', 'PL3', 'SHOP', 'OFFICE']; // Add known department codes to exclude
-
+    
     inventoryItems.forEach((item: any) => {
-      if (
-        item?.source &&
-        typeof item.source === 'string' &&
-        item.source.trim()
-      ) {
+      if (item?.source && typeof item.source === 'string' && item.source.trim()) {
         const source = normalizeSupplierName(item.source);
         // Only add if it's not a department code
         if (!departmentCodes.includes(source.toUpperCase())) {
           suppliers.add(source);
         }
       }
-      if (
-        item?.secondarySource &&
-        typeof item.secondarySource === 'string' &&
-        item.secondarySource.trim()
-      ) {
+      if (item?.secondarySource && typeof item.secondarySource === 'string' && item.secondarySource.trim()) {
         const secondarySource = normalizeSupplierName(item.secondarySource);
         // Only add if it's not a department code
         if (!departmentCodes.includes(secondarySource.toUpperCase())) {
@@ -101,7 +73,7 @@ export default function OrderPlacementCard() {
         }
       }
     });
-
+    
     return Array.from(suppliers).sort();
   }, [inventoryItems]);
 
@@ -110,26 +82,21 @@ export default function OrderPlacementCard() {
     if (!inventoryItems || inventoryItems.length === 0) {
       return [];
     }
-
+    
     // If no supplier selected, return empty array to force supplier selection first
     if (!formData.supplierName) {
       return [];
     }
-
+    
     // Filter items by selected supplier (matching source or secondarySource)
     const filteredItems = inventoryItems.filter((item: any) => {
       const itemSource = normalizeSupplierName(item?.source || '');
-      const itemSecondarySource = normalizeSupplierName(
-        item?.secondarySource || ''
-      );
+      const itemSecondarySource = normalizeSupplierName(item?.secondarySource || '');
       const selectedSupplier = normalizeSupplierName(formData.supplierName);
-
-      return (
-        itemSource === selectedSupplier ||
-        itemSecondarySource === selectedSupplier
-      );
+      
+      return (itemSource === selectedSupplier) || (itemSecondarySource === selectedSupplier);
     });
-
+    
     // Sort by part number
     return filteredItems.sort((a: any, b: any) => {
       const aPartNumber = a.agPartNumber || '';
@@ -140,18 +107,17 @@ export default function OrderPlacementCard() {
 
   // Get selected items details
   const selectedItems = useMemo(() => {
-    return formData.selectedItemIds
-      .map((id) => availableItems.find((item) => item.id === id))
-      .filter(Boolean);
+    return formData.selectedItemIds.map(id => 
+      availableItems.find(item => item.id === id)
+    ).filter(Boolean);
   }, [availableItems, formData.selectedItemIds]);
 
   // Create order mutation
   const createOrderMutation = useMutation({
-    mutationFn: (data: any) =>
-      apiRequest('/api/purchase-orders', {
-        method: 'POST',
-        body: data,
-      }),
+    mutationFn: (data: any) => apiRequest('/api/purchase-orders', {
+      method: 'POST',
+      body: data
+    }),
     onSuccess: () => {
       toast.success('Purchase order created and sent to receiving queue');
       resetForm();
@@ -165,25 +131,24 @@ export default function OrderPlacementCard() {
     setFormData({
       supplierName: '',
       selectedItemIds: [],
-      notes: '',
+      notes: ''
     });
   };
 
   const handleItemSelection = (itemId: number) => {
-    setFormData((prev) => ({
+    setFormData(prev => ({
       ...prev,
       selectedItemIds: prev.selectedItemIds.includes(itemId)
-        ? prev.selectedItemIds.filter((id) => id !== itemId)
-        : [...prev.selectedItemIds, itemId],
+        ? prev.selectedItemIds.filter(id => id !== itemId)
+        : [...prev.selectedItemIds, itemId]
     }));
   };
 
   const handleSelectAll = () => {
-    const allItemIds = availableItems.map((item) => item.id);
-    setFormData((prev) => ({
+    const allItemIds = availableItems.map(item => item.id);
+    setFormData(prev => ({
       ...prev,
-      selectedItemIds:
-        prev.selectedItemIds.length === availableItems.length ? [] : allItemIds,
+      selectedItemIds: prev.selectedItemIds.length === availableItems.length ? [] : allItemIds
     }));
   };
 
@@ -192,7 +157,7 @@ export default function OrderPlacementCard() {
       toast.error('Please select a supplier');
       return;
     }
-
+    
     if (formData.selectedItemIds.length === 0) {
       toast.error('Please select at least one item');
       return;
@@ -204,18 +169,15 @@ export default function OrderPlacementCard() {
       priority: 'NORMAL',
       status: 'PENDING_RECEIVING', // Goes directly to receiving queue
       notes: formData.notes,
-      items: selectedItems.map((item) => ({
+      items: selectedItems.map(item => ({
         partNumber: item.agPartNumber || '',
         description: item.name || '',
         quantity: 1, // Default quantity
-        unitCost: item.costPer || 0,
+        unitCost: item.costPer || 0
       })),
-      totalAmount: selectedItems.reduce(
-        (sum, item) => sum + (item.costPer || 0),
-        0
-      ),
+      totalAmount: selectedItems.reduce((sum, item) => sum + (item.costPer || 0), 0),
       orderDate: new Date().toISOString(),
-      createdBy: 'system', // You can replace with actual user info
+      createdBy: 'system' // You can replace with actual user info
     };
 
     createOrderMutation.mutate(orderData);
@@ -246,29 +208,23 @@ export default function OrderPlacementCard() {
         {/* Step 1: Select Supplier for Order */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">
-              1. Select Supplier for this Order
-            </CardTitle>
-            <CardDescription>
-              Choose which supplier you want to place this order with
-            </CardDescription>
+            <CardTitle className="text-base">1. Select Supplier for this Order</CardTitle>
+            <CardDescription>Choose which supplier you want to place this order with</CardDescription>
           </CardHeader>
           <CardContent>
-            <Select
-              value={formData.supplierName}
-              onValueChange={(value) =>
-                setFormData((prev) => ({
-                  ...prev,
-                  supplierName: value,
-                  selectedItemIds: [], // Clear selected items when supplier changes
-                }))
-              }
+            <Select 
+              value={formData.supplierName} 
+              onValueChange={(value) => setFormData(prev => ({ 
+                ...prev, 
+                supplierName: value,
+                selectedItemIds: [] // Clear selected items when supplier changes
+              }))}
             >
               <SelectTrigger className="w-full">
                 <SelectValue placeholder="Choose a supplier..." />
               </SelectTrigger>
               <SelectContent>
-                {availableSuppliers.map((supplier) => (
+                {availableSuppliers.map(supplier => (
                   <SelectItem key={supplier} value={supplier}>
                     {supplier}
                   </SelectItem>
@@ -282,13 +238,9 @@ export default function OrderPlacementCard() {
         {formData.supplierName && (
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">
-                2. Select Items to Order from {formData.supplierName}
-              </CardTitle>
+              <CardTitle className="text-base">2. Select Items to Order from {formData.supplierName}</CardTitle>
               <CardDescription>
-                {availableItems.length} items available from{' '}
-                {formData.supplierName} • {formData.selectedItemIds.length}{' '}
-                selected
+                {availableItems.length} items available from {formData.supplierName} • {formData.selectedItemIds.length} selected
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -301,37 +253,24 @@ export default function OrderPlacementCard() {
                     onClick={handleSelectAll}
                   >
                     <CheckCircle2 className="h-4 w-4 mr-1" />
-                    {formData.selectedItemIds.length === availableItems.length
-                      ? 'Deselect All'
-                      : 'Select All'}
+                    {formData.selectedItemIds.length === availableItems.length ? 'Deselect All' : 'Select All'}
                   </Button>
                 </div>
 
                 <div className="max-h-80 overflow-y-auto border rounded-lg">
                   {availableItems.map((item: any) => (
-                    <div
-                      key={item.id}
-                      className="flex items-center gap-3 p-3 border-b hover:bg-gray-50 dark:hover:bg-gray-800"
-                    >
+                    <div key={item.id} className="flex items-center gap-3 p-3 border-b hover:bg-gray-50 dark:hover:bg-gray-800">
                       <Checkbox
                         checked={formData.selectedItemIds.includes(item.id)}
                         onCheckedChange={() => handleItemSelection(item.id)}
                       />
                       <div className="flex-1">
                         <div className="font-medium">{item.agPartNumber}</div>
-                        <div className="text-sm text-gray-600 dark:text-gray-400">
-                          {item.name}
-                        </div>
+                        <div className="text-sm text-gray-600 dark:text-gray-400">{item.name}</div>
                         <div className="flex gap-4 text-xs text-gray-500">
-                          {item.costPer && (
-                            <span className="text-green-600 font-medium">
-                              ${item.costPer}
-                            </span>
-                          )}
+                          {item.costPer && <span className="text-green-600 font-medium">${item.costPer}</span>}
                           {item.source && <span>Supplier: {item.source}</span>}
-                          {item.department && (
-                            <span>Dept: {item.department}</span>
-                          )}
+                          {item.department && <span>Dept: {item.department}</span>}
                         </div>
                       </div>
                     </div>
@@ -348,31 +287,21 @@ export default function OrderPlacementCard() {
             <CardHeader>
               <CardTitle className="text-base">3. Order Summary</CardTitle>
               <CardDescription>
-                {selectedItems.length} items selected • Estimated total: $
-                {selectedItems
-                  .reduce((sum, item) => sum + (item.costPer || 0), 0)
-                  .toFixed(2)}
+                {selectedItems.length} items selected • Estimated total: ${selectedItems.reduce((sum, item) => sum + (item.costPer || 0), 0).toFixed(2)}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               {/* Selected Items Preview */}
               <div className="max-h-40 overflow-y-auto border rounded-lg">
                 {selectedItems.map((item: any) => (
-                  <div
-                    key={item.id}
-                    className="flex justify-between items-center p-3 border-b"
-                  >
+                  <div key={item.id} className="flex justify-between items-center p-3 border-b">
                     <div>
                       <div className="font-medium">{item.agPartNumber}</div>
                       <div className="text-sm text-gray-600">{item.name}</div>
                     </div>
                     <div className="text-right">
                       <div className="text-sm">Qty: 1</div>
-                      {item.costPer && (
-                        <div className="font-medium text-green-600">
-                          ${item.costPer}
-                        </div>
-                      )}
+                      {item.costPer && <div className="font-medium text-green-600">${item.costPer}</div>}
                     </div>
                   </div>
                 ))}
@@ -385,9 +314,7 @@ export default function OrderPlacementCard() {
                   id="notes"
                   placeholder="Special instructions or notes for this order..."
                   value={formData.notes}
-                  onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, notes: e.target.value }))
-                  }
+                  onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
                   rows={2}
                 />
               </div>
@@ -398,22 +325,20 @@ export default function OrderPlacementCard() {
                   Order will be sent to receiving queue for processing
                 </div>
                 <div className="flex gap-3">
-                  <Button
-                    variant="outline"
+                  <Button 
+                    variant="outline" 
                     onClick={resetForm}
                     disabled={createOrderMutation.isPending}
                   >
                     Reset
                   </Button>
-                  <Button
+                  <Button 
                     onClick={handlePlaceOrder}
                     disabled={createOrderMutation.isPending}
                     className="bg-purple-600 hover:bg-purple-700"
                   >
                     <ShoppingCart className="h-4 w-4 mr-2" />
-                    {createOrderMutation.isPending
-                      ? 'Placing Order...'
-                      : 'Place Order'}
+                    {createOrderMutation.isPending ? 'Placing Order...' : 'Place Order'}
                   </Button>
                 </div>
               </div>
@@ -426,10 +351,7 @@ export default function OrderPlacementCard() {
           <div className="text-center py-8 text-gray-500">
             <Package className="h-12 w-12 mx-auto mb-3 text-gray-300" />
             <p>Select a supplier to start ordering items</p>
-            <p className="text-sm">
-              All {availableItems.length} inventory items will be available to
-              order
-            </p>
+            <p className="text-sm">All {availableItems.length} inventory items will be available to order</p>
           </div>
         )}
       </div>

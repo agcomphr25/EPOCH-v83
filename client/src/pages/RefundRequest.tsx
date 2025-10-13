@@ -5,14 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import {
-  AlertCircle,
-  DollarSign,
-  FileText,
-  User,
-  Calendar,
-  Package,
-} from 'lucide-react';
+import { AlertCircle, DollarSign, FileText, User, Calendar, Package } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -52,9 +45,7 @@ interface RefundRequestData {
 export default function RefundRequest() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(
-    null
-  );
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [refundAmount, setRefundAmount] = useState<string>('');
   const [reason, setReason] = useState<string>('');
@@ -65,9 +56,7 @@ export default function RefundRequest() {
     queryKey: ['/api/orders/customer', selectedCustomer?.id],
     queryFn: async () => {
       if (!selectedCustomer?.id) return [];
-      const response = await apiRequest(
-        `/api/orders/customer/${selectedCustomer.id}`
-      );
+      const response = await apiRequest(`/api/orders/customer/${selectedCustomer.id}`);
       return response as Order[];
     },
     enabled: !!selectedCustomer?.id,
@@ -163,20 +152,13 @@ export default function RefundRequest() {
   };
 
   return (
-    <div
-      className="container mx-auto p-6 max-w-6xl"
-      data-testid="refund-request-page"
-    >
+    <div className="container mx-auto p-6 max-w-6xl" data-testid="refund-request-page">
       <div className="mb-8">
-        <h1
-          className="text-3xl font-bold text-gray-900 mb-2"
-          data-testid="page-title"
-        >
+        <h1 className="text-3xl font-bold text-gray-900 mb-2" data-testid="page-title">
           Request Refund
         </h1>
         <p className="text-gray-600" data-testid="page-description">
-          Search for a customer and select an order to request a refund. All
-          refund requests require manager approval.
+          Search for a customer and select an order to request a refund. All refund requests require manager approval.
         </p>
       </div>
 
@@ -205,18 +187,12 @@ export default function RefundRequest() {
             {/* Customer Orders */}
             {selectedCustomer && (
               <div className="space-y-3">
-                <Label
-                  className="text-sm font-medium"
-                  data-testid="orders-label"
-                >
+                <Label className="text-sm font-medium" data-testid="orders-label">
                   Orders for {selectedCustomer.name}
                 </Label>
-
+                
                 {ordersLoading ? (
-                  <div
-                    className="text-center py-4 text-gray-500"
-                    data-testid="loading-orders"
-                  >
+                  <div className="text-center py-4 text-gray-500" data-testid="loading-orders">
                     Loading orders...
                   </div>
                 ) : customerOrders.length === 0 ? (
@@ -227,10 +203,7 @@ export default function RefundRequest() {
                     </AlertDescription>
                   </Alert>
                 ) : (
-                  <div
-                    className="space-y-2 max-h-96 overflow-y-auto"
-                    data-testid="orders-list"
-                  >
+                  <div className="space-y-2 max-h-96 overflow-y-auto" data-testid="orders-list">
                     {customerOrders.map((order) => (
                       <div
                         key={order.id}
@@ -244,10 +217,7 @@ export default function RefundRequest() {
                       >
                         <div className="flex justify-between items-start mb-2">
                           <div>
-                            <div
-                              className="font-medium text-sm"
-                              data-testid={`order-id-${order.orderId}`}
-                            >
+                            <div className="font-medium text-sm" data-testid={`order-id-${order.orderId}`}>
                               {order.orderId}
                               {order.fbOrderNumber && (
                                 <span className="text-gray-500 ml-2">
@@ -255,26 +225,16 @@ export default function RefundRequest() {
                                 </span>
                               )}
                             </div>
-                            <div
-                              className="text-xs text-gray-500"
-                              data-testid={`order-date-${order.orderId}`}
-                            >
+                            <div className="text-xs text-gray-500" data-testid={`order-date-${order.orderId}`}>
                               {formatDate(order.orderDate)}
                             </div>
                           </div>
                           <div className="text-right">
-                            <div
-                              className="font-medium text-sm"
-                              data-testid={`balance-due-${order.orderId}`}
-                            >
+                            <div className="font-medium text-sm" data-testid={`balance-due-${order.orderId}`}>
                               {formatCurrency(order.balanceDue || 0)}
                             </div>
                             <Badge
-                              className={
-                                order.isFullyPaid
-                                  ? 'bg-green-500 hover:bg-green-600 text-white text-xs'
-                                  : 'bg-red-500 hover:bg-red-600 text-white text-xs'
-                              }
+                              className={order.isFullyPaid ? "bg-green-500 hover:bg-green-600 text-white text-xs" : "bg-red-500 hover:bg-red-600 text-white text-xs"}
                               data-testid={`payment-status-${order.orderId}`}
                             >
                               {order.isFullyPaid ? 'PAID' : 'NOT PAID'}
@@ -318,46 +278,22 @@ export default function RefundRequest() {
             ) : (
               <>
                 {/* Selected Order Summary */}
-                <div
-                  className="p-3 bg-gray-50 rounded-lg space-y-2"
-                  data-testid="selected-order-summary"
-                >
-                  <div
-                    className="font-medium text-sm"
-                    data-testid="summary-order-id"
-                  >
+                <div className="p-3 bg-gray-50 rounded-lg space-y-2" data-testid="selected-order-summary">
+                  <div className="font-medium text-sm" data-testid="summary-order-id">
                     Order: {selectedOrder.orderId}
                   </div>
                   <div className="text-xs text-gray-600 space-y-1">
-                    <div data-testid="summary-customer">
-                      Customer: {selectedCustomer?.name}
-                    </div>
-                    <div data-testid="summary-date">
-                      Date: {formatDate(selectedOrder.orderDate)}
-                    </div>
-                    <div data-testid="summary-order-total">
-                      Order Total:{' '}
-                      {formatCurrency(selectedOrder.orderTotal || 0)}
-                    </div>
-                    <div data-testid="summary-total-paid">
-                      Total Paid: {formatCurrency(selectedOrder.paymentTotal)}
-                    </div>
-                    <div
-                      data-testid="summary-balance-due"
-                      className="font-medium"
-                    >
-                      Balance Due:{' '}
-                      {formatCurrency(selectedOrder.balanceDue || 0)}
-                    </div>
+                    <div data-testid="summary-customer">Customer: {selectedCustomer?.name}</div>
+                    <div data-testid="summary-date">Date: {formatDate(selectedOrder.orderDate)}</div>
+                    <div data-testid="summary-order-total">Order Total: {formatCurrency(selectedOrder.orderTotal || 0)}</div>
+                    <div data-testid="summary-total-paid">Total Paid: {formatCurrency(selectedOrder.paymentTotal)}</div>
+                    <div data-testid="summary-balance-due" className="font-medium">Balance Due: {formatCurrency(selectedOrder.balanceDue || 0)}</div>
                   </div>
                 </div>
 
                 {/* Refund Amount */}
                 <div className="space-y-2">
-                  <Label
-                    htmlFor="refund-amount"
-                    data-testid="refund-amount-label"
-                  >
+                  <Label htmlFor="refund-amount" data-testid="refund-amount-label">
                     Refund Amount *
                   </Label>
                   <Input
@@ -371,12 +307,8 @@ export default function RefundRequest() {
                     placeholder="0.00"
                     data-testid="refund-amount-input"
                   />
-                  <div
-                    className="text-xs text-gray-500"
-                    data-testid="max-refund-note"
-                  >
-                    Maximum refund:{' '}
-                    {formatCurrency(selectedOrder.orderTotal || 0)}
+                  <div className="text-xs text-gray-500" data-testid="max-refund-note">
+                    Maximum refund: {formatCurrency(selectedOrder.orderTotal || 0)}
                   </div>
                 </div>
 
@@ -418,16 +350,13 @@ export default function RefundRequest() {
                   data-testid="submit-refund-button"
                 >
                   <FileText className="h-4 w-4 mr-2" />
-                  {createRefundRequestMutation.isPending
-                    ? 'Submitting...'
-                    : 'Submit Refund Request'}
+                  {createRefundRequestMutation.isPending ? 'Submitting...' : 'Submit Refund Request'}
                 </Button>
 
                 <Alert data-testid="approval-notice">
                   <AlertCircle className="h-4 w-4" />
                   <AlertDescription>
-                    This refund request will be sent to management for approval
-                    before processing.
+                    This refund request will be sent to management for approval before processing.
                   </AlertDescription>
                 </Alert>
               </>

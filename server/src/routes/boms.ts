@@ -11,8 +11,8 @@ router.get('/', async (req, res) => {
     const boms = await storage.getAllBOMs();
     res.json(boms);
   } catch (error) {
-    console.error('Get BOMs error:', error);
-    res.status(500).json({ error: 'Failed to fetch BOMs' });
+    console.error("Get BOMs error:", error);
+    res.status(500).json({ error: "Failed to fetch BOMs" });
   }
 });
 
@@ -23,13 +23,11 @@ router.post('/', async (req, res) => {
     const bom = await storage.createBOM(bomData);
     res.status(201).json(bom);
   } catch (error) {
-    console.error('Create BOM error:', error);
+    console.error("Create BOM error:", error);
     if (error instanceof z.ZodError) {
-      res
-        .status(400)
-        .json({ error: 'Invalid BOM data', details: error.errors });
+      res.status(400).json({ error: "Invalid BOM data", details: error.errors });
     } else {
-      res.status(500).json({ error: 'Failed to create BOM' });
+      res.status(500).json({ error: "Failed to create BOM" });
     }
   }
 });
@@ -40,26 +38,24 @@ router.get('/:id/details', async (req, res) => {
     console.log(`🔧 Getting BOM details for ID: ${req.params.id}`);
     const { id } = req.params;
     const bomId = parseInt(id);
-
+    
     if (isNaN(bomId)) {
       console.log(`❌ Invalid BOM ID: ${id}`);
-      return res.status(400).json({ error: 'Invalid BOM ID' });
+      return res.status(400).json({ error: "Invalid BOM ID" });
     }
-
+    
     const bom = await storage.getBOMDetails(bomId);
     if (!bom) {
       console.log(`❌ BOM ${id} not found`);
-      return res.status(404).json({ error: 'BOM not found' });
+      return res.status(404).json({ error: "BOM not found" });
     }
-
-    console.log(
-      `✅ BOM details found: ${bom.modelName} with ${bom.items?.length || 0} items`
-    );
+    
+    console.log(`✅ BOM details found: ${bom.modelName} with ${bom.items?.length || 0} items`);
     res.setHeader('Content-Type', 'application/json');
     res.json(bom);
   } catch (error) {
-    console.error('❌ Get BOM details error:', error);
-    res.status(500).json({ error: 'Failed to fetch BOM details' });
+    console.error("❌ Get BOM details error:", error);
+    res.status(500).json({ error: "Failed to fetch BOM details" });
   }
 });
 
@@ -71,13 +67,11 @@ router.put('/:id', async (req, res) => {
     const bom = await storage.updateBOM(parseInt(id), bomData);
     res.json(bom);
   } catch (error) {
-    console.error('Update BOM error:', error);
+    console.error("Update BOM error:", error);
     if (error instanceof z.ZodError) {
-      res
-        .status(400)
-        .json({ error: 'Invalid BOM data', details: error.errors });
+      res.status(400).json({ error: "Invalid BOM data", details: error.errors });
     } else {
-      res.status(500).json({ error: 'Failed to update BOM' });
+      res.status(500).json({ error: "Failed to update BOM" });
     }
   }
 });
@@ -89,8 +83,8 @@ router.delete('/:id', async (req, res) => {
     await storage.deleteBOM(parseInt(id));
     res.json({ success: true });
   } catch (error) {
-    console.error('Delete BOM error:', error);
-    res.status(500).json({ error: 'Failed to delete BOM' });
+    console.error("Delete BOM error:", error);
+    res.status(500).json({ error: "Failed to delete BOM" });
   }
 });
 
@@ -99,26 +93,21 @@ router.post('/:id/items', async (req, res) => {
   try {
     const { id } = req.params;
     const { purchasingUnitConversion, ...restData } = req.body;
-
+    
     // Map purchasingUnitConversion to quantityMultiplier for database
     const itemData = insertBomItemSchema.omit({ bomId: true }).parse({
       ...restData,
       quantityMultiplier: purchasingUnitConversion || 1,
     });
-
-    const item = await storage.addBOMItem(parseInt(id), {
-      ...itemData,
-      bomId: parseInt(id),
-    });
+    
+    const item = await storage.addBOMItem(parseInt(id), { ...itemData, bomId: parseInt(id) });
     res.status(201).json(item);
   } catch (error) {
-    console.error('Add BOM item error:', error);
+    console.error("Add BOM item error:", error);
     if (error instanceof z.ZodError) {
-      res
-        .status(400)
-        .json({ error: 'Invalid BOM item data', details: error.errors });
+      res.status(400).json({ error: "Invalid BOM item data", details: error.errors });
     } else {
-      res.status(500).json({ error: 'Failed to add BOM item' });
+      res.status(500).json({ error: "Failed to add BOM item" });
     }
   }
 });
@@ -128,31 +117,21 @@ router.put('/:bomId/items/:itemId', async (req, res) => {
   try {
     const { bomId, itemId } = req.params;
     const { purchasingUnitConversion, ...restData } = req.body;
-
+    
     // Map purchasingUnitConversion to quantityMultiplier for database
-    const updateData =
-      purchasingUnitConversion !== undefined
-        ? { ...restData, quantityMultiplier: purchasingUnitConversion }
-        : restData;
-
-    const itemData = insertBomItemSchema
-      .partial()
-      .omit({ bomId: true })
-      .parse(updateData);
-    const item = await storage.updateBOMItem(
-      parseInt(bomId),
-      parseInt(itemId),
-      itemData
-    );
+    const updateData = purchasingUnitConversion !== undefined 
+      ? { ...restData, quantityMultiplier: purchasingUnitConversion }
+      : restData;
+    
+    const itemData = insertBomItemSchema.partial().omit({ bomId: true }).parse(updateData);
+    const item = await storage.updateBOMItem(parseInt(bomId), parseInt(itemId), itemData);
     res.json(item);
   } catch (error) {
-    console.error('Update BOM item error:', error);
+    console.error("Update BOM item error:", error);
     if (error instanceof z.ZodError) {
-      res
-        .status(400)
-        .json({ error: 'Invalid BOM item data', details: error.errors });
+      res.status(400).json({ error: "Invalid BOM item data", details: error.errors });
     } else {
-      res.status(500).json({ error: 'Failed to update BOM item' });
+      res.status(500).json({ error: "Failed to update BOM item" });
     }
   }
 });
@@ -164,8 +143,8 @@ router.delete('/:bomId/items/:itemId', async (req, res) => {
     await storage.deleteBOMItem(parseInt(bomId), parseInt(itemId));
     res.json({ success: true });
   } catch (error) {
-    console.error('Delete BOM item error:', error);
-    res.status(500).json({ error: 'Failed to delete BOM item' });
+    console.error("Delete BOM item error:", error);
+    res.status(500).json({ error: "Failed to delete BOM item" });
   }
 });
 
@@ -175,13 +154,11 @@ router.delete('/:bomId/items/:itemId', async (req, res) => {
 router.get('/:bomId/available-sub-assemblies', async (req, res) => {
   try {
     const { bomId } = req.params;
-    const availableBOMs = await storage.getAvailableSubAssemblies(
-      parseInt(bomId)
-    );
+    const availableBOMs = await storage.getAvailableSubAssemblies(parseInt(bomId));
     res.json(availableBOMs);
   } catch (error) {
-    console.error('Get available sub-assemblies error:', error);
-    res.status(500).json({ error: 'Failed to get available sub-assemblies' });
+    console.error("Get available sub-assemblies error:", error);
+    res.status(500).json({ error: "Failed to get available sub-assemblies" });
   }
 });
 
@@ -189,13 +166,10 @@ router.get('/:bomId/available-sub-assemblies', async (req, res) => {
 router.post('/:parentBomId/sub-assemblies', async (req, res) => {
   try {
     const { parentBomId } = req.params;
-    const { childBomId, partName, quantity, quantityMultiplier, notes } =
-      req.body;
-
+    const { childBomId, partName, quantity, quantityMultiplier, notes } = req.body;
+    
     if (!childBomId || !partName || !quantity) {
-      return res
-        .status(400)
-        .json({ error: 'childBomId, partName, and quantity are required' });
+      return res.status(400).json({ error: "childBomId, partName, and quantity are required" });
     }
 
     const subAssemblyItem = await storage.createSubAssemblyReference(
@@ -206,11 +180,11 @@ router.post('/:parentBomId/sub-assemblies', async (req, res) => {
       quantityMultiplier ? parseInt(quantityMultiplier) : 1,
       notes
     );
-
+    
     res.status(201).json(subAssemblyItem);
   } catch (error) {
-    console.error('Create sub-assembly reference error:', error);
-    res.status(500).json({ error: 'Failed to create sub-assembly reference' });
+    console.error("Create sub-assembly reference error:", error);
+    res.status(500).json({ error: "Failed to create sub-assembly reference" });
   }
 });
 
@@ -219,18 +193,18 @@ router.get('/:bomId/hierarchy', async (req, res) => {
   try {
     const { bomId } = req.params;
     const bomWithHierarchy = await storage.getBOMDetails(parseInt(bomId));
-
+    
     if (!bomWithHierarchy) {
-      return res.status(404).json({ error: 'BOM not found' });
+      return res.status(404).json({ error: "BOM not found" });
     }
 
     res.json({
       bom: bomWithHierarchy,
-      hierarchicalItems: bomWithHierarchy.hierarchicalItems || [],
+      hierarchicalItems: bomWithHierarchy.hierarchicalItems || []
     });
   } catch (error) {
-    console.error('Get BOM hierarchy error:', error);
-    res.status(500).json({ error: 'Failed to get BOM hierarchy' });
+    console.error("Get BOM hierarchy error:", error);
+    res.status(500).json({ error: "Failed to get BOM hierarchy" });
   }
 });
 

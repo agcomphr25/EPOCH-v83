@@ -1,20 +1,7 @@
 import React, { useState } from 'react';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import {
-  Package,
-  FileText,
-  ShoppingCart,
-  Plus,
-  Import,
-  Download,
-} from 'lucide-react';
+import { Package, FileText, ShoppingCart, Plus, Import, Download } from 'lucide-react';
 import InventoryItemsCard from '../components/inventory/InventoryItemsCard';
 import PartsRequestsCard from '../components/inventory/PartsRequestsCard';
 import OutstandingOrdersCard from '../components/inventory/OutstandingOrdersCard';
@@ -30,9 +17,7 @@ export default function NewInventoryManagerPage() {
   return (
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-          Inventory Management
-        </h1>
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Inventory Management</h1>
         <div className="text-sm text-gray-500 dark:text-gray-400">
           Manage inventory, parts requests, orders, and placements
         </div>
@@ -41,7 +26,7 @@ export default function NewInventoryManagerPage() {
       {/* Main Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {/* Inventory Items Card */}
-        <Card
+        <Card 
           className="cursor-pointer hover:shadow-lg transition-shadow duration-200 border-2 hover:border-blue-500"
           onClick={() => handleCardClick('inventory')}
         >
@@ -66,7 +51,7 @@ export default function NewInventoryManagerPage() {
         </Card>
 
         {/* Parts Requests Card */}
-        <Card
+        <Card 
           className="cursor-pointer hover:shadow-lg transition-shadow duration-200 border-2 hover:border-green-500"
           onClick={() => handleCardClick('parts-requests')}
         >
@@ -88,7 +73,7 @@ export default function NewInventoryManagerPage() {
         </Card>
 
         {/* Outstanding Orders Card */}
-        <Card
+        <Card 
           className="cursor-pointer hover:shadow-lg transition-shadow duration-200 border-2 hover:border-yellow-500"
           onClick={() => handleCardClick('outstanding-orders')}
         >
@@ -110,7 +95,7 @@ export default function NewInventoryManagerPage() {
         </Card>
 
         {/* Order Placement Card */}
-        <Card
+        <Card 
           className="cursor-pointer hover:shadow-lg transition-shadow duration-200 border-2 hover:border-purple-500"
           onClick={() => handleCardClick('order-placement')}
         >
@@ -125,9 +110,7 @@ export default function NewInventoryManagerPage() {
           </CardHeader>
           <CardContent>
             <div className="flex items-center justify-between">
-              <div className="text-2xl font-bold text-purple-600">
-                New Order
-              </div>
+              <div className="text-2xl font-bold text-purple-600">New Order</div>
               <ShoppingCart className="h-4 w-4 text-gray-400" />
             </div>
           </CardContent>
@@ -142,13 +125,12 @@ export default function NewInventoryManagerPage() {
               <div className="flex justify-between items-center">
                 <CardTitle className="text-xl">
                   {activeCard === 'inventory' && 'Inventory Items Management'}
-                  {activeCard === 'parts-requests' &&
-                    'Parts Requests Management'}
+                  {activeCard === 'parts-requests' && 'Parts Requests Management'}
                   {activeCard === 'outstanding-orders' && 'Outstanding Orders'}
                   {activeCard === 'order-placement' && 'Order Placement'}
                 </CardTitle>
-                <Button
-                  variant="outline"
+                <Button 
+                  variant="outline" 
                   size="sm"
                   onClick={() => setActiveCard(null)}
                 >

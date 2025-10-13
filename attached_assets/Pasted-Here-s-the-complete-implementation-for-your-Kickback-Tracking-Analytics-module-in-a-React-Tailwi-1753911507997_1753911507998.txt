@@ -1,0 +1,229 @@
+Here's the complete implementation for your Kickback Tracking & Analytics module in a React + Tailwind + JavaScript stack. Everything is structured and ready for integration into your ERP 🔨🤖🔧:
+
+✅ src/utils/kickbackUtils.js
+js
+Copy
+Edit
+import axios from 'axios';
+
+// Create a kickback record
+export async function createKickback({ 
+  orderId,        
+  kickbackDept,
+  reasonCode,
+  reasonText,
+  kickbackDate,
+  reportedBy
+}) {
+  return axios.post('/api/kickbacks', {
+    orderId, kickbackDept, reasonCode, reasonText, kickbackDate, reportedBy
+  });
+}
+
+// Fetch kickbacks for one order
+export async function fetchKickbackHistory(orderId) {
+  return axios.get(`/api/kickbacks?orderId=${orderId}`);
+}
+
+// Fetch kickback analytics summary
+export async function fetchKickbackAnalytics() {
+  return axios.get('/api/kickbacks/analytics');
+}
+✅ src/hooks/useKickbacks.js
+js
+Copy
+Edit
+import { useState, useEffect } from 'react';
+import { fetchKickbackHistory } from '../utils/kickbackUtils';
+
+export default function useKickbacks(orderId) {
+  const [history, setHistory] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchKickbackHistory(orderId)
+      .then(res => setHistory(res.data))
+      .finally(() => setLoading(false));
+  }, [orderId]);
+
+  return { history, loading };
+}
+✅ src/components/KickbackModal.jsx
+jsx
+Copy
+Edit
+import React, { useState, useContext } from 'react';
+import { createKickback } from '../utils/kickbackUtils';
+import toast from 'react-hot-toast';
+
+export default function KickbackModal({ orderId, onClose, onSaved }) {
+  const [kickbackDept, setKickbackDept] = useState('');
+  const [reasonCode, setReasonCode] = useState('');
+  const [reasonText, setReasonText] = useState('');
+  const userId = "current-user-id"; // Replace with your auth logic
+
+  async function handleSave() {
+    try {
+      const payload = {
+        orderId,
+        kickbackDept,
+        reasonCode,
+        reasonText,
+        kickbackDate: new Date().toISOString(),
+        reportedBy: userId
+      };
+      await createKickback(payload);
+      toast.success('Kickback recorded');
+      onSaved();
+      onClose();
+    } catch {
+      toast.error('Error saving kickback');
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
+      <div className="bg-white w-96 p-6 rounded-lg space-y-4">
+        <h2 className="text-xl font-semibold">Record Kickback</h2>
+        <div>
+          <label>Department</label>
+          <select
+            value={kickbackDept}
+            onChange={e => setKickbackDept(e.target.value)}
+            className="w-full border rounded px-2 py-1"
+          >
+            <option value="">-- select --</option>
+            {['Layup','Plugging','CNC','Finish','Gunsmith','Paint','QC','Shipping'].map(d => (
+              <option key={d} value={d}>{d}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label>Reason Code</label>
+          <select
+            value={reasonCode}
+            onChange={e => setReasonCode(e.target.value)}
+            className="w-full border rounded px-2 py-1"
+          >
+            <option value="">-- select --</option>
+            <option value="MATERIAL_DEFECT">Material Defect</option>
+            <option value="OPERATOR_ERROR">Operator Error</option>
+            <option value="MACHINE_FAILURE">Machine Failure</option>
+          </select>
+        </div>
+        <div>
+          <label>Reason (details)</label>
+          <textarea
+            value={reasonText}
+            onChange={e => setReasonText(e.target.value)}
+            className="w-full border rounded px-2 py-1"
+          />
+        </div>
+        <div className="flex justify-end space-x-2">
+          <button onClick={onClose} className="px-4 py-2 bg-gray-400 text-white rounded">
+            Cancel
+          </button>
+          <button onClick={handleSave} className="px-4 py-2 bg-blue-600 text-white rounded">
+            Save
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+✅ Kickback Button & Modal Integration in AllOrdersList.jsx
+Add to state:
+
+js
+Copy
+Edit
+const [kickbackOrderId, setKickbackOrderId] = useState(null);
+const refreshList = () => { /* trigger order list reload */ };
+Replace Preview button:
+
+jsx
+Copy
+Edit
+<button
+  onClick={() => setKickbackOrderId(order.orderId)}
+  className="px-2 py-1 bg-yellow-500 text-white rounded"
+>
+  Kickback
+</button>
+Render modal:
+
+jsx
+Copy
+Edit
+{kickbackOrderId && (
+  <KickbackModal
+    orderId={kickbackOrderId}
+    onClose={() => setKickbackOrderId(null)}
+    onSaved={refreshList}
+  />
+)}
+Kickback badge logic (where orders are listed):
+
+jsx
+Copy
+Edit
+{order.kickbackCount > 0 && (
+  <span className={`ml-2 px-2 py-1 text-xs rounded-full ${Date.now() < new Date(order.kickbackDeadline) ? 'bg-red-500' : 'bg-gray-300'} text-white`}>
+    Kickbacks: {order.kickbackCount}
+  </span>
+)}
+✅ src/components/KickbackAnalytics.jsx
+jsx
+Copy
+Edit
+import React, { useState, useEffect } from 'react';
+import { fetchKickbackAnalytics } from '../utils/kickbackUtils';
+import { BarChart, Bar, XAxis, YAxis, Tooltip } from 'recharts';
+
+export default function KickbackAnalytics() {
+  const [data, setData] = useState(null);
+
+  useEffect(() => {
+    fetchKickbackAnalytics().then(res => setData(res.data));
+  }, []);
+
+  if (!data) return <div>Loading analytics…</div>;
+
+  return (
+    <div className="p-4 border rounded space-y-4">
+      <h2 className="text-lg font-semibold">Kickback Trends</h2>
+      <div>
+        <h3 className="font-medium">By Department</h3>
+        <BarChart width={600} height={300} data={data.byDept}>
+          <XAxis dataKey="department" />
+          <YAxis />
+          <Tooltip />
+          <Bar dataKey="count" fill="#1D4ED8" />
+        </BarChart>
+      </div>
+      <div>
+        <h3 className="font-medium">Top Reasons</h3>
+        <BarChart width={600} height={300} data={data.byReason}>
+          <XAxis dataKey="reason" />
+          <YAxis />
+          <Tooltip />
+          <Bar dataKey="count" fill="#10B981" />
+        </BarChart>
+      </div>
+      <div>
+        <h3 className="font-medium">Top Models</h3>
+        <BarChart width={600} height={300} data={data.byModel}>
+          <XAxis dataKey="model" />
+          <YAxis />
+          <Tooltip />
+          <Bar dataKey="count" fill="#F59E0B" />
+        </BarChart>
+      </div>
+    </div>
+  );
+}
+✅ Final Touch
+bash
+Copy
+Edit
+npm install axios react-hot-toast @headlessui/react recharts date-fns

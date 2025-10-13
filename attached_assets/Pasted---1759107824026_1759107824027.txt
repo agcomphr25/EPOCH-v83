@@ -1,0 +1,193 @@
+{…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}]
+Console.js:61 ⚙️ LayupScheduler - Employees: 2 employees loaded
+Console.js:61 🔄 Unassigned orders: 0 []
+Console.js:61 🏭 Unassigned PRODUCTION/P1 orders: 0 []
+Console.js:61 📅 MONDAY DEBUG: Date 2025-09-29, 1 assignments found
+Console.js:61    📅 PO-P18261-2-1 → Privateer-1
+Console.js:61 ✅ Monday assignment found: PO-P18261-2-1 → Privateer-1 on 2025-09-29
+35Console.js:61 Warning: Invalid prop `data-replit-metadata` supplied to `React.Fragment`. React.Fragment can only have `key` and `children` props.
+    at LayupScheduler (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/src/components/LayupScheduler.tsx:534:35)
+    at div
+    at LayupSchedulerPage
+    at Route (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=7a20245f:280:16)
+    at Switch (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=7a20245f:336:17)
+    at main
+    at div
+    at Router (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=7a20245f:235:17)
+    at DeploymentAuthWrapper (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/src/components/DeploymentAuthWrapper.tsx:34:49)
+    at QueryClientProvider (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-65LAIXSP.js?v=7a20245f:2934:3)
+    at App (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/src/App.tsx?v=oDqobUUTulCSspXxXkSQN:138:35)
+    at Router (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=7a20245f:6332:13)
+    at BrowserRouter (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=7a20245f:9416:3)
+    at QueryClientProvider (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-65LAIXSP.js?v=7a20245f:2934:3)
+Mt.forEach.n.<computed> @ Console.js:61
+console.error @ main.tsx:33
+printWarning @ react_jsx-dev-runtime.js?v=7a20245f:64
+error @ react_jsx-dev-runtime.js?v=7a20245f:48
+validateFragmentProps @ react_jsx-dev-runtime.js?v=7a20245f:796
+jsxWithValidation @ react_jsx-dev-runtime.js?v=7a20245f:874
+(anonymous) @ LayupScheduler.tsx:4907
+(anonymous) @ LayupScheduler.tsx:4906
+LayupScheduler @ LayupScheduler.tsx:5063
+renderWithHooks @ chunk-276SZO74.js?v=7a20245f:11548
+updateFunctionComponent @ chunk-276SZO74.js?v=7a20245f:14587
+beginWork @ chunk-276SZO74.js?v=7a20245f:15924
+beginWork$1 @ chunk-276SZO74.js?v=7a20245f:19753
+performUnitOfWork @ chunk-276SZO74.js?v=7a20245f:19198
+workLoopSync @ chunk-276SZO74.js?v=7a20245f:19137
+renderRootSync @ chunk-276SZO74.js?v=7a20245f:19116
+performConcurrentWorkOnRoot @ chunk-276SZO74.js?v=7a20245f:18678
+workLoop @ chunk-276SZO74.js?v=7a20245f:197
+flushWork @ chunk-276SZO74.js?v=7a20245f:176
+performWorkUntilDeadline @ chunk-276SZO74.js?v=7a20245f:384Understand this error
+Console.js:61 🏭 LayupScheduler: Total orders from API: 218
+Console.js:61 🏭 LayupScheduler: Regular orders for scheduling: 215
+Console.js:61 🏭 LayupScheduler: P1 PO orders for scheduling: 0
+Console.js:61 🏭 LayupScheduler: Sample regular order for scheduling: {id: 1616, orderId: 'AG501', orderDate: '2025-03-21T00:00:00.000Z', dueDate: '2025-06-17T00:00:00.000Z', customerId: '209', …}
+Console.js:61 🏭 LayupScheduler: First 5 regular orders: (5) [{…}, {…}, {…}, {…}, {…}]
+Console.js:61 🏭 LayupScheduler: Filtered orders by source: {main_orders: 215, production_order: 3}
+Console.js:61 🚀 LayupScheduler: All data loaded, ready for manual scheduling
+Console.js:61 📋 SCHEDULE STATUS: Ready for manual scheduling (Generate Schedule button) - Has existing assignments
+Console.js:61 🚫 AUTO-TRIGGER DISABLED: Algorithmic scheduling will NOT auto-trigger. Use manual buttons for complete control.
+Console.js:61 🔍 RAW SCHEDULE DATA FROM DATABASE: 3 total entries
+Console.js:61   Entry 0: PO-P18261-2-1 → 2025-09-29T00:00:00.000Z → Mon Sep 29 2025 (Monday, day 1)
+Console.js:61   Entry 1: PO-P18261-3-1 → 2025-09-30T00:00:00.000Z → Tue Sep 30 2025 (Tuesday, day 2)
+Console.js:61   Entry 2: PO-P18261-1-1 → 2025-10-01T00:00:00.000Z → Wed Oct 01 2025 (Wednesday, day 3)
+Console.js:61 ✅ DATABASE FILTER: Keeping Monday assignment - PO-P18261-2-1 on Mon Sep 29 2025
+Console.js:61 ✅ DATABASE FILTER: Keeping Tuesday assignment - PO-P18261-3-1 on Tue Sep 30 2025
+Console.js:61 ✅ DATABASE FILTER: Keeping Wednesday assignment - PO-P18261-1-1 on Wed Oct 01 2025
+Console.js:61 📋 Database filter: Removed 0 non-work-day assignments, kept 3 work-day assignments
+Console.js:61 📋 Selected work days: Mon, Tue, Wed, Thu
+Console.js:61 ✅ Processing 218 orders in select transform
+Console.js:61 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 218, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+Console.js:61 🔧 Final hook return: {ordersReturned: 218, isLoading: false, hasError: false, firstOrderId: 'AG501'}
+Console.js:61 🏔️ MESA UNIVERSAL DEBUG: {totalOrders: 218, mesaUniversalCount: 0, mesaOrders: Array(0)}
+Console.js:61 🔍 LayupScheduler orders debug: {allOrdersCount: 218, rawData: 'has data', dataType: 'object', isArray: true, sourceCounts: {…}, …}
+Console.js:61 🏔️ FINAL ORDERS: Returning 218 total orders, 0 are Mesa Universal
+Console.js:61 🚫 LOP Scheduler auto-run DISABLED for complete manual control
+Console.js:61 ✅ FRIDAY VALIDATION PASSED: 218 assignments, no Friday conflicts
+Console.js:61 🏭 LayupScheduler - Production/P1 orders: 3
+Console.js:61 🏭 LayupScheduler - Sample production/P1 order: {id: 'PO-P18261-2-1', orderId: 'PO-P18261-2-1', orderDate: '2025-09-26 15:15:25.823875', dueDate: '2025-10-22', currentDepartment: 'P1 Production Queue', …}
+Console.js:61 🏭 LayupScheduler - Production/P1 order stockModelId: cf_privateer
+Console.js:61 🏭 LayupScheduler - Production/P1 order modelId: cf_privateer
+Console.js:61 🏭 LayupScheduler - Assigned production/P1 orders: 3
+Console.js:61 ✅ Production/P1 orders assigned: (3) ['PO-P18261-2-1', 'PO-P18261-3-1', 'PO-P18261-1-1']
+Console.js:61 🏭 Production/P1 orders loaded and ready for manual scheduling via Generate Schedule button
+Console.js:61 🏔️ LayupScheduler - Mesa molds: (8) [{…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}]
+Console.js:61 📋 LayupScheduler - Order Assignments: {PO-P18261-2-1: {…}, PO-P18261-3-1: {…}, PO-P18261-1-1: {…}, AG688: {…}, AG679: {…}, …}
+Console.js:61 🏭 LayupScheduler - All Molds: (74) [{…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}]
+Console.js:61 ⚙️ LayupScheduler - Employees: 2 employees loaded
+Console.js:61 🔄 Unassigned orders: 0 []
+Console.js:61 🏭 Unassigned PRODUCTION/P1 orders: 0 []
+Console.js:61 📅 MONDAY DEBUG: Date 2025-09-29, 1 assignments found
+Console.js:61    📅 PO-P18261-2-1 → Privateer-1
+Console.js:61 ✅ Monday assignment found: PO-P18261-2-1 → Privateer-1 on 2025-09-29
+35Console.js:61 Warning: Invalid prop `data-replit-metadata` supplied to `React.Fragment`. React.Fragment can only have `key` and `children` props.
+    at LayupScheduler (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/src/components/LayupScheduler.tsx:534:35)
+    at div
+    at LayupSchedulerPage
+    at Route (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=7a20245f:280:16)
+    at Switch (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=7a20245f:336:17)
+    at main
+    at div
+    at Router (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=7a20245f:235:17)
+    at DeploymentAuthWrapper (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/src/components/DeploymentAuthWrapper.tsx:34:49)
+    at QueryClientProvider (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-65LAIXSP.js?v=7a20245f:2934:3)
+    at App (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/src/App.tsx?v=oDqobUUTulCSspXxXkSQN:138:35)
+    at Router (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=7a20245f:6332:13)
+    at BrowserRouter (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=7a20245f:9416:3)
+    at QueryClientProvider (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-65LAIXSP.js?v=7a20245f:2934:3)
+Mt.forEach.n.<computed> @ Console.js:61
+console.error @ main.tsx:33
+printWarning @ react_jsx-dev-runtime.js?v=7a20245f:64
+error @ react_jsx-dev-runtime.js?v=7a20245f:48
+validateFragmentProps @ react_jsx-dev-runtime.js?v=7a20245f:796
+jsxWithValidation @ react_jsx-dev-runtime.js?v=7a20245f:874
+(anonymous) @ LayupScheduler.tsx:4907
+(anonymous) @ LayupScheduler.tsx:4906
+LayupScheduler @ LayupScheduler.tsx:5063
+renderWithHooks @ chunk-276SZO74.js?v=7a20245f:11548
+updateFunctionComponent @ chunk-276SZO74.js?v=7a20245f:14582
+beginWork @ chunk-276SZO74.js?v=7a20245f:15924
+beginWork$1 @ chunk-276SZO74.js?v=7a20245f:19753
+performUnitOfWork @ chunk-276SZO74.js?v=7a20245f:19198
+workLoopSync @ chunk-276SZO74.js?v=7a20245f:19137
+renderRootSync @ chunk-276SZO74.js?v=7a20245f:19116
+performSyncWorkOnRoot @ chunk-276SZO74.js?v=7a20245f:18874
+flushSyncCallbacks @ chunk-276SZO74.js?v=7a20245f:9119
+(anonymous) @ chunk-276SZO74.js?v=7a20245f:18627Understand this error
+Console.js:61 🔍 RAW SCHEDULE DATA FROM DATABASE: 3 total entries
+Console.js:61   Entry 0: PO-P18261-2-1 → 2025-09-29T00:00:00.000Z → Mon Sep 29 2025 (Monday, day 1)
+Console.js:61   Entry 1: PO-P18261-3-1 → 2025-09-30T00:00:00.000Z → Tue Sep 30 2025 (Tuesday, day 2)
+Console.js:61   Entry 2: PO-P18261-1-1 → 2025-10-01T00:00:00.000Z → Wed Oct 01 2025 (Wednesday, day 3)
+Console.js:61 ✅ DATABASE FILTER: Keeping Monday assignment - PO-P18261-2-1 on Mon Sep 29 2025
+Console.js:61 ✅ DATABASE FILTER: Keeping Tuesday assignment - PO-P18261-3-1 on Tue Sep 30 2025
+Console.js:61 ✅ DATABASE FILTER: Keeping Wednesday assignment - PO-P18261-1-1 on Wed Oct 01 2025
+Console.js:61 📋 Database filter: Removed 0 non-work-day assignments, kept 3 work-day assignments
+Console.js:61 📋 Selected work days: Mon, Tue, Wed, Thu
+Console.js:61 ✅ Processing 218 orders in select transform
+Console.js:61 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 218, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+Console.js:61 🔧 Final hook return: {ordersReturned: 218, isLoading: false, hasError: false, firstOrderId: 'AG501'}
+Console.js:61 🏔️ MESA UNIVERSAL DEBUG: {totalOrders: 218, mesaUniversalCount: 0, mesaOrders: Array(0)}
+Console.js:61 🔍 LayupScheduler orders debug: {allOrdersCount: 218, rawData: 'has data', dataType: 'object', isArray: true, sourceCounts: {…}, …}
+Console.js:61 🏔️ FINAL ORDERS: Returning 218 total orders, 0 are Mesa Universal
+Console.js:61 🚫 LOP Scheduler auto-run DISABLED for complete manual control
+Console.js:61 ✅ FRIDAY VALIDATION PASSED: 218 assignments, no Friday conflicts
+Console.js:61 🏭 LayupScheduler - Production/P1 orders: 3
+Console.js:61 🏭 LayupScheduler - Sample production/P1 order: {id: 'PO-P18261-2-1', orderId: 'PO-P18261-2-1', orderDate: '2025-09-26 15:15:25.823875', dueDate: '2025-10-22', currentDepartment: 'P1 Production Queue', …}
+Console.js:61 🏭 LayupScheduler - Production/P1 order stockModelId: cf_privateer
+Console.js:61 🏭 LayupScheduler - Production/P1 order modelId: cf_privateer
+Console.js:61 🏭 LayupScheduler - Assigned production/P1 orders: 3
+Console.js:61 ✅ Production/P1 orders assigned: (3) ['PO-P18261-2-1', 'PO-P18261-3-1', 'PO-P18261-1-1']
+Console.js:61 🏭 Production/P1 orders loaded and ready for manual scheduling via Generate Schedule button
+Console.js:61 🏔️ LayupScheduler - Mesa molds: (8) [{…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}]
+Console.js:61 📋 LayupScheduler - Order Assignments: {PO-P18261-2-1: {…}, PO-P18261-3-1: {…}, PO-P18261-1-1: {…}, AG688: {…}, AG679: {…}, …}
+Console.js:61 🏭 LayupScheduler - All Molds: (74) [{…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}]
+Console.js:61 ⚙️ LayupScheduler - Employees: 2 employees loaded
+Console.js:61 🔄 Unassigned orders: 0 []
+Console.js:61 🏭 Unassigned PRODUCTION/P1 orders: 0 []
+Console.js:61 📅 MONDAY DEBUG: Date 2025-09-29, 1 assignments found
+Console.js:61    📅 PO-P18261-2-1 → Privateer-1
+Console.js:61 ✅ Monday assignment found: PO-P18261-2-1 → Privateer-1 on 2025-09-29
+35Console.js:61 Warning: Invalid prop `data-replit-metadata` supplied to `React.Fragment`. React.Fragment can only have `key` and `children` props.
+    at LayupScheduler (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/src/components/LayupScheduler.tsx:534:35)
+    at div
+    at LayupSchedulerPage
+    at Route (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=7a20245f:280:16)
+    at Switch (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=7a20245f:336:17)
+    at main
+    at div
+    at Router (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=7a20245f:235:17)
+    at DeploymentAuthWrapper (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/src/components/DeploymentAuthWrapper.tsx:34:49)
+    at QueryClientProvider (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-65LAIXSP.js?v=7a20245f:2934:3)
+    at App (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/src/App.tsx?v=oDqobUUTulCSspXxXkSQN:138:35)
+    at Router (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=7a20245f:6332:13)
+    at BrowserRouter (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=7a20245f:9416:3)
+    at QueryClientProvider (https://b34660c4-9e73-492c-ade9-2911df1fbf59-00-25p0x1ncn4j2g.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-65LAIXSP.js?v=7a20245f:2934:3)
+Mt.forEach.n.<computed> @ Console.js:61
+console.error @ main.tsx:33
+printWarning @ react_jsx-dev-runtime.js?v=7a20245f:64
+error @ react_jsx-dev-runtime.js?v=7a20245f:48
+validateFragmentProps @ react_jsx-dev-runtime.js?v=7a20245f:796
+jsxWithValidation @ react_jsx-dev-runtime.js?v=7a20245f:874
+(anonymous) @ LayupScheduler.tsx:4907
+(anonymous) @ LayupScheduler.tsx:4906
+LayupScheduler @ LayupScheduler.tsx:5063
+renderWithHooks @ chunk-276SZO74.js?v=7a20245f:11548
+updateFunctionComponent @ chunk-276SZO74.js?v=7a20245f:14587
+beginWork @ chunk-276SZO74.js?v=7a20245f:15924
+beginWork$1 @ chunk-276SZO74.js?v=7a20245f:19753
+performUnitOfWork @ chunk-276SZO74.js?v=7a20245f:19198
+workLoopSync @ chunk-276SZO74.js?v=7a20245f:19137
+renderRootSync @ chunk-276SZO74.js?v=7a20245f:19116
+performSyncWorkOnRoot @ chunk-276SZO74.js?v=7a20245f:18874
+flushSyncCallbacks @ chunk-276SZO74.js?v=7a20245f:9119
+(anonymous) @ chunk-276SZO74.js?v=7a20245f:18627Understand this error
+Console.js:61 🏭 LayupScheduler: Total orders from API: 218
+Console.js:61 🏭 LayupScheduler: Regular orders for scheduling: 215
+Console.js:61 🏭 LayupScheduler: P1 PO orders for scheduling: 0
+Console.js:61 🏭 LayupScheduler: Sample regular order for scheduling: {id: 1616, orderId: 'AG501', orderDate: '2025-03-21T00:00:00.000Z', dueDate: '2025-06-17T00:00:00.000Z', customerId: '209', …}
+Console.js:61 🏭 LayupScheduler: First 5 regular orders: (5) [{…}, {…}, {…}, {…}, {…}]
+Console.js:61 🏭 LayupScheduler: Filtered orders by source: {main_orders: 215, production_order: 3}
+Console.js:61 🚀 LayupScheduler: All data loaded, ready for manual scheduling
+Console.js:61 📋 SCHEDULE STATUS: Ready for manual scheduling (Generate Schedule button) - Has existing assignments

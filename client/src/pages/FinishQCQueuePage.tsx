@@ -318,7 +318,7 @@ export default function FinishQCQueuePage() {
                           ? 'ring-4 ring-yellow-400 bg-yellow-50 dark:bg-yellow-900/20'
                           : isSelected 
                           ? 'ring-2 ring-blue-500 ring-offset-2 bg-blue-50 dark:bg-blue-900/20' 
-                          : 'hover:ring-1 hover:ring-gray-300'
+                          : ''
                       }`}
                     >
                       <OrderTooltip 

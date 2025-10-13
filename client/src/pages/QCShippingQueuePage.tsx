@@ -555,7 +555,14 @@ export default function QCShippingQueuePage() {
     >
       <CardHeader className="pb-2">
         <CardTitle className="text-sm flex items-center justify-between">
-          <span>{getDisplayOrderId(order)}</span>
+          <div className="flex flex-col gap-0.5">
+            <span>{order.orderId}</span>
+            {order.fbOrderNumber && (
+              <span className="text-xs text-gray-600 font-normal">
+                FB: {order.fbOrderNumber}
+              </span>
+            )}
+          </div>
           <Checkbox
             checked={selectedOrders.has(order.orderId)}
             onCheckedChange={(checked) => handleOrderSelection(order.orderId, checked as boolean)}

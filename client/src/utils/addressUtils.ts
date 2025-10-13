@@ -6,6 +6,7 @@ export interface AddressData {
   state: string;
   zipCode: string;
   country: string;
+  international?: boolean;
 }
 
 /**

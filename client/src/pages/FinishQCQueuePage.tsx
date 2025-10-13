@@ -21,19 +21,15 @@ export default function FinishQCQueuePage() {
   const [selectAll, setSelectAll] = useState(false);
   const [highlightedOrderId, setHighlightedOrderId] = useState<string | null>(null);
 
-  // Get all orders from production pipeline
+  // Get orders in Finish QC department directly
+  const { data: finishQCOrders = [] } = useQuery<any[]>({
+    queryKey: ['/api/orders/department/Finish QC'],
+  });
+
+  // Also get all orders for counting other departments
   const { data: allOrders = [] } = useQuery({
     queryKey: ['/api/orders/all'],
   });
-
-  // Get orders in Finish QC department
-  const finishQCOrders = useMemo(() => {
-    const filtered = (allOrders as any[]).filter((order: any) => 
-      isOrderInDepartment(order, 'Finish QC')
-    );
-    
-    return filtered;
-  }, [allOrders]);
 
   // Filter orders based on search query
   const filteredOrders = useMemo(() => {
@@ -72,7 +68,24 @@ export default function FinishQCQueuePage() {
     queryKey: ['/api/stock-models'],
   });
 
-  // Handle order search selection
+  // Auto-highlight order when scanned (do not select)
+  const handleOrderScanned = (orderId: string) => {
+    const orderExists = finishQCOrders.some((order: any) => order.orderId === orderId);
+    if (orderExists) {
+      setHighlightedOrderId(orderId);
+      setTimeout(() => {
+        const element = document.getElementById(`order-${orderId}`);
+        if (element) {
+          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 100);
+      toast.success(`Order ${orderId} highlighted`);
+    } else {
+      toast.error(`Order ${orderId} is not in the Finish QC department`);
+    }
+  };
+
+  // Handle order search selection - highlight only (do not select)
   const handleOrderSearchSelect = (order: any) => {
     const orderExists = finishQCOrders.some((o: any) => o.orderId === order.orderId);
     if (orderExists) {
@@ -84,7 +97,7 @@ export default function FinishQCQueuePage() {
           element.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
       }, 100);
-      toast.success(`Order ${order.orderId} highlighted in the list`);
+      toast.success(`Order ${order.orderId} highlighted`);
     } else {
       toast.error(`Order ${order.orderId} is not in the Finish QC department`);
     }
@@ -112,19 +125,43 @@ export default function FinishQCQueuePage() {
     setSelectAll(!selectAll);
   };
 
-  // Handle search with auto-selection
+  // Handle search - auto-highlight matching orders (do not select)
   const handleSearchWithSelection = (query: string) => {
     setSearchQuery(query);
     
     if (query.trim()) {
-      // Auto-select matching orders after a short delay
-      setTimeout(() => {
-        const matchingOrderIds = filteredOrders.map((order: any) => order.orderId);
-        if (matchingOrderIds.length > 0) {
-          setSelectedOrders(new Set(matchingOrderIds));
-          toast.success(`${matchingOrderIds.length} matching order(s) selected`);
-        }
-      }, 300);
+      const searchTerm = query.toLowerCase().trim();
+      
+      // Find all matching orders
+      const matchingOrders = finishQCOrders.filter((order: any) => {
+        const orderId = order.orderId?.toLowerCase() || '';
+        const fbNumber = order.fbOrderNumber?.toLowerCase() || '';
+        const displayOrderId = getDisplayOrderId(order.orderId)?.toLowerCase() || '';
+        
+        return orderId.includes(searchTerm) || 
+               fbNumber.includes(searchTerm) || 
+               displayOrderId.includes(searchTerm);
+      });
+      
+      if (matchingOrders.length > 0) {
+        // Highlight first matching order (do not select)
+        setHighlightedOrderId(matchingOrders[0].orderId);
+        
+        // Scroll to first match
+        setTimeout(() => {
+          const element = document.getElementById(`order-${matchingOrders[0].orderId}`);
+          if (element) {
+            element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        }, 100);
+        
+        toast.success(`${matchingOrders.length} order(s) found - first one highlighted`);
+      } else {
+        setHighlightedOrderId(null);
+        toast.error('No matching orders found');
+      }
+    } else {
+      setHighlightedOrderId(null);
     }
   };
 
@@ -141,7 +178,7 @@ export default function FinishQCQueuePage() {
       </div>
 
       {/* Barcode Scanner at top */}
-      <BarcodeScanner />
+      <BarcodeScanner onOrderScanned={handleOrderScanned} />
 
       {/* Search Box */}
       <Card>
@@ -166,7 +203,7 @@ export default function FinishQCQueuePage() {
               <Button
                 variant="outline"
                 onClick={() => {
-                  if (searchQuery.trim()) {
+                  if (searchQuery.trim() && filteredOrders.length > 0) {
                     const matchingOrderIds = filteredOrders.map((order: any) => order.orderId);
                     setSelectedOrders(new Set(matchingOrderIds));
                     toast.success(`${matchingOrderIds.length} matching order(s) selected`);
@@ -174,32 +211,17 @@ export default function FinishQCQueuePage() {
                 }}
                 disabled={!searchQuery.trim() || filteredOrders.length === 0}
               >
-                Select Matches
+                Select All Matches
               </Button>
+              {highlightedOrderId && (
+                <Button
+                  variant="outline"
+                  onClick={() => setHighlightedOrderId(null)}
+                >
+                  Clear Highlight
+                </Button>
+              )}
             </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Order Search Box */}
-      <Card>
-        <CardContent className="p-4">
-          <div className="flex items-center gap-4">
-            <OrderSearchBox 
-              orders={finishQCOrders}
-              placeholder="Search orders by Order ID or FishBowl Number..."
-              onOrderSelect={handleOrderSearchSelect}
-            />
-            {highlightedOrderId && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setHighlightedOrderId(null)}
-                className="text-sm"
-              >
-                Clear highlight
-              </Button>
-            )}
           </div>
         </CardContent>
       </Card>
@@ -292,14 +314,17 @@ export default function FinishQCQueuePage() {
                   <div key={order.orderId} className="relative">
                     <div 
                       className={`transition-all duration-200 ${
-                        isSelected 
+                        order.orderId === highlightedOrderId
+                          ? 'ring-4 ring-yellow-400 bg-yellow-50 dark:bg-yellow-900/20'
+                          : isSelected 
                           ? 'ring-2 ring-blue-500 ring-offset-2 bg-blue-50 dark:bg-blue-900/20' 
                           : 'hover:ring-1 hover:ring-gray-300'
                       }`}
                     >
                       <OrderTooltip 
                         order={order} 
-                        stockModels={stockModels} 
+                        stockModels={stockModels as any[]} 
+                        showPaintAndTexture={true}
                         className={`border-l-purple-500 cursor-pointer ${
                           isSelected ? 'bg-blue-50 dark:bg-blue-900/20' : ''
                         }`}

@@ -11,6 +11,7 @@ interface OrderTooltipProps {
   className?: string;
   children?: React.ReactNode;
   gunsimthTasks?: string[];
+  showPaintAndTexture?: boolean;
 }
 
 // Format order features for display
@@ -118,7 +119,7 @@ const formatOrderDetails = (order: any, stockModels: any[]) => {
   return details.join('\n');
 };
 
-export function OrderTooltip({ order, stockModels, showHoverText = true, className = "", children, gunsimthTasks }: OrderTooltipProps) {
+export function OrderTooltip({ order, stockModels, showHoverText = true, className = "", children, gunsimthTasks, showPaintAndTexture = false }: OrderTooltipProps) {
   const modelId = order.stockModelId || order.modelId;
   const materialType = modelId?.startsWith('cf_') ? 'CF' : 
                       modelId?.startsWith('fg_') ? 'FG' : null;
@@ -136,8 +137,21 @@ export function OrderTooltip({ order, stockModels, showHoverText = true, classNa
       <Card className={`border-l-4 ${className.includes('border-l-') ? className : `border-l-blue-500 ${className}`} hover:shadow-lg transition-shadow duration-200 cursor-pointer`}>
         <CardHeader className="pb-2">
           <div className="flex justify-between items-start">
-            <div className="font-semibold text-lg">
-              {getDisplayOrderId(order)}
+            <div className="space-y-1">
+              {order.fbOrderNumber && order.fbOrderNumber.trim() !== '' ? (
+                <>
+                  <div className="font-semibold text-lg">
+                    FB: {order.fbOrderNumber}
+                  </div>
+                  <div className="text-xs text-gray-500">
+                    ID: {order.orderId}
+                  </div>
+                </>
+              ) : (
+                <div className="font-semibold text-lg">
+                  {order.orderId}
+                </div>
+              )}
             </div>
             <div className="flex items-center gap-2">
               <Badge variant="secondary" className="text-xs">
@@ -187,6 +201,27 @@ export function OrderTooltip({ order, stockModels, showHoverText = true, classNa
                     </Badge>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {showPaintAndTexture && (
+              <div className="mt-2 space-y-1">
+                {order.features?.paint_options && order.features.paint_options !== 'none' && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">Paint:</span>
+                    <Badge variant="outline" className="text-xs bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300 border-purple-300 dark:border-purple-700">
+                      {order.features.paint_options.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}
+                    </Badge>
+                  </div>
+                )}
+                {order.features?.texture_options && order.features.texture_options !== 'no_texture' && order.features.texture_options !== 'none' && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">Texture:</span>
+                    <Badge variant="outline" className="text-xs bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 border-green-300 dark:border-green-700">
+                      {order.features.texture_options.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}
+                    </Badge>
+                  </div>
+                )}
               </div>
             )}
 

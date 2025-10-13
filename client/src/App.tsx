@@ -338,7 +338,8 @@ function App() {
                   <Route path="/department-queue/cnc" component={CNCQueuePage} />
                   <Route path="/department-queue/finish" component={FinishQueuePage} />
                   <Route path="/department-queue/gunsmith" component={GunsimthQueuePage} />
-                  <Route path="/department-queue/finish-qc" component={FinishQCPage} />
+                  <Route path="/department-queue/finish-qc" component={FinishQCQueuePage} />
+                  <Route path="/finish-qc-queue" component={FinishQCQueuePage} />
                   <Route path="/department-queue/paint" component={PaintQueuePage} />
                   <Route path="/department-queue/qc-shipping" component={QCShippingQueuePage} />
                   <Route path="/department-queue/shipping" component={ShippingQueuePage} />

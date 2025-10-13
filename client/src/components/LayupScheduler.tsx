@@ -138,10 +138,9 @@ const DraggableOrderItem = React.memo(({ order, priority, totalOrdersInCell, mol
       stockModelId: order.stockModelId,
       orderModelId: order.modelId,
       materialType: materialType,
+      hasPOId: !!(order.poId || order.productionOrderId),
       expectedColor:
-
-        order.source === 'production_order' ? 'GREEN (OEM Priority)' :
-
+        (order.poId || order.productionOrderId) ? 'GREEN (Purchase Order/OEM Priority)' :
         materialType === 'CF' ? 'DEEP ORANGE (CF)' :
         materialType === 'FG' ? 'LIGHT ORANGE (FG)' : 'GRAY (Unknown)'
     });
@@ -150,10 +149,9 @@ const DraggableOrderItem = React.memo(({ order, priority, totalOrdersInCell, mol
   // Determine card styling based on source and material
   const getCardStyling = () => {
 
-    // Check if this is a purchase order (has poId or productionOrderId)
-    // ALL OEM Production orders get GREEN badges for priority indication - regardless of model ID
-    if (order.poId || order.productionOrderId || order.source === 'production_order') {
-
+    // OEM Priority ONLY applies to Purchase Orders (items with poId or productionOrderId)
+    // NOT to be confused with regular production orders
+    if (order.poId || order.productionOrderId) {
       return {
         bg: 'bg-green-100 dark:bg-green-800/50 hover:bg-green-200 dark:hover:bg-green-800/70 border-2 border-green-300 dark:border-green-600',
         text: 'text-green-800 dark:text-green-200'
@@ -196,7 +194,7 @@ const DraggableOrderItem = React.memo(({ order, priority, totalOrdersInCell, mol
         <div className="flex items-center font-bold">
           {getDisplayOrderId(order) || 'No ID'}
 
-          {order.source === 'production_order' && <span className="text-xs ml-1 bg-green-200 dark:bg-green-700 px-1 rounded font-semibold">OEM</span>}
+          {(order.poId || order.productionOrderId) && <span className="text-xs ml-1 bg-green-200 dark:bg-green-700 px-1 rounded font-semibold">PO</span>}
 
         </div>
         {/* Show stock model display name with material type */}

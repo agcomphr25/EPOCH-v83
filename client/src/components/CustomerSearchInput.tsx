@@ -286,11 +286,11 @@ export default function CustomerSearchInput({
                     Add New Customer
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="sm:max-w-[800px] max-h-[80vh] overflow-y-auto">
-                  <DialogHeader>
+                <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-hidden flex flex-col">
+                  <DialogHeader className="flex-shrink-0">
                     <DialogTitle>Add New Customer</DialogTitle>
                   </DialogHeader>
-                  <div className="grid gap-6 py-4">
+                  <div className="grid gap-6 py-4 overflow-y-auto flex-1 pr-2">
                     {/* Name - Full width */}
                     <div className="space-y-2">
                       <Label htmlFor="name">Name *</Label>
@@ -456,7 +456,7 @@ export default function CustomerSearchInput({
                       <Label htmlFor="isActive" className="cursor-pointer">Active Customer</Label>
                     </div>
                   </div>
-                  <div className="flex justify-end space-x-2">
+                  <div className="flex justify-end space-x-2 flex-shrink-0 pt-4 border-t mt-4">
                     <Button 
                       variant="outline" 
                       data-testid="button-cancel-customer"

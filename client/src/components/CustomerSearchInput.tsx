@@ -11,8 +11,12 @@ import { apiRequest } from '@/lib/queryClient';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import debounce from 'lodash.debounce';
 import type { Customer } from '@shared/schema';
-import SimpleAddressInput from '@/components/SimpleAddressInput';
+import AddressInput from '@/components/AddressInput';
 import type { AddressData } from '@/utils/addressUtils';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
+import { Switch } from '@/components/ui/switch';
 
 interface CustomerSearchInputProps {
   value?: Customer | null;
@@ -38,17 +42,20 @@ export default function CustomerSearchInput({
     name: '',
     email: '',
     phone: '',
-    company: '',
-    customerType: 'standard',
+    contact: '',
+    customerType: 'Individual',
+    preferredCommunicationMethod: [] as string[],
     notes: '',
-  });
-
-  const [customerAddress, setCustomerAddress] = useState<AddressData>({
-    street: '',
-    city: '',
-    state: '',
-    zipCode: '',
-    country: 'United States',
+    isActive: true,
+    address: {
+      street: '',
+      street2: '',
+      city: '',
+      state: '',
+      zipCode: '',
+      country: 'United States',
+      type: 'both' as 'shipping' | 'billing' | 'both',
+    }
   });
 
   const {
@@ -92,11 +99,14 @@ export default function CustomerSearchInput({
   const createCustomerMutation = useMutation({
     mutationFn: async (customerData: typeof newCustomer) => {
       const cleanedData = {
-        ...customerData,
+        name: customerData.name.trim(),
         email: customerData.email?.trim() || undefined,
         phone: customerData.phone?.trim() || undefined,
-        company: customerData.company?.trim() || undefined,
+        contact: customerData.contact?.trim() || undefined,
+        customerType: customerData.customerType,
+        preferredCommunicationMethod: customerData.preferredCommunicationMethod,
         notes: customerData.notes?.trim() || undefined,
+        isActive: customerData.isActive,
       };
 
       const response = await apiRequest('/api/customers/create-bypass', {
@@ -105,14 +115,19 @@ export default function CustomerSearchInput({
       });
 
       // Create customer address if all required fields are present
-      if (customerAddress.street && customerAddress.city && customerAddress.state && customerAddress.zipCode && customerAddress.country) {
+      if (customerData.address.street && customerData.address.city && customerData.address.state && customerData.address.zipCode) {
         try {
           await apiRequest('/api/addresses', {
             method: 'POST',
             body: JSON.stringify({
               customerId: response.id.toString(),
-              ...customerAddress,
-              type: 'both',
+              street: customerData.address.street,
+              street2: customerData.address.street2 || '',
+              city: customerData.address.city,
+              state: customerData.address.state,
+              zipCode: customerData.address.zipCode,
+              country: customerData.address.country,
+              type: customerData.address.type,
               isDefault: true,
             }),
           });
@@ -132,16 +147,20 @@ export default function CustomerSearchInput({
         name: '',
         email: '',
         phone: '',
-        company: '',
-        customerType: 'standard',
+        contact: '',
+        customerType: 'Individual',
+        preferredCommunicationMethod: [],
         notes: '',
-      });
-      setCustomerAddress({
-        street: '',
-        city: '',
-        state: '',
-        zipCode: '',
-        country: 'United States',
+        isActive: true,
+        address: {
+          street: '',
+          street2: '',
+          city: '',
+          state: '',
+          zipCode: '',
+          country: 'United States',
+          type: 'both',
+        }
       });
       setShowAddDialog(false);
       onValueChange(customer);
@@ -267,16 +286,17 @@ export default function CustomerSearchInput({
                     Add New Customer
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="sm:max-w-[800px] max-h-[80vh] overflow-y-auto">
-                  <DialogHeader>
+                <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-hidden flex flex-col">
+                  <DialogHeader className="flex-shrink-0">
                     <DialogTitle>Add New Customer</DialogTitle>
                   </DialogHeader>
-                  <div className="grid gap-6 py-4">
-                    {/* Name - Full width, larger */}
+                  <div className="grid gap-6 py-4 overflow-y-auto flex-1 pr-2">
+                    {/* Name - Full width */}
                     <div className="space-y-2">
                       <Label htmlFor="name">Name *</Label>
                       <Input
                         id="name"
+                        data-testid="input-customer-name"
                         value={newCustomer.name}
                         onChange={(e) => setNewCustomer(prev => ({ ...prev, name: e.target.value }))}
                         placeholder="John Smith"
@@ -284,24 +304,26 @@ export default function CustomerSearchInput({
                       />
                     </div>
                     
-                    {/* Company - Full width, larger */}
+                    {/* Contact - Full width */}
                     <div className="space-y-2">
-                      <Label htmlFor="company">Company</Label>
+                      <Label htmlFor="contact">Contact Person</Label>
                       <Input
-                        id="company"
-                        value={newCustomer.company}
-                        onChange={(e) => setNewCustomer(prev => ({ ...prev, company: e.target.value }))}
-                        placeholder="ABC Defense"
+                        id="contact"
+                        data-testid="input-customer-contact"
+                        value={newCustomer.contact}
+                        onChange={(e) => setNewCustomer(prev => ({ ...prev, contact: e.target.value }))}
+                        placeholder="John Doe"
                         className="text-base h-12"
                       />
                     </div>
                     
-                    {/* Email and Phone on same row but wider */}
+                    {/* Email and Phone on same row */}
                     <div className="grid grid-cols-2 gap-6">
                       <div className="space-y-2">
                         <Label htmlFor="email">Email</Label>
                         <Input
                           id="email"
+                          data-testid="input-customer-email"
                           type="email"
                           value={newCustomer.email}
                           onChange={(e) => setNewCustomer(prev => ({ ...prev, email: e.target.value }))}
@@ -313,6 +335,7 @@ export default function CustomerSearchInput({
                         <Label htmlFor="phone">Phone</Label>
                         <Input
                           id="phone"
+                          data-testid="input-customer-phone"
                           value={newCustomer.phone}
                           onChange={(e) => setNewCustomer(prev => ({ ...prev, phone: e.target.value }))}
                           placeholder="555-0123"
@@ -320,41 +343,130 @@ export default function CustomerSearchInput({
                         />
                       </div>
                     </div>
+
+                    {/* Customer Type */}
+                    <div className="space-y-2">
+                      <Label htmlFor="customerType">Customer Type</Label>
+                      <Select 
+                        value={newCustomer.customerType} 
+                        onValueChange={(value) => setNewCustomer(prev => ({ ...prev, customerType: value }))}
+                      >
+                        <SelectTrigger data-testid="select-customer-type">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Individual">Individual</SelectItem>
+                          <SelectItem value="Business">Business</SelectItem>
+                          <SelectItem value="Government">Government</SelectItem>
+                          <SelectItem value="Military">Military</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Preferred Communication Method - Checkboxes */}
+                    <div className="space-y-3">
+                      <Label className="text-sm font-medium">Preferred Communication Method</Label>
+                      <div className="flex flex-col gap-3">
+                        <div className="flex items-center space-x-2">
+                          <Checkbox
+                            id="comm-email"
+                            data-testid="checkbox-comm-email"
+                            checked={newCustomer.preferredCommunicationMethod.includes('email')}
+                            onCheckedChange={(checked) => {
+                              const methods = newCustomer.preferredCommunicationMethod;
+                              setNewCustomer(prev => ({
+                                ...prev,
+                                preferredCommunicationMethod: checked 
+                                  ? [...methods, 'email'] 
+                                  : methods.filter(m => m !== 'email')
+                              }));
+                            }}
+                          />
+                          <Label htmlFor="comm-email" className="text-sm font-normal cursor-pointer">
+                            <div className="flex items-center gap-2">
+                              <Mail className="h-4 w-4 text-gray-500" />
+                              <span>Email</span>
+                            </div>
+                          </Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <Checkbox
+                            id="comm-sms"
+                            data-testid="checkbox-comm-sms"
+                            checked={newCustomer.preferredCommunicationMethod.includes('sms')}
+                            onCheckedChange={(checked) => {
+                              const methods = newCustomer.preferredCommunicationMethod;
+                              setNewCustomer(prev => ({
+                                ...prev,
+                                preferredCommunicationMethod: checked 
+                                  ? [...methods, 'sms'] 
+                                  : methods.filter(m => m !== 'sms')
+                              }));
+                            }}
+                          />
+                          <Label htmlFor="comm-sms" className="text-sm font-normal cursor-pointer">
+                            <div className="flex items-center gap-2">
+                              <Phone className="h-4 w-4 text-gray-500" />
+                              <span>SMS</span>
+                            </div>
+                          </Label>
+                        </div>
+                      </div>
+                      {newCustomer.preferredCommunicationMethod.length === 0 && (
+                        <p className="text-sm text-gray-500 italic">No communication method selected</p>
+                      )}
+                    </div>
                     
-                    {/* Notes full width */}
+                    {/* Notes - Textarea */}
                     <div className="space-y-2">
                       <Label htmlFor="notes">Notes</Label>
-                      <Input
+                      <Textarea
                         id="notes"
+                        data-testid="textarea-customer-notes"
                         value={newCustomer.notes}
                         onChange={(e) => setNewCustomer(prev => ({ ...prev, notes: e.target.value }))}
                         placeholder="Additional notes..."
-                        className="text-base h-12"
+                        className="min-h-[80px]"
                       />
                     </div>
 
-                    {/* Address Field */}
-                    <div>
-                      <div className="flex items-center gap-2 mb-2">
-                        <MapPin className="h-4 w-4 text-gray-500" />
-                        <Label>Address (Optional)</Label>
-                      </div>
-                      <SimpleAddressInput 
-                        label=""
-                        value={customerAddress}
-                        onChange={setCustomerAddress}
+                    {/* Address Field with Validation */}
+                    <AddressInput
+                      label="Address (Optional)"
+                      value={newCustomer.address}
+                      onChange={(address) => setNewCustomer(prev => ({ 
+                        ...prev, 
+                        address: {
+                          ...address,
+                          street2: prev.address.street2 || '',
+                          type: prev.address.type || 'both'
+                        }
+                      }))}
+                      required={false}
+                    />
+
+                    {/* Is Active Toggle */}
+                    <div className="flex items-center space-x-2">
+                      <Switch
+                        id="isActive"
+                        data-testid="switch-is-active"
+                        checked={newCustomer.isActive}
+                        onCheckedChange={(checked) => setNewCustomer(prev => ({ ...prev, isActive: checked }))}
                       />
+                      <Label htmlFor="isActive" className="cursor-pointer">Active Customer</Label>
                     </div>
                   </div>
-                  <div className="flex justify-end space-x-2">
+                  <div className="flex justify-end space-x-2 flex-shrink-0 pt-4 border-t mt-4">
                     <Button 
                       variant="outline" 
+                      data-testid="button-cancel-customer"
                       onClick={() => setShowAddDialog(false)}
                       disabled={createCustomerMutation.isPending}
                     >
                       Cancel
                     </Button>
                     <Button 
+                      data-testid="button-add-customer"
                       onClick={handleAddCustomer}
                       disabled={createCustomerMutation.isPending}
                     >

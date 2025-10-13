@@ -275,3 +275,135 @@ function parseQuestions(content: string): TrainingContent['questions'] {
   
   return questions;
 }
+
+export interface TrainingMatrixData {
+  entries: Array<{
+    employeeName: string | null;
+    jobTitle: string | null;
+    department: string | null;
+    trainingName: string;
+    requiredBy: string | null;
+    frequency: string | null;
+    lastCompleted: Date | null;
+    nextDue: Date | null;
+    status: 'PENDING' | 'COMPLETED' | 'OVERDUE' | 'NOT_REQUIRED';
+    notes: string | null;
+  }>;
+}
+
+export async function extractTrainingMatrixData(fileBuffer: Buffer): Promise<TrainingMatrixData> {
+  const result = await analyzeDocument(fileBuffer, 'layout');
+  
+  const content = result.content || '';
+  const entries: TrainingMatrixData['entries'] = [];
+  
+  // Try to extract table data if available
+  if (result.tables && result.tables.length > 0) {
+    const table = result.tables[0];
+    
+    // Find header row to identify columns
+    const headerCells = table.cells.filter(cell => cell.rowIndex === 0);
+    const headers = headerCells.map(cell => cell.content.toLowerCase().trim());
+    
+    // Map column indices
+    const colMap: Record<string, number> = {};
+    headers.forEach((header, idx) => {
+      if (header.includes('employee') || header.includes('name')) colMap.employeeName = idx;
+      if (header.includes('job') || header.includes('title') || header.includes('position')) colMap.jobTitle = idx;
+      if (header.includes('department') || header.includes('dept')) colMap.department = idx;
+      if (header.includes('training') || header.includes('course')) colMap.trainingName = idx;
+      if (header.includes('required') || header.includes('requirement')) colMap.requiredBy = idx;
+      if (header.includes('frequency') || header.includes('recurring')) colMap.frequency = idx;
+      if (header.includes('last') || header.includes('completed')) colMap.lastCompleted = idx;
+      if (header.includes('next') || header.includes('due')) colMap.nextDue = idx;
+      if (header.includes('status')) colMap.status = idx;
+      if (header.includes('note')) colMap.notes = idx;
+    });
+    
+    // Extract data rows
+    const maxRow = Math.max(...table.cells.map(c => c.rowIndex));
+    for (let rowIdx = 1; rowIdx <= maxRow; rowIdx++) {
+      const rowCells = table.cells.filter(cell => cell.rowIndex === rowIdx);
+      
+      const entry: any = {
+        employeeName: null,
+        jobTitle: null,
+        department: null,
+        trainingName: 'Unknown Training',
+        requiredBy: null,
+        frequency: null,
+        lastCompleted: null,
+        nextDue: null,
+        status: 'PENDING',
+        notes: null
+      };
+      
+      rowCells.forEach(cell => {
+        const colIdx = cell.columnIndex;
+        const value = cell.content.trim();
+        
+        if (colMap.employeeName === colIdx && value) entry.employeeName = value;
+        if (colMap.jobTitle === colIdx && value) entry.jobTitle = value;
+        if (colMap.department === colIdx && value) entry.department = value;
+        if (colMap.trainingName === colIdx && value) entry.trainingName = value;
+        if (colMap.requiredBy === colIdx && value) entry.requiredBy = value;
+        if (colMap.frequency === colIdx && value) entry.frequency = value;
+        if (colMap.lastCompleted === colIdx && value) {
+          try {
+            entry.lastCompleted = new Date(value);
+          } catch (e) {
+            entry.lastCompleted = null;
+          }
+        }
+        if (colMap.nextDue === colIdx && value) {
+          try {
+            entry.nextDue = new Date(value);
+          } catch (e) {
+            entry.nextDue = null;
+          }
+        }
+        if (colMap.status === colIdx && value) {
+          const statusUpper = value.toUpperCase();
+          if (['PENDING', 'COMPLETED', 'OVERDUE', 'NOT_REQUIRED'].includes(statusUpper)) {
+            entry.status = statusUpper as any;
+          }
+        }
+        if (colMap.notes === colIdx && value) entry.notes = value;
+      });
+      
+      // Only add if we have at least a training name
+      if (entry.trainingName && entry.trainingName !== 'Unknown Training') {
+        entries.push(entry);
+      }
+    }
+  } else {
+    // Fallback: Parse text-based format
+    const lines = content.split('\n').filter(line => line.trim());
+    
+    for (const line of lines) {
+      // Skip header-like lines
+      if (line.toLowerCase().includes('employee') && line.toLowerCase().includes('training')) {
+        continue;
+      }
+      
+      // Try to extract training info from line
+      const trainingMatch = line.match(/([^,]+),\s*([^,]+),\s*([^,]+),\s*([^,]+)/);
+      if (trainingMatch) {
+        entries.push({
+          employeeName: trainingMatch[1]?.trim() || null,
+          jobTitle: null,
+          department: trainingMatch[2]?.trim() || null,
+          trainingName: trainingMatch[3]?.trim() || 'Unknown Training',
+          requiredBy: null,
+          frequency: trainingMatch[4]?.trim() || null,
+          lastCompleted: null,
+          nextDue: null,
+          status: 'PENDING',
+          notes: null
+        });
+      }
+    }
+  }
+  
+  return { entries };
+}

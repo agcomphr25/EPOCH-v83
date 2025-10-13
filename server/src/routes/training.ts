@@ -22,7 +22,7 @@ import {
   type InsertTrainingMatrix
 } from "../../schema";
 import { eq, and, desc } from "drizzle-orm";
-import { extractTrainingContent } from "../lib/azureDocumentIntelligence";
+import { extractTrainingContent, extractTrainingMatrixData } from "../lib/azureDocumentIntelligence";
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -462,6 +462,49 @@ router.post("/matrix/import-csv", upload.single("file"), async (req, res) => {
     });
   } catch (error: any) {
     console.error("Error importing training matrix CSV:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Import training matrix from PDF
+router.post("/matrix/import-pdf", upload.single("file"), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: "No file uploaded" });
+    }
+    
+    const matrixData = await extractTrainingMatrixData(req.file.buffer);
+    const imported = [];
+    
+    for (const entry of matrixData.entries) {
+      const [newEntry] = await db
+        .insert(trainingMatrix)
+        .values({
+          employeeName: entry.employeeName,
+          jobTitle: entry.jobTitle,
+          department: entry.department,
+          trainingName: entry.trainingName,
+          requiredBy: entry.requiredBy,
+          frequency: entry.frequency,
+          lastCompleted: entry.lastCompleted,
+          nextDue: entry.nextDue,
+          status: entry.status,
+          documentationUrl: req.file.originalname,
+          notes: entry.notes,
+          isLegacy: false
+        })
+        .returning();
+      
+      imported.push(newEntry);
+    }
+    
+    res.status(201).json({ 
+      success: true, 
+      imported: imported.length,
+      entries: imported
+    });
+  } catch (error: any) {
+    console.error("Error importing training matrix PDF:", error);
     res.status(500).json({ error: error.message });
   }
 });

@@ -55,8 +55,10 @@ export default function TrainingManagement() {
   const [isModuleDialogOpen, setIsModuleDialogOpen] = useState(false);
   const [isPdfImportDialogOpen, setIsPdfImportDialogOpen] = useState(false);
   const [isMatrixImportDialogOpen, setIsMatrixImportDialogOpen] = useState(false);
+  const [isMatrixPdfImportDialogOpen, setIsMatrixPdfImportDialogOpen] = useState(false);
   const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [csvFile, setCsvFile] = useState<File | null>(null);
+  const [matrixPdfFile, setMatrixPdfFile] = useState<File | null>(null);
 
   // Fetch training modules
   const { data: modules = [], isLoading: modulesLoading } = useQuery<TrainingModule[]>({
@@ -130,10 +132,41 @@ export default function TrainingManagement() {
     },
   });
 
+  // Import PDF matrix mutation
+  const importMatrixPdfMutation = useMutation({
+    mutationFn: async (formData: FormData) => {
+      const response = await fetch('/api/training/matrix/import-pdf', {
+        method: 'POST',
+        body: formData,
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to import PDF');
+      }
+      return response.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/training/matrix'] });
+      toast({
+        title: "PDF Imported Successfully",
+        description: `Imported ${data.imported} training matrix entries from PDF`,
+      });
+      setIsMatrixPdfImportDialogOpen(false);
+      setMatrixPdfFile(null);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Import Failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   // Delete module mutation
   const deleteModuleMutation = useMutation({
     mutationFn: async (moduleId: number) => {
-      return apiRequest('DELETE', `/api/training/modules/${moduleId}`);
+      return apiRequest(`/api/training/modules/${moduleId}`, { method: 'DELETE' });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/training/modules'] });
@@ -175,6 +208,22 @@ export default function TrainingManagement() {
     formData.append('file', csvFile);
     
     importCsvMutation.mutate(formData);
+  };
+
+  const handleMatrixPdfImport = () => {
+    if (!matrixPdfFile) {
+      toast({
+        title: "No File Selected",
+        description: "Please select a PDF file to import",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('file', matrixPdfFile);
+    
+    importMatrixPdfMutation.mutate(formData);
   };
 
   const getStatusBadge = (status: string | null) => {
@@ -334,13 +383,65 @@ export default function TrainingManagement() {
         <TabsContent value="matrix" className="mt-6">
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-2xl font-semibold">Training Matrix</h2>
-            <Dialog open={isMatrixImportDialogOpen} onOpenChange={setIsMatrixImportDialogOpen}>
-              <DialogTrigger asChild>
-                <Button variant="outline" data-testid="button-import-csv">
-                  <FileUp className="w-4 h-4 mr-2" />
-                  Import CSV
-                </Button>
-              </DialogTrigger>
+            <div className="flex gap-2">
+              <Dialog open={isMatrixPdfImportDialogOpen} onOpenChange={setIsMatrixPdfImportDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="outline" data-testid="button-import-matrix-pdf">
+                    <FileUp className="w-4 h-4 mr-2" />
+                    Import from PDF
+                  </Button>
+                </DialogTrigger>
+                <DialogContent data-testid="dialog-matrix-pdf-import">
+                  <DialogHeader>
+                    <DialogTitle>Import Training Matrix from PDF</DialogTitle>
+                    <DialogDescription>
+                      Upload a PDF document with training requirements tables to automatically extract and import training matrix data
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4">
+                    <div>
+                      <Label htmlFor="matrix-pdf-file">PDF File</Label>
+                      <Input
+                        id="matrix-pdf-file"
+                        type="file"
+                        accept=".pdf"
+                        onChange={(e) => setMatrixPdfFile(e.target.files?.[0] || null)}
+                        data-testid="input-matrix-pdf-file"
+                      />
+                      {matrixPdfFile && (
+                        <p className="text-sm text-muted-foreground mt-2">
+                          Selected: {matrixPdfFile.name}
+                        </p>
+                      )}
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      <p className="font-semibold mb-1">Best results with PDFs containing tables with:</p>
+                      <ul className="list-disc list-inside space-y-1">
+                        <li>Employee names, job titles, departments</li>
+                        <li>Training names and requirements</li>
+                        <li>Frequency and due dates</li>
+                        <li>Status information</li>
+                      </ul>
+                    </div>
+                    <Button 
+                      onClick={handleMatrixPdfImport} 
+                      disabled={importMatrixPdfMutation.isPending}
+                      data-testid="button-upload-matrix-pdf"
+                    >
+                      <Upload className="w-4 h-4 mr-2" />
+                      {importMatrixPdfMutation.isPending ? 'Importing...' : 'Import PDF'}
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+
+              <Dialog open={isMatrixImportDialogOpen} onOpenChange={setIsMatrixImportDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="outline" data-testid="button-import-csv">
+                    <FileText className="w-4 h-4 mr-2" />
+                    Import CSV
+                  </Button>
+                </DialogTrigger>
               <DialogContent data-testid="dialog-csv-import">
                 <DialogHeader>
                   <DialogTitle>Import Training Matrix from CSV</DialogTitle>
@@ -384,6 +485,7 @@ export default function TrainingManagement() {
                 </div>
               </DialogContent>
             </Dialog>
+            </div>
           </div>
 
           {matrixLoading ? (

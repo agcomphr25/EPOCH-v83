@@ -65,10 +65,13 @@ router.get('/google-events', async (req: Request, res: Response) => {
       allDay: !event.start?.dateTime,
       isPublic: event.visibility === 'public',
       eventType: 'meeting',
-      createdBy: 'Google Calendar',
+      createdBy: event.creator?.email || event.organizer?.email || 'Google Calendar',
       source: 'google',
       color: event.colorId ? colorMap[event.colorId] : '#3b82f6', // Default to blue
       colorId: event.colorId || null,
+      organizer: event.organizer?.email || '',
+      creator: event.creator?.email || '',
+      attendees: event.attendees?.map((a: any) => a.email) || [],
     }));
 
     console.log(`📅 Fetched ${formattedEvents.length} Google Calendar events`);
@@ -77,6 +80,17 @@ router.get('/google-events', async (req: Request, res: Response) => {
       acc[colorName] = (acc[colorName] || 0) + 1;
       return acc;
     }, {}));
+    
+    // Log creator information
+    const creatorSummary = formattedEvents.reduce((acc: any, event: any) => {
+      const creator = event.creator || 'Unknown';
+      if (!acc[creator]) acc[creator] = [];
+      acc[creator].push(event.title);
+      return acc;
+    }, {});
+    console.log('📅 Events by creator:', Object.keys(creatorSummary).map(creator => 
+      `${creator}: ${creatorSummary[creator].length} events`
+    ).join(', '));
 
     res.json(formattedEvents);
   } catch (error) {

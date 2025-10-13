@@ -11,7 +11,7 @@ EPOCH v8 is a comprehensive Manufacturing ERP system designed for small manufact
 - **Material-Based Color System**: ALL cards (both Purchase Orders and Production Orders) now use material-based background colors:
   - **CF (Carbon Fiber)**: Light orange background (orange-200)
   - **FG (Fiberglass)**: Dark orange background (orange-600)
-  - **Unknown/Default**: Gray background
+  - **Unknown Material**: RED background (red-100) - indicates orders that need attention/review
   - **Purchase Orders**: Same material colors but with GREEN BORDERS to indicate OEM priority
 - **Updated LayupScheduler Logic**: Removed incorrect association between `source === 'production_order'` and OEM priority
 - **Badge Update**: Changed "OEM" badge to "PO" badge for purchase order items to avoid confusion

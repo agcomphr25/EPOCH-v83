@@ -47,6 +47,8 @@ interface CalendarEventExtended extends Event {
   eventType: string;
   createdBy: string;
   source?: string;
+  color?: string;
+  colorId?: string;
 }
 
 export default function Calendar() {
@@ -130,6 +132,8 @@ export default function Calendar() {
         eventType: event.eventType || 'meeting',
         createdBy: event.createdBy,
         source: 'google',
+        color: event.color,
+        colorId: event.colorId,
         resource: event,
       })) as CalendarEventExtended[];
     },
@@ -352,9 +356,9 @@ export default function Calendar() {
   const eventStyleGetter = (event: CalendarEventExtended) => {
     let backgroundColor = '#3174ad';
     
-    // Google Calendar events get a distinct color
+    // Google Calendar events use their actual Google Calendar color
     if (event.source === 'google') {
-      backgroundColor = '#4285f4';
+      backgroundColor = event.color || '#4285f4'; // Use Google Calendar color or default to blue
     } else {
       switch (event.eventType) {
         case 'meeting':

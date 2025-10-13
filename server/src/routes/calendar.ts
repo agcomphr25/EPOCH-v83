@@ -24,19 +24,36 @@ router.get('/google-events', async (req: Request, res: Response) => {
     const calendar = await getUncachableGoogleCalendarClient();
     
     const now = new Date();
-    const threeMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 3, now.getDate());
-    const threeMonthsFromNow = new Date(now.getFullYear(), now.getMonth() + 3, now.getDate());
+    const oneYearAgo = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
+    const oneYearFromNow = new Date(now.getFullYear() + 1, now.getMonth(), now.getDate());
+    
+    console.log('📅 Fetching Google Calendar events from', oneYearAgo.toISOString(), 'to', oneYearFromNow.toISOString());
     
     const response = await calendar.events.list({
       calendarId: 'primary',
-      timeMin: threeMonthsAgo.toISOString(),
-      timeMax: threeMonthsFromNow.toISOString(),
+      timeMin: oneYearAgo.toISOString(),
+      timeMax: oneYearFromNow.toISOString(),
       singleEvents: true,
       orderBy: 'startTime',
-      maxResults: 250,
+      maxResults: 2500, // Increased limit to get more events
     });
 
     const events = response.data.items || [];
+    
+    // Google Calendar color mapping
+    const colorMap: { [key: string]: string } = {
+      '1': '#a4bdfc', // Lavender
+      '2': '#7ae7bf', // Sage
+      '3': '#dbadff', // Grape
+      '4': '#ff887c', // Flamingo
+      '5': '#fbd75b', // Banana
+      '6': '#ffb878', // Tangerine
+      '7': '#46d6db', // Peacock
+      '8': '#e1e1e1', // Graphite
+      '9': '#5484ed', // Blueberry
+      '10': '#51b749', // Basil
+      '11': '#dc2127', // Tomato
+    };
     
     const formattedEvents = events.map((event: any) => ({
       id: event.id,
@@ -50,7 +67,16 @@ router.get('/google-events', async (req: Request, res: Response) => {
       eventType: 'meeting',
       createdBy: 'Google Calendar',
       source: 'google',
+      color: event.colorId ? colorMap[event.colorId] : '#3b82f6', // Default to blue
+      colorId: event.colorId || null,
     }));
+
+    console.log(`📅 Fetched ${formattedEvents.length} Google Calendar events`);
+    console.log('📅 Event color summary:', formattedEvents.reduce((acc: any, event: any) => {
+      const colorName = event.colorId ? `Color ${event.colorId}` : 'Default Blue';
+      acc[colorName] = (acc[colorName] || 0) + 1;
+      return acc;
+    }, {}));
 
     res.json(formattedEvents);
   } catch (error) {

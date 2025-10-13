@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Check, ChevronsUpDown, MapPin } from 'lucide-react';
@@ -128,6 +129,25 @@ export default function AddressInput({ label, value, onChange, required = false 
     });
   };
 
+  const handleZipCodeChange = (newValue: string) => {
+    // If not international, only allow numbers and hyphens (US format)
+    if (!value.international) {
+      const sanitized = newValue.replace(/[^0-9-]/g, '');
+      handleManualAddressChange('zipCode', sanitized);
+    } else {
+      // International: allow alphanumeric and common postal code characters
+      const sanitized = newValue.replace(/[^A-Za-z0-9\s-]/g, '');
+      handleManualAddressChange('zipCode', sanitized);
+    }
+  };
+
+  const handleInternationalChange = (checked: boolean) => {
+    onChange({
+      ...value,
+      international: checked,
+    });
+  };
+
   return (
     <div className="space-y-4">
       <div>
@@ -228,10 +248,25 @@ export default function AddressInput({ label, value, onChange, required = false 
           <Label htmlFor="zipCode">ZIP Code</Label>
           <Input
             id="zipCode"
+            data-testid="input-zipcode"
             value={value.zipCode}
-            onChange={(e) => handleManualAddressChange('zipCode', e.target.value)}
-            placeholder="10001"
+            onChange={(e) => handleZipCodeChange(e.target.value)}
+            placeholder={value.international ? "ABC 123" : "10001"}
           />
+          <div className="flex items-center space-x-2 mt-2">
+            <Checkbox
+              id="international"
+              data-testid="checkbox-international"
+              checked={value.international || false}
+              onCheckedChange={handleInternationalChange}
+            />
+            <Label
+              htmlFor="international"
+              className="text-sm font-normal cursor-pointer"
+            >
+              International
+            </Label>
+          </div>
         </div>
       </div>
       

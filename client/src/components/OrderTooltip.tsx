@@ -12,6 +12,8 @@ interface OrderTooltipProps {
   children?: React.ReactNode;
   gunsimthTasks?: string[];
   showPaintAndTexture?: boolean;
+  disableHoverPopup?: boolean;
+  showTechnician?: boolean;
 }
 
 // Format order features for display
@@ -119,7 +121,7 @@ const formatOrderDetails = (order: any, stockModels: any[]) => {
   return details.join('\n');
 };
 
-export function OrderTooltip({ order, stockModels, showHoverText = true, className = "", children, gunsimthTasks, showPaintAndTexture = false }: OrderTooltipProps) {
+export function OrderTooltip({ order, stockModels, showHoverText = true, className = "", children, gunsimthTasks, showPaintAndTexture = false, disableHoverPopup = false, showTechnician = false }: OrderTooltipProps) {
   const modelId = order.stockModelId || order.modelId;
   const materialType = modelId?.startsWith('cf_') ? 'CF' : 
                       modelId?.startsWith('fg_') ? 'FG' : null;
@@ -133,7 +135,7 @@ export function OrderTooltip({ order, stockModels, showHoverText = true, classNa
   const orderDetails = formatOrderDetails(order, stockModels);
 
   return (
-    <div className={`relative group`}>
+    <div className={`relative ${disableHoverPopup ? '' : 'group'}`}>
       <Card className={`border-l-4 ${className.includes('border-l-') ? className : `border-l-blue-500 ${className}`} hover:shadow-lg transition-shadow duration-200 cursor-pointer`}>
         <CardHeader className="pb-2">
           <div className="flex justify-between items-start">
@@ -192,6 +194,15 @@ export function OrderTooltip({ order, stockModels, showHoverText = true, classNa
               </div>
             )}
 
+            {showTechnician && order.assignedTechnician && (
+              <div className="flex items-center gap-2 mt-1">
+                <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">Technician:</span>
+                <Badge variant="secondary" className="text-xs bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700">
+                  {order.assignedTechnician}
+                </Badge>
+              </div>
+            )}
+
             {gunsimthTasks && gunsimthTasks.length > 0 && (
               <div className="mt-2">
                 <div className="flex flex-wrap gap-1">
@@ -235,16 +246,18 @@ export function OrderTooltip({ order, stockModels, showHoverText = true, classNa
       </Card>
       
       {/* CSS-based tooltip */}
-      <div className="absolute left-full ml-4 top-0 z-50 w-80 p-4 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 pointer-events-none">
-        <div className="space-y-2">
-          <div className="font-semibold text-blue-600 dark:text-blue-400 border-b border-gray-200 dark:border-gray-600 pb-2 mb-3">
-            Order Details
-          </div>
-          <div className="text-sm whitespace-pre-line text-gray-700 dark:text-gray-300 font-mono leading-relaxed">
-            {orderDetails}
+      {!disableHoverPopup && (
+        <div className="absolute left-full ml-4 top-0 z-50 w-80 p-4 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 pointer-events-none">
+          <div className="space-y-2">
+            <div className="font-semibold text-blue-600 dark:text-blue-400 border-b border-gray-200 dark:border-gray-600 pb-2 mb-3">
+              Order Details
+            </div>
+            <div className="text-sm whitespace-pre-line text-gray-700 dark:text-gray-300 font-mono leading-relaxed">
+              {orderDetails}
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

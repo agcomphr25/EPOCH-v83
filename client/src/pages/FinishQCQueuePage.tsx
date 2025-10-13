@@ -73,10 +73,13 @@ export default function FinishQCQueuePage() {
   });
 
   // Auto-select order when scanned
-  const handleOrderScanned = (orderId: string) => {
+  const handleOrderScanned = React.useCallback((orderId: string) => {
+    // Prevent navigation
+    window.history.pushState(null, '', window.location.href);
+    
     const orderExists = finishQCOrders.some((order: any) => order.orderId === orderId);
     if (orderExists) {
-      setSelectedOrders(prev => new Set([...Array.from(prev), orderId]));
+      setSelectedOrders(new Set([orderId]));
       setHighlightedOrderId(orderId);
       setTimeout(() => {
         const element = document.getElementById(`order-${orderId}`);
@@ -84,11 +87,11 @@ export default function FinishQCQueuePage() {
           element.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
       }, 100);
-      toast.success(`Order ${orderId} selected automatically`);
+      toast.success(`Order ${orderId} selected`);
     } else {
       toast.error(`Order ${orderId} is not in the Finish QC department`);
     }
-  };
+  }, [finishQCOrders]);
 
   // Handle order search selection - select and highlight
   const handleOrderSearchSelect = (order: any) => {
@@ -187,8 +190,10 @@ export default function FinishQCQueuePage() {
         <h1 className="text-3xl font-bold">Finish QC Department Manager</h1>
       </div>
 
-      {/* Barcode Scanner at top */}
-      <BarcodeScanner onOrderScanned={handleOrderScanned} />
+      {/* Barcode Scanner at top - With navigation prevention */}
+      <div className="mb-4" onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}>
+        <BarcodeScanner onOrderScanned={handleOrderScanned} />
+      </div>
 
       {/* Search Box */}
       <Card>

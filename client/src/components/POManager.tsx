@@ -414,19 +414,27 @@ export default function POManager() {
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
-    console.log('Form submitted with formData:', formData);
+    console.log('🟢 Form submitted with formData:', formData);
 
     // Validate required fields
     if (!formData.poNumber || !formData.customerId || !formData.customerName || !formData.poDate || !formData.expectedDelivery) {
-      console.log('Validation failed - missing fields:', {
+      const missingFields = {
         poNumber: !formData.poNumber,
         customerId: !formData.customerId,
         customerName: !formData.customerName,
 
         poDate: !formData.poDate,
         expectedDelivery: !formData.expectedDelivery
-      });
-      toast.error('Please fill in all required fields');
+      };
+      console.log('❌ Validation failed - missing fields:', missingFields);
+      
+      // More specific error message
+      const missing = Object.entries(missingFields)
+        .filter(([_, isMissing]) => isMissing)
+        .map(([field]) => field)
+        .join(', ');
+      
+      toast.error(`Please fill in all required fields: ${missing}`);
       return;
     }
 
@@ -590,7 +598,9 @@ export default function POManager() {
           <div className="flex justify-between items-center">
             <h2 className="text-2xl font-bold">Purchase Order Management</h2>
             <Dialog open={isDialogOpen} onOpenChange={(open) => {
+              console.log('🔵 Dialog onOpenChange called, open:', open);
               if (open) {
+                console.log('🔵 Dialog opening, resetting form...');
                 setEditingPO(null);
                 setFormData({
                   poNumber: '',
@@ -604,9 +614,10 @@ export default function POManager() {
                 });
               }
               setIsDialogOpen(open);
+              console.log('🔵 Dialog state set to:', open);
             }}>
               <DialogTrigger asChild>
-                <Button>
+                <Button data-testid="button-add-purchase-order">
                   <Plus className="w-4 h-4 mr-2" />
                   Add Purchase Order
                 </Button>
@@ -770,10 +781,10 @@ export default function POManager() {
                   </div>
 
                   <div className="flex justify-end space-x-2">
-                    <Button type="button" variant="outline" onClick={handleDialogClose}>
+                    <Button type="button" variant="outline" onClick={handleDialogClose} data-testid="button-cancel-po">
                       Cancel
                     </Button>
-                    <Button type="submit" disabled={createMutation.isPending || updateMutation.isPending}>
+                    <Button type="submit" disabled={createMutation.isPending || updateMutation.isPending} data-testid="button-submit-po">
                       {editingPO ? 'Update' : 'Create'} PO
                     </Button>
                   </div>

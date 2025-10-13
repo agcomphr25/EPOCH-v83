@@ -80,7 +80,6 @@ export default function CustomerSatisfactionSurvey({
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
   const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(customerId || existingResponse?.customerId || null);
   const [orderNumber, setOrderNumber] = useState<string>(existingResponse?.orderId || '');
-  const [orderDate, setOrderDate] = useState<string>('');
   const [csrName, setCsrName] = useState<string>(existingResponse?.csrName || '');
 
   // Fetch active surveys
@@ -198,6 +197,11 @@ export default function CustomerSatisfactionSurvey({
     const productQuality = responses['product-quality'] || null;
     const recommendationLikelihood = responses['recommendation-likelihood'] || null;
 
+    // Calculate aggregate score (sum of all numeric responses)
+    const aggregateScore = Object.values(responses).reduce((sum: number, value: any) => {
+      return typeof value === 'number' ? sum + value : sum;
+    }, 0);
+
     const responseData = {
       surveyId: selectedSurvey.id,
       customerId: selectedCustomerId,
@@ -205,6 +209,7 @@ export default function CustomerSatisfactionSurvey({
       responses,
       overallSatisfaction: productQuality, // Use product quality as overall satisfaction
       npsScore: recommendationLikelihood, // Use recommendation as NPS equivalent
+      aggregateScore, // Sum of all question responses
       responseTimeSeconds: Math.floor((new Date().getTime() - startTime.getTime()) / 1000),
       csrName: csrName || null, // Customer Service Representative name
       isComplete: true,
@@ -442,7 +447,7 @@ export default function CustomerSatisfactionSurvey({
           </div>
 
           {/* Order Details */}
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="orderNumber">Order #</Label>
               <Input
@@ -450,16 +455,6 @@ export default function CustomerSatisfactionSurvey({
                 value={orderNumber}
                 onChange={(e) => setOrderNumber(e.target.value)}
                 placeholder="Enter order number"
-                className="w-full"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="orderDate">Date</Label>
-              <Input
-                id="orderDate"
-                type="date"
-                value={orderDate}
-                onChange={(e) => setOrderDate(e.target.value)}
                 className="w-full"
               />
             </div>

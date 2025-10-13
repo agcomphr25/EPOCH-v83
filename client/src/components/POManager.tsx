@@ -237,6 +237,7 @@ export default function POManager() {
     phone: '',
     company: '',
     customerType: 'Individual' as string,
+    preferredCommunicationMethod: 'email' as string,
     address: {
       street: '',
       city: '',
@@ -349,6 +350,7 @@ export default function POManager() {
         phone: '',
         company: '',
         customerType: 'Individual',
+        preferredCommunicationMethod: 'email',
         address: {
           street: '',
           city: '',
@@ -523,6 +525,7 @@ export default function POManager() {
       phone: '',
       company: '',
       customerType: 'Individual',
+      preferredCommunicationMethod: 'email',
       address: {
         street: '',
         city: '',
@@ -996,19 +999,38 @@ export default function POManager() {
               </div>
             </div>
 
-            <div>
-              <Label htmlFor="customerType">Customer Type</Label>
-              <Select value={newCustomerData.customerType} onValueChange={(value) => setNewCustomerData({...newCustomerData, customerType: value})}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Individual">Individual</SelectItem>
-                  <SelectItem value="Business">Business</SelectItem>
-                  <SelectItem value="Government">Government</SelectItem>
-                  <SelectItem value="Military">Military</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="customerType">Customer Type</Label>
+                <Select value={newCustomerData.customerType} onValueChange={(value) => setNewCustomerData({...newCustomerData, customerType: value})}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Individual">Individual</SelectItem>
+                    <SelectItem value="Business">Business</SelectItem>
+                    <SelectItem value="Government">Government</SelectItem>
+                    <SelectItem value="Military">Military</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label htmlFor="preferredCommunicationMethod">Preferred Contact Method</Label>
+                <Select 
+                  value={newCustomerData.preferredCommunicationMethod} 
+                  onValueChange={(value) => setNewCustomerData({...newCustomerData, preferredCommunicationMethod: value})}
+                >
+                  <SelectTrigger data-testid="select-preferred-communication">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="email">Email</SelectItem>
+                    <SelectItem value="sms">SMS</SelectItem>
+                    <SelectItem value="both">Both (Email & SMS)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
             <AddressInput

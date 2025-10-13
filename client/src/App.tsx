@@ -51,7 +51,6 @@ import BarcodeScannerPage from "./pages/BarcodeScannerPage";
 import LayupSchedulerPage from "./pages/LayupSchedulerPage";
 import P2LayupSchedulerPage from './pages/P2LayupSchedulerPage';
 import AllOrdersPage from "./pages/AllOrdersPage";
-import CancelledOrdersPage from "./pages/CancelledOrdersPage";
 import AGTestDashboard from "./pages/AGTestDashboard";
 import ADMINTestDashboard from "./pages/GLENNTestDashboard";
 import JOHNLTestDashboard from "./pages/JOHNLTestDashboard";
@@ -197,7 +196,6 @@ function App() {
                   <Route path="/orders-list" component={OrdersList} />
                   <Route path="/orders-simple" component={OrdersListSimple} />
                   <Route path="/all-orders" component={AllOrdersPage} />
-                  <Route path="/cancelled-orders" component={CancelledOrdersPage} />
                   <Route path="/discounts" component={DiscountManagement} />
                   <Route path="/feature-manager" component={FeatureManager} />
                   <Route path="/stock-models" component={StockModels} />

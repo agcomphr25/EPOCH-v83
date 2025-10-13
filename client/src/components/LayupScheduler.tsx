@@ -164,10 +164,10 @@ const DraggableOrderItem = React.memo(({ order, priority, totalOrdersInCell, mol
         text: 'text-white dark:text-orange-100'
       };
     } else {
-      // Unknown/default material with green border for POs
+      // Unknown material - RED for attention/needs review with green border for POs
       return {
-        bg: `bg-gray-100 dark:bg-gray-800/50 hover:bg-gray-200 dark:hover:bg-gray-800/70 border-2 ${isPurchaseOrder ? 'border-green-500 dark:border-green-400' : 'border-gray-300 dark:border-gray-600'}`,
-        text: 'text-gray-800 dark:text-gray-200'
+        bg: `bg-red-100 dark:bg-red-900/50 hover:bg-red-200 dark:hover:bg-red-900/70 border-2 ${isPurchaseOrder ? 'border-green-500 dark:border-green-400' : 'border-red-400 dark:border-red-600'}`,
+        text: 'text-red-800 dark:text-red-200'
       };
     }
   };

@@ -54,6 +54,7 @@ The application adopts a monorepo structure utilizing a full-stack TypeScript ap
     - **Training System**: Certification and quiz system with PDF viewer and automatic certificate generation.
     - **AI-Powered Smart Sorting**: Intelligent dropdown sorting for Action Inlet options based on user behavior (selection frequency).
     - **Calendar Integration**: Displays Google Calendar events via OAuth.
+    - **Azure Document Intelligence**: AI-powered document analysis for extracting data from invoices, receipts, and other documents using Azure's prebuilt models. Supports multiple document types with automatic field extraction and table detection.
 
 ## External Dependencies
 
@@ -80,3 +81,4 @@ The application adopts a monorepo structure utilizing a full-stack TypeScript ap
 - SendGrid (Email)
 - Twilio (SMS)
 - Google Calendar (Event Integration)
+- Azure Document Intelligence (AI-powered document analysis)

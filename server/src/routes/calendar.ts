@@ -192,6 +192,11 @@ router.get('/google-events', async (req: Request, res: Response) => {
   }
 });
 
+/* 
+  NOTE: Local calendar event storage endpoints disabled - not implemented in storage layer
+  The calendar feature uses Google Calendar integration exclusively (see /google-events endpoint above)
+  Keeping code commented for potential future implementation
+
 // GET /api/calendar/events/:id - Get specific event
 router.get('/events/:id', async (req: Request, res: Response) => {
   try {
@@ -323,6 +328,7 @@ router.delete('/events/:id/attendees/:userId', async (req: Request, res: Respons
     res.status(500).json({ error: 'Failed to remove event attendee' });
   }
 });
+*/
 
 // Generate blank calendar PDF (shared function)
 const generateBlankPDF = async (req: Request, res: Response) => {

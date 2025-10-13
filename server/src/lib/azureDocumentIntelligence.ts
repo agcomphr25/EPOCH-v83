@@ -305,75 +305,141 @@ export async function extractTrainingMatrixData(fileBuffer: Buffer): Promise<Tra
     const headerCells = table.cells.filter(cell => cell.rowIndex === 0);
     const headers = headerCells.map(cell => cell.content.toLowerCase().trim());
     
-    // Map column indices
-    const colMap: Record<string, number> = {};
-    headers.forEach((header, idx) => {
-      if (header.includes('employee') || header.includes('name')) colMap.employeeName = idx;
-      if (header.includes('job') || header.includes('title') || header.includes('position')) colMap.jobTitle = idx;
-      if (header.includes('department') || header.includes('dept')) colMap.department = idx;
-      if (header.includes('training') || header.includes('course')) colMap.trainingName = idx;
-      if (header.includes('required') || header.includes('requirement')) colMap.requiredBy = idx;
-      if (header.includes('frequency') || header.includes('recurring')) colMap.frequency = idx;
-      if (header.includes('last') || header.includes('completed')) colMap.lastCompleted = idx;
-      if (header.includes('next') || header.includes('due')) colMap.nextDue = idx;
-      if (header.includes('status')) colMap.status = idx;
-      if (header.includes('note')) colMap.notes = idx;
-    });
+    // Check if this is a matrix-style table (employees as columns, trainings as rows)
+    const isMatrixStyle = headers.length > 3 && 
+      !headers.some(h => h.includes('training') && h.includes('name'));
     
-    // Extract data rows
-    const maxRow = Math.max(...table.cells.map(c => c.rowIndex));
-    for (let rowIdx = 1; rowIdx <= maxRow; rowIdx++) {
-      const rowCells = table.cells.filter(cell => cell.rowIndex === rowIdx);
+    if (isMatrixStyle) {
+      // Matrix-style: First column is training names, other columns are employees
+      const employeeNames = headerCells.slice(1).map(cell => cell.content.trim()).filter(n => n);
+      const maxRow = Math.max(...table.cells.map(c => c.rowIndex));
       
-      const entry: any = {
-        employeeName: null,
-        jobTitle: null,
-        department: null,
-        trainingName: 'Unknown Training',
-        requiredBy: null,
-        frequency: null,
-        lastCompleted: null,
-        nextDue: null,
-        status: 'PENDING',
-        notes: null
-      };
-      
-      rowCells.forEach(cell => {
-        const colIdx = cell.columnIndex;
-        const value = cell.content.trim();
+      for (let rowIdx = 1; rowIdx <= maxRow; rowIdx++) {
+        const rowCells = table.cells.filter(cell => cell.rowIndex === rowIdx);
         
-        if (colMap.employeeName === colIdx && value) entry.employeeName = value;
-        if (colMap.jobTitle === colIdx && value) entry.jobTitle = value;
-        if (colMap.department === colIdx && value) entry.department = value;
-        if (colMap.trainingName === colIdx && value) entry.trainingName = value;
-        if (colMap.requiredBy === colIdx && value) entry.requiredBy = value;
-        if (colMap.frequency === colIdx && value) entry.frequency = value;
-        if (colMap.lastCompleted === colIdx && value) {
-          try {
-            entry.lastCompleted = new Date(value);
-          } catch (e) {
-            entry.lastCompleted = null;
-          }
+        // First cell in each row is the training name
+        const trainingCell = rowCells.find(cell => cell.columnIndex === 0);
+        const trainingName = trainingCell?.content.trim() || 'Unknown Training';
+        
+        // Skip if training name is empty or looks like a header
+        if (!trainingName || trainingName.toLowerCase().includes('employee')) {
+          continue;
         }
-        if (colMap.nextDue === colIdx && value) {
-          try {
-            entry.nextDue = new Date(value);
-          } catch (e) {
-            entry.nextDue = null;
+        
+        // Process each employee column
+        employeeNames.forEach((employeeName, idx) => {
+          const colIdx = idx + 1; // +1 because first column is training name
+          const cell = rowCells.find(c => c.columnIndex === colIdx);
+          const cellValue = cell?.content.trim() || '';
+          
+          // Only create entry if there's a date or status indicator
+          if (cellValue && cellValue !== ':unselected:' && cellValue !== '-') {
+            let lastCompleted: Date | null = null;
+            let status: 'PENDING' | 'COMPLETED' | 'OVERDUE' | 'NOT_REQUIRED' = 'PENDING';
+            
+            // Try to parse date
+            const dateMatch = cellValue.match(/(\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4})/);
+            if (dateMatch) {
+              try {
+                lastCompleted = new Date(dateMatch[1]);
+                status = 'COMPLETED';
+              } catch (e) {
+                // Date parsing failed
+              }
+            } else if (cellValue.toLowerCase().includes('complete')) {
+              status = 'COMPLETED';
+            } else if (cellValue.toLowerCase().includes('pending')) {
+              status = 'PENDING';
+            } else if (cellValue.toLowerCase().includes('overdue')) {
+              status = 'OVERDUE';
+            }
+            
+            entries.push({
+              employeeName,
+              jobTitle: null,
+              department: null,
+              trainingName,
+              requiredBy: null,
+              frequency: null,
+              lastCompleted,
+              nextDue: null,
+              status,
+              notes: cellValue !== lastCompleted?.toLocaleDateString() ? cellValue : null
+            });
           }
-        }
-        if (colMap.status === colIdx && value) {
-          const statusUpper = value.toUpperCase();
-          if (['PENDING', 'COMPLETED', 'OVERDUE', 'NOT_REQUIRED'].includes(statusUpper)) {
-            entry.status = statusUpper as any;
-          }
-        }
-        if (colMap.notes === colIdx && value) entry.notes = value;
+        });
+      }
+    } else {
+      // Traditional table format: columns for each field
+      const colMap: Record<string, number> = {};
+      headers.forEach((header, idx) => {
+        if (header.includes('employee') || header.includes('name')) colMap.employeeName = idx;
+        if (header.includes('job') || header.includes('title') || header.includes('position')) colMap.jobTitle = idx;
+        if (header.includes('department') || header.includes('dept')) colMap.department = idx;
+        if (header.includes('training') || header.includes('course')) colMap.trainingName = idx;
+        if (header.includes('required') || header.includes('requirement')) colMap.requiredBy = idx;
+        if (header.includes('frequency') || header.includes('recurring')) colMap.frequency = idx;
+        if (header.includes('last') || header.includes('completed')) colMap.lastCompleted = idx;
+        if (header.includes('next') || header.includes('due')) colMap.nextDue = idx;
+        if (header.includes('status')) colMap.status = idx;
+        if (header.includes('note')) colMap.notes = idx;
       });
       
-      // Only add if we have at least a training name
-      if (entry.trainingName && entry.trainingName !== 'Unknown Training') {
-        entries.push(entry);
+      // Extract data rows
+      const maxRow = Math.max(...table.cells.map(c => c.rowIndex));
+      for (let rowIdx = 1; rowIdx <= maxRow; rowIdx++) {
+        const rowCells = table.cells.filter(cell => cell.rowIndex === rowIdx);
+        
+        const entry: any = {
+          employeeName: null,
+          jobTitle: null,
+          department: null,
+          trainingName: 'Unknown Training',
+          requiredBy: null,
+          frequency: null,
+          lastCompleted: null,
+          nextDue: null,
+          status: 'PENDING',
+          notes: null
+        };
+        
+        rowCells.forEach(cell => {
+          const colIdx = cell.columnIndex;
+          const value = cell.content.trim();
+          
+          if (colMap.employeeName === colIdx && value) entry.employeeName = value;
+          if (colMap.jobTitle === colIdx && value) entry.jobTitle = value;
+          if (colMap.department === colIdx && value) entry.department = value;
+          if (colMap.trainingName === colIdx && value) entry.trainingName = value;
+          if (colMap.requiredBy === colIdx && value) entry.requiredBy = value;
+          if (colMap.frequency === colIdx && value) entry.frequency = value;
+          if (colMap.lastCompleted === colIdx && value) {
+            try {
+              entry.lastCompleted = new Date(value);
+            } catch (e) {
+              entry.lastCompleted = null;
+            }
+          }
+          if (colMap.nextDue === colIdx && value) {
+            try {
+              entry.nextDue = new Date(value);
+            } catch (e) {
+              entry.nextDue = null;
+            }
+          }
+          if (colMap.status === colIdx && value) {
+            const statusUpper = value.toUpperCase();
+            if (['PENDING', 'COMPLETED', 'OVERDUE', 'NOT_REQUIRED'].includes(statusUpper)) {
+              entry.status = statusUpper as any;
+            }
+          }
+          if (colMap.notes === colIdx && value) entry.notes = value;
+        });
+        
+        // Only add if we have at least a training name
+        if (entry.trainingName && entry.trainingName !== 'Unknown Training') {
+          entries.push(entry);
+        }
       }
     }
   } else {

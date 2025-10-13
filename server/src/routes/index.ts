@@ -2229,9 +2229,18 @@ export function registerRoutes(app: Express): Server {
       const newPurchaseOrder = await storage.createPurchaseOrder(purchaseOrderData);
       console.log('🔧 Created purchase order:', newPurchaseOrder.id);
       res.status(201).json(newPurchaseOrder);
-    } catch (error) {
+    } catch (error: any) {
       console.error('🔧 Create purchase order error:', error);
-      res.status(500).json({ error: "Failed to create purchase order" });
+      
+      // Check for duplicate PO number error
+      if (error.code === '23505' && error.constraint === 'purchase_orders_po_number_key') {
+        return res.status(400).json({ 
+          error: `PO Number "${req.body.poNumber}" already exists. Please use a different PO number.` 
+        });
+      }
+      
+      // Generic error for other cases
+      res.status(500).json({ error: error.message || "Failed to create purchase order" });
     }
   });
 

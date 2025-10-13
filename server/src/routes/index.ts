@@ -3226,7 +3226,7 @@ export function registerRoutes(app: Express): Server {
           
           // Add stock model, action length, and paint option on same line below barcode
           const labelLine = paintDisplayName 
-            ? `${modelDisplayName} - ${actionLength.toUpperCase()} - ${paintDisplayName}`
+            ? `${modelDisplayName} - ${actionLength.toUpperCase()} - PAINT: ${paintDisplayName}`
             : `${modelDisplayName} - ${actionLength.toUpperCase()}`;
           
           page.drawText(labelLine, {

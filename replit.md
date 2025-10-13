@@ -5,11 +5,11 @@ EPOCH v8 is a comprehensive Manufacturing ERP system designed for small manufact
 
 ## Recent Changes
 **October 13, 2025 - Barcode Label Information Update**
-- **Enhanced Barcode Labels**: Updated PDF label generation to include complete order information:
-  - Paint option now displayed on label (e.g., "Chalkbranch - SA - TERRAINE")
+- **Enhanced Barcode Labels**: Updated PDF label generation to include complete order information with clear labeling:
+  - Paint option clearly labeled (e.g., "Chalkbranch - SA - PAINT: TERRAINE")
   - Swivel studs changes shown in orange (e.g., "SWIVEL: QD FLUSH CUP")
   - Texture options shown in purple (e.g., "TEXTURE: CHECKERED")
-  - All special features properly color-coded for quick identification
+  - All special features properly color-coded and labeled for quick identification
   
 **October 13, 2025 - OEM Priority Clarification & Material-Based Colors**
 - **Clarified OEM Priority Settings**: OEM priority settings are ONLY for Purchase Orders (items with `poId` or `productionOrderId`), NOT for regular production orders. This prevents confusion between:

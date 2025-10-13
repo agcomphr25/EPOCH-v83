@@ -4,29 +4,6 @@
 EPOCH v8 is a comprehensive Manufacturing ERP system designed for small manufacturing companies specializing in customizable products.
 
 ## Recent Changes
-**October 13, 2025 - Schema Cleanup & Deployment Preparation**
-- **Removed Unused `cancelled_orders` Table**: Eliminated unused feature from codebase
-  - Removed table definition from schema.ts (both root and server versions)
-  - Removed `/cancelled` API route from server/src/routes/orders.ts
-  - Removed CancelledOrdersPage component and route from client
-  - **Reason**: Unused feature that was causing deployment schema conflicts
-- **Schema Synchronization**: Development database now aligned with schema.ts
-  - `customer_communications` table exists and matches schema
-  - `customer_satisfaction_surveys` and `customer_satisfaction_responses` tables properly configured
-  - No conflicting table definitions blocking deployment
-- **Deployment Status**: ✅ Ready to deploy (publish)
-  - Server running successfully on port 5000
-  - All schema conflicts resolved
-  - Database schema matches code definitions
-
-**October 13, 2025 - Database Migration Fix & GitHub Integration Complete**
-- **Critical Database Issue Resolved**: Fixed invalid `serial` type conversion error in customer satisfaction tables
-  - **Root Cause**: Drizzle attempted to ALTER existing `integer` columns to `serial` type (invalid PostgreSQL operation)
-  - **Solution**: Dropped and recreated `customer_satisfaction_surveys` and `customer_satisfaction_responses` tables with correct schema
-  - **Result**: Clean database schema matching schema.ts definitions
-  - **Key Learning**: `serial` is a PostgreSQL pseudo-type only valid during CREATE TABLE, not ALTER TABLE
-- **Missing Package Fixed**: Installed `googleapis` package for Google Calendar integration
-
 **October 13, 2025 - Complete GitHub Integration Verified & Calendar TypeScript Fixes**
 - **New Features from GitHub Pull**:
   1. **Manual Tracking Entry Component** - Added ability to manually enter tracking numbers for external carriers (UPS, USPS, FedEx, DHL, Other) with notification options

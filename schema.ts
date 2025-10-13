@@ -164,7 +164,6 @@ export const orders = pgTable('orders', {
   updatedAt: timestamp('updated_at').defaultNow(),
 });
 
-<<<<<<< HEAD
 export const csvData = pgTable('csv_data', {
   id: serial('id').primaryKey(),
   fileName: text('file_name').notNull(),
@@ -177,13 +176,6 @@ export const customerTypes = pgTable('customer_types', {
   name: text('name').notNull().unique(),
   description: text('description'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
-=======
-export const csvData = pgTable("csv_data", {
-  id: serial("id").primaryKey(),
-  fileName: text("file_name").notNull(),
-  data: jsonb("data").notNull(),
-  uploadedAt: timestamp("uploaded_at").defaultNow().notNull(),
->>>>>>> 5f4f56b9 (Remove unused cancelled orders feature and related code)
 });
 
 export const persistentDiscounts = pgTable('persistent_discounts', {
@@ -805,7 +797,6 @@ export const insertShortTermSaleSchema = z.object({
   isActive: z.number().default(1),
 });
 
-<<<<<<< HEAD
 export const insertFeatureCategorySchema = createInsertSchema(featureCategories)
   .omit({
     createdAt: true,
@@ -835,18 +826,6 @@ export const insertFeatureSubCategorySchema = createInsertSchema(
     sortOrder: z.number().min(0).default(0),
     isActive: z.boolean().default(true),
   });
-=======
-export const insertFeatureCategorySchema = createInsertSchema(featureCategories).omit({
-  createdAt: true,
-  updatedAt: true,
-}).extend({
-  id: z.string().optional(), // Allow client to provide ID or we'll generate one
-  name: z.string().min(1, "Name is required"),
-  displayName: z.string().min(1, "Display name is required"),
-  sortOrder: z.number().min(0).default(0),
-  isActive: z.boolean().default(true),
-});
->>>>>>> 5f4f56b9 (Remove unused cancelled orders feature and related code)
 
 export const insertFeatureSchema = createInsertSchema(features)
   .omit({

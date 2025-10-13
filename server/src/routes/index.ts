@@ -3217,16 +3217,25 @@ export function registerRoutes(app: Express): Server {
             color: rgb(0, 0, 0),
           });
           
-          // Add stock model and action length on same line below barcode
-          page.drawText(`${modelDisplayName} - ${actionLength.toUpperCase()}`, {
+          // Check for special features to add to label
+          const features = (order as any).features || {};
+          
+          // Get paint option for display
+          const paintOption = features.paint_options || '';
+          const paintDisplayName = paintOption ? paintOption.replace(/_/g, ' ').toUpperCase() : '';
+          
+          // Add stock model, action length, and paint option on same line below barcode
+          const labelLine = paintDisplayName 
+            ? `${modelDisplayName} - ${actionLength.toUpperCase()} - ${paintDisplayName}`
+            : `${modelDisplayName} - ${actionLength.toUpperCase()}`;
+          
+          page.drawText(labelLine, {
             x: x + 8,
             y: y + 22,
-            size: 7,
+            size: 6.5,  // Slightly smaller to fit more text
             color: rgb(0, 0, 0),
           });
           
-          // Check for special features to add to label
-          const features = (order as any).features || {};
           const specialLabels = [];
           
           // Extract swivel studs and texture options for color-coded display
@@ -3268,7 +3277,6 @@ export function registerRoutes(app: Express): Server {
           
           
           // Determine barcode color based on specifications
-          const paintOption = features.paint_options || '';
           const modelId = (order as any).modelId || '';
           
           // Check if this order is high priority or late (you can add this logic later)

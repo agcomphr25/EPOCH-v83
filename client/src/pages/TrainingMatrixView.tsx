@@ -77,7 +77,8 @@ export default function TrainingMatrixView() {
     }
   };
 
-  const completedCount = (employee: string) => {
+  const completedCount = (employee: string | null) => {
+    if (!employee) return 0;
     return trainings.filter(training => {
       const entry = getEntry(employee, training);
       return entry?.status === 'COMPLETED';

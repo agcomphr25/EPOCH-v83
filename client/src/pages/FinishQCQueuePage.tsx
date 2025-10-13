@@ -135,31 +135,54 @@ export default function FinishQCQueuePage() {
     setSearchQuery(query);
     
     if (query.trim()) {
-      // Check for exact match
-      setTimeout(() => {
-        const exactMatch = finishQCOrders.find((order: any) => 
-          order.orderId?.toLowerCase() === query.toLowerCase().trim() ||
-          order.fbOrderNumber?.toLowerCase() === query.toLowerCase().trim() ||
-          getDisplayOrderId(order.orderId)?.toLowerCase() === query.toLowerCase().trim()
-        );
+      const searchTerm = query.toLowerCase().trim();
+      
+      // Check for exact match immediately
+      const exactMatch = finishQCOrders.find((order: any) => 
+        order.orderId?.toLowerCase() === searchTerm ||
+        order.fbOrderNumber?.toLowerCase() === searchTerm ||
+        getDisplayOrderId(order.orderId)?.toLowerCase() === searchTerm
+      );
+      
+      if (exactMatch) {
+        // Exact match - select the order
+        setSelectedOrders(new Set([exactMatch.orderId]));
+        setHighlightedOrderId(exactMatch.orderId);
+        toast.success(`Exact match: Order ${exactMatch.orderId} selected`);
         
-        if (exactMatch) {
-          // Exact match - select the order
-          setSelectedOrders(new Set([exactMatch.orderId]));
-          setHighlightedOrderId(exactMatch.orderId);
-          toast.success(`Exact match: Order ${exactMatch.orderId} selected`);
-          
-          // Scroll to the order
+        // Scroll to the order
+        setTimeout(() => {
           const element = document.getElementById(`order-${exactMatch.orderId}`);
           if (element) {
             element.scrollIntoView({ behavior: 'smooth', block: 'center' });
           }
-        } else if (filteredOrders.length > 0) {
-          // Partial matches - only highlight, don't select
-          toast.success(`${filteredOrders.length} order(s) highlighted - type exact order number to select`);
+        }, 100);
+      } else {
+        // Calculate partial matches
+        const partialMatches = finishQCOrders.filter((order: any) => {
+          const orderId = order.orderId?.toLowerCase() || '';
+          const fbNumber = order.fbOrderNumber?.toLowerCase() || '';
+          const displayOrderId = getDisplayOrderId(order.orderId)?.toLowerCase() || '';
+          
+          return orderId.includes(searchTerm) || 
+                 fbNumber.includes(searchTerm) || 
+                 displayOrderId.includes(searchTerm);
+        });
+        
+        if (partialMatches.length > 0) {
+          // Clear selection but keep highlight for first match
+          setSelectedOrders(new Set());
+          if (partialMatches.length === 1) {
+            setHighlightedOrderId(partialMatches[0].orderId);
+          }
+          toast.success(`${partialMatches.length} order(s) highlighted - type exact order number to select`);
+        } else {
+          setSelectedOrders(new Set());
+          setHighlightedOrderId(null);
         }
-      }, 300);
+      }
     } else {
+      setSelectedOrders(new Set());
       setHighlightedOrderId(null);
     }
   };
@@ -337,7 +360,7 @@ export default function FinishQCQueuePage() {
                     >
                       <OrderTooltip 
                         order={order} 
-                        stockModels={stockModels} 
+                        stockModels={stockModels as any[]} 
                         className={`border-l-purple-500 cursor-pointer ${
                           isSelected ? 'bg-blue-50 dark:bg-blue-900/20' : ''
                         }`}

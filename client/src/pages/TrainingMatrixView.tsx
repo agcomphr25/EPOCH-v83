@@ -7,7 +7,10 @@ import { Input } from "@/components/ui/input";
 
 type TrainingMatrixEntry = {
   id: number;
+  employeeId: number | null;
   employeeName: string | null;
+  jobTitle: string | null;
+  department: string | null;
   trainingName: string;
   lastCompleted: string | null;
   status: string;
@@ -47,13 +50,24 @@ export default function TrainingMatrixView() {
     );
   }
 
-  // Extract unique employees and trainings
-  const employees = Array.from(new Set(matrixData.map(e => e.employeeName).filter(Boolean))).sort();
+  // Extract unique employees with their details
+  const employeeMap = new Map<string, { name: string; jobTitle: string | null; department: string | null }>();
+  matrixData.forEach(entry => {
+    if (entry.employeeName && !employeeMap.has(entry.employeeName)) {
+      employeeMap.set(entry.employeeName, {
+        name: entry.employeeName,
+        jobTitle: entry.jobTitle,
+        department: entry.department
+      });
+    }
+  });
+  
+  const employees = Array.from(employeeMap.values()).sort((a, b) => a.name.localeCompare(b.name));
   const trainings = Array.from(new Set(matrixData.map(e => e.trainingName))).sort();
 
   // Filter by search term
   const filteredEmployees = searchTerm
-    ? employees.filter(emp => emp?.toLowerCase().includes(searchTerm.toLowerCase()))
+    ? employees.filter(emp => emp.name.toLowerCase().includes(searchTerm.toLowerCase()))
     : employees;
 
   // Create lookup map for quick access
@@ -63,8 +77,8 @@ export default function TrainingMatrixView() {
     matrixMap.set(key, entry);
   });
 
-  const getEntry = (employee: string, training: string) => {
-    return matrixMap.get(`${employee}-${training}`);
+  const getEntry = (employeeName: string, training: string) => {
+    return matrixMap.get(`${employeeName}-${training}`);
   };
 
   const formatDate = (dateStr: string | null) => {
@@ -77,10 +91,9 @@ export default function TrainingMatrixView() {
     }
   };
 
-  const completedCount = (employee: string | null) => {
-    if (!employee) return 0;
+  const completedCount = (employeeName: string) => {
     return trainings.filter(training => {
-      const entry = getEntry(employee, training);
+      const entry = getEntry(employeeName, training);
       return entry?.status === 'COMPLETED';
     }).length;
   };
@@ -133,17 +146,25 @@ export default function TrainingMatrixView() {
               </thead>
               <tbody>
                 {filteredEmployees.map((employee) => {
-                  const completed = completedCount(employee);
+                  const completed = completedCount(employee.name);
                   const percentage = Math.round((completed / totalTrainings) * 100);
                   
                   return (
                     <tr
-                      key={employee}
+                      key={employee.name}
                       className="border-b hover:bg-muted/50"
-                      data-testid={`row-employee-${employee?.replace(/\s+/g, '-').toLowerCase()}`}
+                      data-testid={`row-employee-${employee.name.replace(/\s+/g, '-').toLowerCase()}`}
                     >
-                      <td className="sticky left-0 bg-background z-10 p-3 font-medium">
-                        {employee}
+                      <td className="sticky left-0 bg-background z-10 p-3">
+                        <div className="flex flex-col">
+                          <span className="font-medium">{employee.name}</span>
+                          {employee.jobTitle && (
+                            <span className="text-xs text-muted-foreground">{employee.jobTitle}</span>
+                          )}
+                          {employee.department && (
+                            <span className="text-xs text-blue-600">{employee.department}</span>
+                          )}
+                        </div>
                       </td>
                       <td className="p-3 text-center">
                         <div className="flex flex-col items-center gap-1">
@@ -159,7 +180,7 @@ export default function TrainingMatrixView() {
                         </div>
                       </td>
                       {trainings.map((training) => {
-                        const entry = getEntry(employee!, training);
+                        const entry = getEntry(employee.name, training);
                         const isCompleted = entry?.status === 'COMPLETED';
                         const date = formatDate(entry?.lastCompleted || null);
                         
@@ -167,7 +188,7 @@ export default function TrainingMatrixView() {
                           <td
                             key={training}
                             className="p-3 text-center border-l"
-                            data-testid={`cell-${employee?.replace(/\s+/g, '-').toLowerCase()}-${training.replace(/\s+/g, '-').toLowerCase()}`}
+                            data-testid={`cell-${employee.name.replace(/\s+/g, '-').toLowerCase()}-${training.replace(/\s+/g, '-').toLowerCase()}`}
                           >
                             {isCompleted ? (
                               <div className="flex flex-col items-center gap-1">

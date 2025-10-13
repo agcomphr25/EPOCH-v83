@@ -13,6 +13,7 @@ interface OrderTooltipProps {
   gunsimthTasks?: string[];
   showPaintAndTexture?: boolean;
   disableHoverPopup?: boolean;
+  showTechnician?: boolean;
 }
 
 // Format order features for display
@@ -120,7 +121,7 @@ const formatOrderDetails = (order: any, stockModels: any[]) => {
   return details.join('\n');
 };
 
-export function OrderTooltip({ order, stockModels, showHoverText = true, className = "", children, gunsimthTasks, showPaintAndTexture = false, disableHoverPopup = false }: OrderTooltipProps) {
+export function OrderTooltip({ order, stockModels, showHoverText = true, className = "", children, gunsimthTasks, showPaintAndTexture = false, disableHoverPopup = false, showTechnician = false }: OrderTooltipProps) {
   const modelId = order.stockModelId || order.modelId;
   const materialType = modelId?.startsWith('cf_') ? 'CF' : 
                       modelId?.startsWith('fg_') ? 'FG' : null;
@@ -190,6 +191,15 @@ export function OrderTooltip({ order, stockModels, showHoverText = true, classNa
             {order.createdAt && (
               <div className="text-xs text-gray-500">
                 In Dept: {Math.floor((Date.now() - new Date(order.updatedAt || order.createdAt).getTime()) / (1000 * 60 * 60 * 24))} days
+              </div>
+            )}
+
+            {showTechnician && order.assignedTechnician && (
+              <div className="flex items-center gap-2 mt-1">
+                <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">Technician:</span>
+                <Badge variant="secondary" className="text-xs bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700">
+                  {order.assignedTechnician}
+                </Badge>
               </div>
             )}
 

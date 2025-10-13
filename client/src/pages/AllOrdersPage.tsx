@@ -42,6 +42,7 @@ import { cn } from '@/lib/utils';
 import CustomerDetailsTooltip from '@/components/CustomerDetailsTooltip';
 import OrderSummaryTooltip from '@/components/OrderSummaryTooltip';
 import { BarcodeDisplay } from '@/components/BarcodeDisplay';
+import { BarcodeScanner } from '@/components/BarcodeScanner';
 import CommunicationCompose from '@/components/CommunicationCompose';
 import { getDisplayOrderId } from '@/lib/orderUtils';
 import hotToast from 'react-hot-toast';

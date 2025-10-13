@@ -111,6 +111,7 @@ import CustomerSatisfaction from "./pages/CustomerSatisfaction";
 import VendorsPage from "./pages/VendorsPage";
 import VendorPOPage from "./pages/VendorPOPage";
 import MetalAccessoriesTracker from "./pages/MetalAccessoriesTracker";
+import DocumentIntelligence from "./pages/DocumentIntelligence";
 
 import { Toaster as HotToaster } from 'react-hot-toast';
 import DeploymentAuthWrapper from './components/DeploymentAuthWrapper';
@@ -305,6 +306,7 @@ function App() {
                   <Route path="/task-tracker" component={TaskTracker} />
                   <Route path="/kickback-tracking" component={KickbackTracking} />
                   <Route path="/document-management" component={DocumentManagement} />
+                  <Route path="/document-intelligence" component={DocumentIntelligence} />
                   
                   {/* Training Routes */}
                   <Route path="/training" component={Training} />

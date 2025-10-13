@@ -2,34 +2,193 @@ import { Router, Request, Response } from 'express';
 import { storage } from '../../storage';
 import { insertCalendarEventSchema, insertCalendarEventAttendeeSchema } from '../../schema';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
+import { getUncachableGoogleCalendarClient } from '../lib/googleCalendar';
 
 const router = Router();
 
 // GET /api/calendar/events - Get all events or events within date range
 router.get('/events', async (req: Request, res: Response) => {
   try {
-    const { startDate, endDate, userId } = req.query;
-    
-    let events;
-    
-    if (userId) {
-      // Get events for a specific user
-      events = await storage.getUserCalendarEvents(userId as string);
-    } else if (startDate && endDate) {
-      // Get events within date range
-      events = await storage.getCalendarEventsByDateRange(
-        new Date(startDate as string),
-        new Date(endDate as string)
-      );
-    } else {
-      // Get all events
-      events = await storage.getAllCalendarEvents();
-    }
-    
-    res.json(events);
+    // Return empty array for now - local calendar storage not implemented
+    // Google Calendar integration provides the main calendar functionality
+    res.json([]);
   } catch (error) {
     console.error('Get calendar events error:', error);
     res.status(500).json({ error: 'Failed to fetch calendar events' });
+  }
+});
+
+// GET /api/calendar/google-events - Get Google Calendar events
+router.get('/google-events', async (req: Request, res: Response) => {
+  try {
+    const calendar = await getUncachableGoogleCalendarClient();
+    
+    const now = new Date();
+    const oneYearAgo = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
+    const oneYearFromNow = new Date(now.getFullYear() + 1, now.getMonth(), now.getDate());
+    
+    console.log('📅 Fetching Google Calendar events from', oneYearAgo.toISOString(), 'to', oneYearFromNow.toISOString());
+    
+    // First, get all calendars the user has access to
+    const calendarListResponse = await calendar.calendarList.list();
+    const calendars = calendarListResponse.data.items || [];
+    
+    console.log(`📅 Found ${calendars.length} calendars:`, calendars.map((c: any) => ({
+      id: c.id,
+      summary: c.summary,
+      primary: c.primary,
+      accessRole: c.accessRole
+    })));
+    
+    // Fetch events from ALL calendars
+    const allEventsPromises = calendars.map(async (cal: any) => {
+      try {
+        const response = await calendar.events.list({
+          calendarId: cal.id,
+          timeMin: oneYearAgo.toISOString(),
+          timeMax: oneYearFromNow.toISOString(),
+          singleEvents: true,
+          orderBy: 'startTime',
+          maxResults: 2500,
+        });
+        
+        const events = (response.data.items || []).map((event: any) => ({
+          ...event,
+          calendarName: cal.summary,
+          calendarId: cal.id,
+        }));
+        
+        console.log(`📅 Calendar "${cal.summary}": ${events.length} events`);
+        return events;
+      } catch (error) {
+        console.error(`📅 Error fetching events from calendar "${cal.summary}":`, error);
+        return [];
+      }
+    });
+    
+    const allEventsArrays = await Promise.all(allEventsPromises);
+    const events = allEventsArrays.flat();
+    
+    // Google Calendar color mapping
+    const colorMap: { [key: string]: string } = {
+      '1': '#a4bdfc', // Lavender
+      '2': '#7ae7bf', // Sage
+      '3': '#dbadff', // Grape
+      '4': '#ff887c', // Flamingo
+      '5': '#fbd75b', // Banana
+      '6': '#ffb878', // Tangerine
+      '7': '#46d6db', // Peacock
+      '8': '#e1e1e1', // Graphite
+      '9': '#5484ed', // Blueberry
+      '10': '#51b749', // Basil
+      '11': '#dc2127', // Tomato
+    };
+    
+    const formattedEvents = events.map((event: any) => {
+      const isAllDay = !event.start?.dateTime;
+      let startDate = event.start?.dateTime || event.start?.date;
+      let endDate = event.end?.dateTime || event.end?.date;
+      
+      // Log sample all-day events to debug date issues
+      if (isAllDay && events.indexOf(event) < 3) {
+        console.log('📅 Sample all-day event:', {
+          title: event.summary,
+          originalStart: event.start?.date,
+          originalEnd: event.end?.date,
+        });
+      }
+      
+      // Fix all-day events: Google Calendar uses exclusive end dates
+      // A birthday on Nov 15 shows as start: Nov 15, end: Nov 16
+      // We subtract one day from the end date string directly to avoid timezone issues
+      if (isAllDay && endDate && typeof endDate === 'string') {
+        const [year, month, day] = endDate.split('-').map(Number);
+        const endDateObj = new Date(year, month - 1, day - 1); // Month is 0-indexed, subtract 1 day
+        const adjustedYear = endDateObj.getFullYear();
+        const adjustedMonth = String(endDateObj.getMonth() + 1).padStart(2, '0');
+        const adjustedDay = String(endDateObj.getDate()).padStart(2, '0');
+        endDate = `${adjustedYear}-${adjustedMonth}-${adjustedDay}`;
+        
+        if (events.indexOf(event) < 3) {
+          console.log('  → Adjusted end date:', endDate);
+        }
+      }
+      
+      // Determine event color
+      let eventColor = '#3b82f6'; // Default blue
+      
+      // Priority 1: Check if it's from the Holidays calendar
+      if (event.calendarName === 'Holidays in United States') {
+        eventColor = '#dc2127'; // Tomato red for holidays
+      }
+      // Priority 2: Check if it's a birthday (by title pattern)
+      else if (event.summary && /birthday/i.test(event.summary)) {
+        eventColor = '#dbadff'; // Grape purple for birthdays
+      }
+      // Priority 3: Check if it's an evaluation or certification event
+      else if (event.summary && (/evaluation/i.test(event.summary) || /cert/i.test(event.summary))) {
+        eventColor = '#ff887c'; // Flamingo for evaluations and certs
+      }
+      // Priority 4: Use Google Calendar's assigned color if available
+      else if (event.colorId && colorMap[event.colorId]) {
+        eventColor = colorMap[event.colorId];
+      }
+      
+      return {
+        id: event.id,
+        title: event.summary || 'Untitled Event',
+        description: event.description || '',
+        startDate,
+        endDate,
+        location: event.location || '',
+        allDay: isAllDay,
+        isPublic: event.visibility === 'public',
+        eventType: 'meeting',
+        createdBy: event.creator?.email || event.organizer?.email || 'Google Calendar',
+        source: 'google',
+        color: eventColor,
+        colorId: event.colorId || null,
+        organizer: event.organizer?.email || '',
+        creator: event.creator?.email || '',
+        attendees: event.attendees?.map((a: any) => a.email) || [],
+        calendarName: event.calendarName || 'Primary',
+        calendarId: event.calendarId || 'primary',
+      };
+    });
+
+    console.log(`📅 Fetched ${formattedEvents.length} total Google Calendar events from ${calendars.length} calendars`);
+    
+    // Log events by calendar
+    const calendarSummary = formattedEvents.reduce((acc: any, event: any) => {
+      const cal = event.calendarName || 'Unknown';
+      acc[cal] = (acc[cal] || 0) + 1;
+      return acc;
+    }, {});
+    console.log('📅 Events by calendar:', Object.keys(calendarSummary).map(cal => 
+      `"${cal}": ${calendarSummary[cal]} events`
+    ).join(', '));
+    
+    // Log color distribution
+    const colorSummary = formattedEvents.reduce((acc: any, event: any) => {
+      const color = event.colorId ? `Color ${event.colorId} (${event.color})` : `Default Blue (${event.color})`;
+      acc[color] = (acc[color] || 0) + 1;
+      return acc;
+    }, {});
+    console.log('📅 Color distribution:', colorSummary);
+    
+    // Log sample events with colors
+    const sampleWithColors = formattedEvents.slice(0, 5).map((e: any) => ({
+      title: e.title,
+      colorId: e.colorId,
+      color: e.color,
+      calendar: e.calendarName
+    }));
+    console.log('📅 Sample events with colors:', sampleWithColors);
+
+    res.json(formattedEvents);
+  } catch (error) {
+    console.error('Get Google Calendar events error:', error);
+    res.status(500).json({ error: 'Failed to fetch Google Calendar events' });
   }
 });
 

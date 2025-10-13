@@ -39,13 +39,16 @@ const eventFormSchema = z.object({
 type EventFormData = z.infer<typeof eventFormSchema>;
 
 interface CalendarEventExtended extends Event {
-  id: number;
+  id: number | string;
   description?: string;
   location?: string;
   isAllDay: boolean;
   isPublic: boolean;
   eventType: string;
   createdBy: string;
+  source?: string;
+  color?: string;
+  colorId?: string;
 }
 
 export default function Calendar() {
@@ -60,24 +63,121 @@ export default function Calendar() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // Fetch calendar events
-  const { data: events = [], isLoading } = useQuery({
-    queryKey: ['/api/calendar/events'],
-    select: (data: CalendarEvent[]) => 
-      data.map(event => ({
-        id: event.id,
-        start: new Date(event.startDate),
-        end: new Date(event.endDate),
-        title: event.title,
-        description: event.description,
-        location: event.location,
-        isAllDay: event.allDay,
-        isPublic: event.isPublic,
-        eventType: 'meeting', // Default since it's not in the schema yet
-        createdBy: event.createdBy,
-        resource: event,
-      })) as CalendarEventExtended[],
+  // Fetch local calendar events
+  const { data: localEvents = [], isLoading: isLoadingLocal, error: localError, status: localStatus } = useQuery({
+    queryKey: ['calendar-events'],
+    queryFn: async () => {
+      const response = await fetch('/api/calendar/events', {
+        credentials: 'include',
+      });
+      if (!response.ok) throw new Error('Failed to fetch events');
+      return response.json();
+    },
+    select: (data: any) => {
+      console.log('📅 Local events raw data:', data);
+      if (!Array.isArray(data)) {
+        console.warn('Local events response is not an array:', data);
+        return [];
+      }
+      const transformed = data.map((event: any) => {
+        // For all-day events, create Date in local timezone to avoid day-shift issues
+        let start, end;
+        if (event.allDay) {
+          // Parse date string as local time, not UTC
+          const [startYear, startMonth, startDay] = event.startDate.split('T')[0].split('-').map(Number);
+          const [endYear, endMonth, endDay] = event.endDate.split('T')[0].split('-').map(Number);
+          start = new Date(startYear, startMonth - 1, startDay);
+          end = new Date(endYear, endMonth - 1, endDay);
+        } else {
+          // For timed events, use standard Date parsing (includes timezone)
+          start = new Date(event.startDate);
+          end = new Date(event.endDate);
+        }
+        
+        return {
+          id: event.id,
+          start,
+          end,
+          title: event.title || 'Untitled',
+          description: event.description || '',
+          location: event.location || '',
+          isAllDay: event.allDay || false,
+          isPublic: event.isPublic !== undefined ? event.isPublic : true,
+          eventType: event.eventType || 'meeting',
+          createdBy: event.createdBy || 'Unknown',
+          source: 'local',
+          resource: event,
+        };
+      }) as CalendarEventExtended[];
+      console.log('📅 Local events transformed:', transformed.length);
+      return transformed;
+    },
   });
+
+  console.log('📅 Calendar state:', { 
+    localStatus, 
+    isLoadingLocal, 
+    localEventsCount: localEvents.length,
+    localError: localError?.message 
+  });
+
+  // Fetch Google Calendar events (optional - won't block calendar if it fails)
+  const { data: googleEvents = [], isLoading: isLoadingGoogle, error: googleError } = useQuery({
+    queryKey: ['google-calendar-events'],
+    queryFn: async () => {
+      const response = await fetch('/api/calendar/google-events', {
+        credentials: 'include',
+      });
+      if (!response.ok) throw new Error('Failed to fetch Google Calendar events');
+      return response.json();
+    },
+    retry: false,
+    enabled: true,
+    staleTime: 1000 * 30, // Refresh every 30 seconds for testing
+    select: (data: any) => {
+      if (!Array.isArray(data)) return [];
+      return data.map((event: any) => {
+        // For all-day events, create Date in local timezone to avoid day-shift issues
+        let start, end;
+        if (event.allDay) {
+          // Parse date string as local time, not UTC
+          const [startYear, startMonth, startDay] = event.startDate.split('T')[0].split('-').map(Number);
+          const [endYear, endMonth, endDay] = event.endDate.split('T')[0].split('-').map(Number);
+          start = new Date(startYear, startMonth - 1, startDay);
+          end = new Date(endYear, endMonth - 1, endDay);
+        } else {
+          // For timed events, use standard Date parsing (includes timezone)
+          start = new Date(event.startDate);
+          end = new Date(event.endDate);
+        }
+        
+        return {
+          id: event.id,
+          start,
+          end,
+          title: event.title,
+          description: event.description,
+          location: event.location,
+          isAllDay: event.allDay,
+          isPublic: event.isPublic,
+          eventType: event.eventType || 'meeting',
+          createdBy: event.createdBy,
+          source: 'google',
+          color: event.color,
+          colorId: event.colorId,
+          resource: event,
+        };
+      }) as CalendarEventExtended[];
+    },
+  });
+
+  // Combine all events
+  const events = useMemo(() => {
+    return [...localEvents, ...googleEvents];
+  }, [localEvents, googleEvents]);
+
+  // Only block loading on local events, show warning if Google Calendar fails
+  const isLoading = isLoadingLocal;
 
   // Create event mutation
   const createEventMutation = useMutation({
@@ -240,8 +340,8 @@ export default function Calendar() {
 
   // Handle event deletion
   const handleDeleteEvent = () => {
-    if (selectedEvent) {
-      deleteEventMutation.mutate(selectedEvent.id);
+    if (selectedEvent && selectedEvent.source !== 'google') {
+      deleteEventMutation.mutate(selectedEvent.id as number);
     }
   };
 
@@ -288,21 +388,26 @@ export default function Calendar() {
   const eventStyleGetter = (event: CalendarEventExtended) => {
     let backgroundColor = '#3174ad';
     
-    switch (event.eventType) {
-      case 'meeting':
-        backgroundColor = '#3174ad';
-        break;
-      case 'deadline':
-        backgroundColor = '#dc2626';
-        break;
-      case 'reminder':
-        backgroundColor = '#f59e0b';
-        break;
-      case 'task':
-        backgroundColor = '#10b981';
-        break;
-      default:
-        backgroundColor = '#6b7280';
+    // Google Calendar events use their actual Google Calendar color
+    if (event.source === 'google') {
+      backgroundColor = event.color || '#4285f4'; // Use Google Calendar color or default to blue
+    } else {
+      switch (event.eventType) {
+        case 'meeting':
+          backgroundColor = '#3174ad';
+          break;
+        case 'deadline':
+          backgroundColor = '#dc2626';
+          break;
+        case 'reminder':
+          backgroundColor = '#f59e0b';
+          break;
+        case 'task':
+          backgroundColor = '#10b981';
+          break;
+        default:
+          backgroundColor = '#6b7280';
+      }
     }
     
     return {
@@ -311,7 +416,7 @@ export default function Calendar() {
         borderRadius: '4px',
         opacity: 0.8,
         color: 'white',
-        border: '0px',
+        border: event.source === 'google' ? '2px solid #1a73e8' : '0px',
         display: 'block',
       },
     };
@@ -329,10 +434,25 @@ export default function Calendar() {
 
   return (
     <div className="p-6 space-y-6">
+      {googleError && (
+        <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4">
+          <div className="flex">
+            <div className="ml-3">
+              <p className="text-sm text-yellow-700">
+                Unable to load Google Calendar events. Showing local events only.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+      
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-3">
           <CalendarIcon className="h-8 w-8 text-blue-600" />
           <h1 className="text-3xl font-bold text-gray-900">Calendar</h1>
+          {isLoadingGoogle && (
+            <span className="text-sm text-gray-500">(Syncing Google Calendar...)</span>
+          )}
         </div>
         
         <div className="flex items-center space-x-3">
@@ -578,31 +698,46 @@ export default function Calendar() {
           <DialogContent className="max-w-lg">
             <DialogHeader>
               <DialogTitle className="flex items-center justify-between">
-                <span>{selectedEvent.title}</span>
-                <div className="flex items-center space-x-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      setIsEditDialogOpen(true);
-                      setSelectedEvent(null);
-                    }}
-                    data-testid="button-edit-event"
-                  >
-                    <Edit className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="destructive"
-                    onClick={handleDeleteEvent}
-                    data-testid="button-delete-event"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                <div className="flex items-center gap-2">
+                  <span>{selectedEvent.title}</span>
+                  {selectedEvent.source === 'google' && (
+                    <span className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded">
+                      Google Calendar
+                    </span>
+                  )}
                 </div>
+                {selectedEvent.source !== 'google' && (
+                  <div className="flex items-center space-x-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setIsEditDialogOpen(true);
+                        setSelectedEvent(null);
+                      }}
+                      data-testid="button-edit-event"
+                    >
+                      <Edit className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      onClick={handleDeleteEvent}
+                      data-testid="button-delete-event"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
               </DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
+              {selectedEvent.source === 'google' && (
+                <div className="p-3 bg-blue-50 rounded-md text-sm text-blue-800">
+                  This event is from Google Calendar and cannot be edited here.
+                </div>
+              )}
+              
               <div>
                 <p className="text-sm font-medium text-gray-500">Time</p>
                 <p className="text-sm">

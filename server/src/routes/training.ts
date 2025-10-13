@@ -389,7 +389,26 @@ router.get("/quiz/attempts/:trainingRecordId", async (req, res) => {
 // Training matrix endpoints
 router.get("/matrix", async (req, res) => {
   try {
-    const matrix = await db.select().from(trainingMatrix).orderBy(desc(trainingMatrix.createdAt));
+    const matrix = await db
+      .select({
+        id: trainingMatrix.id,
+        employeeId: trainingMatrix.employeeId,
+        employeeName: trainingMatrix.employeeName,
+        jobTitle: trainingMatrix.jobTitle,
+        department: trainingMatrix.department,
+        trainingName: trainingMatrix.trainingName,
+        requiredBy: trainingMatrix.requiredBy,
+        frequency: trainingMatrix.frequency,
+        lastCompleted: trainingMatrix.lastCompleted,
+        nextDue: trainingMatrix.nextDue,
+        status: trainingMatrix.status,
+        documentationUrl: trainingMatrix.documentationUrl,
+        notes: trainingMatrix.notes,
+        isLegacy: trainingMatrix.isLegacy,
+      })
+      .from(trainingMatrix)
+      .orderBy(trainingMatrix.employeeName, trainingMatrix.trainingName);
+    
     res.json(matrix);
   } catch (error: any) {
     console.error("Error fetching training matrix:", error);

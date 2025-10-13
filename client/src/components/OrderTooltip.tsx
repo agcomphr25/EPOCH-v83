@@ -137,8 +137,21 @@ export function OrderTooltip({ order, stockModels, showHoverText = true, classNa
       <Card className={`border-l-4 ${className.includes('border-l-') ? className : `border-l-blue-500 ${className}`} hover:shadow-lg transition-shadow duration-200 cursor-pointer`}>
         <CardHeader className="pb-2">
           <div className="flex justify-between items-start">
-            <div className="font-semibold text-lg">
-              {getDisplayOrderId(order)}
+            <div className="space-y-1">
+              {order.fbOrderNumber && order.fbOrderNumber.trim() !== '' ? (
+                <>
+                  <div className="font-semibold text-lg">
+                    FB: {order.fbOrderNumber}
+                  </div>
+                  <div className="text-xs text-gray-500">
+                    ID: {order.orderId}
+                  </div>
+                </>
+              ) : (
+                <div className="font-semibold text-lg">
+                  {order.orderId}
+                </div>
+              )}
             </div>
             <div className="flex items-center gap-2">
               <Badge variant="secondary" className="text-xs">

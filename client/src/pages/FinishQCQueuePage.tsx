@@ -72,6 +72,24 @@ export default function FinishQCQueuePage() {
     queryKey: ['/api/stock-models'],
   });
 
+  // Auto-select order when scanned
+  const handleOrderScanned = (orderId: string) => {
+    const orderExists = finishQCOrders.some((order: any) => order.orderId === orderId);
+    if (orderExists) {
+      setSelectedOrders(prev => new Set([...Array.from(prev), orderId]));
+      setHighlightedOrderId(orderId);
+      setTimeout(() => {
+        const element = document.getElementById(`order-${orderId}`);
+        if (element) {
+          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 100);
+      toast.success(`Order ${orderId} selected automatically`);
+    } else {
+      toast.error(`Order ${orderId} is not in the Finish QC department`);
+    }
+  };
+
   // Handle order search selection
   const handleOrderSearchSelect = (order: any) => {
     const orderExists = finishQCOrders.some((o: any) => o.orderId === order.orderId);
@@ -112,19 +130,37 @@ export default function FinishQCQueuePage() {
     setSelectAll(!selectAll);
   };
 
-  // Handle search with auto-selection
+  // Handle search - highlight only, select on exact match
   const handleSearchWithSelection = (query: string) => {
     setSearchQuery(query);
     
     if (query.trim()) {
-      // Auto-select matching orders after a short delay
+      // Check for exact match
       setTimeout(() => {
-        const matchingOrderIds = filteredOrders.map((order: any) => order.orderId);
-        if (matchingOrderIds.length > 0) {
-          setSelectedOrders(new Set(matchingOrderIds));
-          toast.success(`${matchingOrderIds.length} matching order(s) selected`);
+        const exactMatch = finishQCOrders.find((order: any) => 
+          order.orderId?.toLowerCase() === query.toLowerCase().trim() ||
+          order.fbOrderNumber?.toLowerCase() === query.toLowerCase().trim() ||
+          getDisplayOrderId(order.orderId)?.toLowerCase() === query.toLowerCase().trim()
+        );
+        
+        if (exactMatch) {
+          // Exact match - select the order
+          setSelectedOrders(new Set([exactMatch.orderId]));
+          setHighlightedOrderId(exactMatch.orderId);
+          toast.success(`Exact match: Order ${exactMatch.orderId} selected`);
+          
+          // Scroll to the order
+          const element = document.getElementById(`order-${exactMatch.orderId}`);
+          if (element) {
+            element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        } else if (filteredOrders.length > 0) {
+          // Partial matches - only highlight, don't select
+          toast.success(`${filteredOrders.length} order(s) highlighted - type exact order number to select`);
         }
       }, 300);
+    } else {
+      setHighlightedOrderId(null);
     }
   };
 
@@ -141,7 +177,7 @@ export default function FinishQCQueuePage() {
       </div>
 
       {/* Barcode Scanner at top */}
-      <BarcodeScanner />
+      <BarcodeScanner onOrderScanned={handleOrderScanned} />
 
       {/* Search Box */}
       <Card>
@@ -166,7 +202,7 @@ export default function FinishQCQueuePage() {
               <Button
                 variant="outline"
                 onClick={() => {
-                  if (searchQuery.trim()) {
+                  if (searchQuery.trim() && filteredOrders.length > 0) {
                     const matchingOrderIds = filteredOrders.map((order: any) => order.orderId);
                     setSelectedOrders(new Set(matchingOrderIds));
                     toast.success(`${matchingOrderIds.length} matching order(s) selected`);
@@ -174,7 +210,7 @@ export default function FinishQCQueuePage() {
                 }}
                 disabled={!searchQuery.trim() || filteredOrders.length === 0}
               >
-                Select Matches
+                Select All Matches
               </Button>
             </div>
           </div>
@@ -292,7 +328,9 @@ export default function FinishQCQueuePage() {
                   <div key={order.orderId} className="relative">
                     <div 
                       className={`transition-all duration-200 ${
-                        isSelected 
+                        order.orderId === highlightedOrderId
+                          ? 'ring-4 ring-yellow-400 bg-yellow-50 dark:bg-yellow-900/20'
+                          : isSelected 
                           ? 'ring-2 ring-blue-500 ring-offset-2 bg-blue-50 dark:bg-blue-900/20' 
                           : 'hover:ring-1 hover:ring-gray-300'
                       }`}

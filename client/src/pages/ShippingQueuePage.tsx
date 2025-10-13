@@ -92,6 +92,31 @@ export default function ShippingQueuePage() {
     setLocation('/kickback-tracking');
   };
 
+  // Auto-select order when scanned
+  const handleOrderScanned = (orderId: string) => {
+    const orderExists = shippingOrders.some((order: any) => order.orderId === orderId);
+    if (orderExists) {
+      setSelectedOrders(prev => [...prev, orderId]);
+      setHighlightedOrderId(orderId);
+      setTimeout(() => {
+        const element = document.getElementById(`order-${orderId}`);
+        if (element) {
+          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 100);
+      toast({
+        title: "Order selected",
+        description: `Order ${orderId} selected automatically`,
+      });
+    } else {
+      toast({
+        title: "Order not found",
+        description: `Order ${orderId} is not in the Shipping department`,
+        variant: "destructive",
+      });
+    }
+  };
+
   // Handle order search selection
   const handleOrderSearchSelect = (order: any) => {
     const orderExists = shippingOrders.some((o: any) => o.orderId === order.orderId);
@@ -658,7 +683,7 @@ export default function ShippingQueuePage() {
       </div>
 
       {/* Barcode Scanner at top */}
-      <BarcodeScanner />
+      <BarcodeScanner onOrderScanned={handleOrderScanned} />
 
       {/* Order Search Box */}
       <Card>
@@ -1033,7 +1058,7 @@ export default function ShippingQueuePage() {
 
         {/* Barcode Scanner */}
         <div className="mb-6">
-          <BarcodeScanner />
+          <BarcodeScanner onOrderScanned={handleOrderScanned} />
         </div>
 
         {/* Sticky Bulk Actions */}

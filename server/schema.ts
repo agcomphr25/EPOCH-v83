@@ -2610,8 +2610,9 @@ export const customerSatisfactionResponses = pgTable("customer_satisfaction_resp
   // Survey responses stored as JSON
   responses: jsonb("responses").notNull().default('{}'),
   // Calculated scores
-  overallSatisfaction: integer("overall_satisfaction"), // 1-5 scale
+  overallSatisfaction: integer("overall_satisfaction"), // 1-10 scale
   npsScore: integer("nps_score"), // 0-10 scale for Net Promoter Score
+  aggregateScore: integer("aggregate_score"), // Sum of all question responses (out of 50 for 5 questions)
   // Additional metadata
   responseTimeSeconds: integer("response_time_seconds"), // Time to complete survey
   ipAddress: text("ip_address"),
@@ -2652,7 +2653,7 @@ export const insertCustomerSatisfactionSurveySchema = createInsertSchema(custome
     showProgressBar: z.boolean().default(true),
     autoSave: z.boolean().default(true),
   }).default({}),
-  createdBy: z.number().optional().nullable(),
+  createdBy: z.string().optional().nullable(),
 });
 
 export const insertCustomerSatisfactionResponseSchema = createInsertSchema(customerSatisfactionResponses).omit({
@@ -2664,8 +2665,9 @@ export const insertCustomerSatisfactionResponseSchema = createInsertSchema(custo
   customerId: z.number().min(1, "Customer ID is required"),
   orderId: z.string().optional().nullable(),
   responses: z.record(z.any()).default({}), // Question ID to response mapping
-  overallSatisfaction: z.number().min(1).max(5).optional().nullable(),
+  overallSatisfaction: z.number().min(1).max(10).optional().nullable(),
   npsScore: z.number().min(0).max(10).optional().nullable(),
+  aggregateScore: z.number().optional().nullable(),
   responseTimeSeconds: z.number().optional().nullable(),
   ipAddress: z.string().optional().nullable(),
   userAgent: z.string().optional().nullable(),

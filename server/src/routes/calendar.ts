@@ -114,6 +114,26 @@ router.get('/google-events', async (req: Request, res: Response) => {
         }
       }
       
+      // Determine event color
+      let eventColor = '#3b82f6'; // Default blue
+      
+      // Priority 1: Check if it's from the Holidays calendar
+      if (event.calendarName === 'Holidays in United States') {
+        eventColor = '#dc2127'; // Tomato red for holidays
+      }
+      // Priority 2: Check if it's a birthday (by title pattern)
+      else if (event.summary && /birthday/i.test(event.summary)) {
+        eventColor = '#dbadff'; // Grape purple for birthdays
+      }
+      // Priority 3: Check if it's an evaluation or certification event
+      else if (event.summary && (/evaluation/i.test(event.summary) || /cert/i.test(event.summary))) {
+        eventColor = '#ff887c'; // Flamingo for evaluations and certs
+      }
+      // Priority 4: Use Google Calendar's assigned color if available
+      else if (event.colorId && colorMap[event.colorId]) {
+        eventColor = colorMap[event.colorId];
+      }
+      
       return {
         id: event.id,
         title: event.summary || 'Untitled Event',
@@ -126,7 +146,7 @@ router.get('/google-events', async (req: Request, res: Response) => {
         eventType: 'meeting',
         createdBy: event.creator?.email || event.organizer?.email || 'Google Calendar',
         source: 'google',
-        color: event.colorId ? colorMap[event.colorId] : '#3b82f6', // Default to blue
+        color: eventColor,
         colorId: event.colorId || null,
         organizer: event.organizer?.email || '',
         creator: event.creator?.email || '',

@@ -41,7 +41,7 @@ export async function autocompleteAddress(query: string): Promise<string[]> {
  */
 export async function validateAddress(address: AddressData): Promise<AddressData> {
   try {
-    const response = await apiRequest('/api/validate-address', {
+    const response = await apiRequest('/api/customers/validate-address', {
       method: 'POST',
       body: {
         street: address.street,

@@ -197,6 +197,32 @@ export default function AllOrdersPage() {
     }
   });
 
+  // Undo cancel mutation (restore order)
+  const undoCancelMutation = useMutation({
+    mutationFn: async (orderId: string) => {
+      return apiRequest(`/api/orders/undo-cancel/${orderId}`, {
+        method: 'POST'
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/pipeline-counts'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/production-queue/prioritized'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/layup-schedule'] });
+      toast({
+        title: "Order Restored",
+        description: "The order has been restored to production queue.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: "Failed to restore order: " + (error.message || 'Unknown error'),
+        variant: "destructive",
+      });
+    }
+  });
+
   // CSV Export handlers
   const handleExportCSV = async () => {
     try {
@@ -752,7 +778,13 @@ export default function AllOrdersPage() {
                             onClick={() => handleViewSalesOrder(order.orderId)}
                           >
                             <FileText className="mr-2 h-4 w-4" />
-                            Sales Order PDF
+                            View Sales Order
+                          </DropdownMenuItem>
+                          <DropdownMenuItem 
+                            onClick={() => handleViewSalesOrder(order.orderId)}
+                          >
+                            <Download className="mr-2 h-4 w-4" />
+                            Download Sales Order
                           </DropdownMenuItem>
                           <DropdownMenuItem 
                             onClick={() => setLocation('/kickback-tracking')}
@@ -760,7 +792,15 @@ export default function AllOrdersPage() {
                             <AlertTriangle className="mr-2 h-4 w-4" />
                             Report Kickback
                           </DropdownMenuItem>
-                          {!order.isCancelled && (
+                          {order.isCancelled ? (
+                            <DropdownMenuItem 
+                              onClick={() => undoCancelMutation.mutate(order.orderId)}
+                              className="text-green-600"
+                            >
+                              <ArrowRight className="mr-2 h-4 w-4" />
+                              Restore Order
+                            </DropdownMenuItem>
+                          ) : (
                             <DropdownMenuItem 
                               onClick={() => handleCancelOrder(order.orderId)}
                               className="text-red-600"

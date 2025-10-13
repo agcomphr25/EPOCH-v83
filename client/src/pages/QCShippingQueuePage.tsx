@@ -8,7 +8,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import UPSLabelCreator from '@/components/UPSLabelCreator';
-import { ManualTrackingEntry } from '@/components/ManualTrackingEntry';
 import { apiRequest } from '@/lib/queryClient';
 import { format, differenceInDays } from 'date-fns';
 import { getDisplayOrderId } from '@/lib/orderUtils';
@@ -629,28 +628,25 @@ export default function QCShippingQueuePage() {
           </div>
         )}
 
-        <div className="flex flex-col gap-1 mt-2">
-          <div className="flex gap-1">
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => handleQCChecklistDownload(order.orderId)}
-              className="flex-1 text-xs"
-            >
-              <CheckCircle className="h-3 w-3 mr-1" />
-              QC Checklist
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => handleSalesOrderView(order.orderId)}
-              className="flex-1 text-xs"
-            >
-              <FileText className="h-3 w-3 mr-1" />
-              Sales Order
-            </Button>
-          </div>
-          <ManualTrackingEntry orderId={order.orderId} />
+        <div className="flex gap-1 mt-2">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => handleQCChecklistDownload(order.orderId)}
+            className="flex-1 text-xs"
+          >
+            <CheckCircle className="h-3 w-3 mr-1" />
+            QC Checklist
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => handleSalesOrderView(order.orderId)}
+            className="flex-1 text-xs"
+          >
+            <FileText className="h-3 w-3 mr-1" />
+            Sales Order
+          </Button>
         </div>
       </CardContent>
     </Card>

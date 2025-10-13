@@ -3,7 +3,6 @@ import { BarcodeScanner } from '@/components/BarcodeScanner';
 import { ShippingActions } from '@/components/ShippingActions';
 import { BulkShippingActions } from '@/components/BulkShippingActions';
 import UPSLabelCreator from '@/components/UPSLabelCreator';
-import { ManualTrackingEntry } from '@/components/ManualTrackingEntry';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -1263,11 +1262,6 @@ export default function ShippingQueuePage() {
                   
                   {/* Shipping Actions for Selected Order */}
                   <ShippingActions orderId={selectedCard || ''} orderData={getSelectedOrder()} />
-                  
-                  {/* Manual Tracking Entry */}
-                  <div className="mt-4">
-                    <ManualTrackingEntry orderId={selectedCard || ''} onSuccess={() => setSelectedCard(null)} />
-                  </div>
                 </div>
               ) : (
                 <div className="text-center py-8 text-gray-500">

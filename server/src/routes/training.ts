@@ -728,11 +728,14 @@ import { listGoogleSheets, getSpreadsheetData, parseTrainingMatrixFromSheet } fr
 // List available Google Sheets
 router.get("/google-sheets", async (req, res) => {
   try {
+    console.log("📋 Fetching Google Sheets list...");
     const sheets = await listGoogleSheets();
+    console.log(`✅ Found ${sheets.length} Google Sheets`);
     res.json(sheets);
   } catch (error: any) {
-    console.error("Error listing Google Sheets:", error);
-    res.status(500).json({ error: error.message });
+    console.error("❌ Error listing Google Sheets:", error);
+    console.error("Error details:", error.stack);
+    res.status(500).json({ error: error.message || "Failed to list Google Sheets" });
   }
 });
 

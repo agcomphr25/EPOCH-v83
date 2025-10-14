@@ -36,7 +36,7 @@ export default function TrainingMatrixImport() {
   });
 
   const { data: previewData, isLoading: previewLoading } = useQuery<{ data: string[][] }>({
-    queryKey: ["/api/training/google-sheets", selectedSheetId, "preview"],
+    queryKey: [`/api/training/google-sheets/${selectedSheetId}/preview`],
     enabled: !!selectedSheetId,
   });
 

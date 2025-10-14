@@ -353,55 +353,55 @@ export default function Navigation() {
       description: 'Import training matrix from Google Sheets'
     },
     {
-      path: '/training/preservation-fod',
+      path: '/training/2',
       label: 'Preservation & FOD',
       icon: Shield,
       description: 'Preservation and Foreign Object Debris prevention training'
     },
     {
-      path: '/training/chemical-handling',
+      path: '/training/3',
       label: 'Chemical Handling',
       icon: Shield,
       description: 'Safe chemical handling procedures and training'
     },
     {
-      path: '/training/fire-safety',
+      path: '/training/4',
       label: 'Fire Safety',
       icon: Shield,
       description: 'Fire safety and emergency response training'
     },
     {
-      path: '/training/itar',
+      path: '/training/5',
       label: 'ITAR Compliance',
       icon: Shield,
       description: 'International Traffic in Arms Regulations training'
     },
     {
-      path: '/training/as9100',
+      path: '/training/6',
       label: 'AS9100 Quality',
       icon: Shield,
       description: 'AS9100 Quality Management System training'
     },
     {
-      path: '/training/counterfeit-prevention',
+      path: '/training/7',
       label: 'Counterfeit Prevention',
       icon: Shield,
       description: 'Counterfeit materials prevention training'
     },
     {
-      path: '/training/ethics',
+      path: '/training/8',
       label: 'Ethics Training',
       icon: Shield,
       description: 'Ethics in aerospace quality systems'
     },
     {
-      path: '/training/nonconforming-items',
+      path: '/training/9',
       label: 'Nonconforming Items',
       icon: Shield,
       description: 'Nonconforming items handling and procedures'
     },
     {
-      path: '/training/shutdown-procedures',
+      path: '/training/10',
       label: 'Shutdown Procedures',
       icon: Shield,
       description: 'Department shutdown procedures training'

@@ -72,12 +72,24 @@ export default function TrainingMatrixView() {
     }
   });
   
-  // Sort employees based on sortOrder
-  const employees = Array.from(employeeMap.values()).sort((a, b) => 
-    sortOrder === "asc" 
+  // Owners list - these should appear at the bottom
+  const owners = ['Dave', 'Angie', 'Matt', 'Laurie'];
+  const isOwner = (name: string) => owners.some(owner => name.toLowerCase().includes(owner.toLowerCase()));
+  
+  // Sort employees based on sortOrder, with owners always at the bottom
+  const employees = Array.from(employeeMap.values()).sort((a, b) => {
+    const aIsOwner = isOwner(a.name);
+    const bIsOwner = isOwner(b.name);
+    
+    // If one is owner and other isn't, owner goes to bottom
+    if (aIsOwner && !bIsOwner) return 1;
+    if (!aIsOwner && bIsOwner) return -1;
+    
+    // Both are owners or both are not owners, sort alphabetically
+    return sortOrder === "asc" 
       ? a.name.localeCompare(b.name)
-      : b.name.localeCompare(a.name)
-  );
+      : b.name.localeCompare(a.name);
+  });
   
   // Sort trainings based on sortOrder
   const trainings = Array.from(new Set(matrixData.map(e => e.trainingName))).sort((a, b) =>

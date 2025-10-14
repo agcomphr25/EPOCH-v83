@@ -344,10 +344,28 @@ router.get('/analytics', async (req, res) => {
     // Calculate analytics
     const totalResponses = responses.length;
     const completedResponses = responses.filter(r => r.isComplete).length;
-    const averageOverallSatisfaction = responses
-      .filter(r => r.overallSatisfaction !== null)
-      .reduce((sum, r) => sum + (r.overallSatisfaction || 0), 0) / 
-      responses.filter(r => r.overallSatisfaction !== null).length || 0;
+    
+    // Calculate average satisfaction score out of 50 (5 questions * 10 points each)
+    let totalScores = 0;
+    let responseCount = 0;
+    
+    responses.forEach(response => {
+      if (response.responses && typeof response.responses === 'object') {
+        let responseScore = 0;
+        Object.entries(response.responses).forEach(([key, value]) => {
+          // Only count numeric ratings (exclude text responses and comments)
+          if (typeof value === 'number' && value >= 1 && value <= 10) {
+            responseScore += value;
+          }
+        });
+        if (responseScore > 0) {
+          totalScores += responseScore;
+          responseCount++;
+        }
+      }
+    });
+    
+    const averageOverallSatisfaction = responseCount > 0 ? totalScores / responseCount : 0;
 
     const averageNpsScore = responses
       .filter(r => r.npsScore !== null)

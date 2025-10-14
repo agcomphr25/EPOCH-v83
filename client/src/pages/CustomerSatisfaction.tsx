@@ -347,7 +347,7 @@ export default function CustomerSatisfaction() {
                 <Star className="h-5 w-5 text-yellow-600" />
                 <div>
                   <p className="text-sm text-gray-600">Avg Satisfaction</p>
-                  <p className="text-2xl font-bold">{analytics.averageOverallSatisfaction?.toFixed(1) || '0'}/10</p>
+                  <p className="text-2xl font-bold">{analytics.averageOverallSatisfaction?.toFixed(1) || '0'}/50</p>
                 </div>
               </div>
             </CardContent>
@@ -578,7 +578,7 @@ export default function CustomerSatisfaction() {
                   <div>
                     <p className="text-sm text-gray-600">Avg Satisfaction</p>
                     <p className="text-3xl font-bold">{analytics.averageOverallSatisfaction?.toFixed(1) || '0'}</p>
-                    <p className="text-sm text-gray-600">out of 10</p>
+                    <p className="text-sm text-gray-600">out of 50</p>
                   </div>
                 </div>
               </CardContent>

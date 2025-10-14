@@ -2448,21 +2448,21 @@ export default function TrainingModule() {
             {moduleData.questions?.map((question: any, index: number) => (
               <div key={question.id} className="space-y-3 p-4 border rounded-md" data-testid={`question-${question.id}`}>
                 <Label className="text-base font-semibold">
-                  {index + 1}. {question.question}
+                  {index + 1}. {question.questionText}
                 </Label>
                 <RadioGroup
                   value={answers[question.id] || ''}
                   onValueChange={(value) => setAnswers({ ...answers, [question.id]: value })}
                 >
-                  {question.answers?.map((answer: any) => (
-                    <div key={answer.id} className="flex items-center space-x-2">
+                  {question.options?.map((option: any) => (
+                    <div key={option.id} className="flex items-center space-x-2">
                       <RadioGroupItem
-                        value={answer.answerText}
-                        id={`answer-${answer.id}`}
-                        data-testid={`radio-answer-${answer.id}`}
+                        value={option.optionText}
+                        id={`option-${option.id}`}
+                        data-testid={`radio-option-${option.id}`}
                       />
-                      <Label htmlFor={`answer-${answer.id}`} className="cursor-pointer">
-                        {answer.answerText}
+                      <Label htmlFor={`option-${option.id}`} className="cursor-pointer">
+                        {option.optionText}
                       </Label>
                     </div>
                   ))}

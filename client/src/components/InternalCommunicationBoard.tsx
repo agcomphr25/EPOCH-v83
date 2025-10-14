@@ -212,6 +212,10 @@ export default function InternalCommunicationBoard() {
       }
 
       try {
+        // Find the training module to get the ID for linking
+        const trainingModule = trainingModules.find((m: any) => m.title === selectedTraining);
+        const moduleLink = trainingModule ? `\n\nClick here to start: /training/modules/${trainingModule.id}` : '';
+        
         // Create training assignments for each employee
         for (const userId of trainingEmployees) {
           const user = users.find(u => u.id === userId);
@@ -229,7 +233,7 @@ export default function InternalCommunicationBoard() {
             }),
           });
 
-          // Send notification message to employee
+          // Send notification message to employee with module link
           await apiRequest('/api/internal-messages', {
             method: 'POST',
             body: JSON.stringify({
@@ -239,7 +243,7 @@ export default function InternalCommunicationBoard() {
               recipientName: user.username,
               recipientUserId: userId,
               subject: `Training Assignment: ${selectedTraining}`,
-              message: `You have been assigned the training: ${selectedTraining}\n\n${message}`,
+              message: `You have been assigned the training: ${selectedTraining}\n\n${message}${moduleLink}`,
               isUrgent: isUrgent,
             }),
           });

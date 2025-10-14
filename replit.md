@@ -4,6 +4,7 @@
 EPOCH v8 is a comprehensive Manufacturing ERP system designed for small manufacturing companies specializing in customizable products.
 
 ## Recent Changes
+
 **October 14, 2025 - Training Notifications with Module Links & Production Deployment Ready**
 - **Training Assignment Notifications Enhanced**: Added direct clickable links to training modules in notifications
   - Both "Training Assignment" via Internal Communication Board and "Assign & Notify" button include module links
@@ -16,6 +17,8 @@ EPOCH v8 is a comprehensive Manufacturing ERP system designed for small manufact
   - Google Sheets integration configured for data import in production
   - 133 lines of training routes verified functional
   - **Note**: Production database is separate from development - training data must be re-imported via Google Sheets after publishing
+
+
 
 **October 13, 2025 - Schema Cleanup & Deployment Preparation**
 - **Removed Unused `cancelled_orders` Table**: Eliminated unused feature from codebase
@@ -39,6 +42,7 @@ EPOCH v8 is a comprehensive Manufacturing ERP system designed for small manufact
   - **Result**: Clean database schema matching schema.ts definitions
   - **Key Learning**: `serial` is a PostgreSQL pseudo-type only valid during CREATE TABLE, not ALTER TABLE
 - **Missing Package Fixed**: Installed `googleapis` package for Google Calendar integration
+
 
 **October 13, 2025 - Complete GitHub Integration Verified & Calendar TypeScript Fixes**
 - **New Features from GitHub Pull**:

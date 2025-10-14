@@ -13,18 +13,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import { 
   BarChart3, 
-  Plus, 
   Edit, 
   Trash2, 
-  Send, 
   Users, 
   TrendingUp, 
   Star, 
   MessageSquare,
-  Calendar,
   CheckCircle,
-  XCircle,
-  Eye,
   Download,
   Filter,
   FileText
@@ -219,9 +214,7 @@ export default function CustomerSatisfaction() {
   const queryClient = useQueryClient();
   
   const [activeTab, setActiveTab] = useState('overview');
-  const [selectedSurvey, setSelectedSurvey] = useState<Survey | null>(null);
   const [selectedCustomer, setSelectedCustomer] = useState<number | null>(null);
-  const [isCreateSurveyOpen, setIsCreateSurveyOpen] = useState(false);
   const [isTakeSurveyOpen, setIsTakeSurveyOpen] = useState(false);
   const [isEditResponseOpen, setIsEditResponseOpen] = useState(false);
   const [editingResponse, setEditingResponse] = useState<SurveyResponse | null>(null);
@@ -275,72 +268,6 @@ export default function CustomerSatisfaction() {
     queryFn: () => apiRequest('/api/customers'),
   });
 
-  // Create default survey mutation
-  const createDefaultSurvey = useMutation({
-    mutationFn: () => apiRequest('/api/customer-satisfaction/surveys/create-default', {
-      method: 'POST',
-    }),
-    onSuccess: () => {
-      toast({
-        title: "Survey Created",
-        description: "Default customer satisfaction survey has been created successfully.",
-      });
-      queryClient.invalidateQueries({ queryKey: ['/api/customer-satisfaction/surveys'] });
-      setIsCreateSurveyOpen(false);
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Creation Failed",
-        description: error.message || "Failed to create survey",
-        variant: "destructive",
-      });
-    },
-  });
-
-  // Delete survey mutation
-  const deleteSurvey = useMutation({
-    mutationFn: (surveyId: number) => 
-      apiRequest(`/api/customer-satisfaction/surveys/${surveyId}`, {
-        method: 'DELETE',
-      }),
-    onSuccess: () => {
-      toast({
-        title: "Survey Deleted",
-        description: "Survey has been deleted successfully.",
-      });
-      queryClient.invalidateQueries({ queryKey: ['/api/customer-satisfaction/surveys'] });
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Deletion Failed",
-        description: error.message || "Failed to delete survey",
-        variant: "destructive",
-      });
-    },
-  });
-
-  // Toggle survey active status
-  const toggleSurveyStatus = useMutation({
-    mutationFn: ({ surveyId, isActive }: { surveyId: number; isActive: boolean }) =>
-      apiRequest(`/api/customer-satisfaction/surveys/${surveyId}`, {
-        method: 'PUT',
-        body: JSON.stringify({ 
-          title: selectedSurvey?.title,
-          description: selectedSurvey?.description,
-          questions: selectedSurvey?.questions,
-          settings: selectedSurvey?.settings,
-          isActive 
-        }),
-      }),
-    onSuccess: () => {
-      toast({
-        title: "Survey Updated",
-        description: "Survey status has been updated.",
-      });
-      queryClient.invalidateQueries({ queryKey: ['/api/customer-satisfaction/surveys'] });
-    },
-  });
-
   // Delete response mutation
   const deleteResponse = useMutation({
     mutationFn: (responseId: number) =>
@@ -376,6 +303,17 @@ export default function CustomerSatisfaction() {
 
   const renderOverview = () => (
     <div className="space-y-6">
+      {/* Complete Survey Button */}
+      <div className="flex justify-end">
+        <Button 
+          onClick={() => setIsTakeSurveyOpen(true)}
+          data-testid="button-complete-survey"
+        >
+          <FileText className="h-4 w-4 mr-2" />
+          Complete Survey
+        </Button>
+      </div>
+
       {/* Analytics Cards */}
       {analytics && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -471,107 +409,6 @@ export default function CustomerSatisfaction() {
     </div>
   );
 
-  const renderSurveys = () => (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold">Survey Management</h2>
-        <Button onClick={() => setIsCreateSurveyOpen(true)}>
-          <Plus className="h-4 w-4 mr-2" />
-          Create Survey
-        </Button>
-      </div>
-
-      {surveys.length === 0 ? (
-        <Card>
-          <CardContent className="p-8 text-center">
-            <BarChart3 className="h-12 w-12 mx-auto mb-4 text-gray-400" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No Surveys Created</h3>
-            <p className="text-gray-600 mb-4">Create your first customer satisfaction survey to start collecting feedback.</p>
-            <Button onClick={() => setIsCreateSurveyOpen(true)}>
-              <Plus className="h-4 w-4 mr-2" />
-              Create Default Survey
-            </Button>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {surveys.map((survey: Survey) => (
-            <Card key={survey.id}>
-              <CardHeader>
-                <div className="flex items-start justify-between">
-                  <div>
-                    <CardTitle className="text-lg">{survey.title}</CardTitle>
-                    {survey.description && (
-                      <p className="text-sm text-gray-600 mt-1">{survey.description}</p>
-                    )}
-                  </div>
-                  <Badge variant={survey.isActive ? "default" : "secondary"}>
-                    {survey.isActive ? "Active" : "Inactive"}
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="text-sm text-gray-600">
-                    <p>{survey.questions.length} questions</p>
-                    <p>Created {formatDate(survey.createdAt)}</p>
-                  </div>
-
-                  <div className="flex space-x-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setSelectedSurvey(survey);
-                        toggleSurveyStatus.mutate({
-                          surveyId: survey.id,
-                          isActive: !survey.isActive
-                        });
-                      }}
-                    >
-                      {survey.isActive ? (
-                        <>
-                          <XCircle className="h-4 w-4 mr-1" />
-                          Deactivate
-                        </>
-                      ) : (
-                        <>
-                          <CheckCircle className="h-4 w-4 mr-1" />
-                          Activate
-                        </>
-                      )}
-                    </Button>
-
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setSelectedSurvey(survey);
-                        setIsTakeSurveyOpen(true);
-                      }}
-                    >
-                      <Eye className="h-4 w-4 mr-1" />
-                      Preview
-                    </Button>
-
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => deleteSurvey.mutate(survey.id)}
-                      disabled={deleteSurvey.isPending}
-                    >
-                      <Trash2 className="h-4 w-4 mr-1" />
-                      Delete
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
-    </div>
-  );
 
   const renderResponses = () => (
     <div className="space-y-6">
@@ -785,50 +622,16 @@ export default function CustomerSatisfaction() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="surveys">Surveys</TabsTrigger>
           <TabsTrigger value="responses">Responses</TabsTrigger>
           <TabsTrigger value="analytics">Analytics</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview">{renderOverview()}</TabsContent>
-        <TabsContent value="surveys">{renderSurveys()}</TabsContent>
         <TabsContent value="responses">{renderResponses()}</TabsContent>
         <TabsContent value="analytics">{renderAnalytics()}</TabsContent>
       </Tabs>
-
-      {/* Create Survey Dialog */}
-      <Dialog open={isCreateSurveyOpen} onOpenChange={setIsCreateSurveyOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Create Customer Satisfaction Survey</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <p className="text-gray-600">
-              Create a comprehensive customer satisfaction survey with pre-configured questions covering 
-              product quality, service, delivery, and Net Promoter Score.
-            </p>
-            <div className="flex space-x-2">
-              <Button 
-                onClick={() => createDefaultSurvey.mutate()}
-                disabled={createDefaultSurvey.isPending}
-                className="flex-1"
-              >
-                {createDefaultSurvey.isPending ? (
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                ) : (
-                  <Plus className="h-4 w-4 mr-2" />
-                )}
-                Create Default Survey
-              </Button>
-              <Button variant="outline" onClick={() => setIsCreateSurveyOpen(false)}>
-                Cancel
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
 
       {/* Take Survey Dialog */}
       <Dialog open={isTakeSurveyOpen} onOpenChange={setIsTakeSurveyOpen}>
@@ -841,7 +644,7 @@ export default function CustomerSatisfaction() {
               <div className="space-y-2">
                 <Label>Select Customer</Label>
                 <Select onValueChange={(value) => setSelectedCustomer(parseInt(value))}>
-                  <SelectTrigger>
+                  <SelectTrigger data-testid="select-customer">
                     <SelectValue placeholder="Choose a customer" />
                   </SelectTrigger>
                   <SelectContent>
@@ -857,13 +660,12 @@ export default function CustomerSatisfaction() {
             
             {selectedCustomer && (
               <CustomerSatisfactionSurvey
-                surveyId={selectedSurvey?.id}
                 customerId={selectedCustomer}
                 onComplete={() => {
                   setIsTakeSurveyOpen(false);
                   setSelectedCustomer(null);
-                  setSelectedSurvey(null);
                   queryClient.invalidateQueries({ queryKey: ['/api/customer-satisfaction/responses'] });
+                  queryClient.invalidateQueries({ queryKey: ['/api/customer-satisfaction/analytics'] });
                 }}
               />
             )}

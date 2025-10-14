@@ -473,9 +473,18 @@ export default function CustomerSatisfactionSurvey({
           {/* All Questions */}
           <div className="space-y-6">
             {selectedSurvey.questions.map((question: SurveyQuestion, index: number) => {
-              // Only number rating questions, not comment questions
-              const isCommentQuestion = question.type === 'textarea' || question.question.toLowerCase().includes('comment');
-              const questionNumber = isCommentQuestion ? null : selectedSurvey.questions.filter((q: SurveyQuestion, i: number) => i <= index && q.type === 'rating' && !q.question.toLowerCase().includes('comment')).length;
+              // Only number main questions, not comment questions
+              const isCommentQuestion = question.question.toLowerCase().includes('comment');
+              
+              // Count the actual question number by counting non-comment questions up to this index
+              let questionNumber = 0;
+              if (!isCommentQuestion) {
+                for (let i = 0; i <= index; i++) {
+                  if (!selectedSurvey.questions[i].question.toLowerCase().includes('comment')) {
+                    questionNumber++;
+                  }
+                }
+              }
               
               return (
                 <div key={question.id} className="bg-gray-50 p-4 rounded-lg">
@@ -492,7 +501,7 @@ export default function CustomerSatisfactionSurvey({
                     </div>
                   )}
 
-                  {question.type === 'rating' && (
+                  {(question.type === 'rating' || question.type === 'nps') && (
                     <div className="space-y-2">
                       <div className="flex justify-between text-sm text-gray-600">
                         <span>{question.scale?.minLabel}</span>
@@ -517,7 +526,7 @@ export default function CustomerSatisfactionSurvey({
                           );
                         })}
                       </div>
-                      {responses[question.id] && (
+                      {responses[question.id] !== undefined && (
                         <div className="text-center text-sm text-gray-600">
                           Selected: {responses[question.id]} / {question.scale?.max || 5}
                         </div>

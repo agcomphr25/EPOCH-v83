@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link, useLocation } from 'wouter';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, User, Mail, Phone, Calendar, Shield, FileText, Award, ExternalLink, Copy, Edit, Save, X } from 'lucide-react';
+import { ArrowLeft, User, Mail, Phone, Calendar, Shield, FileText, Award, ExternalLink, Copy, Edit, Save, X, GraduationCap, CheckCircle2, Circle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -82,6 +82,18 @@ interface EmployeeCapability {
   capability: Capability;
 }
 
+interface TrainingMatrixEntry {
+  id: number;
+  employeeId: number | null;
+  employeeName: string | null;
+  jobTitle: string | null;
+  department: string | null;
+  trainingName: string;
+  lastCompleted: string | null;
+  status: string;
+  notes: string | null;
+}
+
 export default function EmployeeDetail() {
   const { id } = useParams();
   const [, setLocation] = useLocation();
@@ -139,6 +151,21 @@ export default function EmployeeDetail() {
     },
     enabled: !!id,
   });
+
+  const { data: trainingMatrix = [] } = useQuery<TrainingMatrixEntry[]>({
+    queryKey: ['/api/training/matrix'],
+    queryFn: async () => {
+      const response = await fetch('/api/training/matrix');
+      if (!response.ok) throw new Error('Failed to fetch training matrix');
+      return response.json();
+    },
+    enabled: !!id,
+  });
+
+  // Filter training matrix data for this employee
+  const employeeTraining = id ? trainingMatrix.filter(entry => entry.employeeId === parseInt(id)) : [];
+  const completedTrainings = employeeTraining.filter(entry => entry.status === 'COMPLETED').length;
+  const totalTrainings = employeeTraining.length;
 
   const updateEmployeeMutation = useMutation({
     mutationFn: async (data: Partial<Employee>) => {
@@ -493,11 +520,12 @@ export default function EmployeeDetail() {
         {/* Main Content Tabs */}
         <div className="lg:col-span-2">
           <Tabs defaultValue="details" className="space-y-4">
-            <TabsList className="grid w-full grid-cols-5">
+            <TabsList className="grid w-full grid-cols-6">
               <TabsTrigger value="details">Details</TabsTrigger>
               <TabsTrigger value="permissions">Permissions</TabsTrigger>
               <TabsTrigger value="certifications">Certifications</TabsTrigger>
               <TabsTrigger value="evaluations">Evaluations</TabsTrigger>
+              <TabsTrigger value="training">Training</TabsTrigger>
               <TabsTrigger value="documents">Documents</TabsTrigger>
             </TabsList>
 
@@ -783,7 +811,7 @@ export default function EmployeeDetail() {
                     <CardTitle>Certifications</CardTitle>
                     <CardDescription>Employee training and certification records</CardDescription>
                   </div>
-                  <AddCertificationModal employeeId={parseInt(id)} />
+                  <AddCertificationModal employeeId={parseInt(id || '0')} />
                 </CardHeader>
                 <CardContent>
                   {certifications.length === 0 ? (
@@ -826,7 +854,7 @@ export default function EmployeeDetail() {
                     <CardTitle>Performance Evaluations</CardTitle>
                     <CardDescription>Employee performance review history</CardDescription>
                   </div>
-                  <AddEvaluationModal employeeId={parseInt(id)} />
+                  <AddEvaluationModal employeeId={parseInt(id || '0')} />
                 </CardHeader>
                 <CardContent>
                   {evaluations.length === 0 ? (
@@ -859,6 +887,98 @@ export default function EmployeeDetail() {
                           </div>
                         </div>
                       ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="training">
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle>Training Completion Status</CardTitle>
+                      <CardDescription>Employee training matrix and completion records</CardDescription>
+                    </div>
+                    {totalTrainings > 0 && (
+                      <div className="flex items-center gap-2">
+                        <Badge variant={completedTrainings === totalTrainings ? "default" : completedTrainings > totalTrainings / 2 ? "secondary" : "destructive"} className="text-sm">
+                          {totalTrainings > 0 ? Math.round((completedTrainings / totalTrainings) * 100) : 0}% Complete
+                        </Badge>
+                        <span className="text-sm text-muted-foreground">
+                          {completedTrainings}/{totalTrainings} trainings
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {employeeTraining.length === 0 ? (
+                    <div className="text-center py-8">
+                      <GraduationCap className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                      <p className="text-gray-500">No training records found</p>
+                      <p className="text-sm text-gray-400 mt-2">Training data can be imported from the Training Matrix Import page</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {employeeTraining
+                        .sort((a, b) => {
+                          // Sort: completed items last, alphabetically within each group
+                          if (a.status === 'COMPLETED' && b.status !== 'COMPLETED') return 1;
+                          if (a.status !== 'COMPLETED' && b.status === 'COMPLETED') return -1;
+                          return a.trainingName.localeCompare(b.trainingName);
+                        })
+                        .map((training) => {
+                          const isCompleted = training.status === 'COMPLETED';
+                          const formatDate = (dateStr: string | null) => {
+                            if (!dateStr) return null;
+                            try {
+                              const date = new Date(dateStr);
+                              return date.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' });
+                            } catch {
+                              return dateStr;
+                            }
+                          };
+
+                          return (
+                            <div
+                              key={training.id}
+                              className={`border rounded-lg p-4 ${isCompleted ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}
+                              data-testid={`training-${training.trainingName.replace(/\s+/g, '-').toLowerCase()}`}
+                            >
+                              <div className="flex items-start justify-between">
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2">
+                                    {isCompleted ? (
+                                      <CheckCircle2 className="h-5 w-5 text-green-600" />
+                                    ) : (
+                                      <Circle className="h-5 w-5 text-red-400" />
+                                    )}
+                                    <h4 className="font-medium text-gray-900">{training.trainingName}</h4>
+                                  </div>
+                                  {isCompleted && training.lastCompleted && (
+                                    <div className="mt-2 text-sm text-gray-600">
+                                      <div className="flex items-center gap-2">
+                                        <Calendar className="h-4 w-4" />
+                                        <span>Completed: {formatDate(training.lastCompleted)}</span>
+                                      </div>
+                                      {training.notes && (
+                                        <p className="mt-1 text-xs text-blue-600">Note: {training.notes}</p>
+                                      )}
+                                    </div>
+                                  )}
+                                  {!isCompleted && (
+                                    <p className="mt-2 text-sm text-gray-600">Not yet completed</p>
+                                  )}
+                                </div>
+                                <Badge variant={isCompleted ? "default" : "destructive"} className="ml-2">
+                                  {training.status}
+                                </Badge>
+                              </div>
+                            </div>
+                          );
+                        })}
                     </div>
                   )}
                 </CardContent>

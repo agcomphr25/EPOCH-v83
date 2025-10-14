@@ -1,0 +1,104 @@
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+agcomphr-10-14:1 The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+agcomphr-10-14:1 The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+agcomphr-10-14:1 The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+framework-d887d50385c10e5e.js:1 Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+_ @ framework-d887d50385c10e5e.js:1
+(anonymous) @ framework-d887d50385c10e5e.js:1
+uD @ framework-d887d50385c10e5e.js:1
+uI @ framework-d887d50385c10e5e.js:1
+uM @ framework-d887d50385c10e5e.js:1
+uS @ framework-d887d50385c10e5e.js:1
+C @ framework-d887d50385c10e5e.js:1
+z @ framework-d887d50385c10e5e.js:1
+workspace_iframe.html?initialPath=%2F&id=%3Ar26%3A:32 Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+injected.js:204  POST https://5e4031a2-fce8-4821-9da7-cb64eef9be82-00-1ojktf4u8jgdq.worf.replit.dev/api/training/modules/2/complete 500 (Internal Server Error)
+apply @ injected.js:204
+apiRequest @ queryClient.ts:71
+mutationFn @ TrainingModule.tsx:2276
+fn @ @tanstack_react-query.js?v=6dc2cf11:1234
+run @ @tanstack_react-query.js?v=6dc2cf11:507
+start @ @tanstack_react-query.js?v=6dc2cf11:550
+execute @ @tanstack_react-query.js?v=6dc2cf11:1270
+await in execute
+mutate @ @tanstack_react-query.js?v=6dc2cf11:2692
+(anonymous) @ @tanstack_react-query.js?v=6dc2cf11:3415
+handleSubmit @ TrainingModule.tsx:2328
+callCallback2 @ chunk-NFC5BX5N.js?v=6dc2cf11:3674
+invokeGuardedCallbackDev @ chunk-NFC5BX5N.js?v=6dc2cf11:3699
+invokeGuardedCallback @ chunk-NFC5BX5N.js?v=6dc2cf11:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-NFC5BX5N.js?v=6dc2cf11:3736
+executeDispatch @ chunk-NFC5BX5N.js?v=6dc2cf11:7014
+processDispatchQueueItemsInOrder @ chunk-NFC5BX5N.js?v=6dc2cf11:7034
+processDispatchQueue @ chunk-NFC5BX5N.js?v=6dc2cf11:7043
+dispatchEventsForPlugins @ chunk-NFC5BX5N.js?v=6dc2cf11:7051
+(anonymous) @ chunk-NFC5BX5N.js?v=6dc2cf11:7174
+batchedUpdates$1 @ chunk-NFC5BX5N.js?v=6dc2cf11:18913
+batchedUpdates @ chunk-NFC5BX5N.js?v=6dc2cf11:3579
+dispatchEventForPluginEventSystem @ chunk-NFC5BX5N.js?v=6dc2cf11:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-NFC5BX5N.js?v=6dc2cf11:5478
+dispatchEvent @ chunk-NFC5BX5N.js?v=6dc2cf11:5472
+dispatchDiscreteEvent @ chunk-NFC5BX5N.js?v=6dc2cf11:5449
+injected.js:27 💥 API Request failed for /api/training/modules/2/complete: Error: invalid input syntax for type integer: "NaN"
+    at apiRequest (queryClient.ts:95:13)
+(anonymous) @ injected.js:27
+console.error @ main.tsx:32
+(anonymous) @ injected.js:27
+apiRequest @ queryClient.ts:112
+await in apiRequest
+mutationFn @ TrainingModule.tsx:2276
+fn @ @tanstack_react-query.js?v=6dc2cf11:1234
+run @ @tanstack_react-query.js?v=6dc2cf11:507
+start @ @tanstack_react-query.js?v=6dc2cf11:550
+execute @ @tanstack_react-query.js?v=6dc2cf11:1270
+await in execute
+mutate @ @tanstack_react-query.js?v=6dc2cf11:2692
+(anonymous) @ @tanstack_react-query.js?v=6dc2cf11:3415
+handleSubmit @ TrainingModule.tsx:2328
+callCallback2 @ chunk-NFC5BX5N.js?v=6dc2cf11:3674
+invokeGuardedCallbackDev @ chunk-NFC5BX5N.js?v=6dc2cf11:3699
+invokeGuardedCallback @ chunk-NFC5BX5N.js?v=6dc2cf11:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-NFC5BX5N.js?v=6dc2cf11:3736
+executeDispatch @ chunk-NFC5BX5N.js?v=6dc2cf11:7014
+processDispatchQueueItemsInOrder @ chunk-NFC5BX5N.js?v=6dc2cf11:7034
+processDispatchQueue @ chunk-NFC5BX5N.js?v=6dc2cf11:7043
+dispatchEventsForPlugins @ chunk-NFC5BX5N.js?v=6dc2cf11:7051
+(anonymous) @ chunk-NFC5BX5N.js?v=6dc2cf11:7174
+batchedUpdates$1 @ chunk-NFC5BX5N.js?v=6dc2cf11:18913
+batchedUpdates @ chunk-NFC5BX5N.js?v=6dc2cf11:3579
+dispatchEventForPluginEventSystem @ chunk-NFC5BX5N.js?v=6dc2cf11:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-NFC5BX5N.js?v=6dc2cf11:5478
+dispatchEvent @ chunk-NFC5BX5N.js?v=6dc2cf11:5472
+dispatchDiscreteEvent @ chunk-NFC5BX5N.js?v=6dc2cf11:5449

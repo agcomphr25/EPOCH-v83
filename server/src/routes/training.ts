@@ -8,6 +8,8 @@ import {
   employeeTrainingRecords,
   employeeQuizAttempts,
   trainingMatrix,
+  employees,
+  users,
   insertTrainingModuleSchema,
   insertTrainingQuestionSchema,
   insertTrainingQuestionOptionSchema,
@@ -458,15 +460,15 @@ router.post("/modules/:moduleId/complete", async (req, res) => {
         if (!isNaN(parsedId)) {
           numericEmployeeId = parsedId;
         } else {
-          // employeeId is a username, look up the numeric ID
-          const employee = await db
+          // employeeId is a username, look up the user's employee ID
+          const user = await db
             .select()
-            .from(employees)
-            .where(eq(employees.username, employeeId))
+            .from(users)
+            .where(eq(users.username, employeeId))
             .limit(1);
           
-          if (employee && employee.length > 0) {
-            numericEmployeeId = employee[0].id;
+          if (user && user.length > 0 && user[0].employeeId) {
+            numericEmployeeId = user[0].employeeId;
           }
         }
       }

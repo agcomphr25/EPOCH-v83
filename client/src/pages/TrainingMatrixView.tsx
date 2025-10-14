@@ -21,6 +21,7 @@ type TrainingMatrixEntry = {
   department: string | null;
   trainingName: string;
   lastCompleted: string | null;
+  lastScore: number | null;
   status: string;
   notes: string | null;
 };
@@ -251,6 +252,7 @@ export default function TrainingMatrixView() {
                           const entry = getEntry(employee.name, training);
                           const isCompleted = entry?.status === 'COMPLETED';
                           const date = formatDate(entry?.lastCompleted || null);
+                          const score = entry?.lastScore;
                           
                           return (
                             <td
@@ -261,6 +263,9 @@ export default function TrainingMatrixView() {
                               {isCompleted ? (
                                 <div className="flex flex-col items-center gap-1">
                                   <CheckCircle2 className="h-5 w-5 text-green-600" />
+                                  {score !== null && score !== undefined && (
+                                    <span className="text-xs font-semibold text-green-700">{score}%</span>
+                                  )}
                                   <span className="text-xs text-muted-foreground">{date}</span>
                                   {entry?.notes && (
                                     <span className="text-xs text-blue-600">({entry.notes})</span>
@@ -333,6 +338,7 @@ export default function TrainingMatrixView() {
                           const entry = getEntry(employee.name, training);
                           const isCompleted = entry?.status === 'COMPLETED';
                           const date = formatDate(entry?.lastCompleted || null);
+                          const score = entry?.lastScore;
                           
                           return (
                             <td
@@ -343,6 +349,9 @@ export default function TrainingMatrixView() {
                               {isCompleted ? (
                                 <div className="flex flex-col items-center gap-1">
                                   <CheckCircle2 className="h-5 w-5 text-green-600" />
+                                  {score !== null && score !== undefined && (
+                                    <span className="text-xs font-semibold text-green-700">{score}%</span>
+                                  )}
                                   <span className="text-xs text-muted-foreground">{date}</span>
                                   {entry?.notes && (
                                     <span className="text-xs text-blue-600">({entry.notes})</span>

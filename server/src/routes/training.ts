@@ -438,6 +438,48 @@ router.post("/modules/:moduleId/complete", async (req, res) => {
     const passingScore = module[0].passingScore || 80;
     const passed = scorePercentage >= passingScore;
 
+    // Update training matrix with completion data
+    if (employeeId && passed) {
+      const trainingName = module[0].title;
+      
+      // Find existing training matrix entry
+      const existingEntry = await db
+        .select()
+        .from(trainingMatrix)
+        .where(
+          and(
+            eq(trainingMatrix.employeeId, parseInt(employeeId)),
+            eq(trainingMatrix.trainingName, trainingName)
+          )
+        )
+        .limit(1);
+
+      if (existingEntry && existingEntry.length > 0) {
+        // Update existing entry
+        await db
+          .update(trainingMatrix)
+          .set({
+            lastCompleted: new Date(),
+            lastScore: scorePercentage,
+            status: 'COMPLETED',
+            updatedAt: new Date()
+          })
+          .where(eq(trainingMatrix.id, existingEntry[0].id));
+      } else {
+        // Create new entry if it doesn't exist
+        await db
+          .insert(trainingMatrix)
+          .values({
+            employeeId: parseInt(employeeId),
+            employeeName: employeeName,
+            trainingName: trainingName,
+            lastCompleted: new Date(),
+            lastScore: scorePercentage,
+            status: 'COMPLETED'
+          });
+      }
+    }
+
     const results = {
       score: scorePercentage,
       correctCount,
@@ -471,6 +513,7 @@ router.get("/matrix", async (req, res) => {
         requiredBy: trainingMatrix.requiredBy,
         frequency: trainingMatrix.frequency,
         lastCompleted: trainingMatrix.lastCompleted,
+        lastScore: trainingMatrix.lastScore,
         nextDue: trainingMatrix.nextDue,
         status: trainingMatrix.status,
         documentationUrl: trainingMatrix.documentationUrl,

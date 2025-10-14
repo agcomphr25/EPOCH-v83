@@ -11,7 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Plus, Edit, Trash2, CheckCircle2, Circle, Calendar } from "lucide-react";
+import { Plus, Edit, Trash2, CheckCircle2, Circle, Calendar, Users, BookOpen } from "lucide-react";
 
 type Employee = {
   id: number;
@@ -55,6 +55,7 @@ export default function TrainingMatrixManage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState<TrainingMatrixEntry | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [viewMode, setViewMode] = useState<"employee" | "training">("employee");
   
   const [formData, setFormData] = useState<FormData>({
     trainingName: "",
@@ -218,6 +219,18 @@ export default function TrainingMatrixManage() {
     entry.trainingName.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
+  // Group data by training for training view
+  const trainingGroups = filteredMatrix.reduce((acc, entry) => {
+    if (!acc[entry.trainingName]) {
+      acc[entry.trainingName] = [];
+    }
+    acc[entry.trainingName].push(entry);
+    return acc;
+  }, {} as Record<string, TrainingMatrixEntry[]>);
+
+  // Get sorted list of trainings
+  const sortedTrainings = Object.keys(trainingGroups).sort();
+
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return "N/A";
     return new Date(dateStr).toLocaleDateString();
@@ -238,12 +251,36 @@ export default function TrainingMatrixManage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Training Assignments</CardTitle>
-          <CardDescription>
-            Manage employee training assignments and completion status
-          </CardDescription>
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <CardTitle>Training Assignments</CardTitle>
+              <CardDescription>
+                Manage employee training assignments and completion status
+              </CardDescription>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant={viewMode === "employee" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setViewMode("employee")}
+                data-testid="button-view-employee"
+              >
+                <Users className="h-4 w-4 mr-2" />
+                By Employee
+              </Button>
+              <Button
+                variant={viewMode === "training" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setViewMode("training")}
+                data-testid="button-view-training"
+              >
+                <BookOpen className="h-4 w-4 mr-2" />
+                By Training
+              </Button>
+            </div>
+          </div>
           <Input
-            placeholder="Search by employee or training..."
+            placeholder={viewMode === "employee" ? "Search by employee or training..." : "Search by training or employee..."}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="max-w-md"
@@ -257,7 +294,7 @@ export default function TrainingMatrixManage() {
             <div className="text-center py-8 text-muted-foreground">
               No training assignments found. Click "Add Assignment" to get started.
             </div>
-          ) : (
+          ) : viewMode === "employee" ? (
             <Table>
               <TableHeader>
                 <TableRow>
@@ -319,6 +356,89 @@ export default function TrainingMatrixManage() {
                 ))}
               </TableBody>
             </Table>
+          ) : (
+            <div className="space-y-6">
+              {sortedTrainings.map((training) => {
+                const entries = trainingGroups[training];
+                const completedCount = entries.filter(e => e.status === 'COMPLETED').length;
+                const totalCount = entries.length;
+                
+                return (
+                  <div key={training} className="border rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-4">
+                      <div>
+                        <h3 className="text-lg font-semibold">{training}</h3>
+                        <p className="text-sm text-muted-foreground">
+                          {completedCount} of {totalCount} employees completed
+                        </p>
+                      </div>
+                      <Badge variant={completedCount === totalCount ? "default" : "secondary"}>
+                        {Math.round((completedCount / totalCount) * 100)}% Complete
+                      </Badge>
+                    </div>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Employee</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Last Completed</TableHead>
+                          <TableHead>Next Due</TableHead>
+                          <TableHead>Notes</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {entries.map((entry) => (
+                          <TableRow key={entry.id} data-testid={`row-training-assignment-${entry.id}`}>
+                            <TableCell>
+                              <div className="flex flex-col">
+                                <span className="font-medium">{entry.employeeName}</span>
+                                {entry.jobTitle && (
+                                  <span className="text-xs text-muted-foreground">{entry.jobTitle}</span>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <Badge
+                                variant={entry.status === 'COMPLETED' ? 'default' : entry.status === 'PENDING' ? 'secondary' : 'destructive'}
+                                data-testid={`badge-status-${entry.id}`}
+                              >
+                                {entry.status === 'COMPLETED' && <CheckCircle2 className="h-3 w-3 mr-1" />}
+                                {entry.status === 'PENDING' && <Circle className="h-3 w-3 mr-1" />}
+                                {entry.status}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>{formatDate(entry.lastCompleted)}</TableCell>
+                            <TableCell>{formatDate(entry.nextDue)}</TableCell>
+                            <TableCell className="max-w-xs truncate">{entry.notes || "-"}</TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex justify-end gap-2">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleOpenDialog(entry)}
+                                  data-testid={`button-edit-${entry.id}`}
+                                >
+                                  <Edit className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleDelete(entry)}
+                                  data-testid={`button-delete-${entry.id}`}
+                                >
+                                  <Trash2 className="h-4 w-4 text-destructive" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                );
+              })}
+            </div>
           )}
         </CardContent>
       </Card>

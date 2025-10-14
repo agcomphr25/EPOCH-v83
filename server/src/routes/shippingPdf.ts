@@ -771,6 +771,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     const customers = await storage.getAllCustomers();
     const features = await storage.getAllFeatures();
     const addresses = await storage.getAllAddresses();
+    const persistentDiscounts = await storage.getAllPersistentDiscounts();
     
     // Get payment data for payment status calculation
     const payments = await storage.getPaymentsByOrderId(orderId);
@@ -790,7 +791,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     const { width, height } = page.getSize();
 
     // Define margins and layout
-    const margin = 50;
+    const margin = 40;
     const printableWidth = width - (margin * 2);
 
     // Load fonts
@@ -814,7 +815,27 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
         height: logoHeight,
       });
       
-      currentY -= logoHeight + 15;
+      currentY -= logoHeight + 10; // Increased from 5 to 10 for more space
+      
+      // Company contact information under logo
+      page.drawText('230 Hamer Rd, Owens Crossroads, AL 35763', {
+        x: margin,
+        y: currentY,
+        size: 8,
+        font: font,
+        color: rgb(0, 0, 0),
+      });
+      
+      currentY -= 10;
+      page.drawText('Phone: (256) 723-8381 | Email: sales@agatcomposite.com', {
+        x: margin,
+        y: currentY,
+        size: 8,
+        font: font,
+        color: rgb(0, 0, 0),
+      });
+      
+      currentY -= 15;
     } else {
       // Fallback to text if logo fails to load
       page.drawText('AG COMPOSITES', {
@@ -824,23 +845,44 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
         font: boldFont,
         color: rgb(0, 0, 0),
       });
-      currentY -= 35;
+      currentY -= 20;
+      
+      // Company contact information
+      page.drawText('230 Hamer Rd, Owens Crossroads, AL 35763', {
+        x: margin,
+        y: currentY,
+        size: 8,
+        font: font,
+        color: rgb(0, 0, 0),
+      });
+      
+      currentY -= 10;
+      page.drawText('Phone: (256) 723-8381 | Email: sales@agatcomposite.com', {
+        x: margin,
+        y: currentY,
+        size: 8,
+        font: font,
+        color: rgb(0, 0, 0),
+      });
+      
+      currentY -= 15;
     }
 
-    // Sales Order title
+    // Sales Order title - moved to upper right corner ABOVE the box
+    const orderBoxX = width - margin - 260;
+    const orderBoxWidth = 260;
+    const orderBoxHeight = 65;
+    
     page.drawText('SALES ORDER', {
-      x: margin,
-      y: currentY,
+      x: 350,
+      y: 720,
       size: 16,
       font: boldFont,
       color: rgb(0, 0, 0),
     });
 
-    // Order number and date box - Fixed positioning
-    const orderBoxX = width - margin - 200;
-    const orderBoxY = currentY - 10;
-    const orderBoxWidth = 200;
-    const orderBoxHeight = 85;
+    // Order number and date box - Fixed positioning with 2 columns (positioned below the SALES ORDER text)
+    const orderBoxY = currentY - 5;
     
     page.drawRectangle({
       x: orderBoxX,
@@ -851,54 +893,73 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       borderWidth: 1,
     });
 
-    // Position text INSIDE the box with proper alignment
-    let boxTextY = orderBoxY + orderBoxHeight - 18; // Start from top of box
+    // Position text INSIDE the box with 2-column layout
+    let boxTextY = orderBoxY + orderBoxHeight - 12; // Start from top of box (reduced from 18 to 12)
     
+    // Left column
     page.drawText('Order Number:', {
       x: orderBoxX + 8,
       y: boxTextY,
-      size: 10,
+      size: 9,
       font: boldFont,
     });
 
     page.drawText(orderId, {
-      x: orderBoxX + 100,
-      y: boxTextY,
-      size: 10,
+      x: orderBoxX + 8,
+      y: boxTextY - 12,
+      size: 9,
       font: font,
     });
 
-    boxTextY -= 20;
+    boxTextY -= 26; // Increased from 24 to 26 (added 2 pixels)
     page.drawText('Date:', {
       x: orderBoxX + 8,
       y: boxTextY,
-      size: 10,
+      size: 9,
       font: boldFont,
     });
 
     page.drawText(new Date().toLocaleDateString(), {
-      x: orderBoxX + 100,
-      y: boxTextY,
-      size: 10,
+      x: orderBoxX + 8,
+      y: boxTextY - 12,
+      size: 9,
       font: font,
     });
 
-    boxTextY -= 20;
-    page.drawText('Due Date:', {
-      x: orderBoxX + 8,
+    // Right column
+    boxTextY = orderBoxY + orderBoxHeight - 12; // Reset to top (reduced from 18 to 12)
+    
+    page.drawText('Customer PO:', {
+      x: orderBoxX + orderBoxWidth / 2 + 8,
       y: boxTextY,
-      size: 10,
+      size: 9,
+      font: boldFont,
+    });
+
+    const customerPO = (order as any).customerPO || 'N/A';
+    page.drawText(customerPO, {
+      x: orderBoxX + orderBoxWidth / 2 + 8,
+      y: boxTextY - 12,
+      size: 9,
+      font: font,
+    });
+
+    boxTextY -= 26; // Increased from 24 to 26 (added 2 pixels)
+    page.drawText('Due Date:', {
+      x: orderBoxX + orderBoxWidth / 2 + 8,
+      y: boxTextY,
+      size: 9,
       font: boldFont,
     });
 
     page.drawText(order.dueDate ? new Date(order.dueDate).toLocaleDateString() : 'TBD', {
-      x: orderBoxX + 100,
-      y: boxTextY,
-      size: 10,
+      x: orderBoxX + orderBoxWidth / 2 + 8,
+      y: boxTextY - 12,
+      size: 9,
       font: font,
     });
 
-    // Calculate payment status using the same logic as the enhanced calculation
+    // Calculate payment status using the same logic as the enhanced calculation (will be used later below TOTAL)
     const paymentTotal = payments.reduce((sum, payment) => sum + (payment.paymentAmount || 0), 0);
     
     // Calculate order total (same logic as OrderEntry.tsx and enhanced payment calculation)
@@ -924,30 +985,13 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     
     const paymentStatus = isFullyPaid ? 'PAID' : 'PENDING';
     const paymentColor = isFullyPaid ? rgb(0, 0.6, 0) : rgb(0.8, 0.4, 0);
-    
-    // Payment Status - positioned outside the order box (below it)
-    const paymentStatusY = orderBoxY - 29; // Position 29 pixels below the order box (moved down 4 points)
-    page.drawText('Payment:', {
-      x: orderBoxX + 5,
-      y: paymentStatusY,
-      size: 10,
-      font: boldFont,
-    });
-    
-    page.drawText(paymentStatus, {
-      x: orderBoxX + 90,
-      y: paymentStatusY,
-      size: 10,
-      font: boldFont,
-      color: paymentColor,
-    });
 
-    // Customer Information Section - Fixed positioning
-    currentY -= 140; // Move down to provide space for proper box placement
+    // Customer Information Section - Fixed positioning with reduced spacing
+    currentY -= 95; // Reduced from 110 to move box up the page
     
-    // Define customer box dimensions and position
+    // Define customer box dimensions and position - reduced height for better fit
     const customerBoxY = currentY;
-    const customerBoxHeight = 120;
+    const customerBoxHeight = 80; // Reduced from 90 to make more compact
     
     // Create customer info box
     page.drawRectangle({
@@ -962,21 +1006,21 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     // Customer header - positioned INSIDE the box from top
     page.drawText('CUSTOMER INFORMATION', {
       x: margin + 8,
-      y: customerBoxY + customerBoxHeight - 20,
-      size: 12,
+      y: customerBoxY + customerBoxHeight - 15, // Reduced spacing
+      size: 11,
       font: boldFont,
     });
 
-    // Bill to section - positioned INSIDE the box
-    let customerTextY = customerBoxY + customerBoxHeight - 45; // Start text properly inside box
+    // Bill to section - positioned INSIDE the box with tighter spacing
+    let customerTextY = customerBoxY + customerBoxHeight - 32; // Reduced spacing
     page.drawText('BILL TO:', {
       x: margin + 8,
       y: customerTextY,
-      size: 10,
+      size: 9,
       font: boldFont,
     });
 
-    customerTextY -= 15;
+    customerTextY -= 12; // Reduced spacing
     if (customer) {
       // Customer name and company - positioned INSIDE the box
       const customerLine = customer.company ? 
@@ -997,24 +1041,8 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       }
 
       customerTextY -= 13;
-      // Contact person if different from customer name - positioned INSIDE the box
-      if (customer.contact && customer.contact !== customer.name && customerTextY > customerBoxY + 15) {
-        const contactText = `Contact: ${customer.contact}`;
-        const wrappedContact = wrapText(contactText, 250, 9, font);
-        wrappedContact.forEach((line, index) => {
-          if (customerTextY - (index * 11) > customerBoxY + 8) {
-            page.drawText(line, {
-              x: margin + 8,
-              y: customerTextY - (index * 11),
-              size: 9,
-              font: font,
-            });
-          }
-        });
-        customerTextY -= wrappedContact.length * 11;
-      }
 
-      // Email and phone on same line if both exist - positioned INSIDE the box
+      // Email and phone on same line if both exist - positioned directly below customer name
       const contactInfo = [];
       if (customer.email) contactInfo.push(`Email: ${customer.email}`);
       if (customer.phone) contactInfo.push(`Phone: ${customer.phone}`);
@@ -1034,6 +1062,23 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
         });
         customerTextY -= wrappedContactInfo.length * 11;
       }
+
+      // Contact person if different from customer name - positioned INSIDE the box
+      if (customer.contact && customer.contact !== customer.name && customerTextY > customerBoxY + 15) {
+        const contactText = `Contact: ${customer.contact}`;
+        const wrappedContact = wrapText(contactText, 250, 9, font);
+        wrappedContact.forEach((line, index) => {
+          if (customerTextY - (index * 11) > customerBoxY + 8) {
+            page.drawText(line, {
+              x: margin + 8,
+              y: customerTextY - (index * 11),
+              size: 9,
+              font: font,
+            });
+          }
+        });
+        customerTextY -= wrappedContact.length * 11;
+      }
     } else {
       page.drawText('Customer information not available', {
         x: margin + 8,
@@ -1043,18 +1088,18 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       });
     }
 
-    // Ship to address section (right side) - positioned INSIDE the box
+    // Ship to address section (right side) - positioned INSIDE the box with reduced spacing
     const shipToX = margin + 280;
-    let shipCurrentY = customerBoxY + customerBoxHeight - 45; // Position relative to box top
+    let shipCurrentY = customerBoxY + customerBoxHeight - 15; // Aligned with CUSTOMER INFORMATION header
     
     page.drawText('SHIP TO:', {
       x: shipToX,
       y: shipCurrentY,
-      size: 10,
+      size: 9,
       font: boldFont,
     });
 
-    shipCurrentY -= 15;
+    shipCurrentY -= 17; // Adjusted spacing to move content down after header alignment
 
     // Check if order has alternate shipping address with actual data
     if ((order as any).hasAltShipTo && (order as any).altShipToAddress && 
@@ -1244,115 +1289,8 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       }
     }
 
-    // Order Details Section - Position properly after customer box
-    currentY = customerBoxY - 30; // Continue below the customer box
-    page.drawText('ORDER DETAILS', {
-      x: margin,
-      y: currentY,
-      size: 14,
-      font: boldFont,
-    });
-
-    // Create order details table
-    currentY -= 25;
-
-    // Table border (reduced height)
-    page.drawRectangle({
-      x: margin,
-      y: currentY - 70,
-      width: printableWidth,
-      height: 70,
-      borderColor: rgb(0, 0, 0),
-      borderWidth: 1,
-    });
-
-    // Table headers (reduced height)
-    page.drawRectangle({
-      x: margin,
-      y: currentY - 20,
-      width: printableWidth,
-      height: 20,
-      color: rgb(0.9, 0.9, 0.9),
-      borderColor: rgb(0, 0, 0),
-      borderWidth: 1,
-    });
-
-    page.drawText('Item Description', {
-      x: margin + 5,
-      y: currentY - 12,
-      size: 9,
-      font: boldFont,
-    });
-
-    page.drawText('Model/SKU', {
-      x: margin + 200,
-      y: currentY - 12,
-      size: 9,
-      font: boldFont,
-    });
-
-    page.drawText('Qty', {
-      x: margin + 320,
-      y: currentY - 12,
-      size: 9,
-      font: boldFont,
-    });
-
-    page.drawText('Unit Price', {
-      x: margin + 380,
-      y: currentY - 12,
-      size: 9,
-      font: boldFont,
-    });
-
-    page.drawText('Total', {
-      x: margin + 460,
-      y: currentY - 12,
-      size: 9,
-      font: boldFont,
-    });
-
-    // Main product line (reduced spacing and font size)
-    currentY -= 30;
-    const productName = model?.displayName || model?.name || 'Custom Stock';
-    page.drawText(productName, {
-      x: margin + 5,
-      y: currentY,
-      size: 9,
-      font: font,
-    });
-
-    page.drawText(order.modelId || 'CUSTOM', {
-      x: margin + 200,
-      y: currentY,
-      size: 9,
-      font: font,
-    });
-
-    page.drawText('1', {
-      x: margin + 320,
-      y: currentY,
-      size: 9,
-      font: font,
-    });
-
-    const basePrice = model?.price || 0;
-    page.drawText(`$${basePrice.toFixed(2)}`, {
-      x: margin + 380,
-      y: currentY,
-      size: 9,
-      font: font,
-    });
-
-    page.drawText(`$${basePrice.toFixed(2)}`, {
-      x: margin + 460,
-      y: currentY,
-      size: 9,
-      font: font,
-    });
-
-    // Features and Customizations Section - ORDER SUMMARY PRICING (moved higher)
-    currentY -= 54;
+    // Features and Customizations Section - Start directly after customer box
+    currentY = customerBoxY - 28; // Continue below the customer box (reduced from 30 to 28)
     page.drawText('FEATURES & CUSTOMIZATIONS', {
       x: margin,
       y: currentY,
@@ -1360,7 +1298,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       font: boldFont,
     });
 
-    currentY -= 25;
+    currentY -= 23; // Reduced from 25 to 23
     
     // Create bordered container for features table
     const featuresTableHeight = 240; // Increased height to accommodate all features
@@ -1409,6 +1347,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     let summaryLineY = currentY - 35; // Start content below header
 
     // Initialize all price variables
+    const basePrice = model?.price || 0;
     let actionLengthPrice = 0;
     let actionInletPrice = 0;
     let bottomMetalPrice = 0;
@@ -1525,9 +1464,42 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       summaryLineY -= Math.max(15, wrappedActionLength.length * 12);
     }
 
+    // Shank Length
+    if (summaryLineY > currentY - featuresTableHeight + 15) {
+      page.drawText('Shank:', {
+        x: margin + 8,
+        y: summaryLineY,
+        size: 9,
+        font: font,
+      });
+
+      const shankDisplay = order.shankLength || (order as any).shank_length || 'Not selected';
+      const wrappedShank = wrapText(shankDisplay, 300, 9, font);
+      wrappedShank.forEach((line, index) => {
+        if (summaryLineY - (index * 12) > currentY - featuresTableHeight + 8) {
+          page.drawText(line, {
+            x: margin + 150,
+            y: summaryLineY - (index * 12),
+            size: 9,
+            font: font,
+          });
+        }
+      });
+
+      page.drawText('$0.00', {
+        x: margin + printableWidth - 70,
+        y: summaryLineY,
+        size: 9,
+        font: boldFont,
+        color: rgb(0, 0.4, 0.8),
+      });
+
+      summaryLineY -= Math.max(15, wrappedShank.length * 12);
+    }
+
     // Action Inlet
     if (summaryLineY > currentY - featuresTableHeight + 15) {
-      const actionInletFeature = features.find(f => f.id === 'action_inlet');
+      const actionInletFeature = features.find(f => f.id === 'action');
       const actionInletOption = actionInletFeature?.options?.find(opt => opt.value === order.features?.action_inlet);
       actionInletPrice = actionInletOption?.price || 0;
 
@@ -1605,7 +1577,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     barrelInletPrice = barrelInletOption?.price || 0;
 
     page.drawText('Barrel Inlet:', {
-      x: margin + 10,
+      x: margin + 8,
       y: summaryLineY,
       size: 9,
       font: font,
@@ -1615,7 +1587,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     const wrappedBarrelInlet = wrapText(barrelInletDisplay, printableWidth - 200, 9, font);
     wrappedBarrelInlet.forEach((line, index) => {
       page.drawText(line, {
-        x: margin + 120,
+        x: margin + 150,
         y: summaryLineY - (index * 12),
         size: 9,
         font: font,
@@ -1626,7 +1598,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     }
 
     page.drawText(`$${barrelInletPrice.toFixed(2)}`, {
-      x: margin + printableWidth - 80,
+      x: margin + printableWidth - 70,
       y: summaryLineY,
       size: 9,
       font: boldFont,
@@ -1641,7 +1613,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     qdPrice = qdOption?.price || 0;
 
     page.drawText('QDs (Quick Detach Cups):', {
-      x: margin + 10,
+      x: margin + 8,
       y: summaryLineY,
       size: 9,
       font: font,
@@ -1651,7 +1623,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     const wrappedQD = wrapText(qdDisplay, printableWidth - 200, 9, font);
     wrappedQD.forEach((line, index) => {
       page.drawText(line, {
-        x: margin + 120,
+        x: margin + 150,
         y: summaryLineY - (index * 12),
         size: 9,
         font: font,
@@ -1662,7 +1634,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     }
 
     page.drawText(`$${qdPrice.toFixed(2)}`, {
-      x: margin + printableWidth - 80,
+      x: margin + printableWidth - 70,
       y: summaryLineY,
       size: 9,
       font: boldFont,
@@ -1677,7 +1649,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     lopPrice = lopOption?.price || 0;
 
     page.drawText('LOP (Length of Pull):', {
-      x: margin + 10,
+      x: margin + 8,
       y: summaryLineY,
       size: 9,
       font: font,
@@ -1690,7 +1662,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     const wrappedLOP = wrapText(lopDisplay, printableWidth - 200, 9, font);
     wrappedLOP.forEach((line, index) => {
       page.drawText(line, {
-        x: margin + 120,
+        x: margin + 150,
         y: summaryLineY - (index * 12),
         size: 9,
         font: font,
@@ -1701,7 +1673,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     }
 
     page.drawText(`$${lopPrice.toFixed(2)}`, {
-      x: margin + printableWidth - 80,
+      x: margin + printableWidth - 70,
       y: summaryLineY,
       size: 9,
       font: boldFont,
@@ -1728,7 +1700,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     }
 
     page.drawText('Rails:', {
-      x: margin + 10,
+      x: margin + 8,
       y: summaryLineY,
       size: 9,
       font: font,
@@ -1737,7 +1709,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     const wrappedRails = wrapText(railsDisplay, printableWidth - 200, 9, font);
     wrappedRails.forEach((line, index) => {
       page.drawText(line, {
-        x: margin + 120,
+        x: margin + 150,
         y: summaryLineY - (index * 12),
         size: 9,
         font: font,
@@ -1748,7 +1720,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     }
 
     page.drawText(`$${railsPrice.toFixed(2)}`, {
-      x: margin + printableWidth - 80,
+      x: margin + printableWidth - 70,
       y: summaryLineY,
       size: 9,
       font: boldFont,
@@ -1763,7 +1735,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     texturePrice = textureOption?.price || 0;
 
     page.drawText('Texture:', {
-      x: margin + 10,
+      x: margin + 8,
       y: summaryLineY,
       size: 9,
       font: font,
@@ -1775,7 +1747,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     const wrappedTexture = wrapText(textureDisplay, printableWidth - 200, 9, font);
     wrappedTexture.forEach((line, index) => {
       page.drawText(line, {
-        x: margin + 120,
+        x: margin + 150,
         y: summaryLineY - (index * 12),
         size: 9,
         font: font,
@@ -1786,7 +1758,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     }
 
     page.drawText(`$${texturePrice.toFixed(2)}`, {
-      x: margin + printableWidth - 80,
+      x: margin + printableWidth - 70,
       y: summaryLineY,
       size: 9,
       font: boldFont,
@@ -1801,7 +1773,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     swivelPrice = swivelOption?.price || 0;
 
     page.drawText('Swivel Studs:', {
-      x: margin + 10,
+      x: margin + 8,
       y: summaryLineY,
       size: 9,
       font: font,
@@ -1811,7 +1783,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     const wrappedSwivel = wrapText(swivelDisplay, printableWidth - 200, 9, font);
     wrappedSwivel.forEach((line, index) => {
       page.drawText(line, {
-        x: margin + 120,
+        x: margin + 150,
         y: summaryLineY - (index * 12),
         size: 9,
         font: font,
@@ -1822,7 +1794,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     }
 
     page.drawText(`$${swivelPrice.toFixed(2)}`, {
-      x: margin + printableWidth - 80,
+      x: margin + printableWidth - 70,
       y: summaryLineY,
       size: 9,
       font: boldFont,
@@ -1850,7 +1822,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     }
 
     page.drawText('Other Options:', {
-      x: margin + 10,
+      x: margin + 8,
       y: summaryLineY,
       size: 9,
       font: font,
@@ -1860,7 +1832,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     const wrappedOtherOptions = wrapText(otherOptionsDisplay, printableWidth - 200, 9, font);
     wrappedOtherOptions.forEach((line, index) => {
       page.drawText(line, {
-        x: margin + 120,
+        x: margin + 150,
         y: summaryLineY - (index * 12),
         size: 9,
         font: font,
@@ -1872,7 +1844,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     }
 
     page.drawText(`$${otherOptionsPrice.toFixed(2)}`, {
-      x: margin + printableWidth - 80,
+      x: margin + printableWidth - 70,
       y: summaryLineY,
       size: 9,
       font: boldFont,
@@ -1921,7 +1893,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     }
 
     page.drawText('Paint Options:', {
-      x: margin + 10,
+      x: margin + 8,
       y: summaryLineY,
       size: 9,
       font: font,
@@ -1931,7 +1903,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     const wrappedPaintDisplay = wrapText(paintDisplay, printableWidth - 200, 9, font);
     wrappedPaintDisplay.forEach((line, index) => {
       page.drawText(line, {
-        x: margin + 120,
+        x: margin + 150,
         y: summaryLineY - (index * 12),
         size: 9,
         font: font,
@@ -1943,7 +1915,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     }
 
     page.drawText(`$${paintPrice.toFixed(2)}`, {
-      x: margin + printableWidth - 80,
+      x: margin + printableWidth - 70,
       y: summaryLineY,
       size: 9,
       font: boldFont,
@@ -1954,7 +1926,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
 
     // Separator line
     page.drawLine({
-      start: { x: margin + 10, y: summaryLineY },
+      start: { x: margin + 8, y: summaryLineY },
       end: { x: margin + printableWidth - 10, y: summaryLineY },
       thickness: 1,
       color: rgb(0, 0, 0),
@@ -1965,14 +1937,14 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     // Subtotal
     const calculatedSubtotal = basePrice + actionLengthPrice + actionInletPrice + bottomMetalPrice + barrelInletPrice + qdPrice + lopPrice + railsPrice + texturePrice + swivelPrice + otherOptionsPrice + paintPrice;
     page.drawText('Subtotal:', {
-      x: margin + 10,
+      x: margin + 8,
       y: summaryLineY,
       size: 10,
       font: boldFont,
     });
 
     page.drawText(`$${calculatedSubtotal.toFixed(2)}`, {
-      x: margin + printableWidth - 80,
+      x: margin + printableWidth - 70,
       y: summaryLineY,
       size: 10,
       font: boldFont,
@@ -1983,14 +1955,14 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     // Shipping
     if (order.shipping && order.shipping > 0) {
       page.drawText('Shipping:', {
-        x: margin + 10,
+        x: margin + 8,
         y: summaryLineY,
         size: 10,
         font: boldFont,
       });
 
       page.drawText(`$${order.shipping.toFixed(2)}`, {
-        x: margin + printableWidth - 80,
+        x: margin + printableWidth - 70,
         y: summaryLineY,
         size: 10,
         font: boldFont,
@@ -1999,9 +1971,73 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       summaryLineY -= 25;
     }
 
+    // Calculate and display discount if applicable
+    let discountAmount = 0;
+    let discountLabel = '';
+    let discountName = '';
+    
+    // Check for persistent discount first
+    const discountCode = order.discountCode || (order as any).discount_code;
+    if (discountCode && discountCode.startsWith('persistent_')) {
+      const persistentDiscountId = parseInt(discountCode.replace('persistent_', ''));
+      const persistentDiscount = persistentDiscounts.find(d => d.id === persistentDiscountId);
+      
+      if (persistentDiscount && persistentDiscount.isActive) {
+        const discountBase = persistentDiscount.appliesTo === 'stock_model' ? basePrice : calculatedSubtotal;
+        
+        if (persistentDiscount.percent) {
+          discountAmount = discountBase * (persistentDiscount.percent / 100);
+          discountLabel = `${persistentDiscount.percent}%`;
+        } else if (persistentDiscount.fixedAmount) {
+          discountAmount = persistentDiscount.fixedAmount;
+          discountLabel = `$${persistentDiscount.fixedAmount.toFixed(2)}`;
+        }
+        
+        discountName = persistentDiscount.name || 'Discount';
+      }
+    }
+    
+    // If no persistent discount, check for custom discount
+    if (discountAmount === 0) {
+      const showDiscount = order.showCustomDiscount || (order as any).show_custom_discount;
+      const discountValue = order.customDiscountValue || (order as any).custom_discount_value;
+      const discountType = order.customDiscountType || (order as any).custom_discount_type;
+      
+      if (showDiscount && discountValue && discountValue > 0) {
+        if (discountType === 'percent') {
+          discountAmount = calculatedSubtotal * (discountValue / 100);
+          discountLabel = `${discountValue}%`;
+        } else {
+          discountAmount = discountValue;
+          discountLabel = `$${discountValue.toFixed(2)}`;
+        }
+        discountName = 'Custom Discount';
+      }
+    }
+    
+    // Display discount if applicable
+    if (discountAmount > 0) {
+      page.drawText('Discount:', {
+        x: margin + 8,
+        y: summaryLineY,
+        size: 10,
+        font: boldFont,
+      });
+      
+      page.drawText(`-$${discountAmount.toFixed(2)}`, {
+        x: margin + printableWidth - 70,
+        y: summaryLineY,
+        size: 10,
+        font: boldFont,
+        color: rgb(0.8, 0, 0),
+      });
+
+      summaryLineY -= 25;
+    }
+
     // Final separator line
     page.drawLine({
-      start: { x: margin + 10, y: summaryLineY },
+      start: { x: margin + 8, y: summaryLineY },
       end: { x: margin + printableWidth - 10, y: summaryLineY },
       thickness: 2,
       color: rgb(0, 0, 0),
@@ -2009,21 +2045,39 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
 
     summaryLineY -= 25;
 
-    // Total
-    const finalTotal = calculatedSubtotal + (order.shipping || 0);
+    // Total (after discount)
+    const finalTotal = calculatedSubtotal + (order.shipping || 0) - discountAmount;
     page.drawText('TOTAL:', {
-      x: margin + 10,
+      x: margin + 8,
       y: summaryLineY,
       size: 11,
       font: boldFont,
     });
 
     page.drawText(`$${finalTotal.toFixed(2)}`, {
-      x: margin + printableWidth - 80,
+      x: margin + printableWidth - 70,
       y: summaryLineY,
       size: 11,
       font: boldFont,
       color: rgb(0, 0.6, 0),
+    });
+
+    summaryLineY -= 25;
+
+    // Payment Status - positioned below the TOTAL
+    page.drawText('Payment Status:', {
+      x: margin + 8,
+      y: summaryLineY,
+      size: 10,
+      font: boldFont,
+    });
+    
+    page.drawText(paymentStatus, {
+      x: margin + printableWidth - 70,
+      y: summaryLineY,
+      size: 10,
+      font: boldFont,
+      color: paymentColor,
     });
 
     summaryLineY -= 15;

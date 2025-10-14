@@ -528,4 +528,107 @@ router.post("/matrix/import-pdf", upload.single("file"), async (req, res) => {
   }
 });
 
+// Google Sheets Integration Routes
+
+import { listGoogleSheets, getSpreadsheetData, parseTrainingMatrixFromSheet } from "../lib/googleSheets";
+
+// List available Google Sheets
+router.get("/google-sheets", async (req, res) => {
+  try {
+    const sheets = await listGoogleSheets();
+    res.json(sheets);
+  } catch (error: any) {
+    console.error("Error listing Google Sheets:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Preview Google Sheet data
+router.get("/google-sheets/:id/preview", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { range } = req.query;
+    
+    const data = await getSpreadsheetData(id, range as string);
+    res.json({ data });
+  } catch (error: any) {
+    console.error("Error previewing Google Sheet:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete all training matrix entries
+router.delete("/matrix", async (req, res) => {
+  try {
+    const deleted = await db.delete(trainingMatrix);
+    res.json({ success: true, message: "All training matrix entries deleted" });
+  } catch (error: any) {
+    console.error("Error deleting training matrix:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Import training matrix from Google Sheets
+router.post("/import-from-sheets", async (req, res) => {
+  try {
+    const { spreadsheetId, range } = req.body;
+    
+    if (!spreadsheetId) {
+      return res.status(400).json({ error: "Spreadsheet ID is required" });
+    }
+    
+    const matrixRows = await parseTrainingMatrixFromSheet(spreadsheetId, range);
+    const imported = [];
+    
+    for (const row of matrixRows) {
+      const { employeeName, ...trainings } = row;
+      
+      // Create a training entry for each training that has a date
+      for (const [trainingName, completionDate] of Object.entries(trainings)) {
+        if (completionDate && completionDate.trim() !== '') {
+          // Parse the date - handle various formats
+          let lastCompleted: Date | null = null;
+          try {
+            // Try to parse the date string
+            const dateStr = completionDate.trim();
+            // Handle formats like "5/7/2025(V)" or "1/19/2023"
+            const cleanDate = dateStr.replace(/\([^)]*\)/g, '').trim();
+            lastCompleted = new Date(cleanDate);
+            
+            // Check if date is valid
+            if (isNaN(lastCompleted.getTime())) {
+              lastCompleted = null;
+            }
+          } catch (e) {
+            console.warn(`Could not parse date for ${employeeName} - ${trainingName}: ${completionDate}`);
+          }
+          
+          const [newEntry] = await db
+            .insert(trainingMatrix)
+            .values({
+              employeeName: employeeName,
+              trainingName: trainingName,
+              lastCompleted: lastCompleted,
+              status: lastCompleted ? 'COMPLETED' : 'PENDING',
+              notes: completionDate.includes('(') ? completionDate.match(/\(([^)]+)\)/)?.[1] || null : null,
+              isLegacy: true
+            })
+            .returning();
+          
+          imported.push(newEntry);
+        }
+      }
+    }
+    
+    res.status(201).json({ 
+      success: true, 
+      imported: imported.length,
+      entries: imported
+    });
+  } catch (error: any) {
+    console.error("Error importing from Google Sheets:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 export default router;

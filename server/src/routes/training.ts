@@ -386,6 +386,77 @@ router.get("/quiz/attempts/:trainingRecordId", async (req, res) => {
   }
 });
 
+// Complete quiz and calculate score
+router.post("/modules/:moduleId/complete", async (req, res) => {
+  try {
+    const moduleId = parseInt(req.params.moduleId);
+    const { employeeId, employeeName, answers } = req.body;
+
+    // Fetch module with questions and options
+    const module = await db
+      .select()
+      .from(trainingModules)
+      .where(eq(trainingModules.id, moduleId))
+      .limit(1);
+
+    if (!module || module.length === 0) {
+      return res.status(404).json({ error: "Training module not found" });
+    }
+
+    const questions = await db
+      .select()
+      .from(trainingQuestions)
+      .where(eq(trainingQuestions.moduleId, moduleId))
+      .orderBy(trainingQuestions.sortOrder);
+
+    const questionsWithOptions = await Promise.all(
+      questions.map(async (question) => {
+        const options = await db
+          .select()
+          .from(trainingQuestionOptions)
+          .where(eq(trainingQuestionOptions.questionId, question.id))
+          .orderBy(trainingQuestionOptions.sortOrder);
+        
+        return { ...question, options };
+      })
+    );
+
+    // Calculate score
+    let correctCount = 0;
+    const totalQuestions = questionsWithOptions.length;
+
+    questionsWithOptions.forEach((question) => {
+      const userAnswer = answers[question.id];
+      const correctOption = question.options.find(opt => opt.isCorrect);
+      
+      if (correctOption && userAnswer === correctOption.optionText) {
+        correctCount++;
+      }
+    });
+
+    const scorePercentage = totalQuestions > 0 ? Math.round((correctCount / totalQuestions) * 100) : 0;
+    const passingScore = module[0].passingScore || 80;
+    const passed = scorePercentage >= passingScore;
+
+    const results = {
+      score: scorePercentage,
+      correctCount,
+      totalQuestions,
+      passed,
+      passingScore,
+      employeeId,
+      employeeName,
+      moduleId,
+      moduleTitle: module[0].title
+    };
+
+    res.json(results);
+  } catch (error: any) {
+    console.error("Error completing quiz:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Training matrix endpoints
 router.get("/matrix", async (req, res) => {
   try {

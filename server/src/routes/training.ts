@@ -392,12 +392,16 @@ router.post("/modules/:moduleId/complete", async (req, res) => {
     const moduleId = parseInt(req.params.moduleId);
     const { employeeId, employeeName, answers } = req.body;
 
+    console.log('Quiz completion request:', { moduleId, employeeId, employeeName, answersCount: Object.keys(answers).length });
+
     // Fetch module with questions and options
     const module = await db
       .select()
       .from(trainingModules)
       .where(eq(trainingModules.id, moduleId))
       .limit(1);
+
+    console.log('Module found:', module.length > 0 ? module[0].title : 'none');
 
     if (!module || module.length === 0) {
       return res.status(404).json({ error: "Training module not found" });
@@ -408,6 +412,8 @@ router.post("/modules/:moduleId/complete", async (req, res) => {
       .from(trainingQuestions)
       .where(eq(trainingQuestions.moduleId, moduleId))
       .orderBy(trainingQuestions.sortOrder);
+
+    console.log('Questions fetched:', questions.length);
 
     const questionsWithOptions = await Promise.all(
       questions.map(async (question) => {
@@ -437,6 +443,8 @@ router.post("/modules/:moduleId/complete", async (req, res) => {
     const scorePercentage = totalQuestions > 0 ? Math.round((correctCount / totalQuestions) * 100) : 0;
     const passingScore = module[0].passingScore || 80;
     const passed = scorePercentage >= passingScore;
+
+    console.log('Score calculation:', { correctCount, totalQuestions, scorePercentage, passingScore, passed });
 
     // Update training matrix with completion data
     if (employeeId && passed) {

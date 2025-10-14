@@ -247,6 +247,10 @@ export default function TrainingMatrixManage() {
     }
 
     try {
+      // Find the training module to get the ID for linking
+      const trainingModule = modules.find(m => m.title === assignTraining);
+      const moduleLink = trainingModule ? `\n\nClick here to start: /training/modules/${trainingModule.id}` : '';
+      
       // Create training assignments and send notifications
       for (const empId of selectedEmployeeIds) {
         const employee = employees.find(e => e.id === empId);
@@ -267,7 +271,7 @@ export default function TrainingMatrixManage() {
           }),
         });
 
-        // Send notification via internal messages
+        // Send notification via internal messages with module link
         await apiRequest('/api/internal-messages', {
           method: 'POST',
           body: JSON.stringify({
@@ -277,7 +281,7 @@ export default function TrainingMatrixManage() {
             recipientName: user.username,
             recipientUserId: empId,
             subject: `Training Assignment: ${assignTraining}`,
-            message: notificationMessage,
+            message: `${notificationMessage}${moduleLink}`,
             isUrgent: false,
           }),
         });

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link, useLocation, useRoute } from 'wouter';
 
-import { Factory, User, FileText, TrendingDown, Plus, Settings, Package, FilePenLine, ClipboardList, BarChart, ChevronDown, ChevronRight, FormInput, PieChart, Scan, Warehouse, Shield, Wrench, Users, TestTube, DollarSign, Receipt, TrendingUp, List, BookOpen, Calendar, CheckSquare, Truck, Mail, MessageSquare, CreditCard, XCircle, Cog, ArrowRight, LogOut, Scissors, MapPin, Snowflake, ShoppingCart, GraduationCap, Home } from "lucide-react";
+import { Factory, User, FileText, TrendingDown, Plus, Settings, Package, FilePenLine, ClipboardList, BarChart, ChevronDown, ChevronRight, FormInput, PieChart, Scan, Warehouse, Shield, Wrench, Users, TestTube, DollarSign, Receipt, TrendingUp, List, BookOpen, Calendar, CheckSquare, Truck, Mail, MessageSquare, CreditCard, XCircle, Cog, ArrowRight, LogOut, Scissors, MapPin, Snowflake, ShoppingCart, GraduationCap, Home, FileSpreadsheet } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -333,6 +333,24 @@ export default function Navigation() {
       label: 'All Training Modules',
       icon: GraduationCap,
       description: 'View all available training modules'
+    },
+    {
+      path: '/training-management',
+      label: 'Training Management',
+      icon: GraduationCap,
+      description: 'Manage training modules and content'
+    },
+    {
+      path: '/training-matrix',
+      label: 'Training Matrix',
+      icon: GraduationCap,
+      description: 'View employee training completion matrix'
+    },
+    {
+      path: '/training-matrix-import',
+      label: 'Import Training Matrix',
+      icon: FileSpreadsheet,
+      description: 'Import training matrix from Google Sheets'
     },
     {
       path: '/training/preservation-fod',

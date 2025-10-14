@@ -203,10 +203,10 @@ export default function TrainingMatrixView() {
                     {trainings.map((training) => (
                       <th
                         key={training}
-                        className="p-3 text-left font-semibold min-w-[120px] border-l"
+                        className="p-3 text-left font-bold min-w-[140px] border-l h-40 bg-muted/50"
                         data-testid={`header-training-${training.replace(/\s+/g, '-').toLowerCase()}`}
                       >
-                        <div className="transform -rotate-45 origin-left text-xs whitespace-nowrap">
+                        <div className="transform -rotate-45 origin-left text-sm whitespace-nowrap font-bold">
                           {training}
                         </div>
                       </th>
@@ -295,10 +295,10 @@ export default function TrainingMatrixView() {
                     {employees.map((employee) => (
                       <th
                         key={employee.name}
-                        className="p-3 text-left font-semibold min-w-[120px] border-l"
+                        className="p-3 text-left font-bold min-w-[140px] border-l h-40 bg-muted/50"
                         data-testid={`header-employee-${employee.name.replace(/\s+/g, '-').toLowerCase()}`}
                       >
-                        <div className="transform -rotate-45 origin-left text-xs whitespace-nowrap">
+                        <div className="transform -rotate-45 origin-left text-sm whitespace-nowrap font-bold">
                           {employee.name}
                         </div>
                       </th>

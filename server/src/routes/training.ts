@@ -447,8 +447,29 @@ router.post("/modules/:moduleId/complete", async (req, res) => {
     console.log('Score calculation:', { correctCount, totalQuestions, scorePercentage, passingScore, passed });
 
     // Update training matrix with completion data
-    if (employeeId && passed) {
+    if (passed) {
       const trainingName = module[0].title;
+      
+      // Look up the actual employee numeric ID from username if employeeId is a username
+      let numericEmployeeId: number | null = null;
+      
+      if (employeeId) {
+        const parsedId = parseInt(employeeId);
+        if (!isNaN(parsedId)) {
+          numericEmployeeId = parsedId;
+        } else {
+          // employeeId is a username, look up the numeric ID
+          const employee = await db
+            .select()
+            .from(employees)
+            .where(eq(employees.username, employeeId))
+            .limit(1);
+          
+          if (employee && employee.length > 0) {
+            numericEmployeeId = employee[0].id;
+          }
+        }
+      }
       
       // Find existing training matrix entry
       const existingEntry = await db
@@ -456,7 +477,9 @@ router.post("/modules/:moduleId/complete", async (req, res) => {
         .from(trainingMatrix)
         .where(
           and(
-            eq(trainingMatrix.employeeId, parseInt(employeeId)),
+            numericEmployeeId !== null 
+              ? eq(trainingMatrix.employeeId, numericEmployeeId)
+              : eq(trainingMatrix.employeeName, employeeName),
             eq(trainingMatrix.trainingName, trainingName)
           )
         )
@@ -478,7 +501,7 @@ router.post("/modules/:moduleId/complete", async (req, res) => {
         await db
           .insert(trainingMatrix)
           .values({
-            employeeId: parseInt(employeeId),
+            employeeId: numericEmployeeId,
             employeeName: employeeName,
             trainingName: trainingName,
             lastCompleted: new Date(),

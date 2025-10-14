@@ -708,6 +708,7 @@ export const trainingMatrix = pgTable("training_matrix", {
   requiredBy: text("required_by"), // JOB_ROLE, DEPARTMENT, REGULATORY, etc.
   frequency: text("frequency"), // ONCE, ANNUAL, QUARTERLY, MONTHLY
   lastCompleted: timestamp("last_completed"),
+  lastScore: integer("last_score"), // Most recent quiz score percentage
   nextDue: timestamp("next_due"),
   status: text("status").default("PENDING"), // PENDING, COMPLETED, OVERDUE, NOT_REQUIRED
   documentationUrl: text("documentation_url"),

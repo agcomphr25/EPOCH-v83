@@ -353,6 +353,12 @@ export default function Navigation() {
       description: 'Import training matrix from Google Sheets'
     },
     {
+      path: '/training-matrix-manage',
+      label: 'Manage Training Assignments',
+      icon: GraduationCap,
+      description: 'Add, edit, and delete training assignments for employees'
+    },
+    {
       path: '/training/2',
       label: 'Preservation & FOD',
       icon: Shield,

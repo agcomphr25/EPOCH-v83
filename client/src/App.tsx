@@ -83,6 +83,7 @@ import TrainingModule from "@/pages/TrainingModule";
 import TrainingManagement from "@/pages/TrainingManagement";
 import TrainingMatrixView from "@/pages/TrainingMatrixView";
 import TrainingMatrixImport from "@/pages/TrainingMatrixImport";
+import TrainingMatrixManage from "@/pages/TrainingMatrixManage";
 import Calendar from "./pages/Calendar";
 import LayupPluggingQueuePage from "./pages/LayupPluggingQueuePage";
 import BarcodeQueuePage from "./pages/BarcodeQueuePage";
@@ -314,6 +315,7 @@ function App() {
                   <Route path="/training-management" component={TrainingManagement} />
                   <Route path="/training-matrix" component={TrainingMatrixView} />
                   <Route path="/training-matrix-import" component={TrainingMatrixImport} />
+                  <Route path="/training-matrix-manage" component={TrainingMatrixManage} />
                   <Route path="/training/:moduleId" component={TrainingModule} />
                   <Route path="/shutdown-training" component={ShutdownProceduresTraining} />
                   <Route path="/counterfeit-prevention-training" component={CounterfeitPreventionTraining} />

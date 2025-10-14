@@ -432,6 +432,50 @@ router.post("/matrix", async (req, res) => {
   }
 });
 
+// Update training matrix entry
+router.patch("/matrix/:id", async (req, res) => {
+  try {
+    const matrixId = parseInt(req.params.id);
+    const validatedData = insertTrainingMatrixSchema.partial().parse(req.body);
+    
+    const [updatedEntry] = await db
+      .update(trainingMatrix)
+      .set(validatedData)
+      .where(eq(trainingMatrix.id, matrixId))
+      .returning();
+    
+    if (!updatedEntry) {
+      return res.status(404).json({ error: "Training matrix entry not found" });
+    }
+    
+    res.json(updatedEntry);
+  } catch (error: any) {
+    console.error("Error updating training matrix entry:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete single training matrix entry
+router.delete("/matrix/:id", async (req, res) => {
+  try {
+    const matrixId = parseInt(req.params.id);
+    
+    const [deletedEntry] = await db
+      .delete(trainingMatrix)
+      .where(eq(trainingMatrix.id, matrixId))
+      .returning();
+    
+    if (!deletedEntry) {
+      return res.status(404).json({ error: "Training matrix entry not found" });
+    }
+    
+    res.json({ success: true, deletedEntry });
+  } catch (error: any) {
+    console.error("Error deleting training matrix entry:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Import legacy training matrix from CSV
 router.post("/matrix/import-csv", upload.single("file"), async (req, res) => {
   try {

@@ -4,6 +4,26 @@
 EPOCH v8 is a comprehensive Manufacturing ERP system designed for small manufacturing companies specializing in customizable products.
 
 ## Recent Changes
+**October 14, 2025 - Training System Complete with Quiz Questions & Owner Sorting**
+- **Quiz Questions Added**: All 9 training modules now include comprehensive quiz assessments
+  - 5 questions per module (45 total questions across all modules)
+  - Each module worth 50 points total
+  - Question types: MULTIPLE_CHOICE, TRUE_FALSE, and SHORT_ANSWER
+  - Modules covered: Preservation & FOD, Chemical Handling, Fire Safety, ITAR Compliance, AS9100, Counterfeit Prevention, Ethics, Nonconforming Items, Shutdown Procedures
+  - Quizzes fully functional with scoring, attempts tracking, and certificate generation
+- **Owner Sorting Implemented**: Dave, Angie, Matt, and Laurie automatically appear at bottom of employee lists
+  - Applied to Training Matrix View for consistent display
+  - Owners sorted to bottom regardless of A-Z/Z-A sort order
+  - Regular employees sorted alphabetically above owners
+- **Training Management Streamlined**: Removed Training Matrix and Employee Records tabs
+  - Training Management page now focuses solely on module management
+  - Matrix and employee training data accessible through dedicated pages
+- **Critical Bug Fix**: Navigation paths corrected from slugs to numeric IDs
+  - Fixed 500 errors when accessing training modules from navigation
+  - All training modules now load correctly with quizzes displayed
+  - **Key File**: `client/src/components/Navigation.tsx`
+- **Production Ready**: All features tested and verified for deployment
+
 **October 14, 2025 - Google Sheets Training Matrix Import & Sorting**
 - **New Feature**: Google Sheets integration for training matrix data import
   - Added Google Sheets API integration using Replit's connection system

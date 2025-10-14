@@ -1,9 +1,17 @@
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle2, Circle } from "lucide-react";
+import { CheckCircle2, Circle, ArrowUpDown } from "lucide-react";
 import { useState } from "react";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 type TrainingMatrixEntry = {
   id: number;
@@ -19,6 +27,8 @@ type TrainingMatrixEntry = {
 
 export default function TrainingMatrixView() {
   const [searchTerm, setSearchTerm] = useState("");
+  const [viewMode, setViewMode] = useState<"employee" | "training">("employee");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
   
   const { data: matrixData, isLoading } = useQuery<TrainingMatrixEntry[]>({
     queryKey: ["/api/training/matrix"],
@@ -62,13 +72,32 @@ export default function TrainingMatrixView() {
     }
   });
   
-  const employees = Array.from(employeeMap.values()).sort((a, b) => a.name.localeCompare(b.name));
-  const trainings = Array.from(new Set(matrixData.map(e => e.trainingName))).sort();
+  // Sort employees based on sortOrder
+  const employees = Array.from(employeeMap.values()).sort((a, b) => 
+    sortOrder === "asc" 
+      ? a.name.localeCompare(b.name)
+      : b.name.localeCompare(a.name)
+  );
+  
+  // Sort trainings based on sortOrder
+  const trainings = Array.from(new Set(matrixData.map(e => e.trainingName))).sort((a, b) =>
+    sortOrder === "asc" 
+      ? a.localeCompare(b)
+      : b.localeCompare(a)
+  );
 
   // Filter by search term
-  const filteredEmployees = searchTerm
-    ? employees.filter(emp => emp.name.toLowerCase().includes(searchTerm.toLowerCase()))
+  const filteredEmployees = viewMode === "employee"
+    ? (searchTerm
+        ? employees.filter(emp => emp.name.toLowerCase().includes(searchTerm.toLowerCase()))
+        : employees)
     : employees;
+
+  const filteredTrainings = viewMode === "training"
+    ? (searchTerm
+        ? trainings.filter(training => training.toLowerCase().includes(searchTerm.toLowerCase()))
+        : trainings)
+    : trainings;
 
   // Create lookup map for quick access
   const matrixMap = new Map<string, TrainingMatrixEntry>();
@@ -98,117 +127,227 @@ export default function TrainingMatrixView() {
     }).length;
   };
 
+  const trainingCompletedCount = (trainingName: string) => {
+    return employees.filter(employee => {
+      const entry = getEntry(employee.name, trainingName);
+      return entry?.status === 'COMPLETED';
+    }).length;
+  };
+
   const totalTrainings = trainings.length;
+  const totalEmployees = employees.length;
 
   return (
     <div className="p-8">
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle>Employee Training Matrix</CardTitle>
-            <div className="flex items-center gap-4">
-              <Input
-                placeholder="Search employees..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-64"
-                data-testid="input-search-employees"
-              />
-              <Badge variant="outline" className="text-sm">
-                {filteredEmployees.length} Employees × {totalTrainings} Trainings
-              </Badge>
-            </div>
+          <div className="flex items-center justify-between mb-4">
+            <CardTitle>Training Matrix</CardTitle>
+            <Badge variant="outline" className="text-sm">
+              {totalEmployees} Employees × {totalTrainings} Trainings
+            </Badge>
+          </div>
+          <div className="flex items-center gap-4">
+            <Select value={viewMode} onValueChange={(value: "employee" | "training") => setViewMode(value)}>
+              <SelectTrigger className="w-48" data-testid="select-view-mode">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="employee">Sort by Employee</SelectItem>
+                <SelectItem value="training">Sort by Training</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setSortOrder(sortOrder === "asc" ? "desc" : "asc")}
+              data-testid="button-toggle-sort"
+            >
+              <ArrowUpDown className="h-4 w-4 mr-2" />
+              {sortOrder === "asc" ? "A-Z" : "Z-A"}
+            </Button>
+            <Input
+              placeholder={viewMode === "employee" ? "Search employees..." : "Search trainings..."}
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-64"
+              data-testid="input-search"
+            />
           </div>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
-            <table className="w-full border-collapse">
-              <thead>
-                <tr className="border-b">
-                  <th className="sticky left-0 bg-background z-10 p-3 text-left font-semibold min-w-[200px]">
-                    Employee
-                  </th>
-                  <th className="p-3 text-center font-semibold min-w-[100px]">
-                    Progress
-                  </th>
-                  {trainings.map((training) => (
-                    <th
-                      key={training}
-                      className="p-3 text-left font-semibold min-w-[120px] border-l"
-                      data-testid={`header-training-${training.replace(/\s+/g, '-').toLowerCase()}`}
-                    >
-                      <div className="transform -rotate-45 origin-left text-xs whitespace-nowrap">
-                        {training}
-                      </div>
+            {viewMode === "employee" ? (
+              <table className="w-full border-collapse">
+                <thead>
+                  <tr className="border-b">
+                    <th className="sticky left-0 bg-background z-10 p-3 text-left font-semibold min-w-[200px]">
+                      Employee
                     </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {filteredEmployees.map((employee) => {
-                  const completed = completedCount(employee.name);
-                  const percentage = Math.round((completed / totalTrainings) * 100);
-                  
-                  return (
-                    <tr
-                      key={employee.name}
-                      className="border-b hover:bg-muted/50"
-                      data-testid={`row-employee-${employee.name.replace(/\s+/g, '-').toLowerCase()}`}
-                    >
-                      <td className="sticky left-0 bg-background z-10 p-3">
-                        <div className="flex flex-col">
-                          <span className="font-medium">{employee.name}</span>
-                          {employee.jobTitle && (
-                            <span className="text-xs text-muted-foreground">{employee.jobTitle}</span>
-                          )}
-                          {employee.department && (
-                            <span className="text-xs text-blue-600">{employee.department}</span>
-                          )}
+                    <th className="p-3 text-center font-semibold min-w-[100px]">
+                      Progress
+                    </th>
+                    {trainings.map((training) => (
+                      <th
+                        key={training}
+                        className="p-3 text-left font-semibold min-w-[120px] border-l"
+                        data-testid={`header-training-${training.replace(/\s+/g, '-').toLowerCase()}`}
+                      >
+                        <div className="transform -rotate-45 origin-left text-xs whitespace-nowrap">
+                          {training}
                         </div>
-                      </td>
-                      <td className="p-3 text-center">
-                        <div className="flex flex-col items-center gap-1">
-                          <Badge
-                            variant={percentage === 100 ? "default" : percentage > 50 ? "secondary" : "destructive"}
-                            className="w-16"
-                          >
-                            {percentage}%
-                          </Badge>
-                          <span className="text-xs text-muted-foreground">
-                            {completed}/{totalTrainings}
-                          </span>
-                        </div>
-                      </td>
-                      {trainings.map((training) => {
-                        const entry = getEntry(employee.name, training);
-                        const isCompleted = entry?.status === 'COMPLETED';
-                        const date = formatDate(entry?.lastCompleted || null);
-                        
-                        return (
-                          <td
-                            key={training}
-                            className="p-3 text-center border-l"
-                            data-testid={`cell-${employee.name.replace(/\s+/g, '-').toLowerCase()}-${training.replace(/\s+/g, '-').toLowerCase()}`}
-                          >
-                            {isCompleted ? (
-                              <div className="flex flex-col items-center gap-1">
-                                <CheckCircle2 className="h-5 w-5 text-green-600" />
-                                <span className="text-xs text-muted-foreground">{date}</span>
-                                {entry?.notes && (
-                                  <span className="text-xs text-blue-600">({entry.notes})</span>
-                                )}
-                              </div>
-                            ) : (
-                              <Circle className="h-5 w-5 text-red-400 mx-auto" />
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredEmployees.map((employee) => {
+                    const completed = completedCount(employee.name);
+                    const percentage = Math.round((completed / totalTrainings) * 100);
+                    
+                    return (
+                      <tr
+                        key={employee.name}
+                        className="border-b hover:bg-muted/50"
+                        data-testid={`row-employee-${employee.name.replace(/\s+/g, '-').toLowerCase()}`}
+                      >
+                        <td className="sticky left-0 bg-background z-10 p-3">
+                          <div className="flex flex-col">
+                            <span className="font-medium">{employee.name}</span>
+                            {employee.jobTitle && (
+                              <span className="text-xs text-muted-foreground">{employee.jobTitle}</span>
                             )}
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                            {employee.department && (
+                              <span className="text-xs text-blue-600">{employee.department}</span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="p-3 text-center">
+                          <div className="flex flex-col items-center gap-1">
+                            <Badge
+                              variant={percentage === 100 ? "default" : percentage > 50 ? "secondary" : "destructive"}
+                              className="w-16"
+                            >
+                              {percentage}%
+                            </Badge>
+                            <span className="text-xs text-muted-foreground">
+                              {completed}/{totalTrainings}
+                            </span>
+                          </div>
+                        </td>
+                        {trainings.map((training) => {
+                          const entry = getEntry(employee.name, training);
+                          const isCompleted = entry?.status === 'COMPLETED';
+                          const date = formatDate(entry?.lastCompleted || null);
+                          
+                          return (
+                            <td
+                              key={training}
+                              className="p-3 text-center border-l"
+                              data-testid={`cell-${employee.name.replace(/\s+/g, '-').toLowerCase()}-${training.replace(/\s+/g, '-').toLowerCase()}`}
+                            >
+                              {isCompleted ? (
+                                <div className="flex flex-col items-center gap-1">
+                                  <CheckCircle2 className="h-5 w-5 text-green-600" />
+                                  <span className="text-xs text-muted-foreground">{date}</span>
+                                  {entry?.notes && (
+                                    <span className="text-xs text-blue-600">({entry.notes})</span>
+                                  )}
+                                </div>
+                              ) : (
+                                <Circle className="h-5 w-5 text-red-400 mx-auto" />
+                              )}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            ) : (
+              <table className="w-full border-collapse">
+                <thead>
+                  <tr className="border-b">
+                    <th className="sticky left-0 bg-background z-10 p-3 text-left font-semibold min-w-[200px]">
+                      Training
+                    </th>
+                    <th className="p-3 text-center font-semibold min-w-[100px]">
+                      Completion
+                    </th>
+                    {employees.map((employee) => (
+                      <th
+                        key={employee.name}
+                        className="p-3 text-left font-semibold min-w-[120px] border-l"
+                        data-testid={`header-employee-${employee.name.replace(/\s+/g, '-').toLowerCase()}`}
+                      >
+                        <div className="transform -rotate-45 origin-left text-xs whitespace-nowrap">
+                          {employee.name}
+                        </div>
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredTrainings.map((training) => {
+                    const completed = trainingCompletedCount(training);
+                    const percentage = Math.round((completed / totalEmployees) * 100);
+                    
+                    return (
+                      <tr
+                        key={training}
+                        className="border-b hover:bg-muted/50"
+                        data-testid={`row-training-${training.replace(/\s+/g, '-').toLowerCase()}`}
+                      >
+                        <td className="sticky left-0 bg-background z-10 p-3">
+                          <div className="flex flex-col">
+                            <span className="font-medium">{training}</span>
+                          </div>
+                        </td>
+                        <td className="p-3 text-center">
+                          <div className="flex flex-col items-center gap-1">
+                            <Badge
+                              variant={percentage === 100 ? "default" : percentage > 50 ? "secondary" : "destructive"}
+                              className="w-16"
+                            >
+                              {percentage}%
+                            </Badge>
+                            <span className="text-xs text-muted-foreground">
+                              {completed}/{totalEmployees}
+                            </span>
+                          </div>
+                        </td>
+                        {employees.map((employee) => {
+                          const entry = getEntry(employee.name, training);
+                          const isCompleted = entry?.status === 'COMPLETED';
+                          const date = formatDate(entry?.lastCompleted || null);
+                          
+                          return (
+                            <td
+                              key={employee.name}
+                              className="p-3 text-center border-l"
+                              data-testid={`cell-${training.replace(/\s+/g, '-').toLowerCase()}-${employee.name.replace(/\s+/g, '-').toLowerCase()}`}
+                            >
+                              {isCompleted ? (
+                                <div className="flex flex-col items-center gap-1">
+                                  <CheckCircle2 className="h-5 w-5 text-green-600" />
+                                  <span className="text-xs text-muted-foreground">{date}</span>
+                                  {entry?.notes && (
+                                    <span className="text-xs text-blue-600">({entry.notes})</span>
+                                  )}
+                                </div>
+                              ) : (
+                                <Circle className="h-5 w-5 text-red-400 mx-auto" />
+                              )}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
           </div>
 
           <div className="mt-6 flex items-center gap-6 text-sm text-muted-foreground">

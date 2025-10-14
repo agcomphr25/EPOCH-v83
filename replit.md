@@ -19,6 +19,13 @@ EPOCH v8 is a comprehensive Manufacturing ERP system designed for small manufact
   - Enhanced search functionality to filter employees or trainings based on active view mode
   - Shows completion percentages and progress indicators for both employee and training completion rates
   - **Key File**: `client/src/pages/TrainingMatrixView.tsx`
+- **New Feature**: Training data integrated into Employee Records
+  - Added "Training" tab to Employee Detail page showing individual employee's training completion status
+  - Displays all training records for the employee with visual completion indicators (green for completed, red for pending)
+  - Shows progress percentage and count of completed vs total trainings
+  - Includes completion dates and notes for completed trainings
+  - Automatically sorts pending trainings first, then completed trainings alphabetically
+  - **Key File**: `client/src/pages/EmployeeDetail.tsx`
 
 **October 13, 2025 - Schema Cleanup & Deployment Preparation**
 - **Removed Unused `cancelled_orders` Table**: Eliminated unused feature from codebase

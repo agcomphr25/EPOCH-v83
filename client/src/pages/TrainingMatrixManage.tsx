@@ -9,9 +9,10 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Plus, Edit, Trash2, CheckCircle2, Circle, Calendar, Users, BookOpen } from "lucide-react";
+import { Plus, Edit, Trash2, CheckCircle2, Circle, Calendar, Users, BookOpen, Bell } from "lucide-react";
 
 type Employee = {
   id: number;
@@ -56,10 +57,19 @@ export default function TrainingMatrixManage() {
   const [editingEntry, setEditingEntry] = useState<TrainingMatrixEntry | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [viewMode, setViewMode] = useState<"employee" | "training">("employee");
+  const [isAssignDialogOpen, setIsAssignDialogOpen] = useState(false);
+  const [assignTraining, setAssignTraining] = useState<string>("");
+  const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<number[]>([]);
+  const [notificationMessage, setNotificationMessage] = useState("");
   
   const [formData, setFormData] = useState<FormData>({
     trainingName: "",
     status: "PENDING",
+  });
+
+  // Fetch current user
+  const { data: currentUser } = useQuery<{ id: number; username: string }>({
+    queryKey: ["/api/auth/session"],
   });
 
   // Fetch employees
@@ -75,6 +85,11 @@ export default function TrainingMatrixManage() {
   // Fetch training matrix
   const { data: matrixData = [], isLoading } = useQuery<TrainingMatrixEntry[]>({
     queryKey: ["/api/training/matrix"],
+  });
+
+  // Fetch users for notification
+  const { data: users = [] } = useQuery<any[]>({
+    queryKey: ["/api/users"],
   });
 
   // Create mutation
@@ -211,6 +226,80 @@ export default function TrainingMatrixManage() {
   const handleDelete = (entry: TrainingMatrixEntry) => {
     if (confirm(`Are you sure you want to delete this training assignment for ${entry.employeeName}?`)) {
       deleteMutation.mutate(entry.id);
+    }
+  };
+
+  const handleOpenAssignDialog = (trainingName: string) => {
+    setAssignTraining(trainingName);
+    setSelectedEmployeeIds([]);
+    setNotificationMessage(`You have been assigned the training: ${trainingName}. Please complete it at your earliest convenience.`);
+    setIsAssignDialogOpen(true);
+  };
+
+  const handleAssignAndNotify = async () => {
+    if (selectedEmployeeIds.length === 0) {
+      toast({
+        title: "Validation Error",
+        description: "Please select at least one employee",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      // Create training assignments and send notifications
+      for (const empId of selectedEmployeeIds) {
+        const employee = employees.find(e => e.id === empId);
+        const user = users.find(u => u.id === empId);
+        if (!employee || !user) continue;
+
+        // Create training matrix entry
+        await apiRequest('/api/training/matrix', {
+          method: 'POST',
+          body: JSON.stringify({
+            employeeId: empId,
+            employeeName: employee.name,
+            jobTitle: employee.jobTitle,
+            department: employee.department,
+            trainingName: assignTraining,
+            status: 'PENDING',
+            notes: 'Assigned with notification'
+          }),
+        });
+
+        // Send notification via internal messages
+        await apiRequest('/api/internal-messages', {
+          method: 'POST',
+          body: JSON.stringify({
+            senderId: currentUser?.id,
+            senderName: currentUser?.username || 'System',
+            recipientType: 'person',
+            recipientName: user.username,
+            recipientUserId: empId,
+            subject: `Training Assignment: ${assignTraining}`,
+            message: notificationMessage,
+            isUrgent: false,
+          }),
+        });
+      }
+
+      queryClient.invalidateQueries({ queryKey: ['/api/training/matrix'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/internal-messages'] });
+
+      toast({
+        title: "Success",
+        description: `${assignTraining} assigned to ${selectedEmployeeIds.length} employee(s) with notifications sent.`,
+      });
+
+      setIsAssignDialogOpen(false);
+      setSelectedEmployeeIds([]);
+      setNotificationMessage("");
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to assign training and send notifications",
+        variant: "destructive",
+      });
     }
   };
 
@@ -372,9 +461,19 @@ export default function TrainingMatrixManage() {
                           {completedCount} of {totalCount} employees completed
                         </p>
                       </div>
-                      <Badge variant={completedCount === totalCount ? "default" : "secondary"}>
-                        {Math.round((completedCount / totalCount) * 100)}% Complete
-                      </Badge>
+                      <div className="flex items-center gap-3">
+                        <Badge variant={completedCount === totalCount ? "default" : "secondary"}>
+                          {Math.round((completedCount / totalCount) * 100)}% Complete
+                        </Badge>
+                        <Button
+                          size="sm"
+                          onClick={() => handleOpenAssignDialog(training)}
+                          data-testid={`button-assign-${training.replace(/\s+/g, '-').toLowerCase()}`}
+                        >
+                          <Bell className="h-4 w-4 mr-2" />
+                          Assign & Notify
+                        </Button>
+                      </div>
                     </div>
                     <Table>
                       <TableHeader>
@@ -570,6 +669,89 @@ export default function TrainingMatrixManage() {
                 : editingEntry
                 ? "Update"
                 : "Create"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isAssignDialogOpen} onOpenChange={setIsAssignDialogOpen}>
+        <DialogContent className="max-w-2xl" data-testid="dialog-assign-notify">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Bell className="h-5 w-5" />
+              Assign Training & Send Notifications
+            </DialogTitle>
+            <DialogDescription>
+              Assign "{assignTraining}" to employees and notify them via internal messages
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="space-y-2">
+              <Label>Select Employees ({selectedEmployeeIds.length} selected)</Label>
+              <div className="border rounded-md p-3 max-h-60 overflow-y-auto space-y-2 bg-background">
+                <div className="flex items-center space-x-2 p-2 bg-muted rounded-md">
+                  <Checkbox
+                    id="select-all-assign"
+                    checked={selectedEmployeeIds.length === employees.length && employees.length > 0}
+                    onCheckedChange={() => {
+                      if (selectedEmployeeIds.length === employees.length) {
+                        setSelectedEmployeeIds([]);
+                      } else {
+                        setSelectedEmployeeIds(employees.map(e => e.id));
+                      }
+                    }}
+                    data-testid="checkbox-select-all-assign"
+                  />
+                  <Label htmlFor="select-all-assign" className="font-bold cursor-pointer flex-1">
+                    Select All ({employees.length} employees)
+                  </Label>
+                </div>
+                
+                {employees.map((emp) => (
+                  <div key={emp.id} className="flex items-center space-x-2 p-2 hover:bg-muted rounded-md">
+                    <Checkbox
+                      id={`assign-emp-${emp.id}`}
+                      checked={selectedEmployeeIds.includes(emp.id)}
+                      onCheckedChange={() => {
+                        setSelectedEmployeeIds(prev => 
+                          prev.includes(emp.id) 
+                            ? prev.filter(id => id !== emp.id)
+                            : [...prev, emp.id]
+                        );
+                      }}
+                      data-testid={`checkbox-assign-emp-${emp.id}`}
+                    />
+                    <Label htmlFor={`assign-emp-${emp.id}`} className="cursor-pointer flex-1">
+                      {emp.name}
+                      {emp.jobTitle && <span className="text-xs text-muted-foreground ml-2">({emp.jobTitle})</span>}
+                    </Label>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="notification-message">Notification Message</Label>
+              <Textarea
+                id="notification-message"
+                value={notificationMessage}
+                onChange={(e) => setNotificationMessage(e.target.value)}
+                placeholder="Message to send to employees..."
+                rows={4}
+                data-testid="textarea-notification"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsAssignDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleAssignAndNotify}
+              data-testid="button-assign-submit"
+            >
+              <Bell className="h-4 w-4 mr-2" />
+              Assign & Notify
             </Button>
           </DialogFooter>
         </DialogContent>

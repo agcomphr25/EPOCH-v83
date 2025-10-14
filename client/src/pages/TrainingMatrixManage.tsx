@@ -214,7 +214,7 @@ export default function TrainingMatrixManage() {
   };
 
   const filteredMatrix = matrixData.filter(entry =>
-    (entry.employeeName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    ((entry.employeeName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
     entry.trainingName.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 

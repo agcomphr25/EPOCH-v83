@@ -462,7 +462,9 @@ router.post("/modules/:moduleId/complete", async (req, res) => {
         } else {
           // employeeId is a username, look up the user's employee ID
           const user = await db
-            .select()
+            .select({
+              employeeId: users.employeeId
+            })
             .from(users)
             .where(eq(users.username, employeeId))
             .limit(1);

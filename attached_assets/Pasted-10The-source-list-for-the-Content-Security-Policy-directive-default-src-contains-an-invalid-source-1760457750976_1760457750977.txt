@@ -1,0 +1,81 @@
+10The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.Understand this error
+10The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?Understand this error
+10The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.Understand this error
+agcomphr-10-14:1 The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.Understand this error
+agcomphr-10-14:1 The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?Understand this error
+agcomphr-10-14:1 The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.Understand this error
+10Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.Understand this error
+5e4031a2-fce8-4821-9da7-cb64eef9be82-00-1ojktf4u8jgdq.worf.replit.dev/api/auth/session:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+5e4031a2-fce8-4821-9da7-cb64eef9be82-00-1ojktf4u8jgdq.worf.replit.dev/api/auth/session:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+5e4031a2-fce8-4821-9da7-cb64eef9be82-00-1ojktf4u8jgdq.worf.replit.dev/api/auth/session:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+5e4031a2-fce8-4821-9da7-cb64eef9be82-00-1ojktf4u8jgdq.worf.replit.dev/api/orders:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+5e4031a2-fce8-4821-9da7-cb64eef9be82-00-1ojktf4u8jgdq.worf.replit.dev/api/orders:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+5e4031a2-fce8-4821-9da7-cb64eef9be82-00-1ojktf4u8jgdq.worf.replit.dev/api/orders:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+5e4031a2-fce8-4821-9da7-cb64eef9be82-00-1ojktf4u8jgdq.worf.replit.dev/api/orders:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+5e4031a2-fce8-4821-9da7-cb64eef9be82-00-1ojktf4u8jgdq.worf.replit.dev/api/orders:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+5e4031a2-fce8-4821-9da7-cb64eef9be82-00-1ojktf4u8jgdq.worf.replit.dev/api/orders:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+5e4031a2-fce8-4821-9da7-cb64eef9be82-00-1ojktf4u8jgdq.worf.replit.dev/api/auth/logout:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+5e4031a2-fce8-4821-9da7-cb64eef9be82-00-1ojktf4u8jgdq.worf.replit.dev/api/auth/logout:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+5e4031a2-fce8-4821-9da7-cb64eef9be82-00-1ojktf4u8jgdq.worf.replit.dev/api/auth/logout:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+VM2540 injected.js:204  GET https://5e4031a2-fce8-4821-9da7-cb64eef9be82-00-1ojktf4u8jgdq.worf.replit.dev/api/training/matrix 500 (Internal Server Error)
+apply @ VM2540 injected.js:204
+(anonymous) @ VM2564 queryClient.ts:100
+fetchFn @ VM2554 @tanstack_react-query.js:879
+run @ VM2554 @tanstack_react-query.js:507
+start @ VM2554 @tanstack_react-query.js:550
+fetch @ VM2554 @tanstack_react-query.js:918
+executeFetch_fn @ VM2554 @tanstack_react-query.js:2280
+onSubscribe @ VM2554 @tanstack_react-query.js:1976
+subscribe @ VM2554 @tanstack_react-query.js:24
+(anonymous) @ VM2554 @tanstack_react-query.js:3147
+subscribeToStore @ VM2558 chunk-NFC5BX5N.js:11984
+commitHookEffectListMount @ VM2558 chunk-NFC5BX5N.js:16915
+commitPassiveMountOnFiber @ VM2558 chunk-NFC5BX5N.js:18156
+commitPassiveMountEffects_complete @ VM2558 chunk-NFC5BX5N.js:18129
+commitPassiveMountEffects_begin @ VM2558 chunk-NFC5BX5N.js:18119
+commitPassiveMountEffects @ VM2558 chunk-NFC5BX5N.js:18109
+flushPassiveEffectsImpl @ VM2558 chunk-NFC5BX5N.js:19490
+flushPassiveEffects @ VM2558 chunk-NFC5BX5N.js:19447
+performSyncWorkOnRoot @ VM2558 chunk-NFC5BX5N.js:18868
+flushSyncCallbacks @ VM2558 chunk-NFC5BX5N.js:9119
+commitRootImpl @ VM2558 chunk-NFC5BX5N.js:19432
+commitRoot @ VM2558 chunk-NFC5BX5N.js:19277
+finishConcurrentRender @ VM2558 chunk-NFC5BX5N.js:18805
+performConcurrentWorkOnRoot @ VM2558 chunk-NFC5BX5N.js:18718
+workLoop @ VM2558 chunk-NFC5BX5N.js:197
+flushWork @ VM2558 chunk-NFC5BX5N.js:176
+performWorkUntilDeadline @ VM2558 chunk-NFC5BX5N.js:384Understand this error
+VM2540 injected.js:204  GET https://5e4031a2-fce8-4821-9da7-cb64eef9be82-00-1ojktf4u8jgdq.worf.replit.dev/api/training/matrix 500 (Internal Server Error)
+apply @ VM2540 injected.js:204
+(anonymous) @ VM2564 queryClient.ts:100
+fetchFn @ VM2554 @tanstack_react-query.js:879
+run @ VM2554 @tanstack_react-query.js:507
+(anonymous) @ VM2554 @tanstack_react-query.js:532
+Promise.then
+(anonymous) @ VM2554 @tanstack_react-query.js:528
+Promise.catch
+run @ VM2554 @tanstack_react-query.js:511
+start @ VM2554 @tanstack_react-query.js:550
+fetch @ VM2554 @tanstack_react-query.js:918
+executeFetch_fn @ VM2554 @tanstack_react-query.js:2280
+onSubscribe @ VM2554 @tanstack_react-query.js:1976
+subscribe @ VM2554 @tanstack_react-query.js:24
+(anonymous) @ VM2554 @tanstack_react-query.js:3147
+subscribeToStore @ VM2558 chunk-NFC5BX5N.js:11984
+commitHookEffectListMount @ VM2558 chunk-NFC5BX5N.js:16915
+commitPassiveMountOnFiber @ VM2558 chunk-NFC5BX5N.js:18156
+commitPassiveMountEffects_complete @ VM2558 chunk-NFC5BX5N.js:18129
+commitPassiveMountEffects_begin @ VM2558 chunk-NFC5BX5N.js:18119
+commitPassiveMountEffects @ VM2558 chunk-NFC5BX5N.js:18109
+flushPassiveEffectsImpl @ VM2558 chunk-NFC5BX5N.js:19490
+flushPassiveEffects @ VM2558 chunk-NFC5BX5N.js:19447
+performSyncWorkOnRoot @ VM2558 chunk-NFC5BX5N.js:18868
+flushSyncCallbacks @ VM2558 chunk-NFC5BX5N.js:9119
+commitRootImpl @ VM2558 chunk-NFC5BX5N.js:19432
+commitRoot @ VM2558 chunk-NFC5BX5N.js:19277
+finishConcurrentRender @ VM2558 chunk-NFC5BX5N.js:18805
+performConcurrentWorkOnRoot @ VM2558 chunk-NFC5BX5N.js:18718
+workLoop @ VM2558 chunk-NFC5BX5N.js:197
+flushWork @ VM2558 chunk-NFC5BX5N.js:176
+performWorkUntilDeadline @ VM2558 chunk-NFC5BX5N.js:384Understand this error
+VM2540 injected.js:204  POST https://5e4031a2-fce8-4821-9da7-cb64eef9be82-00-1ojktf4u8jgdq.worf.replit.dev/api/auth/logout 500 (Internal Server Error)

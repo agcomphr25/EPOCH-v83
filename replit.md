@@ -4,8 +4,22 @@
 EPOCH v8 is a comprehensive Manufacturing ERP system designed for small manufacturing companies specializing in customizable products.
 
 ## Recent Changes
-<<<<<<< HEAD
-=======
+
+**October 14, 2025 - Training Notifications with Module Links & Production Deployment Ready**
+- **Training Assignment Notifications Enhanced**: Added direct clickable links to training modules in notifications
+  - Both "Training Assignment" via Internal Communication Board and "Assign & Notify" button include module links
+  - Format: "Click here to start: /training/modules/{id}" appended to notification messages
+  - Employees can now click directly from their inbox to start assigned training
+- **Employee Name Consistency**: Fixed "Tasha Nicholas" → "Tasha Mireles" across all systems (employees + training_matrix tables)
+- **Production Deployment Verified**: ✅ Ready to publish to production
+  - Production build tested and working (training API returns data correctly)
+  - Training schema deployed (4 tables: training_modules, training_questions, training_question_options, training_matrix)
+  - Google Sheets integration configured for data import in production
+  - 133 lines of training routes verified functional
+  - **Note**: Production database is separate from development - training data must be re-imported via Google Sheets after publishing
+
+
+
 **October 13, 2025 - Schema Cleanup & Deployment Preparation**
 - **Removed Unused `cancelled_orders` Table**: Eliminated unused feature from codebase
   - Removed table definition from schema.ts (both root and server versions)
@@ -29,7 +43,7 @@ EPOCH v8 is a comprehensive Manufacturing ERP system designed for small manufact
   - **Key Learning**: `serial` is a PostgreSQL pseudo-type only valid during CREATE TABLE, not ALTER TABLE
 - **Missing Package Fixed**: Installed `googleapis` package for Google Calendar integration
 
->>>>>>> 84b93280 (Remove unused cancelled orders feature and related code)
+
 **October 13, 2025 - Complete GitHub Integration Verified & Calendar TypeScript Fixes**
 - **New Features from GitHub Pull**:
   1. **Manual Tracking Entry Component** - Added ability to manually enter tracking numbers for external carriers (UPS, USPS, FedEx, DHL, Other) with notification options

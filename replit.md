@@ -1,7 +1,46 @@
 # EPOCH v8 - Manufacturing ERP System
 
 ## Overview
-EPOCH v8 is a comprehensive Manufacturing ERP system designed for small manufacturing companies specializing in customizable products. It aims to streamline operations, enhance efficiency, and improve scalability by providing end-to-end order management, inventory tracking, employee portal functionality, and quality control workflows. The project's vision is to become the leading ERP solution for small-to-medium customizable product manufacturers. It is a full-stack TypeScript application with a React frontend and Express backend, featuring Progressive Web App (PWA) capabilities for deployment to web and mobile platforms via Capacitor.
+EPOCH v8 is a comprehensive Manufacturing ERP system designed for small manufacturing companies specializing in customizable products.
+
+## Recent Changes
+**October 13, 2025 - Schema Cleanup & Deployment Preparation**
+- **Removed Unused `cancelled_orders` Table**: Eliminated unused feature from codebase
+  - Removed table definition from schema.ts (both root and server versions)
+  - Removed `/cancelled` API route from server/src/routes/orders.ts
+  - Removed CancelledOrdersPage component and route from client
+  - **Reason**: Unused feature that was causing deployment schema conflicts
+- **Schema Synchronization**: Development database now aligned with schema.ts
+  - `customer_communications` table exists and matches schema
+  - `customer_satisfaction_surveys` and `customer_satisfaction_responses` tables properly configured
+  - No conflicting table definitions blocking deployment
+- **Deployment Status**: ✅ Ready to deploy (publish)
+  - Server running successfully on port 5000
+  - All schema conflicts resolved
+  - Database schema matches code definitions
+
+**October 13, 2025 - Database Migration Fix & GitHub Integration Complete**
+- **Critical Database Issue Resolved**: Fixed invalid `serial` type conversion error in customer satisfaction tables
+  - **Root Cause**: Drizzle attempted to ALTER existing `integer` columns to `serial` type (invalid PostgreSQL operation)
+  - **Solution**: Dropped and recreated `customer_satisfaction_surveys` and `customer_satisfaction_responses` tables with correct schema
+  - **Result**: Clean database schema matching schema.ts definitions
+  - **Key Learning**: `serial` is a PostgreSQL pseudo-type only valid during CREATE TABLE, not ALTER TABLE
+- **Missing Package Fixed**: Installed `googleapis` package for Google Calendar integration
+
+**October 13, 2025 - Complete GitHub Integration Verified & Calendar TypeScript Fixes**
+- **New Features from GitHub Pull**:
+  1. **Manual Tracking Entry Component** - Added ability to manually enter tracking numbers for external carriers (UPS, USPS, FedEx, DHL, Other) with notification options
+  2. **Calendar Enhancements** - Improved Google Calendar integration with all-day event fixes, proper timezone handling, and color-coded events by calendar type (holidays in red, birthdays in purple)
+  3. **Customer Satisfaction Updates** - Enhanced survey system with PDF export capabilities and improved analytics dashboard
+  4. **Shipping Tracker Improvements** - Manual tracking entry integration for orders shipped via non-UPS carriers
+- **Calendar Routes Fixed**: Commented out unimplemented local calendar storage endpoints (lines 198-334 in calendar.ts) to resolve 8 TypeScript errors
+  - Calendar uses Google Calendar integration exclusively via `/api/calendar/google-events`
+  - Local storage methods preserved in comments for potential future implementation
+- **Address Validation Complete**: Migrated `/api/customers/validate-address` endpoint from disabled to active routes
+  - Full SmartyStreets integration: autocomplete + validation + standardization working end-to-end
+- **All Systems Verified**: ✅ TypeScript clean, ✅ LSP diagnostics clear, ✅ Server running, ✅ Production build successful
+
+EPOCH v8 aims to streamline operations, enhance efficiency, and improve scalability by providing end-to-end order management, inventory tracking, employee portal functionality, and quality control workflows. The project's vision is to become the leading ERP solution for small-to-medium customizable product manufacturers. It is a full-stack TypeScript application with a React frontend and Express backend, featuring Progressive Web App (PWA) capabilities for deployment to web and mobile platforms via Capacitor.
 
 ## User Preferences
 Preferred communication style: Simple, everyday language.

@@ -62,11 +62,13 @@ export default function InternalCommunicationBoard() {
   const [filterType, setFilterType] = useState<'all' | 'sent' | 'received'>('all');
   
   // Attachment state
-  const [attachmentType, setAttachmentType] = useState<'none' | 'sales_order' | 'email' | 'download'>('none');
+  const [attachmentType, setAttachmentType] = useState<'none' | 'sales_order' | 'email' | 'download' | 'training_assignment'>('none');
   const [selectedOrderId, setSelectedOrderId] = useState<string>('');
   const [isPullup, setIsPullup] = useState(false);
   const [emailSubject, setEmailSubject] = useState('');
   const [downloadUrl, setDownloadUrl] = useState('');
+  const [selectedTraining, setSelectedTraining] = useState<string>('');
+  const [trainingEmployees, setTrainingEmployees] = useState<number[]>([]);
   
   const { data: currentUser } = useQuery<CurrentUser>({
     queryKey: ['/api/auth/session'],
@@ -88,6 +90,10 @@ export default function InternalCommunicationBoard() {
 
   const { data: orders = [] } = useQuery<any[]>({
     queryKey: ['/api/orders'],
+  });
+
+  const { data: trainingModules = [] } = useQuery<any[]>({
+    queryKey: ['/api/training/modules'],
   });
 
   const sendMessageMutation = useMutation({
@@ -155,6 +161,8 @@ export default function InternalCommunicationBoard() {
     setIsPullup(false);
     setEmailSubject('');
     setDownloadUrl('');
+    setSelectedTraining('');
+    setTrainingEmployees([]);
   };
 
   const handleToggleUser = (userId: number) => {
@@ -181,6 +189,84 @@ export default function InternalCommunicationBoard() {
         variant: "destructive",
       });
       return;
+    }
+
+    // Handle training assignment
+    if (attachmentType === 'training_assignment') {
+      if (!selectedTraining) {
+        toast({
+          title: "Validation Error",
+          description: "Please select a training module to assign.",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      if (trainingEmployees.length === 0) {
+        toast({
+          title: "Validation Error",
+          description: "Please select at least one employee for training assignment.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      try {
+        // Find the training module to get the ID for linking
+        const trainingModule = trainingModules.find((m: any) => m.title === selectedTraining);
+        const moduleLink = trainingModule ? `\n\nClick here to start: /training/modules/${trainingModule.id}` : '';
+        
+        // Create training assignments for each employee
+        for (const userId of trainingEmployees) {
+          const user = users.find(u => u.id === userId);
+          if (!user) continue;
+          
+          // Create training matrix entry
+          await apiRequest('/api/training/matrix', {
+            method: 'POST',
+            body: JSON.stringify({
+              employeeId: userId,
+              employeeName: user.username,
+              trainingName: selectedTraining,
+              status: 'PENDING',
+              notes: 'Assigned via internal communication'
+            }),
+          });
+
+          // Send notification message to employee with module link
+          await apiRequest('/api/internal-messages', {
+            method: 'POST',
+            body: JSON.stringify({
+              senderId: currentUserId,
+              senderName: users.find(u => u.id === currentUserId)?.username || 'Unknown',
+              recipientType: 'person',
+              recipientName: user.username,
+              recipientUserId: userId,
+              subject: `Training Assignment: ${selectedTraining}`,
+              message: `You have been assigned the training: ${selectedTraining}\n\n${message}${moduleLink}`,
+              isUrgent: isUrgent,
+            }),
+          });
+        }
+
+        queryClient.invalidateQueries({ queryKey: ['/api/training/matrix'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/internal-messages'] });
+        
+        toast({
+          title: "Training Assigned",
+          description: `${selectedTraining} has been assigned to ${trainingEmployees.length} employee(s).`,
+        });
+        
+        resetForm();
+        return;
+      } catch (error: any) {
+        toast({
+          title: "Error",
+          description: error.message || "Failed to assign training. Please try again.",
+          variant: "destructive",
+        });
+        return;
+      }
     }
 
     if (recipientType === 'department' && !selectedDepartment) {
@@ -429,6 +515,7 @@ export default function InternalCommunicationBoard() {
                   <SelectItem value="sales_order">Sales Order</SelectItem>
                   <SelectItem value="email">Email</SelectItem>
                   <SelectItem value="download">Download/File</SelectItem>
+                  <SelectItem value="training_assignment">Training Assignment</SelectItem>
                 </SelectContent>
               </Select>
 
@@ -480,6 +567,69 @@ export default function InternalCommunicationBoard() {
                     placeholder="File URL or path"
                     data-testid="input-download-url"
                   />
+                </div>
+              )}
+
+              {attachmentType === 'training_assignment' && (
+                <div className="space-y-3 pl-4 border-l-2">
+                  <div className="space-y-2">
+                    <Label>Select Training Module</Label>
+                    <Select value={selectedTraining} onValueChange={setSelectedTraining}>
+                      <SelectTrigger data-testid="select-training-module">
+                        <SelectValue placeholder="Choose a training module" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {trainingModules.map((module: any) => (
+                          <SelectItem key={module.id} value={module.title} data-testid={`training-${module.id}`}>
+                            {module.title}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label>Assign to Employees ({trainingEmployees.length} selected)</Label>
+                    <div className="border rounded-md p-3 max-h-48 overflow-y-auto space-y-2 bg-background">
+                      <div className="flex items-center space-x-2 p-2 bg-muted rounded-md">
+                        <Checkbox
+                          id="select-all-training"
+                          checked={trainingEmployees.length === users.length && users.length > 0}
+                          onCheckedChange={() => {
+                            if (trainingEmployees.length === users.length) {
+                              setTrainingEmployees([]);
+                            } else {
+                              setTrainingEmployees(users.map(u => u.id));
+                            }
+                          }}
+                          data-testid="checkbox-select-all-training"
+                        />
+                        <Label htmlFor="select-all-training" className="font-bold cursor-pointer flex-1">
+                          Select All
+                        </Label>
+                      </div>
+                      
+                      {users.map((user) => (
+                        <div key={user.id} className="flex items-center space-x-2 p-2 hover:bg-muted rounded-md">
+                          <Checkbox
+                            id={`training-user-${user.id}`}
+                            checked={trainingEmployees.includes(user.id)}
+                            onCheckedChange={() => {
+                              setTrainingEmployees(prev => 
+                                prev.includes(user.id) 
+                                  ? prev.filter(id => id !== user.id)
+                                  : [...prev, user.id]
+                              );
+                            }}
+                            data-testid={`checkbox-training-user-${user.id}`}
+                          />
+                          <Label htmlFor={`training-user-${user.id}`} className="cursor-pointer flex-1">
+                            {user.username}
+                          </Label>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               )}
             </div>

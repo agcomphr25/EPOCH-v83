@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link, useLocation, useRoute } from 'wouter';
 
-import { Factory, User, FileText, TrendingDown, Plus, Settings, Package, FilePenLine, ClipboardList, BarChart, ChevronDown, ChevronRight, FormInput, PieChart, Scan, Warehouse, Shield, Wrench, Users, TestTube, DollarSign, Receipt, TrendingUp, List, BookOpen, Calendar, CheckSquare, Truck, Mail, MessageSquare, CreditCard, XCircle, Cog, ArrowRight, LogOut, Scissors, MapPin, Snowflake, ShoppingCart, GraduationCap, Home } from "lucide-react";
+import { Factory, User, FileText, TrendingDown, Plus, Settings, Package, FilePenLine, ClipboardList, BarChart, ChevronDown, ChevronRight, FormInput, PieChart, Scan, Warehouse, Shield, Wrench, Users, TestTube, DollarSign, Receipt, TrendingUp, List, BookOpen, Calendar, CheckSquare, Truck, Mail, MessageSquare, CreditCard, XCircle, Cog, ArrowRight, LogOut, Scissors, MapPin, Snowflake, ShoppingCart, GraduationCap, Home, FileSpreadsheet } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -335,55 +335,79 @@ export default function Navigation() {
       description: 'View all available training modules'
     },
     {
-      path: '/training/preservation-fod',
+      path: '/training-management',
+      label: 'Training Management',
+      icon: GraduationCap,
+      description: 'Manage training modules and content'
+    },
+    {
+      path: '/training-matrix',
+      label: 'Training Matrix',
+      icon: GraduationCap,
+      description: 'View employee training completion matrix'
+    },
+    {
+      path: '/training-matrix-import',
+      label: 'Import Training Matrix',
+      icon: FileSpreadsheet,
+      description: 'Import training matrix from Google Sheets'
+    },
+    {
+      path: '/training-matrix-manage',
+      label: 'Manage Training Assignments',
+      icon: GraduationCap,
+      description: 'Add, edit, and delete training assignments for employees'
+    },
+    {
+      path: '/training/2',
       label: 'Preservation & FOD',
       icon: Shield,
       description: 'Preservation and Foreign Object Debris prevention training'
     },
     {
-      path: '/training/chemical-handling',
+      path: '/training/3',
       label: 'Chemical Handling',
       icon: Shield,
       description: 'Safe chemical handling procedures and training'
     },
     {
-      path: '/training/fire-safety',
+      path: '/training/4',
       label: 'Fire Safety',
       icon: Shield,
       description: 'Fire safety and emergency response training'
     },
     {
-      path: '/training/itar',
+      path: '/training/5',
       label: 'ITAR Compliance',
       icon: Shield,
       description: 'International Traffic in Arms Regulations training'
     },
     {
-      path: '/training/as9100',
+      path: '/training/6',
       label: 'AS9100 Quality',
       icon: Shield,
       description: 'AS9100 Quality Management System training'
     },
     {
-      path: '/training/counterfeit-prevention',
+      path: '/training/7',
       label: 'Counterfeit Prevention',
       icon: Shield,
       description: 'Counterfeit materials prevention training'
     },
     {
-      path: '/training/ethics',
+      path: '/training/8',
       label: 'Ethics Training',
       icon: Shield,
       description: 'Ethics in aerospace quality systems'
     },
     {
-      path: '/training/nonconforming-items',
+      path: '/training/9',
       label: 'Nonconforming Items',
       icon: Shield,
       description: 'Nonconforming items handling and procedures'
     },
     {
-      path: '/training/shutdown-procedures',
+      path: '/training/10',
       label: 'Shutdown Procedures',
       icon: Shield,
       description: 'Department shutdown procedures training'

@@ -62,11 +62,13 @@ export default function InternalCommunicationBoard() {
   const [filterType, setFilterType] = useState<'all' | 'sent' | 'received'>('all');
   
   // Attachment state
-  const [attachmentType, setAttachmentType] = useState<'none' | 'sales_order' | 'email' | 'download'>('none');
+  const [attachmentType, setAttachmentType] = useState<'none' | 'sales_order' | 'email' | 'download' | 'training_assignment'>('none');
   const [selectedOrderId, setSelectedOrderId] = useState<string>('');
   const [isPullup, setIsPullup] = useState(false);
   const [emailSubject, setEmailSubject] = useState('');
   const [downloadUrl, setDownloadUrl] = useState('');
+  const [selectedTraining, setSelectedTraining] = useState<string>('');
+  const [trainingEmployees, setTrainingEmployees] = useState<number[]>([]);
   
   const { data: currentUser } = useQuery<CurrentUser>({
     queryKey: ['/api/auth/session'],
@@ -88,6 +90,10 @@ export default function InternalCommunicationBoard() {
 
   const { data: orders = [] } = useQuery<any[]>({
     queryKey: ['/api/orders'],
+  });
+
+  const { data: trainingModules = [] } = useQuery<any[]>({
+    queryKey: ['/api/training/modules'],
   });
 
   const sendMessageMutation = useMutation({

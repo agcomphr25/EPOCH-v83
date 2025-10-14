@@ -8,6 +8,8 @@ import {
   employeeTrainingRecords,
   employeeQuizAttempts,
   trainingMatrix,
+  employees,
+  users,
   insertTrainingModuleSchema,
   insertTrainingQuestionSchema,
   insertTrainingQuestionOptionSchema,
@@ -386,6 +388,152 @@ router.get("/quiz/attempts/:trainingRecordId", async (req, res) => {
   }
 });
 
+// Complete quiz and calculate score
+router.post("/modules/:moduleId/complete", async (req, res) => {
+  try {
+    const moduleId = parseInt(req.params.moduleId);
+    const { employeeId, employeeName, answers } = req.body;
+
+    console.log('Quiz completion request:', { moduleId, employeeId, employeeName, answersCount: Object.keys(answers).length });
+
+    // Fetch module with questions and options
+    const module = await db
+      .select()
+      .from(trainingModules)
+      .where(eq(trainingModules.id, moduleId))
+      .limit(1);
+
+    console.log('Module found:', module.length > 0 ? module[0].title : 'none');
+
+    if (!module || module.length === 0) {
+      return res.status(404).json({ error: "Training module not found" });
+    }
+
+    const questions = await db
+      .select()
+      .from(trainingQuestions)
+      .where(eq(trainingQuestions.moduleId, moduleId))
+      .orderBy(trainingQuestions.sortOrder);
+
+    console.log('Questions fetched:', questions.length);
+
+    const questionsWithOptions = await Promise.all(
+      questions.map(async (question) => {
+        const options = await db
+          .select()
+          .from(trainingQuestionOptions)
+          .where(eq(trainingQuestionOptions.questionId, question.id))
+          .orderBy(trainingQuestionOptions.sortOrder);
+        
+        return { ...question, options };
+      })
+    );
+
+    // Calculate score
+    let correctCount = 0;
+    const totalQuestions = questionsWithOptions.length;
+
+    questionsWithOptions.forEach((question) => {
+      const userAnswer = answers[question.id];
+      const correctOption = question.options.find(opt => opt.isCorrect);
+      
+      if (correctOption && userAnswer === correctOption.optionText) {
+        correctCount++;
+      }
+    });
+
+    const scorePercentage = totalQuestions > 0 ? Math.round((correctCount / totalQuestions) * 100) : 0;
+    const passingScore = module[0].passingScore || 80;
+    const passed = scorePercentage >= passingScore;
+
+    console.log('Score calculation:', { correctCount, totalQuestions, scorePercentage, passingScore, passed });
+
+    // Update training matrix with completion data
+    if (passed) {
+      const trainingName = module[0].title;
+      
+      // Look up the actual employee numeric ID from username if employeeId is a username
+      let numericEmployeeId: number | null = null;
+      
+      if (employeeId) {
+        const parsedId = parseInt(employeeId);
+        if (!isNaN(parsedId)) {
+          numericEmployeeId = parsedId;
+        } else {
+          // employeeId is a username, look up the user's employee ID
+          const user = await db
+            .select({
+              employeeId: users.employeeId
+            })
+            .from(users)
+            .where(eq(users.username, employeeId))
+            .limit(1);
+          
+          if (user && user.length > 0 && user[0].employeeId) {
+            numericEmployeeId = user[0].employeeId;
+          }
+        }
+      }
+      
+      // Find existing training matrix entry
+      const existingEntry = await db
+        .select()
+        .from(trainingMatrix)
+        .where(
+          and(
+            numericEmployeeId !== null 
+              ? eq(trainingMatrix.employeeId, numericEmployeeId)
+              : eq(trainingMatrix.employeeName, employeeName),
+            eq(trainingMatrix.trainingName, trainingName)
+          )
+        )
+        .limit(1);
+
+      if (existingEntry && existingEntry.length > 0) {
+        // Update existing entry
+        await db
+          .update(trainingMatrix)
+          .set({
+            lastCompleted: new Date(),
+            lastScore: scorePercentage,
+            status: 'COMPLETED',
+            updatedAt: new Date()
+          })
+          .where(eq(trainingMatrix.id, existingEntry[0].id));
+      } else {
+        // Create new entry if it doesn't exist
+        await db
+          .insert(trainingMatrix)
+          .values({
+            employeeId: numericEmployeeId,
+            employeeName: employeeName,
+            trainingName: trainingName,
+            lastCompleted: new Date(),
+            lastScore: scorePercentage,
+            status: 'COMPLETED'
+          });
+      }
+    }
+
+    const results = {
+      score: scorePercentage,
+      correctCount,
+      totalQuestions,
+      passed,
+      passingScore,
+      employeeId,
+      employeeName,
+      moduleId,
+      moduleTitle: module[0].title
+    };
+
+    res.json(results);
+  } catch (error: any) {
+    console.error("Error completing quiz:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Training matrix endpoints
 router.get("/matrix", async (req, res) => {
   try {
@@ -400,6 +548,7 @@ router.get("/matrix", async (req, res) => {
         requiredBy: trainingMatrix.requiredBy,
         frequency: trainingMatrix.frequency,
         lastCompleted: trainingMatrix.lastCompleted,
+        lastScore: trainingMatrix.lastScore,
         nextDue: trainingMatrix.nextDue,
         status: trainingMatrix.status,
         documentationUrl: trainingMatrix.documentationUrl,
@@ -428,6 +577,50 @@ router.post("/matrix", async (req, res) => {
     res.status(201).json(newEntry);
   } catch (error: any) {
     console.error("Error creating training matrix entry:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update training matrix entry
+router.patch("/matrix/:id", async (req, res) => {
+  try {
+    const matrixId = parseInt(req.params.id);
+    const validatedData = insertTrainingMatrixSchema.partial().parse(req.body);
+    
+    const [updatedEntry] = await db
+      .update(trainingMatrix)
+      .set(validatedData)
+      .where(eq(trainingMatrix.id, matrixId))
+      .returning();
+    
+    if (!updatedEntry) {
+      return res.status(404).json({ error: "Training matrix entry not found" });
+    }
+    
+    res.json(updatedEntry);
+  } catch (error: any) {
+    console.error("Error updating training matrix entry:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete single training matrix entry
+router.delete("/matrix/:id", async (req, res) => {
+  try {
+    const matrixId = parseInt(req.params.id);
+    
+    const [deletedEntry] = await db
+      .delete(trainingMatrix)
+      .where(eq(trainingMatrix.id, matrixId))
+      .returning();
+    
+    if (!deletedEntry) {
+      return res.status(404).json({ error: "Training matrix entry not found" });
+    }
+    
+    res.json({ success: true, deletedEntry });
+  } catch (error: any) {
+    console.error("Error deleting training matrix entry:", error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -524,6 +717,109 @@ router.post("/matrix/import-pdf", upload.single("file"), async (req, res) => {
     });
   } catch (error: any) {
     console.error("Error importing training matrix PDF:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Google Sheets Integration Routes
+
+import { listGoogleSheets, getSpreadsheetData, parseTrainingMatrixFromSheet } from "../lib/googleSheets";
+
+// List available Google Sheets
+router.get("/google-sheets", async (req, res) => {
+  try {
+    const sheets = await listGoogleSheets();
+    res.json(sheets);
+  } catch (error: any) {
+    console.error("Error listing Google Sheets:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Preview Google Sheet data
+router.get("/google-sheets/:id/preview", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { range } = req.query;
+    
+    const data = await getSpreadsheetData(id, range as string);
+    res.json({ data });
+  } catch (error: any) {
+    console.error("Error previewing Google Sheet:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete all training matrix entries
+router.delete("/matrix", async (req, res) => {
+  try {
+    const deleted = await db.delete(trainingMatrix);
+    res.json({ success: true, message: "All training matrix entries deleted" });
+  } catch (error: any) {
+    console.error("Error deleting training matrix:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Import training matrix from Google Sheets
+router.post("/import-from-sheets", async (req, res) => {
+  try {
+    const { spreadsheetId, range } = req.body;
+    
+    if (!spreadsheetId) {
+      return res.status(400).json({ error: "Spreadsheet ID is required" });
+    }
+    
+    const matrixRows = await parseTrainingMatrixFromSheet(spreadsheetId, range);
+    const imported = [];
+    
+    for (const row of matrixRows) {
+      const { employeeName, ...trainings } = row;
+      
+      // Create a training entry for each training that has a date
+      for (const [trainingName, completionDate] of Object.entries(trainings)) {
+        if (completionDate && completionDate.trim() !== '') {
+          // Parse the date - handle various formats
+          let lastCompleted: Date | null = null;
+          try {
+            // Try to parse the date string
+            const dateStr = completionDate.trim();
+            // Handle formats like "5/7/2025(V)" or "1/19/2023"
+            const cleanDate = dateStr.replace(/\([^)]*\)/g, '').trim();
+            lastCompleted = new Date(cleanDate);
+            
+            // Check if date is valid
+            if (isNaN(lastCompleted.getTime())) {
+              lastCompleted = null;
+            }
+          } catch (e) {
+            console.warn(`Could not parse date for ${employeeName} - ${trainingName}: ${completionDate}`);
+          }
+          
+          const [newEntry] = await db
+            .insert(trainingMatrix)
+            .values({
+              employeeName: employeeName,
+              trainingName: trainingName,
+              lastCompleted: lastCompleted,
+              status: lastCompleted ? 'COMPLETED' : 'PENDING',
+              notes: completionDate.includes('(') ? completionDate.match(/\(([^)]+)\)/)?.[1] || null : null,
+              isLegacy: true
+            })
+            .returning();
+          
+          imported.push(newEntry);
+        }
+      }
+    }
+    
+    res.status(201).json({ 
+      success: true, 
+      imported: imported.length,
+      entries: imported
+    });
+  } catch (error: any) {
+    console.error("Error importing from Google Sheets:", error);
     res.status(500).json({ error: error.message });
   }
 });

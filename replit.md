@@ -4,6 +4,16 @@
 EPOCH v8 is a comprehensive Manufacturing ERP system designed for small manufacturing companies specializing in customizable products.
 
 ## Recent Changes
+**October 14, 2025 - Google Sheets Training Matrix Import**
+- **New Feature**: Google Sheets integration for training matrix data import
+  - Added Google Sheets API integration using Replit's connection system
+  - Created backend API routes to list available Google Sheets, preview data, and import training records
+  - Built frontend UI page at `/training-matrix-import` for managing the import process
+  - Supports direct import from Google Sheets with training completion dates and notes
+  - Includes ability to delete existing training matrix data before importing fresh data
+  - Added navigation links in the Training dropdown menu for easy access
+  - **Key Files**: `server/src/lib/googleSheets.ts`, `server/src/routes/training.ts`, `client/src/pages/TrainingMatrixImport.tsx`
+
 **October 13, 2025 - Schema Cleanup & Deployment Preparation**
 - **Removed Unused `cancelled_orders` Table**: Eliminated unused feature from codebase
   - Removed table definition from schema.ts (both root and server versions)

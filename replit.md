@@ -5,6 +5,17 @@ EPOCH v8 is a comprehensive Manufacturing ERP system designed for small manufact
 
 ## Recent Changes
 
+**October 15, 2025 - Vendor Management Module Complete**
+- **New Vendor Management System**: Replaced placeholder with full-featured CRUD module under Inventory section
+  - **Database**: vendors table with comprehensive fields (name, contact info, email, phone, address, approval status, evaluation tracking, notes)
+  - **Backend API**: RESTful endpoints with pagination, search, filtering (approved, evaluated, eval date range), and sorting
+  - **Storage Layer**: Complete CRUD methods with soft delete functionality
+  - **Frontend**: VendorManagement page with TanStack Query, search/filters, sortable columns, pagination, and create/edit modal
+  - **Form Validation**: Uses shared insertVendorSchema with data normalization to handle optional fields correctly
+  - **Route**: Accessible at `/vendors` in the Inventory section of the navigation
+  - **Status**: ✅ Production-ready with architect approval
+  - **Note**: Shared schema validation contract maintained between frontend and backend
+
 **October 14, 2025 - Training Notifications with Module Links & Production Deployment Ready**
 - **Training Assignment Notifications Enhanced**: Added direct clickable links to training modules in notifications
   - Both "Training Assignment" via Internal Communication Board and "Assign & Notify" button include module links

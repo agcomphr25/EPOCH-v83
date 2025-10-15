@@ -846,7 +846,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       });
       
       currentY -= 12;
-      page.drawText('Phone: (256) 723-8381 | Email: info@agcomposites.com', {
+      page.drawText('Phone: (256) 723-8381 | Email: sales@agcomposites.com', {
         x: margin,
         y: currentY,
         size: 8,
@@ -943,7 +943,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       font: font,
     });
 
-    page.drawText('Due Date:', {
+    page.drawText('Estimated Completion Date:', {
       x: col2X,
       y: boxTextY,
       size: 8,

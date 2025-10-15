@@ -7,14 +7,15 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Plus, Search, ChevronUp, ChevronDown, Edit, Trash2, CheckCircle, XCircle } from 'lucide-react';
+import { Plus, Search, ChevronUp, ChevronDown, Edit, Trash2, CheckCircle, XCircle, User } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { insertVendorSchema, type Vendor } from '@shared/schema';
+import { insertVendorSchema, insertVendorContactSchema, type Vendor, type VendorContact } from '@shared/schema';
 
 const vendorFormSchema = insertVendorSchema.extend({
   email: z.string().email('Invalid email').optional().or(z.literal('')),
@@ -22,7 +23,12 @@ const vendorFormSchema = insertVendorSchema.extend({
   evaluationDate: z.string().optional(),
 });
 
+const vendorContactFormSchema = insertVendorContactSchema.extend({
+  email: z.string().email('Invalid email').optional().or(z.literal('')),
+}).omit({ vendorId: true });
+
 type VendorFormData = z.infer<typeof vendorFormSchema>;
+type VendorContactFormData = z.infer<typeof vendorContactFormSchema>;
 
 interface VendorsResponse {
   data: Vendor[];
@@ -91,7 +97,7 @@ export default function VendorManagement() {
   // Create vendor mutation
   const createVendorMutation = useMutation({
     mutationFn: async (data: VendorFormData) => {
-      return await apiRequest('/api/vendors', 'POST', data);
+      return await apiRequest('/api/vendors', { method: 'POST', body: data });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/vendors'] });
@@ -107,7 +113,7 @@ export default function VendorManagement() {
   // Update vendor mutation
   const updateVendorMutation = useMutation({
     mutationFn: async ({ id, data }: { id: number; data: VendorFormData }) => {
-      return await apiRequest(`/api/vendors/${id}`, 'PUT', data);
+      return await apiRequest(`/api/vendors/${id}`, { method: 'PUT', body: data });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/vendors'] });
@@ -124,7 +130,7 @@ export default function VendorManagement() {
   // Delete vendor mutation
   const deleteVendorMutation = useMutation({
     mutationFn: async (id: number) => {
-      return await apiRequest(`/api/vendors/${id}`, 'DELETE');
+      return await apiRequest(`/api/vendors/${id}`, { method: 'DELETE' });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/vendors'] });
@@ -133,6 +139,85 @@ export default function VendorManagement() {
     },
     onError: () => {
       toast({ title: 'Failed to delete vendor', variant: 'destructive' });
+    },
+  });
+
+  // Contact management state
+  const [editingContact, setEditingContact] = useState<VendorContact | null>(null);
+  const [deleteContact, setDeleteContact] = useState<VendorContact | null>(null);
+  const [isAddingContact, setIsAddingContact] = useState(false);
+  
+  const contactForm = useForm<VendorContactFormData>({
+    resolver: zodResolver(vendorContactFormSchema),
+    defaultValues: {
+      name: '',
+      title: '',
+      email: '',
+      phone: '',
+      isPrimary: false,
+      notes: '',
+    },
+  });
+
+  // Fetch vendor contacts
+  const { data: contacts = [], isLoading: contactsLoading } = useQuery<VendorContact[]>({
+    queryKey: ['/api/vendors', editingVendor?.id, 'contacts'],
+    queryFn: async () => {
+      if (!editingVendor?.id) return [];
+      const res = await fetch(`/api/vendors/${editingVendor.id}/contacts`);
+      if (!res.ok) throw new Error('Failed to fetch contacts');
+      return res.json();
+    },
+    enabled: !!editingVendor?.id,
+  });
+
+  // Create contact mutation
+  const createContactMutation = useMutation({
+    mutationFn: async (data: VendorContactFormData) => {
+      if (!editingVendor?.id) throw new Error('No vendor selected');
+      return await apiRequest(`/api/vendors/${editingVendor.id}/contacts`, { method: 'POST', body: data });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/vendors', editingVendor?.id, 'contacts'] });
+      toast({ title: 'Contact created successfully' });
+      setIsAddingContact(false);
+      contactForm.reset();
+    },
+    onError: () => {
+      toast({ title: 'Failed to create contact', variant: 'destructive' });
+    },
+  });
+
+  // Update contact mutation
+  const updateContactMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: VendorContactFormData }) => {
+      if (!editingVendor?.id) throw new Error('No vendor selected');
+      return await apiRequest(`/api/vendors/${editingVendor.id}/contacts/${id}`, { method: 'PUT', body: data });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/vendors', editingVendor?.id, 'contacts'] });
+      toast({ title: 'Contact updated successfully' });
+      setEditingContact(null);
+      contactForm.reset();
+    },
+    onError: () => {
+      toast({ title: 'Failed to update contact', variant: 'destructive' });
+    },
+  });
+
+  // Delete contact mutation
+  const deleteContactMutation = useMutation({
+    mutationFn: async (id: number) => {
+      if (!editingVendor?.id) throw new Error('No vendor selected');
+      return await apiRequest(`/api/vendors/${editingVendor.id}/contacts/${id}`, { method: 'DELETE' });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/vendors', editingVendor?.id, 'contacts'] });
+      toast({ title: 'Contact deleted successfully' });
+      setDeleteContact(null);
+    },
+    onError: () => {
+      toast({ title: 'Failed to delete contact', variant: 'destructive' });
     },
   });
 
@@ -162,6 +247,10 @@ export default function VendorManagement() {
     setIsModalOpen(false);
     setEditingVendor(null);
     form.reset();
+    // Reset contact form states
+    setIsAddingContact(false);
+    setEditingContact(null);
+    contactForm.reset();
   };
 
   const onSubmit = (data: VendorFormData) => {
@@ -209,184 +298,409 @@ export default function VendorManagement() {
               Add Vendor
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle data-testid="text-modal-title">{editingVendor ? 'Edit Vendor' : 'New Vendor'}</DialogTitle>
             </DialogHeader>
-            <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                <FormField
-                  control={form.control}
-                  name="name"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Vendor Name *</FormLabel>
-                      <FormControl>
-                        <Input {...field} data-testid="input-vendor-name" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="contactPerson"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Contact Person</FormLabel>
-                        <FormControl>
-                          <Input {...field} data-testid="input-contact-person" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="phone"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Phone</FormLabel>
-                        <FormControl>
-                          <Input {...field} data-testid="input-phone" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="email"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Email</FormLabel>
-                        <FormControl>
-                          <Input type="email" {...field} data-testid="input-email" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="additionalEmail"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Additional Email</FormLabel>
-                        <FormControl>
-                          <Input type="email" {...field} data-testid="input-additional-email" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-
-                <FormField
-                  control={form.control}
-                  name="address"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Address</FormLabel>
-                      <FormControl>
-                        <Input {...field} data-testid="input-address" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="approved"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Approved</FormLabel>
-                        <Select onValueChange={(value) => field.onChange(value === 'true')} value={field.value ? 'true' : 'false'}>
+            
+            <Tabs defaultValue="main" className="w-full">
+              <TabsList className="grid w-full grid-cols-3">
+                <TabsTrigger value="main" data-testid="tab-main-info">Main Info</TabsTrigger>
+                <TabsTrigger value="contacts" data-testid="tab-contacts" disabled={!editingVendor}>
+                  Additional Contacts
+                </TabsTrigger>
+                <TabsTrigger value="evaluation" data-testid="tab-evaluation">Evaluation & Notes</TabsTrigger>
+              </TabsList>
+              
+              {/* Tab 1: Main Info */}
+              <TabsContent value="main" className="space-y-4 mt-4">
+                <Form {...form}>
+                  <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                    <FormField
+                      control={form.control}
+                      name="name"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Vendor Name *</FormLabel>
                           <FormControl>
-                            <SelectTrigger data-testid="select-approved">
-                              <SelectValue />
-                            </SelectTrigger>
+                            <Input {...field} data-testid="input-vendor-name" />
                           </FormControl>
-                          <SelectContent>
-                            <SelectItem value="true">Yes</SelectItem>
-                            <SelectItem value="false">No</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
 
-                  <FormField
-                    control={form.control}
-                    name="evaluated"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Evaluated</FormLabel>
-                        <Select onValueChange={(value) => field.onChange(value === 'true')} value={field.value ? 'true' : 'false'}>
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormField
+                        control={form.control}
+                        name="contactPerson"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Primary Contact Person</FormLabel>
+                            <FormControl>
+                              <Input {...field} data-testid="input-contact-person" />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="phone"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Phone</FormLabel>
+                            <FormControl>
+                              <Input {...field} data-testid="input-phone" />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormField
+                        control={form.control}
+                        name="email"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Primary Email</FormLabel>
+                            <FormControl>
+                              <Input type="email" {...field} data-testid="input-email" />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="additionalEmail"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Additional Email</FormLabel>
+                            <FormControl>
+                              <Input type="email" {...field} data-testid="input-additional-email" />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+
+                    <FormField
+                      control={form.control}
+                      name="address"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Address</FormLabel>
                           <FormControl>
-                            <SelectTrigger data-testid="select-evaluated">
-                              <SelectValue />
-                            </SelectTrigger>
+                            <Input {...field} data-testid="input-address" />
                           </FormControl>
-                          <SelectContent>
-                            <SelectItem value="true">Yes</SelectItem>
-                            <SelectItem value="false">No</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="approved"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Approved Vendor</FormLabel>
+                          <Select onValueChange={(value) => field.onChange(value === 'true')} value={field.value ? 'true' : 'false'}>
+                            <FormControl>
+                              <SelectTrigger data-testid="select-approved">
+                                <SelectValue />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="true">Yes</SelectItem>
+                              <SelectItem value="false">No</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <DialogFooter>
+                      <Button type="button" variant="outline" onClick={handleCloseModal} data-testid="button-cancel">
+                        Cancel
+                      </Button>
+                      <Button type="submit" disabled={createVendorMutation.isPending || updateVendorMutation.isPending} data-testid="button-save">
+                        {(createVendorMutation.isPending || updateVendorMutation.isPending) ? 'Saving...' : 'Save'}
+                      </Button>
+                    </DialogFooter>
+                  </form>
+                </Form>
+              </TabsContent>
+              
+              {/* Tab 2: Additional Contacts */}
+              <TabsContent value="contacts" className="space-y-4 mt-4">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-lg font-semibold">Contact List</h3>
+                  <Button onClick={() => setIsAddingContact(true)} size="sm" data-testid="button-add-contact">
+                    <Plus className="w-4 h-4 mr-2" />
+                    Add Contact
+                  </Button>
                 </div>
+                
+                {contactsLoading ? (
+                  <p className="text-center text-gray-500 py-4">Loading contacts...</p>
+                ) : contacts.length === 0 ? (
+                  <p className="text-center text-gray-500 py-4">No additional contacts added yet.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {contacts.map((contact) => (
+                      <div key={contact.id} className="border rounded-lg p-3 flex justify-between items-start" data-testid={`contact-card-${contact.id}`}>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <User className="w-4 h-4 text-gray-400" />
+                            <span className="font-medium">{contact.name}</span>
+                            {contact.isPrimary && (
+                              <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">Primary</span>
+                            )}
+                          </div>
+                          {contact.title && <p className="text-sm text-gray-600 mt-1">{contact.title}</p>}
+                          {contact.email && <p className="text-sm text-gray-600">{contact.email}</p>}
+                          {contact.phone && <p className="text-sm text-gray-600">{contact.phone}</p>}
+                          {contact.notes && <p className="text-sm text-gray-500 mt-1 italic">{contact.notes}</p>}
+                        </div>
+                        <div className="flex gap-2">
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            onClick={() => {
+                              setEditingContact(contact);
+                              contactForm.reset({
+                                name: contact.name,
+                                title: contact.title || '',
+                                email: contact.email || '',
+                                phone: contact.phone || '',
+                                isPrimary: contact.isPrimary ?? false,
+                                notes: contact.notes || '',
+                              });
+                            }}
+                            data-testid={`button-edit-contact-${contact.id}`}
+                          >
+                            <Edit className="w-4 h-4" />
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            onClick={() => setDeleteContact(contact)}
+                            data-testid={`button-delete-contact-${contact.id}`}
+                          >
+                            <Trash2 className="w-4 h-4 text-red-500" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                
+                {/* Add/Edit Contact Form */}
+                {(isAddingContact || editingContact) && (
+                  <div className="border rounded-lg p-4 bg-gray-50 dark:bg-gray-800">
+                    <h4 className="font-semibold mb-3">{editingContact ? 'Edit Contact' : 'New Contact'}</h4>
+                    <Form {...contactForm}>
+                      <form onSubmit={contactForm.handleSubmit((data) => {
+                        if (editingContact) {
+                          updateContactMutation.mutate({ id: editingContact.id, data });
+                        } else {
+                          createContactMutation.mutate(data);
+                        }
+                      })} className="space-y-3">
+                        <FormField
+                          control={contactForm.control}
+                          name="name"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Name *</FormLabel>
+                              <FormControl>
+                                <Input {...field} data-testid="input-contact-name" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        
+                        <div className="grid grid-cols-2 gap-3">
+                          <FormField
+                            control={contactForm.control}
+                            name="title"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Title</FormLabel>
+                                <FormControl>
+                                  <Input {...field} data-testid="input-contact-title" />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          
+                          <FormField
+                            control={contactForm.control}
+                            name="phone"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Phone</FormLabel>
+                                <FormControl>
+                                  <Input {...field} data-testid="input-contact-phone" />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+                        
+                        <FormField
+                          control={contactForm.control}
+                          name="email"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Email</FormLabel>
+                              <FormControl>
+                                <Input type="email" {...field} data-testid="input-contact-email" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        
+                        <FormField
+                          control={contactForm.control}
+                          name="isPrimary"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Primary Contact</FormLabel>
+                              <Select onValueChange={(value) => field.onChange(value === 'true')} value={field.value ? 'true' : 'false'}>
+                                <FormControl>
+                                  <SelectTrigger data-testid="select-contact-primary">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  <SelectItem value="true">Yes</SelectItem>
+                                  <SelectItem value="false">No</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        
+                        <FormField
+                          control={contactForm.control}
+                          name="notes"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Notes</FormLabel>
+                              <FormControl>
+                                <Textarea {...field} rows={2} data-testid="input-contact-notes" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        
+                        <div className="flex gap-2 justify-end">
+                          <Button 
+                            type="button" 
+                            variant="outline" 
+                            onClick={() => {
+                              setIsAddingContact(false);
+                              setEditingContact(null);
+                              contactForm.reset();
+                            }}
+                            data-testid="button-cancel-contact"
+                          >
+                            Cancel
+                          </Button>
+                          <Button 
+                            type="submit" 
+                            disabled={createContactMutation.isPending || updateContactMutation.isPending}
+                            data-testid="button-save-contact"
+                          >
+                            {(createContactMutation.isPending || updateContactMutation.isPending) ? 'Saving...' : 'Save Contact'}
+                          </Button>
+                        </div>
+                      </form>
+                    </Form>
+                  </div>
+                )}
+              </TabsContent>
+              
+              {/* Tab 3: Evaluation & Notes */}
+              <TabsContent value="evaluation" className="space-y-4 mt-4">
+                <Form {...form}>
+                  <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                    <FormField
+                      control={form.control}
+                      name="evaluated"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Evaluation Status</FormLabel>
+                          <Select onValueChange={(value) => field.onChange(value === 'true')} value={field.value ? 'true' : 'false'}>
+                            <FormControl>
+                              <SelectTrigger data-testid="select-eval-status">
+                                <SelectValue />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="true">Evaluated</SelectItem>
+                              <SelectItem value="false">Not Evaluated</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
 
-                <FormField
-                  control={form.control}
-                  name="evaluationDate"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Evaluation Date</FormLabel>
-                      <FormControl>
-                        <Input type="date" {...field} data-testid="input-evaluation-date" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                    <FormField
+                      control={form.control}
+                      name="evaluationDate"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Evaluation Date</FormLabel>
+                          <FormControl>
+                            <Input type="date" {...field} data-testid="input-eval-date" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
 
-                <FormField
-                  control={form.control}
-                  name="notes"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Notes</FormLabel>
-                      <FormControl>
-                        <Textarea {...field} rows={3} data-testid="input-notes" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                    <FormField
+                      control={form.control}
+                      name="notes"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Evaluation Notes</FormLabel>
+                          <FormControl>
+                            <Textarea {...field} rows={6} data-testid="input-eval-notes" placeholder="Add evaluation notes, feedback, or any relevant information about this vendor..." />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
 
-                <DialogFooter>
-                  <Button type="button" variant="outline" onClick={handleCloseModal} data-testid="button-cancel">
-                    Cancel
-                  </Button>
-                  <Button type="submit" disabled={createVendorMutation.isPending || updateVendorMutation.isPending} data-testid="button-save">
-                    {(createVendorMutation.isPending || updateVendorMutation.isPending) ? 'Saving...' : 'Save'}
-                  </Button>
-                </DialogFooter>
-              </form>
-            </Form>
+                    <DialogFooter>
+                      <Button type="button" variant="outline" onClick={handleCloseModal} data-testid="button-eval-cancel">
+                        Cancel
+                      </Button>
+                      <Button type="submit" disabled={createVendorMutation.isPending || updateVendorMutation.isPending} data-testid="button-eval-save">
+                        {(createVendorMutation.isPending || updateVendorMutation.isPending) ? 'Saving...' : 'Save'}
+                      </Button>
+                    </DialogFooter>
+                  </form>
+                </Form>
+              </TabsContent>
+            </Tabs>
           </DialogContent>
         </Dialog>
       </div>
@@ -654,7 +968,7 @@ export default function VendorManagement() {
         </div>
       )}
 
-      {/* Delete Confirmation Dialog */}
+      {/* Delete Vendor Confirmation Dialog */}
       <AlertDialog open={!!deleteVendor} onOpenChange={() => setDeleteVendor(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -669,6 +983,28 @@ export default function VendorManagement() {
               onClick={() => deleteVendor && deleteVendorMutation.mutate(deleteVendor.id)}
               className="bg-red-600 hover:bg-red-700"
               data-testid="button-confirm-delete"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete Contact Confirmation Dialog */}
+      <AlertDialog open={!!deleteContact} onOpenChange={() => setDeleteContact(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Contact</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete "{deleteContact?.name}"? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-delete-contact">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deleteContact && deleteContactMutation.mutate(deleteContact.id)}
+              className="bg-red-600 hover:bg-red-700"
+              data-testid="button-confirm-delete-contact"
             >
               Delete
             </AlertDialogAction>

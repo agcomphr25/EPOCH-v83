@@ -144,12 +144,23 @@ router.post('/:vendorId/contacts', async (req: Request, res: Response) => {
 // PUT /api/vendors/:vendorId/contacts/:contactId - Update a vendor contact
 router.put('/:vendorId/contacts/:contactId', async (req: Request, res: Response) => {
   try {
+    const vendorId = parseInt(req.params.vendorId);
     const contactId = parseInt(req.params.contactId);
-    if (!Number.isInteger(contactId)) {
-      return res.status(400).json({ error: 'Invalid contact ID' });
+    
+    if (!Number.isInteger(vendorId) || !Number.isInteger(contactId)) {
+      return res.status(400).json({ error: 'Invalid vendor or contact ID' });
     }
     
-    const data = insertVendorContactSchema.partial().parse(req.body);
+    // Verify the contact belongs to the specified vendor
+    const existingContacts = await storage.getVendorContacts(vendorId);
+    const contactExists = existingContacts.some(c => c.id === contactId);
+    
+    if (!contactExists) {
+      return res.status(404).json({ error: 'Contact not found for this vendor' });
+    }
+    
+    // Parse and validate request body, but exclude vendorId to prevent reassignment
+    const data = insertVendorContactSchema.partial().omit({ vendorId: true }).parse(req.body);
     const contact = await storage.updateVendorContact(contactId, data);
     res.json(contact);
   } catch (error) {
@@ -164,9 +175,19 @@ router.put('/:vendorId/contacts/:contactId', async (req: Request, res: Response)
 // DELETE /api/vendors/:vendorId/contacts/:contactId - Delete a vendor contact
 router.delete('/:vendorId/contacts/:contactId', async (req: Request, res: Response) => {
   try {
+    const vendorId = parseInt(req.params.vendorId);
     const contactId = parseInt(req.params.contactId);
-    if (!Number.isInteger(contactId)) {
-      return res.status(400).json({ error: 'Invalid contact ID' });
+    
+    if (!Number.isInteger(vendorId) || !Number.isInteger(contactId)) {
+      return res.status(400).json({ error: 'Invalid vendor or contact ID' });
+    }
+    
+    // Verify the contact belongs to the specified vendor
+    const existingContacts = await storage.getVendorContacts(vendorId);
+    const contactExists = existingContacts.some(c => c.id === contactId);
+    
+    if (!contactExists) {
+      return res.status(404).json({ error: 'Contact not found for this vendor' });
     }
     
     await storage.deleteVendorContact(contactId);

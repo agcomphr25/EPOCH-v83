@@ -7,19 +7,21 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { OrderTooltip } from '@/components/OrderTooltip';
-import { Shield, ArrowLeft, ArrowRight, Search, CheckSquare, Square } from 'lucide-react';
-import { useQuery } from '@tanstack/react-query';
+import { Shield, ArrowLeft, ArrowRight, Search, CheckSquare, Square, CheckCircle } from 'lucide-react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { getDisplayOrderId } from '@/lib/orderUtils';
 import { OrderSearchBox } from '@/components/OrderSearchBox';
 import { toast } from 'react-hot-toast';
 import { isOrderInDepartment } from '@/lib/departmentUtils';
+import { apiRequest } from '@/lib/queryClient';
 
 export default function FinishQCQueuePage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
   const [selectAll, setSelectAll] = useState(false);
   const [highlightedOrderId, setHighlightedOrderId] = useState<string | null>(null);
+  const queryClient = useQueryClient();
 
   // Get orders in Finish QC department directly
   const { data: finishQCOrders = [] } = useQuery<any[]>({
@@ -169,6 +171,37 @@ export default function FinishQCQueuePage() {
   React.useEffect(() => {
     setSelectAll(selectedOrders.size === filteredOrders.length && filteredOrders.length > 0);
   }, [selectedOrders.size, filteredOrders.length]);
+
+  // Progress to Paint mutation
+  const progressToPaint = useMutation({
+    mutationFn: async (orderIds: string[]) => {
+      return await apiRequest('/api/orders/progress-department', {
+        method: 'POST',
+        body: JSON.stringify({ 
+          orderIds, 
+          toDepartment: 'Paint' 
+        })
+      });
+    },
+    onSuccess: () => {
+      toast.success(`Progressed ${selectedOrders.size} order(s) to Paint`);
+      setSelectedOrders(new Set());
+      setSelectAll(false);
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/department/Finish QC'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
+    },
+    onError: (error: any) => {
+      toast.error(error.message || 'Failed to progress orders');
+    }
+  });
+
+  const handleProgressToPaint = () => {
+    if (selectedOrders.size === 0) {
+      toast.error('Please select at least one order');
+      return;
+    }
+    progressToPaint.mutate(Array.from(selectedOrders));
+  };
 
   return (
     <div className="container mx-auto p-6 space-y-6">
@@ -348,6 +381,45 @@ export default function FinishQCQueuePage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Floating Paint Progression Button */}
+      {selectedOrders.size > 0 && (
+        <div className="fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 shadow-lg">
+          <div className="container mx-auto p-4">
+            <div className="flex items-center justify-between flex-wrap gap-4">
+              <div className="flex items-center gap-2">
+                <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400" />
+                <span className="font-medium text-green-800 dark:text-green-200">
+                  {selectedOrders.size} order{selectedOrders.size > 1 ? 's' : ''} selected for Paint
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  onClick={() => {
+                    setSelectedOrders(new Set());
+                    setSelectAll(false);
+                  }}
+                  variant="outline"
+                  data-testid="button-clear-selection"
+                >
+                  Clear Selection
+                </Button>
+                <Button
+                  onClick={handleProgressToPaint}
+                  disabled={selectedOrders.size === 0 || progressToPaint.isPending}
+                  className="bg-green-600 hover:bg-green-700 text-white"
+                  data-testid="button-progress-to-paint"
+                >
+                  <ArrowRight className="h-4 w-4 mr-2" />
+                  {progressToPaint.isPending 
+                    ? 'Progressing...' 
+                    : `Progress to Paint (${selectedOrders.size})`}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

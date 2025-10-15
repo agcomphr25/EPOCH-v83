@@ -1996,8 +1996,11 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       const applicableDiscount = persistentDiscounts.find((d: any) => d.id === discountId && d.isActive);
       
       if (applicableDiscount) {
+        // Check appliesTo field to determine discount base
+        const discountBase = applicableDiscount.appliesTo === 'stock_model' ? basePrice : calculatedSubtotal;
+        
         if (applicableDiscount.percent) {
-          discountAmount = calculatedSubtotal * (applicableDiscount.percent / 100);
+          discountAmount = discountBase * (applicableDiscount.percent / 100);
         } else if (applicableDiscount.fixedAmount) {
           discountAmount = applicableDiscount.fixedAmount;
         }
@@ -2012,8 +2015,11 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       );
       
       if (applicableDiscount) {
+        // Check appliesTo field to determine discount base
+        const discountBase = applicableDiscount.appliesTo === 'stock_model' ? basePrice : calculatedSubtotal;
+        
         if (applicableDiscount.percent) {
-          discountAmount = calculatedSubtotal * (applicableDiscount.percent / 100);
+          discountAmount = discountBase * (applicableDiscount.percent / 100);
         } else if (applicableDiscount.fixedAmount) {
           discountAmount = applicableDiscount.fixedAmount;
         }

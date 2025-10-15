@@ -34,6 +34,7 @@ import {
   oemPrioritySettings,
   // Vendors table
   vendors,
+  vendorContacts,
   
   // Types
   type Order, type InsertOrder, type CSVData, type InsertCSVData,
@@ -126,6 +127,7 @@ import {
   type MetalAccessory, type InsertMetalAccessory,
   // Vendor types
   type Vendor, type InsertVendor,
+  type VendorContact, type InsertVendorContact,
 
 } from "./schema";
 import { db } from "./db";
@@ -3881,6 +3883,35 @@ export class DatabaseStorage implements IStorage {
     await db.update(vendors)
       .set({ isActive: false })
       .where(eq(vendors.id, id));
+  }
+
+  // Vendor Contacts CRUD
+  async getVendorContacts(vendorId: number): Promise<VendorContact[]> {
+    return await db
+      .select()
+      .from(vendorContacts)
+      .where(and(eq(vendorContacts.vendorId, vendorId), eq(vendorContacts.isActive, true)))
+      .orderBy(desc(vendorContacts.isPrimary), vendorContacts.name);
+  }
+
+  async createVendorContact(data: InsertVendorContact): Promise<VendorContact> {
+    const [contact] = await db.insert(vendorContacts).values(data).returning();
+    return contact;
+  }
+
+  async updateVendorContact(id: number, data: Partial<InsertVendorContact>): Promise<VendorContact> {
+    const [contact] = await db.update(vendorContacts)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(vendorContacts.id, id))
+      .returning();
+    return contact;
+  }
+
+  async deleteVendorContact(id: number): Promise<void> {
+    // Soft delete - just mark as inactive
+    await db.update(vendorContacts)
+      .set({ isActive: false })
+      .where(eq(vendorContacts.id, id));
   }
 
   // Module 8: Customer Addresses CRUD

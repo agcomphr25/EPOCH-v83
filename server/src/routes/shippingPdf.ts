@@ -1287,7 +1287,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     }
 
     // Features and Customizations Section - starts right after customer box
-    currentY = customerBoxY - 10;
+    currentY = customerBoxY - 15;
     page.drawText('FEATURES & CUSTOMIZATIONS', {
       x: margin,
       y: currentY,
@@ -1295,7 +1295,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       font: boldFont,
     });
 
-    currentY -= 5;
+    currentY -= 15;
     
     // Create bordered container for features table
     const featuresTableHeight = 240; // Increased height to accommodate all features

@@ -7,6 +7,26 @@ import { fileURLToPath } from 'url';
 
 const router = Router();
 
+// Type definition for order features to avoid TypeScript errors
+interface OrderFeatures {
+  handedness?: string;
+  action_length?: string | string[];
+  action?: string;
+  action_inlet?: string | string[];
+  bottom_metal?: string | string[];
+  barrel_inlet?: string | string[];
+  qd_accessory?: string | string[];
+  length_of_pull?: string | string[];
+  rail_accessory?: string | string[];
+  texture_options?: string | string[];
+  swivel_studs?: string | string[];
+  other_options?: string | string[];
+  metallic_finishes?: string;
+  paint_options?: string;
+  paint_options_combined?: string;
+  [key: string]: string | string[] | undefined;
+}
+
 // Helper function to load and embed company logo
 async function embedCompanyLogo(pdfDoc: PDFDocument) {
   try {
@@ -16,7 +36,7 @@ async function embedCompanyLogo(pdfDoc: PDFDocument) {
     const logoPath = path.join(__dirname, '../assets/logo_updated.png');
     const logoImageBytes = fs.readFileSync(logoPath);
     return await pdfDoc.embedPng(logoImageBytes);
-  } catch (error) {
+  } catch (error: unknown) {
     console.warn('Could not load company logo:', error);
     return null;
   }
@@ -411,7 +431,7 @@ router.get('/qc-checklist/:orderId', async (req: Request, res: Response) => {
     page.drawText('Page 1 of 1', {
       x: docBoxX + 5,
       y: currentY + 5,
-      size: 9,
+      size: 8,
       font: font,
     });
 
@@ -453,7 +473,7 @@ router.get('/qc-checklist/:orderId', async (req: Request, res: Response) => {
     const stockModels = await storage.getAllStockModels();
     const customers = await storage.getAllCustomers();
     const addresses = await storage.getAllAddresses();
-    const features = await storage.getAllFeatures();
+    const features: any[] = await storage.getAllFeatures();
 
     // Helper functions to extract order-specific details
     const getStockModelName = (modelId: string) => {
@@ -522,7 +542,7 @@ router.get('/qc-checklist/:orderId', async (req: Request, res: Response) => {
       
       `3) Stock color:\n    Paint Option: ${(() => {
         // Use the same logic as sales order PDF for paint display
-        const currentPaint = (order.features as any)?.metallic_finishes || (order.features as any)?.paint_options || (order.features as any)?.paint_options_combined;
+        const currentPaint = (order.features as OrderFeatures | undefined)?.metallic_finishes || (order.features as OrderFeatures | undefined)?.paint_options || (order.features as OrderFeatures | undefined)?.paint_options_combined;
         
         if (!currentPaint || currentPaint === 'none') {
           return 'Standard';
@@ -539,7 +559,7 @@ router.get('/qc-checklist/:orderId', async (req: Request, res: Response) => {
           f.id === 'metallic_finishes' ||
           f.id === 'paint_options' ||
           f.category === 'paint' ||
-          f.subcategory === 'paint'
+          f.subCategory === 'paint'
         );
 
         for (const feature of paintFeatures) {
@@ -605,7 +625,7 @@ router.get('/qc-checklist/:orderId', async (req: Request, res: Response) => {
         page.drawText(line, {
           x: margin + 20,
           y: lineY,
-          size: 9,
+          size: 8,
           font: lineIndex === 0 ? boldFont : font,
           color: rgb(0, 0, 0),
         });
@@ -707,7 +727,7 @@ router.get('/qc-checklist/:orderId', async (req: Request, res: Response) => {
     // Send PDF
     res.send(Buffer.from(pdfBytes));
 
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error generating QC checklist PDF:', error);
     res.status(500).json({ error: 'Failed to generate QC checklist PDF' });
   }
@@ -769,7 +789,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     const order = await storage.getOrderById(orderId);
     const stockModels = await storage.getAllStockModels();
     const customers = await storage.getAllCustomers();
-    const features = await storage.getAllFeatures();
+    const features: any[] = await storage.getAllFeatures();
     const addresses = await storage.getAllAddresses();
     
     // Get payment data for payment status calculation
@@ -798,7 +818,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
     // Header section with company logo - Fixed positioning
-    let currentY = height - margin - 20; // Move header down from very top edge
+    let currentY = height - margin - 10; // Reduced top margin for more space
     
     // Load and embed company logo
     const logo = await embedCompanyLogo(pdfDoc);
@@ -814,7 +834,27 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
         height: logoHeight,
       });
       
-      currentY -= logoHeight + 15;
+      currentY -= logoHeight + 15; // Added spacing between logo and contact info
+      
+      // Company contact information under logo
+      page.drawText('230 Hamer Rd, Owens Crossroads, AL 35763', {
+        x: margin,
+        y: currentY,
+        size: 8,
+        font: font,
+        color: rgb(0.3, 0.3, 0.3),
+      });
+      
+      currentY -= 12;
+      page.drawText('Phone: (256) 723-8381 | Email: info@agcomposites.com', {
+        x: margin,
+        y: currentY,
+        size: 8,
+        font: font,
+        color: rgb(0.3, 0.3, 0.3),
+      });
+      
+      currentY -= 20;
     } else {
       // Fallback to text if logo fails to load
       page.drawText('AG COMPOSITES', {
@@ -831,7 +871,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     const orderBoxX = width - margin - 220;
     const orderBoxY = currentY - 10;
     const orderBoxWidth = 220;
-    const orderBoxHeight = 95;
+    const orderBoxHeight = 75;
     
     // Sales Order title - positioned ABOVE the order info box
     page.drawText('SALES ORDER', {
@@ -860,21 +900,21 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     page.drawText('Order Number:', {
       x: col1X,
       y: boxTextY,
-      size: 9,
+      size: 8,
       font: boldFont,
     });
 
     page.drawText(orderId, {
       x: col1X,
       y: boxTextY - 12,
-      size: 9,
+      size: 8,
       font: font,
     });
 
     page.drawText('Customer PO:', {
       x: col2X,
       y: boxTextY,
-      size: 9,
+      size: 8,
       font: boldFont,
     });
 
@@ -882,7 +922,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     page.drawText(customerPO, {
       x: col2X,
       y: boxTextY - 12,
-      size: 9,
+      size: 8,
       font: font,
     });
 
@@ -892,28 +932,28 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     page.drawText('Order Date:', {
       x: col1X,
       y: boxTextY,
-      size: 9,
+      size: 8,
       font: boldFont,
     });
 
     page.drawText(new Date().toLocaleDateString(), {
       x: col1X,
       y: boxTextY - 12,
-      size: 9,
+      size: 8,
       font: font,
     });
 
     page.drawText('Due Date:', {
       x: col2X,
       y: boxTextY,
-      size: 9,
+      size: 8,
       font: boldFont,
     });
 
     page.drawText(order.dueDate ? new Date(order.dueDate).toLocaleDateString() : 'TBD', {
       x: col2X,
       y: boxTextY - 12,
-      size: 9,
+      size: 8,
       font: font,
     });
 
@@ -945,11 +985,11 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     const paymentColor = isFullyPaid ? rgb(0, 0.6, 0) : rgb(0.8, 0.4, 0);
 
     // Customer Information Section - Fixed positioning
-    currentY -= 140; // Move down to provide space for proper box placement
+    currentY -= 115; // Move down to provide space for proper box placement
     
     // Define customer box dimensions and position
     const customerBoxY = currentY;
-    const customerBoxHeight = 105;
+    const customerBoxHeight = 70; // Reduced for less white space at bottom
     
     // Create customer info box
     page.drawRectangle({
@@ -1008,7 +1048,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
             page.drawText(line, {
               x: margin + 8,
               y: customerTextY - (index * 11),
-              size: 9,
+              size: 8,
               font: font,
             });
           }
@@ -1029,7 +1069,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
             page.drawText(line, {
               x: margin + 8,
               y: customerTextY - (index * 11),
-              size: 9,
+              size: 8,
               font: font,
             });
           }
@@ -1086,7 +1126,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
             page.drawText(line, {
               x: shipToX,
               y: shipCurrentY - (index * 11),
-              size: 9,
+              size: 8,
               font: font,
             });
           }
@@ -1102,7 +1142,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
             page.drawText(line, {
               x: shipToX,
               y: shipCurrentY - (index * 11),
-              size: 9,
+              size: 8,
               font: font,
             });
           }
@@ -1117,7 +1157,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
           page.drawText(cityStateZip, {
             x: shipToX,
             y: shipCurrentY,
-            size: 9,
+            size: 8,
             font: font,
           });
         }
@@ -1149,7 +1189,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
             page.drawText(line, {
               x: shipToX,
               y: shipCurrentY - (index * 11),
-              size: 9,
+              size: 8,
               font: font,
             });
           }
@@ -1165,7 +1205,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
             page.drawText(line, {
               x: shipToX,
               y: shipCurrentY - (index * 11),
-              size: 9,
+              size: 8,
               font: font,
             });
           }
@@ -1180,7 +1220,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
           page.drawText(cityStateZip, {
             x: shipToX,
             y: shipCurrentY,
-            size: 9,
+            size: 8,
             font: font,
           });
         }
@@ -1216,7 +1256,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
               page.drawText(line, {
                 x: shipToX,
                 y: shipCurrentY - (index * 11),
-                size: 9,
+                size: 8,
                 font: font,
                 color: rgb(0.5, 0.5, 0.5)
               });
@@ -1239,7 +1279,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
         page.drawText('Customer information not available', {
           x: shipToX,
           y: shipCurrentY,
-          size: 9,
+          size: 8,
           font: font,
           color: rgb(0.6, 0.6, 0.6)
         });
@@ -1283,21 +1323,21 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     page.drawText('Feature', {
       x: margin + 8,
       y: currentY - 12,
-      size: 9,
+      size: 8,
       font: boldFont,
     });
 
     page.drawText('Selection', {
       x: margin + 180,
       y: currentY - 12,
-      size: 9,
+      size: 8,
       font: boldFont,
     });
 
     page.drawText('Price', {
       x: margin + printableWidth - 70,
       y: currentY - 12,
-      size: 9,
+      size: 8,
       font: boldFont,
     });
     
@@ -1321,18 +1361,18 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     page.drawText('Stock Model:', {
       x: margin + 8,
       y: summaryLineY,
-      size: 9,
+      size: 8,
       font: font,
     });
 
     const modelDisplayName = model?.displayName || model?.name || 'Custom';
-    const wrappedModel = wrapText(modelDisplayName, 280, 9, font);
+    const wrappedModel = wrapText(modelDisplayName, 280, 8, font);
     wrappedModel.forEach((line, index) => {
-      if (summaryLineY - (index * 12) > currentY - featuresTableHeight + 8) { // Keep within table bounds
+      if (summaryLineY - (index * 11) > currentY - featuresTableHeight + 8) { // Keep within table bounds
         page.drawText(line, {
           x: margin + 180,
-          y: summaryLineY - (index * 12),
-          size: 9,
+          y: summaryLineY - (index * 11),
+          size: 8,
           font: font,
         });
       }
@@ -1341,31 +1381,32 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     page.drawText(`$${basePrice.toFixed(2)}`, {
       x: margin + printableWidth - 70,
       y: summaryLineY,
-      size: 9,
+      size: 8,
       font: boldFont,
       color: rgb(0, 0.4, 0.8),
     });
 
-    summaryLineY -= Math.max(15, wrappedModel.length * 12);
+    summaryLineY -= Math.max(13, wrappedModel.length * 11);
 
     // Handedness
     if (summaryLineY > currentY - featuresTableHeight + 15) {
       page.drawText('Handedness:', {
         x: margin + 8,
         y: summaryLineY,
-        size: 9,
+        size: 8,
         font: font,
       });
 
-      const handednessDisplay = order.features?.handedness ? 
-        ((order.features as any)?.handedness === 'right' ? 'Right' : 'Left') : 'Not selected';
-      const wrappedHandedness = wrapText(handednessDisplay, 280, 9, font);
+      const features = order.features as OrderFeatures | undefined;
+      const handednessDisplay = features?.handedness ? 
+        (features.handedness === 'right' ? 'Right' : 'Left') : 'Not selected';
+      const wrappedHandedness = wrapText(handednessDisplay, 280, 8, font);
       wrappedHandedness.forEach((line, index) => {
-        if (summaryLineY - (index * 12) > currentY - featuresTableHeight + 8) {
+        if (summaryLineY - (index * 11) > currentY - featuresTableHeight + 8) {
           page.drawText(line, {
             x: margin + 180,
-            y: summaryLineY - (index * 12),
-            size: 9,
+            y: summaryLineY - (index * 11),
+            size: 8,
             font: font,
           });
         }
@@ -1374,37 +1415,39 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       page.drawText('$0.00', {
         x: margin + printableWidth - 70,
         y: summaryLineY,
-        size: 9,
+        size: 8,
         font: boldFont,
         color: rgb(0, 0.4, 0.8),
       });
 
-      summaryLineY -= Math.max(15, wrappedHandedness.length * 12);
+      summaryLineY -= Math.max(13, wrappedHandedness.length * 11);
     }
 
     // Action Length
     if (summaryLineY > currentY - featuresTableHeight + 15) {
-      const actionLengthFeature = features.find(f => f.id === 'action_length');
-      const actionLengthOption = actionLengthFeature?.options?.find(opt => opt.value === order.features?.action_length);
+      const orderFeatures = order.features as OrderFeatures | undefined;
+      const actionLengthFeature = features.find((f: any) => f.id === 'action_length');
+      const actionLengthOption = actionLengthFeature?.options?.find((opt: any) => opt.value === orderFeatures?.action_length);
       actionLengthPrice = actionLengthOption?.price || 0;
 
       page.drawText('Action Length:', {
         x: margin + 8,
         y: summaryLineY,
-        size: 9,
+        size: 8,
         font: font,
       });
 
+      const actionLengthValue = typeof orderFeatures?.action_length === 'string' ? orderFeatures.action_length : '';
       const actionLengthDisplay = actionLengthOption?.label || 
-        (order.features?.action_length ? (order.features as any)?.action_length.charAt(0).toUpperCase() + (order.features as any)?.action_length.slice(1) : 'Not selected');
+        (actionLengthValue ? actionLengthValue.charAt(0).toUpperCase() + actionLengthValue.slice(1) : 'Not selected');
       
       const wrappedActionLength = wrapText(actionLengthDisplay, 280, 9, font);
       wrappedActionLength.forEach((line, index) => {
-        if (summaryLineY - (index * 12) > currentY - featuresTableHeight + 8) {
+        if (summaryLineY - (index * 11) > currentY - featuresTableHeight + 8) {
           page.drawText(line, {
             x: margin + 180,
-            y: summaryLineY - (index * 12),
-            size: 9,
+            y: summaryLineY - (index * 11),
+            size: 8,
             font: font,
           });
         }
@@ -1413,37 +1456,70 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       page.drawText(`$${actionLengthPrice.toFixed(2)}`, {
         x: margin + printableWidth - 70,
         y: summaryLineY,
-        size: 9,
+        size: 8,
         font: boldFont,
         color: rgb(0, 0.4, 0.8),
       });
 
-      summaryLineY -= Math.max(15, wrappedActionLength.length * 12);
+      summaryLineY -= Math.max(13, wrappedActionLength.length * 12);
+    }
+
+    // Shank
+    if (summaryLineY > currentY - featuresTableHeight + 15) {
+      page.drawText('Shank:', {
+        x: margin + 8,
+        y: summaryLineY,
+        size: 8,
+        font: font,
+      });
+
+      const shankDisplay = order.shankLength || 'Not selected';
+      const wrappedShank = wrapText(shankDisplay, 280, 9, font);
+      wrappedShank.forEach((line, index) => {
+        if (summaryLineY - (index * 11) > currentY - featuresTableHeight + 8) {
+          page.drawText(line, {
+            x: margin + 180,
+            y: summaryLineY - (index * 11),
+            size: 8,
+            font: font,
+          });
+        }
+      });
+
+      page.drawText('$0.00', {
+        x: margin + printableWidth - 70,
+        y: summaryLineY,
+        size: 8,
+        font: boldFont,
+        color: rgb(0, 0.4, 0.8),
+      });
+
+      summaryLineY -= Math.max(13, wrappedShank.length * 12);
     }
 
     // Action Inlet
     if (summaryLineY > currentY - featuresTableHeight + 15) {
       // Check for both 'action' and 'action_inlet' fields
-      const actionValue = order.features?.action || order.features?.action_inlet;
+      const actionValue = (order.features as OrderFeatures | undefined)?.action || (order.features as OrderFeatures | undefined)?.action_inlet;
       const actionInletFeature = features.find(f => f.id === 'action_inlet' || f.id === 'action');
-      const actionInletOption = actionInletFeature?.options?.find(opt => opt.value === actionValue);
+      const actionInletOption = actionInletFeature?.options?.find((opt: any) => opt.value === actionValue);
       actionInletPrice = actionInletOption?.price || 0;
 
       page.drawText('Action Inlet:', {
         x: margin + 8,
         y: summaryLineY,
-        size: 9,
+        size: 8,
         font: font,
       });
 
       const actionInletDisplay = actionInletOption?.label || (actionValue || 'Not selected');
       const wrappedActionInlet = wrapText(actionInletDisplay, 280, 9, font);
       wrappedActionInlet.forEach((line, index) => {
-        if (summaryLineY - (index * 12) > currentY - featuresTableHeight + 8) {
+        if (summaryLineY - (index * 11) > currentY - featuresTableHeight + 8) {
           page.drawText(line, {
             x: margin + 180,
-            y: summaryLineY - (index * 12),
-            size: 9,
+            y: summaryLineY - (index * 11),
+            size: 8,
             font: font,
           });
         }
@@ -1452,35 +1528,35 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       page.drawText(`$${actionInletPrice.toFixed(2)}`, {
         x: margin + printableWidth - 70,
         y: summaryLineY,
-        size: 9,
+        size: 8,
         font: boldFont,
         color: rgb(0, 0.4, 0.8),
       });
 
-      summaryLineY -= Math.max(15, wrappedActionInlet.length * 12);
+      summaryLineY -= Math.max(13, wrappedActionInlet.length * 12);
     }
 
     // Bottom Metal
     if (summaryLineY > currentY - featuresTableHeight + 15) {
       const bottomMetalFeature = features.find(f => f.id === 'bottom_metal');
-      const bottomMetalOption = bottomMetalFeature?.options?.find(opt => opt.value === order.features?.bottom_metal);
+      const bottomMetalOption = bottomMetalFeature?.options?.find((opt: any) => opt.value === (order.features as OrderFeatures | undefined)?.bottom_metal);
       bottomMetalPrice = bottomMetalOption?.price || 0;
 
       page.drawText('Bottom Metal:', {
         x: margin + 8,
         y: summaryLineY,
-        size: 9,
+        size: 8,
         font: font,
       });
 
       const bottomMetalDisplay = bottomMetalOption?.label || 'Not selected';
       const wrappedBottomMetal = wrapText(bottomMetalDisplay, 280, 9, font);
       wrappedBottomMetal.forEach((line, index) => {
-        if (summaryLineY - (index * 12) > currentY - featuresTableHeight + 8) {
+        if (summaryLineY - (index * 11) > currentY - featuresTableHeight + 8) {
           page.drawText(line, {
             x: margin + 180,
-            y: summaryLineY - (index * 12),
-            size: 9,
+            y: summaryLineY - (index * 11),
+            size: 8,
             font: font,
           });
         }
@@ -1489,23 +1565,23 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       page.drawText(`$${bottomMetalPrice.toFixed(2)}`, {
         x: margin + printableWidth - 70,
         y: summaryLineY,
-        size: 9,
+        size: 8,
         font: boldFont,
         color: rgb(0, 0.4, 0.8),
       });
 
-      summaryLineY -= Math.max(15, wrappedBottomMetal.length * 12);
+      summaryLineY -= Math.max(13, wrappedBottomMetal.length * 12);
     }
 
     // Barrel Inlet
     const barrelInletFeature = features.find(f => f.id === 'barrel_inlet');
-    const barrelInletOption = barrelInletFeature?.options?.find(opt => opt.value === order.features?.barrel_inlet);
+    const barrelInletOption = barrelInletFeature?.options?.find((opt: any) => opt.value === (order.features as OrderFeatures | undefined)?.barrel_inlet);
     barrelInletPrice = barrelInletOption?.price || 0;
 
     page.drawText('Barrel Inlet:', {
       x: margin + 10,
       y: summaryLineY,
-      size: 9,
+      size: 8,
       font: font,
     });
 
@@ -1514,8 +1590,8 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     wrappedBarrelInlet.forEach((line, index) => {
       page.drawText(line, {
         x: margin + 180,
-        y: summaryLineY - (index * 12),
-        size: 9,
+        y: summaryLineY - (index * 11),
+        size: 8,
         font: font,
       });
     });
@@ -1526,7 +1602,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     page.drawText(`$${barrelInletPrice.toFixed(2)}`, {
       x: margin + printableWidth - 70,
       y: summaryLineY,
-      size: 9,
+      size: 8,
       font: boldFont,
       color: rgb(0, 0.4, 0.8),
     });
@@ -1535,13 +1611,13 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
 
     // QDs (Quick Detach Cups)
     const qdFeature = features.find(f => f.id === 'qd_accessory');
-    const qdOption = qdFeature?.options?.find(opt => opt.value === order.features?.qd_accessory);
+    const qdOption = qdFeature?.options?.find((opt: any) => opt.value === (order.features as OrderFeatures | undefined)?.qd_accessory);
     qdPrice = qdOption?.price || 0;
 
     page.drawText('QDs (Quick Detach Cups):', {
       x: margin + 8,
       y: summaryLineY,
-      size: 9,
+      size: 8,
       font: font,
     });
 
@@ -1550,8 +1626,8 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     wrappedQD.forEach((line, index) => {
       page.drawText(line, {
         x: margin + 180,
-        y: summaryLineY - (index * 12),
-        size: 9,
+        y: summaryLineY - (index * 11),
+        size: 8,
         font: font,
       });
     });
@@ -1562,7 +1638,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     page.drawText(`$${qdPrice.toFixed(2)}`, {
       x: margin + printableWidth - 70,
       y: summaryLineY,
-      size: 9,
+      size: 8,
       font: boldFont,
       color: rgb(0, 0.4, 0.8),
     });
@@ -1571,26 +1647,26 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
 
     // Length of Pull (LOP)
     const lopFeature = features.find(f => f.id === 'length_of_pull');
-    const lopOption = lopFeature?.options?.find(opt => opt.value === order.features?.length_of_pull);
+    const lopOption = lopFeature?.options?.find((opt: any) => opt.value === (order.features as OrderFeatures | undefined)?.length_of_pull);
     lopPrice = lopOption?.price || 0;
 
     page.drawText('LOP (Length of Pull):', {
       x: margin + 8,
       y: summaryLineY,
-      size: 9,
+      size: 8,
       font: font,
     });
 
     const lopDisplay = lopOption?.label || 
-      (order.features?.length_of_pull && (order.features as any)?.length_of_pull !== 'no_lop_change' ? 
-        (order.features as any)?.length_of_pull.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : 'Not selected');
+      ((order.features as OrderFeatures | undefined)?.length_of_pull && (order.features as OrderFeatures | undefined)?.length_of_pull !== 'no_lop_change' ? 
+        (order.features as OrderFeatures | undefined)?.length_of_pull.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : 'Not selected');
     
     const wrappedLOP = wrapText(lopDisplay, 280, 9, font);
     wrappedLOP.forEach((line, index) => {
       page.drawText(line, {
         x: margin + 180,
-        y: summaryLineY - (index * 12),
-        size: 9,
+        y: summaryLineY - (index * 11),
+        size: 8,
         font: font,
       });
     });
@@ -1601,7 +1677,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     page.drawText(`$${lopPrice.toFixed(2)}`, {
       x: margin + printableWidth - 70,
       y: summaryLineY,
-      size: 9,
+      size: 8,
       font: boldFont,
       color: rgb(0, 0.4, 0.8),
     });
@@ -1612,13 +1688,13 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     railsPrice = 0;
     let railsDisplay = 'Not selected';
     
-    if (order.features?.rail_accessory && Array.isArray((order.features as any)?.rail_accessory) && (order.features as any)?.rail_accessory.length > 0) {
+    if ((order.features as OrderFeatures | undefined)?.rail_accessory && Array.isArray((order.features as OrderFeatures | undefined)?.rail_accessory) && (order.features as OrderFeatures | undefined)?.rail_accessory.length > 0) {
       const railFeature = features.find(f => f.id === 'rail_accessory');
-      const selectedRails = (order.features as any)?.rail_accessory.filter(rail => rail !== 'no_rail');
+      const selectedRails = (order.features as OrderFeatures | undefined)?.rail_accessory.filter(rail => rail !== 'no_rail');
       
       if (selectedRails.length > 0) {
-        railsDisplay = selectedRails.map(railValue => {
-          const option = railFeature?.options?.find(opt => opt.value === railValue);
+        railsDisplay = selectedRails.map((railValue: any) => {
+          const option = railFeature?.options?.find((opt: any) => opt.value === railValue);
           railsPrice += option?.price || 0;
           return option?.label || railValue.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
         }).join(', ');
@@ -1628,7 +1704,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     page.drawText('Rails:', {
       x: margin + 8,
       y: summaryLineY,
-      size: 9,
+      size: 8,
       font: font,
     });
 
@@ -1636,8 +1712,8 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     wrappedRails.forEach((line, index) => {
       page.drawText(line, {
         x: margin + 180,
-        y: summaryLineY - (index * 12),
-        size: 9,
+        y: summaryLineY - (index * 11),
+        size: 8,
         font: font,
       });
     });
@@ -1648,7 +1724,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     page.drawText(`$${railsPrice.toFixed(2)}`, {
       x: margin + printableWidth - 70,
       y: summaryLineY,
-      size: 9,
+      size: 8,
       font: boldFont,
       color: rgb(0, 0.4, 0.8),
     });
@@ -1657,25 +1733,25 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
 
     // Texture
     const textureFeature = features.find(f => f.id === 'texture_options');
-    const textureOption = textureFeature?.options?.find(opt => opt.value === order.features?.texture_options);
+    const textureOption = textureFeature?.options?.find((opt: any) => opt.value === (order.features as OrderFeatures | undefined)?.texture_options);
     texturePrice = textureOption?.price || 0;
 
     page.drawText('Texture:', {
       x: margin + 8,
       y: summaryLineY,
-      size: 9,
+      size: 8,
       font: font,
     });
 
     const textureDisplay = textureOption?.label || 
-      (order.features?.texture_options ? (order.features as any)?.texture_options.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : 'Not selected');
+      ((order.features as OrderFeatures | undefined)?.texture_options ? (order.features as OrderFeatures | undefined)?.texture_options.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : 'Not selected');
     
     const wrappedTexture = wrapText(textureDisplay, 280, 9, font);
     wrappedTexture.forEach((line, index) => {
       page.drawText(line, {
         x: margin + 180,
-        y: summaryLineY - (index * 12),
-        size: 9,
+        y: summaryLineY - (index * 11),
+        size: 8,
         font: font,
       });
     });
@@ -1686,7 +1762,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     page.drawText(`$${texturePrice.toFixed(2)}`, {
       x: margin + printableWidth - 70,
       y: summaryLineY,
-      size: 9,
+      size: 8,
       font: boldFont,
       color: rgb(0, 0.4, 0.8),
     });
@@ -1695,13 +1771,13 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
 
     // Swivel Studs
     const swivelFeature = features.find(f => f.id === 'swivel_studs');
-    const swivelOption = swivelFeature?.options?.find(opt => opt.value === order.features?.swivel_studs);
+    const swivelOption = swivelFeature?.options?.find((opt: any) => opt.value === (order.features as OrderFeatures | undefined)?.swivel_studs);
     swivelPrice = swivelOption?.price || 0;
 
     page.drawText('Swivel Studs:', {
       x: margin + 8,
       y: summaryLineY,
-      size: 9,
+      size: 8,
       font: font,
     });
 
@@ -1710,8 +1786,8 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     wrappedSwivel.forEach((line, index) => {
       page.drawText(line, {
         x: margin + 180,
-        y: summaryLineY - (index * 12),
-        size: 9,
+        y: summaryLineY - (index * 11),
+        size: 8,
         font: font,
       });
     });
@@ -1722,7 +1798,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     page.drawText(`$${swivelPrice.toFixed(2)}`, {
       x: margin + printableWidth - 70,
       y: summaryLineY,
-      size: 9,
+      size: 8,
       font: boldFont,
       color: rgb(0, 0.4, 0.8),
     });
@@ -1733,24 +1809,24 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     otherOptionsPrice = 0;
     let otherOptionsDisplay = 'Not selected';
     
-    if (order.features?.other_options && Array.isArray((order.features as any)?.other_options) && (order.features as any)?.other_options.length > 0) {
+    if ((order.features as OrderFeatures | undefined)?.other_options && Array.isArray((order.features as OrderFeatures | undefined)?.other_options) && (order.features as OrderFeatures | undefined)?.other_options.length > 0) {
       const otherFeature = features.find(f => f.id === 'other_options');
       
       if (otherFeature?.options) {
-        otherOptionsDisplay = (order.features as any)?.other_options.map((optionValue: string) => {
-          const option = otherFeature.options!.find(opt => opt.value === optionValue);
+        otherOptionsDisplay = (order.features as OrderFeatures | undefined)?.other_options.map((optionValue: string) => {
+          const option = otherFeature.options!.find((opt: any) => opt.value === optionValue);
           otherOptionsPrice += option?.price || 0;
           return option?.label || optionValue.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
         }).join(', ');
       } else {
-        otherOptionsDisplay = (order.features as any)?.other_options.join(', ');
+        otherOptionsDisplay = (order.features as OrderFeatures | undefined)?.other_options.join(', ');
       }
     }
 
     page.drawText('Other Options:', {
       x: margin + 8,
       y: summaryLineY,
-      size: 9,
+      size: 8,
       font: font,
     });
 
@@ -1759,8 +1835,8 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     wrappedOtherOptions.forEach((line, index) => {
       page.drawText(line, {
         x: margin + 180,
-        y: summaryLineY - (index * 12),
-        size: 9,
+        y: summaryLineY - (index * 11),
+        size: 8,
         font: font,
       });
     });
@@ -1772,7 +1848,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     page.drawText(`$${otherOptionsPrice.toFixed(2)}`, {
       x: margin + printableWidth - 70,
       y: summaryLineY,
-      size: 9,
+      size: 8,
       font: boldFont,
       color: rgb(0, 0.4, 0.8),
     });
@@ -1784,7 +1860,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     let paintDisplay = 'Not selected';
     
     // Handle multiple paint option fields
-    const currentPaint = order.features?.metallic_finishes || order.features?.paint_options || order.features?.paint_options_combined;
+    const currentPaint = (order.features as OrderFeatures | undefined)?.metallic_finishes || (order.features as OrderFeatures | undefined)?.paint_options || (order.features as OrderFeatures | undefined)?.paint_options_combined;
     
     if (currentPaint && currentPaint !== 'none') {
       // Search through paint-related features
@@ -1798,12 +1874,12 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
         f.id === 'metallic_finishes' ||
         f.id === 'paint_options' ||
         f.category === 'paint' ||
-        f.subcategory === 'paint'
+        f.subCategory === 'paint'
       );
 
       for (const feature of paintFeatures) {
         if (feature.options) {
-          const option = feature.options.find(opt => opt.value === currentPaint);
+          const option = feature.options.find((opt: any) => opt.value === currentPaint);
           if (option) {
             paintDisplay = option.label;
             paintPrice = option.price || 0;
@@ -1821,7 +1897,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     page.drawText('Paint Options:', {
       x: margin + 8,
       y: summaryLineY,
-      size: 9,
+      size: 8,
       font: font,
     });
 
@@ -1830,8 +1906,8 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     wrappedPaintDisplay.forEach((line, index) => {
       page.drawText(line, {
         x: margin + 180,
-        y: summaryLineY - (index * 12),
-        size: 9,
+        y: summaryLineY - (index * 11),
+        size: 8,
         font: font,
       });
     });
@@ -1843,12 +1919,12 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     page.drawText(`$${paintPrice.toFixed(2)}`, {
       x: margin + printableWidth - 70,
       y: summaryLineY,
-      size: 9,
+      size: 8,
       font: boldFont,
       color: rgb(0, 0.4, 0.8),
     });
 
-    summaryLineY -= 20;
+    summaryLineY -= 10; // Reduced white space above separator
 
     // Separator line
     page.drawLine({
@@ -1858,7 +1934,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       color: rgb(0, 0, 0),
     });
 
-    summaryLineY -= 25;
+    summaryLineY -= 18; // Reduced white space below separator
 
     // Subtotal
     const calculatedSubtotal = basePrice + actionLengthPrice + actionInletPrice + bottomMetalPrice + barrelInletPrice + qdPrice + lopPrice + railsPrice + texturePrice + swivelPrice + otherOptionsPrice + paintPrice;
@@ -1897,8 +1973,11 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       summaryLineY -= 25;
     }
 
-    // Calculate discount
+    // Calculate discounts - check custom, order-level, and customer type discounts
     let discountAmount = 0;
+    let discountLabel = 'Discount';
+    
+    // First check for custom discount
     if ((order as any).showCustomDiscount && (order as any).customDiscountValue) {
       const discountValue = (order as any).customDiscountValue;
       const discountType = (order as any).customDiscountType || 'percent';
@@ -1908,11 +1987,43 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       } else if (discountType === 'fixed') {
         discountAmount = discountValue;
       }
+      discountLabel = 'Custom Discount';
+    } 
+    // Check for order's discountCode (persistent_X format)
+    else if (order.discountCode && order.discountCode !== 'none' && order.discountCode.startsWith('persistent_')) {
+      const discountId = parseInt(order.discountCode.replace('persistent_', ''));
+      const persistentDiscounts = await storage.getAllPersistentDiscounts();
+      const applicableDiscount = persistentDiscounts.find((d: any) => d.id === discountId && d.isActive);
+      
+      if (applicableDiscount) {
+        if (applicableDiscount.percent) {
+          discountAmount = calculatedSubtotal * (applicableDiscount.percent / 100);
+        } else if (applicableDiscount.fixedAmount) {
+          discountAmount = applicableDiscount.fixedAmount;
+        }
+        discountLabel = applicableDiscount.name || 'Discount';
+      }
+    }
+    // If no custom or order discount, check for persistent discount based on customer type
+    else if (customer && (customer as any).customerTypeId) {
+      const persistentDiscounts = await storage.getAllPersistentDiscounts();
+      const applicableDiscount = persistentDiscounts.find(
+        (d: any) => d.customerTypeId === (customer as any).customerTypeId && d.isActive
+      );
+      
+      if (applicableDiscount) {
+        if (applicableDiscount.percent) {
+          discountAmount = calculatedSubtotal * (applicableDiscount.percent / 100);
+        } else if (applicableDiscount.fixedAmount) {
+          discountAmount = applicableDiscount.fixedAmount;
+        }
+        discountLabel = applicableDiscount.name || 'Discount';
+      }
     }
 
-    // Discount (if applicable)
+    // Display discount (if applicable)
     if (discountAmount > 0) {
-      page.drawText('Discount:', {
+      page.drawText(`${discountLabel}:`, {
         x: margin + 8,
         y: summaryLineY,
         size: 10,
@@ -2060,7 +2171,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       page.drawText(term, {
         x: margin,
         y: currentY,
-        size: 9,
+        size: 8,
         font: font,
       });
       currentY -= 15;
@@ -2119,7 +2230,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     page.drawText('AG Composites | 230 Hamer Rd, Owens Crossroads, AL 35763', {
       x: margin,
       y: currentY,
-      size: 9,
+      size: 8,
       font: font,
     });
 
@@ -2127,7 +2238,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     page.drawText('Phone: (256) 723-8381 | Email: sales@agatcomposite.com', {
       x: margin,
       y: currentY,
-      size: 9,
+      size: 8,
       font: font,
     });
 
@@ -2142,7 +2253,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     // Send PDF
     res.send(Buffer.from(pdfBytes));
 
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error generating sales order PDF:', error);
     res.status(500).json({ error: 'Failed to generate sales order PDF' });
   }
@@ -2166,7 +2277,7 @@ router.post('/ups-shipping-label/:orderId', async (req: Request, res: Response) 
     try {
       order = await storage.getFinalizedOrderById(orderId);
       console.log(`Found finalized order: ${orderId}`);
-    } catch (error) {
+    } catch (error: unknown) {
       try {
         order = await storage.getOrderDraft(orderId);
         console.log(`Found draft order: ${orderId}`);
@@ -2245,7 +2356,7 @@ router.post('/ups-shipping-label/:orderId', async (req: Request, res: Response) 
         // Try to update finalized order first
         await storage.updateFinalizedOrder(orderId, orderUpdateData);
         console.log(`Updated finalized order ${orderId} with tracking ${trackingNumber}`);
-      } catch (error) {
+      } catch (error: unknown) {
         try {
           // If not found, try draft orders
           await storage.updateOrderDraft(orderId, orderUpdateData);
@@ -2270,11 +2381,11 @@ router.post('/ups-shipping-label/:orderId', async (req: Request, res: Response) 
       });
     }
     
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error creating UPS shipping label with custom details:', error);
     return res.status(500).json({ 
       error: 'Failed to create UPS shipping label', 
-      details: error instanceof Error ? error.message : 'Unknown error'
+      details: error instanceof Error ? (error as Error).message : 'Unknown error'
     });
   }
 });
@@ -2293,7 +2404,7 @@ router.get('/ups-shipping-label/:orderId', async (req: Request, res: Response) =
     try {
       order = await storage.getFinalizedOrderById(orderId);
       console.log(`Found finalized order: ${orderId}`);
-    } catch (error) {
+    } catch (error: unknown) {
       try {
         order = await storage.getOrderDraft(orderId);
         console.log(`Found draft order: ${orderId}`);
@@ -2413,7 +2524,7 @@ router.get('/ups-shipping-label/:orderId', async (req: Request, res: Response) =
         // Try to update finalized order first
         await storage.updateFinalizedOrder(orderId, orderUpdateData);
         console.log(`Updated finalized order ${orderId} with tracking ${trackingNumber}`);
-      } catch (error) {
+      } catch (error: unknown) {
         try {
           // If not found, try draft orders
           await storage.updateOrderDraft(orderId, orderUpdateData);
@@ -2452,11 +2563,11 @@ router.get('/ups-shipping-label/:orderId', async (req: Request, res: Response) =
             // Send the UPS label GIF image
             return res.send(labelBytes);
           }
-        } catch (pdfError) {
+        } catch (pdfError: unknown) {
           console.error(`Error processing label for ${orderId}:`, pdfError);
           return res.status(500).json({ 
             error: 'Failed to process UPS label', 
-            details: pdfError.message,
+            details: (pdfError as Error).message,
             trackingNumber: trackingNumber
           });
         }
@@ -2482,11 +2593,11 @@ router.get('/ups-shipping-label/:orderId', async (req: Request, res: Response) =
       orderId: orderId
     });
 
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error creating real UPS shipping label:', error);
     
     // Check if this is just the structural error we're trying to fix
-    if (error.message && error.message.includes('UPS API returned')) {
+    if ((error as Error).message && (error as Error).message.includes('UPS API returned')) {
       return res.status(200).json({
         success: true,
         message: 'UPS shipping label created successfully',
@@ -2496,7 +2607,7 @@ router.get('/ups-shipping-label/:orderId', async (req: Request, res: Response) =
     
     res.status(500).json({ 
       error: 'Failed to create UPS shipping label',
-      details: error.message
+      details: (error as Error).message
     });
   }
 });
@@ -2958,7 +3069,7 @@ router.post('/ups-shipping-label/:orderId', async (req: Request, res: Response) 
       res.send(Buffer.from(fallbackPdfBytes));
     }
 
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error generating shipping label PDF:', error);
     res.status(500).json({ error: 'Failed to generate shipping label PDF' });
   }
@@ -3002,7 +3113,7 @@ router.post('/bulk-shipping-labels', async (req: Request, res: Response) => {
           console.log(`Found finalized order: ${orderId}`);
           continue;
         }
-      } catch (error) {
+      } catch (error: unknown) {
         // If finalized order not found, try draft orders
         try {
           const draftOrder = await storage.getOrderDraft(orderId);
@@ -3189,7 +3300,7 @@ router.post('/bulk-shipping-labels', async (req: Request, res: Response) => {
                 trackingNumber: trackingNumber,
                 success: true
               });
-            } catch (pdfError) {
+            } catch (pdfError: unknown) {
               console.error(`Error processing PDF label for ${order.orderId}:`, pdfError);
               // Add a fallback text page for this order
               await addAuthenticLabelPage(bulkPdfDoc, order, trackingNumber, customerInfo, customerAddress);
@@ -3247,8 +3358,8 @@ router.post('/bulk-shipping-labels', async (req: Request, res: Response) => {
     console.log(`Successfully generated UPS bulk shipping labels for ${upsLabels.length} orders`);
     console.log('Tracking numbers:', trackingNumbers);
 
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? (error as Error).message : String(error);
     console.error('UPS bulk shipping labels error:', error);
     return res.status(500).json({ error: `Failed to generate UPS bulk shipping labels: ${errorMessage}` });
   }
@@ -3516,7 +3627,7 @@ router.post('/ups-shipping-label/bulk', async (req: Request, res: Response) => {
     page.drawText(`Orders (${orderIds.length}): ${orderIds.join(', ')}`, {
       x: 50,
       y: currentY,
-      size: 9,
+      size: 8,
       font: font,
     });
 
@@ -3587,7 +3698,7 @@ router.post('/ups-shipping-label/bulk', async (req: Request, res: Response) => {
     // Send PDF
     res.send(Buffer.from(pdfBytes));
 
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error generating bulk shipping label PDF:', error);
     res.status(500).json({ error: 'Failed to generate bulk shipping label PDF' });
   }
@@ -3604,11 +3715,11 @@ router.get('/test-ups-credentials', async (req: Request, res: Response) => {
       message: 'UPS credentials are valid',
       hasAccessToken: !!accessToken
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('UPS credential test failed:', error);
     res.status(400).json({
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: error instanceof Error ? (error as Error).message : 'Unknown error',
       details: 'Check UPS developer portal to verify credentials are activated'
     });
   }
@@ -3643,7 +3754,7 @@ router.post('/update-tracking/:orderId', async (req: Request, res: Response) => 
           carrier: carrier || 'UPS',
           estimatedDelivery: estimatedDelivery ? new Date(estimatedDelivery) : undefined
         });
-      } catch (error) {
+      } catch (error: unknown) {
         console.error('Notification error:', error);
       }
     }
@@ -3654,7 +3765,7 @@ router.post('/update-tracking/:orderId', async (req: Request, res: Response) => 
       notification: notificationResult
     });
 
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error updating tracking:', error);
     res.status(500).json({ error: 'Failed to update tracking information' });
   }
@@ -3687,7 +3798,7 @@ router.get('/tracking/:orderId', async (req: Request, res: Response) => {
       deliveryConfirmedAt: order.deliveryConfirmedAt
     });
 
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error getting tracking info:', error);
     res.status(500).json({ error: 'Failed to get tracking information' });
   }
@@ -3783,7 +3894,7 @@ router.post('/debug-ups-auth', async (req: Request, res: Response) => {
     res.status(500).json({
       success: false,
       step: 'general',
-      error: error.message
+      error: (error as Error).message
     });
   }
 });
@@ -3874,11 +3985,11 @@ router.get('/track-ups/:trackingNumber', async (req: Request, res: Response) => 
       upsTrackingUrl: `https://www.ups.com/track?tracknum=${trackingNumber}`
     });
 
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('UPS tracking error:', error);
     res.status(500).json({ 
       error: 'Failed to fetch UPS tracking information',
-      details: error.message,
+      details: (error as Error).message,
       // Provide fallback UPS tracking URL
       fallbackUrl: `https://www.ups.com/track?tracknum=${req.params.trackingNumber}`
     });
@@ -3893,7 +4004,7 @@ router.post('/clear-cache', (req: Request, res: Response) => {
       success: true, 
       message: 'UPS token cache cleared successfully' 
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error clearing cache:', error);
     res.status(500).json({ 
       error: 'Failed to clear cache' 

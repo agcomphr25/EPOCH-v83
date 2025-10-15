@@ -1,0 +1,106 @@
+import { Router, Request, Response } from 'express';
+import { storage } from '../../storage';
+import { insertVendorSchema } from '@shared/schema';
+import { z } from 'zod';
+
+const router = Router();
+
+// Query params schema for list vendors
+const listVendorsQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(200).default(10),
+  search: z.string().optional(),
+  approved: z.enum(['true', 'false', 'any']).default('any'),
+  evaluated: z.enum(['true', 'false', 'any']).default('any'),
+  evalFrom: z.string().optional(),
+  evalTo: z.string().optional(),
+  sort: z.string().default('createdAt:desc'),
+});
+
+// GET /api/vendors - List all vendors with filtering and pagination
+router.get('/', async (req: Request, res: Response) => {
+  try {
+    const params = listVendorsQuerySchema.parse(req.query);
+    const result = await storage.getAllVendors(params);
+    res.json(result);
+  } catch (error) {
+    console.error('Get vendors error:', error);
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: 'Invalid query parameters', details: error.errors });
+    }
+    res.status(500).json({ error: 'Failed to fetch vendors' });
+  }
+});
+
+// GET /api/vendors/:id - Get a single vendor by ID
+router.get('/:id', async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (!Number.isInteger(id)) {
+      return res.status(400).json({ error: 'Invalid vendor ID' });
+    }
+    
+    const vendor = await storage.getVendor(id);
+    if (!vendor) {
+      return res.status(404).json({ error: 'Vendor not found' });
+    }
+    
+    res.json(vendor);
+  } catch (error) {
+    console.error('Get vendor error:', error);
+    res.status(500).json({ error: 'Failed to fetch vendor' });
+  }
+});
+
+// POST /api/vendors - Create a new vendor
+router.post('/', async (req: Request, res: Response) => {
+  try {
+    const data = insertVendorSchema.parse(req.body);
+    const vendor = await storage.createVendor(data);
+    res.status(201).json(vendor);
+  } catch (error) {
+    console.error('Create vendor error:', error);
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: 'Invalid vendor data', details: error.errors });
+    }
+    res.status(500).json({ error: 'Failed to create vendor' });
+  }
+});
+
+// PUT /api/vendors/:id - Update a vendor
+router.put('/:id', async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (!Number.isInteger(id)) {
+      return res.status(400).json({ error: 'Invalid vendor ID' });
+    }
+    
+    const data = insertVendorSchema.partial().parse(req.body);
+    const vendor = await storage.updateVendor(id, data);
+    res.json(vendor);
+  } catch (error) {
+    console.error('Update vendor error:', error);
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: 'Invalid vendor data', details: error.errors });
+    }
+    res.status(500).json({ error: 'Failed to update vendor' });
+  }
+});
+
+// DELETE /api/vendors/:id - Delete (soft delete) a vendor
+router.delete('/:id', async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (!Number.isInteger(id)) {
+      return res.status(400).json({ error: 'Invalid vendor ID' });
+    }
+    
+    await storage.deleteVendor(id);
+    res.json({ success: true, message: 'Vendor deleted successfully' });
+  } catch (error) {
+    console.error('Delete vendor error:', error);
+    res.status(500).json({ error: 'Failed to delete vendor' });
+  }
+});
+
+export default router;

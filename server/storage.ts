@@ -2137,9 +2137,12 @@ export class DatabaseStorage implements IStorage {
         updatedAt: allOrders.updatedAt,
         // Customer name
         customerName: customers.name,
+        // Stock model display name
+        modelDisplayName: stockModels.displayName,
       })
       .from(allOrders)
       .leftJoin(customers, eq(allOrders.customerId, sql`${customers.id}::text`))
+      .leftJoin(stockModels, eq(allOrders.modelId, stockModels.id))
       .where(and(...whereConditions))
       .orderBy(desc(allOrders.id))
       .limit(limit);
@@ -2157,7 +2160,7 @@ export class DatabaseStorage implements IStorage {
     const paymentMap = new Map(paymentTotals.map(p => [p.orderId, p.totalPayments]));
 
     // PERFORMANCE FIX: Fetch stock models, features, and persistent discounts ONCE instead of per-order
-    const stockModels = await this.getAllStockModels();
+    const stockModelsData = await this.getAllStockModels();
     const features = await this.getAllFeatures();
     const persistentDiscounts = await this.getAllPersistentDiscounts();
 
@@ -2166,7 +2169,7 @@ export class DatabaseStorage implements IStorage {
       const paymentTotal = paymentMap.get(order.orderId) || 0;
       
       // CRITICAL FIX: Use actual calculated order total with cached data for performance
-      const actualOrderTotal = await this.calculateOrderTotalOptimized(order, stockModels, features, persistentDiscounts);
+      const actualOrderTotal = await this.calculateOrderTotalOptimized(order, stockModelsData, features, persistentDiscounts);
 
       // Fixed payment status logic using real current order total
       const isFullyPaid = paymentTotal >= actualOrderTotal && actualOrderTotal > 0;

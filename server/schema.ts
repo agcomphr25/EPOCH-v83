@@ -1886,6 +1886,20 @@ export const vendors = pgTable("vendors", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+export const vendorContacts = pgTable("vendor_contacts", {
+  id: serial("id").primaryKey(),
+  vendorId: integer("vendor_id").references(() => vendors.id).notNull(),
+  name: text("name").notNull(),
+  title: text("title"),
+  email: text("email"),
+  phone: text("phone"),
+  isPrimary: boolean("is_primary").default(false),
+  notes: text("notes"),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
 export const communicationLogs = pgTable("communication_logs", {
   id: serial("id").primaryKey(),
   orderId: text("order_id"), // Made nullable for general communications
@@ -1977,6 +1991,24 @@ export const insertVendorSchema = createInsertSchema(vendors).omit({
   approved: z.boolean().default(false),
   evaluated: z.boolean().default(false),
   evaluationDate: z.string().optional().nullable(),
+  notes: z.string().optional(),
+  isActive: z.boolean().default(true),
+});
+
+export const insertVendorContactSchema = createInsertSchema(vendorContacts).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  vendorId: z.number().int(),
+  name: z.string().min(1, "Contact name is required"),
+  title: z.string().optional(),
+  email: z.string().optional().transform((val) => val === "" ? undefined : val).refine(
+    (email) => !email || z.string().email().safeParse(email).success,
+    { message: "Invalid email format" }
+  ),
+  phone: z.string().optional(),
+  isPrimary: z.boolean().default(false),
   notes: z.string().optional(),
   isActive: z.boolean().default(true),
 });
@@ -2096,6 +2128,8 @@ export type InsertCommunicationLog = z.infer<typeof insertCommunicationLogSchema
 export type CommunicationLog = typeof communicationLogs.$inferSelect;
 export type InsertVendor = z.infer<typeof insertVendorSchema>;
 export type Vendor = typeof vendors.$inferSelect;
+export type InsertVendorContact = z.infer<typeof insertVendorContactSchema>;
+export type VendorContact = typeof vendorContacts.$inferSelect;
 
 // Types for Module 17 - Nonconformance
 export type InsertNonconformanceRecord = z.infer<typeof insertNonconformanceRecordSchema>;

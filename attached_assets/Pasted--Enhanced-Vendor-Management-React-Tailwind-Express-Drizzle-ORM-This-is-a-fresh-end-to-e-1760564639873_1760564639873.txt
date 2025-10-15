@@ -1,0 +1,828 @@
+# Enhanced Vendor Management (React + Tailwind + Express + Drizzle ORM)
+
+This is a fresh, end‑to‑end module you can paste into your project. It includes:
+
+* Frontend (React + Tailwind, plain JS): vendor list with search & filters, sortable columns, server‑side pagination, and a Create/Edit modal with validation.
+* REST API (Express): list/read/create/update/delete with filters, sorting, pagination.
+* Drizzle ORM schema for Postgres.
+* Utilities/hooks for data fetching.
+
+> Assumptions:
+>
+> * Frontend: Vite + React + Tailwind already set up.
+> * Backend: Node/Express server with Drizzle (Postgres) already configured.
+> * You have an axios base URL pointing to your API (or same origin during dev).
+
+---
+
+## 0) Folder Structure (suggested)
+
+```
+project/
+  server/
+    db/
+      drizzle.ts
+      schema/
+        vendors.ts
+    routes/
+      vendors.ts
+    controllers/
+      vendorsController.ts
+    validators/
+      vendorValidators.ts
+  src/
+    utils/vendorApi.js
+    hooks/useVendors.js
+    components/vendors/
+      VendorPage.jsx
+      VendorFilters.jsx
+      VendorTable.jsx
+      VendorModal.jsx
+      Pagination.jsx
+```
+
+---
+
+## 1) Drizzle ORM — `server/db/schema/vendors.ts`
+
+```ts
+// server/db/schema/vendors.ts
+import { pgTable, serial, text, boolean, date, timestamp, index } from "drizzle-orm/pg-core";
+
+export const vendors = pgTable(
+  "vendors",
+  {
+    id: serial("id").primaryKey(),
+    name: text("name").notNull(),
+    contactPerson: text("contact_person"),
+    email: text("email"),
+    additionalEmail: text("additional_email"),
+    phone: text("phone"),
+    address: text("address"),
+    approved: boolean("approved").notNull().default(false),
+    evaluated: boolean("evaluated").notNull().default(false),
+    evaluationDate: date("evaluation_date"),
+    notes: text("notes"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => {
+    return {
+      nameIdx: index("vendors_name_idx").on(table.name),
+      approvedIdx: index("vendors_approved_idx").on(table.approved),
+      evaluatedIdx: index("vendors_evaluated_idx").on(table.evaluated),
+      evalDateIdx: index("vendors_eval_date_idx").on(table.evaluationDate),
+    };
+  }
+);
+```
+
+If you use drizzle‑kit, generate a migration and push.
+
+---
+
+## 2) Drizzle Client — `server/db/drizzle.ts`
+
+```ts
+// server/db/drizzle.ts
+import { drizzle } from "drizzle-orm/node-postgres";
+import { Pool } from "pg";
+
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+});
+
+export const db = drizzle(pool);
+export { pool };
+```
+
+> Ensure `DATABASE_URL` is set (Neon/Supabase/Railway/etc.).
+
+---
+
+## 3) Validation (Zod) — `server/validators/vendorValidators.ts`
+
+```ts
+// server/validators/vendorValidators.ts
+import { z } from "zod";
+
+export const vendorBodySchema = z.object({
+  name: z.string().min(1, "Name is required"),
+  contactPerson: z.string().optional().nullable(),
+  email: z.string().email("Invalid email").optional().nullable(),
+  additionalEmail: z.string().email("Invalid email").optional().nullable(),
+  phone: z.string().optional().nullable(),
+  address: z.string().optional().nullable(),
+  approved: z.boolean().default(false),
+  evaluated: z.boolean().default(false),
+  evaluationDate: z
+    .string()
+    .optional()
+    .nullable(), // ISO date string like "2025-10-15"
+  notes: z.string().optional().nullable(),
+});
+
+export const listQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(200).default(10),
+  search: z.string().optional(),
+  approved: z.enum(["true", "false", "any"]).default("any"),
+  evaluated: z.enum(["true", "false", "any"]).default("any"),
+  evalFrom: z.string().optional(), // "YYYY-MM-DD"
+  evalTo: z.string().optional(),
+  sort: z.string().default("createdAt:desc"), // e.g. "name:asc"
+});
+```
+
+---
+
+## 4) Controller — `server/controllers/vendorsController.ts`
+
+```ts
+// server/controllers/vendorsController.ts
+import { and, asc, desc, eq, ilike, sql, gte, lte } from "drizzle-orm";
+import { db } from "../db/drizzle";
+import { vendors } from "../db/schema/vendors";
+import { listQuerySchema, vendorBodySchema } from "../validators/vendorValidators";
+
+function parseSort(sortStr: string) {
+  // format: field:dir
+  const [field, dir] = sortStr.split(":");
+  const direction = dir?.toLowerCase() === "asc" ? "asc" : "desc";
+  const col =
+    field === "name"
+      ? vendors.name
+      : field === "approved"
+      ? vendors.approved
+      : field === "evaluated"
+      ? vendors.evaluated
+      : field === "evaluationDate"
+      ? vendors.evaluationDate
+      : field === "updatedAt"
+      ? vendors.updatedAt
+      : vendors.createdAt;
+  return direction === "asc" ? asc(col) : desc(col);
+}
+
+export async function listVendors(req, res) {
+  try {
+    const q = listQuerySchema.parse(req.query);
+    const { page, pageSize, search, approved, evaluated, evalFrom, evalTo, sort } = q;
+
+    const whereClauses: any[] = [];
+
+    if (search && search.trim()) {
+      const s = `%${search.trim()}%`;
+      whereClauses.push(
+        or(
+          ilike(vendors.name, s),
+          ilike(vendors.contactPerson, s),
+          ilike(vendors.email, s),
+          ilike(vendors.phone, s),
+          ilike(vendors.address, s)
+        )
+      );
+    }
+
+    if (approved !== "any") {
+      whereClauses.push(eq(vendors.approved, approved === "true"));
+    }
+    if (evaluated !== "any") {
+      whereClauses.push(eq(vendors.evaluated, evaluated === "true"));
+    }
+    if (evalFrom) whereClauses.push(gte(vendors.evaluationDate, evalFrom));
+    if (evalTo) whereClauses.push(lte(vendors.evaluationDate, evalTo));
+
+    const whereExpr = whereClauses.length ? and(...whereClauses) : undefined;
+
+    const orderBy = parseSort(sort);
+
+    const offset = (page - 1) * pageSize;
+
+    const [rows, [{ count }]] = await Promise.all([
+      db
+        .select()
+        .from(vendors)
+        .where(whereExpr)
+        .orderBy(orderBy)
+        .limit(pageSize)
+        .offset(offset),
+      db
+        .select({ count: sql<number>`count(*)` })
+        .from(vendors)
+        .where(whereExpr),
+    ]);
+
+    const total = Number(count);
+    const pageCount = Math.ceil(total / pageSize) || 1;
+
+    res.json({ data: rows, meta: { page, pageSize, total, pageCount } });
+  } catch (err) {
+    console.error(err);
+    res.status(400).json({ error: "Invalid query params" });
+  }
+}
+
+export async function getVendor(req, res) {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: "Invalid id" });
+    const [row] = await db.select().from(vendors).where(eq(vendors.id, id));
+    if (!row) return res.status(404).json({ error: "Not found" });
+    res.json(row);
+  } catch (err) {
+    res.status(500).json({ error: "Server error" });
+  }
+}
+
+export async function createVendor(req, res) {
+  try {
+    const body = vendorBodySchema.parse(req.body);
+    const [row] = await db
+      .insert(vendors)
+      .values({
+        ...body,
+        evaluationDate: body.evaluationDate ?? null,
+        updatedAt: new Date(),
+      })
+      .returning();
+    res.status(201).json(row);
+  } catch (err) {
+    console.error(err);
+    res.status(400).json({ error: "Invalid payload" });
+  }
+}
+
+export async function updateVendor(req, res) {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: "Invalid id" });
+    const body = vendorBodySchema.parse(req.body);
+    const [row] = await db
+      .update(vendors)
+      .set({ ...body, evaluationDate: body.evaluationDate ?? null, updatedAt: new Date() })
+      .where(eq(vendors.id, id))
+      .returning();
+    if (!row) return res.status(404).json({ error: "Not found" });
+    res.json(row);
+  } catch (err) {
+    res.status(400).json({ error: "Invalid payload" });
+  }
+}
+
+export async function deleteVendor(req, res) {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: "Invalid id" });
+    const [row] = await db.delete(vendors).where(eq(vendors.id, id)).returning();
+    if (!row) return res.status(404).json({ error: "Not found" });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: "Server error" });
+  }
+}
+```
+
+> Note: `or` is used above; add it to imports if your Drizzle version uses a separate import (some versions export `or` from `drizzle-orm`). If not available, replace the multi‑field search with a single `ilike(vendors.name, s)` or compose with SQL.
+
+---
+
+## 5) Routes — `server/routes/vendors.ts`
+
+```ts
+// server/routes/vendors.ts
+import { Router } from "express";
+import { listVendors, getVendor, createVendor, updateVendor, deleteVendor } from "../controllers/vendorsController";
+
+export const vendorsRouter = Router();
+
+vendorsRouter.get("/", listVendors);
+vendorsRouter.get("/:id", getVendor);
+vendorsRouter.post("/", createVendor);
+vendorsRouter.put("/:id", updateVendor);
+vendorsRouter.delete("/:id", deleteVendor);
+```
+
+Mount in your main server file:
+
+```ts
+// server/index.ts (excerpt)
+import express from "express";
+import bodyParser from "body-parser";
+import cors from "cors";
+import { vendorsRouter } from "./routes/vendors";
+
+const app = express();
+app.use(cors());
+app.use(bodyParser.json());
+
+app.use("/api/vendors", vendorsRouter);
+
+app.listen(process.env.PORT || 3000, () => console.log("API up"));
+```
+
+---
+
+## 6) Frontend API utils — `src/utils/vendorApi.js`
+
+```js
+// src/utils/vendorApi.js
+import axios from "axios";
+
+export function buildQuery(params = {}) {
+  const searchParams = new URLSearchParams();
+  Object.entries(params).forEach(([k, v]) => {
+    if (v !== undefined && v !== null && v !== "") searchParams.set(k, v);
+  });
+  return searchParams.toString();
+}
+
+export async function fetchVendors(filters = {}) {
+  const qs = buildQuery(filters);
+  const { data } = await axios.get(`/api/vendors?${qs}`);
+  return data; // { data, meta }
+}
+
+export async function fetchVendor(id) {
+  const { data } = await axios.get(`/api/vendors/${id}`);
+  return data;
+}
+
+export async function createVendor(payload) {
+  const { data } = await axios.post(`/api/vendors`, payload);
+  return data;
+}
+
+export async function updateVendor(id, payload) {
+  const { data } = await axios.put(`/api/vendors/${id}`, payload);
+  return data;
+}
+
+export async function deleteVendor(id) {
+  const { data } = await axios.delete(`/api/vendors/${id}`);
+  return data;
+}
+```
+
+---
+
+## 7) Hook — `src/hooks/useVendors.js`
+
+```js
+// src/hooks/useVendors.js
+import { useEffect, useMemo, useState } from "react";
+import { fetchVendors } from "../utils/vendorApi";
+
+export default function useVendors(initial = {}) {
+  const [filters, setFilters] = useState({
+    page: 1,
+    pageSize: 10,
+    search: "",
+    approved: "any",
+    evaluated: "any",
+    evalFrom: "",
+    evalTo: "",
+    sort: "createdAt:desc",
+    ...initial,
+  });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [rows, setRows] = useState([]);
+  const [meta, setMeta] = useState({ page: 1, pageSize: 10, total: 0, pageCount: 1 });
+
+  const run = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetchVendors(filters);
+      setRows(res.data || []);
+      setMeta(res.meta || meta);
+    } catch (e) {
+      setError(e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    run();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    filters.page,
+    filters.pageSize,
+    filters.search,
+    filters.approved,
+    filters.evaluated,
+    filters.evalFrom,
+    filters.evalTo,
+    filters.sort,
+  ]);
+
+  const setPage = (p) => setFilters((f) => ({ ...f, page: p }));
+  const setPageSize = (n) => setFilters((f) => ({ ...f, pageSize: n, page: 1 }));
+
+  return { filters, setFilters, rows, meta, loading, error, refresh: run, setPage, setPageSize };
+}
+```
+
+---
+
+## 8) Components
+
+### `src/components/vendors/Pagination.jsx`
+
+```jsx
+import React from "react";
+
+export default function Pagination({ page, pageCount, onPage }) {
+  if (pageCount <= 1) return null;
+  const prev = () => onPage(Math.max(1, page - 1));
+  const next = () => onPage(Math.min(pageCount, page + 1));
+  return (
+    <div className="flex items-center gap-2 justify-end py-2">
+      <button className="px-3 py-1 rounded border" onClick={prev} disabled={page === 1}>
+        Prev
+      </button>
+      <span className="text-sm">Page {page} of {pageCount}</span>
+      <button className="px-3 py-1 rounded border" onClick={next} disabled={page === pageCount}>
+        Next
+      </button>
+    </div>
+  );
+}
+```
+
+### `src/components/vendors/VendorFilters.jsx`
+
+```jsx
+import React from "react";
+
+export default function VendorFilters({ value, onChange }) {
+  const set = (k, v) => onChange({ ...value, [k]: v, page: 1 });
+  return (
+    <div className="grid md:grid-cols-6 grid-cols-2 gap-3 p-3 bg-gray-50 rounded-lg">
+      <input
+        className="border rounded px-3 py-2 col-span-2"
+        placeholder="Search name/contact/email..."
+        value={value.search}
+        onChange={(e) => set("search", e.target.value)}
+      />
+      <select className="border rounded px-3 py-2" value={value.approved} onChange={(e) => set("approved", e.target.value)}>
+        <option value="any">Approved: Any</option>
+        <option value="true">Approved: Yes</option>
+        <option value="false">Approved: No</option>
+      </select>
+      <select className="border rounded px-3 py-2" value={value.evaluated} onChange={(e) => set("evaluated", e.target.value)}>
+        <option value="any">Evaluated: Any</option>
+        <option value="true">Evaluated: Yes</option>
+        <option value="false">Evaluated: No</option>
+      </select>
+      <input type="date" className="border rounded px-3 py-2" value={value.evalFrom} onChange={(e) => set("evalFrom", e.target.value)} />
+      <input type="date" className="border rounded px-3 py-2" value={value.evalTo} onChange={(e) => set("evalTo", e.target.value)} />
+      <select className="border rounded px-3 py-2" value={value.sort} onChange={(e) => set("sort", e.target.value)}>
+        <option value="createdAt:desc">Newest</option>
+        <option value="updatedAt:desc">Recently Updated</option>
+        <option value="name:asc">Name A→Z</option>
+        <option value="name:desc">Name Z→A</option>
+        <option value="evaluationDate:desc">Eval Date ↓</option>
+        <option value="evaluationDate:asc">Eval Date ↑</option>
+      </select>
+    </div>
+  );
+}
+```
+
+### `src/components/vendors/VendorModal.jsx`
+
+```jsx
+import React, { useEffect, useState } from "react";
+import { createVendor, updateVendor } from "../../utils/vendorApi";
+
+const empty = {
+  name: "",
+  contactPerson: "",
+  email: "",
+  additionalEmail: "",
+  phone: "",
+  address: "",
+  approved: false,
+  evaluated: false,
+  evaluationDate: "",
+  notes: "",
+};
+
+export default function VendorModal({ open, onClose, onSaved, initial }) {
+  const [form, setForm] = useState(empty);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    setForm(initial ? { ...empty, ...initial, evaluationDate: initial.evaluationDate ?? "" } : empty);
+    setError("");
+  }, [initial, open]);
+
+  if (!open) return null;
+
+  const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    setError("");
+    try {
+      const payload = {
+        ...form,
+        evaluationDate: form.evaluationDate || null,
+      };
+      if (initial?.id) await updateVendor(initial.id, payload);
+      else await createVendor(payload);
+      onSaved?.();
+      onClose?.();
+    } catch (err) {
+      setError("Please check the form. Name is required; emails must be valid.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+      <div className="bg-white w-full max-w-2xl rounded-2xl shadow-xl">
+        <div className="flex items-center justify-between p-4 border-b">
+          <h3 className="text-lg font-semibold">{initial?.id ? "Edit Vendor" : "New Vendor"}</h3>
+          <button className="text-gray-500" onClick={onClose}>✕</button>
+        </div>
+        <form onSubmit={submit} className="p-4 grid grid-cols-2 gap-3">
+          <div className="col-span-2">
+            <label className="text-sm">Name *</label>
+            <input className="w-full border rounded px-3 py-2" value={form.name} onChange={(e) => set("name", e.target.value)} required />
+          </div>
+          <div>
+            <label className="text-sm">Contact</label>
+            <input className="w-full border rounded px-3 py-2" value={form.contactPerson} onChange={(e) => set("contactPerson", e.target.value)} />
+          </div>
+          <div>
+            <label className="text-sm">Phone</label>
+            <input className="w-full border rounded px-3 py-2" value={form.phone} onChange={(e) => set("phone", e.target.value)} />
+          </div>
+          <div>
+            <label className="text-sm">Email</label>
+            <input type="email" className="w-full border rounded px-3 py-2" value={form.email} onChange={(e) => set("email", e.target.value)} />
+          </div>
+          <div>
+            <label className="text-sm">Alt Email</label>
+            <input type="email" className="w-full border rounded px-3 py-2" value={form.additionalEmail} onChange={(e) => set("additionalEmail", e.target.value)} />
+          </div>
+          <div className="col-span-2">
+            <label className="text-sm">Address</label>
+            <input className="w-full border rounded px-3 py-2" value={form.address} onChange={(e) => set("address", e.target.value)} />
+          </div>
+
+          <div className="col-span-2 grid grid-cols-2 gap-3">
+            <div className="border rounded p-3">
+              <p className="font-medium mb-2">Approved</p>
+              <div className="flex items-center gap-4">
+                <label className="flex items-center gap-2">
+                  <input type="radio" name="approved" checked={form.approved === true} onChange={() => set("approved", true)} />
+                  <span>Yes</span>
+                </label>
+                <label className="flex items-center gap-2">
+                  <input type="radio" name="approved" checked={form.approved === false} onChange={() => set("approved", false)} />
+                  <span>No</span>
+                </label>
+              </div>
+            </div>
+            <div className="border rounded p-3">
+              <p className="font-medium mb-2">Evaluated</p>
+              <div className="flex items-center gap-4">
+                <label className="flex items-center gap-2">
+                  <input type="radio" name="evaluated" checked={form.evaluated === true} onChange={() => set("evaluated", true)} />
+                  <span>Yes</span>
+                </label>
+                <label className="flex items-center gap-2">
+                  <input type="radio" name="evaluated" checked={form.evaluated === false} onChange={() => set("evaluated", false)} />
+                  <span>No</span>
+                </label>
+              </div>
+              <div className="mt-3">
+                <label className="text-sm">Evaluation Date</label>
+                <input type="date" className="w-full border rounded px-3 py-2" value={form.evaluationDate || ""} onChange={(e) => set("evaluationDate", e.target.value)} />
+              </div>
+            </div>
+          </div>
+
+          <div className="col-span-2">
+            <label className="text-sm">Notes</label>
+            <textarea className="w-full border rounded px-3 py-2" rows={3} value={form.notes} onChange={(e) => set("notes", e.target.value)} />
+          </div>
+
+          {error && <div className="col-span-2 text-red-600 text-sm">{error}</div>}
+
+          <div className="col-span-2 flex justify-end gap-2 pt-2">
+            <button type="button" className="px-4 py-2 rounded border" onClick={onClose} disabled={saving}>Cancel</button>
+            <button type="submit" className="px-4 py-2 rounded bg-black text-white" disabled={saving}>
+              {saving ? "Saving..." : "Save"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+```
+
+### `src/components/vendors/VendorTable.jsx`
+
+```jsx
+import React from "react";
+
+function BoolBadge({ v }) {
+  return (
+    <span className={`px-2 py-0.5 rounded-full text-xs ${v ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"}`}>
+      {v ? "Yes" : "No"}
+    </span>
+  );
+}
+
+export default function VendorTable({ rows, onEdit, onDelete, sort, setSort }) {
+  const toggleSort = (field) => {
+    const [f, dir] = sort.split(":");
+    if (f === field) setSort(`${field}:${dir === "asc" ? "desc" : "asc"}`);
+    else setSort(`${field}:asc`);
+  };
+
+  const Th = ({ field, children }) => (
+    <th className="text-left px-3 py-2 cursor-pointer select-none" onClick={() => toggleSort(field)}>
+      <div className="flex items-center gap-1">
+        <span>{children}</span>
+        {sort.startsWith(field + ":") && <span className="text-xs">{sort.endsWith(":asc") ? "▲" : "▼"}</span>}
+      </div>
+    </th>
+  );
+
+  return (
+    <div className="overflow-x-auto border rounded-lg">
+      <table className="min-w-full">
+        <thead className="bg-gray-50">
+          <tr>
+            <Th field="name">Name</Th>
+            <th className="text-left px-3 py-2">Contact</th>
+            <th className="text-left px-3 py-2">Email</th>
+            <th className="text-left px-3 py-2">Phone</th>
+            <Th field="approved">Approved</Th>
+            <Th field="evaluated">Evaluated</Th>
+            <Th field="evaluationDate">Eval Date</Th>
+            <Th field="updatedAt">Updated</Th>
+            <th className="px-3 py-2">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.id} className="border-t">
+              <td className="px-3 py-2 font-medium">{r.name}</td>
+              <td className="px-3 py-2">{r.contactPerson || "—"}</td>
+              <td className="px-3 py-2">{r.email || "—"}</td>
+              <td className="px-3 py-2">{r.phone || "—"}</td>
+              <td className="px-3 py-2"><BoolBadge v={r.approved} /></td>
+              <td className="px-3 py-2"><BoolBadge v={r.evaluated} /></td>
+              <td className="px-3 py-2">{r.evaluationDate || "—"}</td>
+              <td className="px-3 py-2">{new Date(r.updatedAt || r.createdAt).toLocaleDateString()}</td>
+              <td className="px-3 py-2">
+                <div className="flex gap-2">
+                  <button className="px-2 py-1 border rounded" onClick={() => onEdit(r)}>Edit</button>
+                  <button className="px-2 py-1 border rounded" onClick={() => onDelete(r)}>Delete</button>
+                </div>
+              </td>
+            </tr>
+          ))}
+          {rows.length === 0 && (
+            <tr>
+              <td className="px-3 py-6 text-center text-gray-500" colSpan={9}>No vendors found</td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+```
+
+### `src/components/vendors/VendorPage.jsx`
+
+```jsx
+import React, { useState } from "react";
+import useVendors from "../../hooks/useVendors";
+import VendorFilters from "./VendorFilters";
+import VendorTable from "./VendorTable";
+import Pagination from "./Pagination";
+import { deleteVendor } from "../../utils/vendorApi";
+import VendorModal from "./VendorModal";
+
+export default function VendorPage() {
+  const { filters, setFilters, rows, meta, loading, error, refresh, setPage, setPageSize } = useVendors();
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editing, setEditing] = useState(null);
+
+  const openNew = () => {
+    setEditing(null);
+    setModalOpen(true);
+  };
+  const onEdit = (r) => {
+    setEditing(r);
+    setModalOpen(true);
+  };
+  const onDelete = async (r) => {
+    if (!window.confirm(`Delete ${r.name}?`)) return;
+    await deleteVendor(r.id);
+    refresh();
+  };
+
+  return (
+    <div className="p-4 space-y-4">
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-semibold">Vendors</h1>
+        <div className="flex items-center gap-3">
+          <select className="border rounded px-2 py-1" value={filters.pageSize} onChange={(e) => setPageSize(Number(e.target.value))}>
+            {[10, 20, 50, 100].map((n) => (
+              <option key={n} value={n}>{n} / page</option>
+            ))}
+          </select>
+          <button className="px-4 py-2 rounded bg-black text-white" onClick={openNew}>New Vendor</button>
+        </div>
+      </div>
+
+      <VendorFilters value={filters} onChange={setFilters} />
+
+      {loading && <div className="p-4 text-gray-500">Loading…</div>}
+      {error && <div className="p-4 text-red-600">Failed to load.</div>}
+
+      <VendorTable
+        rows={rows}
+        sort={filters.sort}
+        setSort={(s) => setFilters((f) => ({ ...f, sort: s }))}
+        onEdit={onEdit}
+        onDelete={onDelete}
+      />
+
+      <Pagination page={meta.page} pageCount={meta.pageCount} onPage={setPage} />
+
+      <VendorModal
+        open={modalOpen}
+        initial={editing}
+        onClose={() => setModalOpen(false)}
+        onSaved={refresh}
+      />
+    </div>
+  );
+}
+```
+
+---
+
+## 9) Quick Seed (optional)
+
+```sql
+-- Run in SQL console to create a couple of vendors quickly (if needed)
+INSERT INTO vendors (name, contact_person, email, phone, address, approved, evaluated, evaluation_date)
+VALUES
+('Acme Carbon', 'Jill Smith', 'jill@acme.com', '555-1111', '12 Main St', true, true, '2025-09-01'),
+('Bolt & Nut Co', 'Tom Lee', 'sales@boltandnut.com', '555-2222', '88 Industrial Rd', false, false, NULL);
+```
+
+---
+
+## 10) Wiring it into your app
+
+* Backend: make sure `vendorsRouter` is mounted at `/api/vendors`.
+* Frontend: add a route or page that renders `<VendorPage />`.
+
+Example (React Router):
+
+```jsx
+// src/App.jsx (excerpt)
+import { BrowserRouter, Routes, Route } from "react-router-dom";
+import VendorPage from "./components/vendors/VendorPage";
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        {/* other routes */}
+        <Route path="/vendors" element={<VendorPage />} />
+      </Routes>
+    </BrowserRouter>
+  );
+}
+```
+
+---
+
+## 11) Notes & Enhancements
+
+* Server‑side validation uses Zod. If you prefer `express-validator`, swap accordingly.
+* Sorting is controlled client‑side via `sort` query param; server applies `ORDER BY`.
+* Search uses `ILIKE` across multiple fields (adjust `or()` usage per your Drizzle version).
+* Add auth/permissions middleware if required.
+* To support CSV import/export later, add endpoints like `POST /api/vendors/import` and `GET /api/vendors/export`.
+
+You now have a complete, paginated, filterable Vendor Management module with Create/Edit modal and validation.

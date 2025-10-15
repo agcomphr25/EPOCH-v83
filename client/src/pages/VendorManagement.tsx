@@ -14,38 +14,15 @@ import { z } from 'zod';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Plus, Search, ChevronUp, ChevronDown, Edit, Trash2, CheckCircle, XCircle } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { insertVendorSchema, type Vendor } from '@shared/schema';
 
-const vendorFormSchema = z.object({
-  name: z.string().min(1, 'Vendor name is required'),
-  contactPerson: z.string().optional(),
+const vendorFormSchema = insertVendorSchema.extend({
   email: z.string().email('Invalid email').optional().or(z.literal('')),
   additionalEmail: z.string().email('Invalid email').optional().or(z.literal('')),
-  phone: z.string().optional(),
-  address: z.string().optional(),
-  approved: z.boolean().default(false),
-  evaluated: z.boolean().default(false),
   evaluationDate: z.string().optional(),
-  notes: z.string().optional(),
 });
 
 type VendorFormData = z.infer<typeof vendorFormSchema>;
-
-interface Vendor {
-  id: number;
-  name: string;
-  contactPerson?: string;
-  email?: string;
-  additionalEmail?: string;
-  phone?: string;
-  address?: string;
-  approved: boolean;
-  evaluated: boolean;
-  evaluationDate?: string;
-  notes?: string;
-  isActive: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
 
 interface VendorsResponse {
   data: Vendor[];
@@ -188,10 +165,21 @@ export default function VendorManagement() {
   };
 
   const onSubmit = (data: VendorFormData) => {
+    const normalizedData = {
+      ...data,
+      contactPerson: data.contactPerson || undefined,
+      email: data.email || undefined,
+      additionalEmail: data.additionalEmail || undefined,
+      phone: data.phone || undefined,
+      address: data.address || undefined,
+      evaluationDate: data.evaluationDate || undefined,
+      notes: data.notes || undefined,
+    };
+
     if (editingVendor) {
-      updateVendorMutation.mutate({ id: editingVendor.id, data });
+      updateVendorMutation.mutate({ id: editingVendor.id, data: normalizedData });
     } else {
-      createVendorMutation.mutate(data);
+      createVendorMutation.mutate(normalizedData);
     }
   };
 

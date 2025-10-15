@@ -56,6 +56,7 @@ interface Order {
   product?: string;
   customerPO?: string;
   modelId: string;
+  modelDisplayName?: string;
   currentDepartment: string;
   status: string;
   fbOrderNumber?: string;
@@ -459,7 +460,7 @@ export default function AllOrdersPage() {
 
   if (isLoading) {
     return (
-      <div className="p-6 space-y-6 max-w-7xl mx-auto">
+      <div className="p-6 space-y-6 max-w-[95%] mx-auto">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold text-gray-900">All Orders</h1>
           <div className="text-sm text-gray-500">
@@ -476,7 +477,7 @@ export default function AllOrdersPage() {
   }
 
   return (
-    <div className="p-6 space-y-6 max-w-7xl mx-auto">
+    <div className="p-6 space-y-6 max-w-[95%] mx-auto">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
           <Package className="h-6 w-6" />
@@ -676,7 +677,7 @@ export default function AllOrdersPage() {
                   <TableCell>
                     <div className="flex items-center gap-2">
                       <Package className="h-4 w-4 text-gray-400" />
-                      {order.product || order.modelId}
+                      {order.modelDisplayName || order.product || order.modelId}
                     </div>
                   </TableCell>
                   <TableCell>

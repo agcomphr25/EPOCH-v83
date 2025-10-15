@@ -1,7 +1,7 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { PlusCircle, FileText, FilePenLine, XCircle, Users, User, Factory, RefreshCw, LogOut, Truck, Package, Home } from 'lucide-react';
+import { PlusCircle, FileText, FilePenLine, XCircle, Users, User, Factory, RefreshCw, LogOut, Truck, Package, Home, Star } from 'lucide-react';
 import { Link } from 'wouter';
 import PipelineVisualization from '@/components/PipelineVisualization';
 
@@ -122,6 +122,16 @@ export default function DARLENEBTestDashboard() {
               <Truck className="w-8 h-8 text-teal-600 mx-auto mb-3" />
               <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Shipping Tracker</h3>
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Track shipments</p>
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link href="/customer-satisfaction">
+          <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-indigo-200">
+            <CardContent className="p-4 text-center">
+              <Star className="w-8 h-8 text-indigo-600 mx-auto mb-3" />
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Customer Satisfaction</h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">View feedback</p>
             </CardContent>
           </Card>
         </Link>

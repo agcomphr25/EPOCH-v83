@@ -846,7 +846,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       });
       
       currentY -= 12;
-      page.drawText('Phone: (256) 723-8381 | Email: info@agcomposites.com', {
+      page.drawText('Phone: (256) 723-8381 | Email: sales@agcomposites.com', {
         x: margin,
         y: currentY,
         size: 8,
@@ -894,7 +894,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     // Position text INSIDE the box with 2-column layout
     let boxTextY = orderBoxY + orderBoxHeight - 18; // Start from top of box
     const col1X = orderBoxX + 8;
-    const col2X = orderBoxX + 115;
+    const col2X = orderBoxX + 95; // Moved left for better fit
     
     // Row 1: Order Number and Customer PO
     page.drawText('Order Number:', {
@@ -943,7 +943,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       font: font,
     });
 
-    page.drawText('Due Date:', {
+    page.drawText('Estimated Completion Date:', {
       x: col2X,
       y: boxTextY,
       size: 8,
@@ -985,11 +985,11 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     const paymentColor = isFullyPaid ? rgb(0, 0.6, 0) : rgb(0.8, 0.4, 0);
 
     // Customer Information Section - Fixed positioning
-    currentY -= 115; // Move down to provide space for proper box placement
+    currentY -= 130; // Adjusted spacing to add separation below order info box
     
     // Define customer box dimensions and position
     const customerBoxY = currentY;
-    const customerBoxHeight = 70; // Reduced for less white space at bottom
+    const customerBoxHeight = 100; // Increased for more space for contact info
     
     // Create customer info box
     page.drawRectangle({
@@ -1287,7 +1287,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     }
 
     // Features and Customizations Section - starts right after customer box
-    currentY = customerBoxY - 30;
+    currentY = customerBoxY - 15;
     page.drawText('FEATURES & CUSTOMIZATIONS', {
       x: margin,
       y: currentY,
@@ -1295,7 +1295,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       font: boldFont,
     });
 
-    currentY -= 25;
+    currentY -= 15;
     
     // Create bordered container for features table
     const featuresTableHeight = 240; // Increased height to accommodate all features
@@ -1328,7 +1328,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     });
 
     page.drawText('Selection', {
-      x: margin + 180,
+      x: margin + 140,
       y: currentY - 12,
       size: 8,
       font: boldFont,
@@ -1366,11 +1366,11 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     });
 
     const modelDisplayName = model?.displayName || model?.name || 'Custom';
-    const wrappedModel = wrapText(modelDisplayName, 280, 8, font);
+    const wrappedModel = wrapText(modelDisplayName, 320, 8, font);
     wrappedModel.forEach((line, index) => {
       if (summaryLineY - (index * 11) > currentY - featuresTableHeight + 8) { // Keep within table bounds
         page.drawText(line, {
-          x: margin + 180,
+          x: margin + 140,
           y: summaryLineY - (index * 11),
           size: 8,
           font: font,
@@ -1400,11 +1400,11 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       const features = order.features as OrderFeatures | undefined;
       const handednessDisplay = features?.handedness ? 
         (features.handedness === 'right' ? 'Right' : 'Left') : 'Not selected';
-      const wrappedHandedness = wrapText(handednessDisplay, 280, 8, font);
+      const wrappedHandedness = wrapText(handednessDisplay, 320, 8, font);
       wrappedHandedness.forEach((line, index) => {
         if (summaryLineY - (index * 11) > currentY - featuresTableHeight + 8) {
           page.drawText(line, {
-            x: margin + 180,
+            x: margin + 140,
             y: summaryLineY - (index * 11),
             size: 8,
             font: font,
@@ -1441,11 +1441,11 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       const actionLengthDisplay = actionLengthOption?.label || 
         (actionLengthValue ? actionLengthValue.charAt(0).toUpperCase() + actionLengthValue.slice(1) : 'Not selected');
       
-      const wrappedActionLength = wrapText(actionLengthDisplay, 280, 9, font);
+      const wrappedActionLength = wrapText(actionLengthDisplay, 320, 9, font);
       wrappedActionLength.forEach((line, index) => {
         if (summaryLineY - (index * 11) > currentY - featuresTableHeight + 8) {
           page.drawText(line, {
-            x: margin + 180,
+            x: margin + 140,
             y: summaryLineY - (index * 11),
             size: 8,
             font: font,
@@ -1474,11 +1474,11 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       });
 
       const shankDisplay = order.shankLength || 'Not selected';
-      const wrappedShank = wrapText(shankDisplay, 280, 9, font);
+      const wrappedShank = wrapText(shankDisplay, 320, 9, font);
       wrappedShank.forEach((line, index) => {
         if (summaryLineY - (index * 11) > currentY - featuresTableHeight + 8) {
           page.drawText(line, {
-            x: margin + 180,
+            x: margin + 140,
             y: summaryLineY - (index * 11),
             size: 8,
             font: font,
@@ -1513,11 +1513,11 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       });
 
       const actionInletDisplay = actionInletOption?.label || (actionValue || 'Not selected');
-      const wrappedActionInlet = wrapText(actionInletDisplay, 280, 9, font);
+      const wrappedActionInlet = wrapText(actionInletDisplay, 320, 9, font);
       wrappedActionInlet.forEach((line, index) => {
         if (summaryLineY - (index * 11) > currentY - featuresTableHeight + 8) {
           page.drawText(line, {
-            x: margin + 180,
+            x: margin + 140,
             y: summaryLineY - (index * 11),
             size: 8,
             font: font,
@@ -1550,11 +1550,11 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       });
 
       const bottomMetalDisplay = bottomMetalOption?.label || 'Not selected';
-      const wrappedBottomMetal = wrapText(bottomMetalDisplay, 280, 9, font);
+      const wrappedBottomMetal = wrapText(bottomMetalDisplay, 320, 9, font);
       wrappedBottomMetal.forEach((line, index) => {
         if (summaryLineY - (index * 11) > currentY - featuresTableHeight + 8) {
           page.drawText(line, {
-            x: margin + 180,
+            x: margin + 140,
             y: summaryLineY - (index * 11),
             size: 8,
             font: font,
@@ -1586,10 +1586,10 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     });
 
     const barrelInletDisplay = barrelInletOption?.label || 'Not selected';
-    const wrappedBarrelInlet = wrapText(barrelInletDisplay, 280, 9, font);
+    const wrappedBarrelInlet = wrapText(barrelInletDisplay, 320, 9, font);
     wrappedBarrelInlet.forEach((line, index) => {
       page.drawText(line, {
-        x: margin + 180,
+        x: margin + 140,
         y: summaryLineY - (index * 11),
         size: 8,
         font: font,
@@ -1622,10 +1622,10 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     });
 
     const qdDisplay = qdOption?.label || 'Not selected';
-    const wrappedQD = wrapText(qdDisplay, 280, 9, font);
+    const wrappedQD = wrapText(qdDisplay, 320, 9, font);
     wrappedQD.forEach((line, index) => {
       page.drawText(line, {
-        x: margin + 180,
+        x: margin + 140,
         y: summaryLineY - (index * 11),
         size: 8,
         font: font,
@@ -1661,10 +1661,10 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       ((order.features as OrderFeatures | undefined)?.length_of_pull && (order.features as OrderFeatures | undefined)?.length_of_pull !== 'no_lop_change' ? 
         (order.features as OrderFeatures | undefined)?.length_of_pull.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : 'Not selected');
     
-    const wrappedLOP = wrapText(lopDisplay, 280, 9, font);
+    const wrappedLOP = wrapText(lopDisplay, 320, 9, font);
     wrappedLOP.forEach((line, index) => {
       page.drawText(line, {
-        x: margin + 180,
+        x: margin + 140,
         y: summaryLineY - (index * 11),
         size: 8,
         font: font,
@@ -1708,10 +1708,10 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       font: font,
     });
 
-    const wrappedRails = wrapText(railsDisplay, 280, 9, font);
+    const wrappedRails = wrapText(railsDisplay, 320, 9, font);
     wrappedRails.forEach((line, index) => {
       page.drawText(line, {
-        x: margin + 180,
+        x: margin + 140,
         y: summaryLineY - (index * 11),
         size: 8,
         font: font,
@@ -1746,10 +1746,10 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     const textureDisplay = textureOption?.label || 
       ((order.features as OrderFeatures | undefined)?.texture_options ? (order.features as OrderFeatures | undefined)?.texture_options.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : 'Not selected');
     
-    const wrappedTexture = wrapText(textureDisplay, 280, 9, font);
+    const wrappedTexture = wrapText(textureDisplay, 320, 9, font);
     wrappedTexture.forEach((line, index) => {
       page.drawText(line, {
-        x: margin + 180,
+        x: margin + 140,
         y: summaryLineY - (index * 11),
         size: 8,
         font: font,
@@ -1782,10 +1782,10 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     });
 
     const swivelDisplay = swivelOption?.label || 'Not selected';
-    const wrappedSwivel = wrapText(swivelDisplay, 280, 9, font);
+    const wrappedSwivel = wrapText(swivelDisplay, 320, 9, font);
     wrappedSwivel.forEach((line, index) => {
       page.drawText(line, {
-        x: margin + 180,
+        x: margin + 140,
         y: summaryLineY - (index * 11),
         size: 8,
         font: font,
@@ -1831,10 +1831,10 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     });
 
     // Wrap other options display across multiple lines if needed
-    const wrappedOtherOptions = wrapText(otherOptionsDisplay, 280, 9, font);
+    const wrappedOtherOptions = wrapText(otherOptionsDisplay, 320, 9, font);
     wrappedOtherOptions.forEach((line, index) => {
       page.drawText(line, {
-        x: margin + 180,
+        x: margin + 140,
         y: summaryLineY - (index * 11),
         size: 8,
         font: font,
@@ -1902,10 +1902,10 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     });
 
     // Wrap paint display across multiple lines if needed
-    const wrappedPaintDisplay = wrapText(paintDisplay, 280, 9, font);
+    const wrappedPaintDisplay = wrapText(paintDisplay, 320, 9, font);
     wrappedPaintDisplay.forEach((line, index) => {
       page.drawText(line, {
-        x: margin + 180,
+        x: margin + 140,
         y: summaryLineY - (index * 11),
         size: 8,
         font: font,
@@ -2155,16 +2155,100 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
 
 
 
-    // Terms and Conditions Section
-    currentY -= 120;
-    page.drawText('TERMS AND CONDITIONS', {
+    // PAGE 2 - Terms and Conditions
+    const page2 = pdfDoc.addPage([612, 792]);
+    let page2Y = height - margin - 10;
+    
+    // Repeat order info box at top right of page 2
+    const page2OrderBoxX = width - margin - 220;
+    const page2OrderBoxY = page2Y - 85;
+    const page2OrderBoxWidth = 220;
+    const page2OrderBoxHeight = 75;
+    
+    page2.drawRectangle({
+      x: page2OrderBoxX,
+      y: page2OrderBoxY,
+      width: page2OrderBoxWidth,
+      height: page2OrderBoxHeight,
+      borderColor: rgb(0, 0, 0),
+      borderWidth: 1,
+    });
+
+    // Order info content in page 2 box
+    let page2BoxTextY = page2OrderBoxY + page2OrderBoxHeight - 18;
+    const page2Col1X = page2OrderBoxX + 8;
+    const page2Col2X = page2OrderBoxX + 95;
+    
+    // Row 1: Order Number and Customer PO
+    page2.drawText('Order Number:', {
+      x: page2Col1X,
+      y: page2BoxTextY,
+      size: 8,
+      font: boldFont,
+    });
+
+    page2.drawText(orderId, {
+      x: page2Col1X,
+      y: page2BoxTextY - 12,
+      size: 8,
+      font: font,
+    });
+
+    page2.drawText('Customer PO:', {
+      x: page2Col2X,
+      y: page2BoxTextY,
+      size: 8,
+      font: boldFont,
+    });
+
+    page2.drawText((order as any).customerPo || 'N/A', {
+      x: page2Col2X,
+      y: page2BoxTextY - 12,
+      size: 8,
+      font: font,
+    });
+
+    page2BoxTextY -= 32;
+    
+    // Row 2: Order Date and Estimated Completion Date
+    page2.drawText('Order Date:', {
+      x: page2Col1X,
+      y: page2BoxTextY,
+      size: 8,
+      font: boldFont,
+    });
+
+    page2.drawText(new Date().toLocaleDateString(), {
+      x: page2Col1X,
+      y: page2BoxTextY - 12,
+      size: 8,
+      font: font,
+    });
+
+    page2.drawText('Estimated Completion Date:', {
+      x: page2Col2X,
+      y: page2BoxTextY,
+      size: 8,
+      font: boldFont,
+    });
+
+    page2.drawText(order.dueDate ? new Date(order.dueDate).toLocaleDateString() : 'TBD', {
+      x: page2Col2X,
+      y: page2BoxTextY - 12,
+      size: 8,
+      font: font,
+    });
+    
+    // Terms and Conditions Section on Page 2
+    page2Y -= 120;
+    page2.drawText('TERMS AND CONDITIONS', {
       x: margin,
-      y: currentY,
+      y: page2Y,
       size: 12,
       font: boldFont,
     });
 
-    currentY -= 20;
+    page2Y -= 20;
     const terms = [
       '• Payment: 50% deposit required to begin production, balance due upon completion',
       '• Lead Time: Custom manufacturing typically 4-6 weeks from deposit',
@@ -2174,76 +2258,74 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     ];
 
     terms.forEach(term => {
-      page.drawText(term, {
+      page2.drawText(term, {
         x: margin,
-        y: currentY,
+        y: page2Y,
         size: 8,
         font: font,
       });
-      currentY -= 15;
+      page2Y -= 15;
     });
 
     // Acceptance signature area
-    currentY -= 30;
-    page.drawText('CUSTOMER APPROVAL', {
+    page2Y -= 30;
+    page2.drawText('CUSTOMER APPROVAL', {
       x: margin,
-      y: currentY,
+      y: page2Y,
       size: 12,
       font: boldFont,
     });
 
-    currentY -= 25;
-    page.drawText('Customer Signature:', {
+    page2Y -= 25;
+    page2.drawText('Customer Signature:', {
       x: margin,
-      y: currentY,
+      y: page2Y,
       size: 10,
       font: boldFont,
     });
 
-    page.drawLine({
-      start: { x: margin + 120, y: currentY - 5 },
-      end: { x: margin + 300, y: currentY - 5 },
+    page2.drawLine({
+      start: { x: margin + 120, y: page2Y - 5 },
+      end: { x: margin + 300, y: page2Y - 5 },
       thickness: 1,
       color: rgb(0, 0, 0),
     });
 
-    page.drawText('Date:', {
+    page2.drawText('Date:', {
       x: margin + 320,
-      y: currentY,
+      y: page2Y,
       size: 10,
       font: boldFont,
     });
 
-    page.drawLine({
-      start: { x: margin + 350, y: currentY - 5 },
-      end: { x: margin + 450, y: currentY - 5 },
+    page2.drawLine({
+      start: { x: margin + 350, y: page2Y - 5 },
+      end: { x: margin + 450, y: page2Y - 5 },
       thickness: 1,
       color: rgb(0, 0, 0),
     });
 
-
-
-    // Company footer with better contact info
-    currentY -= 50;
-    page.drawText('Thank you for your business!', {
+    // Company footer on page 2
+    page2Y -= 50;
+    page2.drawText('Thank you for your business!', {
       x: margin,
-      y: currentY,
+      y: page2Y,
       size: 11,
       font: boldFont,
     });
 
-    currentY -= 20;
-    page.drawText('AG Composites | 230 Hamer Rd, Owens Crossroads, AL 35763', {
+    page2Y -= 20;
+    page2.drawText('AG Composites | 230 Hamer Rd, Owens Crossroads, AL 35763', {
       x: margin,
-      y: currentY,
+      y: page2Y,
       size: 8,
       font: font,
     });
 
-    currentY -= 12;
-    page.drawText('Phone: (256) 723-8381 | Email: sales@agatcomposite.com', {
+    page2Y -= 12;
+    page2.drawText('Phone: (256) 723-8381 | Email: sales@agcomposites.com', {
       x: margin,
-      y: currentY,
+      y: page2Y,
       size: 8,
       font: font,
     });

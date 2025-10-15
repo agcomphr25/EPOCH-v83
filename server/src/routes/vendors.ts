@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { storage } from '../../storage';
-import { insertVendorSchema } from '@shared/schema';
+import { insertVendorSchema, insertVendorContactSchema } from '@shared/schema';
 import { z } from 'zod';
 
 const router = Router();
@@ -100,6 +100,80 @@ router.delete('/:id', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Delete vendor error:', error);
     res.status(500).json({ error: 'Failed to delete vendor' });
+  }
+});
+
+// Vendor Contacts Routes
+
+// GET /api/vendors/:vendorId/contacts - Get all contacts for a vendor
+router.get('/:vendorId/contacts', async (req: Request, res: Response) => {
+  try {
+    const vendorId = parseInt(req.params.vendorId);
+    if (!Number.isInteger(vendorId)) {
+      return res.status(400).json({ error: 'Invalid vendor ID' });
+    }
+    
+    const contacts = await storage.getVendorContacts(vendorId);
+    res.json(contacts);
+  } catch (error) {
+    console.error('Get vendor contacts error:', error);
+    res.status(500).json({ error: 'Failed to fetch vendor contacts' });
+  }
+});
+
+// POST /api/vendors/:vendorId/contacts - Create a new contact for a vendor
+router.post('/:vendorId/contacts', async (req: Request, res: Response) => {
+  try {
+    const vendorId = parseInt(req.params.vendorId);
+    if (!Number.isInteger(vendorId)) {
+      return res.status(400).json({ error: 'Invalid vendor ID' });
+    }
+    
+    const data = insertVendorContactSchema.parse({ ...req.body, vendorId });
+    const contact = await storage.createVendorContact(data);
+    res.status(201).json(contact);
+  } catch (error) {
+    console.error('Create vendor contact error:', error);
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: 'Invalid contact data', details: error.errors });
+    }
+    res.status(500).json({ error: 'Failed to create vendor contact' });
+  }
+});
+
+// PUT /api/vendors/:vendorId/contacts/:contactId - Update a vendor contact
+router.put('/:vendorId/contacts/:contactId', async (req: Request, res: Response) => {
+  try {
+    const contactId = parseInt(req.params.contactId);
+    if (!Number.isInteger(contactId)) {
+      return res.status(400).json({ error: 'Invalid contact ID' });
+    }
+    
+    const data = insertVendorContactSchema.partial().parse(req.body);
+    const contact = await storage.updateVendorContact(contactId, data);
+    res.json(contact);
+  } catch (error) {
+    console.error('Update vendor contact error:', error);
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: 'Invalid contact data', details: error.errors });
+    }
+    res.status(500).json({ error: 'Failed to update vendor contact' });
+  }
+});
+
+// DELETE /api/vendors/:vendorId/contacts/:contactId - Delete a vendor contact
+router.delete('/:vendorId/contacts/:contactId', async (req: Request, res: Response) => {
+  try {
+    const contactId = parseInt(req.params.contactId);
+    if (!Number.isInteger(contactId)) {
+      return res.status(400).json({ error: 'Invalid contact ID' });
+    }
+    
+    await storage.deleteVendorContact(contactId);
+    res.json({ success: true, message: 'Contact deleted successfully' });
+  } catch (error) {
+    console.error('Delete vendor contact error:', error);
+    res.status(500).json({ error: 'Failed to delete vendor contact' });
   }
 });
 

@@ -482,8 +482,8 @@ export default function CustomerSatisfactionSurvey({
                 </SelectTrigger>
                 <SelectContent>
                   {users.map((user: any) => (
-                    <SelectItem key={user.id} value={user.username}>
-                      {user.username}
+                    <SelectItem key={user.id} value={user.firstName || user.username}>
+                      {user.firstName || user.username}
                     </SelectItem>
                   ))}
                 </SelectContent>

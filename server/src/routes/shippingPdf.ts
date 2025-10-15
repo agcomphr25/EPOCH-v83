@@ -985,7 +985,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     const paymentColor = isFullyPaid ? rgb(0, 0.6, 0) : rgb(0.8, 0.4, 0);
 
     // Customer Information Section - Fixed positioning
-    currentY -= 110; // Adjusted spacing to prevent overlap with order info box
+    currentY -= 130; // Adjusted spacing to add separation below order info box
     
     // Define customer box dimensions and position
     const customerBoxY = currentY;
@@ -1287,7 +1287,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     }
 
     // Features and Customizations Section - starts right after customer box
-    currentY = customerBoxY - 30;
+    currentY = customerBoxY - 10;
     page.drawText('FEATURES & CUSTOMIZATIONS', {
       x: margin,
       y: currentY,
@@ -1295,7 +1295,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       font: boldFont,
     });
 
-    currentY -= 25;
+    currentY -= 5;
     
     // Create bordered container for features table
     const featuresTableHeight = 240; // Increased height to accommodate all features
@@ -1328,7 +1328,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     });
 
     page.drawText('Selection', {
-      x: margin + 180,
+      x: margin + 140,
       y: currentY - 12,
       size: 8,
       font: boldFont,
@@ -1366,11 +1366,11 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     });
 
     const modelDisplayName = model?.displayName || model?.name || 'Custom';
-    const wrappedModel = wrapText(modelDisplayName, 280, 8, font);
+    const wrappedModel = wrapText(modelDisplayName, 320, 8, font);
     wrappedModel.forEach((line, index) => {
       if (summaryLineY - (index * 11) > currentY - featuresTableHeight + 8) { // Keep within table bounds
         page.drawText(line, {
-          x: margin + 180,
+          x: margin + 140,
           y: summaryLineY - (index * 11),
           size: 8,
           font: font,
@@ -1400,11 +1400,11 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       const features = order.features as OrderFeatures | undefined;
       const handednessDisplay = features?.handedness ? 
         (features.handedness === 'right' ? 'Right' : 'Left') : 'Not selected';
-      const wrappedHandedness = wrapText(handednessDisplay, 280, 8, font);
+      const wrappedHandedness = wrapText(handednessDisplay, 320, 8, font);
       wrappedHandedness.forEach((line, index) => {
         if (summaryLineY - (index * 11) > currentY - featuresTableHeight + 8) {
           page.drawText(line, {
-            x: margin + 180,
+            x: margin + 140,
             y: summaryLineY - (index * 11),
             size: 8,
             font: font,
@@ -1441,11 +1441,11 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       const actionLengthDisplay = actionLengthOption?.label || 
         (actionLengthValue ? actionLengthValue.charAt(0).toUpperCase() + actionLengthValue.slice(1) : 'Not selected');
       
-      const wrappedActionLength = wrapText(actionLengthDisplay, 280, 9, font);
+      const wrappedActionLength = wrapText(actionLengthDisplay, 320, 9, font);
       wrappedActionLength.forEach((line, index) => {
         if (summaryLineY - (index * 11) > currentY - featuresTableHeight + 8) {
           page.drawText(line, {
-            x: margin + 180,
+            x: margin + 140,
             y: summaryLineY - (index * 11),
             size: 8,
             font: font,
@@ -1474,11 +1474,11 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       });
 
       const shankDisplay = order.shankLength || 'Not selected';
-      const wrappedShank = wrapText(shankDisplay, 280, 9, font);
+      const wrappedShank = wrapText(shankDisplay, 320, 9, font);
       wrappedShank.forEach((line, index) => {
         if (summaryLineY - (index * 11) > currentY - featuresTableHeight + 8) {
           page.drawText(line, {
-            x: margin + 180,
+            x: margin + 140,
             y: summaryLineY - (index * 11),
             size: 8,
             font: font,
@@ -1513,11 +1513,11 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       });
 
       const actionInletDisplay = actionInletOption?.label || (actionValue || 'Not selected');
-      const wrappedActionInlet = wrapText(actionInletDisplay, 280, 9, font);
+      const wrappedActionInlet = wrapText(actionInletDisplay, 320, 9, font);
       wrappedActionInlet.forEach((line, index) => {
         if (summaryLineY - (index * 11) > currentY - featuresTableHeight + 8) {
           page.drawText(line, {
-            x: margin + 180,
+            x: margin + 140,
             y: summaryLineY - (index * 11),
             size: 8,
             font: font,
@@ -1550,11 +1550,11 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       });
 
       const bottomMetalDisplay = bottomMetalOption?.label || 'Not selected';
-      const wrappedBottomMetal = wrapText(bottomMetalDisplay, 280, 9, font);
+      const wrappedBottomMetal = wrapText(bottomMetalDisplay, 320, 9, font);
       wrappedBottomMetal.forEach((line, index) => {
         if (summaryLineY - (index * 11) > currentY - featuresTableHeight + 8) {
           page.drawText(line, {
-            x: margin + 180,
+            x: margin + 140,
             y: summaryLineY - (index * 11),
             size: 8,
             font: font,
@@ -1586,10 +1586,10 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     });
 
     const barrelInletDisplay = barrelInletOption?.label || 'Not selected';
-    const wrappedBarrelInlet = wrapText(barrelInletDisplay, 280, 9, font);
+    const wrappedBarrelInlet = wrapText(barrelInletDisplay, 320, 9, font);
     wrappedBarrelInlet.forEach((line, index) => {
       page.drawText(line, {
-        x: margin + 180,
+        x: margin + 140,
         y: summaryLineY - (index * 11),
         size: 8,
         font: font,
@@ -1622,10 +1622,10 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     });
 
     const qdDisplay = qdOption?.label || 'Not selected';
-    const wrappedQD = wrapText(qdDisplay, 280, 9, font);
+    const wrappedQD = wrapText(qdDisplay, 320, 9, font);
     wrappedQD.forEach((line, index) => {
       page.drawText(line, {
-        x: margin + 180,
+        x: margin + 140,
         y: summaryLineY - (index * 11),
         size: 8,
         font: font,
@@ -1661,10 +1661,10 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       ((order.features as OrderFeatures | undefined)?.length_of_pull && (order.features as OrderFeatures | undefined)?.length_of_pull !== 'no_lop_change' ? 
         (order.features as OrderFeatures | undefined)?.length_of_pull.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : 'Not selected');
     
-    const wrappedLOP = wrapText(lopDisplay, 280, 9, font);
+    const wrappedLOP = wrapText(lopDisplay, 320, 9, font);
     wrappedLOP.forEach((line, index) => {
       page.drawText(line, {
-        x: margin + 180,
+        x: margin + 140,
         y: summaryLineY - (index * 11),
         size: 8,
         font: font,
@@ -1708,10 +1708,10 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       font: font,
     });
 
-    const wrappedRails = wrapText(railsDisplay, 280, 9, font);
+    const wrappedRails = wrapText(railsDisplay, 320, 9, font);
     wrappedRails.forEach((line, index) => {
       page.drawText(line, {
-        x: margin + 180,
+        x: margin + 140,
         y: summaryLineY - (index * 11),
         size: 8,
         font: font,
@@ -1746,10 +1746,10 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     const textureDisplay = textureOption?.label || 
       ((order.features as OrderFeatures | undefined)?.texture_options ? (order.features as OrderFeatures | undefined)?.texture_options.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : 'Not selected');
     
-    const wrappedTexture = wrapText(textureDisplay, 280, 9, font);
+    const wrappedTexture = wrapText(textureDisplay, 320, 9, font);
     wrappedTexture.forEach((line, index) => {
       page.drawText(line, {
-        x: margin + 180,
+        x: margin + 140,
         y: summaryLineY - (index * 11),
         size: 8,
         font: font,
@@ -1782,10 +1782,10 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     });
 
     const swivelDisplay = swivelOption?.label || 'Not selected';
-    const wrappedSwivel = wrapText(swivelDisplay, 280, 9, font);
+    const wrappedSwivel = wrapText(swivelDisplay, 320, 9, font);
     wrappedSwivel.forEach((line, index) => {
       page.drawText(line, {
-        x: margin + 180,
+        x: margin + 140,
         y: summaryLineY - (index * 11),
         size: 8,
         font: font,
@@ -1831,10 +1831,10 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     });
 
     // Wrap other options display across multiple lines if needed
-    const wrappedOtherOptions = wrapText(otherOptionsDisplay, 280, 9, font);
+    const wrappedOtherOptions = wrapText(otherOptionsDisplay, 320, 9, font);
     wrappedOtherOptions.forEach((line, index) => {
       page.drawText(line, {
-        x: margin + 180,
+        x: margin + 140,
         y: summaryLineY - (index * 11),
         size: 8,
         font: font,
@@ -1902,10 +1902,10 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     });
 
     // Wrap paint display across multiple lines if needed
-    const wrappedPaintDisplay = wrapText(paintDisplay, 280, 9, font);
+    const wrappedPaintDisplay = wrapText(paintDisplay, 320, 9, font);
     wrappedPaintDisplay.forEach((line, index) => {
       page.drawText(line, {
-        x: margin + 180,
+        x: margin + 140,
         y: summaryLineY - (index * 11),
         size: 8,
         font: font,

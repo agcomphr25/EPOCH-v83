@@ -9,7 +9,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Progress } from '@/components/ui/progress';
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
 import { useToast } from '@/hooks/use-toast';
+import { format } from "date-fns";
 import { 
   Star, 
   Send, 
@@ -20,7 +23,8 @@ import {
   AlertCircle,
   ThumbsUp,
   ThumbsDown,
-  BarChart3
+  BarChart3,
+  CalendarIcon
 } from 'lucide-react';
 
 interface SurveyQuestion {
@@ -81,6 +85,7 @@ export default function CustomerSatisfactionSurvey({
   const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(customerId || existingResponse?.customerId || null);
   const [orderNumber, setOrderNumber] = useState<string>(existingResponse?.orderId || '');
   const [csrName, setCsrName] = useState<string>(existingResponse?.csrName || '');
+  const [surveyDate, setSurveyDate] = useState<Date | undefined>(existingResponse?.surveyDate ? new Date(existingResponse.surveyDate) : new Date());
 
   // Fetch active surveys
   const { data: surveys = [], isLoading: surveysLoading } = useQuery({
@@ -92,6 +97,12 @@ export default function CustomerSatisfactionSurvey({
   const { data: customers = [], isLoading: customersLoading } = useQuery({
     queryKey: ['/api/customers'],
     queryFn: () => apiRequest('/api/customers'),
+  });
+
+  // Fetch users for CSR selection
+  const { data: users = [], isLoading: usersLoading } = useQuery({
+    queryKey: ['/api/users'],
+    queryFn: () => apiRequest('/api/users'),
   });
 
   // Selected survey (either from prop or first active survey)
@@ -212,6 +223,7 @@ export default function CustomerSatisfactionSurvey({
       aggregateScore, // Sum of all question responses
       responseTimeSeconds: Math.floor((new Date().getTime() - startTime.getTime()) / 1000),
       csrName: csrName || null, // Customer Service Representative name
+      surveyDate: surveyDate ? surveyDate.toISOString() : new Date().toISOString(),
       isComplete: true,
       submittedAt: new Date().toISOString(),
     };
@@ -381,7 +393,7 @@ export default function CustomerSatisfactionSurvey({
     );
   };
 
-  if (surveysLoading || customersLoading) {
+  if (surveysLoading || customersLoading || usersLoading) {
     return (
       <Card>
         <CardContent className="p-6">
@@ -447,7 +459,7 @@ export default function CustomerSatisfactionSurvey({
           </div>
 
           {/* Order Details */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-3 gap-4">
             <div className="space-y-2">
               <Label htmlFor="orderNumber">Order #</Label>
               <Input
@@ -456,17 +468,49 @@ export default function CustomerSatisfactionSurvey({
                 onChange={(e) => setOrderNumber(e.target.value)}
                 placeholder="Enter order number"
                 className="w-full"
+                data-testid="input-order-number"
               />
             </div>
             <div className="space-y-2">
               <Label htmlFor="csrName">CSR</Label>
-              <Input
-                id="csrName"
-                value={csrName}
-                onChange={(e) => setCsrName(e.target.value)}
-                placeholder="Customer Service Rep"
-                className="w-full"
-              />
+              <Select 
+                value={csrName} 
+                onValueChange={(value) => setCsrName(value)}
+              >
+                <SelectTrigger data-testid="select-csr">
+                  <SelectValue placeholder="Select CSR" />
+                </SelectTrigger>
+                <SelectContent>
+                  {users.map((user: any) => (
+                    <SelectItem key={user.id} value={user.firstName || user.username}>
+                      {user.firstName || user.username}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="surveyDate">Date</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className="w-full justify-start text-left font-normal"
+                    data-testid="button-survey-date"
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {surveyDate ? format(surveyDate, "MM/dd/yyyy") : <span>Pick a date</span>}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={surveyDate}
+                    onSelect={setSurveyDate}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
             </div>
           </div>
 

@@ -985,7 +985,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     const paymentColor = isFullyPaid ? rgb(0, 0.6, 0) : rgb(0.8, 0.4, 0);
 
     // Customer Information Section - Fixed positioning
-    currentY -= 80; // Move up to have more space for content
+    currentY -= 95; // Adjusted spacing for better visual balance
     
     // Define customer box dimensions and position
     const customerBoxY = currentY;

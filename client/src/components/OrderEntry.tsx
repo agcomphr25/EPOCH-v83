@@ -2863,7 +2863,16 @@ export default function OrderEntry() {
                             }
                           });
 
-                          return allOptions.map((option) => (
+                          // Filter out Carbon options if Fiberglass (FG) stock model is selected
+                          const selectedModel = modelOptions.find(m => m.id === modelId);
+                          const modelName = selectedModel?.name || selectedModel?.displayName || '';
+                          const isFiberglassModel = modelName.toUpperCase().includes('FG');
+                          
+                          const filteredOptions = isFiberglassModel 
+                            ? allOptions.filter(option => !option.label.includes('Carbon'))
+                            : allOptions;
+
+                          return filteredOptions.map((option) => (
                             <SelectItem key={option.value} value={option.value}>
                               {option.label}
                             </SelectItem>

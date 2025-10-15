@@ -894,7 +894,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     // Position text INSIDE the box with 2-column layout
     let boxTextY = orderBoxY + orderBoxHeight - 18; // Start from top of box
     const col1X = orderBoxX + 8;
-    const col2X = orderBoxX + 115;
+    const col2X = orderBoxX + 95; // Moved left for better fit
     
     // Row 1: Order Number and Customer PO
     page.drawText('Order Number:', {
@@ -985,11 +985,11 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     const paymentColor = isFullyPaid ? rgb(0, 0.6, 0) : rgb(0.8, 0.4, 0);
 
     // Customer Information Section - Fixed positioning
-    currentY -= 115; // Move down to provide space for proper box placement
+    currentY -= 80; // Move up to have more space for content
     
     // Define customer box dimensions and position
     const customerBoxY = currentY;
-    const customerBoxHeight = 70; // Reduced for less white space at bottom
+    const customerBoxHeight = 100; // Increased for more space for contact info
     
     // Create customer info box
     page.drawRectangle({
@@ -2155,16 +2155,100 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
 
 
 
-    // Terms and Conditions Section
-    currentY -= 120;
-    page.drawText('TERMS AND CONDITIONS', {
+    // PAGE 2 - Terms and Conditions
+    const page2 = pdfDoc.addPage([612, 792]);
+    let page2Y = height - margin - 10;
+    
+    // Repeat order info box at top right of page 2
+    const page2OrderBoxX = width - margin - 220;
+    const page2OrderBoxY = page2Y - 85;
+    const page2OrderBoxWidth = 220;
+    const page2OrderBoxHeight = 75;
+    
+    page2.drawRectangle({
+      x: page2OrderBoxX,
+      y: page2OrderBoxY,
+      width: page2OrderBoxWidth,
+      height: page2OrderBoxHeight,
+      borderColor: rgb(0, 0, 0),
+      borderWidth: 1,
+    });
+
+    // Order info content in page 2 box
+    let page2BoxTextY = page2OrderBoxY + page2OrderBoxHeight - 18;
+    const page2Col1X = page2OrderBoxX + 8;
+    const page2Col2X = page2OrderBoxX + 95;
+    
+    // Row 1: Order Number and Customer PO
+    page2.drawText('Order Number:', {
+      x: page2Col1X,
+      y: page2BoxTextY,
+      size: 8,
+      font: boldFont,
+    });
+
+    page2.drawText(orderId, {
+      x: page2Col1X,
+      y: page2BoxTextY - 12,
+      size: 8,
+      font: font,
+    });
+
+    page2.drawText('Customer PO:', {
+      x: page2Col2X,
+      y: page2BoxTextY,
+      size: 8,
+      font: boldFont,
+    });
+
+    page2.drawText((order as any).customerPo || 'N/A', {
+      x: page2Col2X,
+      y: page2BoxTextY - 12,
+      size: 8,
+      font: font,
+    });
+
+    page2BoxTextY -= 32;
+    
+    // Row 2: Order Date and Estimated Completion Date
+    page2.drawText('Order Date:', {
+      x: page2Col1X,
+      y: page2BoxTextY,
+      size: 8,
+      font: boldFont,
+    });
+
+    page2.drawText(new Date().toLocaleDateString(), {
+      x: page2Col1X,
+      y: page2BoxTextY - 12,
+      size: 8,
+      font: font,
+    });
+
+    page2.drawText('Estimated Completion Date:', {
+      x: page2Col2X,
+      y: page2BoxTextY,
+      size: 8,
+      font: boldFont,
+    });
+
+    page2.drawText(order.dueDate ? new Date(order.dueDate).toLocaleDateString() : 'TBD', {
+      x: page2Col2X,
+      y: page2BoxTextY - 12,
+      size: 8,
+      font: font,
+    });
+    
+    // Terms and Conditions Section on Page 2
+    page2Y -= 120;
+    page2.drawText('TERMS AND CONDITIONS', {
       x: margin,
-      y: currentY,
+      y: page2Y,
       size: 12,
       font: boldFont,
     });
 
-    currentY -= 20;
+    page2Y -= 20;
     const terms = [
       '• Payment: 50% deposit required to begin production, balance due upon completion',
       '• Lead Time: Custom manufacturing typically 4-6 weeks from deposit',
@@ -2174,76 +2258,74 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     ];
 
     terms.forEach(term => {
-      page.drawText(term, {
+      page2.drawText(term, {
         x: margin,
-        y: currentY,
+        y: page2Y,
         size: 8,
         font: font,
       });
-      currentY -= 15;
+      page2Y -= 15;
     });
 
     // Acceptance signature area
-    currentY -= 30;
-    page.drawText('CUSTOMER APPROVAL', {
+    page2Y -= 30;
+    page2.drawText('CUSTOMER APPROVAL', {
       x: margin,
-      y: currentY,
+      y: page2Y,
       size: 12,
       font: boldFont,
     });
 
-    currentY -= 25;
-    page.drawText('Customer Signature:', {
+    page2Y -= 25;
+    page2.drawText('Customer Signature:', {
       x: margin,
-      y: currentY,
+      y: page2Y,
       size: 10,
       font: boldFont,
     });
 
-    page.drawLine({
-      start: { x: margin + 120, y: currentY - 5 },
-      end: { x: margin + 300, y: currentY - 5 },
+    page2.drawLine({
+      start: { x: margin + 120, y: page2Y - 5 },
+      end: { x: margin + 300, y: page2Y - 5 },
       thickness: 1,
       color: rgb(0, 0, 0),
     });
 
-    page.drawText('Date:', {
+    page2.drawText('Date:', {
       x: margin + 320,
-      y: currentY,
+      y: page2Y,
       size: 10,
       font: boldFont,
     });
 
-    page.drawLine({
-      start: { x: margin + 350, y: currentY - 5 },
-      end: { x: margin + 450, y: currentY - 5 },
+    page2.drawLine({
+      start: { x: margin + 350, y: page2Y - 5 },
+      end: { x: margin + 450, y: page2Y - 5 },
       thickness: 1,
       color: rgb(0, 0, 0),
     });
 
-
-
-    // Company footer with better contact info
-    currentY -= 50;
-    page.drawText('Thank you for your business!', {
+    // Company footer on page 2
+    page2Y -= 50;
+    page2.drawText('Thank you for your business!', {
       x: margin,
-      y: currentY,
+      y: page2Y,
       size: 11,
       font: boldFont,
     });
 
-    currentY -= 20;
-    page.drawText('AG Composites | 230 Hamer Rd, Owens Crossroads, AL 35763', {
+    page2Y -= 20;
+    page2.drawText('AG Composites | 230 Hamer Rd, Owens Crossroads, AL 35763', {
       x: margin,
-      y: currentY,
+      y: page2Y,
       size: 8,
       font: font,
     });
 
-    currentY -= 12;
-    page.drawText('Phone: (256) 723-8381 | Email: sales@agatcomposite.com', {
+    page2Y -= 12;
+    page2.drawText('Phone: (256) 723-8381 | Email: sales@agcomposites.com', {
       x: margin,
-      y: currentY,
+      y: page2Y,
       size: 8,
       font: font,
     });

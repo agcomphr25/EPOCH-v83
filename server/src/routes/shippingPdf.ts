@@ -2004,7 +2004,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
         } else if (applicableDiscount.fixedAmount) {
           discountAmount = applicableDiscount.fixedAmount;
         }
-        discountLabel = applicableDiscount.name || 'Discount';
+        discountLabel = applicableDiscount.name ? `Discount - ${applicableDiscount.name}` : 'Discount';
       }
     }
     // If no custom or order discount, check for persistent discount based on customer type
@@ -2023,7 +2023,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
         } else if (applicableDiscount.fixedAmount) {
           discountAmount = applicableDiscount.fixedAmount;
         }
-        discountLabel = applicableDiscount.name || 'Discount';
+        discountLabel = applicableDiscount.name ? `Discount - ${applicableDiscount.name}` : 'Discount';
       }
     }
 

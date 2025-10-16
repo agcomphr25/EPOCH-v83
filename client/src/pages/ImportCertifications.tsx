@@ -54,8 +54,8 @@ export default function ImportCertifications() {
     // Determine endpoint based on file type
     const isCSV = selectedFile.name.endsWith('.csv') || selectedFile.type === 'text/csv';
     const endpoint = isCSV 
-      ? '/api/_employees/import-certifications-csv'
-      : '/api/_employees/import-certifications-pdf';
+      ? '/api/employees/import-certifications-csv'
+      : '/api/employees/import-certifications-pdf';
 
     try {
       const result = await apiRequest(

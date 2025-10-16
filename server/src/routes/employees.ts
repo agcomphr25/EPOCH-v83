@@ -25,12 +25,10 @@ const router = Router();
 // Employee Management Routes
 router.get('/', async (req: Request, res: Response) => {
   try {
-    console.log('🔧 EMPLOYEES ROUTE CALLED (development mode - no auth)');
     const employees = await storage.getAllEmployees();
-    console.log('🔧 Found employees:', employees.length);
     res.json(employees);
   } catch (error) {
-    console.error('Get employees error:', error);
+    console.error('Error fetching employees:', error);
     res.status(500).json({ error: 'Failed to fetch employees' });
   }
 });

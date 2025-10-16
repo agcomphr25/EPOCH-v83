@@ -57,7 +57,7 @@ export function registerRoutes(app: Express): Server {
   app.use('/api/users', usersRoutes);
 
   // Employee management routes
-  app.use('/api/_employees', employeesRoutes);
+  app.use('/api/employees', employeesRoutes);
 
   // Order management routes
   app.use('/api/orders', ordersRoutes);

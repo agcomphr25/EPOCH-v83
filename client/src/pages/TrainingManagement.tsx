@@ -49,16 +49,51 @@ interface TrainingMatrixEntry {
   isLegacy: boolean | null;
 }
 
+interface Employee {
+  id: number;
+  name: string;
+  jobTitle: string | null;
+  department: string | null;
+}
+
+interface Certification {
+  id: number;
+  name: string;
+  description: string | null;
+  category: string | null;
+}
+
 export default function TrainingManagement() {
   const { toast } = useToast();
   const [selectedModule, setSelectedModule] = useState<TrainingModule | null>(null);
   const [isModuleDialogOpen, setIsModuleDialogOpen] = useState(false);
   const [isPdfImportDialogOpen, setIsPdfImportDialogOpen] = useState(false);
   const [pdfFile, setPdfFile] = useState<File | null>(null);
+  
+  // Certification tab state
+  const [certPdfFile, setCertPdfFile] = useState<File | null>(null);
+  
+  // Evaluation tab state
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>("");
+  const [evaluationType, setEvaluationType] = useState<string>("BIANNUAL");
+  const [selectedCertifications, setSelectedCertifications] = useState<number[]>([]);
+  const [strengths, setStrengths] = useState<string>("");
+  const [opportunities, setOpportunities] = useState<string>("");
+  const [expectations, setExpectations] = useState<string>("");
 
   // Fetch training modules
   const { data: modules = [], isLoading: modulesLoading } = useQuery<TrainingModule[]>({
     queryKey: ['/api/training/modules'],
+  });
+
+  // Fetch employees for evaluations
+  const { data: employees = [] } = useQuery<Employee[]>({
+    queryKey: ['/api/employees'],
+  });
+
+  // Fetch certifications
+  const { data: certifications = [] } = useQuery<Certification[]>({
+    queryKey: ['/api/certifications'],
   });
 
   // Import PDF mutation
@@ -107,6 +142,66 @@ export default function TrainingManagement() {
     },
   });
 
+  // Create certification from PDF mutation
+  const createCertificationMutation = useMutation({
+    mutationFn: async (formData: FormData) => {
+      const response = await fetch('/api/certifications/create-from-pdf', {
+        method: 'POST',
+        body: formData,
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to create certification');
+      }
+      return response.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/certifications'] });
+      toast({
+        title: "Certification Created",
+        description: `Created certification: ${data.certification.name}`,
+      });
+      setCertPdfFile(null);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Creation Failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Create evaluation mutation
+  const createEvaluationMutation = useMutation({
+    mutationFn: async (evaluationData: any) => {
+      return apiRequest('/api/evaluations', {
+        method: 'POST',
+        body: JSON.stringify(evaluationData),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/employees/evaluations'] });
+      toast({
+        title: "Evaluation Created",
+        description: "Employee evaluation has been created successfully",
+      });
+      // Reset form
+      setSelectedEmployeeId("");
+      setSelectedCertifications([]);
+      setStrengths("");
+      setOpportunities("");
+      setExpectations("");
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Creation Failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const handlePdfImport = () => {
     if (!pdfFile) {
       toast({
@@ -124,6 +219,47 @@ export default function TrainingManagement() {
     importPdfMutation.mutate(formData);
   };
 
+  const handleCertificationPdfUpload = () => {
+    if (!certPdfFile) {
+      toast({
+        title: "No File Selected",
+        description: "Please select a PDF file to create certification",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('file', certPdfFile);
+    formData.append('createdBy', 'admin'); // TODO: Get from auth context
+    
+    createCertificationMutation.mutate(formData);
+  };
+
+  const handleEvaluationSubmit = () => {
+    if (!selectedEmployeeId) {
+      toast({
+        title: "Employee Required",
+        description: "Please select an employee to evaluate",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const evaluationData = {
+      employeeId: parseInt(selectedEmployeeId),
+      evaluationType,
+      certificationIds: selectedCertifications,
+      strengths,
+      areasForImprovement: opportunities,
+      goals: expectations,
+      evaluatedBy: 'admin', // TODO: Get from auth context
+      status: 'COMPLETED',
+    };
+
+    createEvaluationMutation.mutate(evaluationData);
+  };
+
   return (
     <div className="container mx-auto py-8">
       <div className="mb-8">
@@ -132,10 +268,18 @@ export default function TrainingManagement() {
       </div>
 
       <Tabs defaultValue="modules" className="w-full">
-        <TabsList className="grid w-full grid-cols-1">
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="modules" data-testid="tab-modules">
             <BookOpen className="w-4 h-4 mr-2" />
             Training Modules
+          </TabsTrigger>
+          <TabsTrigger value="certifications" data-testid="tab-certifications">
+            <FileText className="w-4 h-4 mr-2" />
+            Certifications
+          </TabsTrigger>
+          <TabsTrigger value="evaluations" data-testid="tab-evaluations">
+            <Users className="w-4 h-4 mr-2" />
+            Evaluations
           </TabsTrigger>
         </TabsList>
 
@@ -255,6 +399,201 @@ export default function TrainingManagement() {
               ))}
             </div>
           )}
+        </TabsContent>
+
+        <TabsContent value="certifications" className="mt-6">
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-2xl font-semibold">Create Certification from PDF</h2>
+          </div>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Upload Job Position / Work Instructions PDF</CardTitle>
+              <CardDescription>
+                Upload a PDF containing job position details or work instructions to create a new certification using AI document analysis
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Label htmlFor="cert-pdf-file">PDF File</Label>
+                <Input
+                  id="cert-pdf-file"
+                  type="file"
+                  accept=".pdf"
+                  onChange={(e) => setCertPdfFile(e.target.files?.[0] || null)}
+                  data-testid="input-cert-pdf-file"
+                />
+                {certPdfFile && (
+                  <p className="text-sm text-muted-foreground mt-2">
+                    Selected: {certPdfFile.name}
+                  </p>
+                )}
+              </div>
+              <Button 
+                onClick={handleCertificationPdfUpload} 
+                disabled={createCertificationMutation.isPending}
+                data-testid="button-create-certification"
+              >
+                <Upload className="w-4 h-4 mr-2" />
+                {createCertificationMutation.isPending ? 'Creating Certification...' : 'Create Certification from PDF'}
+              </Button>
+            </CardContent>
+          </Card>
+
+          <div className="mt-8">
+            <h3 className="text-xl font-semibold mb-4">Existing Certifications</h3>
+            {certifications.length === 0 ? (
+              <Card>
+                <CardContent className="py-8 text-center">
+                  <FileText className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
+                  <p className="text-muted-foreground">No certifications yet. Upload a PDF to create one.</p>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="grid gap-4">
+                {certifications.map((cert) => (
+                  <Card key={cert.id} data-testid={`card-cert-${cert.id}`}>
+                    <CardHeader>
+                      <CardTitle>{cert.name}</CardTitle>
+                      <CardDescription>{cert.description || 'No description'}</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      {cert.category && (
+                        <Badge variant="secondary">{cert.category}</Badge>
+                      )}
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </div>
+        </TabsContent>
+
+        <TabsContent value="evaluations" className="mt-6">
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-2xl font-semibold">Create Employee Evaluation</h2>
+          </div>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>New Evaluation</CardTitle>
+              <CardDescription>
+                Create a performance evaluation based on employee certifications
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="employee-select">Employee</Label>
+                  <Select value={selectedEmployeeId} onValueChange={setSelectedEmployeeId}>
+                    <SelectTrigger id="employee-select" data-testid="select-employee">
+                      <SelectValue placeholder="Select employee..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {employees.map((emp) => (
+                        <SelectItem key={emp.id} value={emp.id.toString()}>
+                          {emp.name} {emp.jobTitle && `- ${emp.jobTitle}`}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label htmlFor="evaluation-type">Evaluation Type</Label>
+                  <Select value={evaluationType} onValueChange={setEvaluationType}>
+                    <SelectTrigger id="evaluation-type" data-testid="select-eval-type">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="BIANNUAL">Biannual</SelectItem>
+                      <SelectItem value="ANNUAL">Annual</SelectItem>
+                      <SelectItem value="QUARTERLY">Quarterly</SelectItem>
+                      <SelectItem value="PROBATION">Probation</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label>Certifications (Multi-select)</Label>
+                  <div className="border rounded-md p-4 space-y-2 max-h-48 overflow-y-auto">
+                    {certifications.map((cert) => (
+                      <div key={cert.id} className="flex items-center space-x-2">
+                        <input
+                          type="checkbox"
+                          id={`cert-${cert.id}`}
+                          checked={selectedCertifications.includes(cert.id)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedCertifications([...selectedCertifications, cert.id]);
+                            } else {
+                              setSelectedCertifications(selectedCertifications.filter(id => id !== cert.id));
+                            }
+                          }}
+                          data-testid={`checkbox-cert-${cert.id}`}
+                          className="rounded"
+                        />
+                        <Label htmlFor={`cert-${cert.id}`} className="cursor-pointer">
+                          {cert.name}
+                        </Label>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="border-t pt-6">
+                <h3 className="text-lg font-semibold mb-4">Evaluation Sections</h3>
+                
+                <div className="space-y-4">
+                  <div>
+                    <Label htmlFor="strengths">Strengths</Label>
+                    <Textarea
+                      id="strengths"
+                      placeholder="Describe employee's key strengths and positive qualities..."
+                      value={strengths}
+                      onChange={(e) => setStrengths(e.target.value)}
+                      rows={4}
+                      data-testid="textarea-strengths"
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="opportunities">Opportunities for Improvement</Label>
+                    <Textarea
+                      id="opportunities"
+                      placeholder="Areas where employee can improve and develop..."
+                      value={opportunities}
+                      onChange={(e) => setOpportunities(e.target.value)}
+                      rows={4}
+                      data-testid="textarea-opportunities"
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="expectations">Expectations & Plans</Label>
+                    <Textarea
+                      id="expectations"
+                      placeholder="Goals, action items, and expectations for the next period..."
+                      value={expectations}
+                      onChange={(e) => setExpectations(e.target.value)}
+                      rows={4}
+                      data-testid="textarea-expectations"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <Button 
+                onClick={handleEvaluationSubmit} 
+                disabled={createEvaluationMutation.isPending}
+                className="w-full"
+                data-testid="button-create-evaluation"
+              >
+                {createEvaluationMutation.isPending ? 'Creating Evaluation...' : 'Create Evaluation'}
+              </Button>
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
     </div>

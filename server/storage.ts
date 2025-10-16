@@ -3638,7 +3638,6 @@ export class DatabaseStorage implements IStorage {
     return await db
       .select()
       .from(employees)
-      .where(eq(employees.isActive, true))
       .orderBy(employees.name);
   }
 

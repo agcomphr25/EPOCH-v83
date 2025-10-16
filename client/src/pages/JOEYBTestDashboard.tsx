@@ -1,6 +1,6 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Scissors, Settings, Wrench, FileText, Users, Factory } from 'lucide-react';
+import { Scissors, Settings, Wrench, FileText, Users, Factory, GraduationCap } from 'lucide-react';
 import { Link } from 'wouter';
 import PipelineVisualization from '@/components/PipelineVisualization';
 
@@ -60,13 +60,15 @@ export default function JOEYBTestDashboard() {
           </Card>
         </Link>
 
-        <Card className="opacity-50 cursor-not-allowed border-2 border-gray-200">
-          <CardContent className="p-4 text-center">
-            <Users className="w-8 h-8 text-gray-400 mx-auto mb-3" />
-            <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-500">Employee Portal</h3>
-            <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Placeholder - Coming Soon</p>
-          </CardContent>
-        </Card>
+        <Link href="/training">
+          <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-teal-200">
+            <CardContent className="p-4 text-center">
+              <GraduationCap className="w-8 h-8 text-teal-600 mx-auto mb-3" />
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Training Modules</h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Complete training courses</p>
+            </CardContent>
+          </Card>
+        </Link>
       </div>
 
       {/* Production Pipeline Overview */}

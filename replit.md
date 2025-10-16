@@ -69,6 +69,6 @@ The application uses a monorepo structure with a full-stack TypeScript approach.
 ### October 16, 2025 - Training Modules Added to All Dashboards
 - **Enhancement**: Added Training Modules card to all user dashboards for easy access
 - **Main Dashboard**: Added dedicated Training section with links to All Training Modules and Training Matrix
-- **User Dashboards**: Added Training Modules navigation card to individual dashboards (AGTestDashboard, TIMSTestDashboard, etc.)
+- **User Dashboards**: Added Training Modules navigation card to individual dashboards (AGTestDashboard, TIMSTestDashboard, JOHNLTestDashboard, JOEYBTestDashboard, etc.)
 - **Features**: Quick access to complete training courses and view certification status
-- **Status**: ✅ Training now accessible from every dashboard including TIMS
+- **Status**: ✅ Training now accessible from every dashboard including TIMS, JOHNL, and JOEYB

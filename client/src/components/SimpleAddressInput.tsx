@@ -1,11 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { MapPin, Loader2 } from 'lucide-react';
-import debounce from 'lodash.debounce';
-
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { MapPin, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
+import debounce from 'lodash.debounce';
 import {
   autocompleteAddress,
   validateAddress,

@@ -1,9 +1,9 @@
 // React is automatically imported by Vite JSX transformer
 import { Switch, Route } from 'wouter';
 import { QueryClientProvider } from '@tanstack/react-query';
-import { Toaster as HotToaster } from 'react-hot-toast';
-
 import { queryClient } from './lib/queryClient';
+import { Toaster } from '@/components/ui/toaster';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { CSVProvider } from './contexts/CSVContext';
 import Navigation from './components/Navigation';
 import OfflineIndicator from './components/OfflineIndicator';
@@ -36,9 +36,7 @@ import EnhancedReportsPage from './pages/EnhancedReportsPage';
 import FormRendererPage from './pages/FormRendererPage';
 import DocumentationPageNew from './pages/DocumentationPageNew';
 import ReactErrorTest from './components/ReactErrorTest';
-
-import { TooltipProvider } from '@/components/ui/tooltip';
-import { Toaster } from '@/components/ui/toaster';
+import { Toaster as HotToaster } from 'react-hot-toast';
 
 function App() {
   return (

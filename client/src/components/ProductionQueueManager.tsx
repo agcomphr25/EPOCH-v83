@@ -1,38 +1,58 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { apiRequest } from '@/lib/queryClient';
 import { useLocation } from 'wouter';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '@/components/ui/accordion';
 import { useToast } from '@/hooks/use-toast';
-import { 
-  RefreshCw, 
-  ArrowUp, 
-  ArrowDown, 
-  Clock, 
+import {
+  RefreshCw,
+  ArrowUp,
+  ArrowDown,
+  Clock,
   AlertTriangle,
   CheckCircle,
   Calendar,
   User,
   Package,
   ArrowRight,
-Search
 } from 'lucide-react';
-
-import { apiRequest } from '@/lib/queryClient';
 
 interface ProductionQueueOrder {
   orderId: string;
   fbOrderNumber?: string;
   modelId: string;
   stockModelId: string;
-  stockModelDisplayName?: string;
   dueDate: string;
   orderDate: string;
   currentDepartment: string;
@@ -379,10 +399,9 @@ export default function ProductionQueueManager() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
   // State for P1 Production Queue order selection
-const [selectedQueueOrders, setSelectedQueueOrders] = useState<Set<string>>(new Set());
-  
-  // State for search functionality
-  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [selectedQueueOrders, setSelectedQueueOrders] = useState<Set<string>>(
+    new Set()
+  );
 
   // Fetch prioritized production queue
   const {
@@ -643,20 +662,6 @@ const [selectedQueueOrders, setSelectedQueueOrders] = useState<Set<string>>(new 
       moveSelectedItemsToLayupMutation.mutate(selectedItems);
     }
   };
-
-  // Filter production queue based on search query
-  const filteredProductionQueue = productionQueue.filter(order => {
-    if (!searchQuery.trim()) return true;
-    
-    const query = searchQuery.toLowerCase();
-    const orderId = order.orderId?.toLowerCase() || '';
-    const fbOrderNumber = order.fbOrderNumber?.toLowerCase() || '';
-    const customerName = order.customerName?.toLowerCase() || '';
-    
-    return orderId.includes(query) || 
-           fbOrderNumber.includes(query) || 
-           customerName.includes(query);
-  });
 
   const movePriority = (index: number, direction: 'up' | 'down') => {
     const newQueue = [...productionQueue];
@@ -948,203 +953,205 @@ const [selectedQueueOrders, setSelectedQueueOrders] = useState<Set<string>>(new 
             <AccordionContent>
               <CardContent>
                 {productionQueue.length > 0 && (
-                  <>
-                    <div className="mb-4">
-                      <div className="relative">
-                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                        <Input
-                          data-testid="input-search-queue"
-                          type="text"
-                          placeholder="Search by Order ID, FB Order #, or Customer Name..."
-                          value={searchQuery}
-                          onChange={(e) => setSearchQuery(e.target.value)}
-                          className="pl-10"
-                        />
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 mb-4">
+                  <div className="flex items-center gap-2 mb-4">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleSelectAllQueueOrders}
+                      className="flex items-center gap-2"
+                    >
+                      {selectedQueueOrders.size === productionQueue.length
+                        ? 'Deselect All'
+                        : 'Select All'}
+                    </Button>
+                    {selectedQueueOrders.size > 0 && (
                       <Button
-                        data-testid="button-select-all"
-                        variant="outline"
+                        onClick={handleProgressSelectedToBarcode}
+                        disabled={progressToBarcodeMutation.isPending}
+                        className="flex items-center gap-2 bg-green-600 hover:bg-green-700"
                         size="sm"
-                        onClick={handleSelectAllQueueOrders}
-                        className="flex items-center gap-2"
                       >
-                        {selectedQueueOrders.size === productionQueue.length ? 'Deselect All' : 'Select All'}
+                        <ArrowRight className="h-4 w-4" />
+                        Progress to Barcode ({selectedQueueOrders.size})
                       </Button>
-                      {selectedQueueOrders.size > 0 && (
-                        <Button
-                          data-testid="button-progress-to-barcode"
-                          onClick={handleProgressSelectedToBarcode}
-                          disabled={progressToBarcodeMutation.isPending}
-                          className="flex items-center gap-2 bg-green-600 hover:bg-green-700"
-                          size="sm"
-                        >
-                          <ArrowRight className="h-4 w-4" />
-                          Progress to Barcode ({selectedQueueOrders.size})
-                        </Button>
-                      )}
-                    </div>
-                  </>
+                    )}
+                  </div>
                 )}
-          {productionQueue.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
-              <Package className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-              <p>No orders in production queue</p>
-              <p className="text-sm">Use Auto-Populate to add eligible orders</p>
-            </div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-12">
-                    <Checkbox
-                      checked={selectedQueueOrders.size === productionQueue.length && productionQueue.length > 0}
-                      onCheckedChange={handleSelectAllQueueOrders}
-                    />
-                  </TableHead>
-                  <TableHead className="w-20">Priority</TableHead>
-                  <TableHead>Order ID</TableHead>
-                  <TableHead>Customer</TableHead>
-                  <TableHead>Stock Model</TableHead>
-                  <TableHead>Action Length</TableHead>
-                  <TableHead>Bottom Metal</TableHead>
-                  <TableHead>Special</TableHead>
-                  <TableHead>Due Date</TableHead>
-                  <TableHead className="w-28">Days to Due</TableHead>
-                  <TableHead>Urgency</TableHead>
-                  <TableHead>Score</TableHead>
-                  <TableHead className="w-32">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredProductionQueue.map((order, index) => {
-                  // Get action length
-                  let actionLength = order.features?.action_length;
-                  if (!actionLength || actionLength === 'none') {
-                    // Try to derive from action_inlet
-                    const actionInlet = order.features?.action_inlet;
-                    if (actionInlet) {
-                      if (actionInlet.toLowerCase().includes('short')) actionLength = 'Short';
-                      else if (actionInlet.toLowerCase().includes('long')) actionLength = 'Long';
-                    }
-                  }
-                  
-                  // Check if bottom metal contains "adl"
-                  const bottomMetal = order.features?.bottom_metal;
-                  const showBottomMetal = bottomMetal && typeof bottomMetal === 'string' && bottomMetal.toLowerCase().includes('adl');
-                  const bottomMetalDisplay = showBottomMetal 
-                    ? bottomMetal.replace(/_/g, ' ').toUpperCase() 
-                    : '';
-                  
-                  // Check for LOP adjustment
-                  const lengthOfPull = order.features?.length_of_pull;
-                  const hasLOP = lengthOfPull && lengthOfPull !== 'no_lop_change' && lengthOfPull !== 'standard';
-                  
-                  // Check for Heavy Fill
-                  const otherOptions = order.features?.other_options;
-                  const hasHeavyFill = Array.isArray(otherOptions) && otherOptions.includes('heavy_fill');
-                  
-                  return (
-                    <TableRow key={order.orderId} className={order.isOverdue ? 'bg-red-50' : ''} data-testid={`row-order-${order.orderId}`}>
-                    <TableCell>
-                      <Checkbox
-                        data-testid={`checkbox-order-${order.orderId}`}
-                        checked={selectedQueueOrders.has(order.orderId)}
-                        onCheckedChange={() => handleToggleOrderSelection(order.orderId)}
-                      />
-                    </TableCell>
-                    <TableCell className="font-bold text-center" data-testid={`text-priority-${order.orderId}`}>
-                      #{order.queuePosition}
-                    </TableCell>
-                    <TableCell className="font-medium" data-testid={`text-orderid-${order.orderId}`}>
-                      <div>
-                        {order.fbOrderNumber || order.orderId}
-                        {order.fbOrderNumber && (
-                          <div className="text-xs text-gray-500">{order.orderId}</div>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell data-testid={`text-customer-${order.orderId}`}>
-                      <div className="flex items-center gap-1">
-                        <User className="w-3 h-3 text-gray-400" />
-                        {order.customerName || order.customerId}
-                      </div>
-                    </TableCell>
-                    <TableCell data-testid={`text-stockmodel-${order.orderId}`}>
-                      <Badge variant="outline">{order.stockModelDisplayName || order.stockModelId}</Badge>
-                    </TableCell>
-                    <TableCell data-testid={`text-actionlength-${order.orderId}`}>
-                      {actionLength && actionLength !== 'none' && (
-                        <Badge variant="secondary" className="font-medium">
-                          {actionLength}
-                        </Badge>
-                      )}
-                    </TableCell>
-                    <TableCell data-testid={`text-bottommetal-${order.orderId}`}>
-                      {showBottomMetal && (
-                        <Badge className="bg-blue-100 text-blue-800 border-blue-200 font-semibold">
-                          {bottomMetalDisplay}
-                        </Badge>
-                      )}
-                    </TableCell>
-                    <TableCell data-testid={`text-special-${order.orderId}`}>
-                      <div className="flex flex-col gap-1">
-                        {hasLOP && (
-                          <Badge className="bg-purple-100 text-purple-800 border-purple-200 font-semibold">
-                            LOP
-                          </Badge>
-                        )}
-                        {hasHeavyFill && (
-                          <Badge className="bg-amber-100 text-amber-800 border-amber-200 font-semibold">
-                            Heavy Fill
-                          </Badge>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1">
-                        <Calendar className="w-3 h-3 text-gray-400" />
-                        {new Date(order.dueDate).toLocaleDateString()}
-                      </div>
-                    </TableCell>
-                    <TableCell className={order.isOverdue ? 'text-red-600 font-semibold' : ''}>
-                      {order.daysToDue} days
-                    </TableCell>
-                    <TableCell>
-                      <Badge className={getUrgencyBadgeColor(order.urgencyLevel)}>
-                        {order.urgencyLevel.toUpperCase()}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="font-mono text-sm">
-                      {order.priorityScore}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => movePriority(index, 'up')}
-                          disabled={index === 0 || updatePrioritiesMutation.isPending}
-                        >
-                          <ArrowUp className="w-3 h-3" />
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => movePriority(index, 'down')}
-                          disabled={index === productionQueue.length - 1 || updatePrioritiesMutation.isPending}
-                        >
-                          <ArrowDown className="w-3 h-3" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          )}
+                {productionQueue.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500">
+                    <Package className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+                    <p>No orders in production queue</p>
+                    <p className="text-sm">
+                      Use Auto-Populate to add eligible orders
+                    </p>
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-12">
+                          <Checkbox
+                            checked={
+                              selectedQueueOrders.size ===
+                                productionQueue.length &&
+                              productionQueue.length > 0
+                            }
+                            onCheckedChange={handleSelectAllQueueOrders}
+                          />
+                        </TableHead>
+                        <TableHead className="w-20">Priority</TableHead>
+                        <TableHead>Order ID</TableHead>
+                        <TableHead>Customer</TableHead>
+                        <TableHead>Model</TableHead>
+                        <TableHead>Stock Model</TableHead>
+                        <TableHead>Action Length</TableHead>
+                        <TableHead>Bottom Metal</TableHead>
+                        <TableHead>Due Date</TableHead>
+                        <TableHead>Days to Due</TableHead>
+                        <TableHead>Urgency</TableHead>
+                        <TableHead>Score</TableHead>
+                        <TableHead className="w-32">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {productionQueue.map((order, index) => {
+                        // Get action length
+                        let actionLength = order.features?.action_length;
+                        if (!actionLength || actionLength === 'none') {
+                          // Try to derive from action_inlet
+                          const actionInlet = order.features?.action_inlet;
+                          if (actionInlet) {
+                            if (actionInlet.toLowerCase().includes('short'))
+                              actionLength = 'Short';
+                            else if (actionInlet.toLowerCase().includes('long'))
+                              actionLength = 'Long';
+                          }
+                        }
+
+                        // Check if bottom metal contains "adl"
+                        const bottomMetal = order.features?.bottom_metal;
+                        const showBottomMetal =
+                          bottomMetal &&
+                          typeof bottomMetal === 'string' &&
+                          bottomMetal.toLowerCase().includes('adl');
+                        const bottomMetalDisplay = showBottomMetal
+                          ? bottomMetal.replace(/_/g, ' ').toUpperCase()
+                          : '';
+
+                        return (
+                          <TableRow
+                            key={order.orderId}
+                            className={order.isOverdue ? 'bg-red-50' : ''}
+                          >
+                            <TableCell>
+                              <Checkbox
+                                checked={selectedQueueOrders.has(order.orderId)}
+                                onCheckedChange={() =>
+                                  handleToggleOrderSelection(order.orderId)
+                                }
+                              />
+                            </TableCell>
+                            <TableCell className="font-bold text-center">
+                              #{order.queuePosition}
+                            </TableCell>
+                            <TableCell className="font-medium">
+                              <div>
+                                {order.fbOrderNumber || order.orderId}
+                                {order.fbOrderNumber && (
+                                  <div className="text-xs text-gray-500">
+                                    {order.orderId}
+                                  </div>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-1">
+                                <User className="w-3 h-3 text-gray-400" />
+                                {order.customerName || order.customerId}
+                              </div>
+                            </TableCell>
+                            <TableCell>{order.modelId}</TableCell>
+                            <TableCell>
+                              <Badge variant="outline">
+                                {order.stockModelId}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              {actionLength && actionLength !== 'none' && (
+                                <Badge
+                                  variant="secondary"
+                                  className="font-medium"
+                                >
+                                  {actionLength}
+                                </Badge>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {showBottomMetal && (
+                                <Badge className="bg-blue-100 text-blue-800 border-blue-200 font-semibold">
+                                  {bottomMetalDisplay}
+                                </Badge>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-1">
+                                <Calendar className="w-3 h-3 text-gray-400" />
+                                {new Date(order.dueDate).toLocaleDateString()}
+                              </div>
+                            </TableCell>
+                            <TableCell
+                              className={
+                                order.isOverdue
+                                  ? 'text-red-600 font-semibold'
+                                  : ''
+                              }
+                            >
+                              {order.daysToDue} days
+                            </TableCell>
+                            <TableCell>
+                              <Badge
+                                className={getUrgencyBadgeColor(
+                                  order.urgencyLevel
+                                )}
+                              >
+                                {order.urgencyLevel.toUpperCase()}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="font-mono text-sm">
+                              {order.priorityScore}
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-1">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => movePriority(index, 'up')}
+                                  disabled={
+                                    index === 0 ||
+                                    updatePrioritiesMutation.isPending
+                                  }
+                                >
+                                  <ArrowUp className="w-3 h-3" />
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => movePriority(index, 'down')}
+                                  disabled={
+                                    index === productionQueue.length - 1 ||
+                                    updatePrioritiesMutation.isPending
+                                  }
+                                >
+                                  <ArrowDown className="w-3 h-3" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                )}
               </CardContent>
             </AccordionContent>
           </Card>

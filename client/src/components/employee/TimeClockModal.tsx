@@ -1,6 +1,4 @@
 import { useState } from 'react';
-import { Clock, LogIn, LogOut, X } from 'lucide-react';
-
 import {
   Dialog,
   DialogContent,
@@ -15,6 +13,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
+import { Clock, LogIn, LogOut, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import useTimeClock from '@/hooks/useTimeClock';
 

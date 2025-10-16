@@ -1,27 +1,5 @@
 import React, { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import {
-  Users,
-  Search,
-  Plus,
-  Edit,
-  Trash2,
-  Mail,
-  Phone,
-  Building,
-  MapPin,
-  Filter,
-  Download,
-  Upload,
-  UserCheck,
-  UserPlus,
-  UserX,
-  AlertCircle,
-  RefreshCw,
-  CheckCircle,
-  FileText,
-} from 'lucide-react';
-
 import { apiRequest } from '@/lib/queryClient';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -46,6 +24,27 @@ import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import {
+  Users,
+  Search,
+  Plus,
+  Edit,
+  Trash2,
+  Mail,
+  Phone,
+  Building,
+  MapPin,
+  Filter,
+  Download,
+  Upload,
+  UserCheck,
+  UserPlus,
+  UserX,
+  AlertCircle,
+  RefreshCw,
+  CheckCircle,
+  FileText,
+} from 'lucide-react';
 import {
   Table,
   TableBody,

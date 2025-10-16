@@ -1,6 +1,9 @@
-import { createServer, type Server } from 'http';
-
 import type { Express } from 'express';
+import { createServer, type Server } from 'http';
+import { storage } from './storage';
+import { generateP1OrderId } from './utils/orderIdGenerator';
+
+// SmartyStreets direct API calls
 import axios from 'axios';
 import {
   insertCSVDataSchema,
@@ -29,11 +32,6 @@ import {
   insertCommunicationLogSchema,
   insertPdfDocumentSchema,
 } from '@shared/schema';
-
-import { storage } from './storage';
-import { generateP1OrderId } from './utils/orderIdGenerator';
-
-// SmartyStreets direct API calls
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // CSV Data routes
@@ -1132,10 +1130,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const result = insertCustomerSchema.safeParse(req.body);
       if (!result.success) {
-        return res.status(400).json({
-          error: 'Invalid customer data',
-          details: result.error.issues,
-        });
+        return res
+          .status(400)
+          .json({
+            error: 'Invalid customer data',
+            details: result.error.issues,
+          });
       }
 
       const customer = await storage.createCustomer(result.data);
@@ -1151,10 +1151,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const id = parseInt(req.params.id);
       const result = insertCustomerSchema.partial().safeParse(req.body);
       if (!result.success) {
-        return res.status(400).json({
-          error: 'Invalid customer data',
-          details: result.error.issues,
-        });
+        return res
+          .status(400)
+          .json({
+            error: 'Invalid customer data',
+            details: result.error.issues,
+          });
       }
 
       const customer = await storage.updateCustomer(id, result.data);
@@ -1493,9 +1495,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { orderId, via, message } = req.body;
       if (!orderId || !via || !message) {
-        return res.status(400).json({
-          error: 'Order ID, communication method, and message are required',
-        });
+        return res
+          .status(400)
+          .json({
+            error: 'Order ID, communication method, and message are required',
+          });
       }
 
       const mockLog = {

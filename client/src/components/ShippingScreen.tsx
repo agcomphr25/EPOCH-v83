@@ -1,7 +1,5 @@
 import * as React from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { Truck, Package, FileText, Check, Clock } from 'lucide-react';
-
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
@@ -23,6 +21,7 @@ import {
 } from '@/components/ui/dialog';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Truck, Package, FileText, Check, Clock } from 'lucide-react';
 
 type OrderRow = {
   id: number;

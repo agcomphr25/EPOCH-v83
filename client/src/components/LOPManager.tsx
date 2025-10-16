@@ -1,13 +1,10 @@
 import React from 'react';
-import { Zap } from 'lucide-react';
-
 import {
   scheduleLOPAdjustments,
   identifyLOPOrders,
   getLOPStatus,
   needsImmediateLOPAttention,
 } from '../utils/lopScheduler';
-
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -16,6 +13,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import { Zap } from 'lucide-react';
 import { getDisplayOrderId } from '@/lib/orderUtils';
 
 interface LOPManagerProps {

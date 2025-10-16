@@ -1,7 +1,5 @@
-import { createServer, type Server } from 'http';
-
 import { Express } from 'express';
-
+import { createServer, type Server } from 'http';
 import employeesRoutes from './employees';
 import ordersRoutes from './orders';
 import formsRoutes from './forms';
@@ -60,7 +58,7 @@ export function registerRoutes(app: Express): Server {
   app.use('/api/users', usersRoutes);
 
   // Employee management routes
-  app.use('/api/_employees', employeesRoutes);
+  app.use('/api/employees', employeesRoutes);
 
   // Order management routes
   app.use('/api/orders', ordersRoutes);
@@ -1074,9 +1072,11 @@ export function registerRoutes(app: Express): Server {
       res.json(pos);
     } catch (_error) {
       console._error('🔧 P2 purchase orders bypass _error:', _error);
-      res.status(500).json({
-        _error: 'Failed to fetch P2 purchase orders via bypass route',
-      });
+      res
+        .status(500)
+        .json({
+          _error: 'Failed to fetch P2 purchase orders via bypass route',
+        });
     }
   });
 
@@ -1151,7 +1151,7 @@ export function registerRoutes(app: Express): Server {
 
       // Generate next 30 work days (Monday-Thursday only)
       const today = new Date();
-      const currentDate = new Date(today);
+      let currentDate = new Date(today);
 
       while (workDays.length < 30) {
         const dayOfWeek = currentDate.getDay();
@@ -1204,9 +1204,11 @@ export function registerRoutes(app: Express): Server {
       res.status(201).json(po);
     } catch (_error) {
       console._error('🔧 P2 purchase order create bypass _error:', _error);
-      res.status(500).json({
-        _error: 'Failed to create P2 purchase order via bypass route',
-      });
+      res
+        .status(500)
+        .json({
+          _error: 'Failed to create P2 purchase order via bypass route',
+        });
     }
   });
 
@@ -1221,9 +1223,11 @@ export function registerRoutes(app: Express): Server {
       res.json(po);
     } catch (_error) {
       console._error('🔧 P2 purchase order update bypass _error:', _error);
-      res.status(500).json({
-        _error: 'Failed to update P2 purchase order via bypass route',
-      });
+      res
+        .status(500)
+        .json({
+          _error: 'Failed to update P2 purchase order via bypass route',
+        });
     }
   });
 
@@ -1237,9 +1241,11 @@ export function registerRoutes(app: Express): Server {
       res.json({ success: true });
     } catch (_error) {
       console._error('🔧 P2 purchase order delete bypass _error:', _error);
-      res.status(500).json({
-        _error: 'Failed to delete P2 purchase order via bypass route',
-      });
+      res
+        .status(500)
+        .json({
+          _error: 'Failed to delete P2 purchase order via bypass route',
+        });
     }
   });
 
@@ -1986,10 +1992,12 @@ export function registerRoutes(app: Express): Server {
             'Failed to parse Python scheduler output:',
             parseError
           );
-          res.status(500).json({
-            _error: 'Failed to parse scheduler output',
-            raw_output: output,
-          });
+          res
+            .status(500)
+            .json({
+              _error: 'Failed to parse scheduler output',
+              raw_output: output,
+            });
         }
       });
 
@@ -3749,7 +3757,7 @@ export function registerRoutes(app: Express): Server {
 
             // Calculate and apply scaling to fit in label
             let estimatedWidth = 0;
-            for (const char of fullText) {
+            for (let char of fullText) {
               if (code39Table[char]) {
                 estimatedWidth += thinWidth * 6 + thickWidth * 3 + interCharGap; // 9 elements per char
               }
@@ -3762,7 +3770,7 @@ export function registerRoutes(app: Express): Server {
             const scaledThick = thickWidth * scale;
             const scaledGap = interCharGap * scale;
 
-            for (const char of fullText) {
+            for (let char of fullText) {
               const pattern = code39Table[char];
               if (pattern) {
                 // Code 39: 9 elements per character (5 bars, 4 spaces)
@@ -4012,7 +4020,7 @@ export function registerRoutes(app: Express): Server {
             const fullText = `*${text.toUpperCase()}*`;
 
             let estimatedWidth = 0;
-            for (const char of fullText) {
+            for (let char of fullText) {
               if (code39Table[char]) {
                 estimatedWidth += thinWidth * 6 + thickWidth * 3 + interCharGap;
               }
@@ -4025,7 +4033,7 @@ export function registerRoutes(app: Express): Server {
             const scaledThick = thickWidth * scale;
             const scaledGap = interCharGap * scale;
 
-            for (const char of fullText) {
+            for (let char of fullText) {
               const pattern = code39Table[char];
               if (pattern) {
                 for (let i = 0; i < pattern.length; i++) {

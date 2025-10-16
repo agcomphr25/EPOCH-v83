@@ -1,7 +1,6 @@
 import { Router } from 'express';
 import multer from 'multer';
-import { eq, and, desc } from 'drizzle-orm';
-
+import bcrypt from 'bcryptjs';
 import { db } from '../../db';
 import {
   trainingModules,
@@ -25,6 +24,7 @@ import {
   type InsertEmployeeQuizAttempt,
   type InsertTrainingMatrix,
 } from '../../schema';
+import { eq, and, desc } from 'drizzle-orm';
 import {
   extractTrainingContent,
   extractTrainingMatrixData,
@@ -409,13 +409,53 @@ router.get('/quiz/attempts/:trainingRecordId', async (req, res) => {
 router.post('/modules/:moduleId/complete', async (req, res) => {
   try {
     const moduleId = parseInt(req.params.moduleId);
-    const { employeeId, employeeName, answers } = req.body;
+    const { employeeId, password, answers } = req.body;
 
     console.log('Quiz completion request:', {
       moduleId,
       employeeId,
-      employeeName,
       answersCount: Object.keys(answers).length,
+    });
+
+    // Validate employee credentials
+    if (!employeeId || !password) {
+      return res.status(400).json({ error: 'Employee ID and password are required' });
+    }
+
+    // Look up user by username (employeeId can be username)
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.username, employeeId))
+      .limit(1);
+
+    if (!user) {
+      return res.status(401).json({ error: 'Invalid employee ID or password' });
+    }
+
+    // Validate password
+    const isValidPassword = await bcrypt.compare(password, user.passwordHash);
+    if (!isValidPassword) {
+      return res.status(401).json({ error: 'Invalid employee ID or password' });
+    }
+
+    // Get employee name from employees table
+    let employeeName = user.username; // Default to username
+    if (user.employeeId) {
+      const [employee] = await db
+        .select()
+        .from(employees)
+        .where(eq(employees.id, user.employeeId))
+        .limit(1);
+      
+      if (employee && employee.name) {
+        employeeName = employee.name;
+      }
+    }
+
+    console.log('User authenticated:', {
+      username: user.username,
+      employeeName,
     });
 
     // Fetch module with questions and options

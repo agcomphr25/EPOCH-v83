@@ -1,7 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { Check, ChevronsUpDown, MapPin } from 'lucide-react';
-import debounce from 'lodash.debounce';
-
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
@@ -18,6 +15,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
+import { Check, ChevronsUpDown, MapPin } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   autocompleteAddress,
@@ -25,6 +23,7 @@ import {
   type AddressData,
 } from '@/utils/addressUtils';
 import { useToast } from '@/hooks/use-toast';
+import debounce from 'lodash.debounce';
 
 interface AddressInputProps {
   label: string;

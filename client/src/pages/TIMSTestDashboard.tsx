@@ -1,4 +1,5 @@
 import React from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Cog,
   Shield,
@@ -10,8 +11,6 @@ import {
   GraduationCap,
 } from 'lucide-react';
 import { Link } from 'wouter';
-
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import PipelineVisualization from '@/components/PipelineVisualization';
 
 export default function TIMSTestDashboard() {

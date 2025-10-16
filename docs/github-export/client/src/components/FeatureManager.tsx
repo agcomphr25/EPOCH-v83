@@ -1,16 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import {
-  Settings,
-  Plus,
-  Edit,
-  Trash2,
-  Save,
-  X,
-  ChevronUp,
-  ChevronDown,
-} from 'lucide-react';
-
 import { apiRequest } from '@/lib/queryClient';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -42,6 +31,16 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import {
+  Settings,
+  Plus,
+  Edit,
+  Trash2,
+  Save,
+  X,
+  ChevronUp,
+  ChevronDown,
+} from 'lucide-react';
 
 interface FeatureOption {
   value: string;

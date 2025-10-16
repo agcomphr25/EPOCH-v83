@@ -1,8 +1,7 @@
 import { Router, Request, Response } from 'express';
-import { z } from 'zod';
-
 import { storage } from '../../storage';
 import { insertKickbackSchema } from '../../schema';
+import { z } from 'zod';
 
 const router = Router();
 

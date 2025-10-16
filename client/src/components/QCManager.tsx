@@ -1,21 +1,5 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import {
-  CheckCircle,
-  XCircle,
-  Clock,
-  Plus,
-  FileText,
-  Settings,
-  Edit,
-  Trash2,
-} from 'lucide-react';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { insertQcSubmissionSchema } from '@shared/schema';
-import { z } from 'zod';
-import type { QcDefinition, QcSubmission } from '@shared/schema';
-
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -50,7 +34,22 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import {
+  CheckCircle,
+  XCircle,
+  Clock,
+  Plus,
+  FileText,
+  Settings,
+  Edit,
+  Trash2,
+} from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { insertQcSubmissionSchema } from '@shared/schema';
+import { z } from 'zod';
+import type { QcDefinition, QcSubmission } from '@shared/schema';
 
 export default function QCManager() {
   const [activeTab, setActiveTab] = useState('submissions');

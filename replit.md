@@ -2,7 +2,9 @@
 
 ## Overview
 
+
 EPOCH v8 is a comprehensive Manufacturing ERP system designed for small manufacturing companies specializing in customizable products. Its primary purpose is to streamline operations, enhance efficiency, and improve scalability through features like end-to-end order management, inventory tracking, an employee portal, and quality control workflows. The project's ambition is to become a leading ERP solution for small-to-medium customizable product manufacturers, offering a full-stack TypeScript PWA with a React frontend and Express backend, deployable to web and mobile platforms.
+
 
 ## User Preferences
 

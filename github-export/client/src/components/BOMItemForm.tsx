@@ -3,10 +3,6 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { Check, ChevronsUpDown } from 'lucide-react';
-import { toast } from 'react-hot-toast';
-import type { InventoryItem } from '@shared/schema';
-
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -40,8 +36,11 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
+import { Check, ChevronsUpDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { apiRequest } from '@/lib/queryClient';
+import { toast } from 'react-hot-toast';
+import type { InventoryItem } from '@shared/schema';
 
 const bomItemSchema = z.object({
   partName: z.string().min(1, 'Part name is required'),

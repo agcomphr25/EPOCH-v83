@@ -1,22 +1,5 @@
 import React, { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import {
-  Upload,
-  Search,
-  FileText,
-  Tag,
-  FolderOpen,
-  Download,
-  Edit3,
-  Trash2,
-  Plus,
-  Filter,
-  Grid,
-  List,
-  Eye,
-  AlertCircle,
-} from 'lucide-react';
-
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -39,6 +22,22 @@ import {
 } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from '@/hooks/use-toast';
+import {
+  Upload,
+  Search,
+  FileText,
+  Tag,
+  FolderOpen,
+  Download,
+  Edit3,
+  Trash2,
+  Plus,
+  Filter,
+  Grid,
+  List,
+  Eye,
+  AlertCircle,
+} from 'lucide-react';
 
 interface Document {
   id: number;

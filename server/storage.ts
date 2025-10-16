@@ -32,6 +32,9 @@ import {
   refundRequests,
   // OEM Priority Settings table
   oemPrioritySettings,
+  // Vendors table
+  vendors,
+  vendorContacts,
   
   // Types
   type Order, type InsertOrder, type CSVData, type InsertCSVData,
@@ -122,6 +125,9 @@ import {
   // Metal accessories types
   metalAccessories,
   type MetalAccessory, type InsertMetalAccessory,
+  // Vendor types
+  type Vendor, type InsertVendor,
+  type VendorContact, type InsertVendorContact,
 
 } from "./schema";
 import { db } from "./db";
@@ -421,6 +427,13 @@ export interface IStorage {
   createCustomer(data: InsertCustomer): Promise<Customer>;
   updateCustomer(id: number, data: Partial<InsertCustomer>): Promise<Customer>;
   deleteCustomer(id: number): Promise<void>;
+
+  // Vendor management methods
+  getAllVendors(params?: { search?: string; approved?: string; evaluated?: string; evalFrom?: string; evalTo?: string; sort?: string; page?: number; pageSize?: number }): Promise<{ data: Vendor[]; meta: { page: number; pageSize: number; total: number; pageCount: number } }>;
+  getVendor(id: number): Promise<Vendor | undefined>;
+  createVendor(data: InsertVendor): Promise<Vendor>;
+  updateVendor(id: number, data: Partial<InsertVendor>): Promise<Vendor>;
+  deleteVendor(id: number): Promise<void>;
 
   // Module 8: Customer Addresses CRUD
   getAllAddresses(): Promise<CustomerAddress[]>;
@@ -3764,6 +3777,141 @@ export class DatabaseStorage implements IStorage {
     await db.update(customers)
       .set({ isActive: false })
       .where(eq(customers.id, id));
+  }
+
+  // Vendor management methods
+  async getAllVendors(params?: { search?: string; approved?: string; evaluated?: string; evalFrom?: string; evalTo?: string; sort?: string; page?: number; pageSize?: number }): Promise<{ data: Vendor[]; meta: { page: number; pageSize: number; total: number; pageCount: number } }> {
+    const {
+      search = '',
+      approved = 'any',
+      evaluated = 'any',
+      evalFrom,
+      evalTo,
+      sort = 'createdAt:desc',
+      page = 1,
+      pageSize = 10
+    } = params || {};
+
+    const whereClauses: any[] = [eq(vendors.isActive, true)];
+
+    // Search filter
+    if (search && search.trim()) {
+      const searchTerm = `%${search.trim()}%`;
+      whereClauses.push(
+        or(
+          ilike(vendors.name, searchTerm),
+          ilike(vendors.contactPerson, searchTerm),
+          ilike(vendors.email, searchTerm),
+          ilike(vendors.phone, searchTerm),
+          ilike(vendors.address, searchTerm)
+        )
+      );
+    }
+
+    // Approved filter
+    if (approved !== 'any') {
+      whereClauses.push(eq(vendors.approved, approved === 'true'));
+    }
+
+    // Evaluated filter
+    if (evaluated !== 'any') {
+      whereClauses.push(eq(vendors.evaluated, evaluated === 'true'));
+    }
+
+    // Evaluation date range filters
+    if (evalFrom) {
+      whereClauses.push(gte(vendors.evaluationDate, evalFrom));
+    }
+    if (evalTo) {
+      whereClauses.push(lte(vendors.evaluationDate, evalTo));
+    }
+
+    const whereExpr = whereClauses.length > 1 ? and(...whereClauses) : whereClauses[0];
+
+    // Parse sort
+    const [sortField, sortDir] = sort.split(':');
+    const sortCol = sortField === 'name' ? vendors.name
+      : sortField === 'approved' ? vendors.approved
+      : sortField === 'evaluated' ? vendors.evaluated
+      : sortField === 'evaluationDate' ? vendors.evaluationDate
+      : sortField === 'updatedAt' ? vendors.updatedAt
+      : vendors.createdAt;
+    const orderBy = sortDir === 'asc' ? asc(sortCol) : desc(sortCol);
+
+    // Calculate offset
+    const offset = (page - 1) * pageSize;
+
+    // Execute queries
+    const [data, [countResult]] = await Promise.all([
+      db.select().from(vendors).where(whereExpr).orderBy(orderBy).limit(pageSize).offset(offset),
+      db.select({ count: sql<number>`count(*)` }).from(vendors).where(whereExpr)
+    ]);
+
+    const total = Number(countResult.count);
+    const pageCount = Math.ceil(total / pageSize) || 1;
+
+    return {
+      data,
+      meta: { page, pageSize, total, pageCount }
+    };
+  }
+
+  async getVendor(id: number): Promise<Vendor | undefined> {
+    const [vendor] = await db
+      .select()
+      .from(vendors)
+      .where(eq(vendors.id, id))
+      .limit(1);
+    return vendor;
+  }
+
+  async createVendor(data: InsertVendor): Promise<Vendor> {
+    const [vendor] = await db.insert(vendors).values(data).returning();
+    return vendor;
+  }
+
+  async updateVendor(id: number, data: Partial<InsertVendor>): Promise<Vendor> {
+    const [vendor] = await db.update(vendors)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(vendors.id, id))
+      .returning();
+    return vendor;
+  }
+
+  async deleteVendor(id: number): Promise<void> {
+    // Soft delete - just mark as inactive
+    await db.update(vendors)
+      .set({ isActive: false })
+      .where(eq(vendors.id, id));
+  }
+
+  // Vendor Contacts CRUD
+  async getVendorContacts(vendorId: number): Promise<VendorContact[]> {
+    return await db
+      .select()
+      .from(vendorContacts)
+      .where(and(eq(vendorContacts.vendorId, vendorId), eq(vendorContacts.isActive, true)))
+      .orderBy(desc(vendorContacts.isPrimary), vendorContacts.name);
+  }
+
+  async createVendorContact(data: InsertVendorContact): Promise<VendorContact> {
+    const [contact] = await db.insert(vendorContacts).values(data).returning();
+    return contact;
+  }
+
+  async updateVendorContact(id: number, data: Partial<InsertVendorContact>): Promise<VendorContact> {
+    const [contact] = await db.update(vendorContacts)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(vendorContacts.id, id))
+      .returning();
+    return contact;
+  }
+
+  async deleteVendorContact(id: number): Promise<void> {
+    // Soft delete - just mark as inactive
+    await db.update(vendorContacts)
+      .set({ isActive: false })
+      .where(eq(vendorContacts.id, id));
   }
 
   // Module 8: Customer Addresses CRUD

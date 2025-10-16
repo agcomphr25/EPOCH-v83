@@ -86,6 +86,14 @@ The application adopts a monorepo structure utilizing a full-stack TypeScript ap
 
 ## Recent Changes
 
+### October 16, 2025 - Customer Satisfaction Survey Date Display Enhancement
+- **Enhanced Survey Responses Display**: Survey Responses tab now displays user-selected survey date (surveyDate) instead of submission timestamp
+- **Database Schema**: Added `survey_date` timestamp column to `customer_satisfaction_responses` table in both root and server schema files
+- **Backend Updates**: API endpoints now handle surveyDate field conversion (ISO string to Date object) and include it in response payload
+- **Frontend Display Logic**: Implemented fallback priority: surveyDate → submittedAt → createdAt to ensure dates display for all responses (legacy and new)
+- **Schema Consistency**: Critical fix applied to synchronize both schema.ts files (root and server/schema.ts) to prevent Drizzle ORM caching issues
+- **Status**: ✅ Fully functional and architect-approved
+
 ### October 16, 2025 - Magic Link Authentication System Verified & Integrated
 - **Added passwordless authentication system** for secure customer interactions
 - **Security Features**: 

@@ -52,6 +52,7 @@ interface SurveyResponse {
   aggregateScore?: number;
   responseTimeSeconds?: number;
   isComplete: boolean;
+  surveyDate?: string;
   submittedAt?: string;
   createdAt: string;
 }
@@ -497,7 +498,7 @@ export default function CustomerSatisfaction() {
                         </Badge>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {response.submittedAt ? formatDate(response.submittedAt) : formatDate(response.createdAt)}
+                        {response.surveyDate ? formatDate(response.surveyDate) : (response.submittedAt ? formatDate(response.submittedAt) : formatDate(response.createdAt))}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <div className="flex space-x-2">

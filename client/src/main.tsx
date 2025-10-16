@@ -6,7 +6,6 @@ import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'react-hot-toast';
-
 import App from './App.tsx';
 import './index.css';
 
@@ -22,11 +21,8 @@ import './index.css';
 (window as any).useContext = React.useContext;
 
 // Enhanced error tracking for deployment debugging
-const globalErrors: Array<{
-  timestamp: string;
-  message: string;
-  type: string;
-}> = [];
+let globalErrors: Array<{ timestamp: string; message: string; type: string }> =
+  [];
 const originalConsoleError = console.error;
 console.error = function (...args) {
   globalErrors.push({

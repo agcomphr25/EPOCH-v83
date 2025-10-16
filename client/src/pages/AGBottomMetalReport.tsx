@@ -1,15 +1,5 @@
 import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import {
-  Download,
-  FileText,
-  Filter,
-  DollarSign,
-  TrendingUp,
-  Package,
-} from 'lucide-react';
-import { format } from 'date-fns';
-
 import { apiRequest } from '@/lib/queryClient';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -22,6 +12,15 @@ import {
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+  Download,
+  FileText,
+  Filter,
+  DollarSign,
+  TrendingUp,
+  Package,
+} from 'lucide-react';
+import { format } from 'date-fns';
 
 interface Order {
   id: number;

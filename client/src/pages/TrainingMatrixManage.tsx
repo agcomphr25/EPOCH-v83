@@ -1,18 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import {
-  Plus,
-  Edit,
-  Trash2,
-  CheckCircle2,
-  Circle,
-  Calendar,
-  Users,
-  BookOpen,
-  Bell,
-} from 'lucide-react';
-
-import {
   Card,
   CardContent,
   CardDescription,
@@ -50,6 +38,17 @@ import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
+import {
+  Plus,
+  Edit,
+  Trash2,
+  CheckCircle2,
+  Circle,
+  Calendar,
+  Users,
+  BookOpen,
+  Bell,
+} from 'lucide-react';
 
 type Employee = {
   id: number;

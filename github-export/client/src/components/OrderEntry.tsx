@@ -1,17 +1,4 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
-import {
-  Package,
-  Users,
-  ChevronDown,
-  Send,
-  CheckCircle,
-  Check,
-  ChevronsUpDown,
-} from 'lucide-react';
-import debounce from 'lodash.debounce';
-import { useLocation, useRoute } from 'wouter';
-import type { Customer } from '@shared/schema';
-
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -46,12 +33,24 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
-import { useToast } from '@/hooks/use-toast';
-// @ts-ignore
 
+import { useToast } from '@/hooks/use-toast';
+import {
+  Package,
+  Users,
+  ChevronDown,
+  Send,
+  CheckCircle,
+  Check,
+  ChevronsUpDown,
+} from 'lucide-react';
+// @ts-ignore
+import debounce from 'lodash.debounce';
+import { useLocation, useRoute } from 'wouter';
 import CustomerSearchInput from '@/components/CustomerSearchInput';
 import PaymentManager from '@/components/PaymentManager';
 import { OrderAttachments } from '@/components/OrderAttachments';
+import type { Customer } from '@shared/schema';
 import {
   useFeatureValidation,
   useFeatureStateValidation,

@@ -1,8 +1,5 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { eq, desc } from 'drizzle-orm';
-import AuthorizeNet from 'authorizenet';
-
 import { db } from '../../db';
 import {
   payments,
@@ -12,7 +9,9 @@ import {
   insertPaymentSchema,
   insertCreditCardTransactionSchema,
 } from '../../schema';
+import { eq, desc } from 'drizzle-orm';
 // @ts-ignore - AuthorizeNet doesn't have proper TypeScript definitions
+import AuthorizeNet from 'authorizenet';
 
 const router = Router();
 

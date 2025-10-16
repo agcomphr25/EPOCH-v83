@@ -1,17 +1,5 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import {
-  Clock,
-  Edit,
-  Trash2,
-  Plus,
-  Search,
-  Calendar,
-  Filter,
-} from 'lucide-react';
-import { format } from 'date-fns';
-import type { TimeClockEntry, Employee } from '@shared/schema';
-
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -46,7 +34,18 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
+import {
+  Clock,
+  Edit,
+  Trash2,
+  Plus,
+  Search,
+  Calendar,
+  Filter,
+} from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { format } from 'date-fns';
+import type { TimeClockEntry, Employee } from '@shared/schema';
 
 interface TimeClockAdminProps {
   className?: string;

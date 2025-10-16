@@ -1,12 +1,4 @@
 import React, { useState } from 'react';
-import {
-  Mail,
-  MessageSquare,
-  Send,
-  CheckCircle,
-  AlertTriangle,
-} from 'lucide-react';
-
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -23,6 +15,13 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
+import {
+  Mail,
+  MessageSquare,
+  Send,
+  CheckCircle,
+  AlertTriangle,
+} from 'lucide-react';
 import {
   sendOrderConfirmation,
   sendShippingNotification,

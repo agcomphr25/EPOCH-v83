@@ -1,7 +1,5 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Package, Plus, Save, Edit, Trash2, Eye } from 'lucide-react';
-
 import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
@@ -33,6 +31,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import { Package, Plus, Save, Edit, Trash2, Eye } from 'lucide-react';
 
 interface StockModel {
   id: string;

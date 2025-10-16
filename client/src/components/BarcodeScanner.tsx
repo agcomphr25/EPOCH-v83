@@ -1,4 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
 import {
   Scan,
   Package,
@@ -12,14 +17,8 @@ import {
   FileText,
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
-import { useLocation } from 'wouter';
-
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
 import { apiRequest } from '@/lib/queryClient';
+import { useLocation } from 'wouter';
 import { formatOrderDetails } from '@/components/OrderTooltip';
 import { useDeviceDetection } from '@/hooks/useDeviceDetection';
 import { useBarcodeInput } from '@/hooks/useBarcodeInput';

@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Calendar, Clock, AlertTriangle, CheckCircle } from 'lucide-react';
-
 import {
   createLayupSchedulerService,
   ScheduledOrder,
@@ -10,10 +12,6 @@ import {
   PriorityOrder,
 } from '../../../shared/services/OrderPriorityService';
 import { Order } from '../../../shared/schema';
-
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 // Sample data for demonstration
 const sampleOrders: Order[] = [

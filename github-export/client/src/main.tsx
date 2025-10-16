@@ -3,7 +3,6 @@ import './react-refresh-fix';
 
 import React, { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-
 import './index.css';
 import App from './App';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -20,11 +19,8 @@ import ErrorBoundary from './components/ErrorBoundary';
 (window as any).useContext = React.useContext;
 
 // Enhanced error tracking for deployment debugging
-const globalErrors: Array<{
-  timestamp: string;
-  message: string;
-  type: string;
-}> = [];
+let globalErrors: Array<{ timestamp: string; message: string; type: string }> =
+  [];
 const originalConsoleError = console.error;
 console.error = function (...args) {
   globalErrors.push({

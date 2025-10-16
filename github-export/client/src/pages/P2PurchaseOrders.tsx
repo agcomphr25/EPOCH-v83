@@ -1,10 +1,9 @@
 import { useState } from 'react';
-import { Building2, FileText, Package } from 'lucide-react';
-
 import { P2CustomerManager } from '@/components/P2CustomerManager';
 import { P2POManager } from '@/components/P2POManager';
 import { P2POItemsManager } from '@/components/P2POItemsManager';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Building2, FileText, Package } from 'lucide-react';
 
 type ViewMode = 'customers' | 'orders' | 'items';
 

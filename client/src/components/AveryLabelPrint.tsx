@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import JsBarcode from 'jsbarcode';
-import { Printer, Package, Calendar, User } from 'lucide-react';
-
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Printer, Package, Calendar, User } from 'lucide-react';
 
 interface AveryLabelPrintProps {
   orderId: string;

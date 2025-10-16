@@ -1,21 +1,4 @@
 import { useState, useEffect } from 'react';
-import { useQuery, useMutation } from '@tanstack/react-query';
-import {
-  Truck,
-  Package,
-  Search,
-  Filter,
-  Send,
-  CheckCircle,
-  Clock,
-  Download,
-  FileText,
-  DollarSign,
-  ExternalLink,
-  Plus,
-  Edit3,
-} from 'lucide-react';
-
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -43,7 +26,22 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
-
+import { useQuery, useMutation } from '@tanstack/react-query';
+import {
+  Truck,
+  Package,
+  Search,
+  Filter,
+  Send,
+  CheckCircle,
+  Clock,
+  Download,
+  FileText,
+  DollarSign,
+  ExternalLink,
+  Plus,
+  Edit3,
+} from 'lucide-react';
 // Removed ShippingTracker import since we're using the simpler Track Order button approach
 // Removed UPSLabelCreator import since we're now using Track Order instead of Create Label
 import { useToast } from '@/hooks/use-toast';

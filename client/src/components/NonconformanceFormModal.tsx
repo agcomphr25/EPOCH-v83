@@ -1,12 +1,4 @@
 import React, { useState, useEffect } from 'react';
-
-import {
-  createRecord,
-  updateRecord,
-  fetchOne,
-} from '../utils/nonconformanceUtils';
-import { apiRequest } from '../lib/queryClient';
-
 import {
   Dialog,
   DialogContent,
@@ -25,7 +17,13 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import {
+  createRecord,
+  updateRecord,
+  fetchOne,
+} from '../utils/nonconformanceUtils';
 import { useToast } from '@/hooks/use-toast';
+import { apiRequest } from '../lib/queryClient';
 
 const issueOptions = [
   'Customer Request for Additional Work',

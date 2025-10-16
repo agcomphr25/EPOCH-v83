@@ -1,7 +1,6 @@
 import { Router, Request, Response } from 'express';
-import { insertPOProductSchema } from '@shared/schema';
-
 import { storage } from '../../storage';
+import { insertPOProductSchema } from '@shared/schema';
 
 const router = Router();
 
@@ -12,10 +11,12 @@ router.get('/', async (req: Request, res: Response) => {
     res.json(products);
   } catch (error) {
     console.error('Error retrieving PO products:', error);
-    res.status(500).json({
-      error: 'Failed to fetch PO products',
-      details: (error as any).message,
-    });
+    res
+      .status(500)
+      .json({
+        error: 'Failed to fetch PO products',
+        details: (error as any).message,
+      });
   }
 });
 
@@ -35,10 +36,12 @@ router.get('/:id', async (req: Request, res: Response) => {
     res.json(product);
   } catch (error) {
     console.error('Error retrieving PO product:', error);
-    res.status(500).json({
-      error: 'Failed to fetch PO product',
-      details: (error as any).message,
-    });
+    res
+      .status(500)
+      .json({
+        error: 'Failed to fetch PO product',
+        details: (error as any).message,
+      });
   }
 });
 
@@ -50,10 +53,12 @@ router.post('/', async (req: Request, res: Response) => {
     res.status(201).json(product);
   } catch (error) {
     console.error('Error creating PO product:', error);
-    res.status(500).json({
-      error: 'Failed to create PO product',
-      details: (error as any).message,
-    });
+    res
+      .status(500)
+      .json({
+        error: 'Failed to create PO product',
+        details: (error as any).message,
+      });
   }
 });
 
@@ -70,10 +75,12 @@ router.put('/:id', async (req: Request, res: Response) => {
     res.json(product);
   } catch (error) {
     console.error('Error updating PO product:', error);
-    res.status(500).json({
-      error: 'Failed to update PO product',
-      details: (error as any).message,
-    });
+    res
+      .status(500)
+      .json({
+        error: 'Failed to update PO product',
+        details: (error as any).message,
+      });
   }
 });
 
@@ -89,10 +96,12 @@ router.delete('/:id', async (req: Request, res: Response) => {
     res.status(204).send();
   } catch (error) {
     console.error('Error deleting PO product:', error);
-    res.status(500).json({
-      error: 'Failed to delete PO product',
-      details: (error as any).message,
-    });
+    res
+      .status(500)
+      .json({
+        error: 'Failed to delete PO product',
+        details: (error as any).message,
+      });
   }
 });
 

@@ -2860,11 +2860,13 @@ export const customerSatisfactionResponses = pgTable(
     // Calculated scores
     overallSatisfaction: integer('overall_satisfaction'), // 1-5 scale
     npsScore: integer('nps_score'), // 0-10 scale for Net Promoter Score
+    aggregateScore: integer('aggregate_score'), // Sum of all numeric responses
     // Additional metadata
     responseTimeSeconds: integer('response_time_seconds'), // Time to complete survey
     ipAddress: text('ip_address'),
     userAgent: text('user_agent'),
     csrName: text('csr_name'), // Customer Service Representative name
+    surveyDate: timestamp('survey_date'), // Date selected by user in the survey form
     // Status tracking
     isComplete: boolean('is_complete').default(false),
     submittedAt: timestamp('submitted_at'),
@@ -2938,10 +2940,12 @@ export const insertCustomerSatisfactionResponseSchema = createInsertSchema(
     responses: z.record(z.any()).default({}), // Question ID to response mapping
     overallSatisfaction: z.number().min(1).max(5).optional().nullable(),
     npsScore: z.number().min(0).max(10).optional().nullable(),
+    aggregateScore: z.number().optional().nullable(),
     responseTimeSeconds: z.number().optional().nullable(),
     ipAddress: z.string().optional().nullable(),
     userAgent: z.string().optional().nullable(),
     csrName: z.string().optional().nullable(), // Customer Service Representative name
+    surveyDate: z.string().optional().nullable(), // ISO date string - user-selected survey date
     isComplete: z.boolean().default(false),
     submittedAt: z.string().optional().nullable(), // ISO date string
   });

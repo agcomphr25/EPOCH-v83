@@ -166,6 +166,7 @@ router.get('/surveys/:id/responses', async (req, res) => {
         aggregateScore: customerSatisfactionResponses.aggregateScore,
         responseTimeSeconds: customerSatisfactionResponses.responseTimeSeconds,
         csrName: customerSatisfactionResponses.csrName,
+        surveyDate: customerSatisfactionResponses.surveyDate,
         isComplete: customerSatisfactionResponses.isComplete,
         submittedAt: customerSatisfactionResponses.submittedAt,
         createdAt: customerSatisfactionResponses.createdAt,
@@ -201,6 +202,7 @@ router.get('/responses', async (req, res) => {
         aggregateScore: customerSatisfactionResponses.aggregateScore,
         responseTimeSeconds: customerSatisfactionResponses.responseTimeSeconds,
         csrName: customerSatisfactionResponses.csrName,
+        surveyDate: customerSatisfactionResponses.surveyDate,
         isComplete: customerSatisfactionResponses.isComplete,
         submittedAt: customerSatisfactionResponses.submittedAt,
         createdAt: customerSatisfactionResponses.createdAt,
@@ -223,10 +225,11 @@ router.post('/responses', async (req, res) => {
   try {
     const validatedData = insertCustomerSatisfactionResponseSchema.parse(req.body);
     
-    // Convert submittedAt string to Date if provided
+    // Convert date strings to Date objects if provided
     const dataToInsert = {
       ...validatedData,
       submittedAt: validatedData.submittedAt ? new Date(validatedData.submittedAt) : new Date(),
+      surveyDate: validatedData.surveyDate ? new Date(validatedData.surveyDate) : undefined,
       ipAddress: req.ip,
       userAgent: req.get('User-Agent'),
     };
@@ -264,6 +267,7 @@ router.put('/responses/:id', async (req, res) => {
     const dataToUpdate = {
       ...validatedData,
       submittedAt: validatedData.submittedAt ? new Date(validatedData.submittedAt) : undefined,
+      surveyDate: validatedData.surveyDate ? new Date(validatedData.surveyDate) : undefined,
       updatedAt: new Date(),
     };
 
@@ -383,6 +387,101 @@ router.get('/analytics', async (req, res) => {
       .reduce((sum, r) => sum + (r.responseTimeSeconds || 0), 0) / 
       responses.filter(r => r.responseTimeSeconds !== null).length || 0;
 
+    // Calculate question-level analytics
+    const questionScores: Record<string, { question: string; averageScore: number; responseCount: number; monthlyTrends: Array<{ month: string; averageScore: number; count: number }> }> = {};
+    
+    // Get the appropriate survey to extract question text
+    // Use filtered surveyId if provided, otherwise use the active survey
+    let surveyToAnalyze;
+    if (surveyId) {
+      const filteredSurvey = await db
+        .select()
+        .from(customerSatisfactionSurveys)
+        .where(eq(customerSatisfactionSurveys.id, parseInt(surveyId as string)))
+        .limit(1);
+      surveyToAnalyze = filteredSurvey[0];
+    } else {
+      const activeSurvey = await db
+        .select()
+        .from(customerSatisfactionSurveys)
+        .where(eq(customerSatisfactionSurveys.isActive, true))
+        .limit(1);
+      surveyToAnalyze = activeSurvey[0];
+    }
+    
+    const surveyQuestions = surveyToAnalyze?.questions || [];
+    const questionMap = new Map(surveyQuestions.map((q: any) => [q.id, q.question]));
+    
+    // Track scores by question ID
+    const questionData: Record<string, number[]> = {};
+    
+    responses.forEach(response => {
+      if (response.responses && typeof response.responses === 'object') {
+        Object.entries(response.responses).forEach(([questionId, value]) => {
+          // Only track numeric ratings
+          if (typeof value === 'number' && value >= 1 && value <= 10) {
+            if (!questionData[questionId]) {
+              questionData[questionId] = [];
+            }
+            questionData[questionId].push(value);
+          }
+        });
+      }
+    });
+    
+    // Calculate averages for each question
+    Object.entries(questionData).forEach(([questionId, scores]) => {
+      const avgScore = scores.reduce((sum, score) => sum + score, 0) / scores.length;
+      questionScores[questionId] = {
+        question: questionMap.get(questionId) || questionId,
+        averageScore: Math.round(avgScore * 100) / 100,
+        responseCount: scores.length,
+        monthlyTrends: []
+      };
+    });
+    
+    // Calculate 3-month trends for each question
+    const now = new Date();
+    const threeMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 3, 1);
+    
+    // Group responses by month
+    for (let monthOffset = 0; monthOffset < 3; monthOffset++) {
+      const monthDate = new Date(now.getFullYear(), now.getMonth() - monthOffset, 1);
+      const monthStart = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
+      // Set monthEnd to the start of the next month (exclusive upper bound)
+      const nextMonthStart = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 1);
+      const monthLabel = monthDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+      
+      const monthResponses = responses.filter(r => {
+        const responseDate = new Date(r.createdAt);
+        return responseDate >= monthStart && responseDate < nextMonthStart;
+      });
+      
+      // Calculate scores for each question in this month
+      Object.keys(questionScores).forEach(questionId => {
+        const monthScores: number[] = [];
+        
+        monthResponses.forEach(response => {
+          if (response.responses && typeof response.responses === 'object') {
+            const value = response.responses[questionId];
+            if (typeof value === 'number' && value >= 1 && value <= 10) {
+              monthScores.push(value);
+            }
+          }
+        });
+        
+        const avgScore = monthScores.length > 0 
+          ? monthScores.reduce((sum, score) => sum + score, 0) / monthScores.length 
+          : 0;
+        
+        questionScores[questionId].monthlyTrends.unshift({
+          month: monthLabel,
+          averageScore: Math.round(avgScore * 100) / 100,
+          count: monthScores.length
+        });
+      });
+    }
+
     const analytics = {
       totalResponses,
       completedResponses,
@@ -396,6 +495,10 @@ router.get('/analytics', async (req, res) => {
         detractors
       },
       averageResponseTimeMinutes: Math.round((averageResponseTime / 60) * 100) / 100,
+      questionScores: Object.entries(questionScores).map(([id, data]) => ({
+        questionId: id,
+        ...data
+      }))
     };
 
     res.json(analytics);

@@ -1876,7 +1876,12 @@ export const vendors = pgTable("vendors", {
   email: text("email"),
   additionalEmail: text("additional_email"),
   phone: text("phone"),
-  address: text("address"),
+  address: text("address"), // Legacy field - kept for backward compatibility
+  street: text("street"),
+  city: text("city"),
+  state: text("state"),
+  zipCode: text("zip_code"),
+  country: text("country").default("United States"),
   approved: boolean("approved").notNull().default(false),
   evaluated: boolean("evaluated").notNull().default(false),
   evaluationDate: date("evaluation_date"),
@@ -1988,6 +1993,11 @@ export const insertVendorSchema = createInsertSchema(vendors).omit({
   contactPerson: z.string().optional(),
   phone: z.string().optional(),
   address: z.string().optional(),
+  street: z.string().optional(),
+  city: z.string().optional(),
+  state: z.string().optional(),
+  zipCode: z.string().optional(),
+  country: z.string().optional(),
   approved: z.boolean().default(false),
   evaluated: z.boolean().default(false),
   evaluationDate: z.string().optional().nullable(),
@@ -2846,6 +2856,7 @@ export const customerSatisfactionResponses = pgTable("customer_satisfaction_resp
   ipAddress: text("ip_address"),
   userAgent: text("user_agent"),
   csrName: text("csr_name"), // Customer Service Representative name
+  surveyDate: timestamp("survey_date"), // Date selected by user in the survey form
   // Status tracking
   isComplete: boolean("is_complete").default(false),
   submittedAt: timestamp("submitted_at"),
@@ -2900,6 +2911,7 @@ export const insertCustomerSatisfactionResponseSchema = createInsertSchema(custo
   ipAddress: z.string().optional().nullable(),
   userAgent: z.string().optional().nullable(),
   csrName: z.string().optional().nullable(), // Customer Service Representative name
+  surveyDate: z.string().optional().nullable(), // ISO date string - user-selected survey date
   isComplete: z.boolean().default(false),
   submittedAt: z.string().optional().nullable(), // ISO date string
 });

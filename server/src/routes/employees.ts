@@ -639,4 +639,143 @@ router.post('/:id/capabilities', async (req: Request, res: Response) => {
   }
 });
 
+// Import Certifications from PDF using Azure Document Intelligence
+router.post(
+  '/import-certifications-pdf',
+  uploadMiddleware.single('file'),
+  async (req: Request, res: Response) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: 'No file uploaded' });
+      }
+
+      console.log('📄 Extracting certification data from PDF...');
+      
+      // Import the Azure Document Intelligence function
+      const { extractTrainingMatrixData } = await import('../lib/azureDocumentIntelligence');
+      
+      // Extract data from PDF
+      const extractedData = await extractTrainingMatrixData(req.file.buffer);
+      console.log(`✅ Extracted ${extractedData.entries.length} certification entries from PDF`);
+
+      // Get all employees and certifications for mapping
+      const [employeesResult, certificationsResult] = await Promise.all([
+        pool.query`SELECT id, name FROM employees WHERE is_active = true`,
+        pool.query`SELECT id, name FROM certifications WHERE category = 'DEPARTMENT'`
+      ]);
+
+      const employees = employeesResult.rows;
+      const certifications = certificationsResult.rows;
+
+      // Create mapping helpers
+      const employeeNameToId = new Map<string, number>();
+      employees.forEach((emp: any) => {
+        const normalizedName = emp.name.toLowerCase().trim();
+        employeeNameToId.set(normalizedName, emp.id);
+      });
+
+      const certNameToId = new Map<string, number>();
+      certifications.forEach((cert: any) => {
+        const normalizedName = cert.name.toLowerCase().trim();
+        certNameToId.set(normalizedName, cert.id);
+      });
+
+      // Process extracted entries
+      const importResults = {
+        total: extractedData.entries.length,
+        imported: 0,
+        skipped: 0,
+        errors: [] as string[],
+        details: [] as any[]
+      };
+
+      for (const entry of extractedData.entries) {
+        try {
+          // Map employee name to ID
+          const employeeName = entry.employeeName?.toLowerCase().trim();
+          const employeeId = employeeName ? employeeNameToId.get(employeeName) : null;
+
+          if (!employeeId) {
+            importResults.skipped++;
+            importResults.errors.push(`Employee not found: ${entry.employeeName}`);
+            continue;
+          }
+
+          // Map certification name to ID
+          const certName = entry.trainingName?.toLowerCase().trim();
+          const certificationId = certName ? certNameToId.get(certName) : null;
+
+          if (!certificationId) {
+            importResults.skipped++;
+            importResults.errors.push(`Certification not found: ${entry.trainingName}`);
+            continue;
+          }
+
+          // Check if certification already exists
+          const existingCert = await pool.query`
+            SELECT id FROM employee_certifications 
+            WHERE employee_id = ${employeeId} 
+            AND certification_id = ${certificationId}
+          `;
+
+          if (existingCert.rows.length > 0) {
+            // Update existing certification
+            await pool.query`
+              UPDATE employee_certifications 
+              SET date_obtained = ${entry.lastCompleted},
+                  is_active = true,
+                  updated_at = NOW()
+              WHERE employee_id = ${employeeId} 
+              AND certification_id = ${certificationId}
+            `;
+            importResults.details.push({
+              employee: entry.employeeName,
+              certification: entry.trainingName,
+              action: 'updated',
+              date: entry.lastCompleted
+            });
+          } else {
+            // Insert new certification
+            await pool.query`
+              INSERT INTO employee_certifications (
+                employee_id, 
+                certification_id, 
+                date_obtained, 
+                is_active
+              ) VALUES (
+                ${employeeId}, 
+                ${certificationId}, 
+                ${entry.lastCompleted}, 
+                true
+              )
+            `;
+            importResults.details.push({
+              employee: entry.employeeName,
+              certification: entry.trainingName,
+              action: 'created',
+              date: entry.lastCompleted
+            });
+          }
+
+          importResults.imported++;
+        } catch (error) {
+          importResults.skipped++;
+          importResults.errors.push(
+            `Error processing ${entry.employeeName} - ${entry.trainingName}: ${(error as Error).message}`
+          );
+        }
+      }
+
+      console.log(`✅ Import complete: ${importResults.imported} imported, ${importResults.skipped} skipped`);
+      res.json(importResults);
+    } catch (error) {
+      console.error('Import certifications error:', error);
+      res.status(500).json({ 
+        error: 'Failed to import certifications from PDF',
+        details: (error as Error).message 
+      });
+    }
+  }
+);
+
 export default router;

@@ -131,16 +131,17 @@ router.get('/certifications-matrix', async (req: Request, res: Response) => {
         ec.id as "certificationRecordId",
         ec.date_obtained as "dateEarned",
         ec.expiry_date as "expiryDate",
-        ec.status,
+        COALESCE(ec.is_active, false) as "isActive",
         ec.notes
       FROM employees e
       CROSS JOIN certifications c
       LEFT JOIN employee_certifications ec 
         ON e.id = ec.employee_id AND c.id = ec.certification_id
-      WHERE e.is_active = true AND c.is_active = true
+      WHERE e.is_active = true AND c.is_active = true AND c.category = 'DEPARTMENT'
       ORDER BY e.name, c.name
     `;
 
+    console.log('Certifications matrix result:', result.length, 'rows');
     res.json(result || []);
   } catch (error) {
     console.error('Get certifications matrix error:', error);

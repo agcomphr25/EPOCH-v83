@@ -199,8 +199,8 @@ function App() {
               <ConditionalNavigation />
               <OfflineIndicator />
               <main className="container mx-auto px-4 py-8">
-                <Switch>
-                  <Route path="/" component={Dashboard} />
+                  <Switch>
+                  <Route path="/" component={LoginPage} />
                   <Route path="/order-management" component={OrderManagement} />
                   <Route
                     path="/orders-management"

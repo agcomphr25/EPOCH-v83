@@ -78,6 +78,14 @@ type Evaluation = {
   status: string;
 };
 
+type Employee = {
+  id: number;
+  name: string;
+  jobTitle: string | null;
+  department: string | null;
+  isActive: boolean;
+};
+
 export default function TrainingMatrixView() {
   const [activeTab, setActiveTab] = useState('standards');
   const [searchTerm, setSearchTerm] = useState('');
@@ -89,6 +97,11 @@ export default function TrainingMatrixView() {
   // Dialog states for CRUD
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [editingEntry, setEditingEntry] = useState<any>(null);
+
+  // Fetch all employees
+  const { data: allEmployees, isLoading: employeesLoading } = useQuery<Employee[]>({
+    queryKey: ['/api/employees'],
+  });
 
   const { data: matrixData, isLoading: matrixLoading } = useQuery<
     TrainingMatrixEntry[]
@@ -123,7 +136,7 @@ export default function TrainingMatrixView() {
   };
 
   const renderStandardsTrainingTab = () => {
-    if (matrixLoading) {
+    if (matrixLoading || employeesLoading) {
       return (
         <div className="animate-pulse space-y-4">
           <div className="h-8 bg-gray-200 rounded w-1/4"></div>
@@ -132,26 +145,18 @@ export default function TrainingMatrixView() {
       );
     }
 
-    if (!matrixData || matrixData.length === 0) {
+    if (!allEmployees || allEmployees.length === 0) {
       return (
-        <p className="text-muted-foreground">No training data available.</p>
+        <p className="text-muted-foreground">No employees available.</p>
       );
     }
 
-    // Extract unique employees with their details
-    const employeeMap = new Map<
-      string,
-      { name: string; jobTitle: string | null; department: string | null }
-    >();
-    matrixData.forEach((entry) => {
-      if (entry.employeeName && !employeeMap.has(entry.employeeName)) {
-        employeeMap.set(entry.employeeName, {
-          name: entry.employeeName,
-          jobTitle: entry.jobTitle,
-          department: entry.department,
-        });
-      }
-    });
+    // Use all employees from the employees table
+    const employeeList = allEmployees.map(emp => ({
+      name: emp.name,
+      jobTitle: emp.jobTitle,
+      department: emp.department,
+    }));
 
     // Owners list - these should appear at the bottom
     const owners = ['Dave', 'Angie', 'Matt', 'Laurie'];
@@ -159,7 +164,7 @@ export default function TrainingMatrixView() {
       owners.some((owner) => name.toLowerCase().includes(owner.toLowerCase()));
 
     // Sort employees based on sortOrder, with owners always at the bottom
-    const employees = Array.from(employeeMap.values()).sort((a, b) => {
+    const employees = employeeList.sort((a, b) => {
       const aIsOwner = isOwner(a.name);
       const bIsOwner = isOwner(b.name);
 
@@ -171,11 +176,11 @@ export default function TrainingMatrixView() {
         : b.name.localeCompare(a.name);
     });
 
-    const trainings = Array.from(
-      new Set(matrixData.map((e) => e.trainingName))
-    ).sort((a, b) =>
-      sortOrder === 'asc' ? a.localeCompare(b) : b.localeCompare(a)
-    );
+    const trainings = matrixData && matrixData.length > 0 
+      ? Array.from(new Set(matrixData.map((e) => e.trainingName))).sort((a, b) =>
+          sortOrder === 'asc' ? a.localeCompare(b) : b.localeCompare(a)
+        )
+      : [];
 
     const filteredEmployees =
       viewMode === 'employee'
@@ -196,10 +201,12 @@ export default function TrainingMatrixView() {
         : trainings;
 
     const matrixMap = new Map<string, TrainingMatrixEntry>();
-    matrixData.forEach((entry) => {
-      const key = `${entry.employeeName}-${entry.trainingName}`;
-      matrixMap.set(key, entry);
-    });
+    if (matrixData) {
+      matrixData.forEach((entry) => {
+        const key = `${entry.employeeName}-${entry.trainingName}`;
+        matrixMap.set(key, entry);
+      });
+    }
 
     const getEntry = (employeeName: string, training: string) => {
       return matrixMap.get(`${employeeName}-${training}`);
@@ -495,7 +502,7 @@ export default function TrainingMatrixView() {
   };
 
   const renderCertificationsTab = () => {
-    if (certsLoading) {
+    if (certsLoading || employeesLoading) {
       return (
         <div className="animate-pulse space-y-4">
           <div className="h-8 bg-gray-200 rounded w-1/4"></div>
@@ -504,43 +511,35 @@ export default function TrainingMatrixView() {
       );
     }
 
-    if (!certificationsData || certificationsData.length === 0) {
+    if (!allEmployees || allEmployees.length === 0) {
       return (
         <p className="text-muted-foreground">
-          No certification data available.
+          No employees available.
         </p>
       );
     }
 
-    // Extract unique employees
-    const employeeMap = new Map<
-      string,
-      { name: string; jobTitle: string | null; department: string | null }
-    >();
-    certificationsData.forEach((cert) => {
-      if (cert.employeeName && !employeeMap.has(cert.employeeName)) {
-        employeeMap.set(cert.employeeName, {
-          name: cert.employeeName,
-          jobTitle: cert.jobTitle,
-          department: cert.department,
-        });
-      }
-    });
+    // Use all employees from the employees table
+    const employeeList = allEmployees.map(emp => ({
+      name: emp.name,
+      jobTitle: emp.jobTitle,
+      department: emp.department,
+    }));
 
-    const employees = Array.from(employeeMap.values()).sort((a, b) =>
+    const employees = employeeList.sort((a, b) =>
       sortOrder === 'asc'
         ? a.name.localeCompare(b.name)
         : b.name.localeCompare(a.name)
     );
 
     // Extract unique certifications (filter out nulls)
-    const certifications = Array.from(
-      new Set(certificationsData.map((c) => c.certificationName))
-    )
-      .filter((name) => name !== null && name !== undefined)
-      .sort((a, b) =>
-        sortOrder === 'asc' ? a.localeCompare(b) : b.localeCompare(a)
-      );
+    const certifications = certificationsData && certificationsData.length > 0
+      ? Array.from(new Set(certificationsData.map((c) => c.certificationName)))
+          .filter((name) => name !== null && name !== undefined)
+          .sort((a, b) =>
+            sortOrder === 'asc' ? a.localeCompare(b) : b.localeCompare(a)
+          )
+      : [];
 
     const filteredEmployees = searchTerm
       ? employees.filter((emp) =>
@@ -550,10 +549,12 @@ export default function TrainingMatrixView() {
 
     // Create lookup map
     const certMap = new Map<string, EmployeeCertification>();
-    certificationsData.forEach((cert) => {
-      const key = `${cert.employeeName}-${cert.certificationName}`;
-      certMap.set(key, cert);
-    });
+    if (certificationsData) {
+      certificationsData.forEach((cert) => {
+        const key = `${cert.employeeName}-${cert.certificationName}`;
+        certMap.set(key, cert);
+      });
+    }
 
     const getCert = (employeeName: string, certName: string) => {
       return certMap.get(`${employeeName}-${certName}`);

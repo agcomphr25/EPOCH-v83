@@ -128,8 +128,8 @@ router.get('/certifications-matrix', async (req: Request, res: Response) => {
         e.department as "department",
         c.id as "certificationId",
         c.name as "certificationName",
-        ec.id as "certificationRecordId",
-        ec.date_obtained as "dateEarned",
+        ec.id as "id",
+        ec.date_obtained as "dateObtained",
         ec.expiry_date as "expiryDate",
         COALESCE(ec.is_active, false) as "isActive",
         ec.notes
@@ -953,5 +953,117 @@ router.post(
     }
   }
 );
+
+// Create or update employee certification
+router.post('/certifications', async (req: Request, res: Response) => {
+  try {
+    const { employeeId, certificationId, dateObtained, expiryDate, notes } = req.body;
+
+    if (!employeeId || !certificationId) {
+      return res.status(400).json({ error: 'Employee ID and Certification ID are required' });
+    }
+
+    // Check if certification already exists
+    const existing = await pool.query`
+      SELECT id FROM employee_certifications 
+      WHERE employee_id = ${employeeId} 
+      AND certification_id = ${certificationId}
+    `;
+
+    if (existing.length > 0) {
+      // Update existing
+      await pool.query`
+        UPDATE employee_certifications 
+        SET date_obtained = ${dateObtained || null},
+            expiry_date = ${expiryDate || null},
+            notes = ${notes || null},
+            is_active = ${!!dateObtained},
+            updated_at = NOW()
+        WHERE employee_id = ${employeeId} 
+        AND certification_id = ${certificationId}
+      `;
+      
+      const updated = await pool.query`
+        SELECT * FROM employee_certifications 
+        WHERE employee_id = ${employeeId} 
+        AND certification_id = ${certificationId}
+      `;
+      
+      return res.json(updated[0]);
+    }
+
+    // Create new
+    const result = await pool.query`
+      INSERT INTO employee_certifications (
+        employee_id, 
+        certification_id, 
+        date_obtained,
+        expiry_date,
+        notes,
+        is_active
+      ) VALUES (
+        ${employeeId}, 
+        ${certificationId}, 
+        ${dateObtained || null},
+        ${expiryDate || null},
+        ${notes || null},
+        ${!!dateObtained}
+      )
+      RETURNING *
+    `;
+
+    res.json(result[0]);
+  } catch (error) {
+    console.error('Create certification error:', error);
+    res.status(500).json({ error: 'Failed to create certification' });
+  }
+});
+
+// Update employee certification
+router.patch('/certifications/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { dateObtained, expiryDate, notes, isActive } = req.body;
+
+    await pool.query`
+      UPDATE employee_certifications 
+      SET date_obtained = ${dateObtained !== undefined ? dateObtained : null},
+          expiry_date = ${expiryDate !== undefined ? expiryDate : null},
+          notes = ${notes !== undefined ? notes : null},
+          is_active = ${isActive !== undefined ? isActive : !!dateObtained},
+          updated_at = NOW()
+      WHERE id = ${id}
+    `;
+
+    const updated = await pool.query`
+      SELECT * FROM employee_certifications WHERE id = ${id}
+    `;
+
+    if (updated.length === 0) {
+      return res.status(404).json({ error: 'Certification not found' });
+    }
+
+    res.json(updated[0]);
+  } catch (error) {
+    console.error('Update certification error:', error);
+    res.status(500).json({ error: 'Failed to update certification' });
+  }
+});
+
+// Delete employee certification
+router.delete('/certifications/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    await pool.query`
+      DELETE FROM employee_certifications WHERE id = ${id}
+    `;
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Delete certification error:', error);
+    res.status(500).json({ error: 'Failed to delete certification' });
+  }
+});
 
 export default router;

@@ -902,11 +902,11 @@ export default function TrainingMatrixView() {
               <Button
                 variant="default"
                 size="sm"
-                onClick={() => setShowAddDialog(true)}
-                data-testid="button-add-entry"
+                onClick={() => setLocation('/certification-backlog')}
+                data-testid="button-manage-certifications"
               >
                 <Plus className="h-4 w-4 mr-2" />
-                Add Entry
+                Manage Certifications
               </Button>
             </div>
           </div>

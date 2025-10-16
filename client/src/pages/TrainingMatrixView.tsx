@@ -1,8 +1,8 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { CheckCircle2, Circle, ArrowUpDown, Calendar } from 'lucide-react';
+import { CheckCircle2, Circle, ArrowUpDown, Calendar, Plus, Edit, Trash2, Upload } from 'lucide-react';
 import { useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -13,6 +13,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { useToast } from '@/hooks/use-toast';
+import { queryClient, apiRequest } from '@/lib/queryClient';
+import { useLocation } from 'wouter';
 
 type TrainingMatrixEntry = {
   id: number;
@@ -72,6 +83,12 @@ export default function TrainingMatrixView() {
   const [searchTerm, setSearchTerm] = useState('');
   const [viewMode, setViewMode] = useState<'employee' | 'training'>('employee');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [, setLocation] = useLocation();
+  const { toast } = useToast();
+  
+  // Dialog states for CRUD
+  const [showAddDialog, setShowAddDialog] = useState(false);
+  const [editingEntry, setEditingEntry] = useState<any>(null);
 
   const { data: matrixData, isLoading: matrixLoading } = useQuery<
     TrainingMatrixEntry[]
@@ -870,7 +887,29 @@ export default function TrainingMatrixView() {
     <div className="p-8">
       <Card>
         <CardHeader>
-          <CardTitle>Training Matrix</CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle>Training Matrix</CardTitle>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setLocation('/import-certifications')}
+                data-testid="button-import-certifications"
+              >
+                <Upload className="h-4 w-4 mr-2" />
+                Import Certifications
+              </Button>
+              <Button
+                variant="default"
+                size="sm"
+                onClick={() => setShowAddDialog(true)}
+                data-testid="button-add-entry"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Add Entry
+              </Button>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           <Tabs

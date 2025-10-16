@@ -90,7 +90,14 @@ app.get('/attached_assets/*', (req, res, next) => {
 });
 
 app.use(cookieParser());
-app.use(express.json());
+// Skip JSON parsing for multipart/form-data (file uploads)
+app.use((req, res, next) => {
+  const contentType = req.headers['content-type'] || '';
+  if (contentType.includes('multipart/form-data')) {
+    return next();
+  }
+  express.json()(req, res, next);
+});
 app.use(express.urlencoded({ extended: false }));
 
 // Also add express.static as fallback

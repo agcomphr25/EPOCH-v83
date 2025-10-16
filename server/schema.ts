@@ -684,6 +684,7 @@ export const trainingModules = pgTable('training_modules', {
   certificationId: integer('certification_id').references(
     () => certifications.id
   ),
+  requiredForAll: boolean('required_for_all').default(false), // Indicates if all employees must complete this training
   pdfSource: text('pdf_source'), // URL or path to source PDF if imported
   version: integer('version').default(1),
   isActive: boolean('is_active').default(true),

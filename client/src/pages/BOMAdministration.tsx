@@ -1,6 +1,15 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import {
   Plus,
   Search,
   FileText,
@@ -10,21 +19,9 @@ import {
   Eye,
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import { BomDefinition } from '@shared/schema';
-
+import { apiRequest } from '@/lib/queryClient';
 import { BOMDefinitionForm } from '../components/BOMDefinitionForm';
 import { BOMDetails } from '../components/BOMDetails';
-
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { apiRequest } from '@/lib/queryClient';
 import { Badge } from '@/components/ui/badge';
 import {
   Dialog,
@@ -42,6 +39,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { BomDefinition } from '@shared/schema';
 
 export function BOMAdministration() {
   const [searchTerm, setSearchTerm] = useState('');

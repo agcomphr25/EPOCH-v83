@@ -1,9 +1,5 @@
 import React, { useState, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Edit, Trash2, Download, Upload, Search } from 'lucide-react';
-import toast from 'react-hot-toast';
-import type { InventoryItem } from '@shared/schema';
-
 import { apiRequest } from '@/lib/queryClient';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -23,6 +19,9 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import { Plus, Edit, Trash2, Download, Upload, Search } from 'lucide-react';
+import toast from 'react-hot-toast';
+import type { InventoryItem } from '@shared/schema';
 
 interface InventoryFormData {
   agPartNumber: string;

@@ -1,4 +1,6 @@
 import React from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import {
   PlusCircle,
   FileText,
@@ -14,9 +16,6 @@ import {
   Home,
 } from 'lucide-react';
 import { Link } from 'wouter';
-
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import PipelineVisualization from '@/components/PipelineVisualization';
 
 export default function STACIWTestDashboard() {

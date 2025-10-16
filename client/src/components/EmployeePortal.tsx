@@ -1,17 +1,4 @@
 import React, { useState } from 'react';
-import {
-  UserCheck,
-  ClipboardList,
-  FileText,
-  CheckCircle,
-  AlertCircle,
-} from 'lucide-react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import type { ChecklistItem } from '@shared/schema';
-
-import TimeClock from './TimeClock';
-import OnboardingDocs from './OnboardingDocs';
-
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Card,
@@ -32,7 +19,18 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
+import {
+  UserCheck,
+  ClipboardList,
+  FileText,
+  CheckCircle,
+  AlertCircle,
+} from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import TimeClock from './TimeClock';
+import OnboardingDocs from './OnboardingDocs';
+import type { ChecklistItem } from '@shared/schema';
 
 interface EmployeePortalProps {
   employeeId: string;
@@ -255,7 +253,7 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
                           <CheckCircle className="h-5 w-5 text-green-500" />
                         )}
 
-                        {item.required && !item.value && (
+                        {item.required && !Boolean(item.value) && (
                           <AlertCircle className="h-5 w-5 text-red-500" />
                         )}
                       </div>

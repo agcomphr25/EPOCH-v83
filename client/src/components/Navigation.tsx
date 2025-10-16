@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link, useLocation, useRoute } from 'wouter';
+
 import {
   Factory,
   User,
@@ -44,12 +45,11 @@ import {
   Home,
   FileSpreadsheet,
 } from 'lucide-react';
-import { useQuery } from '@tanstack/react-query';
-
-import InstallPWAButton from './InstallPWAButton';
 
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import InstallPWAButton from './InstallPWAButton';
+import { useQuery } from '@tanstack/react-query';
 import { hasFullAccess, hasRouteAccess } from '@/config/userPermissions';
 import { getDashboardRoute } from '@/config/dashboardMapping';
 import {

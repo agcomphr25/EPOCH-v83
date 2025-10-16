@@ -1,24 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  CalendarIcon,
-  Plus,
-  Search,
-  BarChart3,
-  AlertTriangle,
-  CheckCircle,
-  Clock,
-  XCircle,
-  Eye,
-  RefreshCw,
-} from 'lucide-react';
-import { format } from 'date-fns';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
-import { insertKickbackSchema, type Kickback } from '@shared/schema';
-
-import {
   Card,
   CardContent,
   CardDescription,
@@ -59,7 +41,24 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
+import {
+  CalendarIcon,
+  Plus,
+  Search,
+  BarChart3,
+  AlertTriangle,
+  CheckCircle,
+  Clock,
+  XCircle,
+  Eye,
+  RefreshCw,
+} from 'lucide-react';
+import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { insertKickbackSchema, type Kickback } from '@shared/schema';
 import { useToast } from '@/hooks/use-toast';
 
 // Form validation schema

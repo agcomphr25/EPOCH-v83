@@ -1,17 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import toast from 'react-hot-toast';
-import {
-  Trash2,
-  Plus,
-  ChevronUp,
-  ChevronDown,
-  Edit,
-  Save,
-  X,
-} from 'lucide-react';
-
 import { apiRequest } from '@/lib/queryClient';
+import toast from 'react-hot-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -24,6 +14,15 @@ import {
 } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Trash2,
+  Plus,
+  ChevronUp,
+  ChevronDown,
+  Edit,
+  Save,
+  X,
+} from 'lucide-react';
 
 const ROLE_OPTIONS = ['Admin', 'CSR', 'Production', 'Owner'];
 const FIELD_TYPES = [

@@ -8,7 +8,7 @@ async function countOrdersWithActionLength() {
     console.log(`Total orders: ${orders.length}`);
 
     let ordersWithActionLength = 0;
-    const ordersWithActionData = [];
+    let ordersWithActionData = [];
 
     orders.forEach((order) => {
       let hasActionLength = false;

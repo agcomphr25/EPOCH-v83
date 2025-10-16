@@ -3,18 +3,6 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import {
-  DollarSign,
-  CreditCard,
-  Banknote,
-  FileText,
-  Building,
-  University,
-  Users,
-  Search,
-} from 'lucide-react';
-import type { Customer } from '@shared/schema';
-
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -39,7 +27,18 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { Badge } from '@/components/ui/badge';
+import {
+  DollarSign,
+  CreditCard,
+  Banknote,
+  FileText,
+  Building,
+  University,
+  Users,
+  Search,
+} from 'lucide-react';
 import CustomerSearchInput from '@/components/CustomerSearchInput';
+import type { Customer } from '@shared/schema';
 
 // Payment method configuration
 const PAYMENT_METHODS = [

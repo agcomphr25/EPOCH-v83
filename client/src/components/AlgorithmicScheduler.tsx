@@ -4,19 +4,6 @@
  */
 
 import { useState } from 'react';
-import {
-  Zap,
-  Target,
-  Calendar,
-  TrendingUp,
-  BarChart3,
-  Settings,
-  RefreshCw,
-  CheckCircle,
-  AlertTriangle,
-  Info,
-} from 'lucide-react';
-
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -36,6 +23,18 @@ import {
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
+import {
+  Zap,
+  Target,
+  Calendar,
+  TrendingUp,
+  BarChart3,
+  Settings,
+  RefreshCw,
+  CheckCircle,
+  AlertTriangle,
+  Info,
+} from 'lucide-react';
 
 interface AlgorithmicSchedulerProps {
   onScheduleGenerated?: (allocations: any[]) => void;

@@ -1,17 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import {
-  Mail,
-  MessageSquare,
-  Phone,
-  User,
-  Clock,
-  Filter,
-  Send,
-  Eye,
-  EyeOff,
-} from 'lucide-react';
-import { formatDistanceToNow } from 'date-fns';
-
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -24,8 +11,20 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  Mail,
+  MessageSquare,
+  Phone,
+  User,
+  Clock,
+  Filter,
+  Send,
+  Eye,
+  EyeOff,
+} from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
+import { formatDistanceToNow } from 'date-fns';
 
 interface Message {
   id: number;

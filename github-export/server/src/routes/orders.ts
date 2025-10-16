@@ -1,4 +1,7 @@
 import { Router, Request, Response } from 'express';
+import { storage } from '../../storage';
+import { generateP1OrderId } from '../../utils/orderIdGenerator';
+import { authenticateToken } from '../../middleware/auth';
 import {
   insertOrderDraftSchema,
   insertOrderSchema,
@@ -11,10 +14,6 @@ import {
   insertPaymentSchema,
 } from '@shared/schema';
 
-import { storage } from '../../storage';
-import { generateP1OrderId } from '../../utils/orderIdGenerator';
-import { authenticateToken } from '../../middleware/auth';
-
 const router = Router();
 
 // Get all orders for All Orders List (root endpoint)
@@ -24,10 +23,12 @@ router.get('/', async (req: Request, res: Response) => {
     res.json(orders);
   } catch (error) {
     console.error('Error retrieving orders:', error);
-    res.status(500).json({
-      error: 'Failed to fetch order',
-      details: (error as any).message,
-    });
+    res
+      .status(500)
+      .json({
+        error: 'Failed to fetch order',
+        details: (error as any).message,
+      });
   }
 });
 
@@ -166,10 +167,12 @@ router.get('/all', async (req: Request, res: Response) => {
     res.json(orders);
   } catch (error) {
     console.error('Error retrieving all orders:', error);
-    res.status(500).json({
-      error: 'Failed to fetch order',
-      details: (error as any).message,
-    });
+    res
+      .status(500)
+      .json({
+        error: 'Failed to fetch order',
+        details: (error as any).message,
+      });
   }
 });
 
@@ -339,10 +342,12 @@ router.post('/:orderId/payments', async (req: Request, res: Response) => {
     res.status(201).json(newPayment);
   } catch (error) {
     console.error('Create payment error:', error);
-    res.status(400).json({
-      error: 'Failed to create payment',
-      details: (error as any).message,
-    });
+    res
+      .status(400)
+      .json({
+        error: 'Failed to create payment',
+        details: (error as any).message,
+      });
   }
 });
 
@@ -355,10 +360,12 @@ router.put('/payments/:paymentId', async (req: Request, res: Response) => {
     res.json(updatedPayment);
   } catch (error) {
     console.error('Update payment error:', error);
-    res.status(400).json({
-      error: 'Failed to update payment',
-      details: (error as any).message,
-    });
+    res
+      .status(400)
+      .json({
+        error: 'Failed to update payment',
+        details: (error as any).message,
+      });
   }
 });
 

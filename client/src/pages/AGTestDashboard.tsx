@@ -1,4 +1,9 @@
 import React, { useState } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   BarChart3,
   Calendar,
@@ -19,16 +24,10 @@ import {
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
-import { useLocation } from 'wouter';
-
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import PipelineVisualization from '@/components/PipelineVisualization';
 import LayupScheduler from '@/components/LayupScheduler';
 import { getDisplayOrderId } from '@/lib/orderUtils';
+import { useLocation } from 'wouter';
 
 export default function AGTestDashboard() {
   const [expandedSection, setExpandedSection] = useState<string | null>(null);

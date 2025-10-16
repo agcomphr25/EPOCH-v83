@@ -5,6 +5,30 @@ EPOCH v8 is a comprehensive Manufacturing ERP system designed for small manufact
 
 ## Recent Changes
 
+**October 15, 2025 - Enhanced Vendor Management with Tabbed Interface & Multiple Contacts**
+- **Tabbed Vendor Management System**: Comprehensive CRUD module with three-tab interface under Inventory section
+  - **Database Schema**: 
+    - `vendors` table with comprehensive fields (name, contact info, email, phone, address, approval status, evaluation tracking, notes)
+    - `vendor_contacts` table for unlimited additional contacts per vendor (foreign key relationship)
+  - **Backend API**: 
+    - Vendor endpoints: RESTful with pagination, search, filtering (approved, evaluated, eval date range), and sorting
+    - Contact endpoints: Nested routes under `/api/vendors/:vendorId/contacts` with security validation
+    - **Security**: Enforces parent/child relationship - prevents cross-vendor contact mutations and reassignment
+  - **Storage Layer**: Complete CRUD methods for vendors and contacts with soft delete functionality
+  - **Frontend Tabbed Modal**: 
+    - **Tab 1 - Main Info**: Basic vendor details (name, primary contact, email, phone, address, approval status)
+    - **Tab 2 - Additional Contacts**: List and CRUD for unlimited vendor contacts (disabled for new vendors, enabled on edit)
+    - **Tab 3 - Evaluation & Notes**: Evaluation tracking with date, status, and detailed notes
+  - **Features**: 
+    - Inline contact forms with add/edit capability
+    - Contact cards showing name, title, email, phone, primary designation, and notes
+    - Delete confirmation dialogs for both vendors and contacts
+    - Form validation using shared Zod schemas with data normalization
+    - Proper cache invalidation and state management
+  - **Route**: Accessible at `/vendors` in the Inventory section of the navigation
+  - **Status**: ✅ Production-ready with full architect security approval
+  - **Security Note**: All contact routes validate vendor ownership and prevent unauthorized modifications
+
 **October 14, 2025 - Training Notifications with Module Links & Production Deployment Ready**
 - **Training Assignment Notifications Enhanced**: Added direct clickable links to training modules in notifications
   - Both "Training Assignment" via Internal Communication Board and "Assign & Notify" button include module links

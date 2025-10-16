@@ -1,12 +1,11 @@
 import React, { useState } from 'react';
-import { Calculator, TrendingDown } from 'lucide-react';
-
 import DiscountAdmin from '@/components/DiscountAdmin';
 import DiscountCalculator from '@/components/DiscountCalculator';
 import CustomerTypeManager from '@/components/CustomerTypeManager';
 import PersistentDiscountManager from '@/components/PersistentDiscountManager';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Calculator, TrendingDown } from 'lucide-react';
 
 interface ShortTermSale {
   id: number;

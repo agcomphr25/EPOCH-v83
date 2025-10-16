@@ -1,10 +1,8 @@
 import React from 'react';
 import { Switch, Route, Router, Link, useLocation } from 'wouter';
 import { QueryClientProvider } from '@tanstack/react-query';
-import { Toaster as HotToaster } from 'react-hot-toast';
-
 import { queryClient } from './lib/queryClient';
-
+import { Toaster } from '@/components/ui/toaster';
 // import { CSVProvider } from "./contexts/CSVContext"; // Temporarily disabled
 import Navigation from './components/Navigation';
 import OfflineIndicator from './components/OfflineIndicator';
@@ -73,8 +71,15 @@ import EmployeeDetail from './pages/EmployeeDetail';
 import EmployeePortal from './pages/EmployeePortal';
 import UserManagement from './pages/UserManagement';
 import LoginPage from './pages/LoginPage';
+import P2Forms from '@/pages/P2Forms';
+import WasteManagementForm from '@/pages/WasteManagementForm';
+import TaskTracker from '@/pages/TaskTracker';
+import KickbackTracking from '@/components/KickbackTracking';
 import DocumentManagement from './pages/DocumentManagement';
-
+import ShutdownProceduresTraining from '@/pages/ShutdownProceduresTraining';
+import CounterfeitPreventionTraining from '@/pages/CounterfeitPreventionTraining';
+import Training from '@/pages/Training';
+import TrainingModule from '@/pages/TrainingModule';
 import TrainingManagement from '@/pages/TrainingManagement';
 import TrainingMatrixView from '@/pages/TrainingMatrixView';
 import TrainingMatrixImport from '@/pages/TrainingMatrixImport';
@@ -111,16 +116,8 @@ import VendorPOPage from './pages/VendorPOPage';
 import MetalAccessoriesTracker from './pages/MetalAccessoriesTracker';
 import DocumentIntelligence from './pages/DocumentIntelligence';
 
+import { Toaster as HotToaster } from 'react-hot-toast';
 import DeploymentAuthWrapper from './components/DeploymentAuthWrapper';
-import TrainingModule from '@/pages/TrainingModule';
-import Training from '@/pages/Training';
-import CounterfeitPreventionTraining from '@/pages/CounterfeitPreventionTraining';
-import ShutdownProceduresTraining from '@/pages/ShutdownProceduresTraining';
-import KickbackTracking from '@/components/KickbackTracking';
-import TaskTracker from '@/pages/TaskTracker';
-import WasteManagementForm from '@/pages/WasteManagementForm';
-import P2Forms from '@/pages/P2Forms';
-import { Toaster } from '@/components/ui/toaster';
 
 // Component to conditionally render Navigation
 function ConditionalNavigation() {
@@ -199,8 +196,8 @@ function App() {
               <ConditionalNavigation />
               <OfflineIndicator />
               <main className="container mx-auto px-4 py-8">
-                  <Switch>
-                  <Route path="/" component={LoginPage} />
+                <Switch>
+                  <Route path="/" component={Dashboard} />
                   <Route path="/order-management" component={OrderManagement} />
                   <Route
                     path="/orders-management"

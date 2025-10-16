@@ -1,4 +1,12 @@
 import React, { useMemo, useState } from 'react';
+import { BarcodeScanner } from '@/components/BarcodeScanner';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
+import { OrderTooltip } from '@/components/OrderTooltip';
 import {
   Shield,
   ArrowLeft,
@@ -10,18 +18,9 @@ import {
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
-import { toast } from 'react-hot-toast';
-
-import { BarcodeScanner } from '@/components/BarcodeScanner';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Checkbox } from '@/components/ui/checkbox';
-import { OrderTooltip } from '@/components/OrderTooltip';
 import { getDisplayOrderId } from '@/lib/orderUtils';
 import { OrderSearchBox } from '@/components/OrderSearchBox';
+import { toast } from 'react-hot-toast';
 import { isOrderInDepartment } from '@/lib/departmentUtils';
 import { apiRequest } from '@/lib/queryClient';
 

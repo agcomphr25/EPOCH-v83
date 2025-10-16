@@ -1,6 +1,5 @@
 import { neon } from '@neondatabase/serverless';
 import { drizzle } from 'drizzle-orm/neon-http';
-
 import * as schema from '../../schema';
 
 const DEV_DATABASE_URL =
@@ -170,11 +169,13 @@ async function migrateTrainingData() {
         continue;
       }
 
-      await prodDb.insert(schema.employeeQuizAttempts).values({
-        ...attemptData,
-        trainingRecordId: newRecordId,
-        moduleId: newModuleId,
-      });
+      await prodDb
+        .insert(schema.employeeQuizAttempts)
+        .values({
+          ...attemptData,
+          trainingRecordId: newRecordId,
+          moduleId: newModuleId,
+        });
       console.log(
         `   Migrated attempt ID ${id} (record ${trainingRecordId} → ${newRecordId})`
       );

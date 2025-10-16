@@ -1,10 +1,9 @@
-import * as fs from 'fs';
-import * as path from 'path';
-import { fileURLToPath } from 'url';
-
 import { Router, Request, Response } from 'express';
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 import fetch from 'node-fetch';
+import * as fs from 'fs';
+import * as path from 'path';
+import { fileURLToPath } from 'url';
 
 const router = Router();
 
@@ -337,7 +336,7 @@ router.get('/qc-checklist/:orderId', async (req: Request, res: Response) => {
 
     // Get order data from storage using the proper method
     const { storage } = await import('../../storage');
-    const order = await storage.getOrderById(orderId);
+    let order = await storage.getOrderById(orderId);
 
     if (!order) {
       return res.status(404).json({ error: 'Order not found' });
@@ -1461,7 +1460,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     let summaryLineY = currentY - 35; // Start content below header
 
     // Initialize all price variables
-    const basePrice = model?.price || 0;
+    let basePrice = model?.price || 0;
     let actionLengthPrice = 0;
     let actionInletPrice = 0;
     let bottomMetalPrice = 0;
@@ -3995,9 +3994,11 @@ router.post('/bulk-shipping-labels', async (req: Request, res: Response) => {
     const errorMessage =
       error instanceof Error ? (error as Error).message : String(error);
     console.error('UPS bulk shipping labels error:', error);
-    return res.status(500).json({
-      error: `Failed to generate UPS bulk shipping labels: ${errorMessage}`,
-    });
+    return res
+      .status(500)
+      .json({
+        error: `Failed to generate UPS bulk shipping labels: ${errorMessage}`,
+      });
   }
 });
 

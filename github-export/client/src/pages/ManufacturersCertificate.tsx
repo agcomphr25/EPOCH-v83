@@ -1,9 +1,5 @@
 import { useState, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Save, Printer, Download, FileText, Award } from 'lucide-react';
-import SignatureCanvas from 'react-signature-canvas';
-import { COMPANY_INFO, CERTIFICATE_TEMPLATES } from '@shared/company-config';
-
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -17,8 +13,11 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
+import { Save, Printer, Download, FileText, Award } from 'lucide-react';
+import SignatureCanvas from 'react-signature-canvas';
 import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
+import { COMPANY_INFO, CERTIFICATE_TEMPLATES } from '@shared/company-config';
 
 export default function ManufacturersCertificate() {
   const { toast } = useToast();

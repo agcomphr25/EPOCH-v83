@@ -1,19 +1,5 @@
 import React, { useState, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import {
-  Search,
-  Plus,
-  TrendingUp,
-  TrendingDown,
-  Package,
-  FileText,
-  RefreshCw,
-  Calendar,
-  ArrowRight,
-  Activity,
-} from 'lucide-react';
-import { toast } from 'react-hot-toast';
-
 import { apiRequest } from '@/lib/queryClient';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -41,6 +27,19 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import {
+  Search,
+  Plus,
+  TrendingUp,
+  TrendingDown,
+  Package,
+  FileText,
+  RefreshCw,
+  Calendar,
+  ArrowRight,
+  Activity,
+} from 'lucide-react';
+import { toast } from 'react-hot-toast';
 
 interface InventoryTransaction {
   transactionId: string;

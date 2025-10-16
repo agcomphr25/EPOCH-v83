@@ -1,10 +1,8 @@
 import React from 'react';
 import { Switch, Route } from 'wouter';
 import { QueryClientProvider } from '@tanstack/react-query';
-import { Toaster as HotToaster } from 'react-hot-toast';
-
 import { queryClient } from './lib/queryClient';
-
+import { Toaster } from '@/components/ui/toaster';
 // import { CSVProvider } from "./contexts/CSVContext"; // Temporarily disabled
 import Navigation from './components/Navigation';
 import OfflineIndicator from './components/OfflineIndicator';
@@ -38,8 +36,7 @@ import EnhancedFormsPage from './pages/EnhancedFormsPage';
 import EnhancedReportsPage from './pages/EnhancedReportsPage';
 import FormRendererPage from './pages/FormRendererPage';
 import DocumentationPageNew from './pages/DocumentationPageNew';
-
-import { Toaster } from '@/components/ui/toaster';
+import { Toaster as HotToaster } from 'react-hot-toast';
 
 function App() {
   console.log('App component is rendering...');

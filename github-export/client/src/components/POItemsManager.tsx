@@ -1,8 +1,5 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Edit, Trash2, Package, Settings } from 'lucide-react';
-import { toast } from 'react-hot-toast';
-
 import {
   fetchPOItems,
   createPOItem,
@@ -42,6 +39,8 @@ import {
 } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { Plus, Edit, Trash2, Package, Settings } from 'lucide-react';
+import { toast } from 'react-hot-toast';
 
 interface POItemsManagerProps {
   poId: number;

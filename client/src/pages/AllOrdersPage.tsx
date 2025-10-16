@@ -1,27 +1,6 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link, useLocation } from 'wouter';
-import {
-  Search,
-  X,
-  Download,
-  MoreHorizontal,
-  XCircle,
-  ArrowRight,
-  AlertTriangle,
-  Edit,
-  FileText,
-  QrCode,
-  User,
-  CalendarDays,
-  Package,
-  Mail,
-  MessageSquare,
-  Eye,
-} from 'lucide-react';
-import { format } from 'date-fns';
-import hotToast from 'react-hot-toast';
-
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -74,6 +53,25 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
+import {
+  Search,
+  X,
+  Download,
+  MoreHorizontal,
+  XCircle,
+  ArrowRight,
+  AlertTriangle,
+  Edit,
+  FileText,
+  QrCode,
+  User,
+  CalendarDays,
+  Package,
+  Mail,
+  MessageSquare,
+  Eye,
+} from 'lucide-react';
+import { format } from 'date-fns';
 import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
@@ -82,6 +80,7 @@ import OrderSummaryTooltip from '@/components/OrderSummaryTooltip';
 import { BarcodeDisplay } from '@/components/BarcodeDisplay';
 import CommunicationCompose from '@/components/CommunicationCompose';
 import { getDisplayOrderId } from '@/lib/orderUtils';
+import hotToast from 'react-hot-toast';
 
 interface Order {
   id: number;

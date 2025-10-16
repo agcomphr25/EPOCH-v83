@@ -1,16 +1,5 @@
 import { useState } from 'react';
 import {
-  BookOpen,
-  Download,
-  FileText,
-  Shield,
-  Users,
-  Clock,
-  X,
-  ExternalLink,
-} from 'lucide-react';
-
-import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -25,6 +14,16 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  BookOpen,
+  Download,
+  FileText,
+  Shield,
+  Users,
+  Clock,
+  X,
+  ExternalLink,
+} from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface HandbookModalProps {

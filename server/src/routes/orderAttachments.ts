@@ -1,14 +1,12 @@
-import path from 'path';
-import fs from 'fs';
-
 import express from 'express';
+import { storage } from '../../storage';
+import { uploadMiddleware } from '../../utils/fileUpload';
 import {
   insertOrderAttachmentSchema,
   type OrderAttachment,
 } from '@shared/schema';
-
-import { storage } from '../../storage';
-import { uploadMiddleware } from '../../utils/fileUpload';
+import path from 'path';
+import fs from 'fs';
 
 const router = express.Router();
 

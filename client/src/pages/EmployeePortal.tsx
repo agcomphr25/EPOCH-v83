@@ -15,7 +15,6 @@ import {
   Shield,
   ExternalLink,
 } from 'lucide-react';
-
 import {
   Card,
   CardContent,

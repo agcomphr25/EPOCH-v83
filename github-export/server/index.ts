@@ -1,7 +1,5 @@
-import path from 'path';
-
 import express, { type Request, Response, NextFunction } from 'express';
-
+import path from 'path';
 import { registerRoutes } from './src/routes';
 import { setupVite, serveStatic, log } from './vite';
 

@@ -1,14 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import {
-  Plus,
-  Edit,
-  Trash2,
-  Package,
-  DollarSign,
-  ArrowUpDown,
-} from 'lucide-react';
-
 import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
@@ -26,6 +17,14 @@ import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import {
+  Plus,
+  Edit,
+  Trash2,
+  Package,
+  DollarSign,
+  ArrowUpDown,
+} from 'lucide-react';
 
 interface StockModel {
   id: string;

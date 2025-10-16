@@ -1,16 +1,14 @@
-import path from 'path';
-import fs from 'fs';
-
 import express from 'express';
 import multer from 'multer';
 import { z } from 'zod';
-
 import { storage } from '../../storage';
 import {
   insertDocumentSchema,
   insertDocumentTagSchema,
   insertDocumentCollectionSchema,
 } from '../../schema';
+import path from 'path';
+import fs from 'fs';
 
 const router = express.Router();
 

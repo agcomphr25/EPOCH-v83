@@ -1,7 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'wouter';
-import { GraduationCap, Clock, FileText, Award } from 'lucide-react';
-
 import {
   Card,
   CardContent,
@@ -10,6 +8,7 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { GraduationCap, Clock, FileText, Award } from 'lucide-react';
 
 export default function Training() {
   const { data: modules, isLoading } = useQuery({

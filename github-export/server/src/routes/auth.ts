@@ -1,17 +1,16 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import cookieParser from 'cookie-parser';
-import {
-  loginSchema,
-  changePasswordSchema,
-  insertUserSchema,
-} from '@shared/schema';
-
 import { AuthService } from '../../auth';
 import {
   authenticateToken,
   authenticatePortalToken,
 } from '../../middleware/auth';
+import {
+  loginSchema,
+  changePasswordSchema,
+  insertUserSchema,
+} from '@shared/schema';
 
 const router = Router();
 

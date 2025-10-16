@@ -14,24 +14,6 @@ interface Order {
   fbOrderNumber?: string;
 }
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import {
-  ArrowRight,
-  AlertTriangle,
-  Package2,
-  Edit,
-  Search,
-  X,
-  Mail,
-  MessageSquare,
-} from 'lucide-react';
-import toast from 'react-hot-toast';
-import { Link } from 'wouter';
-
-import ScrapOrderModal from './ScrapOrderModal';
-import OrderSummaryModal from './OrderSummaryModal';
-import CustomerDetailsTooltip from './CustomerDetailsTooltip';
-import CommunicationCompose from './CommunicationCompose';
-
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -51,8 +33,24 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import {
+  ArrowRight,
+  AlertTriangle,
+  Package2,
+  Edit,
+  Search,
+  X,
+  Mail,
+  MessageSquare,
+} from 'lucide-react';
 import { apiRequest } from '@/lib/queryClient';
+import ScrapOrderModal from './ScrapOrderModal';
+import OrderSummaryModal from './OrderSummaryModal';
+import toast from 'react-hot-toast';
+import { Link } from 'wouter';
 import { getDisplayOrderId } from '@/lib/orderUtils';
+import CustomerDetailsTooltip from './CustomerDetailsTooltip';
+import CommunicationCompose from './CommunicationCompose';
 
 const departments = [
   'Layup',

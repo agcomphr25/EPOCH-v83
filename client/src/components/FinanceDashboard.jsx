@@ -1,5 +1,20 @@
 import React, { useState } from 'react';
 import {
+  useAPTransactions,
+  useARTransactions,
+  useCOGS,
+} from '../hooks/useTransactions';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
   DollarSign,
   TrendingUp,
   TrendingDown,
@@ -22,23 +37,6 @@ import {
   Cell,
 } from 'recharts';
 import { format, subDays } from 'date-fns';
-
-import {
-  useAPTransactions,
-  useARTransactions,
-  useCOGS,
-} from '../hooks/useTransactions';
-
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 
 /**
  * Finance Dashboard component displaying high-level financial KPIs

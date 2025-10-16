@@ -1,17 +1,4 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
-import {
-  Package,
-  Users,
-  ChevronDown,
-  Send,
-  CheckCircle,
-  Check,
-  ChevronsUpDown,
-} from 'lucide-react';
-import debounce from 'lodash.debounce';
-import { useLocation, useRoute } from 'wouter';
-import type { Customer } from '@shared/schema';
-
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -52,12 +39,24 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '@/components/ui/accordion';
-import { useToast } from '@/hooks/use-toast';
-// @ts-ignore
 
+import { useToast } from '@/hooks/use-toast';
+import {
+  Package,
+  Users,
+  ChevronDown,
+  Send,
+  CheckCircle,
+  Check,
+  ChevronsUpDown,
+} from 'lucide-react';
+// @ts-ignore
+import debounce from 'lodash.debounce';
+import { useLocation, useRoute } from 'wouter';
 import CustomerSearchInput from '@/components/CustomerSearchInput';
 import PaymentManager from '@/components/PaymentManager';
 import { OrderAttachments } from '@/components/OrderAttachments';
+import type { Customer } from '@shared/schema';
 import {
   useFeatureValidation,
   useFeatureStateValidation,
@@ -285,7 +284,7 @@ export default function OrderEntry() {
         option.includes('2')
     );
 
-    const adjustedDate = new Date(baseDueDate);
+    let adjustedDate = new Date(baseDueDate);
 
     if (hasRushFee2) {
       // Rush Fee 2: reduce by 42 days (6 weeks)

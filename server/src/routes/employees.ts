@@ -113,7 +113,7 @@ router.get("/certifications-matrix", async (req: Request, res: Response) => {
         ec.id as "certificationRecordId",
         ec.date_obtained as "dateEarned",
         ec.expiry_date as "expiryDate",
-        ec.is_active as "status",
+        ec.status,
         ec.notes
       FROM employees e
       CROSS JOIN certifications c

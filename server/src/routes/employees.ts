@@ -282,6 +282,227 @@ router.post('/evaluations', async (req: Request, res: Response) => {
   }
 });
 
+// Employee Layup Settings CRUD (migrated from monolithic routes.ts)
+// Note: These routes don't require authentication for use in Layup Scheduler
+// MUST be before /:id to avoid route collision
+router.get('/layup-settings', async (req: Request, res: Response) => {
+  try {
+    const settings = await storage.getAllEmployeeLayupSettings();
+    res.json(settings);
+  } catch (error) {
+    console.error('Employee layup settings fetch error:', error);
+    res.status(500).json({ error: 'Failed to fetch employee layup settings' });
+  }
+});
+
+router.get(
+  '/layup-settings/:employeeId',
+  async (req: Request, res: Response) => {
+    try {
+      const settings = await storage.getEmployeeLayupSettings(
+        req.params.employeeId
+      );
+      if (settings) {
+        res.json(settings);
+      } else {
+        res.status(404).json({ error: 'Employee layup settings not found' });
+      }
+    } catch (error) {
+      console.error('Employee layup settings fetch error:', error);
+      res
+        .status(500)
+        .json({ error: 'Failed to fetch employee layup settings' });
+    }
+  }
+);
+
+router.post('/layup-settings', async (req: Request, res: Response) => {
+  try {
+    const result = insertEmployeeLayupSettingsSchema.parse(req.body);
+    const settings = await storage.createEmployeeLayupSettings(result);
+    res.json(settings);
+  } catch (error) {
+    console.error('Employee layup settings creation error:', error);
+    res.status(400).json({ error: 'Invalid employee layup settings data' });
+  }
+});
+
+router.put(
+  '/layup-settings/:employeeId',
+  async (req: Request, res: Response) => {
+    try {
+      // Decode URL-encoded employee ID
+      const employeeId = decodeURIComponent(req.params.employeeId);
+      console.log(
+        `💾 API: Updating employee layup settings for: "${employeeId}"`
+      );
+      console.log(`📝 API: Update data:`, req.body);
+
+      // Validate the data (but be flexible with required fields for updates)
+      const updateData = {
+        rate: req.body.rate ? parseFloat(req.body.rate) : undefined,
+        hours: req.body.hours ? parseFloat(req.body.hours) : undefined,
+        department: req.body.department || undefined,
+        isActive:
+          req.body.isActive !== undefined ? req.body.isActive : undefined,
+        updatedAt: new Date(),
+      };
+
+      // Remove undefined values
+      const cleanData = Object.fromEntries(
+        Object.entries(updateData).filter(([_, value]) => value !== undefined)
+      );
+
+      console.log(`🧹 API: Clean update data:`, cleanData);
+
+      const settings = await storage.updateEmployeeLayupSettings(
+        employeeId,
+        cleanData
+      );
+      console.log(
+        `✅ API: Successfully updated employee layup settings for: "${employeeId}"`
+      );
+      res.json(settings);
+    } catch (error) {
+      console.error('❌ API: Employee layup settings update error:', error);
+      console.error('❌ API: Error details:', (error as any)?.message);
+      res.status(500).json({
+        error: 'Failed to update employee layup settings',
+        details: (error as any)?.message || 'Unknown error',
+        employeeId: decodeURIComponent(req.params.employeeId),
+      });
+    }
+  }
+);
+
+router.delete(
+  '/layup-settings/:employeeId',
+  async (req: Request, res: Response) => {
+    try {
+      await storage.deleteEmployeeLayupSettings(req.params.employeeId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Employee layup settings deletion error:', error);
+      res
+        .status(500)
+        .json({ error: 'Failed to delete employee layup settings' });
+    }
+  }
+);
+
+// Create or update employee certification (MUST be before /:id to avoid route collision)
+router.post('/certifications', async (req: Request, res: Response) => {
+  try {
+    const { employeeId, certificationId, dateObtained, expiryDate, notes } = req.body;
+
+    if (!employeeId || !certificationId) {
+      return res.status(400).json({ error: 'Employee ID and Certification ID are required' });
+    }
+
+    // Check if certification already exists
+    const existing = await pool.query`
+      SELECT id FROM employee_certifications 
+      WHERE employee_id = ${employeeId} 
+      AND certification_id = ${certificationId}
+    `;
+
+    if (existing.length > 0) {
+      // Update existing
+      await pool.query`
+        UPDATE employee_certifications 
+        SET date_obtained = ${dateObtained || null},
+            expiry_date = ${expiryDate || null},
+            notes = ${notes || null},
+            is_active = ${!!dateObtained},
+            updated_at = NOW()
+        WHERE employee_id = ${employeeId} 
+        AND certification_id = ${certificationId}
+      `;
+      
+      const updated = await pool.query`
+        SELECT * FROM employee_certifications 
+        WHERE employee_id = ${employeeId} 
+        AND certification_id = ${certificationId}
+      `;
+      
+      return res.json(updated[0]);
+    }
+
+    // Create new
+    const result = await pool.query`
+      INSERT INTO employee_certifications (
+        employee_id, 
+        certification_id, 
+        date_obtained,
+        expiry_date,
+        notes,
+        is_active
+      ) VALUES (
+        ${employeeId}, 
+        ${certificationId}, 
+        ${dateObtained || null},
+        ${expiryDate || null},
+        ${notes || null},
+        ${!!dateObtained}
+      )
+      RETURNING *
+    `;
+
+    res.json(result[0]);
+  } catch (error) {
+    console.error('Create certification error:', error);
+    res.status(500).json({ error: 'Failed to create certification' });
+  }
+});
+
+// Update employee certification (MUST be before /:id)
+router.patch('/certifications/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { dateObtained, expiryDate, notes, isActive } = req.body;
+
+    await pool.query`
+      UPDATE employee_certifications 
+      SET date_obtained = ${dateObtained !== undefined ? dateObtained : null},
+          expiry_date = ${expiryDate !== undefined ? expiryDate : null},
+          notes = ${notes !== undefined ? notes : null},
+          is_active = ${isActive !== undefined ? isActive : !!dateObtained},
+          updated_at = NOW()
+      WHERE id = ${id}
+    `;
+
+    const updated = await pool.query`
+      SELECT * FROM employee_certifications WHERE id = ${id}
+    `;
+
+    if (updated.length === 0) {
+      return res.status(404).json({ error: 'Certification not found' });
+    }
+
+    res.json(updated[0]);
+  } catch (error) {
+    console.error('Update certification error:', error);
+    res.status(500).json({ error: 'Failed to update certification' });
+  }
+});
+
+// Delete employee certification (MUST be before /:id)
+router.delete('/certifications/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    await pool.query`
+      DELETE FROM employee_certifications WHERE id = ${id}
+    `;
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Delete certification error:', error);
+    res.status(500).json({ error: 'Failed to delete certification' });
+  }
+});
+
+// Parametric routes MUST come after all specific routes
 router.get('/:id', async (req: Request, res: Response) => {
   try {
     const employee = await storage.getEmployee(parseInt(req.params.id));
@@ -500,114 +721,7 @@ router.post('/:id/checklist', async (req: Request, res: Response) => {
   }
 });
 
-// Employee Layup Settings CRUD (migrated from monolithic routes.ts)
-// Note: These routes don't require authentication for use in Layup Scheduler
-router.get('/layup-settings', async (req: Request, res: Response) => {
-  try {
-    const settings = await storage.getAllEmployeeLayupSettings();
-    res.json(settings);
-  } catch (error) {
-    console.error('Employee layup settings fetch error:', error);
-    res.status(500).json({ error: 'Failed to fetch employee layup settings' });
-  }
-});
-
-router.get(
-  '/layup-settings/:employeeId',
-  async (req: Request, res: Response) => {
-    try {
-      const settings = await storage.getEmployeeLayupSettings(
-        req.params.employeeId
-      );
-      if (settings) {
-        res.json(settings);
-      } else {
-        res.status(404).json({ error: 'Employee layup settings not found' });
-      }
-    } catch (error) {
-      console.error('Employee layup settings fetch error:', error);
-      res
-        .status(500)
-        .json({ error: 'Failed to fetch employee layup settings' });
-    }
-  }
-);
-
-router.post('/layup-settings', async (req: Request, res: Response) => {
-  try {
-    const result = insertEmployeeLayupSettingsSchema.parse(req.body);
-    const settings = await storage.createEmployeeLayupSettings(result);
-    res.json(settings);
-  } catch (error) {
-    console.error('Employee layup settings creation error:', error);
-    res.status(400).json({ error: 'Invalid employee layup settings data' });
-  }
-});
-
-router.put(
-  '/layup-settings/:employeeId',
-  async (req: Request, res: Response) => {
-    try {
-      // Decode URL-encoded employee ID
-      const employeeId = decodeURIComponent(req.params.employeeId);
-      console.log(
-        `💾 API: Updating employee layup settings for: "${employeeId}"`
-      );
-      console.log(`📝 API: Update data:`, req.body);
-
-      // Validate the data (but be flexible with required fields for updates)
-      const updateData = {
-        rate: req.body.rate ? parseFloat(req.body.rate) : undefined,
-        hours: req.body.hours ? parseFloat(req.body.hours) : undefined,
-        department: req.body.department || undefined,
-        isActive:
-          req.body.isActive !== undefined ? req.body.isActive : undefined,
-        updatedAt: new Date(),
-      };
-
-      // Remove undefined values
-      const cleanData = Object.fromEntries(
-        Object.entries(updateData).filter(([_, value]) => value !== undefined)
-      );
-
-      console.log(`🧹 API: Clean update data:`, cleanData);
-
-      const settings = await storage.updateEmployeeLayupSettings(
-        employeeId,
-        cleanData
-      );
-      console.log(
-        `✅ API: Successfully updated employee layup settings for: "${employeeId}"`
-      );
-      res.json(settings);
-    } catch (error) {
-      console.error('❌ API: Employee layup settings update error:', error);
-      console.error('❌ API: Error details:', (error as any)?.message);
-      res.status(500).json({
-        error: 'Failed to update employee layup settings',
-        details: (error as any)?.message || 'Unknown error',
-        employeeId: decodeURIComponent(req.params.employeeId),
-      });
-    }
-  }
-);
-
-router.delete(
-  '/layup-settings/:employeeId',
-  async (req: Request, res: Response) => {
-    try {
-      await storage.deleteEmployeeLayupSettings(req.params.employeeId);
-      res.json({ success: true });
-    } catch (error) {
-      console.error('Employee layup settings deletion error:', error);
-      res
-        .status(500)
-        .json({ error: 'Failed to delete employee layup settings' });
-    }
-  }
-);
-
-// Employee Capability Assignment Routes (MUST be after /capabilities but before /:id/*)
+// Employee Capability Assignment Routes (moved here to avoid conflicts)
 router.get('/:id/capabilities', async (req: Request, res: Response) => {
   try {
     const employeeId = parseInt(req.params.id);
@@ -950,117 +1064,5 @@ router.post(
     }
   }
 );
-
-// Create or update employee certification
-router.post('/certifications', async (req: Request, res: Response) => {
-  try {
-    const { employeeId, certificationId, dateObtained, expiryDate, notes } = req.body;
-
-    if (!employeeId || !certificationId) {
-      return res.status(400).json({ error: 'Employee ID and Certification ID are required' });
-    }
-
-    // Check if certification already exists
-    const existing = await pool.query`
-      SELECT id FROM employee_certifications 
-      WHERE employee_id = ${employeeId} 
-      AND certification_id = ${certificationId}
-    `;
-
-    if (existing.length > 0) {
-      // Update existing
-      await pool.query`
-        UPDATE employee_certifications 
-        SET date_obtained = ${dateObtained || null},
-            expiry_date = ${expiryDate || null},
-            notes = ${notes || null},
-            is_active = ${!!dateObtained},
-            updated_at = NOW()
-        WHERE employee_id = ${employeeId} 
-        AND certification_id = ${certificationId}
-      `;
-      
-      const updated = await pool.query`
-        SELECT * FROM employee_certifications 
-        WHERE employee_id = ${employeeId} 
-        AND certification_id = ${certificationId}
-      `;
-      
-      return res.json(updated[0]);
-    }
-
-    // Create new
-    const result = await pool.query`
-      INSERT INTO employee_certifications (
-        employee_id, 
-        certification_id, 
-        date_obtained,
-        expiry_date,
-        notes,
-        is_active
-      ) VALUES (
-        ${employeeId}, 
-        ${certificationId}, 
-        ${dateObtained || null},
-        ${expiryDate || null},
-        ${notes || null},
-        ${!!dateObtained}
-      )
-      RETURNING *
-    `;
-
-    res.json(result[0]);
-  } catch (error) {
-    console.error('Create certification error:', error);
-    res.status(500).json({ error: 'Failed to create certification' });
-  }
-});
-
-// Update employee certification
-router.patch('/certifications/:id', async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params;
-    const { dateObtained, expiryDate, notes, isActive } = req.body;
-
-    await pool.query`
-      UPDATE employee_certifications 
-      SET date_obtained = ${dateObtained !== undefined ? dateObtained : null},
-          expiry_date = ${expiryDate !== undefined ? expiryDate : null},
-          notes = ${notes !== undefined ? notes : null},
-          is_active = ${isActive !== undefined ? isActive : !!dateObtained},
-          updated_at = NOW()
-      WHERE id = ${id}
-    `;
-
-    const updated = await pool.query`
-      SELECT * FROM employee_certifications WHERE id = ${id}
-    `;
-
-    if (updated.length === 0) {
-      return res.status(404).json({ error: 'Certification not found' });
-    }
-
-    res.json(updated[0]);
-  } catch (error) {
-    console.error('Update certification error:', error);
-    res.status(500).json({ error: 'Failed to update certification' });
-  }
-});
-
-// Delete employee certification
-router.delete('/certifications/:id', async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params;
-
-    await pool.query`
-      DELETE FROM employee_certifications WHERE id = ${id}
-    `;
-
-    res.json({ success: true });
-  } catch (error) {
-    console.error('Delete certification error:', error);
-    res.status(500).json({ error: 'Failed to delete certification' });
-  }
-});
 
 export default router;

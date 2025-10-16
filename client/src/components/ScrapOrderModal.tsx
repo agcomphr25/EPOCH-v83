@@ -1,6 +1,4 @@
 import React, { useState } from 'react';
-import { AlertTriangle } from 'lucide-react';
-
 import {
   Dialog,
   DialogContent,
@@ -19,6 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { AlertTriangle } from 'lucide-react';
 
 export default function ScrapOrderModal({ order, onSubmit, onClose }) {
   const [formData, setFormData] = useState({

@@ -1,19 +1,4 @@
 import React, { useMemo, useState } from 'react';
-import {
-  Package,
-  ArrowLeft,
-  ArrowRight,
-  CheckCircle,
-  AlertTriangle,
-  FileText,
-  Eye,
-  TrendingDown,
-} from 'lucide-react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { toast } from 'react-hot-toast';
-import { format } from 'date-fns';
-import { useLocation } from 'wouter';
-
 import { BarcodeScanner } from '@/components/BarcodeScanner';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -26,8 +11,22 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { OrderTooltip } from '@/components/OrderTooltip';
+import {
+  Package,
+  ArrowLeft,
+  ArrowRight,
+  CheckCircle,
+  AlertTriangle,
+  FileText,
+  Eye,
+  TrendingDown,
+} from 'lucide-react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'react-hot-toast';
 import { apiRequest } from '@/lib/queryClient';
+import { format } from 'date-fns';
 import { getDisplayOrderId } from '@/lib/orderUtils';
+import { useLocation } from 'wouter';
 import { OrderSearchBox } from '@/components/OrderSearchBox';
 import { SalesOrderModal } from '@/components/SalesOrderModal';
 import { isOrderInDepartment } from '@/lib/departmentUtils';

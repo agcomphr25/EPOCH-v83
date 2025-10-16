@@ -1,5 +1,4 @@
 import { Router } from 'express';
-
 import { pool } from '../../db.js';
 
 const router = Router();
@@ -188,7 +187,7 @@ router.post('/add-regular-orders', async (req, res) => {
     console.log(`📅 WEEK-SPECIFIC: Will NOT schedule beyond this week`);
 
     // Initialize capacity for each work day in the SELECTED WEEK ONLY
-    const currentDateIterator = new Date(startDate);
+    let currentDateIterator = new Date(startDate);
     while (currentDateIterator <= endDate) {
       if (workDays.includes(currentDateIterator.getDay())) {
         const dateStr = currentDateIterator.toISOString().split('T')[0];
@@ -315,7 +314,7 @@ router.post('/add-regular-orders', async (req, res) => {
       const maxAttempts = 30; // Prevent infinite loops
 
       // Find next available work day with employee capacity
-      const currentDate = new Date(startDate);
+      let currentDate = new Date(startDate);
       let foundSlot = false;
 
       // FIXED: Keep trying same order until scheduled or max attempts reached
@@ -603,9 +602,11 @@ router.post('/oem-priority-only', async (req, res) => {
         console.log(
           '❌ Validation failed: Missing poNumber for entire_po mode'
         );
-        return res.status(400).json({
-          error: 'Missing required field: poNumber for entire_po mode',
-        });
+        return res
+          .status(400)
+          .json({
+            error: 'Missing required field: poNumber for entire_po mode',
+          });
       }
     } else {
       // For individual stock items mode, we need stockItemIds
@@ -615,10 +616,12 @@ router.post('/oem-priority-only', async (req, res) => {
           stockItemIds,
           selectionMode,
         });
-        return res.status(400).json({
-          error:
-            'Missing required field: stockItemIds for individual stock selection',
-        });
+        return res
+          .status(400)
+          .json({
+            error:
+              'Missing required field: stockItemIds for individual stock selection',
+          });
       }
     }
 
@@ -771,7 +774,7 @@ router.post('/oem-priority-only', async (req, res) => {
     startDate.setHours(0, 0, 0, 0);
 
     // Find the first work day starting from tomorrow
-    const currentScheduleDate = new Date(startDate);
+    let currentScheduleDate = new Date(startDate);
     while (!workDays.includes(currentScheduleDate.getDay())) {
       currentScheduleDate.setDate(currentScheduleDate.getDate() + 1);
     }
@@ -1202,7 +1205,7 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
       allowedWorkDays: number[]
     ): Date[] => {
       const workDates: Date[] = [];
-      const currentDate = new Date(startDate);
+      let currentDate = new Date(startDate);
 
       // Start from next valid work day if current day is not a work day
       while (!allowedWorkDays.includes(currentDate.getDay())) {

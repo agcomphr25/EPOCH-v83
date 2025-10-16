@@ -1,14 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import {
-  ChevronDown,
-  ChevronRight,
-  Package,
-  PlayCircle,
-  CheckCircle,
-} from 'lucide-react';
-
-import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -33,6 +25,13 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import {
+  ChevronDown,
+  ChevronRight,
+  Package,
+  PlayCircle,
+  CheckCircle,
+} from 'lucide-react';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 

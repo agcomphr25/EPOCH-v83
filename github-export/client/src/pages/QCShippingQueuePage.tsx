@@ -1,14 +1,13 @@
 import React, { useMemo, useState } from 'react';
-import { TrendingUp, ArrowLeft, CheckCircle, ArrowRight } from 'lucide-react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { format } from 'date-fns';
-
 import { BarcodeScanner } from '@/components/BarcodeScanner';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { OrderTooltip } from '@/components/OrderTooltip';
+import { TrendingUp, ArrowLeft, CheckCircle, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { format } from 'date-fns';
 import { getDisplayOrderId } from '@/lib/orderUtils';
 
 export default function QCShippingQueuePage() {

@@ -1,7 +1,5 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Truck, MapPin, Clock } from 'lucide-react';
-
 import { apiRequest } from '@/lib/queryClient';
 import {
   Card,
@@ -11,6 +9,7 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Truck, MapPin, Clock } from 'lucide-react';
 
 export default function OutsideProcessingCard() {
   const { data: locations = [] } = useQuery({

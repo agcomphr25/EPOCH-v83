@@ -1,10 +1,8 @@
-import path from 'path';
-import fs from 'fs';
-
 import express, { type Request, Response, NextFunction } from 'express';
 import cookieParser from 'cookie-parser';
 import cors from 'cors';
-
+import path from 'path';
+import fs from 'fs';
 import { registerRoutes } from './src/routes/index';
 import { setupVite, serveStatic, log } from './vite';
 

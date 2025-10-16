@@ -1,5 +1,9 @@
 import { Router, Request, Response } from 'express';
+import { db } from '../../db';
+import { payments, allOrders } from '../../../shared/schema';
 import { eq, sql } from 'drizzle-orm';
+import { storage } from '../../storage';
+import { generateP1OrderId } from '../../utils/orderIdGenerator';
 import {
   insertOrderDraftSchema,
   insertOrderSchema,
@@ -12,11 +16,6 @@ import {
   insertPaymentSchema,
 } from '@shared/schema';
 
-import { db } from '../../db';
-import { payments, allOrders } from '../../../shared/schema';
-import { storage } from '../../storage';
-import { generateP1OrderId } from '../../utils/orderIdGenerator';
-
 const router = Router();
 
 // Get all orders for All Orders List (root endpoint)
@@ -26,10 +25,12 @@ router.get('/', async (req: Request, res: Response) => {
     res.json(orders);
   } catch (error) {
     console.error('Error retrieving orders:', error);
-    res.status(500).json({
-      error: 'Failed to fetch order',
-      details: (error as any).message,
-    });
+    res
+      .status(500)
+      .json({
+        error: 'Failed to fetch order',
+        details: (error as any).message,
+      });
   }
 });
 
@@ -49,10 +50,12 @@ router.get('/with-payment-status', async (req: Request, res: Response) => {
     res.json(orders);
   } catch (error) {
     console.error('Error retrieving orders with payment status:', error);
-    res.status(500).json({
-      error: 'Failed to fetch orders with payment status',
-      details: (error as any).message,
-    });
+    res
+      .status(500)
+      .json({
+        error: 'Failed to fetch orders with payment status',
+        details: (error as any).message,
+      });
   }
 });
 
@@ -80,10 +83,12 @@ router.get(
         'Error retrieving paginated orders with payment status:',
         error
       );
-      res.status(500).json({
-        error: 'Failed to fetch paginated orders with payment status',
-        details: (error as any).message,
-      });
+      res
+        .status(500)
+        .json({
+          error: 'Failed to fetch paginated orders with payment status',
+          details: (error as any).message,
+        });
     }
   }
 );
@@ -95,10 +100,12 @@ router.get('/unpaid', async (req: Request, res: Response) => {
     res.json(unpaidOrders);
   } catch (error) {
     console.error('Error retrieving unpaid orders:', error);
-    res.status(500).json({
-      error: 'Failed to fetch unpaid orders',
-      details: (error as any).message,
-    });
+    res
+      .status(500)
+      .json({
+        error: 'Failed to fetch unpaid orders',
+        details: (error as any).message,
+      });
   }
 });
 
@@ -112,10 +119,12 @@ router.get(
       res.json(unpaidOrders);
     } catch (error) {
       console.error('Error retrieving unpaid orders by customer:', error);
-      res.status(500).json({
-        error: 'Failed to fetch unpaid orders for customer',
-        details: (error as any).message,
-      });
+      res
+        .status(500)
+        .json({
+          error: 'Failed to fetch unpaid orders for customer',
+          details: (error as any).message,
+        });
     }
   }
 );
@@ -210,10 +219,12 @@ router.get('/customer/:customerId', async (req: Request, res: Response) => {
     res.json(ordersWithPaymentTotals);
   } catch (error) {
     console.error('❌ Error retrieving orders by customer:', error);
-    res.status(500).json({
-      error: 'Failed to fetch orders for customer',
-      details: (error as any).message,
-    });
+    res
+      .status(500)
+      .json({
+        error: 'Failed to fetch orders for customer',
+        details: (error as any).message,
+      });
   }
 });
 
@@ -448,9 +459,11 @@ router.put('/draft/:id', async (req: Request, res: Response) => {
           'Finalized order update failed:',
           (finalizedError as Error).message
         );
-        return res.status(404).json({
-          error: `Order ${orderId} not found in drafts or finalized orders`,
-        });
+        return res
+          .status(404)
+          .json({
+            error: `Order ${orderId} not found in drafts or finalized orders`,
+          });
       }
     }
   } catch (error) {
@@ -483,10 +496,12 @@ router.get('/all', async (req: Request, res: Response) => {
     res.json(orders);
   } catch (error) {
     console.error('Error retrieving all orders:', error);
-    res.status(500).json({
-      error: 'Failed to fetch order',
-      details: (error as any).message,
-    });
+    res
+      .status(500)
+      .json({
+        error: 'Failed to fetch order',
+        details: (error as any).message,
+      });
   }
 });
 
@@ -497,10 +512,12 @@ router.get('/finalized', async (req: Request, res: Response) => {
     res.json(orders);
   } catch (error) {
     console.error('Error retrieving finalized orders:', error);
-    res.status(500).json({
-      error: 'Failed to fetch finalized orders',
-      details: (error as any).message,
-    });
+    res
+      .status(500)
+      .json({
+        error: 'Failed to fetch finalized orders',
+        details: (error as any).message,
+      });
   }
 });
 
@@ -782,10 +799,12 @@ router.post('/sync-verification', async (req: Request, res: Response) => {
     res.json(result);
   } catch (error) {
     console.error('Sync verification status error:', error);
-    res.status(500).json({
-      error: 'Failed to sync verification status',
-      details: (error as Error).message,
-    });
+    res
+      .status(500)
+      .json({
+        error: 'Failed to sync verification status',
+        details: (error as Error).message,
+      });
   }
 });
 
@@ -847,10 +866,12 @@ router.post('/:orderId/payments', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Create payment error:', error);
     console.error('Error details:', (error as Error).message);
-    res.status(400).json({
-      error: 'Failed to create payment',
-      details: (error as any).message,
-    });
+    res
+      .status(400)
+      .json({
+        error: 'Failed to create payment',
+        details: (error as any).message,
+      });
   }
 });
 
@@ -863,10 +884,12 @@ router.put('/payments/:paymentId', async (req: Request, res: Response) => {
     res.json(updatedPayment);
   } catch (error) {
     console.error('Update payment error:', error);
-    res.status(400).json({
-      error: 'Failed to update payment',
-      details: (error as any).message,
-    });
+    res
+      .status(400)
+      .json({
+        error: 'Failed to update payment',
+        details: (error as any).message,
+      });
   }
 });
 
@@ -1132,9 +1155,11 @@ router.post('/:orderId/progress', async (req: Request, res: Response) => {
           console.error(
             `❌ Cannot determine next department for ${existingOrder.currentDepartment}`
           );
-          return res.status(400).json({
-            error: `Invalid current department: ${existingOrder.currentDepartment}`,
-          });
+          return res
+            .status(400)
+            .json({
+              error: `Invalid current department: ${existingOrder.currentDepartment}`,
+            });
         }
       }
     }
@@ -1240,10 +1265,12 @@ router.post('/:orderId/progress', async (req: Request, res: Response) => {
     res.json({ success: true, order: updatedOrder });
   } catch (error) {
     console.error('Progress order error:', error);
-    res.status(500).json({
-      error: 'Failed to progress order',
-      details: (error as any).message,
-    });
+    res
+      .status(500)
+      .json({
+        error: 'Failed to progress order',
+        details: (error as any).message,
+      });
   }
 });
 

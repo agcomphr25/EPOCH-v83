@@ -1,11 +1,10 @@
 import { Router, Request, Response } from 'express';
-import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
-
 import { storage } from '../../storage';
 import {
   insertCalendarEventSchema,
   insertCalendarEventAttendeeSchema,
 } from '../../schema';
+import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { getUncachableGoogleCalendarClient } from '../lib/googleCalendar';
 
 const router = Router();
@@ -109,7 +108,7 @@ router.get('/google-events', async (req: Request, res: Response) => {
 
     const formattedEvents = events.map((event: any) => {
       const isAllDay = !event.start?.dateTime;
-      const startDate = event.start?.dateTime || event.start?.date;
+      let startDate = event.start?.dateTime || event.start?.date;
       let endDate = event.end?.dateTime || event.end?.date;
 
       // Log sample all-day events to debug date issues

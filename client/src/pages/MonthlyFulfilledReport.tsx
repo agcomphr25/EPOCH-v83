@@ -1,8 +1,5 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { FileText, DollarSign, Package } from 'lucide-react';
-import { format } from 'date-fns';
-
 import {
   Card,
   CardContent,
@@ -26,6 +23,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { FileText, DollarSign, Package } from 'lucide-react';
+import { format } from 'date-fns';
 
 interface FulfilledOrder {
   orderId: string;

@@ -1,5 +1,4 @@
 import { Router, Request, Response } from 'express';
-
 import { pool } from '../../db';
 import { storage } from '../../storage';
 
@@ -315,7 +314,6 @@ router.get('/prioritized', async (req: Request, res: Response) => {
         o.fb_order_number as fbOrderNumber,
         o.model_id as modelId,
         o.model_id as stockModelId,
-        sm.display_name as stockModelDisplayName,
         o.due_date as dueDate,
         o.order_date as orderDate,
         o.current_department as currentDepartment,
@@ -328,7 +326,6 @@ router.get('/prioritized', async (req: Request, res: Response) => {
         c.name as customerName
       FROM all_orders o
       LEFT JOIN customers c ON CAST(o.customer_id AS INTEGER) = c.id
-      LEFT JOIN stock_models sm ON o.model_id = sm.id
       WHERE o.current_department = 'P1 Production Queue'
         AND o.status IN ('FINALIZED', 'Active')
         AND o.model_id IS NOT NULL 
@@ -349,15 +346,16 @@ router.get('/prioritized', async (req: Request, res: Response) => {
     // Calculate current priority metrics
     const now = new Date();
     const enhancedQueue = prioritizedQueue.map((order: any, index: number) => {
-      const dueDate = new Date(order.duedate || order.orderdate);
-      const daysToDue = Math.floor((dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-      
+      const dueDate = new Date(order.dueDate || order.orderDate);
+      const daysToDue = Math.floor(
+        (dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
+      );
+
       return {
         orderId: order.orderid,
         fbOrderNumber: order.fbordernumber,
         modelId: order.modelid,
         stockModelId: order.modelid,
-        stockModelDisplayName: order.stockmodeldisplayname,
         dueDate: order.duedate,
         orderDate: order.orderdate,
         currentDepartment: order.currentdepartment,

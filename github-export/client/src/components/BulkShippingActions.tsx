@@ -1,7 +1,4 @@
 import React, { useState } from 'react';
-import { Truck, Package, X, Mail, Phone } from 'lucide-react';
-import axios from 'axios';
-
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -21,7 +18,9 @@ import {
 } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Truck, Package, X, Mail, Phone } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import axios from 'axios';
 
 interface BulkShippingActionsProps {
   selectedOrders: string[];
@@ -132,7 +131,7 @@ export function BulkShippingActions({
     setIsProcessing(true);
     const trackingNumber = generateTrackingNumber();
     let successCount = 0;
-    const notificationResults: any[] = [];
+    let notificationResults: any[] = [];
 
     try {
       // Generate shipping label for bulk shipment

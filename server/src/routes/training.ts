@@ -1,7 +1,5 @@
 import { Router } from 'express';
 import multer from 'multer';
-import { eq, and, desc } from 'drizzle-orm';
-
 import { db } from '../../db';
 import {
   trainingModules,
@@ -25,6 +23,7 @@ import {
   type InsertEmployeeQuizAttempt,
   type InsertTrainingMatrix,
 } from '../../schema';
+import { eq, and, desc } from 'drizzle-orm';
 import {
   extractTrainingContent,
   extractTrainingMatrixData,

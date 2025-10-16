@@ -1,22 +1,5 @@
 import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import {
-  Package,
-  TrendingUp,
-  Calendar,
-  Search,
-  Truck,
-  CheckCircle,
-  XCircle,
-  ExternalLink,
-} from 'lucide-react';
-import {
-  getCurrentCompanyWeek,
-  formatWeekRange,
-  isDateInCompanyWeek,
-} from '@shared/weekUtils';
-import { format } from 'date-fns';
-
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Table,
@@ -42,6 +25,22 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '@/components/ui/accordion';
+import {
+  Package,
+  TrendingUp,
+  Calendar,
+  Search,
+  Truck,
+  CheckCircle,
+  XCircle,
+  ExternalLink,
+} from 'lucide-react';
+import {
+  getCurrentCompanyWeek,
+  formatWeekRange,
+  isDateInCompanyWeek,
+} from '@shared/weekUtils';
+import { format } from 'date-fns';
 import { ManualTrackingEntry } from '@/components/ManualTrackingEntry';
 
 interface Order {

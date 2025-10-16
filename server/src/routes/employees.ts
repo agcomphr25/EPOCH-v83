@@ -1,4 +1,13 @@
 import { Router, Request, Response } from 'express';
+import { storage } from '../../storage';
+import { pool } from '../../db';
+import {
+  uploadMiddleware,
+  getFileInfo,
+  getFileUrl,
+  validateEmployeeDocumentAccess,
+  getDocumentType,
+} from '../../utils/fileUpload';
 import {
   insertEmployeeSchema,
   insertCertificationSchema,
@@ -10,16 +19,6 @@ import {
   insertOnboardingDocSchema,
   insertEmployeeLayupSettingsSchema,
 } from '@shared/schema';
-
-import { storage } from '../../storage';
-import { pool } from '../../db';
-import {
-  uploadMiddleware,
-  getFileInfo,
-  getFileUrl,
-  validateEmployeeDocumentAccess,
-  getDocumentType,
-} from '../../utils/fileUpload';
 
 const router = Router();
 
@@ -203,7 +202,7 @@ router.post('/evaluations', async (req: Request, res: Response) => {
     // Calculate period start/end based on evaluation type
     const now = new Date();
     const periodEnd = now;
-    const periodStart = new Date(now);
+    let periodStart = new Date(now);
 
     switch (evaluationType) {
       case 'BIANNUAL':

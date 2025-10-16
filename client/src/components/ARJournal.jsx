@@ -1,9 +1,5 @@
 import React, { useState } from 'react';
-import { RefreshCw, ExternalLink } from 'lucide-react';
-import { useLocation } from 'wouter';
-
 import { useARTransactions } from '../hooks/useTransactions';
-
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -16,6 +12,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { RefreshCw, ExternalLink } from 'lucide-react';
+import { useLocation } from 'wouter';
 
 /**
  * AR Journal component displaying Accounts Receivable transactions

@@ -1,6 +1,4 @@
 import React, { useState } from 'react';
-import { Mail, MessageSquare, Send, X } from 'lucide-react';
-
 import {
   Dialog,
   DialogContent,
@@ -13,6 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Mail, MessageSquare, Send, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
 

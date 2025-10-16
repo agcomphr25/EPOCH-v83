@@ -1,8 +1,5 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { Plus, Edit, Trash2, AlertCircle, FileWarning } from 'lucide-react';
-import { format } from 'date-fns';
-
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -33,6 +30,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { Plus, Edit, Trash2, AlertCircle, FileWarning } from 'lucide-react';
+import { format } from 'date-fns';
 
 type P1Customer = {
   id: number;

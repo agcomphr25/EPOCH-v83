@@ -1,13 +1,12 @@
 import { drizzle } from 'drizzle-orm/neon-serverless';
 import { Pool, neonConfig } from '@neondatabase/serverless';
 import ws from 'ws';
-import { sql } from 'drizzle-orm';
-
 import {
   trainingModules,
   trainingQuestions,
   trainingQuestionOptions,
 } from '../../schema';
+import { sql } from 'drizzle-orm';
 
 // WebSocket for Neon serverless
 neonConfig.webSocketConstructor = ws;

@@ -1,17 +1,4 @@
 import React, { useState, useRef, useEffect } from 'react';
-import {
-  Check,
-  ChevronDown,
-  Mail,
-  MapPin,
-  Phone,
-  Plus,
-  User,
-} from 'lucide-react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import debounce from 'lodash.debounce';
-import type { Customer } from '@shared/schema';
-
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
@@ -35,8 +22,20 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import {
+  Check,
+  ChevronDown,
+  Mail,
+  MapPin,
+  Phone,
+  Plus,
+  User,
+} from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import debounce from 'lodash.debounce';
+import type { Customer } from '@shared/schema';
 import AddressInput from '@/components/AddressInput';
 import type { AddressData } from '@/utils/addressUtils';
 import { Checkbox } from '@/components/ui/checkbox';

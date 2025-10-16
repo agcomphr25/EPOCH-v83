@@ -1,5 +1,21 @@
 import React, { useState } from 'react';
 import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
   Package,
   TrendingUp,
   AlertTriangle,
@@ -25,23 +41,6 @@ import MRPShortagesCard from '../components/inventory/MRPShortagesCard';
 import OutsideProcessingCard from '../components/inventory/OutsideProcessingCard';
 import VendorPartsCard from '../components/inventory/VendorPartsCard';
 import POSuggestionsCard from '../components/inventory/POSuggestionsCard';
-
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { Separator } from '@/components/ui/separator';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
 
 export default function EnhancedInventoryMRPPage() {
   const [activeCard, setActiveCard] = useState<string | null>(null);

@@ -61,8 +61,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import SimpleAddressInput from '@/components/SimpleAddressInput';
-import type { AddressData } from '@/utils/addressUtils';
 
 const vendorFormSchema = insertVendorSchema.extend({
   email: z.string().email('Invalid email').optional().or(z.literal('')),
@@ -113,14 +111,6 @@ export default function VendorManagement() {
   const [sort, setSort] = useState('createdAt:desc');
   const [page, setPage] = useState(1);
   const [pageSize] = useState(10);
-
-  const [vendorAddress, setVendorAddress] = useState<AddressData>({
-    street: '',
-    city: '',
-    state: '',
-    zipCode: '',
-    country: 'United States',
-  });
 
   const form = useForm<VendorFormData>({
     resolver: zodResolver(vendorFormSchema),
@@ -400,28 +390,19 @@ export default function VendorManagement() {
         email: vendor.email || '',
         additionalEmail: vendor.additionalEmail || '',
         phone: vendor.phone || '',
+        address: vendor.address || '',
+        city: vendor.city || '',
+        state: vendor.state || '',
+        zipCode: vendor.zipCode || '',
+        country: vendor.country || 'United States',
         approved: vendor.approved,
         evaluated: vendor.evaluated,
         evaluationDate: vendor.evaluationDate || '',
         notes: vendor.notes || '',
       });
-      setVendorAddress({
-        street: vendor.street || '',
-        city: vendor.city || '',
-        state: vendor.state || '',
-        zipCode: vendor.zipCode || '',
-        country: vendor.country || 'United States',
-      });
     } else {
       setEditingVendor(null);
       form.reset();
-      setVendorAddress({
-        street: '',
-        city: '',
-        state: '',
-        zipCode: '',
-        country: 'United States',
-      });
     }
     setIsModalOpen(true);
   };
@@ -431,13 +412,6 @@ export default function VendorManagement() {
     setEditingVendor(null);
     setPendingContacts([]);
     form.reset();
-    setVendorAddress({
-      street: '',
-      city: '',
-      state: '',
-      zipCode: '',
-      country: 'United States',
-    });
     // Reset contact form states
     setIsAddingContact(false);
     setEditingContact(null);
@@ -451,11 +425,11 @@ export default function VendorManagement() {
       email: data.email || undefined,
       additionalEmail: data.additionalEmail || undefined,
       phone: data.phone || undefined,
-      street: vendorAddress.street || undefined,
-      city: vendorAddress.city || undefined,
-      state: vendorAddress.state || undefined,
-      zipCode: vendorAddress.zipCode || undefined,
-      country: vendorAddress.country || undefined,
+      address: data.address || undefined,
+      city: data.city || undefined,
+      state: data.state || undefined,
+      zipCode: data.zipCode || undefined,
+      country: data.country || undefined,
       evaluationDate: data.evaluationDate || undefined,
       notes: data.notes || undefined,
     };
@@ -620,13 +594,100 @@ export default function VendorManagement() {
                       />
                     </div>
 
-                    <div>
-                      <SimpleAddressInput
-                        label="Address"
-                        value={vendorAddress}
-                        onChange={setVendorAddress}
-                        required={false}
+                    <div className="space-y-4">
+                      <FormField
+                        control={form.control}
+                        name="address"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Street Address</FormLabel>
+                            <FormControl>
+                              <Input
+                                {...field}
+                                placeholder="123 Main St"
+                                data-testid="input-address"
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
                       />
+                      
+                      <div className="grid grid-cols-2 gap-4">
+                        <FormField
+                          control={form.control}
+                          name="city"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>City</FormLabel>
+                              <FormControl>
+                                <Input
+                                  {...field}
+                                  placeholder="City"
+                                  data-testid="input-city"
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        
+                        <FormField
+                          control={form.control}
+                          name="state"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>State</FormLabel>
+                              <FormControl>
+                                <Input
+                                  {...field}
+                                  placeholder="State"
+                                  data-testid="input-state"
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-4">
+                        <FormField
+                          control={form.control}
+                          name="zipCode"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>ZIP Code</FormLabel>
+                              <FormControl>
+                                <Input
+                                  {...field}
+                                  placeholder="12345"
+                                  data-testid="input-zip"
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        
+                        <FormField
+                          control={form.control}
+                          name="country"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Country</FormLabel>
+                              <FormControl>
+                                <Input
+                                  {...field}
+                                  placeholder="United States"
+                                  data-testid="input-country"
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
                     </div>
 
                     <FormField

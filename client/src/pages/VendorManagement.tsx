@@ -16,6 +16,8 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Plus, Search, ChevronUp, ChevronDown, Edit, Trash2, CheckCircle, XCircle, User } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { insertVendorSchema, insertVendorContactSchema, type Vendor, type VendorContact } from '@shared/schema';
+import SimpleAddressInput from '@/components/SimpleAddressInput';
+import type { AddressData } from '@/utils/addressUtils';
 
 const vendorFormSchema = insertVendorSchema.extend({
   email: z.string().email('Invalid email').optional().or(z.literal('')),
@@ -61,6 +63,14 @@ export default function VendorManagement() {
   const [page, setPage] = useState(1);
   const [pageSize] = useState(10);
 
+  const [vendorAddress, setVendorAddress] = useState<AddressData>({
+    street: '',
+    city: '',
+    state: '',
+    zipCode: '',
+    country: 'United States',
+  });
+
   const form = useForm<VendorFormData>({
     resolver: zodResolver(vendorFormSchema),
     defaultValues: {
@@ -69,7 +79,6 @@ export default function VendorManagement() {
       email: '',
       additionalEmail: '',
       phone: '',
-      address: '',
       approved: false,
       evaluated: false,
       evaluationDate: '',
@@ -293,15 +302,28 @@ export default function VendorManagement() {
         email: vendor.email || '',
         additionalEmail: vendor.additionalEmail || '',
         phone: vendor.phone || '',
-        address: vendor.address || '',
         approved: vendor.approved,
         evaluated: vendor.evaluated,
         evaluationDate: vendor.evaluationDate || '',
         notes: vendor.notes || '',
       });
+      setVendorAddress({
+        street: vendor.street || '',
+        city: vendor.city || '',
+        state: vendor.state || '',
+        zipCode: vendor.zipCode || '',
+        country: vendor.country || 'United States',
+      });
     } else {
       setEditingVendor(null);
       form.reset();
+      setVendorAddress({
+        street: '',
+        city: '',
+        state: '',
+        zipCode: '',
+        country: 'United States',
+      });
     }
     setIsModalOpen(true);
   };
@@ -311,6 +333,13 @@ export default function VendorManagement() {
     setEditingVendor(null);
     setPendingContacts([]);
     form.reset();
+    setVendorAddress({
+      street: '',
+      city: '',
+      state: '',
+      zipCode: '',
+      country: 'United States',
+    });
     // Reset contact form states
     setIsAddingContact(false);
     setEditingContact(null);
@@ -324,7 +353,11 @@ export default function VendorManagement() {
       email: data.email || undefined,
       additionalEmail: data.additionalEmail || undefined,
       phone: data.phone || undefined,
-      address: data.address || undefined,
+      street: vendorAddress.street || undefined,
+      city: vendorAddress.city || undefined,
+      state: vendorAddress.state || undefined,
+      zipCode: vendorAddress.zipCode || undefined,
+      country: vendorAddress.country || undefined,
       evaluationDate: data.evaluationDate || undefined,
       notes: data.notes || undefined,
     };
@@ -454,19 +487,14 @@ export default function VendorManagement() {
                       />
                     </div>
 
-                    <FormField
-                      control={form.control}
-                      name="address"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Address</FormLabel>
-                          <FormControl>
-                            <Input {...field} data-testid="input-address" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                    <div>
+                      <SimpleAddressInput
+                        label="Address"
+                        value={vendorAddress}
+                        onChange={setVendorAddress}
+                        required={false}
+                      />
+                    </div>
 
                     <FormField
                       control={form.control}

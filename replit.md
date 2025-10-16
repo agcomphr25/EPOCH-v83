@@ -54,6 +54,7 @@ The application adopts a monorepo structure utilizing a full-stack TypeScript ap
     - **AI-Powered Smart Sorting**: Intelligent dropdown sorting for Action Inlet options.
     - **Calendar Integration**: Displays Google Calendar events via OAuth.
     - **Azure Document Intelligence**: AI-powered document analysis for extracting data from documents.
+    - **Magic Link Authentication**: Secure passwordless authentication system for customers with time-limited, single-use email links for login, order confirmation, password reset, and custom actions. Features SHA-256 token hashing and SendGrid email delivery.
 
 ## External Dependencies
 
@@ -77,8 +78,23 @@ The application adopts a monorepo structure utilizing a full-stack TypeScript ap
 - SmartyStreets (Address Validation)
 - Authorize.Net (Payment Gateway)
 - UPS API (Shipping)
-- SendGrid (Email)
+- SendGrid (Email - includes Magic Link delivery)
 - Twilio (SMS)
 - Google Calendar (Event Integration)
 - Google APIs (`googleapis` package)
 - Azure Document Intelligence (AI-powered document analysis)
+
+## Recent Changes
+
+### October 16, 2025 - Magic Link Authentication System
+- **Added passwordless authentication system** for secure customer interactions
+- **Security Features**: 
+  - Cryptographically secure token generation using crypto.randomBytes
+  - SHA-256 token hashing before database storage
+  - One-time use enforcement with expiration tracking
+  - Authentication-protected endpoints for link generation
+- **Database**: New `magic_link_tokens` table with metadata support
+- **API Endpoints**: `/api/magic-link/send`, `/api/magic-link/verify`, `/api/magic-link/generate`, `/api/magic-link/cleanup`
+- **Email Integration**: SendGrid integration for reliable email delivery with customizable templates
+- **Use Cases**: Customer login, order confirmation, password reset, document signing, and custom actions
+- **Documentation**: Comprehensive usage guide at `server/utils/MAGIC_LINK_USAGE.md`

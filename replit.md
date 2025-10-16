@@ -86,6 +86,23 @@ The application adopts a monorepo structure utilizing a full-stack TypeScript ap
 
 ## Recent Changes
 
+### October 16, 2025 - Training Matrix Enhanced with 3-Tab Interface
+- **3-Tab Interface Implementation**: Training Matrix View now features three tabs for comprehensive employee development tracking
+  - **Standards Training Tab**: Displays existing training module completion matrix (preserved original functionality)
+  - **Certifications Tab**: Shows employee certifications across 15 department-specific categories
+  - **Evaluations Tab**: Displays employee performance evaluations with biannual tracking
+- **Department-Specific Certifications**: Created 15 certification types including Cutting Table, Cores, Lay-up, Mold Assembly, Tube Procedure, Lathe Cert., Using the Ovens, Breakout, Finish, CNC Operations, QC Standards, Shipping, Paint Booth Methods, Mold/Mandrel Maintenance, and Customer Satisfaction
+- **New API Endpoints**:
+  - GET `/api/employees/certifications-matrix` - Returns all employee certifications in flattened matrix format
+  - GET `/api/employees/evaluations` - Returns all employee evaluations with filtering by active employees
+- **UI/UX Improvements**: 
+  - Consistent matrix table pattern across all three tabs
+  - Loading states for each tab
+  - Proper data-testid attributes for testing
+  - Preserves existing sorting, sticky columns, and completion badges from Standards tab
+- **Status**: ✅ Fully functional and architect-approved
+- **Architect Recommendations**: Add explicit empty/error states for new tabs, consider lazy-loading non-active tabs for performance optimization
+
 ### October 16, 2025 - Customer Satisfaction Analytics Enhanced with Question-Level Insights
 - **Question-Level Analytics**: Analytics tab now displays detailed breakdown for each survey question with average scores and response counts
 - **3-Month Trend Tracking**: Each question shows trend data across the last 3 months with visual indicators (Up/Down/Stable)

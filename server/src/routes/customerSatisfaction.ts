@@ -166,6 +166,7 @@ router.get('/surveys/:id/responses', async (req, res) => {
         aggregateScore: customerSatisfactionResponses.aggregateScore,
         responseTimeSeconds: customerSatisfactionResponses.responseTimeSeconds,
         csrName: customerSatisfactionResponses.csrName,
+        surveyDate: customerSatisfactionResponses.surveyDate,
         isComplete: customerSatisfactionResponses.isComplete,
         submittedAt: customerSatisfactionResponses.submittedAt,
         createdAt: customerSatisfactionResponses.createdAt,
@@ -201,6 +202,7 @@ router.get('/responses', async (req, res) => {
         aggregateScore: customerSatisfactionResponses.aggregateScore,
         responseTimeSeconds: customerSatisfactionResponses.responseTimeSeconds,
         csrName: customerSatisfactionResponses.csrName,
+        surveyDate: customerSatisfactionResponses.surveyDate,
         isComplete: customerSatisfactionResponses.isComplete,
         submittedAt: customerSatisfactionResponses.submittedAt,
         createdAt: customerSatisfactionResponses.createdAt,
@@ -223,10 +225,11 @@ router.post('/responses', async (req, res) => {
   try {
     const validatedData = insertCustomerSatisfactionResponseSchema.parse(req.body);
     
-    // Convert submittedAt string to Date if provided
+    // Convert date strings to Date objects if provided
     const dataToInsert = {
       ...validatedData,
       submittedAt: validatedData.submittedAt ? new Date(validatedData.submittedAt) : new Date(),
+      surveyDate: validatedData.surveyDate ? new Date(validatedData.surveyDate) : undefined,
       ipAddress: req.ip,
       userAgent: req.get('User-Agent'),
     };
@@ -264,6 +267,7 @@ router.put('/responses/:id', async (req, res) => {
     const dataToUpdate = {
       ...validatedData,
       submittedAt: validatedData.submittedAt ? new Date(validatedData.submittedAt) : undefined,
+      surveyDate: validatedData.surveyDate ? new Date(validatedData.surveyDate) : undefined,
       updatedAt: new Date(),
     };
 

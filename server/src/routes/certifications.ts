@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { pool } from '../../db';
 import { uploadMiddleware } from '../../utils/fileUpload';
-import { extractCertificationContent } from '../../lib/azureDocumentIntelligence';
+import { extractCertificationContent } from '../lib/azureDocumentIntelligence';
 
 const router = Router();
 

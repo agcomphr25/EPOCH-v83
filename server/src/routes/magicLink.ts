@@ -6,8 +6,12 @@ import {
   cleanupExpiredMagicLinks 
 } from '../../utils/magicLink';
 import { z } from 'zod';
+import { authenticateToken } from '../../middleware/auth';
 
 const router = Router();
+
+// SECURITY: All magic link generation/sending routes require authentication
+// Only verified backend users can create magic links
 
 const generateMagicLinkSchema = z.object({
   email: z.string().email('Invalid email address'),
@@ -22,7 +26,8 @@ const sendMagicLinkSchema = generateMagicLinkSchema.extend({
   buttonText: z.string().optional(),
 });
 
-router.post('/generate', async (req: Request, res: Response) => {
+// PROTECTED: Only authenticated users can generate magic links
+router.post('/generate', authenticateToken, async (req: Request, res: Response) => {
   try {
     const validatedData = generateMagicLinkSchema.parse(req.body);
     
@@ -53,7 +58,8 @@ router.post('/generate', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/send', async (req: Request, res: Response) => {
+// PROTECTED: Only authenticated users can send magic links
+router.post('/send', authenticateToken, async (req: Request, res: Response) => {
   try {
     const validatedData = sendMagicLinkSchema.parse(req.body);
     
@@ -91,6 +97,7 @@ router.post('/send', async (req: Request, res: Response) => {
   }
 });
 
+// PUBLIC: Customers can verify their magic links (no auth required)
 router.get('/verify', async (req: Request, res: Response) => {
   try {
     const { token, purpose } = req.query;
@@ -130,7 +137,8 @@ router.get('/verify', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/cleanup', async (req: Request, res: Response) => {
+// PROTECTED: Only authenticated users can trigger cleanup
+router.post('/cleanup', authenticateToken, async (req: Request, res: Response) => {
   try {
     const deletedCount = await cleanupExpiredMagicLinks();
     res.json({

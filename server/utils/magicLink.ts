@@ -31,6 +31,13 @@ export function generateMagicLinkToken(): string {
 }
 
 /**
+ * Hash a token for secure storage using SHA-256
+ */
+export function hashToken(token: string): string {
+  return crypto.createHash('sha256').update(token).digest('hex');
+}
+
+/**
  * Get the base URL for magic links
  */
 export function getMagicLinkBaseUrl(): string {
@@ -53,16 +60,18 @@ export function createMagicLinkUrl(token: string, purpose: string): string {
 
 /**
  * Generate and save a magic link token to the database
+ * SECURITY: Token is hashed before storage using SHA-256
  */
 export async function generateMagicLink(options: MagicLinkOptions): Promise<{ token: string; link: string; expiresAt: Date }> {
   const { storage } = await import('../storage.js');
   
   const token = generateMagicLinkToken();
+  const tokenHash = hashToken(token);
   const expiresInMinutes = options.expiresInMinutes || 30; // Default 30 minutes
   const expiresAt = new Date(Date.now() + expiresInMinutes * 60 * 1000);
   
   await storage.createMagicLinkToken({
-    token,
+    token: tokenHash, // Store hashed token, not plaintext
     email: options.email,
     purpose: options.purpose,
     metadata: options.metadata || null,
@@ -79,6 +88,7 @@ export async function generateMagicLink(options: MagicLinkOptions): Promise<{ to
 
 /**
  * Validate and consume a magic link token
+ * SECURITY: Compares hashed version of token
  */
 export async function validateMagicLink(
   token: string, 
@@ -87,7 +97,8 @@ export async function validateMagicLink(
   const { storage } = await import('../storage.js');
   
   try {
-    const magicToken = await storage.getMagicLinkToken(token);
+    const tokenHash = hashToken(token);
+    const magicToken = await storage.getMagicLinkToken(tokenHash);
     
     if (!magicToken) {
       return { isValid: false, error: 'Invalid or expired token' };
@@ -108,8 +119,8 @@ export async function validateMagicLink(
       return { isValid: false, error: 'Invalid token purpose' };
     }
     
-    // Mark as used
-    await storage.markMagicLinkTokenAsUsed(token);
+    // Mark as used (using the hash)
+    await storage.markMagicLinkTokenAsUsed(tokenHash);
     
     return { isValid: true, token: magicToken };
   } catch (error) {

@@ -39,11 +39,15 @@ import featureSelectionsRoutes from './featureSelections';
 import calendarRoutes from './calendar';
 import documentIntelligenceRoutes from './documentIntelligence';
 import trainingRoutes from './training';
+import magicLinkRoutes from './magicLink';
 import { getAccessToken } from '../utils/upsShipping';
 
 export function registerRoutes(app: Express): Server {
   // Authentication routes
   app.use('/api/auth', authRoutes);
+  
+  // Magic Link routes
+  app.use('/api/magic-link', magicLinkRoutes);
   
   // Calendar routes
   app.use('/api/calendar', calendarRoutes);

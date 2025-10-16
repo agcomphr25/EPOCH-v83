@@ -9120,13 +9120,16 @@ export class DatabaseStorage implements IStorage {
 
       const totalDemandNext4 = weeklyDemand.reduce((a, b) => a + b, 0);
       const available = item.inventory + item.machined + item.atAnodizer;
-      const need = totalDemandNext4 - available;
+      // Account for minimum threshold: we need enough to cover demand AND maintain threshold
+      const totalNeeded = totalDemandNext4 + (item.minimumThreshold || 0);
+      const need = totalNeeded - available;
 
       return {
         itemId: item.id,
         name: item.name,
         category: item.category,
         inventory: item.inventory,
+        minimumThreshold: item.minimumThreshold || 0,
         machined: item.machined,
         atAnodizer: item.atAnodizer,
         weeklyDemand,

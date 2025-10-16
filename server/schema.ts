@@ -3924,7 +3924,8 @@ export const metalAccessories = pgTable('metal_accessories', {
   id: serial('id').primaryKey(),
   name: text('name').notNull(),
   category: text('category').notNull(),
-  inventory: integer('inventory').notNull().default(0),
+  inventory: integer('inventory').notNull().default(0), // Can be negative to account for uncommitted orders
+  minimumThreshold: integer('minimum_threshold').notNull().default(0), // Minimum stock level to maintain
   machined: integer('machined').notNull().default(0),
   atAnodizer: integer('at_anodizer').notNull().default(0),
   createdAt: timestamp('created_at').defaultNow(),

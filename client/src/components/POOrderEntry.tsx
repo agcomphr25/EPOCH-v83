@@ -1,7 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ChevronsUpDown, Check } from 'lucide-react';
-
 import {
   fetchStockModels,
   fetchFeatures,
@@ -44,6 +42,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Checkbox } from '@/components/ui/checkbox';
+import { ChevronsUpDown, Check } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import {
   FEATURE_IDS,

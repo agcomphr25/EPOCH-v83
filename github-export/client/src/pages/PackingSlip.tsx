@@ -1,8 +1,5 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Save, Printer, Download, FileText, Package } from 'lucide-react';
-import { COMPANY_INFO } from '@shared/company-config';
-
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,8 +12,10 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
+import { Save, Printer, Download, FileText, Package } from 'lucide-react';
 import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
+import { COMPANY_INFO } from '@shared/company-config';
 
 interface PackingSlipFormData {
   // Header Information

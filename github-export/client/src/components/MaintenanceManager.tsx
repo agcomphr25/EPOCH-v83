@@ -1,20 +1,5 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import {
-  Calendar,
-  Clock,
-  Settings,
-  Plus,
-  Wrench,
-  AlertTriangle,
-  CheckCircle,
-} from 'lucide-react';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { insertMaintenanceScheduleSchema } from '@shared/schema';
-import { z } from 'zod';
-import type { MaintenanceSchedule, MaintenanceLog } from '@shared/schema';
-
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -49,7 +34,21 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import {
+  Calendar,
+  Clock,
+  Settings,
+  Plus,
+  Wrench,
+  AlertTriangle,
+  CheckCircle,
+} from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { insertMaintenanceScheduleSchema } from '@shared/schema';
+import { z } from 'zod';
+import type { MaintenanceSchedule, MaintenanceLog } from '@shared/schema';
 
 export default function MaintenanceManager() {
   const [activeTab, setActiveTab] = useState('schedules');
@@ -141,7 +140,7 @@ export default function MaintenanceManager() {
     const startDate = new Date(schedule.startDate);
     const now = new Date();
 
-    const nextDue = new Date(startDate);
+    let nextDue = new Date(startDate);
 
     const intervals = {
       ANNUAL: 365,

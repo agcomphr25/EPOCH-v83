@@ -1,15 +1,5 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Edit, Trash2, Percent } from 'lucide-react';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import {
-  insertPersistentDiscountSchema,
-  type PersistentDiscount,
-  type CustomerType,
-} from '@shared/schema';
-import { z } from 'zod';
-
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -45,8 +35,17 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
+import { Plus, Edit, Trash2, Percent } from 'lucide-react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import {
+  insertPersistentDiscountSchema,
+  type PersistentDiscount,
+  type CustomerType,
+} from '@shared/schema';
 import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
+import { z } from 'zod';
 
 const persistentDiscountFormSchema = insertPersistentDiscountSchema.extend({
   customerTypeId: z.number().min(1, 'Customer type is required'),

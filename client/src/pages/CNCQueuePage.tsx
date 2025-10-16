@@ -1,4 +1,10 @@
 import React, { useMemo, useState, useCallback } from 'react';
+import { BarcodeScanner } from '@/components/BarcodeScanner';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
+import { OrderTooltip } from '@/components/OrderTooltip';
 import {
   Settings,
   ArrowLeft,
@@ -13,18 +19,11 @@ import {
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format, isAfter } from 'date-fns';
-import { useLocation } from 'wouter';
-
-import { BarcodeScanner } from '@/components/BarcodeScanner';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
-import { OrderTooltip } from '@/components/OrderTooltip';
 import { getDisplayOrderId } from '@/lib/orderUtils';
 import { apiRequest } from '@/lib/queryClient';
 import { OrderSearchBox } from '@/components/OrderSearchBox';
 import { useToast } from '@/hooks/use-toast';
+import { useLocation } from 'wouter';
 import { SalesOrderModal } from '@/components/SalesOrderModal';
 
 export default function CNCQueuePage() {

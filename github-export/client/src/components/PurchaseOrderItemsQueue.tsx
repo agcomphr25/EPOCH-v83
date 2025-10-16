@@ -1,6 +1,4 @@
 import { useState, useEffect } from 'react';
-import { Package, Eye, Calendar, DollarSign } from 'lucide-react';
-
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -12,6 +10,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { Package, Eye, Calendar, DollarSign } from 'lucide-react';
 
 interface PurchaseOrderItem {
   id: number;

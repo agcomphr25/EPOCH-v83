@@ -1,14 +1,5 @@
 import React, { useState } from 'react';
 import {
-  MapPin,
-  FileText,
-  MessageSquare,
-  Download,
-  Send,
-  Mail,
-} from 'lucide-react';
-
-import {
   Card,
   CardContent,
   CardDescription,
@@ -18,6 +9,14 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import {
+  MapPin,
+  FileText,
+  MessageSquare,
+  Download,
+  Send,
+  Mail,
+} from 'lucide-react';
 import AddressInput from '@/components/AddressInput';
 import AddressTestComponent from '@/components/AddressTestComponent';
 import PdfViewer from '@/components/PdfViewer';

@@ -1,10 +1,9 @@
 import { Router, Request, Response } from 'express';
+import { storage } from '../../storage';
 import {
   insertPersistentDiscountSchema,
   insertShortTermSaleSchema,
 } from '@shared/schema';
-
-import { storage } from '../../storage';
 
 const router = Router();
 

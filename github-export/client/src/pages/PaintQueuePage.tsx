@@ -1,12 +1,11 @@
 import React, { useMemo } from 'react';
-import { Package, ArrowLeft, ArrowRight } from 'lucide-react';
-import { useQuery } from '@tanstack/react-query';
-import { format } from 'date-fns';
-
 import { BarcodeScanner } from '@/components/BarcodeScanner';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { OrderTooltip } from '@/components/OrderTooltip';
+import { Package, ArrowLeft, ArrowRight } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { format } from 'date-fns';
 import { getDisplayOrderId } from '@/lib/orderUtils';
 
 export default function PaintQueuePage() {

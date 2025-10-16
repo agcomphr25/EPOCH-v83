@@ -2,8 +2,6 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation } from '@tanstack/react-query';
-import { toast } from 'react-hot-toast';
-
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -18,6 +16,7 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { apiRequest } from '@/lib/queryClient';
+import { toast } from 'react-hot-toast';
 
 const bomDefinitionSchema = z.object({
   sku: z.string().optional(),

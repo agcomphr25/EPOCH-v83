@@ -1,10 +1,9 @@
 import React, { useState } from 'react';
-import { Hash, Settings, BarChart3, CheckCircle } from 'lucide-react';
-
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Hash, Settings, BarChart3, CheckCircle } from 'lucide-react';
 import { generateP1OrderId, generateP2Serial } from '@/utils/orderUtils';
 
 export function OrderIDGenerator() {

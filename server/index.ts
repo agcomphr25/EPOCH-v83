@@ -1,10 +1,8 @@
-import path from 'path';
-import fs from 'fs';
-
 import express, { type Request, Response, NextFunction } from 'express';
 import cookieParser from 'cookie-parser';
 import cors from 'cors';
-
+import path from 'path';
+import fs from 'fs';
 import { registerRoutes } from './src/routes/index';
 import { setupVite, serveStatic, log } from './vite';
 
@@ -92,7 +90,14 @@ app.get('/attached_assets/*', (req, res, next) => {
 });
 
 app.use(cookieParser());
-app.use(express.json());
+// Skip JSON parsing for multipart/form-data (file uploads)
+app.use((req, res, next) => {
+  const contentType = req.headers['content-type'] || '';
+  if (contentType.includes('multipart/form-data')) {
+    return next();
+  }
+  express.json()(req, res, next);
+});
 app.use(express.urlencoded({ extended: false }));
 
 // Also add express.static as fallback

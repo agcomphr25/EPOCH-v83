@@ -1,24 +1,4 @@
 import {
-  eq,
-  desc,
-  and,
-  or,
-  ilike,
-  isNull,
-  sql,
-  ne,
-  like,
-  lt,
-  gt,
-  gte,
-  lte,
-  getTableColumns,
-} from 'drizzle-orm';
-import { nanoid } from 'nanoid';
-import bcrypt from 'bcrypt';
-
-import { db } from './db';
-import {
   users,
   csvData,
   customerTypes,
@@ -213,6 +193,25 @@ import {
   type InsertOrderAttachment,
   orderAttachments,
 } from './schema';
+import { db } from './db';
+import {
+  eq,
+  desc,
+  and,
+  or,
+  ilike,
+  isNull,
+  sql,
+  ne,
+  like,
+  lt,
+  gt,
+  gte,
+  lte,
+  getTableColumns,
+} from 'drizzle-orm';
+import { nanoid } from 'nanoid';
+import bcrypt from 'bcrypt';
 import {
   generateP1OrderId,
   getCurrentYearMonthPrefix,
@@ -534,7 +533,9 @@ export interface IStorage {
   deleteMaintenanceLog(id: number): Promise<void>;
 
   // Time Clock CRUD
-  getTimeClockStatus(employeeId: string): Promise<{
+  getTimeClockStatus(
+    employeeId: string
+  ): Promise<{
     status: 'IN' | 'OUT';
     clockIn: string | null;
     clockOut: string | null;
@@ -1218,8 +1219,7 @@ export class DatabaseStorage implements IStorage {
 
   async createStockModel(data: InsertStockModel): Promise<StockModel> {
     // Generate ID from name if not provided
-    const baseId =
-      data.id || data.name.toLowerCase().replace(/[^a-z0-9]/g, '_');
+    let baseId = data.id || data.name.toLowerCase().replace(/[^a-z0-9]/g, '_');
     let id = baseId;
     let counter = 1;
 
@@ -2587,7 +2587,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Time Clock CRUD
-  async getTimeClockStatus(employeeId: string): Promise<{
+  async getTimeClockStatus(
+    employeeId: string
+  ): Promise<{
     status: 'IN' | 'OUT';
     clockIn: string | null;
     clockOut: string | null;
@@ -2839,7 +2841,7 @@ export class DatabaseStorage implements IStorage {
 
   // Onboarding Docs CRUD
   async getOnboardingDocs(employeeId: string): Promise<OnboardingDoc[]> {
-    const docs = await db
+    let docs = await db
       .select()
       .from(onboardingDocs)
       .where(eq(onboardingDocs.employeeId, employeeId))

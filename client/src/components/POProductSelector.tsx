@@ -1,7 +1,5 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Package, Plus, ShoppingCart } from 'lucide-react';
-
 import { apiRequest } from '@/lib/queryClient';
 import { Button } from '@/components/ui/button';
 import {
@@ -22,6 +20,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { Package, Plus, ShoppingCart } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface POProduct {

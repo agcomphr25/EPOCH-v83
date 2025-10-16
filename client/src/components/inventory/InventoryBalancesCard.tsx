@@ -1,18 +1,5 @@
 import React, { useState, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import {
-  Search,
-  AlertTriangle,
-  Package,
-  MapPin,
-  TrendingUp,
-  TrendingDown,
-  Edit,
-  RefreshCw,
-  Target,
-} from 'lucide-react';
-import { toast } from 'react-hot-toast';
-
 import { apiRequest } from '@/lib/queryClient';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -41,6 +28,18 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  Search,
+  AlertTriangle,
+  Package,
+  MapPin,
+  TrendingUp,
+  TrendingDown,
+  Edit,
+  RefreshCw,
+  Target,
+} from 'lucide-react';
+import { toast } from 'react-hot-toast';
 
 interface InventoryBalance {
   partId: string;

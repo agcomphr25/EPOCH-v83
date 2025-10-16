@@ -45,7 +45,7 @@ type EmployeeCertification = {
   certificationName: string;
   dateEarned: string | null;
   expiryDate: string | null;
-  status: string;
+  isActive: boolean;
   notes: string | null;
 };
 
@@ -545,7 +545,7 @@ export default function TrainingMatrixView() {
     const completedCertCount = (employeeName: string) => {
       return certifications.filter((cert) => {
         const entry = getCert(employeeName, cert);
-        return entry?.status === 'ACTIVE' || entry?.dateEarned;
+        return entry?.isActive || entry?.dateEarned;
       }).length;
     };
 
@@ -650,7 +650,7 @@ export default function TrainingMatrixView() {
                     {certifications.map((cert) => {
                       const entry = getCert(employee.name, cert);
                       const isEarned =
-                        entry?.status === 'ACTIVE' || entry?.dateEarned;
+                        entry?.isActive || entry?.dateEarned;
                       const date = formatDate(entry?.dateEarned || null);
                       const expiryDate = formatDate(entry?.expiryDate || null);
 

@@ -108,18 +108,25 @@ The application adopts a monorepo structure utilizing a full-stack TypeScript ap
 - **Schema Consistency**: Critical fix applied to synchronize both schema.ts files (root and server/schema.ts) to prevent Drizzle ORM caching issues
 - **Status**: ✅ Fully functional and architect-approved
 
-### October 16, 2025 - Training Module Quiz Display Fixed
-- **Critical Bug Fixed**: Training modules in production were missing their quizzes/questions
+### October 16, 2025 - Training Module Quiz Display Fixed & Clean Production Migration
+- **Critical Bug Fixed**: Training modules in production were missing their quizzes/questions and had duplicates
 - **Root Cause 1**: Duplicate hardcoded training routes in `server/src/routes/index.ts` were overriding the database routes from `server/src/routes/training.ts`
   - Hardcoded routes returned static training data without quiz questions
   - Database routes properly fetch modules with their associated questions and options
-- **Root Cause 2**: Duplicate training module in database (ID 1) with 0 questions
-  - Module IDs 2-10 had the correct data with 5 questions each
+- **Root Cause 2**: Duplicate/incomplete training modules in production database
 - **Solution**: 
   - Removed 504 lines of hardcoded training array and duplicate routes (lines 3543-4046)
-  - Deleted duplicate module ID 1 from database
-- **Result**: All 9 training modules now correctly display with their quizzes (5 questions each)
-- **Files Modified**: `server/src/routes/index.ts` - cleaned up to use only database-backed training routes
+  - Created clean migration script (`migrate-training-to-production-clean.ts`) that:
+    - Deletes all existing training data from production
+    - Resets ID sequences to start from 1
+    - Copies all training modules, questions, and options from development to production
+  - Successfully migrated: 9 modules, 45 questions, 180 options
+- **Result**: Production database now has clean, complete training data with no duplicates
+  - Module IDs 1-9 each have 5 questions with multiple choice options
+  - All quizzes properly display in production app
+- **Files Modified**: 
+  - `server/src/routes/index.ts` - cleaned up to use only database-backed training routes
+  - `server/src/scripts/migrate-training-to-production-clean.ts` - new clean migration script
 
 ### October 16, 2025 - Training Navigation Fixed
 - **Removed hardcoded training module links** from navigation dropdown

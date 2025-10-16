@@ -4,7 +4,13 @@ import { useLocation } from 'wouter';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { Eye, EyeOff, LogIn, Building } from 'lucide-react';
 
@@ -26,20 +32,20 @@ export default function LoginPage() {
         },
         body: JSON.stringify(credentials),
       });
-      
+
       if (!response.ok) {
         const error = await response.json();
         throw new Error(error.message || 'Login failed');
       }
-      
+
       return response.json();
     },
     onSuccess: (data) => {
       toast({
-        title: "Login Successful",
+        title: 'Login Successful',
         description: `Welcome back, ${data.user?.name || 'User'}!`,
       });
-      
+
       // Redirect based on role
       if (data.user?.role === 'ADMIN' || data.user?.role === 'HR Manager') {
         setLocation('/employee');
@@ -49,21 +55,21 @@ export default function LoginPage() {
     },
     onError: (error: Error) => {
       toast({
-        title: "Login Failed",
+        title: 'Login Failed',
         description: error.message,
-        variant: "destructive",
+        variant: 'destructive',
       });
     },
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!formData.username || !formData.password) {
       toast({
-        title: "Validation Error",
-        description: "Please enter both username and password",
-        variant: "destructive",
+        title: 'Validation Error',
+        description: 'Please enter both username and password',
+        variant: 'destructive',
       });
       return;
     }
@@ -72,7 +78,7 @@ export default function LoginPage() {
   };
 
   const handleInputChange = (field: string, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
   return (
@@ -101,7 +107,9 @@ export default function LoginPage() {
                   id="username"
                   type="text"
                   value={formData.username}
-                  onChange={(e) => handleInputChange('username', e.target.value)}
+                  onChange={(e) =>
+                    handleInputChange('username', e.target.value)
+                  }
                   placeholder="Enter your username"
                   autoComplete="username"
                 />
@@ -112,9 +120,11 @@ export default function LoginPage() {
                 <div className="relative">
                   <Input
                     id="password"
-                    type={showPassword ? "text" : "password"}
+                    type={showPassword ? 'text' : 'password'}
                     value={formData.password}
-                    onChange={(e) => handleInputChange('password', e.target.value)}
+                    onChange={(e) =>
+                      handleInputChange('password', e.target.value)
+                    }
                     placeholder="Enter your password"
                     autoComplete="current-password"
                     className="pr-10"
@@ -126,13 +136,17 @@ export default function LoginPage() {
                     className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
                     onClick={() => setShowPassword(!showPassword)}
                   >
-                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    {showPassword ? (
+                      <EyeOff className="w-4 h-4" />
+                    ) : (
+                      <Eye className="w-4 h-4" />
+                    )}
                   </Button>
                 </div>
               </div>
 
-              <Button 
-                type="submit" 
+              <Button
+                type="submit"
                 className="w-full bg-blue-600 hover:bg-blue-700"
                 disabled={loginMutation.isPending}
               >

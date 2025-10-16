@@ -1,17 +1,48 @@
-import { useState } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient, apiRequest } from "@/lib/queryClient";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Badge } from "@/components/ui/badge";
-import { useToast } from "@/hooks/use-toast";
-import { FileUp, Plus, Edit, Trash2, BookOpen, FileText, Users, Upload, CheckCircle, Clock, XCircle } from "lucide-react";
+import { useState } from 'react';
+import { useQuery, useMutation } from '@tanstack/react-query';
+import { queryClient, apiRequest } from '@/lib/queryClient';
+import { Button } from '@/components/ui/button';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Badge } from '@/components/ui/badge';
+import { useToast } from '@/hooks/use-toast';
+import {
+  FileUp,
+  Plus,
+  Edit,
+  Trash2,
+  BookOpen,
+  FileText,
+  Users,
+  Upload,
+  CheckCircle,
+  Clock,
+  XCircle,
+} from 'lucide-react';
 
 interface TrainingModule {
   id: number;
@@ -65,24 +96,30 @@ interface Certification {
 
 export default function TrainingManagement() {
   const { toast } = useToast();
-  const [selectedModule, setSelectedModule] = useState<TrainingModule | null>(null);
-  const [isModuleDialogOpen, setIsModuleDialogOpen] = useState(false);
+  const [_selectedModule, _setSelectedModule] = useState<TrainingModule | null>(
+    null
+  );
+  const [_isModuleDialogOpen, _setIsModuleDialogOpen] = useState(false);
   const [isPdfImportDialogOpen, setIsPdfImportDialogOpen] = useState(false);
   const [pdfFile, setPdfFile] = useState<File | null>(null);
-  
+
   // Certification tab state
   const [certPdfFile, setCertPdfFile] = useState<File | null>(null);
-  
+
   // Evaluation tab state
-  const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>("");
-  const [evaluationType, setEvaluationType] = useState<string>("BIANNUAL");
-  const [selectedCertifications, setSelectedCertifications] = useState<number[]>([]);
-  const [strengths, setStrengths] = useState<string>("");
-  const [opportunities, setOpportunities] = useState<string>("");
-  const [expectations, setExpectations] = useState<string>("");
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>('');
+  const [evaluationType, setEvaluationType] = useState<string>('BIANNUAL');
+  const [selectedCertifications, setSelectedCertifications] = useState<
+    number[]
+  >([]);
+  const [strengths, setStrengths] = useState<string>('');
+  const [opportunities, setOpportunities] = useState<string>('');
+  const [expectations, setExpectations] = useState<string>('');
 
   // Fetch training modules
-  const { data: modules = [], isLoading: modulesLoading } = useQuery<TrainingModule[]>({
+  const { data: modules = [], isLoading: modulesLoading } = useQuery<
+    TrainingModule[]
+  >({
     queryKey: ['/api/training/modules'],
   });
 
@@ -112,7 +149,7 @@ export default function TrainingManagement() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['/api/training/modules'] });
       toast({
-        title: "PDF Imported Successfully",
+        title: 'PDF Imported Successfully',
         description: `Created module: ${data.module.title} with ${data.questionsImported} questions`,
       });
       setIsPdfImportDialogOpen(false);
@@ -120,24 +157,25 @@ export default function TrainingManagement() {
     },
     onError: (error: Error) => {
       toast({
-        title: "Import Failed",
+        title: 'Import Failed',
         description: error.message,
-        variant: "destructive",
+        variant: 'destructive',
       });
     },
   });
 
-
   // Delete module mutation
   const deleteModuleMutation = useMutation({
     mutationFn: async (moduleId: number) => {
-      return apiRequest(`/api/training/modules/${moduleId}`, { method: 'DELETE' });
+      return apiRequest(`/api/training/modules/${moduleId}`, {
+        method: 'DELETE',
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/training/modules'] });
       toast({
-        title: "Module Deleted",
-        description: "Training module has been deleted successfully",
+        title: 'Module Deleted',
+        description: 'Training module has been deleted successfully',
       });
     },
   });
@@ -158,16 +196,16 @@ export default function TrainingManagement() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['/api/certifications'] });
       toast({
-        title: "Certification Created",
+        title: 'Certification Created',
         description: `Created certification: ${data.certification.name}`,
       });
       setCertPdfFile(null);
     },
     onError: (error: Error) => {
       toast({
-        title: "Creation Failed",
+        title: 'Creation Failed',
         description: error.message,
-        variant: "destructive",
+        variant: 'destructive',
       });
     },
   });
@@ -181,23 +219,25 @@ export default function TrainingManagement() {
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/employees/evaluations'] });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/employees/evaluations'],
+      });
       toast({
-        title: "Evaluation Created",
-        description: "Employee evaluation has been created successfully",
+        title: 'Evaluation Created',
+        description: 'Employee evaluation has been created successfully',
       });
       // Reset form
-      setSelectedEmployeeId("");
+      setSelectedEmployeeId('');
       setSelectedCertifications([]);
-      setStrengths("");
-      setOpportunities("");
-      setExpectations("");
+      setStrengths('');
+      setOpportunities('');
+      setExpectations('');
     },
     onError: (error: Error) => {
       toast({
-        title: "Creation Failed",
+        title: 'Creation Failed',
         description: error.message,
-        variant: "destructive",
+        variant: 'destructive',
       });
     },
   });
@@ -205,9 +245,9 @@ export default function TrainingManagement() {
   const handlePdfImport = () => {
     if (!pdfFile) {
       toast({
-        title: "No File Selected",
-        description: "Please select a PDF file to import",
-        variant: "destructive",
+        title: 'No File Selected',
+        description: 'Please select a PDF file to import',
+        variant: 'destructive',
       });
       return;
     }
@@ -215,16 +255,16 @@ export default function TrainingManagement() {
     const formData = new FormData();
     formData.append('file', pdfFile);
     formData.append('createdBy', 'admin'); // TODO: Get from auth context
-    
+
     importPdfMutation.mutate(formData);
   };
 
   const handleCertificationPdfUpload = () => {
     if (!certPdfFile) {
       toast({
-        title: "No File Selected",
-        description: "Please select a PDF file to create certification",
-        variant: "destructive",
+        title: 'No File Selected',
+        description: 'Please select a PDF file to create certification',
+        variant: 'destructive',
       });
       return;
     }
@@ -232,16 +272,16 @@ export default function TrainingManagement() {
     const formData = new FormData();
     formData.append('file', certPdfFile);
     formData.append('createdBy', 'admin'); // TODO: Get from auth context
-    
+
     createCertificationMutation.mutate(formData);
   };
 
   const handleEvaluationSubmit = () => {
     if (!selectedEmployeeId) {
       toast({
-        title: "Employee Required",
-        description: "Please select an employee to evaluate",
-        variant: "destructive",
+        title: 'Employee Required',
+        description: 'Please select an employee to evaluate',
+        variant: 'destructive',
       });
       return;
     }
@@ -264,7 +304,10 @@ export default function TrainingManagement() {
     <div className="container mx-auto py-8">
       <div className="mb-8">
         <h1 className="text-3xl font-bold mb-2">Training Management System</h1>
-        <p className="text-muted-foreground">Manage training modules, import content from PDFs, and track employee training</p>
+        <p className="text-muted-foreground">
+          Manage training modules, import content from PDFs, and track employee
+          training
+        </p>
       </div>
 
       <Tabs defaultValue="modules" className="w-full">
@@ -287,7 +330,10 @@ export default function TrainingManagement() {
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-2xl font-semibold">Training Modules</h2>
             <div className="flex gap-2">
-              <Dialog open={isPdfImportDialogOpen} onOpenChange={setIsPdfImportDialogOpen}>
+              <Dialog
+                open={isPdfImportDialogOpen}
+                onOpenChange={setIsPdfImportDialogOpen}
+              >
                 <DialogTrigger asChild>
                   <Button variant="outline" data-testid="button-import-pdf">
                     <FileUp className="w-4 h-4 mr-2" />
@@ -298,7 +344,8 @@ export default function TrainingManagement() {
                   <DialogHeader>
                     <DialogTitle>Import Training Module from PDF</DialogTitle>
                     <DialogDescription>
-                      Upload a PDF document to automatically extract training content and create a new module
+                      Upload a PDF document to automatically extract training
+                      content and create a new module
                     </DialogDescription>
                   </DialogHeader>
                   <div className="space-y-4">
@@ -308,7 +355,9 @@ export default function TrainingManagement() {
                         id="pdf-file"
                         type="file"
                         accept=".pdf"
-                        onChange={(e) => setPdfFile(e.target.files?.[0] || null)}
+                        onChange={(e) =>
+                          setPdfFile(e.target.files?.[0] || null)
+                        }
                         data-testid="input-pdf-file"
                       />
                       {pdfFile && (
@@ -317,13 +366,15 @@ export default function TrainingManagement() {
                         </p>
                       )}
                     </div>
-                    <Button 
-                      onClick={handlePdfImport} 
+                    <Button
+                      onClick={handlePdfImport}
                       disabled={importPdfMutation.isPending}
                       data-testid="button-upload-pdf"
                     >
                       <Upload className="w-4 h-4 mr-2" />
-                      {importPdfMutation.isPending ? 'Importing...' : 'Import PDF'}
+                      {importPdfMutation.isPending
+                        ? 'Importing...'
+                        : 'Import PDF'}
                     </Button>
                   </div>
                 </DialogContent>
@@ -342,7 +393,10 @@ export default function TrainingManagement() {
             <Card>
               <CardContent className="py-8 text-center">
                 <BookOpen className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
-                <p className="text-muted-foreground">No training modules yet. Import from PDF or create one manually.</p>
+                <p className="text-muted-foreground">
+                  No training modules yet. Import from PDF or create one
+                  manually.
+                </p>
               </CardContent>
             </Card>
           ) : (
@@ -353,14 +407,20 @@ export default function TrainingManagement() {
                     <div className="flex justify-between items-start">
                       <div>
                         <CardTitle>{module.title}</CardTitle>
-                        <CardDescription>{module.description || 'No description'}</CardDescription>
+                        <CardDescription>
+                          {module.description || 'No description'}
+                        </CardDescription>
                       </div>
                       <div className="flex gap-2">
-                        <Button variant="ghost" size="sm" data-testid={`button-edit-${module.id}`}>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          data-testid={`button-edit-${module.id}`}
+                        >
                           <Edit className="w-4 h-4" />
                         </Button>
-                        <Button 
-                          variant="ghost" 
+                        <Button
+                          variant="ghost"
                           size="sm"
                           onClick={() => deleteModuleMutation.mutate(module.id)}
                           data-testid={`button-delete-${module.id}`}
@@ -403,14 +463,18 @@ export default function TrainingManagement() {
 
         <TabsContent value="certifications" className="mt-6">
           <div className="flex justify-between items-center mb-6">
-            <h2 className="text-2xl font-semibold">Create Certification from PDF</h2>
+            <h2 className="text-2xl font-semibold">
+              Create Certification from PDF
+            </h2>
           </div>
 
           <Card>
             <CardHeader>
               <CardTitle>Upload Job Position / Work Instructions PDF</CardTitle>
               <CardDescription>
-                Upload a PDF containing job position details or work instructions to create a new certification using AI document analysis
+                Upload a PDF containing job position details or work
+                instructions to create a new certification using AI document
+                analysis
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -429,24 +493,30 @@ export default function TrainingManagement() {
                   </p>
                 )}
               </div>
-              <Button 
-                onClick={handleCertificationPdfUpload} 
+              <Button
+                onClick={handleCertificationPdfUpload}
                 disabled={createCertificationMutation.isPending}
                 data-testid="button-create-certification"
               >
                 <Upload className="w-4 h-4 mr-2" />
-                {createCertificationMutation.isPending ? 'Creating Certification...' : 'Create Certification from PDF'}
+                {createCertificationMutation.isPending
+                  ? 'Creating Certification...'
+                  : 'Create Certification from PDF'}
               </Button>
             </CardContent>
           </Card>
 
           <div className="mt-8">
-            <h3 className="text-xl font-semibold mb-4">Existing Certifications</h3>
+            <h3 className="text-xl font-semibold mb-4">
+              Existing Certifications
+            </h3>
             {certifications.length === 0 ? (
               <Card>
                 <CardContent className="py-8 text-center">
                   <FileText className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
-                  <p className="text-muted-foreground">No certifications yet. Upload a PDF to create one.</p>
+                  <p className="text-muted-foreground">
+                    No certifications yet. Upload a PDF to create one.
+                  </p>
                 </CardContent>
               </Card>
             ) : (
@@ -455,7 +525,9 @@ export default function TrainingManagement() {
                   <Card key={cert.id} data-testid={`card-cert-${cert.id}`}>
                     <CardHeader>
                       <CardTitle>{cert.name}</CardTitle>
-                      <CardDescription>{cert.description || 'No description'}</CardDescription>
+                      <CardDescription>
+                        {cert.description || 'No description'}
+                      </CardDescription>
                     </CardHeader>
                     <CardContent>
                       {cert.category && (
@@ -471,7 +543,9 @@ export default function TrainingManagement() {
 
         <TabsContent value="evaluations" className="mt-6">
           <div className="flex justify-between items-center mb-6">
-            <h2 className="text-2xl font-semibold">Create Employee Evaluation</h2>
+            <h2 className="text-2xl font-semibold">
+              Create Employee Evaluation
+            </h2>
           </div>
 
           <Card>
@@ -485,8 +559,14 @@ export default function TrainingManagement() {
               <div className="space-y-4">
                 <div>
                   <Label htmlFor="employee-select">Employee</Label>
-                  <Select value={selectedEmployeeId} onValueChange={setSelectedEmployeeId}>
-                    <SelectTrigger id="employee-select" data-testid="select-employee">
+                  <Select
+                    value={selectedEmployeeId}
+                    onValueChange={setSelectedEmployeeId}
+                  >
+                    <SelectTrigger
+                      id="employee-select"
+                      data-testid="select-employee"
+                    >
                       <SelectValue placeholder="Select employee..." />
                     </SelectTrigger>
                     <SelectContent>
@@ -501,8 +581,14 @@ export default function TrainingManagement() {
 
                 <div>
                   <Label htmlFor="evaluation-type">Evaluation Type</Label>
-                  <Select value={evaluationType} onValueChange={setEvaluationType}>
-                    <SelectTrigger id="evaluation-type" data-testid="select-eval-type">
+                  <Select
+                    value={evaluationType}
+                    onValueChange={setEvaluationType}
+                  >
+                    <SelectTrigger
+                      id="evaluation-type"
+                      data-testid="select-eval-type"
+                    >
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -518,22 +604,35 @@ export default function TrainingManagement() {
                   <Label>Certifications (Multi-select)</Label>
                   <div className="border rounded-md p-4 space-y-2 max-h-48 overflow-y-auto">
                     {certifications.map((cert) => (
-                      <div key={cert.id} className="flex items-center space-x-2">
+                      <div
+                        key={cert.id}
+                        className="flex items-center space-x-2"
+                      >
                         <input
                           type="checkbox"
                           id={`cert-${cert.id}`}
                           checked={selectedCertifications.includes(cert.id)}
                           onChange={(e) => {
                             if (e.target.checked) {
-                              setSelectedCertifications([...selectedCertifications, cert.id]);
+                              setSelectedCertifications([
+                                ...selectedCertifications,
+                                cert.id,
+                              ]);
                             } else {
-                              setSelectedCertifications(selectedCertifications.filter(id => id !== cert.id));
+                              setSelectedCertifications(
+                                selectedCertifications.filter(
+                                  (id) => id !== cert.id
+                                )
+                              );
                             }
                           }}
                           data-testid={`checkbox-cert-${cert.id}`}
                           className="rounded"
                         />
-                        <Label htmlFor={`cert-${cert.id}`} className="cursor-pointer">
+                        <Label
+                          htmlFor={`cert-${cert.id}`}
+                          className="cursor-pointer"
+                        >
                           {cert.name}
                         </Label>
                       </div>
@@ -543,8 +642,10 @@ export default function TrainingManagement() {
               </div>
 
               <div className="border-t pt-6">
-                <h3 className="text-lg font-semibold mb-4">Evaluation Sections</h3>
-                
+                <h3 className="text-lg font-semibold mb-4">
+                  Evaluation Sections
+                </h3>
+
                 <div className="space-y-4">
                   <div>
                     <Label htmlFor="strengths">Strengths</Label>
@@ -559,7 +660,9 @@ export default function TrainingManagement() {
                   </div>
 
                   <div>
-                    <Label htmlFor="opportunities">Opportunities for Improvement</Label>
+                    <Label htmlFor="opportunities">
+                      Opportunities for Improvement
+                    </Label>
                     <Textarea
                       id="opportunities"
                       placeholder="Areas where employee can improve and develop..."
@@ -584,13 +687,15 @@ export default function TrainingManagement() {
                 </div>
               </div>
 
-              <Button 
-                onClick={handleEvaluationSubmit} 
+              <Button
+                onClick={handleEvaluationSubmit}
                 disabled={createEvaluationMutation.isPending}
                 className="w-full"
                 data-testid="button-create-evaluation"
               >
-                {createEvaluationMutation.isPending ? 'Creating Evaluation...' : 'Create Evaluation'}
+                {createEvaluationMutation.isPending
+                  ? 'Creating Evaluation...'
+                  : 'Create Evaluation'}
               </Button>
             </CardContent>
           </Card>

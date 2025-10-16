@@ -25,13 +25,20 @@ export default function OutstandingOrdersCard() {
 
   const getStatusBadgeColor = (status: string) => {
     switch (status) {
-      case 'DRAFT': return 'bg-gray-100 text-gray-800';
-      case 'PENDING': return 'bg-yellow-100 text-yellow-800';
-      case 'CONFIRMED': return 'bg-blue-100 text-blue-800';
-      case 'IN_PRODUCTION': return 'bg-purple-100 text-purple-800';
-      case 'READY': return 'bg-green-100 text-green-800';
-      case 'SHIPPED': return 'bg-orange-100 text-orange-800';
-      default: return 'bg-gray-100 text-gray-800';
+      case 'DRAFT':
+        return 'bg-gray-100 text-gray-800';
+      case 'PENDING':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'CONFIRMED':
+        return 'bg-blue-100 text-blue-800';
+      case 'IN_PRODUCTION':
+        return 'bg-purple-100 text-purple-800';
+      case 'READY':
+        return 'bg-green-100 text-green-800';
+      case 'SHIPPED':
+        return 'bg-orange-100 text-orange-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
     }
   };
 
@@ -63,12 +70,17 @@ export default function OutstandingOrdersCard() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {orders.map((order) => (
-            <div key={order.id} className="border rounded-lg p-4 space-y-3 hover:shadow-md transition-shadow">
+            <div
+              key={order.id}
+              className="border rounded-lg p-4 space-y-3 hover:shadow-md transition-shadow"
+            >
               <div className="flex justify-between items-start">
                 <div>
                   <h4 className="font-medium">Order {order.orderId}</h4>
                   {order.customerPO && (
-                    <p className="text-sm text-gray-600">PO: {order.customerPO}</p>
+                    <p className="text-sm text-gray-600">
+                      PO: {order.customerPO}
+                    </p>
                   )}
                 </div>
                 <Badge className={getStatusBadgeColor(order.status)}>
@@ -88,20 +100,29 @@ export default function OutstandingOrdersCard() {
                   <div className="flex items-center gap-2">
                     <Package className="h-4 w-4 text-gray-400" />
                     <span>{getModelDisplayName(order.modelId)}</span>
-                    {order.handedness && <span className="text-gray-500">({order.handedness})</span>}
+                    {order.handedness && (
+                      <span className="text-gray-500">
+                        ({order.handedness})
+                      </span>
+                    )}
                   </div>
                 )}
 
                 <div className="flex items-center gap-2">
                   <Calendar className="h-4 w-4 text-gray-400" />
-                  <span>Due: {order.dueDate ? formatDate(order.dueDate) : 'No Due Date'}</span>
+                  <span>
+                    Due:{' '}
+                    {order.dueDate ? formatDate(order.dueDate) : 'No Due Date'}
+                  </span>
                 </div>
 
                 <div className="flex items-center gap-2">
                   <DollarSign className="h-4 w-4 text-gray-400" />
                   <span>Est: ${calculateOrderTotal(order).toFixed(2)}</span>
                   {order.shipping && order.shipping > 0 && (
-                    <span className="text-gray-500">+ ${order.shipping.toFixed(2)} shipping</span>
+                    <span className="text-gray-500">
+                      + ${order.shipping.toFixed(2)} shipping
+                    </span>
                   )}
                 </div>
 
@@ -114,15 +135,23 @@ export default function OutstandingOrdersCard() {
 
               {/* Progress indicator based on status */}
               <div className="w-full bg-gray-200 rounded-full h-2">
-                <div 
+                <div
                   className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                  style={{ 
-                    width: order.status === 'DRAFT' ? '10%' :
-                           order.status === 'PENDING' ? '25%' :
-                           order.status === 'CONFIRMED' ? '40%' :
-                           order.status === 'IN_PRODUCTION' ? '70%' :
-                           order.status === 'READY' ? '90%' :
-                           order.status === 'SHIPPED' ? '100%' : '10%'
+                  style={{
+                    width:
+                      order.status === 'DRAFT'
+                        ? '10%'
+                        : order.status === 'PENDING'
+                          ? '25%'
+                          : order.status === 'CONFIRMED'
+                            ? '40%'
+                            : order.status === 'IN_PRODUCTION'
+                              ? '70%'
+                              : order.status === 'READY'
+                                ? '90%'
+                                : order.status === 'SHIPPED'
+                                  ? '100%'
+                                  : '10%',
                   }}
                 />
               </div>

@@ -5,7 +5,7 @@ This folder needs the following PDF files for the training system to work in pro
 ## Required Training PDF Files:
 
 1. **Preservation-FOD.pdf** - Preservation & Foreign Object Debris training
-2. **Chemical-Handling.pdf** - Chemical Handling Safety training  
+2. **Chemical-Handling.pdf** - Chemical Handling Safety training
 3. **Fire-Safety.pdf** - Fire Safety Procedures training
 4. **ITAR.pdf** - International Traffic in Arms Regulations training
 5. **AS9100.pdf** - AS9100 Quality Management training
@@ -21,5 +21,6 @@ This folder needs the following PDF files for the training system to work in pro
 3. The build process (npm run build) will copy this entire folder to dist/attached_assets/training/
 
 ## Current Status:
+
 - ✅ Folder structure created
 - ⏳ Waiting for PDF files to be uploaded

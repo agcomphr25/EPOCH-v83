@@ -8,24 +8,43 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { 
-  BarChart3, 
-  Edit, 
-  Trash2, 
-  Users, 
-  TrendingUp, 
-  Star, 
+import {
+  BarChart3,
+  Edit,
+  Trash2,
+  Users,
+  TrendingUp,
+  Star,
   MessageSquare,
   CheckCircle,
   Download,
   Filter,
-  FileText
+  FileText,
 } from 'lucide-react';
 import CustomerSatisfactionSurvey from '@/components/CustomerSatisfactionSurvey';
-import { pdf, Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer';
+import {
+  pdf,
+  Document,
+  Page,
+  Text,
+  View,
+  StyleSheet,
+} from '@react-pdf/renderer';
 
 interface Survey {
   id: number;
@@ -152,14 +171,25 @@ const pdfStyles = StyleSheet.create({
 });
 
 // PDF Document Component
-const SurveyResponsePDF = ({ response, survey }: { response: SurveyResponse; survey: Survey | null }) => (
+const SurveyResponsePDF = ({
+  response,
+  survey,
+}: {
+  response: SurveyResponse;
+  survey: Survey | null;
+}) => (
   <Document>
     <Page size="A4" style={pdfStyles.page}>
       <View style={pdfStyles.header}>
-        <Text style={pdfStyles.title}>Customer Satisfaction Survey Response</Text>
+        <Text style={pdfStyles.title}>
+          Customer Satisfaction Survey Response
+        </Text>
         <Text style={pdfStyles.subtitle}>{response.surveyTitle}</Text>
         <Text style={pdfStyles.subtitle}>
-          Submitted: {response.submittedAt ? new Date(response.submittedAt).toLocaleDateString() : 'N/A'}
+          Submitted:{' '}
+          {response.submittedAt
+            ? new Date(response.submittedAt).toLocaleDateString()
+            : 'N/A'}
         </Text>
       </View>
 
@@ -200,7 +230,7 @@ const SurveyResponsePDF = ({ response, survey }: { response: SurveyResponse; sur
         {survey?.questions.map((question: any, index: number) => {
           const answer = response.responses[question.id];
           if (!answer && answer !== 0) return null;
-          
+
           return (
             <View key={question.id} style={pdfStyles.question}>
               <Text style={pdfStyles.questionText}>
@@ -215,7 +245,8 @@ const SurveyResponsePDF = ({ response, survey }: { response: SurveyResponse; sur
       </View>
 
       <Text style={pdfStyles.footer}>
-        Generated on {new Date().toLocaleDateString()} • Customer Satisfaction Survey System
+        Generated on {new Date().toLocaleDateString()} • Customer Satisfaction
+        Survey System
       </Text>
     </Page>
   </Document>
@@ -224,34 +255,38 @@ const SurveyResponsePDF = ({ response, survey }: { response: SurveyResponse; sur
 export default function CustomerSatisfaction() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  
+
   const [activeTab, setActiveTab] = useState('overview');
   const [selectedCustomer, setSelectedCustomer] = useState<number | null>(null);
   const [isTakeSurveyOpen, setIsTakeSurveyOpen] = useState(false);
   const [isEditResponseOpen, setIsEditResponseOpen] = useState(false);
-  const [editingResponse, setEditingResponse] = useState<SurveyResponse | null>(null);
+  const [editingResponse, setEditingResponse] = useState<SurveyResponse | null>(
+    null
+  );
 
   // Export response as PDF
   const exportResponseToPDF = async (response: SurveyResponse) => {
     try {
       const survey = surveys.find((s: Survey) => s.id === response.surveyId);
-      const blob = await pdf(<SurveyResponsePDF response={response} survey={survey || null} />).toBlob();
+      const blob = await pdf(
+        <SurveyResponsePDF response={response} survey={survey || null} />
+      ).toBlob();
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
       link.download = `survey-response-${response.customerName.replace(/\s+/g, '-')}-${response.id}.pdf`;
       link.click();
       URL.revokeObjectURL(url);
-      
+
       toast({
-        title: "PDF Downloaded",
-        description: "Survey response has been exported as PDF.",
+        title: 'PDF Downloaded',
+        description: 'Survey response has been exported as PDF.',
       });
     } catch (error) {
       toast({
-        title: "Export Failed",
-        description: "Failed to export PDF",
-        variant: "destructive",
+        title: 'Export Failed',
+        description: 'Failed to export PDF',
+        variant: 'destructive',
       });
     }
   };
@@ -288,17 +323,21 @@ export default function CustomerSatisfaction() {
       }),
     onSuccess: () => {
       toast({
-        title: "Response Deleted",
-        description: "Survey response has been deleted successfully.",
+        title: 'Response Deleted',
+        description: 'Survey response has been deleted successfully.',
       });
-      queryClient.invalidateQueries({ queryKey: ['/api/customer-satisfaction/responses'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/customer-satisfaction/analytics'] });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/customer-satisfaction/responses'],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/customer-satisfaction/analytics'],
+      });
     },
     onError: (error: any) => {
       toast({
-        title: "Deletion Failed",
-        description: error.message || "Failed to delete response",
-        variant: "destructive",
+        title: 'Deletion Failed',
+        description: error.message || 'Failed to delete response',
+        variant: 'destructive',
       });
     },
   });
@@ -309,7 +348,7 @@ export default function CustomerSatisfaction() {
       month: 'short',
       day: 'numeric',
       hour: '2-digit',
-      minute: '2-digit'
+      minute: '2-digit',
     });
   };
 
@@ -317,7 +356,7 @@ export default function CustomerSatisfaction() {
     <div className="space-y-6">
       {/* Complete Survey Button */}
       <div className="flex justify-end">
-        <Button 
+        <Button
           onClick={() => setIsTakeSurveyOpen(true)}
           data-testid="button-complete-survey"
         >
@@ -335,7 +374,9 @@ export default function CustomerSatisfaction() {
                 <Users className="h-5 w-5 text-blue-600" />
                 <div>
                   <p className="text-sm text-gray-600">Total Responses</p>
-                  <p className="text-2xl font-bold">{analytics.totalResponses}</p>
+                  <p className="text-2xl font-bold">
+                    {analytics.totalResponses}
+                  </p>
                 </div>
               </div>
             </CardContent>
@@ -347,7 +388,9 @@ export default function CustomerSatisfaction() {
                 <Star className="h-5 w-5 text-yellow-600" />
                 <div>
                   <p className="text-sm text-gray-600">Avg Satisfaction</p>
-                  <p className="text-2xl font-bold">{analytics.averageOverallSatisfaction?.toFixed(1) || '0'}/50</p>
+                  <p className="text-2xl font-bold">
+                    {analytics.averageOverallSatisfaction?.toFixed(1) || '0'}/50
+                  </p>
                 </div>
               </div>
             </CardContent>
@@ -359,7 +402,9 @@ export default function CustomerSatisfaction() {
                 <TrendingUp className="h-5 w-5 text-purple-600" />
                 <div>
                   <p className="text-sm text-gray-600">NPS Score</p>
-                  <p className="text-2xl font-bold">{analytics.netPromoterScore?.toFixed(0) || '0'}</p>
+                  <p className="text-2xl font-bold">
+                    {analytics.netPromoterScore?.toFixed(0) || '0'}
+                  </p>
                 </div>
               </div>
             </CardContent>
@@ -381,23 +426,35 @@ export default function CustomerSatisfaction() {
           ) : (
             <div className="space-y-4">
               {responses.slice(0, 5).map((response: SurveyResponse) => (
-                <div key={response.id} className="flex items-center justify-between p-4 border rounded-lg">
+                <div
+                  key={response.id}
+                  className="flex items-center justify-between p-4 border rounded-lg"
+                >
                   <div className="space-y-1">
                     <div className="font-medium">{response.customerName}</div>
-                    <div className="text-sm text-gray-600">{response.surveyTitle}</div>
+                    <div className="text-sm text-gray-600">
+                      {response.surveyTitle}
+                    </div>
                     <div className="text-xs text-gray-500">
-                      {response.submittedAt ? formatDate(response.submittedAt) : 'Draft'}
+                      {response.submittedAt
+                        ? formatDate(response.submittedAt)
+                        : 'Draft'}
                     </div>
                   </div>
                   <div className="flex items-center space-x-2">
-                    {response.aggregateScore !== undefined && response.aggregateScore !== null && (
-                      <div className="flex items-center space-x-1">
-                        <Star className="h-4 w-4 text-yellow-500" />
-                        <span className="text-sm">{response.aggregateScore}/50</span>
-                      </div>
-                    )}
-                    <Badge variant={response.isComplete ? "default" : "secondary"}>
-                      {response.isComplete ? "Complete" : "Draft"}
+                    {response.aggregateScore !== undefined &&
+                      response.aggregateScore !== null && (
+                        <div className="flex items-center space-x-1">
+                          <Star className="h-4 w-4 text-yellow-500" />
+                          <span className="text-sm">
+                            {response.aggregateScore}/50
+                          </span>
+                        </div>
+                      )}
+                    <Badge
+                      variant={response.isComplete ? 'default' : 'secondary'}
+                    >
+                      {response.isComplete ? 'Complete' : 'Draft'}
                     </Badge>
                   </div>
                 </div>
@@ -408,7 +465,6 @@ export default function CustomerSatisfaction() {
       </Card>
     </div>
   );
-
 
   const renderResponses = () => (
     <div className="space-y-6">
@@ -430,8 +486,12 @@ export default function CustomerSatisfaction() {
         <Card>
           <CardContent className="p-8 text-center">
             <MessageSquare className="h-12 w-12 mx-auto mb-4 text-gray-400" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No Responses Yet</h3>
-            <p className="text-gray-600">Customer responses will appear here once surveys are submitted.</p>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">
+              No Responses Yet
+            </h3>
+            <p className="text-gray-600">
+              Customer responses will appear here once surveys are submitted.
+            </p>
           </CardContent>
         </Card>
       ) : (
@@ -469,9 +529,13 @@ export default function CustomerSatisfaction() {
                     <tr key={response.id}>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div>
-                          <div className="font-medium text-gray-900">{response.customerName}</div>
+                          <div className="font-medium text-gray-900">
+                            {response.customerName}
+                          </div>
                           {response.customerEmail && (
-                            <div className="text-sm text-gray-500">{response.customerEmail}</div>
+                            <div className="text-sm text-gray-500">
+                              {response.customerEmail}
+                            </div>
                           )}
                         </div>
                       </td>
@@ -479,10 +543,13 @@ export default function CustomerSatisfaction() {
                         {response.surveyTitle}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        {response.aggregateScore !== undefined && response.aggregateScore !== null ? (
+                        {response.aggregateScore !== undefined &&
+                        response.aggregateScore !== null ? (
                           <div className="flex items-center space-x-1">
                             <Star className="h-4 w-4 text-yellow-500" />
-                            <span className="text-sm">{response.aggregateScore}/50</span>
+                            <span className="text-sm">
+                              {response.aggregateScore}/50
+                            </span>
                           </div>
                         ) : (
                           <span className="text-gray-400">-</span>
@@ -492,12 +559,20 @@ export default function CustomerSatisfaction() {
                         {response.npsScore !== null ? response.npsScore : '-'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <Badge variant={response.isComplete ? "default" : "secondary"}>
-                          {response.isComplete ? "Complete" : "Draft"}
+                        <Badge
+                          variant={
+                            response.isComplete ? 'default' : 'secondary'
+                          }
+                        >
+                          {response.isComplete ? 'Complete' : 'Draft'}
                         </Badge>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {response.surveyDate ? formatDate(response.surveyDate) : (response.submittedAt ? formatDate(response.submittedAt) : formatDate(response.createdAt))}
+                        {response.surveyDate
+                          ? formatDate(response.surveyDate)
+                          : response.submittedAt
+                            ? formatDate(response.submittedAt)
+                            : formatDate(response.createdAt)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <div className="flex space-x-2">
@@ -526,7 +601,11 @@ export default function CustomerSatisfaction() {
                             variant="outline"
                             size="sm"
                             onClick={() => {
-                              if (window.confirm('Are you sure you want to delete this response? This action cannot be undone.')) {
+                              if (
+                                window.confirm(
+                                  'Are you sure you want to delete this response? This action cannot be undone.'
+                                )
+                              ) {
                                 deleteResponse.mutate(response.id);
                               }
                             }}
@@ -551,7 +630,7 @@ export default function CustomerSatisfaction() {
   const renderAnalytics = () => (
     <div className="space-y-6">
       <h2 className="text-2xl font-bold">Analytics & Insights</h2>
-      
+
       {analytics ? (
         <div className="space-y-6">
           {/* Key Metrics */}
@@ -562,7 +641,9 @@ export default function CustomerSatisfaction() {
                   <Users className="h-8 w-8 text-blue-600" />
                   <div>
                     <p className="text-sm text-gray-600">Total Responses</p>
-                    <p className="text-3xl font-bold">{analytics.totalResponses}</p>
+                    <p className="text-3xl font-bold">
+                      {analytics.totalResponses}
+                    </p>
                     <p className="text-sm text-green-600">
                       {analytics.completedResponses} completed
                     </p>
@@ -577,7 +658,9 @@ export default function CustomerSatisfaction() {
                   <Star className="h-8 w-8 text-yellow-600" />
                   <div>
                     <p className="text-sm text-gray-600">Avg Satisfaction</p>
-                    <p className="text-3xl font-bold">{analytics.averageOverallSatisfaction?.toFixed(1) || '0'}</p>
+                    <p className="text-3xl font-bold">
+                      {analytics.averageOverallSatisfaction?.toFixed(1) || '0'}
+                    </p>
                     <p className="text-sm text-gray-600">out of 50</p>
                   </div>
                 </div>
@@ -590,7 +673,9 @@ export default function CustomerSatisfaction() {
                   <TrendingUp className="h-8 w-8 text-purple-600" />
                   <div>
                     <p className="text-sm text-gray-600">Net Promoter Score</p>
-                    <p className="text-3xl font-bold">{analytics.netPromoterScore?.toFixed(0) || '0'}</p>
+                    <p className="text-3xl font-bold">
+                      {analytics.netPromoterScore?.toFixed(0) || '0'}
+                    </p>
                     <p className="text-sm text-gray-600">
                       {analytics.npsBreakdown.promoters} promoters
                     </p>
@@ -606,7 +691,10 @@ export default function CustomerSatisfaction() {
               <h3 className="text-xl font-semibold">Question Breakdown</h3>
               <div className="grid grid-cols-1 gap-4">
                 {analytics.questionScores.map((questionScore) => (
-                  <Card key={questionScore.questionId} data-testid={`card-question-${questionScore.questionId}`}>
+                  <Card
+                    key={questionScore.questionId}
+                    data-testid={`card-question-${questionScore.questionId}`}
+                  >
                     <CardHeader className="pb-3">
                       <CardTitle className="text-base font-medium">
                         {questionScore.question}
@@ -617,19 +705,28 @@ export default function CustomerSatisfaction() {
                         {/* Average Score Display */}
                         <div className="flex items-center justify-between">
                           <div>
-                            <p className="text-sm text-gray-600">Average Score</p>
-                            <p className="text-2xl font-bold text-blue-600" data-testid={`text-avg-score-${questionScore.questionId}`}>
+                            <p className="text-sm text-gray-600">
+                              Average Score
+                            </p>
+                            <p
+                              className="text-2xl font-bold text-blue-600"
+                              data-testid={`text-avg-score-${questionScore.questionId}`}
+                            >
                               {questionScore.averageScore.toFixed(1)} / 10
                             </p>
-                            <p className="text-xs text-gray-500">{questionScore.responseCount} responses</p>
+                            <p className="text-xs text-gray-500">
+                              {questionScore.responseCount} responses
+                            </p>
                           </div>
-                          
+
                           {/* Progress Bar */}
                           <div className="flex-1 max-w-xs ml-8">
                             <div className="w-full bg-gray-200 rounded-full h-3">
                               <div
                                 className="bg-gradient-to-r from-blue-500 to-blue-600 h-3 rounded-full transition-all"
-                                style={{ width: `${(questionScore.averageScore / 10) * 100}%` }}
+                                style={{
+                                  width: `${(questionScore.averageScore / 10) * 100}%`,
+                                }}
                               />
                             </div>
                           </div>
@@ -637,39 +734,54 @@ export default function CustomerSatisfaction() {
 
                         {/* 3-Month Trend */}
                         <div className="border-t pt-4">
-                          <p className="text-sm font-medium text-gray-700 mb-3">3-Month Trend</p>
+                          <p className="text-sm font-medium text-gray-700 mb-3">
+                            3-Month Trend
+                          </p>
                           <div className="grid grid-cols-3 gap-4">
                             {questionScore.monthlyTrends.map((trend, index) => (
-                              <div 
+                              <div
                                 key={`${questionScore.questionId}-${trend.month}`}
                                 className="bg-gray-50 rounded-lg p-3"
                                 data-testid={`trend-${questionScore.questionId}-${index}`}
                               >
-                                <p className="text-xs text-gray-600 mb-1">{trend.month}</p>
+                                <p className="text-xs text-gray-600 mb-1">
+                                  {trend.month}
+                                </p>
                                 <p className="text-lg font-semibold text-gray-900">
-                                  {trend.averageScore > 0 ? trend.averageScore.toFixed(1) : 'N/A'}
+                                  {trend.averageScore > 0
+                                    ? trend.averageScore.toFixed(1)
+                                    : 'N/A'}
                                 </p>
                                 <p className="text-xs text-gray-500">
-                                  {trend.count} {trend.count === 1 ? 'response' : 'responses'}
+                                  {trend.count}{' '}
+                                  {trend.count === 1 ? 'response' : 'responses'}
                                 </p>
                                 {/* Trend Indicator */}
-                                {index < questionScore.monthlyTrends.length - 1 && trend.averageScore > 0 && (
-                                  <div className="mt-1">
-                                    {trend.averageScore > questionScore.monthlyTrends[index + 1].averageScore ? (
-                                      <span className="text-xs text-green-600 flex items-center">
-                                        <TrendingUp className="h-3 w-3 mr-1" />
-                                        Up
-                                      </span>
-                                    ) : trend.averageScore < questionScore.monthlyTrends[index + 1].averageScore ? (
-                                      <span className="text-xs text-red-600 flex items-center">
-                                        <TrendingUp className="h-3 w-3 mr-1 rotate-180" />
-                                        Down
-                                      </span>
-                                    ) : (
-                                      <span className="text-xs text-gray-600">Stable</span>
-                                    )}
-                                  </div>
-                                )}
+                                {index <
+                                  questionScore.monthlyTrends.length - 1 &&
+                                  trend.averageScore > 0 && (
+                                    <div className="mt-1">
+                                      {trend.averageScore >
+                                      questionScore.monthlyTrends[index + 1]
+                                        .averageScore ? (
+                                        <span className="text-xs text-green-600 flex items-center">
+                                          <TrendingUp className="h-3 w-3 mr-1" />
+                                          Up
+                                        </span>
+                                      ) : trend.averageScore <
+                                        questionScore.monthlyTrends[index + 1]
+                                          .averageScore ? (
+                                        <span className="text-xs text-red-600 flex items-center">
+                                          <TrendingUp className="h-3 w-3 mr-1 rotate-180" />
+                                          Down
+                                        </span>
+                                      ) : (
+                                        <span className="text-xs text-gray-600">
+                                          Stable
+                                        </span>
+                                      )}
+                                    </div>
+                                  )}
                               </div>
                             ))}
                           </div>
@@ -686,8 +798,12 @@ export default function CustomerSatisfaction() {
         <Card>
           <CardContent className="p-8 text-center">
             <BarChart3 className="h-12 w-12 mx-auto mb-4 text-gray-400" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No Data Available</h3>
-            <p className="text-gray-600">Analytics will appear here once survey responses are collected.</p>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">
+              No Data Available
+            </h3>
+            <p className="text-gray-600">
+              Analytics will appear here once survey responses are collected.
+            </p>
           </CardContent>
         </Card>
       )}
@@ -698,8 +814,12 @@ export default function CustomerSatisfaction() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Customer Satisfaction</h1>
-          <p className="text-gray-600">Manage surveys and analyze customer feedback</p>
+          <h1 className="text-3xl font-bold text-gray-900">
+            Customer Satisfaction
+          </h1>
+          <p className="text-gray-600">
+            Manage surveys and analyze customer feedback
+          </p>
         </div>
       </div>
 
@@ -725,29 +845,41 @@ export default function CustomerSatisfaction() {
             {!selectedCustomer && (
               <div className="space-y-2">
                 <Label>Select Customer</Label>
-                <Select onValueChange={(value) => setSelectedCustomer(parseInt(value))}>
+                <Select
+                  onValueChange={(value) =>
+                    setSelectedCustomer(parseInt(value))
+                  }
+                >
                   <SelectTrigger data-testid="select-customer">
                     <SelectValue placeholder="Choose a customer" />
                   </SelectTrigger>
                   <SelectContent>
                     {customers.map((customer: any) => (
-                      <SelectItem key={customer.id} value={customer.id.toString()}>
-                        {customer.name} {customer.email && `(${customer.email})`}
+                      <SelectItem
+                        key={customer.id}
+                        value={customer.id.toString()}
+                      >
+                        {customer.name}{' '}
+                        {customer.email && `(${customer.email})`}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
             )}
-            
+
             {selectedCustomer && (
               <CustomerSatisfactionSurvey
                 customerId={selectedCustomer}
                 onComplete={() => {
                   setIsTakeSurveyOpen(false);
                   setSelectedCustomer(null);
-                  queryClient.invalidateQueries({ queryKey: ['/api/customer-satisfaction/responses'] });
-                  queryClient.invalidateQueries({ queryKey: ['/api/customer-satisfaction/analytics'] });
+                  queryClient.invalidateQueries({
+                    queryKey: ['/api/customer-satisfaction/responses'],
+                  });
+                  queryClient.invalidateQueries({
+                    queryKey: ['/api/customer-satisfaction/analytics'],
+                  });
                 }}
               />
             )}
@@ -761,18 +893,20 @@ export default function CustomerSatisfaction() {
           <DialogHeader>
             <DialogTitle>Edit Survey Response</DialogTitle>
           </DialogHeader>
-          
+
           {editingResponse && (
             <div className="space-y-4">
               <div className="text-sm text-gray-600 p-3 bg-gray-50 rounded">
                 <strong>Customer:</strong> {editingResponse.customerName}
-                {editingResponse.customerEmail && ` (${editingResponse.customerEmail})`}
+                {editingResponse.customerEmail &&
+                  ` (${editingResponse.customerEmail})`}
                 <br />
                 <strong>Survey:</strong> {editingResponse.surveyTitle}
                 <br />
-                <strong>Status:</strong> {editingResponse.isComplete ? 'Complete' : 'Draft'}
+                <strong>Status:</strong>{' '}
+                {editingResponse.isComplete ? 'Complete' : 'Draft'}
               </div>
-              
+
               <CustomerSatisfactionSurvey
                 surveyId={editingResponse.surveyId}
                 customerId={editingResponse.customerId}
@@ -781,11 +915,16 @@ export default function CustomerSatisfaction() {
                 onComplete={() => {
                   setIsEditResponseOpen(false);
                   setEditingResponse(null);
-                  queryClient.invalidateQueries({ queryKey: ['/api/customer-satisfaction/responses'] });
-                  queryClient.invalidateQueries({ queryKey: ['/api/customer-satisfaction/analytics'] });
+                  queryClient.invalidateQueries({
+                    queryKey: ['/api/customer-satisfaction/responses'],
+                  });
+                  queryClient.invalidateQueries({
+                    queryKey: ['/api/customer-satisfaction/analytics'],
+                  });
                   toast({
-                    title: "Response Updated",
-                    description: "Survey response has been updated successfully.",
+                    title: 'Response Updated',
+                    description:
+                      'Survey response has been updated successfully.',
                   });
                 }}
               />

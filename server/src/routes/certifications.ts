@@ -24,29 +24,32 @@ router.get('/', async (req: Request, res: Response) => {
       WHERE is_active = true
       ORDER BY name
     `;
-    
+
     res.json(result || []);
   } catch (error) {
-    console.error("Get certifications error:", error);
-    res.status(500).json({ error: "Failed to fetch certifications" });
+    console.error('Get certifications error:', error);
+    res.status(500).json({ error: 'Failed to fetch certifications' });
   }
 });
 
 // POST create certification from PDF
-router.post('/create-from-pdf', uploadMiddleware.single('file'), async (req: Request, res: Response) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ error: 'No PDF file uploaded' });
-    }
+router.post(
+  '/create-from-pdf',
+  uploadMiddleware.single('file'),
+  async (req: Request, res: Response) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: 'No PDF file uploaded' });
+      }
 
-    const pdfBuffer = req.file.buffer;
-    const createdBy = req.body.createdBy || 'system';
+      const pdfBuffer = req.file.buffer;
+      const createdBy = req.body.createdBy || 'system';
 
-    // Extract certification content using Azure Document Intelligence
-    const extractedData = await extractCertificationContent(pdfBuffer);
+      // Extract certification content using Azure Document Intelligence
+      const extractedData = await extractCertificationContent(pdfBuffer);
 
-    // Create certification in database
-    const result = await pool.query`
+      // Create certification in database
+      const result = await pool.query`
       INSERT INTO certifications (
         name,
         description,
@@ -67,24 +70,27 @@ router.post('/create-from-pdf', uploadMiddleware.single('file'), async (req: Req
       RETURNING *
     `;
 
-    const certification = result[0];
+      const certification = result[0];
 
-    res.status(201).json({
-      certification: {
-        id: certification.id,
-        name: certification.name,
-        description: certification.description,
-        category: certification.category,
-      },
-      extractedData,
-    });
-  } catch (error) {
-    console.error('Create certification from PDF error:', error);
-    if (error instanceof Error) {
-      return res.status(500).json({ error: error.message });
+      res.status(201).json({
+        certification: {
+          id: certification.id,
+          name: certification.name,
+          description: certification.description,
+          category: certification.category,
+        },
+        extractedData,
+      });
+    } catch (error) {
+      console.error('Create certification from PDF error:', error);
+      if (error instanceof Error) {
+        return res.status(500).json({ error: error.message });
+      }
+      res
+        .status(500)
+        .json({ error: 'Failed to create certification from PDF' });
     }
-    res.status(500).json({ error: 'Failed to create certification from PDF' });
   }
-});
+);
 
 export default router;

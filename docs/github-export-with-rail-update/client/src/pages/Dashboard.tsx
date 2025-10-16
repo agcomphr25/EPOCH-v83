@@ -1,25 +1,29 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Link } from "wouter";
-import { 
-  Plus, 
-  List, 
-  FileText, 
-  Settings, 
-  Package, 
-  Shield, 
-  Users, 
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Link } from 'wouter';
+import {
+  Plus,
+  List,
+  FileText,
+  Settings,
+  Package,
+  Shield,
+  Users,
   DollarSign,
   BarChart3,
-  CheckCircle
-} from "lucide-react";
+  CheckCircle,
+} from 'lucide-react';
 
 export default function Dashboard() {
   return (
     <div className="container mx-auto p-6">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">EPOCH v8 Manufacturing ERP</h1>
-        <p className="text-gray-600">Welcome to your comprehensive manufacturing management system</p>
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">
+          EPOCH v8 Manufacturing ERP
+        </h1>
+        <p className="text-gray-600">
+          Welcome to your comprehensive manufacturing management system
+        </p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -32,7 +36,9 @@ export default function Dashboard() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-sm text-gray-600 mb-4">Create and manage customer orders</p>
+            <p className="text-sm text-gray-600 mb-4">
+              Create and manage customer orders
+            </p>
             <div className="space-y-2">
               <Link href="/order-entry">
                 <Button className="w-full justify-start" variant="outline">
@@ -65,7 +71,9 @@ export default function Dashboard() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-sm text-gray-600 mb-4">Track and manage inventory items</p>
+            <p className="text-sm text-gray-600 mb-4">
+              Track and manage inventory items
+            </p>
             <div className="space-y-2">
               <Link href="/inventory/dashboard">
                 <Button className="w-full justify-start" variant="outline">
@@ -98,7 +106,9 @@ export default function Dashboard() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-sm text-gray-600 mb-4">Quality control and maintenance</p>
+            <p className="text-sm text-gray-600 mb-4">
+              Quality control and maintenance
+            </p>
             <div className="space-y-2">
               <Link href="/qc">
                 <Button className="w-full justify-start" variant="outline">
@@ -125,7 +135,9 @@ export default function Dashboard() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-sm text-gray-600 mb-4">Employee management and time tracking</p>
+            <p className="text-sm text-gray-600 mb-4">
+              Employee management and time tracking
+            </p>
             <div className="space-y-2">
               <Link href="/employee-portal">
                 <Button className="w-full justify-start" variant="outline">
@@ -152,7 +164,9 @@ export default function Dashboard() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-sm text-gray-600 mb-4">Financial reporting and management</p>
+            <p className="text-sm text-gray-600 mb-4">
+              Financial reporting and management
+            </p>
             <div className="space-y-2">
               <Link href="/finance/dashboard">
                 <Button className="w-full justify-start" variant="outline">
@@ -185,7 +199,9 @@ export default function Dashboard() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-sm text-gray-600 mb-4">Enhanced form builder and reporting</p>
+            <p className="text-sm text-gray-600 mb-4">
+              Enhanced form builder and reporting
+            </p>
             <div className="space-y-2">
               <Link href="/enhanced-forms">
                 <Button className="w-full justify-start" variant="outline">

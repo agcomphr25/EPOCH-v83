@@ -1,18 +1,18 @@
-import { useQuery } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { CheckCircle2, Circle, ArrowUpDown, Calendar } from "lucide-react";
-import { useState } from "react";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
+import { useQuery } from '@tanstack/react-query';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { CheckCircle2, Circle, ArrowUpDown, Calendar } from 'lucide-react';
+import { useState } from 'react';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from '@/components/ui/select';
 
 type TrainingMatrixEntry = {
   id: number;
@@ -68,28 +68,38 @@ type Evaluation = {
 };
 
 export default function TrainingMatrixView() {
-  const [activeTab, setActiveTab] = useState("standards");
-  const [searchTerm, setSearchTerm] = useState("");
-  const [viewMode, setViewMode] = useState<"employee" | "training">("employee");
-  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
-  
-  const { data: matrixData, isLoading: matrixLoading } = useQuery<TrainingMatrixEntry[]>({
-    queryKey: ["/api/training/matrix"],
+  const [activeTab, setActiveTab] = useState('standards');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [viewMode, setViewMode] = useState<'employee' | 'training'>('employee');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+
+  const { data: matrixData, isLoading: matrixLoading } = useQuery<
+    TrainingMatrixEntry[]
+  >({
+    queryKey: ['/api/training/matrix'],
   });
 
-  const { data: certificationsData, isLoading: certsLoading } = useQuery<EmployeeCertification[]>({
-    queryKey: ["/api/employees/certifications-matrix"],
+  const { data: certificationsData, isLoading: certsLoading } = useQuery<
+    EmployeeCertification[]
+  >({
+    queryKey: ['/api/employees/certifications-matrix'],
   });
 
-  const { data: evaluationsData, isLoading: evalsLoading } = useQuery<Evaluation[]>({
-    queryKey: ["/api/employees/evaluations"],
+  const { data: evaluationsData, isLoading: evalsLoading } = useQuery<
+    Evaluation[]
+  >({
+    queryKey: ['/api/employees/evaluations'],
   });
 
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return null;
     try {
       const date = new Date(dateStr);
-      return date.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' });
+      return date.toLocaleDateString('en-US', {
+        month: 'numeric',
+        day: 'numeric',
+        year: 'numeric',
+      });
     } catch {
       return dateStr;
     }
@@ -106,58 +116,70 @@ export default function TrainingMatrixView() {
     }
 
     if (!matrixData || matrixData.length === 0) {
-      return <p className="text-muted-foreground">No training data available.</p>;
+      return (
+        <p className="text-muted-foreground">No training data available.</p>
+      );
     }
 
     // Extract unique employees with their details
-    const employeeMap = new Map<string, { name: string; jobTitle: string | null; department: string | null }>();
-    matrixData.forEach(entry => {
+    const employeeMap = new Map<
+      string,
+      { name: string; jobTitle: string | null; department: string | null }
+    >();
+    matrixData.forEach((entry) => {
       if (entry.employeeName && !employeeMap.has(entry.employeeName)) {
         employeeMap.set(entry.employeeName, {
           name: entry.employeeName,
           jobTitle: entry.jobTitle,
-          department: entry.department
+          department: entry.department,
         });
       }
     });
-    
+
     // Owners list - these should appear at the bottom
     const owners = ['Dave', 'Angie', 'Matt', 'Laurie'];
-    const isOwner = (name: string) => owners.some(owner => name.toLowerCase().includes(owner.toLowerCase()));
-    
+    const isOwner = (name: string) =>
+      owners.some((owner) => name.toLowerCase().includes(owner.toLowerCase()));
+
     // Sort employees based on sortOrder, with owners always at the bottom
     const employees = Array.from(employeeMap.values()).sort((a, b) => {
       const aIsOwner = isOwner(a.name);
       const bIsOwner = isOwner(b.name);
-      
+
       if (aIsOwner && !bIsOwner) return 1;
       if (!aIsOwner && bIsOwner) return -1;
-      
-      return sortOrder === "asc" 
+
+      return sortOrder === 'asc'
         ? a.name.localeCompare(b.name)
         : b.name.localeCompare(a.name);
     });
-    
-    const trainings = Array.from(new Set(matrixData.map(e => e.trainingName))).sort((a, b) =>
-      sortOrder === "asc" 
-        ? a.localeCompare(b)
-        : b.localeCompare(a)
+
+    const trainings = Array.from(
+      new Set(matrixData.map((e) => e.trainingName))
+    ).sort((a, b) =>
+      sortOrder === 'asc' ? a.localeCompare(b) : b.localeCompare(a)
     );
 
-    const filteredEmployees = viewMode === "employee"
-      ? (searchTerm
-          ? employees.filter(emp => emp.name.toLowerCase().includes(searchTerm.toLowerCase()))
-          : employees)
-      : employees;
+    const filteredEmployees =
+      viewMode === 'employee'
+        ? searchTerm
+          ? employees.filter((emp) =>
+              emp.name.toLowerCase().includes(searchTerm.toLowerCase())
+            )
+          : employees
+        : employees;
 
-    const filteredTrainings = viewMode === "training"
-      ? (searchTerm
-          ? trainings.filter(training => training.toLowerCase().includes(searchTerm.toLowerCase()))
-          : trainings)
-      : trainings;
+    const filteredTrainings =
+      viewMode === 'training'
+        ? searchTerm
+          ? trainings.filter((training) =>
+              training.toLowerCase().includes(searchTerm.toLowerCase())
+            )
+          : trainings
+        : trainings;
 
     const matrixMap = new Map<string, TrainingMatrixEntry>();
-    matrixData.forEach(entry => {
+    matrixData.forEach((entry) => {
       const key = `${entry.employeeName}-${entry.trainingName}`;
       matrixMap.set(key, entry);
     });
@@ -167,14 +189,14 @@ export default function TrainingMatrixView() {
     };
 
     const completedCount = (employeeName: string) => {
-      return trainings.filter(training => {
+      return trainings.filter((training) => {
         const entry = getEntry(employeeName, training);
         return entry?.status === 'COMPLETED';
       }).length;
     };
 
     const trainingCompletedCount = (trainingName: string) => {
-      return employees.filter(employee => {
+      return employees.filter((employee) => {
         const entry = getEntry(employee.name, trainingName);
         return entry?.status === 'COMPLETED';
       }).length;
@@ -190,7 +212,12 @@ export default function TrainingMatrixView() {
             {totalEmployees} Employees × {totalTrainings} Trainings
           </Badge>
           <div className="flex items-center gap-4">
-            <Select value={viewMode} onValueChange={(value: "employee" | "training") => setViewMode(value)}>
+            <Select
+              value={viewMode}
+              onValueChange={(value: 'employee' | 'training') =>
+                setViewMode(value)
+              }
+            >
               <SelectTrigger className="w-48" data-testid="select-view-mode">
                 <SelectValue />
               </SelectTrigger>
@@ -202,14 +229,18 @@ export default function TrainingMatrixView() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setSortOrder(sortOrder === "asc" ? "desc" : "asc")}
+              onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
               data-testid="button-toggle-sort"
             >
               <ArrowUpDown className="h-4 w-4 mr-2" />
-              {sortOrder === "asc" ? "A-Z" : "Z-A"}
+              {sortOrder === 'asc' ? 'A-Z' : 'Z-A'}
             </Button>
             <Input
-              placeholder={viewMode === "employee" ? "Search employees..." : "Search trainings..."}
+              placeholder={
+                viewMode === 'employee'
+                  ? 'Search employees...'
+                  : 'Search trainings...'
+              }
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-64"
@@ -219,7 +250,7 @@ export default function TrainingMatrixView() {
         </div>
 
         <div className="overflow-x-auto">
-          {viewMode === "employee" ? (
+          {viewMode === 'employee' ? (
             <table className="w-full border-collapse">
               <thead>
                 <tr className="border-b">
@@ -245,8 +276,10 @@ export default function TrainingMatrixView() {
               <tbody>
                 {filteredEmployees.map((employee) => {
                   const completed = completedCount(employee.name);
-                  const percentage = Math.round((completed / totalTrainings) * 100);
-                  
+                  const percentage = Math.round(
+                    (completed / totalTrainings) * 100
+                  );
+
                   return (
                     <tr
                       key={employee.name}
@@ -257,17 +290,27 @@ export default function TrainingMatrixView() {
                         <div className="flex flex-col">
                           <span className="font-medium">{employee.name}</span>
                           {employee.jobTitle && (
-                            <span className="text-xs text-muted-foreground">{employee.jobTitle}</span>
+                            <span className="text-xs text-muted-foreground">
+                              {employee.jobTitle}
+                            </span>
                           )}
                           {employee.department && (
-                            <span className="text-xs text-blue-600">{employee.department}</span>
+                            <span className="text-xs text-blue-600">
+                              {employee.department}
+                            </span>
                           )}
                         </div>
                       </td>
                       <td className="p-3 text-center">
                         <div className="flex flex-col items-center gap-1">
                           <Badge
-                            variant={percentage === 100 ? "default" : percentage > 50 ? "secondary" : "destructive"}
+                            variant={
+                              percentage === 100
+                                ? 'default'
+                                : percentage > 50
+                                  ? 'secondary'
+                                  : 'destructive'
+                            }
                             className="w-16"
                           >
                             {percentage}%
@@ -282,7 +325,7 @@ export default function TrainingMatrixView() {
                         const isCompleted = entry?.status === 'COMPLETED';
                         const date = formatDate(entry?.lastCompleted || null);
                         const score = entry?.lastScore;
-                        
+
                         return (
                           <td
                             key={training}
@@ -293,11 +336,17 @@ export default function TrainingMatrixView() {
                               <div className="flex flex-col items-center gap-1">
                                 <CheckCircle2 className="h-5 w-5 text-green-600" />
                                 {score !== null && score !== undefined && (
-                                  <span className="text-xs font-semibold text-green-700">{score}%</span>
+                                  <span className="text-xs font-semibold text-green-700">
+                                    {score}%
+                                  </span>
                                 )}
-                                <span className="text-xs text-muted-foreground">{date}</span>
+                                <span className="text-xs text-muted-foreground">
+                                  {date}
+                                </span>
                                 {entry?.notes && (
-                                  <span className="text-xs text-blue-600">({entry.notes})</span>
+                                  <span className="text-xs text-blue-600">
+                                    ({entry.notes})
+                                  </span>
                                 )}
                               </div>
                             ) : (
@@ -337,8 +386,10 @@ export default function TrainingMatrixView() {
               <tbody>
                 {filteredTrainings.map((training) => {
                   const completed = trainingCompletedCount(training);
-                  const percentage = Math.round((completed / totalEmployees) * 100);
-                  
+                  const percentage = Math.round(
+                    (completed / totalEmployees) * 100
+                  );
+
                   return (
                     <tr
                       key={training}
@@ -353,7 +404,13 @@ export default function TrainingMatrixView() {
                       <td className="p-3 text-center">
                         <div className="flex flex-col items-center gap-1">
                           <Badge
-                            variant={percentage === 100 ? "default" : percentage > 50 ? "secondary" : "destructive"}
+                            variant={
+                              percentage === 100
+                                ? 'default'
+                                : percentage > 50
+                                  ? 'secondary'
+                                  : 'destructive'
+                            }
                             className="w-16"
                           >
                             {percentage}%
@@ -368,7 +425,7 @@ export default function TrainingMatrixView() {
                         const isCompleted = entry?.status === 'COMPLETED';
                         const date = formatDate(entry?.lastCompleted || null);
                         const score = entry?.lastScore;
-                        
+
                         return (
                           <td
                             key={employee.name}
@@ -379,11 +436,17 @@ export default function TrainingMatrixView() {
                               <div className="flex flex-col items-center gap-1">
                                 <CheckCircle2 className="h-5 w-5 text-green-600" />
                                 {score !== null && score !== undefined && (
-                                  <span className="text-xs font-semibold text-green-700">{score}%</span>
+                                  <span className="text-xs font-semibold text-green-700">
+                                    {score}%
+                                  </span>
                                 )}
-                                <span className="text-xs text-muted-foreground">{date}</span>
+                                <span className="text-xs text-muted-foreground">
+                                  {date}
+                                </span>
                                 {entry?.notes && (
-                                  <span className="text-xs text-blue-600">({entry.notes})</span>
+                                  <span className="text-xs text-blue-600">
+                                    ({entry.notes})
+                                  </span>
                                 )}
                               </div>
                             ) : (
@@ -425,39 +488,52 @@ export default function TrainingMatrixView() {
     }
 
     if (!certificationsData || certificationsData.length === 0) {
-      return <p className="text-muted-foreground">No certification data available.</p>;
+      return (
+        <p className="text-muted-foreground">
+          No certification data available.
+        </p>
+      );
     }
 
     // Extract unique employees
-    const employeeMap = new Map<string, { name: string; jobTitle: string | null; department: string | null }>();
-    certificationsData.forEach(cert => {
+    const employeeMap = new Map<
+      string,
+      { name: string; jobTitle: string | null; department: string | null }
+    >();
+    certificationsData.forEach((cert) => {
       if (cert.employeeName && !employeeMap.has(cert.employeeName)) {
         employeeMap.set(cert.employeeName, {
           name: cert.employeeName,
           jobTitle: cert.jobTitle,
-          department: cert.department
+          department: cert.department,
         });
       }
     });
 
-    const employees = Array.from(employeeMap.values()).sort((a, b) => 
-      sortOrder === "asc" ? a.name.localeCompare(b.name) : b.name.localeCompare(a.name)
+    const employees = Array.from(employeeMap.values()).sort((a, b) =>
+      sortOrder === 'asc'
+        ? a.name.localeCompare(b.name)
+        : b.name.localeCompare(a.name)
     );
 
     // Extract unique certifications (filter out nulls)
-    const certifications = Array.from(new Set(certificationsData.map(c => c.certificationName)))
-      .filter(name => name !== null && name !== undefined)
+    const certifications = Array.from(
+      new Set(certificationsData.map((c) => c.certificationName))
+    )
+      .filter((name) => name !== null && name !== undefined)
       .sort((a, b) =>
-        sortOrder === "asc" ? a.localeCompare(b) : b.localeCompare(a)
+        sortOrder === 'asc' ? a.localeCompare(b) : b.localeCompare(a)
       );
 
     const filteredEmployees = searchTerm
-      ? employees.filter(emp => emp.name.toLowerCase().includes(searchTerm.toLowerCase()))
+      ? employees.filter((emp) =>
+          emp.name.toLowerCase().includes(searchTerm.toLowerCase())
+        )
       : employees;
 
     // Create lookup map
     const certMap = new Map<string, EmployeeCertification>();
-    certificationsData.forEach(cert => {
+    certificationsData.forEach((cert) => {
       const key = `${cert.employeeName}-${cert.certificationName}`;
       certMap.set(key, cert);
     });
@@ -467,7 +543,7 @@ export default function TrainingMatrixView() {
     };
 
     const completedCertCount = (employeeName: string) => {
-      return certifications.filter(cert => {
+      return certifications.filter((cert) => {
         const entry = getCert(employeeName, cert);
         return entry?.status === 'ACTIVE' || entry?.dateEarned;
       }).length;
@@ -477,17 +553,18 @@ export default function TrainingMatrixView() {
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <Badge variant="outline" className="text-sm">
-            {filteredEmployees.length} Employees × {certifications.length} Certifications
+            {filteredEmployees.length} Employees × {certifications.length}{' '}
+            Certifications
           </Badge>
           <div className="flex items-center gap-4">
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setSortOrder(sortOrder === "asc" ? "desc" : "asc")}
+              onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
               data-testid="button-toggle-sort-certs"
             >
               <ArrowUpDown className="h-4 w-4 mr-2" />
-              {sortOrder === "asc" ? "A-Z" : "Z-A"}
+              {sortOrder === 'asc' ? 'A-Z' : 'Z-A'}
             </Button>
             <Input
               placeholder="Search employees..."
@@ -525,8 +602,11 @@ export default function TrainingMatrixView() {
             <tbody>
               {filteredEmployees.map((employee) => {
                 const completed = completedCertCount(employee.name);
-                const percentage = certifications.length > 0 ? Math.round((completed / certifications.length) * 100) : 0;
-                
+                const percentage =
+                  certifications.length > 0
+                    ? Math.round((completed / certifications.length) * 100)
+                    : 0;
+
                 return (
                   <tr
                     key={employee.name}
@@ -537,17 +617,27 @@ export default function TrainingMatrixView() {
                       <div className="flex flex-col">
                         <span className="font-medium">{employee.name}</span>
                         {employee.jobTitle && (
-                          <span className="text-xs text-muted-foreground">{employee.jobTitle}</span>
+                          <span className="text-xs text-muted-foreground">
+                            {employee.jobTitle}
+                          </span>
                         )}
                         {employee.department && (
-                          <span className="text-xs text-blue-600">{employee.department}</span>
+                          <span className="text-xs text-blue-600">
+                            {employee.department}
+                          </span>
                         )}
                       </div>
                     </td>
                     <td className="p-3 text-center">
                       <div className="flex flex-col items-center gap-1">
                         <Badge
-                          variant={percentage === 100 ? "default" : percentage > 50 ? "secondary" : "destructive"}
+                          variant={
+                            percentage === 100
+                              ? 'default'
+                              : percentage > 50
+                                ? 'secondary'
+                                : 'destructive'
+                          }
                           className="w-16"
                         >
                           {percentage}%
@@ -559,10 +649,11 @@ export default function TrainingMatrixView() {
                     </td>
                     {certifications.map((cert) => {
                       const entry = getCert(employee.name, cert);
-                      const isEarned = entry?.status === 'ACTIVE' || entry?.dateEarned;
+                      const isEarned =
+                        entry?.status === 'ACTIVE' || entry?.dateEarned;
                       const date = formatDate(entry?.dateEarned || null);
                       const expiryDate = formatDate(entry?.expiryDate || null);
-                      
+
                       return (
                         <td
                           key={cert}
@@ -572,12 +663,20 @@ export default function TrainingMatrixView() {
                           {isEarned ? (
                             <div className="flex flex-col items-center gap-1">
                               <CheckCircle2 className="h-5 w-5 text-green-600" />
-                              {date && <span className="text-xs text-muted-foreground">Earned: {date}</span>}
+                              {date && (
+                                <span className="text-xs text-muted-foreground">
+                                  Earned: {date}
+                                </span>
+                              )}
                               {expiryDate && (
-                                <span className="text-xs text-orange-600">Expires: {expiryDate}</span>
+                                <span className="text-xs text-orange-600">
+                                  Expires: {expiryDate}
+                                </span>
                               )}
                               {entry?.notes && (
-                                <span className="text-xs text-blue-600">({entry.notes})</span>
+                                <span className="text-xs text-blue-600">
+                                  ({entry.notes})
+                                </span>
                               )}
                             </div>
                           ) : (
@@ -618,15 +717,21 @@ export default function TrainingMatrixView() {
     }
 
     if (!evaluationsData || evaluationsData.length === 0) {
-      return <p className="text-muted-foreground">No evaluation data available.</p>;
+      return (
+        <p className="text-muted-foreground">No evaluation data available.</p>
+      );
     }
 
     const filteredEvaluations = searchTerm
-      ? evaluationsData.filter(evaluation => evaluation.employeeName.toLowerCase().includes(searchTerm.toLowerCase()))
+      ? evaluationsData.filter((evaluation) =>
+          evaluation.employeeName
+            .toLowerCase()
+            .includes(searchTerm.toLowerCase())
+        )
       : evaluationsData;
 
     const sortedEvaluations = [...filteredEvaluations].sort((a, b) => {
-      if (sortOrder === "asc") {
+      if (sortOrder === 'asc') {
         return a.employeeName.localeCompare(b.employeeName);
       }
       return b.employeeName.localeCompare(a.employeeName);
@@ -642,11 +747,11 @@ export default function TrainingMatrixView() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setSortOrder(sortOrder === "asc" ? "desc" : "asc")}
+              onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
               data-testid="button-toggle-sort-evals"
             >
               <ArrowUpDown className="h-4 w-4 mr-2" />
-              {sortOrder === "asc" ? "A-Z" : "Z-A"}
+              {sortOrder === 'asc' ? 'A-Z' : 'Z-A'}
             </Button>
             <Input
               placeholder="Search employees..."
@@ -680,12 +785,18 @@ export default function TrainingMatrixView() {
                 >
                   <td className="p-3">
                     <div className="flex flex-col">
-                      <span className="font-medium">{evaluation.employeeName}</span>
+                      <span className="font-medium">
+                        {evaluation.employeeName}
+                      </span>
                       {evaluation.jobTitle && (
-                        <span className="text-xs text-muted-foreground">{evaluation.jobTitle}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {evaluation.jobTitle}
+                        </span>
                       )}
                       {evaluation.department && (
-                        <span className="text-xs text-blue-600">{evaluation.department}</span>
+                        <span className="text-xs text-blue-600">
+                          {evaluation.department}
+                        </span>
                       )}
                     </div>
                   </td>
@@ -694,7 +805,9 @@ export default function TrainingMatrixView() {
                   </td>
                   <td className="p-3">
                     <div className="flex flex-col text-xs">
-                      <span>{formatDate(evaluation.evaluationPeriodStart)}</span>
+                      <span>
+                        {formatDate(evaluation.evaluationPeriodStart)}
+                      </span>
                       <span className="text-muted-foreground">to</span>
                       <span>{formatDate(evaluation.evaluationPeriodEnd)}</span>
                     </div>
@@ -703,9 +816,11 @@ export default function TrainingMatrixView() {
                     {evaluation.overallRating !== null ? (
                       <Badge
                         variant={
-                          evaluation.overallRating >= 4 ? "default" : 
-                          evaluation.overallRating >= 3 ? "secondary" : 
-                          "destructive"
+                          evaluation.overallRating >= 4
+                            ? 'default'
+                            : evaluation.overallRating >= 3
+                              ? 'secondary'
+                              : 'destructive'
                         }
                       >
                         {evaluation.overallRating}/5
@@ -714,19 +829,29 @@ export default function TrainingMatrixView() {
                       <span className="text-muted-foreground">N/A</span>
                     )}
                   </td>
-                  <td className="p-3">{evaluation.evaluatedBy || <span className="text-muted-foreground">-</span>}</td>
+                  <td className="p-3">
+                    {evaluation.evaluatedBy || (
+                      <span className="text-muted-foreground">-</span>
+                    )}
+                  </td>
                   <td className="p-3">
                     <div className="flex items-center gap-1 text-sm">
                       <Calendar className="h-3 w-3" />
-                      {evaluation.evaluatedAt ? formatDate(evaluation.evaluatedAt) : <span className="text-muted-foreground">Pending</span>}
+                      {evaluation.evaluatedAt ? (
+                        formatDate(evaluation.evaluatedAt)
+                      ) : (
+                        <span className="text-muted-foreground">Pending</span>
+                      )}
                     </div>
                   </td>
                   <td className="p-3">
                     <Badge
                       variant={
-                        evaluation.status === 'COMPLETED' ? "default" :
-                        evaluation.status === 'IN_PROGRESS' ? "secondary" :
-                        "outline"
+                        evaluation.status === 'COMPLETED'
+                          ? 'default'
+                          : evaluation.status === 'IN_PROGRESS'
+                            ? 'secondary'
+                            : 'outline'
                       }
                     >
                       {evaluation.status}
@@ -748,28 +873,50 @@ export default function TrainingMatrixView() {
           <CardTitle>Training Matrix</CardTitle>
         </CardHeader>
         <CardContent>
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="grid w-full grid-cols-3" data-testid="tabs-training-matrix">
+          <Tabs
+            value={activeTab}
+            onValueChange={setActiveTab}
+            className="w-full"
+          >
+            <TabsList
+              className="grid w-full grid-cols-3"
+              data-testid="tabs-training-matrix"
+            >
               <TabsTrigger value="standards" data-testid="tab-standards">
                 Standards Training
               </TabsTrigger>
-              <TabsTrigger value="certifications" data-testid="tab-certifications">
+              <TabsTrigger
+                value="certifications"
+                data-testid="tab-certifications"
+              >
                 Certifications
               </TabsTrigger>
               <TabsTrigger value="evaluations" data-testid="tab-evaluations">
                 Evaluations
               </TabsTrigger>
             </TabsList>
-            
-            <TabsContent value="standards" className="mt-6" data-testid="content-standards">
+
+            <TabsContent
+              value="standards"
+              className="mt-6"
+              data-testid="content-standards"
+            >
               {renderStandardsTrainingTab()}
             </TabsContent>
-            
-            <TabsContent value="certifications" className="mt-6" data-testid="content-certifications">
+
+            <TabsContent
+              value="certifications"
+              className="mt-6"
+              data-testid="content-certifications"
+            >
               {renderCertificationsTab()}
             </TabsContent>
-            
-            <TabsContent value="evaluations" className="mt-6" data-testid="content-evaluations">
+
+            <TabsContent
+              value="evaluations"
+              className="mt-6"
+              data-testid="content-evaluations"
+            >
               {renderEvaluationsTab()}
             </TabsContent>
           </Tabs>

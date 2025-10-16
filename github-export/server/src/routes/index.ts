@@ -1,5 +1,5 @@
 import { Express } from 'express';
-import { createServer, type Server } from "http";
+import { createServer, type Server } from 'http';
 import authRoutes from './auth';
 import employeesRoutes from './employees';
 import ordersRoutes from './orders';
@@ -26,7 +26,7 @@ export function registerRoutes(app: Express): Server {
   // Employee management routes
   app.use('/api/employees', employeesRoutes);
 
-  // Order management routes  
+  // Order management routes
   app.use('/api/orders', ordersRoutes);
 
   // Forms and submissions routes
@@ -83,7 +83,7 @@ export function registerRoutes(app: Express): Server {
         timestamp: new Date().toISOString(),
         database: dbConnected ? 'connected' : 'disconnected',
         environment: process.env.NODE_ENV || 'development',
-        server: 'running'
+        server: 'running',
       };
 
       if (dbConnected) {
@@ -98,10 +98,10 @@ export function registerRoutes(app: Express): Server {
 
       res.json(status);
     } catch (error) {
-      res.status(500).json({ 
-        status: 'error', 
+      res.status(500).json({
+        status: 'error',
         error: error instanceof Error ? error.message : 'Unknown error',
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       });
     }
   });
@@ -116,7 +116,7 @@ export function registerRoutes(app: Express): Server {
       res.json(scheduleData);
     } catch (error) {
       console.error('❌ Layup schedule fetch error:', error);
-      res.status(500).json({ error: "Failed to fetch layup schedule" });
+      res.status(500).json({ error: 'Failed to fetch layup schedule' });
     }
   });
 
@@ -129,19 +129,24 @@ export function registerRoutes(app: Express): Server {
       res.json(result);
     } catch (error) {
       console.error('❌ Layup schedule create error:', error);
-      res.status(500).json({ error: "Failed to create layup schedule entry" });
+      res.status(500).json({ error: 'Failed to create layup schedule entry' });
     }
   });
 
   app.delete('/api/layup-schedule/by-order/:orderId', async (req, res) => {
     try {
-      console.log('🔧 LAYUP SCHEDULE DELETE BY ORDER CALLED', req.params.orderId);
+      console.log(
+        '🔧 LAYUP SCHEDULE DELETE BY ORDER CALLED',
+        req.params.orderId
+      );
       const { storage } = await import('../../storage');
       await storage.deleteLayupScheduleByOrder(req.params.orderId);
       res.json({ success: true });
     } catch (error) {
       console.error('❌ Layup schedule delete error:', error);
-      res.status(500).json({ error: "Failed to delete layup schedule entries" });
+      res
+        .status(500)
+        .json({ error: 'Failed to delete layup schedule entries' });
     }
   });
 
@@ -155,7 +160,7 @@ export function registerRoutes(app: Express): Server {
       res.json(p2Customers);
     } catch (error) {
       console.error('Get P2 customers error:', error);
-      res.status(500).json({ error: "Failed to fetch P2 customers" });
+      res.status(500).json({ error: 'Failed to fetch P2 customers' });
     }
   });
 
@@ -169,7 +174,9 @@ export function registerRoutes(app: Express): Server {
       res.json(pos);
     } catch (error) {
       console.error('🔧 P2 purchase orders bypass error:', error);
-      res.status(500).json({ error: "Failed to fetch P2 purchase orders via bypass route" });
+      res
+        .status(500)
+        .json({ error: 'Failed to fetch P2 purchase orders via bypass route' });
     }
   });
 
@@ -183,7 +190,9 @@ export function registerRoutes(app: Express): Server {
       res.status(201).json(po);
     } catch (error) {
       console.error('🔧 P2 purchase order create bypass error:', error);
-      res.status(500).json({ error: "Failed to create P2 purchase order via bypass route" });
+      res
+        .status(500)
+        .json({ error: 'Failed to create P2 purchase order via bypass route' });
     }
   });
 
@@ -198,7 +207,9 @@ export function registerRoutes(app: Express): Server {
       res.json(po);
     } catch (error) {
       console.error('🔧 P2 purchase order update bypass error:', error);
-      res.status(500).json({ error: "Failed to update P2 purchase order via bypass route" });
+      res
+        .status(500)
+        .json({ error: 'Failed to update P2 purchase order via bypass route' });
     }
   });
 
@@ -212,24 +223,30 @@ export function registerRoutes(app: Express): Server {
       res.json({ success: true });
     } catch (error) {
       console.error('🔧 P2 purchase order delete bypass error:', error);
-      res.status(500).json({ error: "Failed to delete P2 purchase order via bypass route" });
+      res
+        .status(500)
+        .json({ error: 'Failed to delete P2 purchase order via bypass route' });
     }
   });
 
   // Stock Models routes - bypass to old monolithic routes temporarily
   app.get('/api/stock-models', async (req, res) => {
     try {
-      console.log("🔍 Stock models API called");
+      console.log('🔍 Stock models API called');
       const { storage } = await import('../../storage');
       const stockModels = await storage.getAllStockModels();
-      console.log("🔍 Retrieved stock models from storage:", stockModels.length, "models");
+      console.log(
+        '🔍 Retrieved stock models from storage:',
+        stockModels.length,
+        'models'
+      );
       if (stockModels.length > 0) {
-        console.log("🔍 First stock model from storage:", stockModels[0]);
-        console.log("🔍 First stock model keys:", Object.keys(stockModels[0]));
+        console.log('🔍 First stock model from storage:', stockModels[0]);
+        console.log('🔍 First stock model keys:', Object.keys(stockModels[0]));
       }
 
       // Transform data to ensure proper format for frontend
-      const transformedModels = stockModels.map(model => ({
+      const transformedModels = stockModels.map((model) => ({
         id: model.id,
         name: model.name,
         displayName: model.displayName,
@@ -238,18 +255,18 @@ export function registerRoutes(app: Express): Server {
         isActive: model.isActive,
         sortOrder: model.sortOrder,
         createdAt: model.createdAt,
-        updatedAt: model.updatedAt
+        updatedAt: model.updatedAt,
       }));
 
-      console.log("🔍 Transformed models count:", transformedModels.length);
+      console.log('🔍 Transformed models count:', transformedModels.length);
       if (transformedModels.length > 0) {
-        console.log("🔍 First transformed model:", transformedModels[0]);
+        console.log('🔍 First transformed model:', transformedModels[0]);
       }
 
       res.json(transformedModels);
     } catch (error) {
-      console.error("🚨 Error retrieving stock models:", error);
-      res.status(500).json({ error: "Failed to retrieve stock models" });
+      console.error('🚨 Error retrieving stock models:', error);
+      res.status(500).json({ error: 'Failed to retrieve stock models' });
     }
   });
 
@@ -261,7 +278,7 @@ export function registerRoutes(app: Express): Server {
       res.json(features);
     } catch (error) {
       console.error('🎯 Features API Error:', error);
-      res.status(500).json({ error: "Failed to retrieve features" });
+      res.status(500).json({ error: 'Failed to retrieve features' });
     }
   });
 
@@ -275,7 +292,7 @@ export function registerRoutes(app: Express): Server {
       res.status(201).json(feature);
     } catch (error) {
       console.error('🔧 Feature create error:', error);
-      res.status(500).json({ error: "Failed to create feature" });
+      res.status(500).json({ error: 'Failed to create feature' });
     }
   });
 
@@ -291,7 +308,7 @@ export function registerRoutes(app: Express): Server {
       res.json(feature);
     } catch (error) {
       console.error('🔧 Feature update error:', error);
-      res.status(500).json({ error: "Failed to update feature" });
+      res.status(500).json({ error: 'Failed to update feature' });
     }
   });
 
@@ -305,7 +322,7 @@ export function registerRoutes(app: Express): Server {
       res.json({ success: true });
     } catch (error) {
       console.error('🔧 Feature delete error:', error);
-      res.status(500).json({ error: "Failed to delete feature" });
+      res.status(500).json({ error: 'Failed to delete feature' });
     }
   });
 
@@ -315,8 +332,8 @@ export function registerRoutes(app: Express): Server {
       const categories = await storage.getAllFeatureCategories();
       res.json(categories);
     } catch (error) {
-      console.error("Get feature categories error:", error);
-      res.status(500).json({ error: "Failed to get feature categories" });
+      console.error('Get feature categories error:', error);
+      res.status(500).json({ error: 'Failed to get feature categories' });
     }
   });
 
@@ -326,8 +343,8 @@ export function registerRoutes(app: Express): Server {
       const subCategories = await storage.getAllFeatureSubCategories();
       res.json(subCategories);
     } catch (error) {
-      console.error("Get feature sub-categories error:", error);
-      res.status(500).json({ error: "Failed to get feature sub-categories" });
+      console.error('Get feature sub-categories error:', error);
+      res.status(500).json({ error: 'Failed to get feature sub-categories' });
     }
   });
 
@@ -342,7 +359,7 @@ export function registerRoutes(app: Express): Server {
       res.json(settings);
     } catch (error) {
       console.error('🚀 Employee data fetch error:', error);
-      res.status(500).json({ error: "Failed to fetch employee data" });
+      res.status(500).json({ error: 'Failed to fetch employee data' });
     }
   });
 
@@ -365,7 +382,9 @@ export function registerRoutes(app: Express): Server {
       console.log('🔧 JSON response sent successfully');
     } catch (error) {
       console.error('🔧 Employee layup settings fetch error:', error);
-      res.status(500).json({ error: "Failed to fetch employee layup settings" });
+      res
+        .status(500)
+        .json({ error: 'Failed to fetch employee layup settings' });
     }
   });
 
@@ -376,8 +395,8 @@ export function registerRoutes(app: Express): Server {
       const addresses = await storage.getAllAddresses();
       res.json(addresses);
     } catch (error) {
-      console.error("Get all addresses error:", error);
-      res.status(500).json({ error: "Failed to fetch addresses" });
+      console.error('Get all addresses error:', error);
+      res.status(500).json({ error: 'Failed to fetch addresses' });
     }
   });
 
@@ -392,7 +411,7 @@ export function registerRoutes(app: Express): Server {
       res.status(201).json(address);
     } catch (error) {
       console.error('🔧 Address create error:', error);
-      res.status(500).json({ error: "Failed to create address" });
+      res.status(500).json({ error: 'Failed to create address' });
     }
   });
 
@@ -402,12 +421,15 @@ export function registerRoutes(app: Express): Server {
       const { storage } = await import('../../storage');
       const { id } = req.params;
       const addressData = req.body;
-      const address = await storage.updateCustomerAddress(parseInt(id), addressData);
+      const address = await storage.updateCustomerAddress(
+        parseInt(id),
+        addressData
+      );
       console.log('🔧 Updated address:', address.id);
       res.json(address);
     } catch (error) {
       console.error('🔧 Address update error:', error);
-      res.status(500).json({ error: "Failed to update address" });
+      res.status(500).json({ error: 'Failed to update address' });
     }
   });
 
@@ -421,7 +443,7 @@ export function registerRoutes(app: Express): Server {
       res.json({ success: true });
     } catch (error) {
       console.error('🔧 Address delete error:', error);
-      res.status(500).json({ error: "Failed to get all addresses" });
+      res.status(500).json({ error: 'Failed to get all addresses' });
     }
   });
 
@@ -429,14 +451,16 @@ export function registerRoutes(app: Express): Server {
     try {
       const { customerId } = req.query;
       if (!customerId) {
-        return res.status(400).json({ error: "Customer ID is required" });
+        return res.status(400).json({ error: 'Customer ID is required' });
       }
       const { storage } = await import('../../storage');
-      const addresses = await storage.getCustomerAddresses(customerId as string);
+      const addresses = await storage.getCustomerAddresses(
+        customerId as string
+      );
       res.json(addresses);
     } catch (error) {
-      console.error("Get customer addresses error:", error);
-      res.status(500).json({ error: "Failed to get customer addresses" });
+      console.error('Get customer addresses error:', error);
+      res.status(500).json({ error: 'Failed to get customer addresses' });
     }
   });
 
@@ -448,28 +472,36 @@ export function registerRoutes(app: Express): Server {
 
       // Get only finalized orders from draft table that are ready for production
       const allOrders = await storage.getAllOrderDrafts();
-      const layupOrders = allOrders.filter(order => 
-        order.status === 'FINALIZED' && 
-        (order.currentDepartment === 'Layup' || !order.currentDepartment)
+      const layupOrders = allOrders.filter(
+        (order) =>
+          order.status === 'FINALIZED' &&
+          (order.currentDepartment === 'Layup' || !order.currentDepartment)
       );
 
       // Add debug logging for features
       console.log('Sample P1 layup order features:', {
         orderId: layupOrders[0]?.orderId,
         features: layupOrders[0]?.features,
-        modelId: layupOrders[0]?.modelId
+        modelId: layupOrders[0]?.modelId,
       });
 
       // Get P1 Production Orders (generated from purchase orders)
       const productionOrders = await storage.getAllProductionOrders();
-      const pendingProductionOrders = productionOrders.filter(po => po.productionStatus === 'PENDING');
+      const pendingProductionOrders = productionOrders.filter(
+        (po) => po.productionStatus === 'PENDING'
+      );
 
-      const p1LayupOrders = pendingProductionOrders.map(po => {
+      const p1LayupOrders = pendingProductionOrders.map((po) => {
         // Calculate priority score based on due date urgency
         const dueDate = new Date(po.dueDate || po.orderDate);
         const today = new Date();
-        const daysUntilDue = Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-        const priorityScore = Math.max(20, Math.min(35, 20 + Math.floor(daysUntilDue / 30))); // 20-35 range
+        const daysUntilDue = Math.ceil(
+          (dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
+        );
+        const priorityScore = Math.max(
+          20,
+          Math.min(35, 20 + Math.floor(daysUntilDue / 30))
+        ); // 20-35 range
 
         return {
           id: `p1-prod-${po.id}`,
@@ -490,12 +522,12 @@ export function registerRoutes(app: Express): Server {
           stockModelId: po.itemId, // Use item ID as stock model for mold matching
           specifications: po.specifications,
           createdAt: po.createdAt,
-          updatedAt: po.updatedAt
+          updatedAt: po.updatedAt,
         };
       });
 
       // Convert regular orders to unified format
-      const regularLayupOrders = layupOrders.map(order => ({
+      const regularLayupOrders = layupOrders.map((order) => ({
         id: order.id?.toString() || order.orderId,
         orderId: order.orderId,
         orderDate: order.orderDate,
@@ -512,22 +544,24 @@ export function registerRoutes(app: Express): Server {
         modelId: order.modelId,
         features: order.features,
         createdAt: order.orderDate,
-        updatedAt: order.updatedAt || order.orderDate
+        updatedAt: order.updatedAt || order.orderDate,
       }));
 
       // Combine P1 order types only
-      const combinedOrders = [
-        ...regularLayupOrders,
-        ...p1LayupOrders
-      ].sort((a, b) => ((a as any).priorityScore || 50) - ((b as any).priorityScore || 50));
+      const combinedOrders = [...regularLayupOrders, ...p1LayupOrders].sort(
+        (a, b) =>
+          ((a as any).priorityScore || 50) - ((b as any).priorityScore || 50)
+      );
 
       console.log(`🏭 P1 layup queue orders count: ${combinedOrders.length}`);
-      console.log(`🏭 Regular orders: ${regularLayupOrders.length}, P1 PO orders: ${p1LayupOrders.length}`);
+      console.log(
+        `🏭 Regular orders: ${regularLayupOrders.length}, P1 PO orders: ${p1LayupOrders.length}`
+      );
 
       res.json(combinedOrders);
     } catch (error) {
-      console.error("P1 layup queue error:", error);
-      res.status(500).json({ error: "Failed to fetch P1 layup queue" });
+      console.error('P1 layup queue error:', error);
+      res.status(500).json({ error: 'Failed to fetch P1 layup queue' });
     }
   });
 
@@ -539,14 +573,21 @@ export function registerRoutes(app: Express): Server {
 
       // Get production orders from P2 system
       const productionOrders = await storage.getAllP2ProductionOrders();
-      const pendingProductionOrders = productionOrders.filter(po => po.status === 'PENDING');
+      const pendingProductionOrders = productionOrders.filter(
+        (po) => po.status === 'PENDING'
+      );
 
-      const p2LayupOrders = pendingProductionOrders.map(po => {
+      const p2LayupOrders = pendingProductionOrders.map((po) => {
         // Calculate priority score for production orders (higher priority)
         const dueDate = new Date(po.dueDate || po.createdAt || new Date());
         const today = new Date();
-        const daysUntilDue = Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-        const priorityScore = Math.max(20, Math.min(35, 20 + Math.floor(daysUntilDue / 2))); // 20-35 range, higher priority
+        const daysUntilDue = Math.ceil(
+          (dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
+        );
+        const priorityScore = Math.max(
+          20,
+          Math.min(35, 20 + Math.floor(daysUntilDue / 2))
+        ); // 20-35 range, higher priority
 
         return {
           id: `prod-${po.id}`,
@@ -565,7 +606,7 @@ export function registerRoutes(app: Express): Server {
           stockModelId: po.orderId, // Use order ID as stock model for mold matching
           specifications: { department: po.department },
           createdAt: po.createdAt || new Date().toISOString(),
-          updatedAt: po.updatedAt || po.createdAt || new Date().toISOString()
+          updatedAt: po.updatedAt || po.createdAt || new Date().toISOString(),
         };
       });
 
@@ -574,8 +615,8 @@ export function registerRoutes(app: Express): Server {
 
       res.json(p2LayupOrders);
     } catch (error) {
-      console.error("P2 layup queue error:", error);
-      res.status(500).json({ error: "Failed to fetch P2 layup queue" });
+      console.error('P2 layup queue error:', error);
+      res.status(500).json({ error: 'Failed to fetch P2 layup queue' });
     }
   });
 
@@ -586,12 +627,15 @@ export function registerRoutes(app: Express): Server {
       const { storage } = await import('../../storage');
 
       const scheduleEntries = await storage.getAllLayupSchedule();
-      console.log('🔧 Found P2 layup schedule entries:', scheduleEntries.length);
+      console.log(
+        '🔧 Found P2 layup schedule entries:',
+        scheduleEntries.length
+      );
 
       res.json(scheduleEntries);
     } catch (error) {
-      console.error("P2 layup schedule error:", error);
-      res.status(500).json({ error: "Failed to fetch P2 layup schedule" });
+      console.error('P2 layup schedule error:', error);
+      res.status(500).json({ error: 'Failed to fetch P2 layup schedule' });
     }
   });
 
@@ -606,8 +650,10 @@ export function registerRoutes(app: Express): Server {
       console.log('🔧 P2 Schedule entry created:', result);
       res.json(result);
     } catch (error) {
-      console.error("P2 layup schedule create error:", error);
-      res.status(500).json({ error: "Failed to create P2 layup schedule entry" });
+      console.error('P2 layup schedule create error:', error);
+      res
+        .status(500)
+        .json({ error: 'Failed to create P2 layup schedule entry' });
     }
   });
 
@@ -622,15 +668,19 @@ export function registerRoutes(app: Express): Server {
       console.log('🔧 P2 Schedule entries deleted for order:', orderId);
       res.json({ success: true });
     } catch (error) {
-      console.error("P2 layup schedule delete error:", error);
-      res.status(500).json({ error: "Failed to delete P2 layup schedule entries" });
+      console.error('P2 layup schedule delete error:', error);
+      res
+        .status(500)
+        .json({ error: 'Failed to delete P2 layup schedule entries' });
     }
   });
 
   // Python scheduler integration endpoint
   app.post('/api/python-scheduler', async (req, res) => {
     try {
-      console.log('🐍 Running Python scheduler with Mesa Universal constraints...');
+      console.log(
+        '🐍 Running Python scheduler with Mesa Universal constraints...'
+      );
       const { spawn } = require('child_process');
       const path = require('path');
 
@@ -644,32 +694,45 @@ export function registerRoutes(app: Express): Server {
       const schedulerInput = {
         orders: orders.map((order: any) => ({
           order_id: order.orderId,
-          order_type: order.source === 'production_order' ? 'production_order' : 
-                     order.stockModelId === 'mesa_universal' ? 'mesa_universal' : 'regular',
+          order_type:
+            order.source === 'production_order'
+              ? 'production_order'
+              : order.stockModelId === 'mesa_universal'
+                ? 'mesa_universal'
+                : 'regular',
           features: order.features || {},
           quantity: order.quantity || 1,
           priority: order.priorityScore || 50,
           deadline: order.dueDate || order.orderDate,
-          stock_model_id: order.stockModelId
+          stock_model_id: order.stockModelId,
         })),
         molds: molds.map((mold: any) => ({
           mold_id: mold.moldId,
           capacity: mold.multiplier || 1,
-          compatible_types: ['production_order', 'mesa_universal', 'regular', 'P1'],
-          stock_models: mold.stockModels || []
+          compatible_types: [
+            'production_order',
+            'mesa_universal',
+            'regular',
+            'P1',
+          ],
+          stock_models: mold.stockModels || [],
         })),
         employees: employees.map((emp: any) => ({
           employee_id: emp.employeeId,
           skills: ['production_order', 'mesa_universal', 'regular', 'P1'], // All employees can handle all types
           prod_rate: emp.rate || 1,
-          hours_per_day: emp.hours || 10
-        }))
+          hours_per_day: emp.hours || 10,
+        })),
       };
 
       const pythonScript = path.join(process.cwd(), 'scripts', 'scheduler.py');
-      const pythonProcess = spawn('python', [pythonScript, '--json-input', '--json-output'], {
-        stdio: ['pipe', 'pipe', 'pipe']
-      });
+      const pythonProcess = spawn(
+        'python',
+        [pythonScript, '--json-input', '--json-output'],
+        {
+          stdio: ['pipe', 'pipe', 'pipe'],
+        }
+      );
 
       let output = '';
       let errorOutput = '';
@@ -685,13 +748,15 @@ export function registerRoutes(app: Express): Server {
       pythonProcess.on('close', (code: number | null) => {
         if (code !== 0) {
           console.error('Python scheduler error:', errorOutput);
-          return res.status(500).json({ error: 'Python scheduler failed', details: errorOutput });
+          return res
+            .status(500)
+            .json({ error: 'Python scheduler failed', details: errorOutput });
         }
 
         try {
           // Extract JSON from output (filter out console.log messages)
           const lines = output.trim().split('\n');
-          const jsonLine = lines.find(line => line.startsWith('{'));
+          const jsonLine = lines.find((line) => line.startsWith('{'));
 
           if (!jsonLine) {
             console.log('Python scheduler output:', output);
@@ -699,19 +764,25 @@ export function registerRoutes(app: Express): Server {
           }
 
           const result = JSON.parse(jsonLine);
-          console.log(`🐍 Python scheduler completed: ${result.schedule?.length || 0} orders scheduled`);
+          console.log(
+            `🐍 Python scheduler completed: ${result.schedule?.length || 0} orders scheduled`
+          );
 
           res.json(result);
         } catch (parseError) {
           console.error('Failed to parse Python scheduler output:', parseError);
-          res.status(500).json({ error: 'Failed to parse scheduler output', raw_output: output });
+          res
+            .status(500)
+            .json({
+              error: 'Failed to parse scheduler output',
+              raw_output: output,
+            });
         }
       });
 
       // Send input data to Python process
       pythonProcess.stdin.write(JSON.stringify(schedulerInput));
       pythonProcess.stdin.end();
-
     } catch (error) {
       console.error('Python scheduler integration error:', error);
       res.status(500).json({ error: 'Failed to run Python scheduler' });
@@ -733,36 +804,46 @@ export function registerRoutes(app: Express): Server {
       const updatedOrders = [];
       for (const orderId of orderIds) {
         // Update production orders status to LAID_UP
-        const productionOrder = await storage.getProductionOrderByOrderId(orderId);
+        const productionOrder =
+          await storage.getProductionOrderByOrderId(orderId);
         if (productionOrder) {
-          const updated = await storage.updateProductionOrder(productionOrder.id, {
-            productionStatus: 'LAID_UP',
-            laidUpAt: new Date()
-          });
+          const updated = await storage.updateProductionOrder(
+            productionOrder.id,
+            {
+              productionStatus: 'LAID_UP',
+              laidUpAt: new Date(),
+            }
+          );
           updatedOrders.push(updated);
           console.log(`✅ Production order ${orderId} moved to LAID_UP status`);
         }
 
         // Update regular order drafts to next department
         const orderDrafts = await storage.getAllOrderDrafts();
-        const regularOrder = orderDrafts.find(o => o.orderId === orderId);
+        const regularOrder = orderDrafts.find((o) => o.orderId === orderId);
         if (regularOrder && regularOrder.id) {
           await storage.updateOrderDraft(regularOrder.id.toString(), {
-            currentDepartment: 'Barcode' // Move from Layup to next department
+            currentDepartment: 'Barcode', // Move from Layup to next department
           });
-          console.log(`✅ Regular order ${orderId} moved to Barcode department`);
+          console.log(
+            `✅ Regular order ${orderId} moved to Barcode department`
+          );
         }
       }
 
-      console.log(`🔄 Successfully pushed ${updatedOrders.length} orders to layup/plugging queue`);
-      res.json({ 
-        success: true, 
+      console.log(
+        `🔄 Successfully pushed ${updatedOrders.length} orders to layup/plugging queue`
+      );
+      res.json({
+        success: true,
         message: `${updatedOrders.length} orders moved to layup/plugging phase`,
-        updatedOrders 
+        updatedOrders,
       });
     } catch (error) {
       console.error('Push to layup/plugging error:', error);
-      res.status(500).json({ error: 'Failed to push orders to layup/plugging queue' });
+      res
+        .status(500)
+        .json({ error: 'Failed to push orders to layup/plugging queue' });
     }
   });
 
@@ -774,25 +855,30 @@ export function registerRoutes(app: Express): Server {
 
       // Get only finalized orders from draft table that are ready for production
       const allOrders = await storage.getAllOrderDrafts();
-      const layupOrders = allOrders.filter(order => 
-        order.status === 'FINALIZED' && 
-        (order.currentDepartment === 'Layup' || !order.currentDepartment)
+      const layupOrders = allOrders.filter(
+        (order) =>
+          order.status === 'FINALIZED' &&
+          (order.currentDepartment === 'Layup' || !order.currentDepartment)
       );
 
       // Get P1 Purchase Orders with stock model items
       const pos = await storage.getAllPurchaseOrders();
-      const activePos = pos.filter(po => po.status === 'OPEN');
+      const activePos = pos.filter((po) => po.status === 'OPEN');
 
       const p1LayupOrders = [];
       for (const po of activePos) {
         const items = await storage.getPurchaseOrderItems(po.id);
-        const stockModelItems = items.filter(item => item.itemId && item.itemId.trim());
+        const stockModelItems = items.filter(
+          (item) => item.itemId && item.itemId.trim()
+        );
 
         for (const item of stockModelItems) {
           // Calculate priority score based on due date urgency
           const dueDate = new Date(po.expectedDelivery || po.poDate);
           const today = new Date();
-          const daysUntilDue = Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+          const daysUntilDue = Math.ceil(
+            (dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
+          );
           const priorityScore = Math.max(20, Math.min(35, 20 + daysUntilDue)); // 20-35 range
 
           p1LayupOrders.push({
@@ -813,13 +899,13 @@ export function registerRoutes(app: Express): Server {
             stockModelId: item.itemId, // Use item ID as stock model
             specifications: item.specifications,
             createdAt: po.createdAt,
-            updatedAt: po.updatedAt
+            updatedAt: po.updatedAt,
           });
         }
       }
 
       // Convert regular orders to unified format
-      const regularLayupOrders = layupOrders.map(order => ({
+      const regularLayupOrders = layupOrders.map((order) => ({
         id: order.id?.toString() || order.orderId,
         orderId: order.orderId,
         orderDate: order.orderDate,
@@ -836,21 +922,23 @@ export function registerRoutes(app: Express): Server {
         modelId: order.modelId,
         features: order.features,
         createdAt: order.orderDate,
-        updatedAt: order.updatedAt || order.orderDate
+        updatedAt: order.updatedAt || order.orderDate,
       }));
 
       // Combine only P1 order types (no P2 production orders)
-      const combinedOrders = [
-        ...regularLayupOrders,
-        ...p1LayupOrders
-      ].sort((a, b) => ((a as any).priorityScore || 50) - ((b as any).priorityScore || 50));
+      const combinedOrders = [...regularLayupOrders, ...p1LayupOrders].sort(
+        (a, b) =>
+          ((a as any).priorityScore || 50) - ((b as any).priorityScore || 50)
+      );
 
-      console.log(`🏭 Legacy layup queue orders count: ${combinedOrders.length}`);
+      console.log(
+        `🏭 Legacy layup queue orders count: ${combinedOrders.length}`
+      );
 
       res.json(combinedOrders);
     } catch (error) {
-      console.error("Legacy layup queue error:", error);
-      res.status(500).json({ error: "Failed to fetch layup queue" });
+      console.error('Legacy layup queue error:', error);
+      res.status(500).json({ error: 'Failed to fetch layup queue' });
     }
   });
 
@@ -866,7 +954,7 @@ export function registerRoutes(app: Express): Server {
       res.json(purchaseOrders);
     } catch (error) {
       console.error('🔧 Purchase orders fetch error:', error);
-      res.status(500).json({ error: "Failed to fetch purchase orders" });
+      res.status(500).json({ error: 'Failed to fetch purchase orders' });
     }
   });
 
@@ -876,12 +964,13 @@ export function registerRoutes(app: Express): Server {
       const { insertPurchaseOrderSchema } = await import('@shared/schema');
       const { storage } = await import('../../storage');
       const purchaseOrderData = insertPurchaseOrderSchema.parse(req.body);
-      const newPurchaseOrder = await storage.createPurchaseOrder(purchaseOrderData);
+      const newPurchaseOrder =
+        await storage.createPurchaseOrder(purchaseOrderData);
       console.log('🔧 Created purchase order:', newPurchaseOrder.id);
       res.status(201).json(newPurchaseOrder);
     } catch (error) {
       console.error('🔧 Create purchase order error:', error);
-      res.status(500).json({ error: "Failed to create purchase order" });
+      res.status(500).json({ error: 'Failed to create purchase order' });
     }
   });
 
@@ -891,12 +980,15 @@ export function registerRoutes(app: Express): Server {
       const { storage } = await import('../../storage');
       const { id } = req.params;
       const updateData = req.body;
-      const updatedPurchaseOrder = await storage.updatePurchaseOrder(parseInt(id), updateData);
+      const updatedPurchaseOrder = await storage.updatePurchaseOrder(
+        parseInt(id),
+        updateData
+      );
       console.log('🔧 Updated purchase order:', updatedPurchaseOrder.id);
       res.json(updatedPurchaseOrder);
     } catch (error) {
       console.error('🔧 Update purchase order error:', error);
-      res.status(500).json({ error: "Failed to update purchase order" });
+      res.status(500).json({ error: 'Failed to update purchase order' });
     }
   });
 
@@ -910,7 +1002,7 @@ export function registerRoutes(app: Express): Server {
       res.json({ success: true });
     } catch (error) {
       console.error('🔧 Delete purchase order error:', error);
-      res.status(500).json({ error: "Failed to delete purchase order" });
+      res.status(500).json({ error: 'Failed to delete purchase order' });
     }
   });
 
@@ -925,7 +1017,7 @@ export function registerRoutes(app: Express): Server {
       res.json(items);
     } catch (error) {
       console.error('🔧 Get PO items error:', error);
-      res.status(500).json({ error: "Failed to fetch purchase order items" });
+      res.status(500).json({ error: 'Failed to fetch purchase order items' });
     }
   });
 
@@ -942,7 +1034,7 @@ export function registerRoutes(app: Express): Server {
       res.status(201).json(newItem);
     } catch (error) {
       console.error('🔧 Create PO item error:', error);
-      res.status(500).json({ error: "Failed to create purchase order item" });
+      res.status(500).json({ error: 'Failed to create purchase order item' });
     }
   });
 
@@ -952,12 +1044,15 @@ export function registerRoutes(app: Express): Server {
       const { storage } = await import('../../storage');
       const { itemId } = req.params;
       const updateData = req.body;
-      const updatedItem = await storage.updatePurchaseOrderItem(parseInt(itemId), updateData);
+      const updatedItem = await storage.updatePurchaseOrderItem(
+        parseInt(itemId),
+        updateData
+      );
       console.log('🔧 Updated PO item:', updatedItem.id);
       res.json(updatedItem);
     } catch (error) {
       console.error('🔧 Update PO item error:', error);
-      res.status(500).json({ error: "Failed to update purchase order item" });
+      res.status(500).json({ error: 'Failed to update purchase order item' });
     }
   });
 
@@ -971,14 +1066,17 @@ export function registerRoutes(app: Express): Server {
       res.json({ success: true });
     } catch (error) {
       console.error('🔧 Delete PO item error:', error);
-      res.status(500).json({ error: "Failed to delete purchase order item" });
+      res.status(500).json({ error: 'Failed to delete purchase order item' });
     }
   });
 
   // Generate Production Orders from Purchase Order Items
   app.post('/api/pos/:id/generate-production-orders', async (req, res) => {
     try {
-      console.log('🏭 Generate Production Orders endpoint called for PO:', req.params.id);
+      console.log(
+        '🏭 Generate Production Orders endpoint called for PO:',
+        req.params.id
+      );
       const { storage } = await import('../../storage');
       const poId = parseInt(req.params.id);
 
@@ -990,9 +1088,13 @@ export function registerRoutes(app: Express): Server {
 
       // Get all items for this purchase order
       const poItems = await storage.getPurchaseOrderItems(poId);
-      const stockModelItems = poItems.filter(item => item.itemId && item.itemId.trim());
+      const stockModelItems = poItems.filter(
+        (item) => item.itemId && item.itemId.trim()
+      );
 
-      console.log(`🏭 Found ${stockModelItems.length} stock model items to convert to production orders`);
+      console.log(
+        `🏭 Found ${stockModelItems.length} stock model items to convert to production orders`
+      );
 
       const createdOrders = [];
 
@@ -1017,36 +1119,40 @@ export function registerRoutes(app: Express): Server {
               ...(item.specifications || {}),
               sourcePoNumber: purchaseOrder.poNumber,
               customerName: purchaseOrder.customerName,
-              expectedDelivery: purchaseOrder.expectedDelivery
+              expectedDelivery: purchaseOrder.expectedDelivery,
             },
             createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
+            updatedAt: new Date().toISOString(),
           };
 
-          const createdOrder = await storage.createP2ProductionOrder(productionOrderData);
+          const createdOrder =
+            await storage.createP2ProductionOrder(productionOrderData);
           createdOrders.push(createdOrder);
 
-          console.log(`🏭 Created production order: ${productionOrderData.orderId} for ${item.itemId}`);
+          console.log(
+            `🏭 Created production order: ${productionOrderData.orderId} for ${item.itemId}`
+          );
         }
       }
 
-      console.log(`🏭 Successfully created ${createdOrders.length} production orders from PO ${purchaseOrder.poNumber}`);
+      console.log(
+        `🏭 Successfully created ${createdOrders.length} production orders from PO ${purchaseOrder.poNumber}`
+      );
 
       res.json({
         success: true,
         message: `Generated ${createdOrders.length} production orders`,
         createdOrders: createdOrders.length,
-        orders: createdOrders.map(order => ({
+        orders: createdOrders.map((order) => ({
           orderId: order.orderId,
           partName: order.partName,
           dueDate: order.dueDate,
-          status: order.status
-        }))
+          status: order.status,
+        })),
       });
-
     } catch (error) {
       console.error('🏭 Generate production orders error:', error);
-      res.status(500).json({ error: "Failed to generate production orders" });
+      res.status(500).json({ error: 'Failed to generate production orders' });
     }
   });
 
@@ -1055,12 +1161,12 @@ export function registerRoutes(app: Express): Server {
   // app.use('/api/scheduling', schedulingRoutes);
   // app.use('/api/bom', bomRoutes);
 
-    // Health check endpoint
+  // Health check endpoint
   app.get('/health', (req, res) => {
-    res.json({ 
-      status: 'healthy', 
+    res.json({
+      status: 'healthy',
       timestamp: new Date().toISOString(),
-      uptime: process.uptime()
+      uptime: process.uptime(),
     });
   });
 
@@ -1084,16 +1190,18 @@ export function registerRoutes(app: Express): Server {
         // Using updateOrderDraft method instead of direct query
         await storage.updateOrderDraft(orderId, {
           currentDepartment: department,
-          status: status || 'IN_PROGRESS'
+          status: status || 'IN_PROGRESS',
         });
       }
 
-      console.log(`✅ Updated ${orderIds.length} orders to department: ${department}`);
+      console.log(
+        `✅ Updated ${orderIds.length} orders to department: ${department}`
+      );
 
-      res.json({ 
-        success: true, 
+      res.json({
+        success: true,
         message: `Updated ${orderIds.length} orders to ${department} department`,
-        updatedOrders: orderIds.length
+        updatedOrders: orderIds.length,
       });
     } catch (error) {
       console.error('❌ Update department error:', error);
@@ -1105,20 +1213,20 @@ export function registerRoutes(app: Express): Server {
   return createServer(app);
 }
 
-export { 
-  customersRoutes as customersRouter, 
-  ordersRoutes as ordersRouter, 
-  inventoryRoutes as inventoryRouter, 
-  formsRoutes as formsRouter, 
-  documentsRoutes as documentsRouter, 
-  discountsRoutes as discountsRouter, 
-  employeesRoutes as employeesRouter, 
-  qualityRoutes as qualityRouter, 
-  bomsRoutes as bomsRouter, 
-  moldsRoutes as moldsRouter, 
-  kickbackRoutes as kickbacksRouter, 
+export {
+  customersRoutes as customersRouter,
+  ordersRoutes as ordersRouter,
+  inventoryRoutes as inventoryRouter,
+  formsRoutes as formsRouter,
+  documentsRoutes as documentsRouter,
+  discountsRoutes as discountsRouter,
+  employeesRoutes as employeesRouter,
+  qualityRoutes as qualityRouter,
+  bomsRoutes as bomsRouter,
+  moldsRoutes as moldsRouter,
+  kickbackRoutes as kickbacksRouter,
   orderAttachmentsRoutes as orderAttachmentsRouter,
   tasksRoutes as tasksRouter,
   communicationsRoutes as communicationsRouter,
-  secureVerificationRoutes as secureVerificationRouter
+  secureVerificationRoutes as secureVerificationRouter,
 };

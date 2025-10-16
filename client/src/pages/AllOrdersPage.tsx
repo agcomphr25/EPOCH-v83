@@ -5,18 +5,31 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { 
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import {
   Pagination,
   PaginationContent,
   PaginationEllipsis,
   PaginationItem,
   PaginationLink,
   PaginationNext,
-  PaginationPrevious
+  PaginationPrevious,
 } from '@/components/ui/pagination';
-import { 
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -32,9 +45,32 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
-import { Search, X, Download, MoreHorizontal, XCircle, ArrowRight, AlertTriangle, Edit, FileText, QrCode, User, CalendarDays, Package, Mail, MessageSquare, Eye } from 'lucide-react';
+import {
+  Search,
+  X,
+  Download,
+  MoreHorizontal,
+  XCircle,
+  ArrowRight,
+  AlertTriangle,
+  Edit,
+  FileText,
+  QrCode,
+  User,
+  CalendarDays,
+  Package,
+  Mail,
+  MessageSquare,
+  Eye,
+} from 'lucide-react';
 import { format } from 'date-fns';
 import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
@@ -88,7 +124,9 @@ interface PaginatedOrdersResponse {
 export default function AllOrdersPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDepartment, setSelectedDepartment] = useState('all');
-  const [sortBy, setSortBy] = useState<'orderDate' | 'dueDate' | 'customer' | 'model' | 'enteredDate'>('orderDate');
+  const [sortBy, setSortBy] = useState<
+    'orderDate' | 'dueDate' | 'customer' | 'model' | 'enteredDate'
+  >('orderDate');
   const [cancelReason, setCancelReason] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [orderToCancel, setOrderToCancel] = useState<string>('');
@@ -112,44 +150,59 @@ export default function AllOrdersPage() {
     'Finish QC',
     'Paint',
     'Shipping QC',
-    'Shipping'
+    'Shipping',
   ];
-  
+
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
   // Progress order mutation
   const progressOrderMutation = useMutation({
-    mutationFn: async ({ orderId, nextDepartment }: { orderId: string, nextDepartment?: string }) => {
-      console.log(`🔄 Progressing order ${orderId} to ${nextDepartment || 'next department'}`);
+    mutationFn: async ({
+      orderId,
+      nextDepartment,
+    }: {
+      orderId: string;
+      nextDepartment?: string;
+    }) => {
+      console.log(
+        `🔄 Progressing order ${orderId} to ${nextDepartment || 'next department'}`
+      );
       return apiRequest(`/api/orders/${orderId}/progress`, {
         method: 'POST',
-        body: JSON.stringify({ nextDepartment })
+        body: JSON.stringify({ nextDepartment }),
       });
     },
     onSuccess: async (data, variables) => {
       console.log(`✅ Order ${variables.orderId} progressed successfully`);
       toast({
-        title: "Success",
-        description: "Order progressed successfully",
+        title: 'Success',
+        description: 'Order progressed successfully',
       });
-      
+
       // Clear all caches and force immediate refetch
       queryClient.clear();
-      await queryClient.refetchQueries({ queryKey: ['/api/orders/with-payment-status'] });
+      await queryClient.refetchQueries({
+        queryKey: ['/api/orders/with-payment-status'],
+      });
     },
     onError: (error: any, variables) => {
       console.error(`❌ Failed to progress order ${variables.orderId}:`, error);
       toast({
-        title: "Error",
-        description: "Failed to progress order: " + (error.message || 'Unknown error'),
-        variant: "destructive",
+        title: 'Error',
+        description:
+          'Failed to progress order: ' + (error.message || 'Unknown error'),
+        variant: 'destructive',
       });
-    }
+    },
   });
 
   // Fetch ALL orders (not paginated) - using same pattern as OrdersList
-  const { data: allOrders, isLoading, error } = useQuery<Order[]>({
+  const {
+    data: allOrders,
+    isLoading,
+    error,
+  } = useQuery<Order[]>({
     queryKey: ['/api/orders/with-payment-status'],
     queryFn: () => apiRequest('/api/orders/with-payment-status'),
     refetchInterval: false,
@@ -170,20 +223,32 @@ export default function AllOrdersPage() {
 
   // Cancel order mutation
   const cancelOrderMutation = useMutation({
-    mutationFn: async ({ orderId, reason }: { orderId: string; reason: string }) => {
+    mutationFn: async ({
+      orderId,
+      reason,
+    }: {
+      orderId: string;
+      reason: string;
+    }) => {
       return apiRequest(`/api/orders/cancel/${orderId}`, {
         method: 'POST',
-        body: JSON.stringify({ reason })
+        body: JSON.stringify({ reason }),
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/orders/pipeline-counts'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/production-queue/prioritized'] });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/orders/with-payment-status'],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/orders/pipeline-counts'],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/production-queue/prioritized'],
+      });
       queryClient.invalidateQueries({ queryKey: ['/api/layup-schedule'] });
       toast({
-        title: "Order Cancelled",
-        description: "The order has been cancelled successfully.",
+        title: 'Order Cancelled',
+        description: 'The order has been cancelled successfully.',
       });
       setIsDialogOpen(false);
       setCancelReason('');
@@ -191,37 +256,45 @@ export default function AllOrdersPage() {
     },
     onError: (error: any) => {
       toast({
-        title: "Error",
-        description: "Failed to cancel order: " + (error.message || 'Unknown error'),
-        variant: "destructive",
+        title: 'Error',
+        description:
+          'Failed to cancel order: ' + (error.message || 'Unknown error'),
+        variant: 'destructive',
       });
-    }
+    },
   });
 
   // Undo cancel mutation (restore order)
   const undoCancelMutation = useMutation({
     mutationFn: async (orderId: string) => {
       return apiRequest(`/api/orders/undo-cancel/${orderId}`, {
-        method: 'POST'
+        method: 'POST',
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/orders/pipeline-counts'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/production-queue/prioritized'] });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/orders/with-payment-status'],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/orders/pipeline-counts'],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/production-queue/prioritized'],
+      });
       queryClient.invalidateQueries({ queryKey: ['/api/layup-schedule'] });
       toast({
-        title: "Order Restored",
-        description: "The order has been restored to production queue.",
+        title: 'Order Restored',
+        description: 'The order has been restored to production queue.',
       });
     },
     onError: (error: any) => {
       toast({
-        title: "Error",
-        description: "Failed to restore order: " + (error.message || 'Unknown error'),
-        variant: "destructive",
+        title: 'Error',
+        description:
+          'Failed to restore order: ' + (error.message || 'Unknown error'),
+        variant: 'destructive',
       });
-    }
+    },
   });
 
   // CSV Export handlers
@@ -282,7 +355,10 @@ export default function AllOrdersPage() {
 
   const confirmCancel = () => {
     if (orderToCancel && cancelReason.trim()) {
-      cancelOrderMutation.mutate({ orderId: orderToCancel, reason: cancelReason });
+      cancelOrderMutation.mutate({
+        orderId: orderToCancel,
+        reason: cancelReason,
+      });
     }
   };
 
@@ -291,7 +367,9 @@ export default function AllOrdersPage() {
   };
 
   const handleOpenCommunication = (order: Order, customersList: Customer[]) => {
-    const customer = customersList?.find(c => c.id.toString() === order.customerId);
+    const customer = customersList?.find(
+      (c) => c.id.toString() === order.customerId
+    );
     if (customer) {
       setCommunicationModal({
         isOpen: true,
@@ -299,9 +377,9 @@ export default function AllOrdersPage() {
           id: customer.id,
           name: customer.name,
           email: customer.email,
-          phone: customer.phone
+          phone: customer.phone,
         },
-        orderId: order.orderId
+        orderId: order.orderId,
       });
     }
   };
@@ -313,17 +391,20 @@ export default function AllOrdersPage() {
   // Check if an order has unresolved kickbacks
   const hasUnresolvedKickback = (orderId: string) => {
     if (!kickbacks) return false;
-    return kickbacks?.some((kickback: any) => 
-      kickback.orderId === orderId && 
-      kickback.status !== 'RESOLVED' && 
-      kickback.status !== 'CLOSED'
+    return kickbacks?.some(
+      (kickback: any) =>
+        kickback.orderId === orderId &&
+        kickback.status !== 'RESOLVED' &&
+        kickback.status !== 'CLOSED'
     );
   };
 
   // Department progression helpers
   const getNextDepartment = (currentDept: string) => {
     const index = departments.indexOf(currentDept);
-    return index >= 0 && index < departments.length - 1 ? departments[index + 1] : null;
+    return index >= 0 && index < departments.length - 1
+      ? departments[index + 1]
+      : null;
   };
 
   const handleProgressOrder = (orderId: string, nextDepartment?: string) => {
@@ -359,14 +440,16 @@ export default function AllOrdersPage() {
   const filteredOrders = React.useMemo(() => {
     if (!allOrders) return [];
 
-    return allOrders.filter(order => {
+    return allOrders.filter((order) => {
       // Exclude cancelled orders from main list
       if (order.isCancelled || order.status === 'CANCELLED') {
         return false;
       }
 
       // Department filter
-      const departmentMatch = selectedDepartment === 'all' || order.currentDepartment === selectedDepartment;
+      const departmentMatch =
+        selectedDepartment === 'all' ||
+        order.currentDepartment === selectedDepartment;
 
       // Search filter - search in multiple fields including FB Order Number
       if (!searchTerm.trim()) {
@@ -380,10 +463,12 @@ export default function AllOrdersPage() {
         order.customer?.toLowerCase(),
         order.customerId?.toLowerCase(),
         order.product?.toLowerCase(),
-        order.modelId?.toLowerCase()
+        order.modelId?.toLowerCase(),
       ].filter(Boolean);
 
-      const searchMatch = searchFields.some(field => field?.includes(searchLower));
+      const searchMatch = searchFields.some((field) =>
+        field?.includes(searchLower)
+      );
 
       return departmentMatch && searchMatch;
     });
@@ -392,22 +477,24 @@ export default function AllOrdersPage() {
   // Function to calculate search relevance score
   const getSearchRelevanceScore = (order: any, searchTerm: string) => {
     if (!searchTerm.trim()) return 0;
-    
+
     const searchLower = searchTerm.toLowerCase();
     let score = 0;
-    
+
     if (order.orderId?.toLowerCase() === searchLower) score += 100;
     else if (order.orderId?.toLowerCase().startsWith(searchLower)) score += 50;
     else if (order.orderId?.toLowerCase().includes(searchLower)) score += 20;
-    
+
     if (order.fbOrderNumber?.toLowerCase() === searchLower) score += 90;
-    else if (order.fbOrderNumber?.toLowerCase().startsWith(searchLower)) score += 45;
-    else if (order.fbOrderNumber?.toLowerCase().includes(searchLower)) score += 18;
-    
+    else if (order.fbOrderNumber?.toLowerCase().startsWith(searchLower))
+      score += 45;
+    else if (order.fbOrderNumber?.toLowerCase().includes(searchLower))
+      score += 18;
+
     if (order.customer?.toLowerCase() === searchLower) score += 80;
     else if (order.customer?.toLowerCase().startsWith(searchLower)) score += 40;
     else if (order.customer?.toLowerCase().includes(searchLower)) score += 15;
-    
+
     return score;
   };
 
@@ -417,15 +504,17 @@ export default function AllOrdersPage() {
       if (searchTerm.trim()) {
         const scoreA = getSearchRelevanceScore(a, searchTerm);
         const scoreB = getSearchRelevanceScore(b, searchTerm);
-        
+
         if (scoreA !== scoreB) {
           return scoreB - scoreA;
         }
       }
-      
+
       switch (sortBy) {
         case 'orderDate':
-          return new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime();
+          return (
+            new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime()
+          );
         case 'dueDate':
           return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
         case 'customer':
@@ -433,7 +522,10 @@ export default function AllOrdersPage() {
         case 'model':
           return (a.modelId || '').localeCompare(b.modelId || '');
         case 'enteredDate':
-          return new Date(b.createdAt || '').getTime() - new Date(a.createdAt || '').getTime();
+          return (
+            new Date(b.createdAt || '').getTime() -
+            new Date(a.createdAt || '').getTime()
+          );
         default:
           return 0;
       }
@@ -452,7 +544,7 @@ export default function AllOrdersPage() {
     const startIndex = (currentPage - 1) * pageSize;
     const endIndex = startIndex + pageSize;
     const orders = sortedOrders.slice(startIndex, endIndex);
-    
+
     return { totalOrders, totalPages, orders };
   }, [sortedOrders, currentPage, pageSize]);
 
@@ -484,18 +576,18 @@ export default function AllOrdersPage() {
           All Orders
         </h1>
         <div className="flex items-center gap-2">
-          <Button 
+          <Button
             onClick={handleExportCSV}
-            variant="outline" 
+            variant="outline"
             className="flex items-center gap-2"
             data-testid="export-csv-button"
           >
             <Download className="h-4 w-4" />
             Export CSV (Active)
           </Button>
-          <Button 
+          <Button
             onClick={handleExportAllCSV}
-            variant="outline" 
+            variant="outline"
             className="flex items-center gap-2"
             data-testid="export-all-csv-button"
           >
@@ -541,14 +633,19 @@ export default function AllOrdersPage() {
               {/* Department Filter */}
               <div className="flex items-center gap-2">
                 <span className="text-sm font-medium">Department:</span>
-                <Select value={selectedDepartment} onValueChange={setSelectedDepartment}>
+                <Select
+                  value={selectedDepartment}
+                  onValueChange={setSelectedDepartment}
+                >
                   <SelectTrigger className="w-48">
                     <SelectValue placeholder="All Departments" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Departments</SelectItem>
-                    {departments.map(dept => (
-                      <SelectItem key={dept} value={dept}>{dept}</SelectItem>
+                    {departments.map((dept) => (
+                      <SelectItem key={dept} value={dept}>
+                        {dept}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -556,7 +653,17 @@ export default function AllOrdersPage() {
 
               <div className="flex items-center gap-2">
                 <span className="text-sm font-medium">Sort by:</span>
-                <Select value={sortBy} onValueChange={(value: 'orderDate' | 'dueDate' | 'customer' | 'model' | 'enteredDate') => setSortBy(value)}>
+                <Select
+                  value={sortBy}
+                  onValueChange={(
+                    value:
+                      | 'orderDate'
+                      | 'dueDate'
+                      | 'customer'
+                      | 'model'
+                      | 'enteredDate'
+                  ) => setSortBy(value)}
+                >
                   <SelectTrigger className="w-40">
                     <SelectValue />
                   </SelectTrigger>
@@ -587,8 +694,13 @@ export default function AllOrdersPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {orders.map(order => (
-                <TableRow key={order.orderId} className={cn(order.isVerified ? "bg-green-50 dark:bg-green-950" : "")}>
+              {orders.map((order) => (
+                <TableRow
+                  key={order.orderId}
+                  className={cn(
+                    order.isVerified ? 'bg-green-50 dark:bg-green-950' : ''
+                  )}
+                >
                   <TableCell className="font-medium">
                     <div className="flex items-center gap-2">
                       <OrderSummaryTooltip orderId={order.orderId}>
@@ -597,7 +709,7 @@ export default function AllOrdersPage() {
                         </span>
                       </OrderSummaryTooltip>
                       {order.status && (
-                        <Badge 
+                        <Badge
                           className={`${getStatusColor(order.status)} text-xs px-1 py-0`}
                           title={`Order Status: ${order.status}`}
                         >
@@ -605,7 +717,7 @@ export default function AllOrdersPage() {
                         </Badge>
                       )}
                       {hasUnresolvedKickback(order.orderId) && (
-                        <Badge 
+                        <Badge
                           className="bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300 text-xs px-1 py-0 cursor-pointer hover:bg-red-200 hover:text-red-900 transition-colors"
                           title="This order has unresolved kickbacks - Click to view Kickback Tracking"
                           onClick={handleKickbackClick}
@@ -614,16 +726,14 @@ export default function AllOrdersPage() {
                         </Badge>
                       )}
                       {order.isFullyPaid ? (
-                        <Badge 
+                        <Badge
                           className="bg-green-500 hover:bg-green-600 text-white text-xs px-1 py-0"
                           title="Order is paid"
                         >
                           PAID
                         </Badge>
                       ) : (
-                        <Badge 
-                          className="bg-red-500 hover:bg-red-600 text-white text-xs px-1 py-0"
-                        >
+                        <Badge className="bg-red-500 hover:bg-red-600 text-white text-xs px-1 py-0">
                           NOT PAID
                         </Badge>
                       )}
@@ -636,8 +746,8 @@ export default function AllOrdersPage() {
                   </TableCell>
                   <TableCell>
                     <div className="relative group">
-                      <CustomerDetailsTooltip 
-                        customerId={order.customerId} 
+                      <CustomerDetailsTooltip
+                        customerId={order.customerId}
                         customerName={order.customer || 'N/A'}
                       >
                         <div className="flex items-center gap-2">
@@ -652,7 +762,9 @@ export default function AllOrdersPage() {
                           size="sm"
                           variant="ghost"
                           className="h-8 w-8 p-0 hover:bg-blue-50"
-                          onClick={() => handleOpenCommunication(order, customers || [])}
+                          onClick={() =>
+                            handleOpenCommunication(order, customers || [])
+                          }
                           title="Send Email"
                         >
                           <Mail className="h-4 w-4 text-blue-600" />
@@ -661,7 +773,9 @@ export default function AllOrdersPage() {
                           size="sm"
                           variant="ghost"
                           className="h-8 w-8 p-0 hover:bg-green-50"
-                          onClick={() => handleOpenCommunication(order, customers || [])}
+                          onClick={() =>
+                            handleOpenCommunication(order, customers || [])
+                          }
                           title="Send SMS"
                         >
                           <MessageSquare className="h-4 w-4 text-green-600" />
@@ -683,13 +797,17 @@ export default function AllOrdersPage() {
                   <TableCell>
                     <div className="flex items-center gap-2">
                       <CalendarDays className="h-4 w-4 text-gray-400" />
-                      {order.orderDate ? format(new Date(order.orderDate), 'MMM d, yyyy') : '-'}
+                      {order.orderDate
+                        ? format(new Date(order.orderDate), 'MMM d, yyyy')
+                        : '-'}
                     </div>
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
                       <CalendarDays className="h-4 w-4 text-gray-400" />
-                      {order.dueDate ? format(new Date(order.dueDate), 'MMM d, yyyy') : '-'}
+                      {order.dueDate
+                        ? format(new Date(order.dueDate), 'MMM d, yyyy')
+                        : '-'}
                     </div>
                   </TableCell>
                   <TableCell>
@@ -700,7 +818,7 @@ export default function AllOrdersPage() {
                           <Edit className="h-4 w-4" />
                         </Button>
                       </Link>
-                      
+
                       {/* View Sales Order */}
                       <Badge
                         variant="outline"
@@ -724,16 +842,24 @@ export default function AllOrdersPage() {
                           <DialogHeader>
                             <DialogTitle>Order Barcode</DialogTitle>
                           </DialogHeader>
-                          {order.barcode && <BarcodeDisplay orderId={order.orderId} barcode={order.barcode} />}
+                          {order.barcode && (
+                            <BarcodeDisplay
+                              orderId={order.orderId}
+                              barcode={order.barcode}
+                            />
+                          )}
                         </DialogContent>
                       </Dialog>
 
                       {/* Progress Button */}
                       {(() => {
-                        const nextDept = getNextDepartment(order.currentDepartment);
+                        const nextDept = getNextDepartment(
+                          order.currentDepartment
+                        );
                         const isScrapped = order.status === 'SCRAPPED';
                         const isFulfilled = order.status === 'FULFILLED';
-                        const isInShipping = order.currentDepartment === 'Shipping';
+                        const isInShipping =
+                          order.currentDepartment === 'Shipping';
 
                         if (!isScrapped && !isFulfilled) {
                           // Special case: Shipping is final department, show "Complete" button
@@ -741,7 +867,9 @@ export default function AllOrdersPage() {
                             return (
                               <Button
                                 size="sm"
-                                onClick={() => handleProgressOrder(order.orderId)}
+                                onClick={() =>
+                                  handleProgressOrder(order.orderId)
+                                }
                                 disabled={progressOrderMutation.isPending}
                                 className="bg-green-600 hover:bg-green-700"
                               >
@@ -755,7 +883,9 @@ export default function AllOrdersPage() {
                             return (
                               <Button
                                 size="sm"
-                                onClick={() => handleProgressOrder(order.orderId, nextDept)}
+                                onClick={() =>
+                                  handleProgressOrder(order.orderId, nextDept)
+                                }
                                 disabled={progressOrderMutation.isPending}
                               >
                                 <ArrowRight className="w-4 h-4 mr-1" />
@@ -775,34 +905,36 @@ export default function AllOrdersPage() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem 
+                          <DropdownMenuItem
                             onClick={() => handleViewSalesOrder(order.orderId)}
                           >
                             <FileText className="mr-2 h-4 w-4" />
                             View Sales Order
                           </DropdownMenuItem>
-                          <DropdownMenuItem 
+                          <DropdownMenuItem
                             onClick={() => handleViewSalesOrder(order.orderId)}
                           >
                             <Download className="mr-2 h-4 w-4" />
                             Download Sales Order
                           </DropdownMenuItem>
-                          <DropdownMenuItem 
+                          <DropdownMenuItem
                             onClick={() => setLocation('/kickback-tracking')}
                           >
                             <AlertTriangle className="mr-2 h-4 w-4" />
                             Report Kickback
                           </DropdownMenuItem>
                           {order.isCancelled ? (
-                            <DropdownMenuItem 
-                              onClick={() => undoCancelMutation.mutate(order.orderId)}
+                            <DropdownMenuItem
+                              onClick={() =>
+                                undoCancelMutation.mutate(order.orderId)
+                              }
                               className="text-green-600"
                             >
                               <ArrowRight className="mr-2 h-4 w-4" />
                               Restore Order
                             </DropdownMenuItem>
                           ) : (
-                            <DropdownMenuItem 
+                            <DropdownMenuItem
                               onClick={() => handleCancelOrder(order.orderId)}
                               className="text-red-600"
                             >
@@ -825,22 +957,28 @@ export default function AllOrdersPage() {
             </div>
           )}
         </CardContent>
-        
+
         {/* Pagination Controls */}
         {totalPages > 1 && (
           <div className="flex items-center justify-between px-6 py-4 border-t">
             <div className="text-sm text-gray-500">
-              Showing {((currentPage - 1) * pageSize) + 1} to {Math.min(currentPage * pageSize, totalOrders)} of {totalOrders} orders
+              Showing {(currentPage - 1) * pageSize + 1} to{' '}
+              {Math.min(currentPage * pageSize, totalOrders)} of {totalOrders}{' '}
+              orders
             </div>
             <Pagination>
               <PaginationContent>
                 <PaginationItem>
-                  <PaginationPrevious 
+                  <PaginationPrevious
                     onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                    className={currentPage === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                    className={
+                      currentPage === 1
+                        ? 'pointer-events-none opacity-50'
+                        : 'cursor-pointer'
+                    }
                   />
                 </PaginationItem>
-                
+
                 {/* Page Numbers */}
                 {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
                   let pageNumber;
@@ -853,7 +991,7 @@ export default function AllOrdersPage() {
                   } else {
                     pageNumber = currentPage - 2 + i;
                   }
-                  
+
                   return (
                     <PaginationItem key={pageNumber}>
                       <PaginationLink
@@ -872,11 +1010,17 @@ export default function AllOrdersPage() {
                     <PaginationEllipsis />
                   </PaginationItem>
                 )}
-                
+
                 <PaginationItem>
-                  <PaginationNext 
-                    onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
-                    className={currentPage === totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                  <PaginationNext
+                    onClick={() =>
+                      setCurrentPage(Math.min(totalPages, currentPage + 1))
+                    }
+                    className={
+                      currentPage === totalPages
+                        ? 'pointer-events-none opacity-50'
+                        : 'cursor-pointer'
+                    }
                   />
                 </PaginationItem>
               </PaginationContent>
@@ -901,8 +1045,8 @@ export default function AllOrdersPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Cancel Order</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to cancel order {orderToCancel}? This action cannot be undone.
-              Please provide a reason for cancellation.
+              Are you sure you want to cancel order {orderToCancel}? This action
+              cannot be undone. Please provide a reason for cancellation.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="my-4">

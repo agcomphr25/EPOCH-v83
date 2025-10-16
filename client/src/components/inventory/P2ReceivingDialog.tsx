@@ -1,12 +1,25 @@
-import { useState, useEffect } from "react";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { QrCode, Printer, Save, Calendar } from "lucide-react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { toast } from "react-hot-toast";
+import { useState, useEffect } from 'react';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import { QrCode, Printer, Save, Calendar } from 'lucide-react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'react-hot-toast';
 
 interface P2ReceivingData {
   itemCode: string;
@@ -30,25 +43,29 @@ interface P2ReceivingDialogProps {
 function generateBarcode(): string {
   // Code 39 valid characters: 0-9, A-Z, space, and symbols - . $ / + %
   // For simplicity, we'll use alphanumeric only for P2 products
-  const characters = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  const characters = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
   const timestamp = Date.now().toString(36).toUpperCase();
   const random = Math.random().toString(36).substr(2, 4).toUpperCase();
-  
+
   // Create a shorter 10-character barcode with timestamp + random + P2 prefix
-  let result = "P2" + timestamp + random;
-  
+  let result = 'P2' + timestamp + random;
+
   // Pad or trim to exactly 10 characters for consistent length
   result = result.substr(0, 10).padEnd(10, '0');
-  
+
   return result;
 }
 
 // Format barcode for display with dashes every 4 characters
 function formatBarcodeDisplay(barcode: string): string {
-  return barcode.match(/.{1,4}/g)?.join("-") || barcode;
+  return barcode.match(/.{1,4}/g)?.join('-') || barcode;
 }
 
-export default function P2ReceivingDialog({ open, onOpenChange, item }: P2ReceivingDialogProps) {
+export default function P2ReceivingDialog({
+  open,
+  onOpenChange,
+  item,
+}: P2ReceivingDialogProps) {
   const [formData, setFormData] = useState<P2ReceivingData>({
     itemCode: item?.agPartNumber || '',
     quantity: 1,
@@ -58,15 +75,15 @@ export default function P2ReceivingDialog({ open, onOpenChange, item }: P2Receiv
     batchNumber: '',
     lotNumber: '',
     aluminumHeatNumber: '',
-    barcode: generateBarcode()
+    barcode: generateBarcode(),
   });
 
   // Update item code when item changes
   useEffect(() => {
     if (item?.agPartNumber) {
-      setFormData(prev => ({
+      setFormData((prev) => ({
         ...prev,
-        itemCode: item.agPartNumber
+        itemCode: item.agPartNumber,
       }));
     }
   }, [item]);
@@ -78,7 +95,7 @@ export default function P2ReceivingDialog({ open, onOpenChange, item }: P2Receiv
       const response = await fetch('/api/inventory/scan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
+        body: JSON.stringify(data),
       });
       if (!response.ok) throw new Error('Failed to create scan record');
       return response.json();
@@ -90,12 +107,17 @@ export default function P2ReceivingDialog({ open, onOpenChange, item }: P2Receiv
     },
     onError: () => {
       toast.error('Failed to create receiving record');
-    }
+    },
   });
 
   const handleSave = () => {
-    if (!formData.manufactureDate || !formData.expirationDate || !formData.batchNumber || 
-        !formData.lotNumber || !formData.aluminumHeatNumber) {
+    if (
+      !formData.manufactureDate ||
+      !formData.expirationDate ||
+      !formData.batchNumber ||
+      !formData.lotNumber ||
+      !formData.aluminumHeatNumber
+    ) {
       toast.error('Please fill in all required fields');
       return;
     }
@@ -115,7 +137,7 @@ export default function P2ReceivingDialog({ open, onOpenChange, item }: P2Receiv
       batchNumber: '',
       lotNumber: '',
       aluminumHeatNumber: '',
-      barcode: generateBarcode()
+      barcode: generateBarcode(),
     });
   };
 
@@ -124,7 +146,7 @@ export default function P2ReceivingDialog({ open, onOpenChange, item }: P2Receiv
     const printWindow = window.open('', '_blank');
     if (printWindow) {
       const barcodeDisplay = formatBarcodeDisplay(formData.barcode);
-      
+
       printWindow.document.write(`
         <html>
           <head>
@@ -204,13 +226,16 @@ export default function P2ReceivingDialog({ open, onOpenChange, item }: P2Receiv
             </style>
           </head>
           <body>
-            ${Array.from({ length: 30 }, (_, i) => `
+            ${Array.from(
+              { length: 30 },
+              (_, i) => `
               <div class="barcode-label">
                 <div class="part-info">${formData.itemCode} ${item?.name || 'P2 Product'}</div>
                 <div class="barcode">*${formData.barcode}*</div>
                 <div class="expiration">Expiration Date: ${formData.expirationDate}</div>
               </div>
-            `).join('')}
+            `
+            ).join('')}
             <script>
               // Auto-print when page loads with proper settings
               window.onload = function() {
@@ -231,14 +256,14 @@ export default function P2ReceivingDialog({ open, onOpenChange, item }: P2Receiv
           </body>
         </html>
       `);
-      
+
       printWindow.document.close();
       printWindow.focus();
     }
   };
 
   const regenerateBarcode = () => {
-    setFormData(prev => ({ ...prev, barcode: generateBarcode() }));
+    setFormData((prev) => ({ ...prev, barcode: generateBarcode() }));
     toast.success('New barcode generated');
   };
 
@@ -251,7 +276,8 @@ export default function P2ReceivingDialog({ open, onOpenChange, item }: P2Receiv
             P2 Product Receiving - {item?.agPartNumber}
           </DialogTitle>
           <DialogDescription>
-            Enter detailed information for P2 product receiving and barcode generation
+            Enter detailed information for P2 product receiving and barcode
+            generation
           </DialogDescription>
         </DialogHeader>
 
@@ -259,14 +285,25 @@ export default function P2ReceivingDialog({ open, onOpenChange, item }: P2Receiv
           {/* Barcode Generation Card */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Generated Scannable Barcode</CardTitle>
-              <CardDescription>Code 39 compatible barcode for P2 product tracking - readable by barcode scanners</CardDescription>
+              <CardTitle className="text-base">
+                Generated Scannable Barcode
+              </CardTitle>
+              <CardDescription>
+                Code 39 compatible barcode for P2 product tracking - readable by
+                barcode scanners
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="flex items-center gap-4">
                 <div className="flex-1">
                   <div className="text-center">
-                    <div className="font-mono text-2xl bg-gray-100 dark:bg-gray-800 p-4 rounded border mb-2" style={{fontFamily: "'Libre Barcode 39', 'Courier New', monospace"}}>
+                    <div
+                      className="font-mono text-2xl bg-gray-100 dark:bg-gray-800 p-4 rounded border mb-2"
+                      style={{
+                        fontFamily:
+                          "'Libre Barcode 39', 'Courier New', monospace",
+                      }}
+                    >
                       *{formData.barcode}*
                     </div>
                     <div className="font-mono text-xs text-gray-600 dark:text-gray-400">
@@ -278,11 +315,19 @@ export default function P2ReceivingDialog({ open, onOpenChange, item }: P2Receiv
                   </div>
                 </div>
                 <div className="flex gap-2">
-                  <Button onClick={regenerateBarcode} variant="outline" size="sm">
+                  <Button
+                    onClick={regenerateBarcode}
+                    variant="outline"
+                    size="sm"
+                  >
                     <QrCode className="h-4 w-4 mr-1" />
                     New Code
                   </Button>
-                  <Button onClick={handlePrintBarcode} variant="outline" size="sm">
+                  <Button
+                    onClick={handlePrintBarcode}
+                    variant="outline"
+                    size="sm"
+                  >
                     <Printer className="h-4 w-4 mr-1" />
                     Print (30x)
                   </Button>
@@ -309,7 +354,12 @@ export default function P2ReceivingDialog({ open, onOpenChange, item }: P2Receiv
                 id="quantity"
                 type="number"
                 value={formData.quantity}
-                onChange={(e) => setFormData(prev => ({ ...prev, quantity: parseInt(e.target.value) || 1 }))}
+                onChange={(e) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    quantity: parseInt(e.target.value) || 1,
+                  }))
+                }
                 min="1"
               />
             </div>
@@ -326,7 +376,12 @@ export default function P2ReceivingDialog({ open, onOpenChange, item }: P2Receiv
                 id="receivingDate"
                 type="date"
                 value={formData.receivingDate}
-                onChange={(e) => setFormData(prev => ({ ...prev, receivingDate: e.target.value }))}
+                onChange={(e) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    receivingDate: e.target.value,
+                  }))
+                }
                 required
               />
             </div>
@@ -336,7 +391,12 @@ export default function P2ReceivingDialog({ open, onOpenChange, item }: P2Receiv
                 id="manufactureDate"
                 type="date"
                 value={formData.manufactureDate}
-                onChange={(e) => setFormData(prev => ({ ...prev, manufactureDate: e.target.value }))}
+                onChange={(e) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    manufactureDate: e.target.value,
+                  }))
+                }
                 required
               />
             </div>
@@ -346,7 +406,12 @@ export default function P2ReceivingDialog({ open, onOpenChange, item }: P2Receiv
                 id="expirationDate"
                 type="date"
                 value={formData.expirationDate}
-                onChange={(e) => setFormData(prev => ({ ...prev, expirationDate: e.target.value }))}
+                onChange={(e) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    expirationDate: e.target.value,
+                  }))
+                }
                 required
               />
             </div>
@@ -359,7 +424,12 @@ export default function P2ReceivingDialog({ open, onOpenChange, item }: P2Receiv
               <Input
                 id="batchNumber"
                 value={formData.batchNumber}
-                onChange={(e) => setFormData(prev => ({ ...prev, batchNumber: e.target.value }))}
+                onChange={(e) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    batchNumber: e.target.value,
+                  }))
+                }
                 placeholder="Enter batch number"
                 required
               />
@@ -369,7 +439,12 @@ export default function P2ReceivingDialog({ open, onOpenChange, item }: P2Receiv
               <Input
                 id="lotNumber"
                 value={formData.lotNumber}
-                onChange={(e) => setFormData(prev => ({ ...prev, lotNumber: e.target.value }))}
+                onChange={(e) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    lotNumber: e.target.value,
+                  }))
+                }
                 placeholder="Enter lot number"
                 required
               />
@@ -382,7 +457,12 @@ export default function P2ReceivingDialog({ open, onOpenChange, item }: P2Receiv
             <Input
               id="aluminumHeatNumber"
               value={formData.aluminumHeatNumber}
-              onChange={(e) => setFormData(prev => ({ ...prev, aluminumHeatNumber: e.target.value }))}
+              onChange={(e) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  aluminumHeatNumber: e.target.value,
+                }))
+              }
               placeholder="Enter aluminum heat number"
               required
             />
@@ -393,8 +473,8 @@ export default function P2ReceivingDialog({ open, onOpenChange, item }: P2Receiv
           <Button onClick={handleClose} variant="outline">
             Cancel
           </Button>
-          <Button 
-            onClick={handleSave} 
+          <Button
+            onClick={handleSave}
             disabled={createScanMutation.isPending}
             className="ml-2"
           >

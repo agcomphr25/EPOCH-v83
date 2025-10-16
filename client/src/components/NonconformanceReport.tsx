@@ -1,6 +1,6 @@
 import React from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { ArrowLeft, Download, FileText } from 'lucide-react';
 import { Link } from 'wouter';
 
@@ -16,9 +16,11 @@ const NonconformanceReport: React.FC = () => {
               Back to Dashboard
             </Link>
           </Button>
-          <h1 className="text-3xl font-bold text-gray-900">Nonconformance Report</h1>
+          <h1 className="text-3xl font-bold text-gray-900">
+            Nonconformance Report
+          </h1>
         </div>
-        
+
         <div className="flex space-x-2">
           <Button variant="outline">
             <Download className="h-4 w-4 mr-2" />
@@ -42,7 +44,9 @@ const NonconformanceReport: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div className="bg-red-50 p-4 rounded-lg border">
                 <div className="text-2xl font-bold text-red-600">0</div>
-                <div className="text-sm text-gray-600">Total Nonconformances</div>
+                <div className="text-sm text-gray-600">
+                  Total Nonconformances
+                </div>
               </div>
               <div className="bg-yellow-50 p-4 rounded-lg border">
                 <div className="text-2xl font-bold text-yellow-600">0</div>
@@ -70,10 +74,12 @@ const NonconformanceReport: React.FC = () => {
                   </div>
                 </CardContent>
               </Card>
-              
+
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-lg">Dispositions Overview</CardTitle>
+                  <CardTitle className="text-lg">
+                    Dispositions Overview
+                  </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="h-64 flex items-center justify-center text-gray-500">

@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -38,7 +38,7 @@
       <h1>EPOCH v8 - Manufacturing ERP System</h1>
       <p>Pure HTML fallback - React runtime error detected</p>
     </div>
-    
+
     <nav>
       <a href="#" class="nav-item">Order Entry</a>
       <a href="#" class="nav-item">All Orders</a>
@@ -46,7 +46,7 @@
       <a href="#" class="nav-item">Feature Manager</a>
       <a href="#" class="nav-item">Inventory</a>
     </nav>
-    
+
     <div>
       <h2>System Status</h2>
       <p>React runtime error preventing normal operation. Please check:</p>
@@ -56,22 +56,24 @@
         <li>Vite configuration</li>
       </ul>
     </div>
-    
+
     <script>
-      console.log("Pure HTML fallback loaded");
-      
+      console.log('Pure HTML fallback loaded');
+
       // Test if React is available
       if (typeof React !== 'undefined') {
-        console.log("React is available:", React);
+        console.log('React is available:', React);
       } else {
-        console.error("React is not available");
+        console.error('React is not available');
       }
-      
+
       // Add click handlers
-      document.querySelectorAll('.nav-item').forEach(item => {
+      document.querySelectorAll('.nav-item').forEach((item) => {
         item.addEventListener('click', (e) => {
           e.preventDefault();
-          alert('React application is not functional. Please resolve React runtime error.');
+          alert(
+            'React application is not functional. Please resolve React runtime error.'
+          );
         });
       });
     </script>

@@ -1,9 +1,11 @@
 # Employee Management System - Authentication Testing Guide
 
 ## Overview
+
 This guide provides comprehensive test cases for the employee management system's authentication and security features, including user creation, login, portal access, and record updates.
 
 ## Prerequisites
+
 - System is running at http://localhost:5000 (development) or production URL
 - PostgreSQL database is accessible and schema is up to date
 - Test data is available (employees, users, etc.)
@@ -11,6 +13,7 @@ This guide provides comprehensive test cases for the employee management system'
 ## Test Environment Setup
 
 ### 1. Create Test Users
+
 ```bash
 # Create admin user via API (requires existing admin or direct DB insert)
 curl -X POST http://localhost:5000/api/users \
@@ -49,6 +52,7 @@ curl -X POST http://localhost:5000/api/users \
 ```
 
 ### 2. Create Test Employee Records
+
 ```bash
 # Create test employee
 curl -X POST http://localhost:5000/api/employees \
@@ -72,8 +76,10 @@ curl -X POST http://localhost:5000/api/employees \
 ### 1. User Authentication Tests
 
 #### Test 1.1: Successful Login
+
 **Purpose**: Verify users can log in with valid credentials
 **Steps**:
+
 1. POST to `/api/auth/login` with valid username/password
 2. Verify successful response with user data
 3. Verify session cookie is set
@@ -109,15 +115,18 @@ curl -X GET http://localhost:5000/api/auth/user \
 # Expected: User data returned
 ```
 
-**Expected Result**: 
+**Expected Result**:
+
 - Status 200
 - User object returned
 - Session cookie set
 - Subsequent requests authenticated
 
 #### Test 1.2: Failed Login - Invalid Credentials
+
 **Purpose**: Verify failed login attempts are handled securely
 **Steps**:
+
 ```bash
 # Test invalid password
 curl -X POST http://localhost:5000/api/auth/login \
@@ -144,8 +153,10 @@ curl -X POST http://localhost:5000/api/auth/login \
 **Expected Result**: Status 401, appropriate error message, no session created
 
 #### Test 1.3: Account Lockout
+
 **Purpose**: Verify accounts lock after multiple failed attempts
 **Steps**:
+
 1. Attempt login with wrong password 5+ times
 2. Verify account is locked
 3. Verify correct password fails during lockout
@@ -179,8 +190,10 @@ curl -X POST http://localhost:5000/api/auth/login \
 **Expected Result**: Account locked after 5 failed attempts, lockout message returned
 
 #### Test 1.4: Session Management
+
 **Purpose**: Verify session tokens work correctly
 **Steps**:
+
 ```bash
 # Login and get session
 curl -X POST http://localhost:5000/api/auth/login \
@@ -211,8 +224,10 @@ curl -X GET http://localhost:5000/api/auth/user \
 ### 2. Role-Based Access Control Tests
 
 #### Test 2.1: Admin Access
+
 **Purpose**: Verify admin users can access all endpoints
 **Steps**:
+
 ```bash
 # Login as admin
 curl -X POST http://localhost:5000/api/auth/login \
@@ -236,8 +251,10 @@ curl -X GET http://localhost:5000/api/employees \
 **Expected Result**: Admin can access all protected endpoints
 
 #### Test 2.2: HR Access
+
 **Purpose**: Verify HR users have appropriate access
 **Steps**:
+
 ```bash
 # Login as HR
 curl -X POST http://localhost:5000/api/auth/login \
@@ -267,8 +284,10 @@ curl -X POST http://localhost:5000/api/users \
 **Expected Result**: HR can access employee management and user creation
 
 #### Test 2.3: Employee Access Restrictions
+
 **Purpose**: Verify employees can only access their own data
 **Steps**:
+
 ```bash
 # Login as employee
 curl -X POST http://localhost:5000/api/auth/login \
@@ -304,8 +323,10 @@ curl -X GET http://localhost:5000/api/employees/1 \
 ### 3. Employee Portal Access Tests
 
 #### Test 3.1: Portal Token Generation
+
 **Purpose**: Verify secure portal tokens are generated correctly
 **Steps**:
+
 ```bash
 # Login as admin
 curl -X POST http://localhost:5000/api/auth/login \
@@ -331,8 +352,10 @@ curl -X POST http://localhost:5000/api/employees/2/portal-token \
 **Expected Result**: Secure portal token generated with expiration
 
 #### Test 3.2: Portal Access Validation
+
 **Purpose**: Verify portal tokens provide secure access
 **Steps**:
+
 ```bash
 # Use token from previous test
 PORTAL_TOKEN="portal_<from_previous_test>"
@@ -351,8 +374,10 @@ curl -X GET http://localhost:5000/api/portal/$PORTAL_TOKEN/timeclock
 **Expected Result**: Valid tokens provide access, invalid tokens rejected
 
 #### Test 3.3: Portal Token Expiration
+
 **Purpose**: Verify portal tokens expire correctly
 **Steps**:
+
 1. Generate portal token
 2. Wait for expiration (or modify token to be expired)
 3. Attempt to use expired token
@@ -371,8 +396,10 @@ curl -X GET http://localhost:5000/api/portal/invalid_token/employee
 ### 4. Time Clock Portal Tests
 
 #### Test 4.1: Clock In/Out Functionality
+
 **Purpose**: Verify time tracking works through portal
 **Steps**:
+
 ```bash
 PORTAL_TOKEN="portal_<valid_token>"
 
@@ -400,8 +427,10 @@ curl -X GET http://localhost:5000/api/portal/$PORTAL_TOKEN/timeclock
 **Expected Result**: Time clock functionality works correctly through portal
 
 #### Test 4.2: Clock In/Out Validation
+
 **Purpose**: Verify proper validation of time clock operations
 **Steps**:
+
 ```bash
 PORTAL_TOKEN="portal_<valid_token>"
 
@@ -426,8 +455,10 @@ curl -X POST http://localhost:5000/api/portal/$PORTAL_TOKEN/timeclock/clock-in
 ### 5. Daily Checklist Portal Tests
 
 #### Test 5.1: Checklist Retrieval
+
 **Purpose**: Verify employees can access their daily checklist
 **Steps**:
+
 ```bash
 PORTAL_TOKEN="portal_<valid_token>"
 
@@ -440,8 +471,10 @@ curl -X GET http://localhost:5000/api/portal/$PORTAL_TOKEN/checklist
 **Expected Result**: Employee's daily checklist returned
 
 #### Test 5.2: Checklist Updates
+
 **Purpose**: Verify employees can update their checklist
 **Steps**:
+
 ```bash
 PORTAL_TOKEN="portal_<valid_token>"
 
@@ -458,7 +491,7 @@ curl -X POST http://localhost:5000/api/portal/$PORTAL_TOKEN/checklist \
       },
       {
         "label": "Work area inspection",
-        "type": "checkbox", 
+        "type": "checkbox",
         "value": "true",
         "required": true
       }
@@ -473,8 +506,10 @@ curl -X POST http://localhost:5000/api/portal/$PORTAL_TOKEN/checklist \
 ### 6. Password Management Tests
 
 #### Test 6.1: Password Change
+
 **Purpose**: Verify users can change their passwords
 **Steps**:
+
 ```bash
 # Login
 curl -X POST http://localhost:5000/api/auth/login \
@@ -511,8 +546,10 @@ curl -X POST http://localhost:5000/api/auth/login \
 **Expected Result**: Password changed successfully, old password no longer works
 
 #### Test 6.2: Password Change Validation
+
 **Purpose**: Verify password change validation
 **Steps**:
+
 ```bash
 # Try to change with wrong current password
 curl -X POST http://localhost:5000/api/auth/change-password \
@@ -543,6 +580,7 @@ curl -X POST http://localhost:5000/api/auth/change-password \
 ## Manual Testing Scenarios
 
 ### Scenario 1: Complete Employee Onboarding
+
 1. Admin creates employee record
 2. HR creates user account for employee
 3. HR generates portal token and shares with employee
@@ -552,6 +590,7 @@ curl -X POST http://localhost:5000/api/auth/change-password \
 7. Verify all actions are logged properly
 
 ### Scenario 2: Security Breach Response
+
 1. Detect suspicious login attempts
 2. Admin reviews audit logs
 3. Admin disables compromised user account
@@ -560,6 +599,7 @@ curl -X POST http://localhost:5000/api/auth/change-password \
 6. Verify new access works correctly
 
 ### Scenario 3: Role Changes
+
 1. Employee promoted to manager
 2. Admin updates user role
 3. Verify new permissions take effect
@@ -586,12 +626,14 @@ curl -X POST http://localhost:5000/api/auth/change-password \
 ## Performance Testing
 
 ### Load Testing Login Endpoint
+
 ```bash
 # Use Apache Bench or similar tool
 ab -n 1000 -c 10 -p login_data.json -T application/json http://localhost:5000/api/auth/login
 ```
 
 ### Concurrent Session Testing
+
 ```bash
 # Test multiple simultaneous logins
 for i in {1..10}; do
@@ -603,7 +645,9 @@ wait
 ```
 
 ## Cleanup
+
 After testing, clean up test data:
+
 ```bash
 # Delete test users and employees
 # Reset any modified data
@@ -621,6 +665,7 @@ After testing, clean up test data:
 ## Monitoring and Logging
 
 Monitor these key metrics during testing:
+
 - Login success/failure rates
 - Session creation/invalidation
 - Portal token usage

@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { BarcodeScanner } from '@/components/BarcodeScanner';
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { OrderTooltip } from '@/components/OrderTooltip';
 import { Settings, ArrowLeft, ArrowRight } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
@@ -16,26 +16,29 @@ export default function CNCQueuePage() {
 
   // Get orders in CNC department
   const cncOrders = useMemo(() => {
-    return (allOrders as any[]).filter((order: any) => 
-      order.currentDepartment === 'CNC' || 
-      (order.department === 'CNC' && order.status === 'IN_PROGRESS')
+    return (allOrders as any[]).filter(
+      (order: any) =>
+        order.currentDepartment === 'CNC' ||
+        (order.department === 'CNC' && order.status === 'IN_PROGRESS')
     );
   }, [allOrders]);
 
   // Count orders in previous department (Barcode)
   const barcodeCount = useMemo(() => {
-    return (allOrders as any[]).filter((order: any) => 
-      order.currentDepartment === 'Barcode' || 
-      (order.department === 'Barcode' && order.status === 'IN_PROGRESS')
+    return (allOrders as any[]).filter(
+      (order: any) =>
+        order.currentDepartment === 'Barcode' ||
+        (order.department === 'Barcode' && order.status === 'IN_PROGRESS')
     ).length;
   }, [allOrders]);
 
   // Count orders in next department (Finish QC)
   const finishQCCount = useMemo(() => {
-    return (allOrders as any[]).filter((order: any) => 
-      order.currentDepartment === 'Finish' || 
-      order.currentDepartment === 'FinishQC' ||
-      (order.department === 'Finish' && order.status === 'IN_PROGRESS')
+    return (allOrders as any[]).filter(
+      (order: any) =>
+        order.currentDepartment === 'Finish' ||
+        order.currentDepartment === 'FinishQC' ||
+        (order.department === 'Finish' && order.status === 'IN_PROGRESS')
     ).length;
   }, [allOrders]);
 
@@ -43,8 +46,6 @@ export default function CNCQueuePage() {
   const { data: stockModels = [] } = useQuery({
     queryKey: ['/api/stock-models'],
   });
-
-
 
   return (
     <div className="container mx-auto p-6 space-y-6">
@@ -113,7 +114,12 @@ export default function CNCQueuePage() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {cncOrders.map((order: any) => (
-                <OrderTooltip key={order.orderId} order={order} stockModels={stockModels} className="border-l-yellow-500" />
+                <OrderTooltip
+                  key={order.orderId}
+                  order={order}
+                  stockModels={stockModels}
+                  className="border-l-yellow-500"
+                />
               ))}
             </div>
           )}

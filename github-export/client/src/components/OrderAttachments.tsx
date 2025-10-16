@@ -2,11 +2,24 @@ import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Upload, X, File, Image, FileText, Download, Trash2 } from 'lucide-react';
+import {
+  Upload,
+  X,
+  File,
+  Image,
+  FileText,
+  Download,
+  Trash2,
+} from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
 
@@ -28,7 +41,10 @@ interface OrderAttachmentsProps {
   readonly?: boolean;
 }
 
-export function OrderAttachments({ orderId, readonly = false }: OrderAttachmentsProps) {
+export function OrderAttachments({
+  orderId,
+  readonly = false,
+}: OrderAttachmentsProps) {
   const [isDragOver, setIsDragOver] = useState(false);
   const [uploadNotes, setUploadNotes] = useState('');
   const [showUploadDialog, setShowUploadDialog] = useState(false);
@@ -48,39 +64,45 @@ export function OrderAttachments({ orderId, readonly = false }: OrderAttachments
   const uploadMutation = useMutation({
     mutationFn: async ({ files, notes }: { files: File[]; notes: string }) => {
       const formData = new FormData();
-      files.forEach(file => formData.append('files', file));
+      files.forEach((file) => formData.append('files', file));
       if (notes) formData.append('notes', notes);
 
       return fetch(`/api/order-attachments/${orderId}`, {
         method: 'POST',
         body: formData,
-      }).then(res => {
+      }).then((res) => {
         if (!res.ok) throw new Error('Upload failed');
         return res.json();
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['order-attachments', orderId] });
+      queryClient.invalidateQueries({
+        queryKey: ['order-attachments', orderId],
+      });
       toast({ title: 'Files uploaded successfully' });
       setShowUploadDialog(false);
       setPendingFiles([]);
       setUploadNotes('');
     },
     onError: (error) => {
-      toast({ 
-        title: 'Upload failed', 
+      toast({
+        title: 'Upload failed',
         description: error instanceof Error ? error.message : 'Unknown error',
-        variant: 'destructive' 
+        variant: 'destructive',
       });
     },
   });
 
   // Delete mutation
   const deleteMutation = useMutation({
-    mutationFn: (attachmentId: number) => 
-      apiRequest(`/api/order-attachments/${attachmentId}`, { method: 'DELETE' }),
+    mutationFn: (attachmentId: number) =>
+      apiRequest(`/api/order-attachments/${attachmentId}`, {
+        method: 'DELETE',
+      }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['order-attachments', orderId] });
+      queryClient.invalidateQueries({
+        queryKey: ['order-attachments', orderId],
+      });
       toast({ title: 'Attachment deleted successfully' });
     },
     onError: () => {
@@ -101,7 +123,7 @@ export function OrderAttachments({ orderId, readonly = false }: OrderAttachments
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     if (readonly) return;
-    
+
     setIsDragOver(false);
     const files = Array.from(e.dataTransfer.files);
     handleFileSelection(files);
@@ -109,10 +131,10 @@ export function OrderAttachments({ orderId, readonly = false }: OrderAttachments
 
   const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (readonly) return;
-    
+
     const files = Array.from(e.target.files || []);
     handleFileSelection(files);
-    
+
     // Reset input
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
@@ -131,28 +153,30 @@ export function OrderAttachments({ orderId, readonly = false }: OrderAttachments
       'image/jpg',
       'image/png',
       'image/gif',
-      'text/plain'
+      'text/plain',
     ];
 
-    const validFiles = files.filter(file => {
+    const validFiles = files.filter((file) => {
       if (!allowedTypes.includes(file.type)) {
-        toast({ 
-          title: `File type not allowed: ${file.name}`, 
-          description: 'Please upload PDF, Word, Excel, image, or text files only.',
-          variant: 'destructive' 
+        toast({
+          title: `File type not allowed: ${file.name}`,
+          description:
+            'Please upload PDF, Word, Excel, image, or text files only.',
+          variant: 'destructive',
         });
         return false;
       }
-      
-      if (file.size > 10 * 1024 * 1024) { // 10MB limit
-        toast({ 
-          title: `File too large: ${file.name}`, 
+
+      if (file.size > 10 * 1024 * 1024) {
+        // 10MB limit
+        toast({
+          title: `File too large: ${file.name}`,
           description: 'Please keep files under 10MB.',
-          variant: 'destructive' 
+          variant: 'destructive',
         });
         return false;
       }
-      
+
       return true;
     });
 
@@ -172,7 +196,7 @@ export function OrderAttachments({ orderId, readonly = false }: OrderAttachments
     const sizes = ['Bytes', 'KB', 'MB', 'GB'];
     if (bytes === 0) return '0 Bytes';
     const i = Math.floor(Math.log(bytes) / Math.log(1024));
-    return Math.round(bytes / Math.pow(1024, i) * 100) / 100 + ' ' + sizes[i];
+    return Math.round((bytes / Math.pow(1024, i)) * 100) / 100 + ' ' + sizes[i];
   };
 
   const handleDownload = (attachment: OrderAttachment) => {
@@ -228,8 +252,8 @@ export function OrderAttachments({ orderId, readonly = false }: OrderAttachments
           {!readonly && (
             <div
               className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
-                isDragOver 
-                  ? 'border-blue-500 bg-blue-50 dark:bg-blue-950' 
+                isDragOver
+                  ? 'border-blue-500 bg-blue-50 dark:bg-blue-950'
                   : 'border-gray-300 dark:border-gray-600'
               }`}
               onDragOver={handleDragOver}
@@ -248,7 +272,8 @@ export function OrderAttachments({ orderId, readonly = false }: OrderAttachments
                 </button>
               </p>
               <p className="text-xs text-gray-500 mt-1">
-                Supports PDF, Word, Excel, images, and text files (max 10MB each)
+                Supports PDF, Word, Excel, images, and text files (max 10MB
+                each)
               </p>
             </div>
           )}
@@ -272,9 +297,12 @@ export function OrderAttachments({ orderId, readonly = false }: OrderAttachments
                   <div className="flex items-center space-x-3">
                     {getFileIcon(attachment.mimeType)}
                     <div>
-                      <p className="font-medium text-sm">{attachment.originalFileName}</p>
+                      <p className="font-medium text-sm">
+                        {attachment.originalFileName}
+                      </p>
                       <p className="text-xs text-gray-500">
-                        {formatFileSize(attachment.fileSize)} • {new Date(attachment.createdAt).toLocaleDateString()}
+                        {formatFileSize(attachment.fileSize)} •{' '}
+                        {new Date(attachment.createdAt).toLocaleDateString()}
                         {attachment.notes && ` • ${attachment.notes}`}
                       </p>
                     </div>
@@ -319,16 +347,25 @@ export function OrderAttachments({ orderId, readonly = false }: OrderAttachments
               <Label>Files to upload:</Label>
               <div className="mt-2 space-y-2">
                 {pendingFiles.map((file, index) => (
-                  <div key={index} className="flex items-center justify-between p-2 border rounded">
+                  <div
+                    key={index}
+                    className="flex items-center justify-between p-2 border rounded"
+                  >
                     <div className="flex items-center space-x-2">
                       {getFileIcon(file.type)}
                       <span className="text-sm">{file.name}</span>
-                      <span className="text-xs text-gray-500">({formatFileSize(file.size)})</span>
+                      <span className="text-xs text-gray-500">
+                        ({formatFileSize(file.size)})
+                      </span>
                     </div>
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => setPendingFiles(files => files.filter((_, i) => i !== index))}
+                      onClick={() =>
+                        setPendingFiles((files) =>
+                          files.filter((_, i) => i !== index)
+                        )
+                      }
                     >
                       <X className="h-4 w-4" />
                     </Button>
@@ -348,11 +385,14 @@ export function OrderAttachments({ orderId, readonly = false }: OrderAttachments
             </div>
 
             <div className="flex justify-end space-x-2">
-              <Button variant="outline" onClick={() => setShowUploadDialog(false)}>
+              <Button
+                variant="outline"
+                onClick={() => setShowUploadDialog(false)}
+              >
                 Cancel
               </Button>
-              <Button 
-                onClick={handleUpload} 
+              <Button
+                onClick={handleUpload}
                 disabled={uploadMutation.isPending || pendingFiles.length === 0}
               >
                 {uploadMutation.isPending ? 'Uploading...' : 'Upload Files'}

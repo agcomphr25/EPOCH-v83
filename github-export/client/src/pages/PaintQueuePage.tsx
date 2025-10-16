@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { BarcodeScanner } from '@/components/BarcodeScanner';
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { OrderTooltip } from '@/components/OrderTooltip';
 import { Package, ArrowLeft, ArrowRight } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
@@ -16,28 +16,31 @@ export default function PaintQueuePage() {
 
   // Get orders in Paint department
   const paintOrders = useMemo(() => {
-    return (allOrders as any[]).filter((order: any) => 
-      order.currentDepartment === 'Paint' || 
-      (order.department === 'Paint' && order.status === 'IN_PROGRESS')
+    return (allOrders as any[]).filter(
+      (order: any) =>
+        order.currentDepartment === 'Paint' ||
+        (order.department === 'Paint' && order.status === 'IN_PROGRESS')
     );
   }, [allOrders]);
 
   // Count orders in previous department (Finish QC)
   const finishQCCount = useMemo(() => {
-    return (allOrders as any[]).filter((order: any) => 
-      order.currentDepartment === 'Finish' || 
-      order.currentDepartment === 'FinishQC' ||
-      (order.department === 'Finish' && order.status === 'IN_PROGRESS')
+    return (allOrders as any[]).filter(
+      (order: any) =>
+        order.currentDepartment === 'Finish' ||
+        order.currentDepartment === 'FinishQC' ||
+        (order.department === 'Finish' && order.status === 'IN_PROGRESS')
     ).length;
   }, [allOrders]);
 
   // Count orders in next department (QC/Shipping)
   const qcShippingCount = useMemo(() => {
-    return (allOrders as any[]).filter((order: any) => 
-      order.currentDepartment === 'QC' || 
-      order.currentDepartment === 'Shipping' ||
-      (order.department === 'QC' && order.status === 'IN_PROGRESS') ||
-      (order.department === 'Shipping' && order.status === 'IN_PROGRESS')
+    return (allOrders as any[]).filter(
+      (order: any) =>
+        order.currentDepartment === 'QC' ||
+        order.currentDepartment === 'Shipping' ||
+        (order.department === 'QC' && order.status === 'IN_PROGRESS') ||
+        (order.department === 'Shipping' && order.status === 'IN_PROGRESS')
     ).length;
   }, [allOrders]);
 
@@ -45,8 +48,6 @@ export default function PaintQueuePage() {
   const { data: stockModels = [] } = useQuery({
     queryKey: ['/api/stock-models'],
   });
-
-
 
   return (
     <div className="container mx-auto p-6 space-y-6">
@@ -115,7 +116,12 @@ export default function PaintQueuePage() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {paintOrders.map((order: any) => (
-                <OrderTooltip key={order.orderId} order={order} stockModels={stockModels} className="border-l-pink-500" />
+                <OrderTooltip
+                  key={order.orderId}
+                  order={order}
+                  stockModels={stockModels}
+                  className="border-l-pink-500"
+                />
               ))}
             </div>
           )}

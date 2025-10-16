@@ -9,7 +9,9 @@ export default function STACITestDashboard() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">STACITEST Dashboard</h1>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
+            STACITEST Dashboard
+          </h1>
           <p className="text-gray-600 dark:text-gray-400 mt-1">
             Layup Scheduling & P2 Layup Scheduler Management
           </p>
@@ -21,7 +23,6 @@ export default function STACITestDashboard() {
 
       {/* Two Column Layout */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-        
         {/* Left Column - Layup Scheduler */}
         <div className="xl:col-span-1">
           <LayupScheduler />
@@ -44,8 +45,9 @@ export default function STACITestDashboard() {
                 P2 Layup Scheduler
               </h3>
               <p className="text-gray-500 dark:text-gray-400 max-w-md">
-                This section will display the P2 layup scheduling interface, 
-                allowing scheduling and assignment of P2 production orders to molds and dates.
+                This section will display the P2 layup scheduling interface,
+                allowing scheduling and assignment of P2 production orders to
+                molds and dates.
               </p>
               <div className="mt-6 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border-2 border-dashed border-gray-200 dark:border-gray-700">
                 <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
@@ -55,7 +57,6 @@ export default function STACITestDashboard() {
             </div>
           </CardContent>
         </Card>
-
       </div>
 
       {/* Footer Status */}
@@ -64,15 +65,19 @@ export default function STACITestDashboard() {
           <CardContent className="p-4 text-center">
             <div className="text-2xl font-bold text-blue-600">📅</div>
             <div className="text-sm font-medium">P1 Layup Scheduler</div>
-            <div className="text-xs text-gray-500">Active scheduling & assignment</div>
+            <div className="text-xs text-gray-500">
+              Active scheduling & assignment
+            </div>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardContent className="p-4 text-center">
             <div className="text-2xl font-bold text-purple-600">🏭</div>
             <div className="text-sm font-medium">P2 Layup Scheduler</div>
-            <div className="text-xs text-gray-500">Scheduler interface ready</div>
+            <div className="text-xs text-gray-500">
+              Scheduler interface ready
+            </div>
           </CardContent>
         </Card>
       </div>

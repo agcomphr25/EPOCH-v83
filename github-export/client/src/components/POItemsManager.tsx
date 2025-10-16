@@ -1,27 +1,44 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { 
-  fetchPOItems, 
-  createPOItem, 
-  updatePOItem, 
-  deletePOItem, 
-
+import {
+  fetchPOItems,
+  createPOItem,
+  updatePOItem,
+  deletePOItem,
   fetchStockModels,
   fetchFeatures,
-  type PurchaseOrderItem, 
+  type PurchaseOrderItem,
   type CreatePurchaseOrderItemData,
   type StockModel,
-  type Feature
+  type Feature,
 } from '@/lib/poUtils';
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
 import { Plus, Edit, Trash2, Package, Settings } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
@@ -31,9 +48,15 @@ interface POItemsManagerProps {
   customerId: string;
 }
 
-export default function POItemsManager({ poId, poNumber, customerId }: POItemsManagerProps) {
+export default function POItemsManager({
+  poId,
+  poNumber,
+  customerId,
+}: POItemsManagerProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingItem, setEditingItem] = useState<PurchaseOrderItem | null>(null);
+  const [editingItem, setEditingItem] = useState<PurchaseOrderItem | null>(
+    null
+  );
   const queryClient = useQueryClient();
 
   // Form state
@@ -45,23 +68,27 @@ export default function POItemsManager({ poId, poNumber, customerId }: POItemsMa
     unitPrice: 0,
     totalPrice: 0,
     specifications: {},
-    notes: ''
+    notes: '',
   });
 
   // Data queries
-  const { data: items = [], isLoading: itemsLoading, refetch: refetchItems } = useQuery({
+  const {
+    data: items = [],
+    isLoading: itemsLoading,
+    refetch: refetchItems,
+  } = useQuery({
     queryKey: ['/api/pos', poId, 'items'],
-    queryFn: () => fetchPOItems(poId)
+    queryFn: () => fetchPOItems(poId),
   });
 
   const { data: stockModels = [], isLoading: stockModelsLoading } = useQuery({
     queryKey: ['/api/stock-models'],
-    queryFn: fetchStockModels
+    queryFn: fetchStockModels,
   });
 
   const { data: features = [], isLoading: featuresLoading } = useQuery({
     queryKey: ['/api/features'],
-    queryFn: fetchFeatures
+    queryFn: fetchFeatures,
   });
 
   // Mutations
@@ -75,12 +102,17 @@ export default function POItemsManager({ poId, poNumber, customerId }: POItemsMa
     },
     onError: () => {
       toast.error('Failed to add item');
-    }
+    },
   });
 
   const updateItemMutation = useMutation({
-    mutationFn: ({ itemId, data }: { itemId: number; data: Partial<CreatePurchaseOrderItemData> }) => 
-      updatePOItem(poId, itemId, data),
+    mutationFn: ({
+      itemId,
+      data,
+    }: {
+      itemId: number;
+      data: Partial<CreatePurchaseOrderItemData>;
+    }) => updatePOItem(poId, itemId, data),
     onSuccess: () => {
       toast.success('Item updated successfully');
       queryClient.invalidateQueries({ queryKey: ['/api/pos', poId, 'items'] });
@@ -89,7 +121,7 @@ export default function POItemsManager({ poId, poNumber, customerId }: POItemsMa
     },
     onError: () => {
       toast.error('Failed to update item');
-    }
+    },
   });
 
   const deleteItemMutation = useMutation({
@@ -100,10 +132,8 @@ export default function POItemsManager({ poId, poNumber, customerId }: POItemsMa
     },
     onError: () => {
       toast.error('Failed to delete item');
-    }
+    },
   });
-
-
 
   const resetForm = () => {
     setFormData({
@@ -114,14 +144,14 @@ export default function POItemsManager({ poId, poNumber, customerId }: POItemsMa
       unitPrice: 0,
       totalPrice: 0,
       specifications: {},
-      notes: ''
+      notes: '',
     });
     setEditingItem(null);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!formData.itemId || !formData.itemName || formData.quantity <= 0) {
       toast.error('Please fill in all required fields');
       return;
@@ -134,8 +164,11 @@ export default function POItemsManager({ poId, poNumber, customerId }: POItemsMa
       quantity: formData.quantity,
       unitPrice: formData.unitPrice,
       totalPrice: formData.quantity * formData.unitPrice,
-      specifications: formData.itemType === 'custom_model' ? formData.specifications : undefined,
-      notes: formData.notes || undefined
+      specifications:
+        formData.itemType === 'custom_model'
+          ? formData.specifications
+          : undefined,
+      notes: formData.notes || undefined,
     };
 
     if (editingItem) {
@@ -155,7 +188,7 @@ export default function POItemsManager({ poId, poNumber, customerId }: POItemsMa
       unitPrice: item.unitPrice,
       totalPrice: item.totalPrice,
       specifications: item.specifications || {},
-      notes: item.notes || ''
+      notes: item.notes || '',
     });
     setIsDialogOpen(true);
   };
@@ -171,38 +204,38 @@ export default function POItemsManager({ poId, poNumber, customerId }: POItemsMa
     let price = 0;
 
     if (itemType === 'stock_model') {
-      selectedItem = stockModels.find(model => model.id === itemId);
+      selectedItem = stockModels.find((model) => model.id === itemId);
       price = selectedItem?.price || 0;
     } else if (itemType === 'feature_item') {
-      selectedItem = features.find(feature => feature.id === itemId);
+      selectedItem = features.find((feature) => feature.id === itemId);
       price = selectedItem?.price || 0;
     }
 
     if (selectedItem) {
-      setFormData(prev => ({
+      setFormData((prev) => ({
         ...prev,
         itemType: itemType as 'stock_model' | 'custom_model' | 'feature_item',
         itemId: itemId,
         itemName: selectedItem.displayName || selectedItem.name,
         unitPrice: price,
-        totalPrice: prev.quantity * price
+        totalPrice: prev.quantity * price,
       }));
     }
   };
 
   const handleQuantityChange = (quantity: number) => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
       quantity,
-      totalPrice: quantity * prev.unitPrice
+      totalPrice: quantity * prev.unitPrice,
     }));
   };
 
   const handleUnitPriceChange = (unitPrice: number) => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
       unitPrice,
-      totalPrice: prev.quantity * unitPrice
+      totalPrice: prev.quantity * unitPrice,
     }));
   };
 
@@ -232,15 +265,24 @@ export default function POItemsManager({ poId, poNumber, customerId }: POItemsMa
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
                   <Label htmlFor="itemType">Item Type</Label>
-                  <Select 
-                    value={formData.itemType} 
-                    onValueChange={(value) => setFormData(prev => ({...prev, itemType: value as any, itemId: '', itemName: ''}))}
+                  <Select
+                    value={formData.itemType}
+                    onValueChange={(value) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        itemType: value as any,
+                        itemId: '',
+                        itemName: '',
+                      }))
+                    }
                   >
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="stock_model">Pre-Defined Stock Model</SelectItem>
+                      <SelectItem value="stock_model">
+                        Pre-Defined Stock Model
+                      </SelectItem>
                       <SelectItem value="feature_item">Feature Item</SelectItem>
                       <SelectItem value="custom_model">Stock Model</SelectItem>
                     </SelectContent>
@@ -250,15 +292,17 @@ export default function POItemsManager({ poId, poNumber, customerId }: POItemsMa
                 {formData.itemType === 'stock_model' && (
                   <div>
                     <Label htmlFor="stockModel">Stock Model</Label>
-                    <Select 
-                      value={formData.itemId} 
-                      onValueChange={(value) => handleItemSelection('stock_model', value)}
+                    <Select
+                      value={formData.itemId}
+                      onValueChange={(value) =>
+                        handleItemSelection('stock_model', value)
+                      }
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Select a stock model" />
                       </SelectTrigger>
                       <SelectContent>
-                        {stockModels.map(model => (
+                        {stockModels.map((model) => (
                           <SelectItem key={model.id} value={model.id}>
                             {model.displayName} - ${model.price}
                           </SelectItem>
@@ -271,15 +315,17 @@ export default function POItemsManager({ poId, poNumber, customerId }: POItemsMa
                 {formData.itemType === 'feature_item' && (
                   <div>
                     <Label htmlFor="feature">Feature Item</Label>
-                    <Select 
-                      value={formData.itemId} 
-                      onValueChange={(value) => handleItemSelection('feature_item', value)}
+                    <Select
+                      value={formData.itemId}
+                      onValueChange={(value) =>
+                        handleItemSelection('feature_item', value)
+                      }
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Select a feature item" />
                       </SelectTrigger>
                       <SelectContent>
-                        {features.map(feature => (
+                        {features.map((feature) => (
                           <SelectItem key={feature.id} value={feature.id}>
                             {feature.displayName} - ${feature.price}
                           </SelectItem>
@@ -295,7 +341,13 @@ export default function POItemsManager({ poId, poNumber, customerId }: POItemsMa
                     <Input
                       id="customName"
                       value={formData.itemName}
-                      onChange={(e) => setFormData(prev => ({...prev, itemName: e.target.value, itemId: e.target.value}))}
+                      onChange={(e) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          itemName: e.target.value,
+                          itemId: e.target.value,
+                        }))
+                      }
                       placeholder="Enter stock model name"
                       required
                     />
@@ -310,7 +362,9 @@ export default function POItemsManager({ poId, poNumber, customerId }: POItemsMa
                       type="number"
                       min="1"
                       value={formData.quantity}
-                      onChange={(e) => handleQuantityChange(parseInt(e.target.value) || 1)}
+                      onChange={(e) =>
+                        handleQuantityChange(parseInt(e.target.value) || 1)
+                      }
                       required
                     />
                   </div>
@@ -322,7 +376,9 @@ export default function POItemsManager({ poId, poNumber, customerId }: POItemsMa
                       step="0.01"
                       min="0"
                       value={formData.unitPrice}
-                      onChange={(e) => handleUnitPriceChange(parseFloat(e.target.value) || 0)}
+                      onChange={(e) =>
+                        handleUnitPriceChange(parseFloat(e.target.value) || 0)
+                      }
                       required
                     />
                   </div>
@@ -344,17 +400,32 @@ export default function POItemsManager({ poId, poNumber, customerId }: POItemsMa
                   <Textarea
                     id="notes"
                     value={formData.notes}
-                    onChange={(e) => setFormData(prev => ({...prev, notes: e.target.value}))}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        notes: e.target.value,
+                      }))
+                    }
                     rows={3}
                     placeholder="Optional notes about this item"
                   />
                 </div>
 
                 <div className="flex justify-end space-x-2">
-                  <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setIsDialogOpen(false)}
+                  >
                     Cancel
                   </Button>
-                  <Button type="submit" disabled={createItemMutation.isPending || updateItemMutation.isPending}>
+                  <Button
+                    type="submit"
+                    disabled={
+                      createItemMutation.isPending ||
+                      updateItemMutation.isPending
+                    }
+                  >
                     {editingItem ? 'Update' : 'Add'} Item
                   </Button>
                 </div>
@@ -381,9 +452,15 @@ export default function POItemsManager({ poId, poNumber, customerId }: POItemsMa
                       <CardTitle className="text-lg">{item.itemName}</CardTitle>
                       <div className="flex gap-2 mt-2">
                         <Badge variant="secondary">
-                          {item.itemType === 'stock_model' && <Package className="w-3 h-3 mr-1" />}
-                          {item.itemType === 'feature_item' && <Settings className="w-3 h-3 mr-1" />}
-                          {item.itemType === 'custom_model' && <Edit className="w-3 h-3 mr-1" />}
+                          {item.itemType === 'stock_model' && (
+                            <Package className="w-3 h-3 mr-1" />
+                          )}
+                          {item.itemType === 'feature_item' && (
+                            <Settings className="w-3 h-3 mr-1" />
+                          )}
+                          {item.itemType === 'custom_model' && (
+                            <Edit className="w-3 h-3 mr-1" />
+                          )}
                           {item.itemType.replace('_', ' ').toUpperCase()}
                         </Badge>
                         {item.orderCount > 0 && (
@@ -414,32 +491,38 @@ export default function POItemsManager({ poId, poNumber, customerId }: POItemsMa
                 <CardContent>
                   <div className="grid grid-cols-4 gap-4 text-sm">
                     <div>
-                      <span className="font-medium">Quantity:</span> {item.quantity}
+                      <span className="font-medium">Quantity:</span>{' '}
+                      {item.quantity}
                     </div>
                     <div>
-                      <span className="font-medium">Unit Price:</span> ${item.unitPrice.toFixed(2)}
+                      <span className="font-medium">Unit Price:</span> $
+                      {item.unitPrice.toFixed(2)}
                     </div>
                     <div>
-                      <span className="font-medium">Total:</span> ${item.totalPrice.toFixed(2)}
+                      <span className="font-medium">Total:</span> $
+                      {item.totalPrice.toFixed(2)}
                     </div>
                     <div>
-                      <span className="font-medium">Item ID:</span> {item.itemId}
+                      <span className="font-medium">Item ID:</span>{' '}
+                      {item.itemId}
                     </div>
                   </div>
                   {item.notes && (
                     <div className="mt-3 pt-3 border-t">
-                      <span className="font-medium text-sm">Notes:</span> {item.notes}
+                      <span className="font-medium text-sm">Notes:</span>{' '}
+                      {item.notes}
                     </div>
                   )}
                 </CardContent>
               </Card>
             ))}
-            
+
             <Separator />
-            
+
             <div className="flex justify-between items-center py-4">
               <div className="text-lg font-semibold">
-                Total Items: {items.reduce((sum, item) => sum + item.quantity, 0)}
+                Total Items:{' '}
+                {items.reduce((sum, item) => sum + item.quantity, 0)}
               </div>
               <div className="text-lg font-semibold">
                 Total Value: ${totalPOValue.toFixed(2)}

@@ -14,36 +14,36 @@ export default function AddressTestComponent() {
 
   const testAddressAPI = async () => {
     if (!query.trim()) return;
-    
+
     setIsLoading(true);
     setError(null);
     setResults([]);
-    
+
     try {
       const url = `/api/address/autocomplete?query=${encodeURIComponent(query)}`;
       console.log('Making request to:', url);
-      
+
       const response = await fetch(url, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
         },
-        credentials: 'include'
+        credentials: 'include',
       });
-      
+
       console.log('Response status:', response.status);
       console.log('Response ok:', response.ok);
-      
+
       if (!response.ok) {
         const errorText = await response.text();
         console.error('Error response:', errorText);
         throw new Error(`HTTP error! status: ${response.status}`);
       }
-      
+
       const data = await response.json();
       console.log('Success! API response:', data);
       setResults(data);
-      
+
       toast({
         title: 'Success!',
         description: `Found ${data.length} addresses`,
@@ -77,24 +77,26 @@ export default function AddressTestComponent() {
               placeholder="Enter address (e.g., 123 Main Street)"
               onKeyPress={(e) => e.key === 'Enter' && testAddressAPI()}
             />
-            <Button 
-              onClick={testAddressAPI} 
+            <Button
+              onClick={testAddressAPI}
               disabled={isLoading || !query.trim()}
             >
               {isLoading ? 'Testing...' : 'Test API'}
             </Button>
           </div>
         </div>
-        
+
         {error && (
           <div className="bg-red-50 border border-red-200 rounded p-3">
             <p className="text-red-700">Error: {error}</p>
           </div>
         )}
-        
+
         {results.length > 0 && (
           <div className="bg-green-50 border border-green-200 rounded p-3">
-            <h3 className="font-semibold text-green-800 mb-2">Results ({results.length}):</h3>
+            <h3 className="font-semibold text-green-800 mb-2">
+              Results ({results.length}):
+            </h3>
             <ul className="space-y-1">
               {results.map((address, index) => (
                 <li key={index} className="text-green-700 text-sm">

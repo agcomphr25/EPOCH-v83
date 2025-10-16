@@ -1,9 +1,22 @@
 import { useState } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogFooter,
+} from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -33,7 +46,10 @@ const shippingMethods = [
   { value: 'Other', label: 'Other' },
 ];
 
-export function ManualTrackingEntry({ orderId, onSuccess }: ManualTrackingEntryProps) {
+export function ManualTrackingEntry({
+  orderId,
+  onSuccess,
+}: ManualTrackingEntryProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
@@ -41,21 +57,26 @@ export function ManualTrackingEntry({ orderId, onSuccess }: ManualTrackingEntryP
   const [carrier, setCarrier] = useState('UPS');
   const [shippingMethod, setShippingMethod] = useState('Ground');
   const [sendNotification, setSendNotification] = useState(true);
-  const [notificationMethod, setNotificationMethod] = useState<'email' | 'sms' | 'both'>('email');
+  const [notificationMethod, setNotificationMethod] = useState<
+    'email' | 'sms' | 'both'
+  >('email');
 
   const markShippedMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest(`/api/shipping/mark-shipped/${orderId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          trackingNumber: trackingNumber.trim(),
-          shippingCarrier: carrier,
-          shippingMethod: shippingMethod,
-          sendNotification,
-          notificationMethod,
-        }),
-      });
+      const response = await apiRequest(
+        `/api/shipping/mark-shipped/${orderId}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            trackingNumber: trackingNumber.trim(),
+            shippingCarrier: carrier,
+            shippingMethod: shippingMethod,
+            sendNotification,
+            notificationMethod,
+          }),
+        }
+      );
       return response;
     },
     onSuccess: () => {
@@ -64,8 +85,12 @@ export function ManualTrackingEntry({ orderId, onSuccess }: ManualTrackingEntryP
         description: `Order ${orderId} marked as shipped with tracking number ${trackingNumber}`,
       });
       queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/shipping/ready-for-shipping'] });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/orders/with-payment-status'],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/shipping/ready-for-shipping'],
+      });
       setOpen(false);
       resetForm();
       onSuccess?.();
@@ -102,8 +127,8 @@ export function ManualTrackingEntry({ orderId, onSuccess }: ManualTrackingEntryP
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button 
-          variant="outline" 
+        <Button
+          variant="outline"
           size="sm"
           data-testid={`button-manual-tracking-${orderId}`}
         >
@@ -146,7 +171,10 @@ export function ManualTrackingEntry({ orderId, onSuccess }: ManualTrackingEntryP
           <div className="space-y-2">
             <Label htmlFor="shipping-method">Shipping Method *</Label>
             <Select value={shippingMethod} onValueChange={setShippingMethod}>
-              <SelectTrigger id="shipping-method" data-testid="select-shipping-method">
+              <SelectTrigger
+                id="shipping-method"
+                data-testid="select-shipping-method"
+              >
                 <SelectValue placeholder="Select shipping method" />
               </SelectTrigger>
               <SelectContent>
@@ -164,10 +192,15 @@ export function ManualTrackingEntry({ orderId, onSuccess }: ManualTrackingEntryP
               <Checkbox
                 id="send-notification"
                 checked={sendNotification}
-                onCheckedChange={(checked) => setSendNotification(checked as boolean)}
+                onCheckedChange={(checked) =>
+                  setSendNotification(checked as boolean)
+                }
                 data-testid="checkbox-send-notification"
               />
-              <Label htmlFor="send-notification" className="font-normal cursor-pointer">
+              <Label
+                htmlFor="send-notification"
+                className="font-normal cursor-pointer"
+              >
                 Send customer notification
               </Label>
             </div>
@@ -175,11 +208,16 @@ export function ManualTrackingEntry({ orderId, onSuccess }: ManualTrackingEntryP
             {sendNotification && (
               <div className="space-y-2 ml-6">
                 <Label htmlFor="notification-method">Notification Method</Label>
-                <Select 
-                  value={notificationMethod} 
-                  onValueChange={(value) => setNotificationMethod(value as 'email' | 'sms' | 'both')}
+                <Select
+                  value={notificationMethod}
+                  onValueChange={(value) =>
+                    setNotificationMethod(value as 'email' | 'sms' | 'both')
+                  }
                 >
-                  <SelectTrigger id="notification-method" data-testid="select-notification-method">
+                  <SelectTrigger
+                    id="notification-method"
+                    data-testid="select-notification-method"
+                  >
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>

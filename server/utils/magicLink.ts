@@ -14,7 +14,10 @@ export interface SendMagicLinkOptions extends MagicLinkOptions {
   subject?: string;
   message?: string;
   buttonText?: string;
-  customTemplate?: (link: string, data: MagicLinkOptions) => { subject: string; html: string; text: string };
+  customTemplate?: (
+    link: string,
+    data: MagicLinkOptions
+  ) => { subject: string; html: string; text: string };
 }
 
 export interface MagicLinkValidationResult {
@@ -45,8 +48,8 @@ export function getMagicLinkBaseUrl(): string {
     const domains = process.env.REPLIT_DOMAINS.split(',');
     return `https://${domains[0]}`;
   }
-  return process.env.NODE_ENV === 'production' 
-    ? process.env.APP_URL || 'https://your-app.com' 
+  return process.env.NODE_ENV === 'production'
+    ? process.env.APP_URL || 'https://your-app.com'
     : 'http://localhost:5000';
 }
 
@@ -62,14 +65,16 @@ export function createMagicLinkUrl(token: string, purpose: string): string {
  * Generate and save a magic link token to the database
  * SECURITY: Token is hashed before storage using SHA-256
  */
-export async function generateMagicLink(options: MagicLinkOptions): Promise<{ token: string; link: string; expiresAt: Date }> {
+export async function generateMagicLink(
+  options: MagicLinkOptions
+): Promise<{ token: string; link: string; expiresAt: Date }> {
   const { storage } = await import('../storage.js');
-  
+
   const token = generateMagicLinkToken();
   const tokenHash = hashToken(token);
   const expiresInMinutes = options.expiresInMinutes || 30; // Default 30 minutes
   const expiresAt = new Date(Date.now() + expiresInMinutes * 60 * 1000);
-  
+
   await storage.createMagicLinkToken({
     token: tokenHash, // Store hashed token, not plaintext
     email: options.email,
@@ -80,9 +85,9 @@ export async function generateMagicLink(options: MagicLinkOptions): Promise<{ to
     ipAddress: options.ipAddress || null,
     userAgent: options.userAgent || null,
   });
-  
+
   const link = createMagicLinkUrl(token, options.purpose);
-  
+
   return { token, link, expiresAt };
 }
 
@@ -91,37 +96,37 @@ export async function generateMagicLink(options: MagicLinkOptions): Promise<{ to
  * SECURITY: Compares hashed version of token
  */
 export async function validateMagicLink(
-  token: string, 
+  token: string,
   purpose?: string
 ): Promise<MagicLinkValidationResult> {
   const { storage } = await import('../storage.js');
-  
+
   try {
     const tokenHash = hashToken(token);
     const magicToken = await storage.getMagicLinkToken(tokenHash);
-    
+
     if (!magicToken) {
       return { isValid: false, error: 'Invalid or expired token' };
     }
-    
+
     // Check if already used
     if (magicToken.usedAt) {
       return { isValid: false, error: 'This link has already been used' };
     }
-    
+
     // Check if expired
     if (new Date() > new Date(magicToken.expiresAt)) {
       return { isValid: false, error: 'This link has expired' };
     }
-    
+
     // Check purpose if provided
     if (purpose && magicToken.purpose !== purpose) {
       return { isValid: false, error: 'Invalid token purpose' };
     }
-    
+
     // Mark as used (using the hash)
     await storage.markMagicLinkTokenAsUsed(tokenHash);
-    
+
     return { isValid: true, token: magicToken };
   } catch (error) {
     console.error('Magic link validation error:', error);
@@ -141,22 +146,24 @@ export async function cleanupExpiredMagicLinks(): Promise<number> {
  * Generate a default email template for magic links
  */
 export function generateMagicLinkEmailTemplate(
-  link: string, 
+  link: string,
   options: SendMagicLinkOptions
 ): { subject: string; html: string; text: string } {
   const { purpose, metadata } = options;
-  
+
   let subject = options.subject || `Your secure link - AG Composites`;
   let buttonText = options.buttonText || 'Click Here to Continue';
   let heading = 'Secure Access Link';
-  let description = 'Click the button below to continue. This link will expire in 30 minutes for your security.';
-  
+  let description =
+    'Click the button below to continue. This link will expire in 30 minutes for your security.';
+
   // Customize based on purpose
   switch (purpose) {
     case 'login':
       subject = 'Your Login Link - AG Composites';
       heading = 'Sign In to Your Account';
-      description = 'Click the button below to securely sign in. This link will expire in 30 minutes.';
+      description =
+        'Click the button below to securely sign in. This link will expire in 30 minutes.';
       buttonText = 'Sign In Now';
       break;
     case 'order_confirmation':
@@ -168,17 +175,20 @@ export function generateMagicLinkEmailTemplate(
     case 'password_reset':
       subject = 'Reset Your Password - AG Composites';
       heading = 'Reset Your Password';
-      description = 'Click the button below to reset your password. This link will expire in 30 minutes.';
+      description =
+        'Click the button below to reset your password. This link will expire in 30 minutes.';
       buttonText = 'Reset Password';
       break;
     case 'customer_action':
       subject = options.subject || 'Action Required - AG Composites';
       heading = options.subject || 'Action Required';
-      description = options.message || 'Click the button below to complete your action. This link will expire in 30 minutes.';
+      description =
+        options.message ||
+        'Click the button below to complete your action. This link will expire in 30 minutes.';
       buttonText = options.buttonText || 'Take Action';
       break;
   }
-  
+
   const html = `
 <!DOCTYPE html>
 <html>
@@ -277,7 +287,7 @@ export function generateMagicLinkEmailTemplate(
 </body>
 </html>
   `.trim();
-  
+
   const text = `
 ${heading}
 
@@ -295,7 +305,7 @@ AG Composites
 Owens Cross Roads, AL 35763
 Phone: 256-723-8381
   `.trim();
-  
+
   return { subject, html, text };
 }
 
@@ -311,18 +321,19 @@ export async function sendMagicLink(options: SendMagicLinkOptions): Promise<{
   try {
     // Generate the magic link
     const { link, expiresAt } = await generateMagicLink(options);
-    
+
     // Generate email template
-    const emailContent = options.customTemplate 
+    const emailContent = options.customTemplate
       ? options.customTemplate(link, options)
       : generateMagicLinkEmailTemplate(link, options);
-    
+
     // Send email via communications API
-    const baseUrl = process.env.NODE_ENV === 'production' ? '' : 'http://localhost:5000';
+    const baseUrl =
+      process.env.NODE_ENV === 'production' ? '' : 'http://localhost:5000';
     const response = await fetch(`${baseUrl}/api/communications/email`, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
       },
       body: JSON.stringify({
         to: options.email,
@@ -330,25 +341,25 @@ export async function sendMagicLink(options: SendMagicLinkOptions): Promise<{
         message: emailContent.text, // Plain text version
         html: emailContent.html, // HTML version
         customerId: options.metadata?.customerId,
-        orderId: options.metadata?.orderId
-      })
+        orderId: options.metadata?.orderId,
+      }),
     });
-    
+
     if (!response.ok) {
       const errorData = await response.json();
       throw new Error(errorData.error || 'Failed to send email');
     }
-    
+
     return {
       success: true,
       link,
-      expiresAt
+      expiresAt,
     };
   } catch (error) {
     console.error('Failed to send magic link:', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown error'
+      error: error instanceof Error ? error.message : 'Unknown error',
     };
   }
 }

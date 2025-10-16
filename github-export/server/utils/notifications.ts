@@ -12,7 +12,9 @@ export interface NotificationData {
   preferredMethods?: string[];
 }
 
-export async function sendCustomerNotification(data: NotificationData): Promise<{
+export async function sendCustomerNotification(
+  data: NotificationData
+): Promise<{
   success: boolean;
   methods: string[];
   errors?: string[];
@@ -20,14 +22,14 @@ export async function sendCustomerNotification(data: NotificationData): Promise<
   const results = {
     success: false,
     methods: [] as string[],
-    errors: [] as string[]
+    errors: [] as string[],
   };
 
   // Get customer preferences
   const [order] = await db
     .select({
       customerId: orderDrafts.customerId,
-      orderId: orderDrafts.orderId
+      orderId: orderDrafts.orderId,
     })
     .from(orderDrafts)
     .where(eq(orderDrafts.orderId, data.orderId));
@@ -48,7 +50,8 @@ export async function sendCustomerNotification(data: NotificationData): Promise<
   }
 
   // Determine notification methods
-  const preferredMethods = customer.preferredCommunicationMethod as string[] || ['email'];
+  const preferredMethods =
+    (customer.preferredCommunicationMethod as string[]) || ['email'];
   const email = data.customerEmail || customer.email;
   const phone = data.customerPhone || customer.phone;
 
@@ -60,11 +63,13 @@ export async function sendCustomerNotification(data: NotificationData): Promise<
         orderId: data.orderId,
         trackingNumber: data.trackingNumber,
         carrier: data.carrier,
-        estimatedDelivery: data.estimatedDelivery
+        estimatedDelivery: data.estimatedDelivery,
       });
       results.methods.push('email');
     } catch (error) {
-      results.errors.push(`Email failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      results.errors.push(
+        `Email failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
     }
   }
 
@@ -76,11 +81,13 @@ export async function sendCustomerNotification(data: NotificationData): Promise<
         orderId: data.orderId,
         trackingNumber: data.trackingNumber,
         carrier: data.carrier,
-        estimatedDelivery: data.estimatedDelivery
+        estimatedDelivery: data.estimatedDelivery,
       });
       results.methods.push('sms');
     } catch (error) {
-      results.errors.push(`SMS failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      results.errors.push(
+        `SMS failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
     }
   }
 
@@ -91,10 +98,10 @@ export async function sendCustomerNotification(data: NotificationData): Promise<
       .set({
         customerNotified: true,
         notificationMethod: results.methods.join(', '),
-        notificationSentAt: new Date()
+        notificationSentAt: new Date(),
       })
       .where(eq(orderDrafts.orderId, data.orderId));
-    
+
     results.success = true;
   }
 
@@ -110,7 +117,7 @@ async function sendEmailNotification(data: {
 }) {
   // Email notification logic
   const subject = `Your Order ${data.orderId} Has Shipped - AG Composites`;
-  const deliveryText = data.estimatedDelivery 
+  const deliveryText = data.estimatedDelivery
     ? `Estimated delivery: ${data.estimatedDelivery.toLocaleDateString()}`
     : 'Delivery information will be updated shortly.';
 
@@ -138,7 +145,7 @@ Phone: 256-723-8381
   console.log('Email notification would be sent:', {
     to: data.email,
     subject,
-    message: message.substring(0, 100) + '...'
+    message: message.substring(0, 100) + '...',
   });
 
   // TODO: Implement actual email sending (SendGrid, etc.)
@@ -157,7 +164,7 @@ async function sendSMSNotification(data: {
 
   console.log('SMS notification would be sent:', {
     to: data.phone,
-    message
+    message,
   });
 
   // TODO: Implement actual SMS sending (Twilio, etc.)
@@ -165,12 +172,15 @@ async function sendSMSNotification(data: {
   return Promise.resolve();
 }
 
-export async function updateTrackingInfo(orderId: string, trackingData: {
-  trackingNumber: string;
-  carrier?: string;
-  shippedDate?: Date;
-  estimatedDelivery?: Date;
-}) {
+export async function updateTrackingInfo(
+  orderId: string,
+  trackingData: {
+    trackingNumber: string;
+    carrier?: string;
+    shippedDate?: Date;
+    estimatedDelivery?: Date;
+  }
+) {
   return await db
     .update(orderDrafts)
     .set({
@@ -178,7 +188,7 @@ export async function updateTrackingInfo(orderId: string, trackingData: {
       shippingCarrier: trackingData.carrier || 'UPS',
       shippedDate: trackingData.shippedDate || new Date(),
       estimatedDelivery: trackingData.estimatedDelivery,
-      shippingLabelGenerated: true
+      shippingLabelGenerated: true,
     })
     .where(eq(orderDrafts.orderId, orderId));
 }

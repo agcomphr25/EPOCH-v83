@@ -1,6 +1,10 @@
-
 import React, { useState } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -17,13 +21,13 @@ interface SecureVerificationModalProps {
   operationType: 'delete' | 'add' | 'modify';
 }
 
-export default function SecureVerificationModal({ 
-  isOpen, 
-  onClose, 
-  onConfirm, 
-  operation, 
-  itemName, 
-  operationType 
+export default function SecureVerificationModal({
+  isOpen,
+  onClose,
+  onConfirm,
+  operation,
+  itemName,
+  operationType,
 }: SecureVerificationModalProps) {
   const [step, setStep] = useState(1);
   const [password, setPassword] = useState('');
@@ -33,7 +37,7 @@ export default function SecureVerificationModal({
   const { toast } = useToast();
 
   // Generate a random 6-digit confirmation code
-  const [generatedCode] = useState(() => 
+  const [generatedCode] = useState(() =>
     Math.floor(100000 + Math.random() * 900000).toString()
   );
 
@@ -47,16 +51,20 @@ export default function SecureVerificationModal({
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}` || document.cookie.includes('sessionToken') ? `Bearer ${document.cookie.split('sessionToken=')[1]?.split(';')[0]}` : ''
+          Authorization:
+            `Bearer ${localStorage.getItem('token')}` ||
+            document.cookie.includes('sessionToken')
+              ? `Bearer ${document.cookie.split('sessionToken=')[1]?.split(';')[0]}`
+              : '',
         },
-        body: JSON.stringify({ password })
+        body: JSON.stringify({ password }),
       });
 
       if (response.ok) {
         setStep(2);
         toast({
-          title: "Step 1 Complete",
-          description: `Please enter the confirmation code: ${generatedCode}`
+          title: 'Step 1 Complete',
+          description: `Please enter the confirmation code: ${generatedCode}`,
         });
       } else {
         setError('Invalid admin password');
@@ -71,8 +79,8 @@ export default function SecureVerificationModal({
   const handleConfirmationVerification = () => {
     if (confirmationCode === generatedCode) {
       toast({
-        title: "Verification Complete",
-        description: "Proceeding with secure operation"
+        title: 'Verification Complete',
+        description: 'Proceeding with secure operation',
       });
       onConfirm();
       handleClose();
@@ -91,19 +99,27 @@ export default function SecureVerificationModal({
 
   const getOperationColor = () => {
     switch (operationType) {
-      case 'delete': return 'text-red-600';
-      case 'add': return 'text-green-600';
-      case 'modify': return 'text-yellow-600';
-      default: return 'text-blue-600';
+      case 'delete':
+        return 'text-red-600';
+      case 'add':
+        return 'text-green-600';
+      case 'modify':
+        return 'text-yellow-600';
+      default:
+        return 'text-blue-600';
     }
   };
 
   const getOperationIcon = () => {
     switch (operationType) {
-      case 'delete': return <AlertTriangle className="h-5 w-5 text-red-500" />;
-      case 'add': return <Shield className="h-5 w-5 text-green-500" />;
-      case 'modify': return <Lock className="h-5 w-5 text-yellow-500" />;
-      default: return <Shield className="h-5 w-5 text-blue-500" />;
+      case 'delete':
+        return <AlertTriangle className="h-5 w-5 text-red-500" />;
+      case 'add':
+        return <Shield className="h-5 w-5 text-green-500" />;
+      case 'modify':
+        return <Lock className="h-5 w-5 text-yellow-500" />;
+      default:
+        return <Shield className="h-5 w-5 text-blue-500" />;
     }
   };
 
@@ -138,10 +154,14 @@ export default function SecureVerificationModal({
           {step === 1 && (
             <div className="space-y-4">
               <div className="text-center">
-                <h3 className="text-lg font-semibold">Step 1: Admin Password</h3>
-                <p className="text-sm text-gray-600">Enter your admin password to proceed</p>
+                <h3 className="text-lg font-semibold">
+                  Step 1: Admin Password
+                </h3>
+                <p className="text-sm text-gray-600">
+                  Enter your admin password to proceed
+                </p>
               </div>
-              
+
               <div className="space-y-2">
                 <Label htmlFor="admin-password">Admin Password</Label>
                 <Input
@@ -150,16 +170,22 @@ export default function SecureVerificationModal({
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Enter admin password"
-                  onKeyPress={(e) => e.key === 'Enter' && handlePasswordVerification()}
+                  onKeyPress={(e) =>
+                    e.key === 'Enter' && handlePasswordVerification()
+                  }
                 />
               </div>
 
               <div className="flex gap-2">
-                <Button variant="outline" onClick={handleClose} className="flex-1">
+                <Button
+                  variant="outline"
+                  onClick={handleClose}
+                  className="flex-1"
+                >
                   Cancel
                 </Button>
-                <Button 
-                  onClick={handlePasswordVerification} 
+                <Button
+                  onClick={handlePasswordVerification}
                   disabled={!password || isVerifying}
                   className="flex-1"
                 >
@@ -172,7 +198,9 @@ export default function SecureVerificationModal({
           {step === 2 && (
             <div className="space-y-4">
               <div className="text-center">
-                <h3 className="text-lg font-semibold">Step 2: Confirmation Code</h3>
+                <h3 className="text-lg font-semibold">
+                  Step 2: Confirmation Code
+                </h3>
                 <p className="text-sm text-gray-600">
                   Enter the confirmation code displayed above
                 </p>
@@ -182,7 +210,7 @@ export default function SecureVerificationModal({
                   </span>
                 </div>
               </div>
-              
+
               <div className="space-y-2">
                 <Label htmlFor="confirmation-code">Confirmation Code</Label>
                 <Input
@@ -192,19 +220,27 @@ export default function SecureVerificationModal({
                   onChange={(e) => setConfirmationCode(e.target.value)}
                   placeholder="Enter 6-digit code"
                   maxLength={6}
-                  onKeyPress={(e) => e.key === 'Enter' && handleConfirmationVerification()}
+                  onKeyPress={(e) =>
+                    e.key === 'Enter' && handleConfirmationVerification()
+                  }
                 />
               </div>
 
               <div className="flex gap-2">
-                <Button variant="outline" onClick={handleClose} className="flex-1">
+                <Button
+                  variant="outline"
+                  onClick={handleClose}
+                  className="flex-1"
+                >
                   Cancel
                 </Button>
-                <Button 
+                <Button
                   onClick={handleConfirmationVerification}
                   disabled={confirmationCode.length !== 6}
                   className="flex-1"
-                  variant={operationType === 'delete' ? 'destructive' : 'default'}
+                  variant={
+                    operationType === 'delete' ? 'destructive' : 'default'
+                  }
                 >
                   Confirm {operation}
                 </Button>

@@ -39,5 +39,7 @@ for (let i = 10; i <= 20; i++) {
   const secondIdx = i % 26;
   const letter = (idx) => String.fromCharCode(65 + idx);
   const prefix = `${letter(firstIdx)}${letter(secondIdx)}`;
-  console.log(`Period ${i}: ${prefix} (starts ${periodStart.toISOString().split('T')[0]})`);
+  console.log(
+    `Period ${i}: ${prefix} (starts ${periodStart.toISOString().split('T')[0]})`
+  );
 }

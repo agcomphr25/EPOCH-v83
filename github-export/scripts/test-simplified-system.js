@@ -34,7 +34,12 @@ const actualPeriod15 = 15 + periods15;
 const firstIdx15 = Math.floor(actualPeriod15 / 26) % 26;
 const secondIdx15 = actualPeriod15 % 26;
 const prefix15 = `${letter(firstIdx15)}${letter(secondIdx15)}`;
-console.log('July 15, 2025 - Periods from base:', periods15, 'Prefix:', prefix15);
+console.log(
+  'July 15, 2025 - Periods from base:',
+  periods15,
+  'Prefix:',
+  prefix15
+);
 
 console.log('\n=== Test July 25, 2025 (next period) ===');
 const july25 = new Date('2025-07-25');
@@ -44,4 +49,9 @@ const actualPeriod25 = 15 + periods25;
 const firstIdx25 = Math.floor(actualPeriod25 / 26) % 26;
 const secondIdx25 = actualPeriod25 % 26;
 const prefix25 = `${letter(firstIdx25)}${letter(secondIdx25)}`;
-console.log('July 25, 2025 - Periods from base:', periods25, 'Prefix:', prefix25);
+console.log(
+  'July 25, 2025 - Periods from base:',
+  periods25,
+  'Prefix:',
+  prefix25
+);

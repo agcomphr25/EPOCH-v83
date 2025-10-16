@@ -2,13 +2,46 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { Truck, Package, Search, Filter, Send, CheckCircle, Clock, Download, FileText, DollarSign, ExternalLink, Plus, Edit3 } from 'lucide-react';
+import {
+  Truck,
+  Package,
+  Search,
+  Filter,
+  Send,
+  CheckCircle,
+  Clock,
+  Download,
+  FileText,
+  DollarSign,
+  ExternalLink,
+  Plus,
+  Edit3,
+} from 'lucide-react';
 // Removed ShippingTracker import since we're using the simpler Track Order button approach
 // Removed UPSLabelCreator import since we're now using Track Order instead of Create Label
 import { useToast } from '@/hooks/use-toast';
@@ -38,8 +71,10 @@ export default function ShippingManagement() {
   const [filterStatus, setFilterStatus] = useState('all');
   const [showAddTrackingDialog, setShowAddTrackingDialog] = useState(false);
   const [showEditTrackingDialog, setShowEditTrackingDialog] = useState(false);
-  const [selectedOrderForTracking, setSelectedOrderForTracking] = useState<OrderWithTracking | null>(null);
-  const [selectedOrderForEdit, setSelectedOrderForEdit] = useState<OrderWithTracking | null>(null);
+  const [selectedOrderForTracking, setSelectedOrderForTracking] =
+    useState<OrderWithTracking | null>(null);
+  const [selectedOrderForEdit, setSelectedOrderForEdit] =
+    useState<OrderWithTracking | null>(null);
   const [newTrackingNumber, setNewTrackingNumber] = useState('');
   const [editTrackingNumber, setEditTrackingNumber] = useState('');
   const [shippingCarrier, setShippingCarrier] = useState('UPS');
@@ -47,19 +82,31 @@ export default function ShippingManagement() {
   // Removed unused label creator state variables since we're now using Track Order instead of Create Label
 
   // Get shipping-ready orders
-  const { data: orders, isLoading, refetch } = useQuery({
+  const {
+    data: orders,
+    isLoading,
+    refetch,
+  } = useQuery({
     queryKey: ['/api/shipping/ready-for-shipping'],
   });
 
   // Mark order as shipped mutation
   const markShippedMutation = useMutation({
-    mutationFn: ({ orderId, trackingData }: { orderId: string, trackingData: any }) => 
+    mutationFn: ({
+      orderId,
+      trackingData,
+    }: {
+      orderId: string;
+      trackingData: any;
+    }) =>
       apiRequest(`/api/shipping/mark-shipped/${orderId}`, {
         method: 'POST',
         body: trackingData,
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/shipping/ready-for-shipping'] });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/shipping/ready-for-shipping'],
+      });
       toast({
         title: 'Order Shipped',
         description: 'Order has been marked as shipped and customer notified',
@@ -76,14 +123,24 @@ export default function ShippingManagement() {
 
   // Add tracking number mutation
   const addTrackingMutation = useMutation({
-    mutationFn: ({ orderId, trackingNumber, carrier }: { orderId: string, trackingNumber: string, carrier: string }) => 
+    mutationFn: ({
+      orderId,
+      trackingNumber,
+      carrier,
+    }: {
+      orderId: string;
+      trackingNumber: string;
+      carrier: string;
+    }) =>
       apiRequest(`/api/shipping/add-tracking/${orderId}`, {
         method: 'POST',
         body: JSON.stringify({ trackingNumber, shippingCarrier: carrier }),
         headers: { 'Content-Type': 'application/json' },
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/shipping/ready-for-shipping'] });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/shipping/ready-for-shipping'],
+      });
       setShowAddTrackingDialog(false);
       setNewTrackingNumber('');
       setSelectedOrderForTracking(null);
@@ -103,14 +160,24 @@ export default function ShippingManagement() {
 
   // Edit tracking number mutation
   const editTrackingMutation = useMutation({
-    mutationFn: ({ orderId, trackingNumber, carrier }: { orderId: string, trackingNumber: string, carrier: string }) => 
+    mutationFn: ({
+      orderId,
+      trackingNumber,
+      carrier,
+    }: {
+      orderId: string;
+      trackingNumber: string;
+      carrier: string;
+    }) =>
       apiRequest(`/api/shipping-pdf/update-tracking/${orderId}`, {
         method: 'POST',
         body: JSON.stringify({ trackingNumber, shippingCarrier: carrier }),
         headers: { 'Content-Type': 'application/json' },
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/shipping/ready-for-shipping'] });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/shipping/ready-for-shipping'],
+      });
       setShowEditTrackingDialog(false);
       setEditTrackingNumber('');
       setSelectedOrderForEdit(null);
@@ -130,7 +197,7 @@ export default function ShippingManagement() {
 
   // Clear cache mutation
   const clearCacheMutation = useMutation({
-    mutationFn: () => 
+    mutationFn: () =>
       apiRequest('/api/shipping-pdf/clear-cache', {
         method: 'POST',
       }),
@@ -149,19 +216,29 @@ export default function ShippingManagement() {
     },
   });
 
-  const filteredOrders = (orders as OrderWithTracking[] | undefined)?.filter((order: OrderWithTracking) => {
-    const matchesSearch = order.orderId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         order.customer.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         (order.trackingNumber && order.trackingNumber.toLowerCase().includes(searchTerm.toLowerCase()));
-    
-    if (filterStatus === 'all') return matchesSearch;
-    if (filterStatus === 'shipped') return matchesSearch && order.trackingNumber;
-    if (filterStatus === 'pending') return matchesSearch && !order.trackingNumber;
-    if (filterStatus === 'delivered') return matchesSearch && order.deliveryConfirmed;
-    if (filterStatus === 'notified') return matchesSearch && order.customerNotified;
-    
-    return matchesSearch;
-  });
+  const filteredOrders = (orders as OrderWithTracking[] | undefined)?.filter(
+    (order: OrderWithTracking) => {
+      const matchesSearch =
+        order.orderId.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        order.customer.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (order.trackingNumber &&
+          order.trackingNumber
+            .toLowerCase()
+            .includes(searchTerm.toLowerCase()));
+
+      if (filterStatus === 'all') return matchesSearch;
+      if (filterStatus === 'shipped')
+        return matchesSearch && order.trackingNumber;
+      if (filterStatus === 'pending')
+        return matchesSearch && !order.trackingNumber;
+      if (filterStatus === 'delivered')
+        return matchesSearch && order.deliveryConfirmed;
+      if (filterStatus === 'notified')
+        return matchesSearch && order.customerNotified;
+
+      return matchesSearch;
+    }
+  );
 
   const getStatusIcon = (order: OrderWithTracking) => {
     if (order.deliveryConfirmed) {
@@ -192,31 +269,40 @@ export default function ShippingManagement() {
   const handleTrackOrder = async (trackingNumber: string, orderId: string) => {
     try {
       // First try to get tracking data from our API
-      const response = await fetch(`/api/shipping-pdf/track-ups/${trackingNumber}`);
+      const response = await fetch(
+        `/api/shipping-pdf/track-ups/${trackingNumber}`
+      );
       const data = await response.json();
-      
+
       if (data.success) {
         // Show tracking information
         toast({
-          title: "Tracking Information",
+          title: 'Tracking Information',
           description: `Order ${orderId} - Tracking: ${trackingNumber}`,
         });
-        
+
         // Open UPS tracking page in new tab
         window.open(data.upsTrackingUrl, '_blank');
       } else {
         // Fallback to UPS website
-        window.open(data.fallbackUrl || `https://www.ups.com/track?tracknum=${trackingNumber}`, '_blank');
+        window.open(
+          data.fallbackUrl ||
+            `https://www.ups.com/track?tracknum=${trackingNumber}`,
+          '_blank'
+        );
         toast({
-          title: "Tracking",
+          title: 'Tracking',
           description: `Opened UPS tracking for ${trackingNumber}`,
         });
       }
     } catch (error) {
       // Fallback to UPS website
-      window.open(`https://www.ups.com/track?tracknum=${trackingNumber}`, '_blank');
+      window.open(
+        `https://www.ups.com/track?tracknum=${trackingNumber}`,
+        '_blank'
+      );
       toast({
-        title: "Tracking",
+        title: 'Tracking',
         description: `Opened UPS tracking for ${trackingNumber}`,
       });
     }
@@ -331,7 +417,10 @@ export default function ShippingManagement() {
         <CardContent>
           <div className="flex gap-4 items-end">
             <div className="flex-1">
-              <label htmlFor="search" className="block text-sm font-medium mb-1">
+              <label
+                htmlFor="search"
+                className="block text-sm font-medium mb-1"
+              >
                 Search Orders
               </label>
               <div className="relative">
@@ -346,7 +435,10 @@ export default function ShippingManagement() {
               </div>
             </div>
             <div className="w-48">
-              <label htmlFor="status" className="block text-sm font-medium mb-1">
+              <label
+                htmlFor="status"
+                className="block text-sm font-medium mb-1"
+              >
                 Status
               </label>
               <Select value={filterStatus} onValueChange={setFilterStatus}>
@@ -432,7 +524,10 @@ export default function ShippingManagement() {
                     <TableCell>{formatDate(order.shippedDate)}</TableCell>
                     <TableCell>
                       {order.customerNotified ? (
-                        <Badge variant="default" className="flex items-center gap-1 w-fit">
+                        <Badge
+                          variant="default"
+                          className="flex items-center gap-1 w-fit"
+                        >
                           <Send className="h-3 w-3" />
                           {order.notificationMethod || 'Yes'}
                         </Badge>
@@ -446,16 +541,24 @@ export default function ShippingManagement() {
                           <div className="flex gap-1">
                             <Button
                               size="sm"
-                              onClick={() => handleTrackOrder(order.trackingNumber!, order.orderId)}
+                              onClick={() =>
+                                handleTrackOrder(
+                                  order.trackingNumber!,
+                                  order.orderId
+                                )
+                              }
                               className="flex items-center gap-1"
                             >
                               <ExternalLink className="h-3 w-3" />
                               Track Order
                             </Button>
                             {order.shippingCost && (
-                              <Badge variant="outline" className="flex items-center gap-1">
-                                <DollarSign className="h-3 w-3" />
-                                ${order.shippingCost.toFixed(2)}
+                              <Badge
+                                variant="outline"
+                                className="flex items-center gap-1"
+                              >
+                                <DollarSign className="h-3 w-3" />$
+                                {order.shippingCost.toFixed(2)}
                               </Badge>
                             )}
                             {!order.shippedDate && (
@@ -492,7 +595,10 @@ export default function ShippingManagement() {
       </Card>
 
       {/* Add Tracking Number Dialog */}
-      <Dialog open={showAddTrackingDialog} onOpenChange={setShowAddTrackingDialog}>
+      <Dialog
+        open={showAddTrackingDialog}
+        onOpenChange={setShowAddTrackingDialog}
+      >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Add Tracking Number</DialogTitle>
@@ -509,7 +615,10 @@ export default function ShippingManagement() {
             </div>
             <div>
               <Label htmlFor="carrier">Shipping Carrier</Label>
-              <Select value={shippingCarrier} onValueChange={setShippingCarrier}>
+              <Select
+                value={shippingCarrier}
+                onValueChange={setShippingCarrier}
+              >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -545,7 +654,9 @@ export default function ShippingManagement() {
               </Button>
               <Button
                 onClick={handleSaveTracking}
-                disabled={addTrackingMutation.isPending || !newTrackingNumber.trim()}
+                disabled={
+                  addTrackingMutation.isPending || !newTrackingNumber.trim()
+                }
                 className="flex items-center gap-1"
               >
                 {addTrackingMutation.isPending ? (
@@ -561,7 +672,10 @@ export default function ShippingManagement() {
       </Dialog>
 
       {/* Edit Tracking Number Dialog */}
-      <Dialog open={showEditTrackingDialog} onOpenChange={setShowEditTrackingDialog}>
+      <Dialog
+        open={showEditTrackingDialog}
+        onOpenChange={setShowEditTrackingDialog}
+      >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Edit Tracking Number</DialogTitle>
@@ -578,7 +692,10 @@ export default function ShippingManagement() {
             </div>
             <div>
               <Label htmlFor="edit-carrier">Shipping Carrier</Label>
-              <Select value={editShippingCarrier} onValueChange={setEditShippingCarrier}>
+              <Select
+                value={editShippingCarrier}
+                onValueChange={setEditShippingCarrier}
+              >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -614,7 +731,9 @@ export default function ShippingManagement() {
               </Button>
               <Button
                 onClick={handleSaveEditTracking}
-                disabled={editTrackingMutation.isPending || !editTrackingNumber.trim()}
+                disabled={
+                  editTrackingMutation.isPending || !editTrackingNumber.trim()
+                }
                 className="flex items-center gap-1"
               >
                 {editTrackingMutation.isPending ? (

@@ -1,6 +1,6 @@
 /**
  * Feature Validation Hook
- * 
+ *
  * Provides runtime validation and warnings for feature ID mismatches
  */
 
@@ -13,7 +13,10 @@ interface Feature {
   options?: { value: string; label: string; price?: number }[];
   category?: string;
 }
-import { validateAllFeatureReferences, FEATURE_IDS } from '../utils/featureMapping';
+import {
+  validateAllFeatureReferences,
+  FEATURE_IDS,
+} from '../utils/featureMapping';
 
 /**
  * Hook to validate feature references during development
@@ -37,7 +40,7 @@ export function useFeatureValidation(features: Feature[]) {
         FEATURE_IDS.PROTECTIVE_COATINGS,
         FEATURE_IDS.CUSTOM_GRAPHICS,
         FEATURE_IDS.BASE_COLORS,
-        FEATURE_IDS.SPECIAL_EFFECTS
+        FEATURE_IDS.SPECIAL_EFFECTS,
       ];
 
       validateAllFeatureReferences(features, usedFeatureIds);
@@ -58,9 +61,11 @@ export function useFeatureStateValidation(
       const warnings: string[] = [];
 
       // Check if any feature is stored in both places
-      Object.keys(features).forEach(key => {
+      Object.keys(features).forEach((key) => {
         if (separateStateVars[key] !== undefined) {
-          warnings.push(`Feature '${key}' exists in both features object and separate state`);
+          warnings.push(
+            `Feature '${key}' exists in both features object and separate state`
+          );
         }
       });
 

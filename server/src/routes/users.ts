@@ -6,54 +6,57 @@ import { storage } from '../../storage';
 const router = express.Router();
 
 // User Capability Management Routes (MUST be before /:id to avoid route collision)
-router.get("/:id/capabilities", async (req, res) => {
+router.get('/:id/capabilities', async (req, res) => {
   try {
     const userId = parseInt(req.params.id);
     const capabilities = await storage.getUserCapabilities(userId);
     res.json(capabilities);
   } catch (error) {
-    console.error("Get user capabilities error:", error);
-    res.status(500).json({ error: "Failed to fetch user capabilities" });
+    console.error('Get user capabilities error:', error);
+    res.status(500).json({ error: 'Failed to fetch user capabilities' });
   }
 });
 
-router.post("/:id/capabilities", async (req, res) => {
+router.post('/:id/capabilities', async (req, res) => {
   try {
     const userId = parseInt(req.params.id);
     const { capabilityId, useHardcoded } = req.body;
     const assignmentData = {
       userId,
       capabilityId,
-      useHardcodedValue: useHardcoded ?? true
+      useHardcodedValue: useHardcoded ?? true,
     };
     const newAssignment = await storage.grantUserCapability(assignmentData);
     res.status(201).json(newAssignment);
   } catch (error) {
-    console.error("Grant user capability error:", error);
-    res.status(500).json({ error: "Failed to grant capability" });
+    console.error('Grant user capability error:', error);
+    res.status(500).json({ error: 'Failed to grant capability' });
   }
 });
 
-router.delete("/user-capabilities/:id", async (req, res) => {
+router.delete('/user-capabilities/:id', async (req, res) => {
   try {
     const userCapabilityId = parseInt(req.params.id);
     await storage.revokeUserCapability(userCapabilityId);
     res.status(204).end();
   } catch (error) {
-    console.error("Revoke user capability error:", error);
-    res.status(500).json({ error: "Failed to revoke capability" });
+    console.error('Revoke user capability error:', error);
+    res.status(500).json({ error: 'Failed to revoke capability' });
   }
 });
 
-router.patch("/user-capabilities/:id/toggle", async (req, res) => {
+router.patch('/user-capabilities/:id/toggle', async (req, res) => {
   try {
     const userCapabilityId = parseInt(req.params.id);
     const { useHardcoded } = req.body;
-    const updatedAssignment = await storage.toggleUserHardcodedCapability(userCapabilityId, useHardcoded);
+    const updatedAssignment = await storage.toggleUserHardcodedCapability(
+      userCapabilityId,
+      useHardcoded
+    );
     res.json(updatedAssignment);
   } catch (error) {
-    console.error("Toggle user hardcoded capability error:", error);
-    res.status(500).json({ error: "Failed to toggle hardcoded capability" });
+    console.error('Toggle user hardcoded capability error:', error);
+    res.status(500).json({ error: 'Failed to toggle hardcoded capability' });
   }
 });
 
@@ -81,7 +84,7 @@ router.get('/', async (req, res) => {
       FROM users
       ORDER BY username
     `);
-    
+
     res.json(result);
   } catch (error) {
     console.error('Error fetching users:', error);
@@ -92,18 +95,31 @@ router.get('/', async (req, res) => {
 // POST create new user
 router.post('/', async (req, res) => {
   try {
-    const { username, firstName, lastName, password, role, employeeId, canOverridePrices, isActive } = req.body;
-    
+    const {
+      username,
+      firstName,
+      lastName,
+      password,
+      role,
+      employeeId,
+      canOverridePrices,
+      isActive,
+    } = req.body;
+
     // Check if username already exists
-    const existingUser = await pool.query('SELECT id FROM users WHERE username = $1', [username]);
+    const existingUser = await pool.query(
+      'SELECT id FROM users WHERE username = $1',
+      [username]
+    );
     if (existingUser && existingUser.length > 0) {
       return res.status(400).json({ error: 'Username already exists' });
     }
-    
+
     // Hash the password
     const passwordHash = await bcrypt.hash(password, 10);
-    
-    const result = await pool.query(`
+
+    const result = await pool.query(
+      `
       INSERT INTO users (
         username, 
         first_name, 
@@ -127,8 +143,20 @@ router.post('/', async (req, res) => {
         employee_id as "employeeId",
         can_override_prices as "canOverridePrices",
         is_active as "isActive"
-    `, [username, firstName, lastName, password, passwordHash, role || 'EMPLOYEE', employeeId, canOverridePrices || false, isActive !== false]);
-    
+    `,
+      [
+        username,
+        firstName,
+        lastName,
+        password,
+        passwordHash,
+        role || 'EMPLOYEE',
+        employeeId,
+        canOverridePrices || false,
+        isActive !== false,
+      ]
+    );
+
     res.status(201).json(result[0]);
   } catch (error) {
     console.error('Error creating user:', error);
@@ -140,12 +168,21 @@ router.post('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { username, firstName, lastName, password, role, employeeId, canOverridePrices, isActive } = req.body;
-    
+    const {
+      username,
+      firstName,
+      lastName,
+      password,
+      role,
+      employeeId,
+      canOverridePrices,
+      isActive,
+    } = req.body;
+
     const updates: string[] = [];
     const values: any[] = [];
     let paramCount = 1;
-    
+
     if (username !== undefined) {
       updates.push(`username = $${paramCount++}`);
       values.push(username);
@@ -182,11 +219,12 @@ router.put('/:id', async (req, res) => {
       updates.push(`is_active = $${paramCount++}`);
       values.push(isActive);
     }
-    
+
     updates.push(`updated_at = NOW()`);
     values.push(id);
-    
-    const result = await pool.query(`
+
+    const result = await pool.query(
+      `
       UPDATE users 
       SET ${updates.join(', ')}
       WHERE id = $${paramCount}
@@ -199,12 +237,14 @@ router.put('/:id', async (req, res) => {
         employee_id as "employeeId",
         can_override_prices as "canOverridePrices",
         is_active as "isActive"
-    `, values);
-    
+    `,
+      values
+    );
+
     if (!result || result.length === 0) {
       return res.status(404).json({ error: 'User not found' });
     }
-    
+
     res.json(result[0]);
   } catch (error) {
     console.error('Error updating user:', error);
@@ -216,18 +256,21 @@ router.put('/:id', async (req, res) => {
 router.delete('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    
-    const result = await pool.query(`
+
+    const result = await pool.query(
+      `
       UPDATE users 
       SET is_active = false, updated_at = NOW()
       WHERE id = $1
       RETURNING id
-    `, [id]);
-    
+    `,
+      [id]
+    );
+
     if (!result || result.length === 0) {
       return res.status(404).json({ error: 'User not found' });
     }
-    
+
     res.json({ success: true, id });
   } catch (error) {
     console.error('Error deleting user:', error);

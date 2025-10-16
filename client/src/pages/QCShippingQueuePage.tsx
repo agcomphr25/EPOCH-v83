@@ -1,11 +1,31 @@
 import React, { useMemo, useState } from 'react';
 import { BarcodeScanner } from '@/components/BarcodeScanner';
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { TrendingUp, ArrowLeft, CheckCircle, ArrowRight, FileText, Calendar, Truck, DollarSign, Package, AlertTriangle, Download, X, ChevronLeft, ChevronRight } from 'lucide-react';
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import {
+  TrendingUp,
+  ArrowLeft,
+  CheckCircle,
+  ArrowRight,
+  FileText,
+  Calendar,
+  Truck,
+  DollarSign,
+  Package,
+  AlertTriangle,
+  Download,
+  X,
+  ChevronLeft,
+  ChevronRight,
+} from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import UPSLabelCreator from '@/components/UPSLabelCreator';
 import { apiRequest } from '@/lib/queryClient';
@@ -25,9 +45,13 @@ export default function QCShippingQueuePage() {
 
   // State for bulk printing modal
   const [showBulkPrintModal, setShowBulkPrintModal] = useState(false);
-  const [printQueue, setPrintQueue] = useState<{ orderId: string, type: 'sales' | 'qc' }[]>([]);
+  const [printQueue, setPrintQueue] = useState<
+    { orderId: string; type: 'sales' | 'qc' }[]
+  >([]);
   const [currentPrintIndex, setCurrentPrintIndex] = useState(0);
-  const [highlightedOrderId, setHighlightedOrderId] = useState<string | null>(null);
+  const [highlightedOrderId, setHighlightedOrderId] = useState<string | null>(
+    null
+  );
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
@@ -45,26 +69,33 @@ export default function QCShippingQueuePage() {
   // Fetch all kickbacks to determine which orders have kickbacks
   const { data: allKickbacks = [] } = useQuery({
     queryKey: ['/api/kickbacks'],
-    refetchInterval: 30000 // Refresh every 30 seconds
+    refetchInterval: 30000, // Refresh every 30 seconds
   });
 
   // Helper function to check if an order has kickbacks
   const hasKickbacks = (orderId: string) => {
-    return (allKickbacks as any[]).some((kickback: any) => kickback.orderId === orderId);
+    return (allKickbacks as any[]).some(
+      (kickback: any) => kickback.orderId === orderId
+    );
   };
 
   // Helper function to get the most severe kickback status for an order
   const getKickbackStatus = (orderId: string) => {
-    const orderKickbacks = (allKickbacks as any[]).filter((kickback: any) => kickback.orderId === orderId);
+    const orderKickbacks = (allKickbacks as any[]).filter(
+      (kickback: any) => kickback.orderId === orderId
+    );
     if (orderKickbacks.length === 0) return null;
 
     // Priority order: CRITICAL > HIGH > MEDIUM > LOW
     const priorities = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'];
-    const highestPriority = orderKickbacks.reduce((highest: string, kickback: any) => {
-      const currentIndex = priorities.indexOf(kickback.priority);
-      const highestIndex = priorities.indexOf(highest);
-      return currentIndex < highestIndex ? kickback.priority : highest;
-    }, 'LOW');
+    const highestPriority = orderKickbacks.reduce(
+      (highest: string, kickback: any) => {
+        const currentIndex = priorities.indexOf(kickback.priority);
+        const highestIndex = priorities.indexOf(highest);
+        return currentIndex < highestIndex ? kickback.priority : highest;
+      },
+      'LOW'
+    );
 
     return highestPriority;
   };
@@ -76,9 +107,11 @@ export default function QCShippingQueuePage() {
 
   // Auto-select order when scanned
   const handleOrderScanned = (orderId: string) => {
-    const orderExists = qcShippingOrders.some((order: any) => order.orderId === orderId);
+    const orderExists = qcShippingOrders.some(
+      (order: any) => order.orderId === orderId
+    );
     if (orderExists) {
-      setSelectedOrders(prev => new Set([...Array.from(prev), orderId]));
+      setSelectedOrders((prev) => new Set([...Array.from(prev), orderId]));
       setHighlightedOrderId(orderId);
       setTimeout(() => {
         const element = document.getElementById(`order-${orderId}`);
@@ -87,21 +120,23 @@ export default function QCShippingQueuePage() {
         }
       }, 100);
       toast({
-        title: "Order selected",
+        title: 'Order selected',
         description: `Order ${orderId} selected automatically`,
       });
     } else {
       toast({
-        title: "Order not found",
+        title: 'Order not found',
         description: `Order ${orderId} is not in the Shipping QC department`,
-        variant: "destructive",
+        variant: 'destructive',
       });
     }
   };
 
   // Handle order search selection
   const handleOrderSearchSelect = (order: any) => {
-    const orderExists = qcShippingOrders.some((o: any) => o.orderId === order.orderId);
+    const orderExists = qcShippingOrders.some(
+      (o: any) => o.orderId === order.orderId
+    );
     if (orderExists) {
       setHighlightedOrderId(order.orderId);
       // Auto-scroll to the highlighted order
@@ -112,14 +147,14 @@ export default function QCShippingQueuePage() {
         }
       }, 100);
       toast({
-        title: "Success",
+        title: 'Success',
         description: `Order ${order.orderId} highlighted in the list`,
       });
     } else {
       toast({
-        title: "Error",
+        title: 'Error',
         description: `Order ${order.orderId} is not in the Shipping QC department`,
-        variant: "destructive",
+        variant: 'destructive',
       });
     }
   };
@@ -127,18 +162,22 @@ export default function QCShippingQueuePage() {
   // Get orders in QC/Shipping department and categorize by due date
   const qcShippingOrders = useMemo(() => {
     const orders = allOrders as any[];
-    const filteredOrders = orders.filter((order: any) => 
-      order.currentDepartment === 'Shipping QC' || 
-      order.currentDepartment === 'QC' || 
-      (order.department === 'QC' && order.status === 'IN_PROGRESS') ||
-      (order.department === 'Shipping QC' && order.status === 'IN_PROGRESS')
+    const filteredOrders = orders.filter(
+      (order: any) =>
+        order.currentDepartment === 'Shipping QC' ||
+        order.currentDepartment === 'QC' ||
+        (order.department === 'QC' && order.status === 'IN_PROGRESS') ||
+        (order.department === 'Shipping QC' && order.status === 'IN_PROGRESS')
     );
-    
+
     // Separate orders with stock models from orders without stock models
-    const regularOrders = filteredOrders.filter((order: any) => 
-      order.modelId && order.modelId.trim() !== '' && order.modelId.toLowerCase() !== 'none'
+    const regularOrders = filteredOrders.filter(
+      (order: any) =>
+        order.modelId &&
+        order.modelId.trim() !== '' &&
+        order.modelId.toLowerCase() !== 'none'
     );
-    
+
     // Sort orders by due date
     return regularOrders.sort((a: any, b: any) => {
       const dateA = new Date(a.dueDate);
@@ -150,14 +189,18 @@ export default function QCShippingQueuePage() {
   // Get orders with no stock model - these are special handling orders
   const noStockModelOrders = useMemo(() => {
     const orders = allOrders as any[];
-    const filteredOrders = orders.filter((order: any) => 
-      (order.currentDepartment === 'Shipping QC' || 
-       order.currentDepartment === 'QC' || 
-       (order.department === 'QC' && order.status === 'IN_PROGRESS') ||
-       (order.department === 'Shipping QC' && order.status === 'IN_PROGRESS')) &&
-      (!order.modelId || order.modelId.trim() === '' || order.modelId.toLowerCase() === 'none')
+    const filteredOrders = orders.filter(
+      (order: any) =>
+        (order.currentDepartment === 'Shipping QC' ||
+          order.currentDepartment === 'QC' ||
+          (order.department === 'QC' && order.status === 'IN_PROGRESS') ||
+          (order.department === 'Shipping QC' &&
+            order.status === 'IN_PROGRESS')) &&
+        (!order.modelId ||
+          order.modelId.trim() === '' ||
+          order.modelId.toLowerCase() === 'none')
     );
-    
+
     // Sort by due date
     return filteredOrders.sort((a: any, b: any) => {
       const dateA = new Date(a.dueDate);
@@ -175,13 +218,13 @@ export default function QCShippingQueuePage() {
       dueTomorrow: [] as any[],
       dueThisWeek: [] as any[],
       dueNextWeek: [] as any[],
-      dueLater: [] as any[]
+      dueLater: [] as any[],
     };
 
-    qcShippingOrders.forEach(order => {
+    qcShippingOrders.forEach((order) => {
       const dueDate = new Date(order.dueDate);
       const daysDiff = differenceInDays(dueDate, today);
-      
+
       if (daysDiff < 0) {
         categories.overdue.push(order);
       } else if (daysDiff === 0) {
@@ -203,18 +246,18 @@ export default function QCShippingQueuePage() {
   // Count orders in previous department (Paint)
   const paintCount = useMemo(() => {
     const orders = allOrders as any[];
-    return orders.filter((order: any) => 
-      order.currentDepartment === 'Paint' || 
-      (order.department === 'Paint' && order.status === 'IN_PROGRESS')
+    return orders.filter(
+      (order: any) =>
+        order.currentDepartment === 'Paint' ||
+        (order.department === 'Paint' && order.status === 'IN_PROGRESS')
     ).length;
   }, [allOrders]);
 
   // Count completed orders (shipped)
   const completedCount = useMemo(() => {
     const orders = allOrders as any[];
-    return orders.filter((order: any) => 
-      order.status === 'COMPLETED' || 
-      order.status === 'SHIPPED'
+    return orders.filter(
+      (order: any) => order.status === 'COMPLETED' || order.status === 'SHIPPED'
     ).length;
   }, [allOrders]);
 
@@ -235,36 +278,59 @@ export default function QCShippingQueuePage() {
     const featureList = features as any[];
     const feature = featureList.find((f: any) => f.id === featureId);
     if (!feature) return optionValue;
-    
-    const option = feature.options?.find((opt: any) => opt.value === optionValue);
+
+    const option = feature.options?.find(
+      (opt: any) => opt.value === optionValue
+    );
     return option?.label || optionValue;
   };
 
   // Helper function to check for specific bottom metals
   const hasSpecificBottomMetal = (order: any) => {
     const bottomMetal = order.features?.bottom_metal;
-    const specificBottomMetals = ['AG-M5-SA', 'AG-M5-LA', 'AG-M5-LA-CIP', 'AG-BDL-SA', 'AG-BDL-LA'];
+    const specificBottomMetals = [
+      'AG-M5-SA',
+      'AG-M5-LA',
+      'AG-M5-LA-CIP',
+      'AG-BDL-SA',
+      'AG-BDL-LA',
+    ];
     return bottomMetal && specificBottomMetals.includes(bottomMetal);
   };
 
   // Helper function to check for paid other options (shirt, hat, touch-up paint)
   const getPaidOtherOptions = (order: any) => {
     const paidOptions: string[] = [];
-    
+
     // ONLY check the other_options array - this is where these items should be explicitly listed
-    if (order.features?.other_options && Array.isArray(order.features.other_options)) {
+    if (
+      order.features?.other_options &&
+      Array.isArray(order.features.other_options)
+    ) {
       order.features.other_options.forEach((option: string) => {
         const optionLower = option.toLowerCase();
-        
+
         // Very specific matching to avoid false positives
-        if (optionLower === 'shirt' || optionLower.includes('t-shirt') || optionLower.includes('tshirt')) {
+        if (
+          optionLower === 'shirt' ||
+          optionLower.includes('t-shirt') ||
+          optionLower.includes('tshirt')
+        ) {
           paidOptions.push('Shirt');
         }
-        if (optionLower === 'hat' || optionLower.includes('cap') || optionLower.includes('beanie')) {
+        if (
+          optionLower === 'hat' ||
+          optionLower.includes('cap') ||
+          optionLower.includes('beanie')
+        ) {
           paidOptions.push('Hat');
         }
         // Only match explicit touch-up paint, not just any paint mention
-        if ((optionLower.includes('touch-up') || optionLower.includes('touchup')) && optionLower.includes('paint')) {
+        if (
+          (optionLower.includes('touch-up') ||
+            optionLower.includes('touchup')) &&
+          optionLower.includes('paint')
+        ) {
           paidOptions.push('Touch-up Paint');
         }
       });
@@ -276,20 +342,26 @@ export default function QCShippingQueuePage() {
   // Helper function to format order features for tooltip
   const formatOrderFeatures = (order: any) => {
     if (!order.features) return 'No customizations';
-    
+
     const featureEntries = Object.entries(order.features);
     if (featureEntries.length === 0) return 'No customizations';
-    
-    return featureEntries.map(([key, value]) => {
-      const displayKey = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-      if (Array.isArray(value)) {
-        const displayValues = value.map(v => getFeatureDisplayName(key, v)).join(', ');
-        return `• ${displayKey}: ${displayValues}`;
-      } else {
-        const displayValue = getFeatureDisplayName(key, value as string);
-        return `• ${displayKey}: ${displayValue}`;
-      }
-    }).join('\n');
+
+    return featureEntries
+      .map(([key, value]) => {
+        const displayKey = key
+          .replace(/_/g, ' ')
+          .replace(/\b\w/g, (l) => l.toUpperCase());
+        if (Array.isArray(value)) {
+          const displayValues = value
+            .map((v) => getFeatureDisplayName(key, v))
+            .join(', ');
+          return `• ${displayKey}: ${displayValues}`;
+        } else {
+          const displayValue = getFeatureDisplayName(key, value as string);
+          return `• ${displayKey}: ${displayValue}`;
+        }
+      })
+      .join('\n');
   };
 
   // Handle checkbox selection
@@ -308,7 +380,9 @@ export default function QCShippingQueuePage() {
     if (selectedOrders.size === qcShippingOrders.length) {
       setSelectedOrders(new Set());
     } else {
-      setSelectedOrders(new Set(qcShippingOrders.map(order => order.orderId)));
+      setSelectedOrders(
+        new Set(qcShippingOrders.map((order) => order.orderId))
+      );
     }
   };
 
@@ -320,11 +394,11 @@ export default function QCShippingQueuePage() {
         const result = await apiRequest(`/api/orders/${orderId}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
+          body: JSON.stringify({
             currentDepartment: 'Shipping',
             department: 'Shipping',
-            status: 'IN_PROGRESS' 
-          })
+            status: 'IN_PROGRESS',
+          }),
         });
         results.push(result);
       }
@@ -338,7 +412,9 @@ export default function QCShippingQueuePage() {
       // Clear selection and invalidate cache
       setSelectedOrders(new Set());
       queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/orders/with-payment-status'],
+      });
     },
     onError: (error: any) => {
       console.error('Error progressing orders to shipping:', error);
@@ -347,7 +423,7 @@ export default function QCShippingQueuePage() {
         description: 'Failed to progress orders to shipping',
         variant: 'destructive',
       });
-    }
+    },
   });
 
   // Progress selected orders to shipping
@@ -362,15 +438,15 @@ export default function QCShippingQueuePage() {
     try {
       window.open(`/api/shipping-pdf/qc-checklist/${orderId}`, '_blank');
       toast({
-        title: "QC checklist opened",
-        description: `QC checklist for order ${orderId} opened in new tab for inspection`
+        title: 'QC checklist opened',
+        description: `QC checklist for order ${orderId} opened in new tab for inspection`,
       });
     } catch (error) {
       console.error('Error generating QC checklist:', error);
       toast({
-        title: "Error generating QC checklist",
-        description: "Failed to generate QC checklist PDF",
-        variant: "destructive"
+        title: 'Error generating QC checklist',
+        description: 'Failed to generate QC checklist PDF',
+        variant: 'destructive',
       });
     }
   };
@@ -378,7 +454,7 @@ export default function QCShippingQueuePage() {
   // Handle bulk QC checklist download for selected orders
   const handleBulkQCChecklistDownload = () => {
     if (selectedOrders.size === 0) return;
-    
+
     const orderIds = Array.from(selectedOrders);
     let successCount = 0;
     let errorCount = 0;
@@ -397,20 +473,23 @@ export default function QCShippingQueuePage() {
     });
 
     // Show toast notification after processing
-    setTimeout(() => {
-      if (errorCount === 0) {
-        toast({
-          title: "QC checklists opened",
-          description: `${successCount} QC checklists opened in new tabs for printing`
-        });
-      } else {
-        toast({
-          title: "Partial success",
-          description: `${successCount} checklists opened, ${errorCount} failed`,
-          variant: "destructive"
-        });
-      }
-    }, (orderIds.length * 100) + 500);
+    setTimeout(
+      () => {
+        if (errorCount === 0) {
+          toast({
+            title: 'QC checklists opened',
+            description: `${successCount} QC checklists opened in new tabs for printing`,
+          });
+        } else {
+          toast({
+            title: 'Partial success',
+            description: `${successCount} checklists opened, ${errorCount} failed`,
+            variant: 'destructive',
+          });
+        }
+      },
+      orderIds.length * 100 + 500
+    );
   };
 
   // Handle sales order PDF download
@@ -421,10 +500,13 @@ export default function QCShippingQueuePage() {
   // Handle bulk sales order download
   const handleBulkSalesOrderDownload = () => {
     if (selectedOrders.size === 0) return;
-    
+
     const orderIds = Array.from(selectedOrders);
-    const queue = orderIds.map(orderId => ({ orderId, type: 'sales' as const }));
-    
+    const queue = orderIds.map((orderId) => ({
+      orderId,
+      type: 'sales' as const,
+    }));
+
     setPrintQueue(queue);
     setCurrentPrintIndex(0);
     setShowBulkPrintModal(true);
@@ -433,10 +515,10 @@ export default function QCShippingQueuePage() {
   // Handle bulk QC checklist download with modal
   const handleBulkQCChecklistDownloadModal = () => {
     if (selectedOrders.size === 0) return;
-    
+
     const orderIds = Array.from(selectedOrders);
-    const queue = orderIds.map(orderId => ({ orderId, type: 'qc' as const }));
-    
+    const queue = orderIds.map((orderId) => ({ orderId, type: 'qc' as const }));
+
     setPrintQueue(queue);
     setCurrentPrintIndex(0);
     setShowBulkPrintModal(true);
@@ -445,12 +527,13 @@ export default function QCShippingQueuePage() {
   // Open current PDF in queue
   const openCurrentPDF = () => {
     if (currentPrintIndex >= printQueue.length) return;
-    
+
     const current = printQueue[currentPrintIndex];
-    const url = current.type === 'sales' 
-      ? `/api/shipping-pdf/sales-order/${current.orderId}`
-      : `/api/shipping-pdf/qc-checklist/${current.orderId}`;
-    
+    const url =
+      current.type === 'sales'
+        ? `/api/shipping-pdf/sales-order/${current.orderId}`
+        : `/api/shipping-pdf/qc-checklist/${current.orderId}`;
+
     window.open(url, '_blank');
   };
 
@@ -486,12 +569,16 @@ export default function QCShippingQueuePage() {
     setShowLabelViewer(true);
     queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
     toast({
-      title: "Shipping label created",
-      description: "Label has been generated successfully"
+      title: 'Shipping label created',
+      description: 'Label has been generated successfully',
     });
   };
 
-  const downloadLabel = (labelBase64: string, trackingNumber: string, orderId: string) => {
+  const downloadLabel = (
+    labelBase64: string,
+    trackingNumber: string,
+    orderId: string
+  ) => {
     const link = document.createElement('a');
     link.href = `data:image/gif;base64,${labelBase64}`;
     link.download = `UPS_Label_${orderId}_${trackingNumber}.gif`;
@@ -500,7 +587,13 @@ export default function QCShippingQueuePage() {
 
   // Mark order as shipped mutation
   const markShippedMutation = useMutation({
-    mutationFn: ({ orderId, trackingData }: { orderId: string, trackingData: any }) => 
+    mutationFn: ({
+      orderId,
+      trackingData,
+    }: {
+      orderId: string;
+      trackingData: any;
+    }) =>
       apiRequest(`/api/shipping/mark-shipped/${orderId}`, {
         method: 'POST',
         body: trackingData,
@@ -544,12 +637,16 @@ export default function QCShippingQueuePage() {
   };
 
   // Order card component with updated buttons - Sales Order + Shipping Label
-  const OrderCard = ({ order, borderColor, dueDateColor }: { 
-    order: any, 
-    borderColor: string, 
-    dueDateColor: string 
+  const OrderCard = ({
+    order,
+    borderColor,
+    dueDateColor,
+  }: {
+    order: any;
+    borderColor: string;
+    dueDateColor: string;
   }) => (
-    <Card 
+    <Card
       key={order.orderId}
       className={`border-l-4 ${borderColor} ${selectedOrders.has(order.orderId) ? 'ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-900/20' : ''}`}
     >
@@ -565,12 +662,16 @@ export default function QCShippingQueuePage() {
           </div>
           <Checkbox
             checked={selectedOrders.has(order.orderId)}
-            onCheckedChange={(checked) => handleOrderSelection(order.orderId, checked as boolean)}
+            onCheckedChange={(checked) =>
+              handleOrderSelection(order.orderId, checked as boolean)
+            }
           />
         </CardTitle>
       </CardHeader>
       <CardContent className="pt-2">
-        <p className="text-sm font-medium truncate">{order.customer || 'Unknown Customer'}</p>
+        <p className="text-sm font-medium truncate">
+          {order.customer || 'Unknown Customer'}
+        </p>
         <p className="text-xs text-gray-600 dark:text-gray-400 truncate">
           {getModelDisplayName(order.stockModelId || order.modelId)}
         </p>
@@ -579,28 +680,28 @@ export default function QCShippingQueuePage() {
             Due: {format(new Date(order.dueDate), 'MMM dd, yyyy')}
           </p>
         )}
-        
+
         {/* QC Checkboxes for specific items */}
         <div className="space-y-1 mt-2 mb-2">
           {/* Bottom Metal Checkbox */}
           {hasSpecificBottomMetal(order) && (
             <div className="flex items-center space-x-2">
               <Checkbox id={`bottom-metal-${order.orderId}`} />
-              <label 
-                htmlFor={`bottom-metal-${order.orderId}`} 
+              <label
+                htmlFor={`bottom-metal-${order.orderId}`}
                 className="text-xs font-medium text-blue-700 dark:text-blue-300"
               >
                 Bottom Metal ({order.features.bottom_metal})
               </label>
             </div>
           )}
-          
+
           {/* Paid Other Options Checkboxes */}
           {getPaidOtherOptions(order).map((option, index) => (
             <div key={index} className="flex items-center space-x-2">
               <Checkbox id={`paid-option-${order.orderId}-${index}`} />
-              <label 
-                htmlFor={`paid-option-${order.orderId}-${index}`} 
+              <label
+                htmlFor={`paid-option-${order.orderId}-${index}`}
                 className="text-xs font-medium text-green-700 dark:text-green-300"
               >
                 {option}
@@ -615,10 +716,13 @@ export default function QCShippingQueuePage() {
             <Badge
               variant="destructive"
               className={`cursor-pointer hover:opacity-80 transition-opacity text-xs ${
-                getKickbackStatus(order.orderId) === 'CRITICAL' ? 'bg-red-600 hover:bg-red-700' :
-                getKickbackStatus(order.orderId) === 'HIGH' ? 'bg-orange-600 hover:bg-orange-700' :
-                getKickbackStatus(order.orderId) === 'MEDIUM' ? 'bg-yellow-600 hover:bg-yellow-700' :
-                'bg-gray-600 hover:bg-gray-700'
+                getKickbackStatus(order.orderId) === 'CRITICAL'
+                  ? 'bg-red-600 hover:bg-red-700'
+                  : getKickbackStatus(order.orderId) === 'HIGH'
+                    ? 'bg-orange-600 hover:bg-orange-700'
+                    : getKickbackStatus(order.orderId) === 'MEDIUM'
+                      ? 'bg-yellow-600 hover:bg-yellow-700'
+                      : 'bg-gray-600 hover:bg-gray-700'
               }`}
               onClick={() => handleKickbackClick(order.orderId)}
             >
@@ -666,7 +770,7 @@ export default function QCShippingQueuePage() {
       <Card>
         <CardContent className="p-4">
           <div className="flex items-center gap-4">
-            <OrderSearchBox 
+            <OrderSearchBox
               orders={qcShippingOrders}
               placeholder="Search orders by Order ID or FishBowl Number..."
               onOrderSelect={handleOrderSearchSelect}
@@ -737,7 +841,9 @@ export default function QCShippingQueuePage() {
                   onClick={handleSelectAll}
                   className="text-xs"
                 >
-                  {selectedOrders.size === qcShippingOrders.length ? 'Deselect All' : 'Select All'}
+                  {selectedOrders.size === qcShippingOrders.length
+                    ? 'Deselect All'
+                    : 'Select All'}
                 </Button>
               )}
               <Badge variant="outline" className="ml-2">
@@ -758,14 +864,16 @@ export default function QCShippingQueuePage() {
                 <div>
                   <div className="flex items-center gap-2 mb-4">
                     <Calendar className="h-5 w-5 text-red-600" />
-                    <h3 className="text-lg font-semibold text-red-600">Overdue ({categorizedOrders.overdue.length})</h3>
+                    <h3 className="text-lg font-semibold text-red-600">
+                      Overdue ({categorizedOrders.overdue.length})
+                    </h3>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                     {categorizedOrders.overdue.map((order: any) => (
-                      <OrderCard 
-                        key={order.orderId} 
-                        order={order} 
-                        borderColor="border-l-red-500" 
+                      <OrderCard
+                        key={order.orderId}
+                        order={order}
+                        borderColor="border-l-red-500"
                         dueDateColor="text-red-600"
                       />
                     ))}
@@ -778,14 +886,16 @@ export default function QCShippingQueuePage() {
                 <div>
                   <div className="flex items-center gap-2 mb-4">
                     <Calendar className="h-5 w-5 text-orange-600" />
-                    <h3 className="text-lg font-semibold text-orange-600">Due Today ({categorizedOrders.dueToday.length})</h3>
+                    <h3 className="text-lg font-semibold text-orange-600">
+                      Due Today ({categorizedOrders.dueToday.length})
+                    </h3>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                     {categorizedOrders.dueToday.map((order: any) => (
-                      <OrderCard 
-                        key={order.orderId} 
-                        order={order} 
-                        borderColor="border-l-orange-500" 
+                      <OrderCard
+                        key={order.orderId}
+                        order={order}
+                        borderColor="border-l-orange-500"
                         dueDateColor="text-orange-600"
                       />
                     ))}
@@ -798,14 +908,16 @@ export default function QCShippingQueuePage() {
                 <div>
                   <div className="flex items-center gap-2 mb-4">
                     <Calendar className="h-5 w-5 text-yellow-600" />
-                    <h3 className="text-lg font-semibold text-yellow-600">Due Tomorrow ({categorizedOrders.dueTomorrow.length})</h3>
+                    <h3 className="text-lg font-semibold text-yellow-600">
+                      Due Tomorrow ({categorizedOrders.dueTomorrow.length})
+                    </h3>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                     {categorizedOrders.dueTomorrow.map((order: any) => (
-                      <OrderCard 
-                        key={order.orderId} 
-                        order={order} 
-                        borderColor="border-l-yellow-500" 
+                      <OrderCard
+                        key={order.orderId}
+                        order={order}
+                        borderColor="border-l-yellow-500"
                         dueDateColor="text-yellow-600"
                       />
                     ))}
@@ -818,14 +930,16 @@ export default function QCShippingQueuePage() {
                 <div>
                   <div className="flex items-center gap-2 mb-4">
                     <Calendar className="h-5 w-5 text-blue-600" />
-                    <h3 className="text-lg font-semibold text-blue-600">Due This Week ({categorizedOrders.dueThisWeek.length})</h3>
+                    <h3 className="text-lg font-semibold text-blue-600">
+                      Due This Week ({categorizedOrders.dueThisWeek.length})
+                    </h3>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                     {categorizedOrders.dueThisWeek.map((order: any) => (
-                      <OrderCard 
-                        key={order.orderId} 
-                        order={order} 
-                        borderColor="border-l-blue-500" 
+                      <OrderCard
+                        key={order.orderId}
+                        order={order}
+                        borderColor="border-l-blue-500"
                         dueDateColor="text-blue-600"
                       />
                     ))}
@@ -838,14 +952,16 @@ export default function QCShippingQueuePage() {
                 <div>
                   <div className="flex items-center gap-2 mb-4">
                     <Calendar className="h-5 w-5 text-green-600" />
-                    <h3 className="text-lg font-semibold text-green-600">Due Next Week ({categorizedOrders.dueNextWeek.length})</h3>
+                    <h3 className="text-lg font-semibold text-green-600">
+                      Due Next Week ({categorizedOrders.dueNextWeek.length})
+                    </h3>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                     {categorizedOrders.dueNextWeek.map((order: any) => (
-                      <OrderCard 
-                        key={order.orderId} 
-                        order={order} 
-                        borderColor="border-l-green-500" 
+                      <OrderCard
+                        key={order.orderId}
+                        order={order}
+                        borderColor="border-l-green-500"
                         dueDateColor="text-green-600"
                       />
                     ))}
@@ -858,14 +974,16 @@ export default function QCShippingQueuePage() {
                 <div>
                   <div className="flex items-center gap-2 mb-4">
                     <Calendar className="h-5 w-5 text-gray-600" />
-                    <h3 className="text-lg font-semibold text-gray-600">Due Later ({categorizedOrders.dueLater.length})</h3>
+                    <h3 className="text-lg font-semibold text-gray-600">
+                      Due Later ({categorizedOrders.dueLater.length})
+                    </h3>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                     {categorizedOrders.dueLater.map((order: any) => (
-                      <OrderCard 
-                        key={order.orderId} 
-                        order={order} 
-                        borderColor="border-l-gray-500" 
+                      <OrderCard
+                        key={order.orderId}
+                        order={order}
+                        borderColor="border-l-gray-500"
                         dueDateColor="text-gray-600"
                       />
                     ))}
@@ -884,9 +1002,14 @@ export default function QCShippingQueuePage() {
             <CardTitle className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Package className="h-6 w-6 text-purple-600" />
-                <span className="text-purple-700 dark:text-purple-300">Special Handling Orders (No Stock Model)</span>
+                <span className="text-purple-700 dark:text-purple-300">
+                  Special Handling Orders (No Stock Model)
+                </span>
               </div>
-              <Badge variant="outline" className="border-purple-300 text-purple-700 dark:text-purple-300">
+              <Badge
+                variant="outline"
+                className="border-purple-300 text-purple-700 dark:text-purple-300"
+              >
                 {noStockModelOrders.length} Orders
               </Badge>
             </CardTitle>
@@ -894,15 +1017,16 @@ export default function QCShippingQueuePage() {
           <CardContent>
             <div className="mb-4">
               <p className="text-sm text-purple-600 dark:text-purple-400">
-                These orders have no stock model selected and require special handling before shipping.
+                These orders have no stock model selected and require special
+                handling before shipping.
               </p>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {noStockModelOrders.map((order: any) => (
-                <OrderCard 
-                  key={order.orderId} 
-                  order={order} 
-                  borderColor="border-l-purple-500" 
+                <OrderCard
+                  key={order.orderId}
+                  order={order}
+                  borderColor="border-l-purple-500"
                   dueDateColor="text-purple-600"
                 />
               ))}
@@ -919,7 +1043,8 @@ export default function QCShippingQueuePage() {
               <div className="flex items-center gap-2">
                 <ArrowRight className="h-5 w-5 text-blue-600 dark:text-blue-400" />
                 <span className="font-medium text-blue-800 dark:text-blue-200">
-                  {selectedOrders.size} order{selectedOrders.size > 1 ? 's' : ''} selected for shipping
+                  {selectedOrders.size} order
+                  {selectedOrders.size > 1 ? 's' : ''} selected for shipping
                 </span>
               </div>
               <div className="flex items-center gap-2">
@@ -950,12 +1075,14 @@ export default function QCShippingQueuePage() {
                 </Button>
                 <Button
                   onClick={progressToShipping}
-                  disabled={selectedOrders.size === 0 || progressOrderMutation.isPending}
+                  disabled={
+                    selectedOrders.size === 0 || progressOrderMutation.isPending
+                  }
                   className="bg-blue-600 hover:bg-blue-700 text-white"
                 >
                   <ArrowRight className="h-4 w-4 mr-2" />
-                  {progressOrderMutation.isPending 
-                    ? 'Progressing...' 
+                  {progressOrderMutation.isPending
+                    ? 'Progressing...'
                     : `Progress to Shipping (${selectedOrders.size})`}
                 </Button>
               </div>
@@ -986,20 +1113,32 @@ export default function QCShippingQueuePage() {
             </DialogHeader>
             <div className="space-y-4">
               <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg">
-                <p className="text-sm"><strong>Tracking Number:</strong> {labelData.trackingNumber}</p>
-                <p className="text-sm"><strong>Service:</strong> {labelData.serviceDescription}</p>
-                <p className="text-sm"><strong>Cost:</strong> ${labelData.totalCharges}</p>
+                <p className="text-sm">
+                  <strong>Tracking Number:</strong> {labelData.trackingNumber}
+                </p>
+                <p className="text-sm">
+                  <strong>Service:</strong> {labelData.serviceDescription}
+                </p>
+                <p className="text-sm">
+                  <strong>Cost:</strong> ${labelData.totalCharges}
+                </p>
               </div>
               {labelData.labelImageFormat && (
                 <div className="text-center">
                   <Button
-                    onClick={() => downloadLabel(labelData.graphicImage, labelData.trackingNumber, selectedOrderId!)}
+                    onClick={() =>
+                      downloadLabel(
+                        labelData.graphicImage,
+                        labelData.trackingNumber,
+                        selectedOrderId!
+                      )
+                    }
                     className="mb-4"
                   >
                     Download Label
                   </Button>
                   <div className="border rounded-lg p-4 bg-white">
-                    <img 
+                    <img
                       src={`data:image/gif;base64,${labelData.graphicImage}`}
                       alt="Shipping Label"
                       className="mx-auto max-w-full h-auto"
@@ -1025,7 +1164,9 @@ export default function QCShippingQueuePage() {
             <div className="space-y-4">
               <div className="text-center">
                 <div className="text-lg font-semibold mb-2">
-                  {printQueue[currentPrintIndex]?.type === 'sales' ? 'Sales Order' : 'QC Checklist'}
+                  {printQueue[currentPrintIndex]?.type === 'sales'
+                    ? 'Sales Order'
+                    : 'QC Checklist'}
                 </div>
                 <div className="text-2xl font-bold text-blue-600">
                   {printQueue[currentPrintIndex]?.orderId}
@@ -1045,7 +1186,7 @@ export default function QCShippingQueuePage() {
                   <ChevronLeft className="h-4 w-4" />
                   Previous
                 </Button>
-                
+
                 <Button
                   onClick={openCurrentPDF}
                   className="bg-blue-600 hover:bg-blue-700 text-white"
@@ -1053,7 +1194,7 @@ export default function QCShippingQueuePage() {
                   <Download className="h-4 w-4 mr-2" />
                   Open PDF
                 </Button>
-                
+
                 <Button
                   variant="outline"
                   size="sm"
@@ -1080,7 +1221,6 @@ export default function QCShippingQueuePage() {
           </DialogContent>
         </Dialog>
       )}
-
     </div>
   );
 }

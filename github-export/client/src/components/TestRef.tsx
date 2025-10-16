@@ -2,7 +2,7 @@ import { useRef } from 'react';
 
 export function TestRef() {
   const testRef = useRef<HTMLDivElement>(null);
-  
+
   return (
     <div ref={testRef}>
       <p>Test component with useRef</p>

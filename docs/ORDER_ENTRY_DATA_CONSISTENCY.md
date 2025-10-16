@@ -10,6 +10,7 @@ The Order Entry component has **two different data storage patterns** that cause
 ## Root Cause
 
 Form controls store data in the `features` object, but some display/calculation logic reads from separate state variables, causing:
+
 - Order Summary shows "Not selected" even when items are chosen
 - Price calculations miss selected options
 - Data doesn't persist correctly during save/load
@@ -19,6 +20,7 @@ Form controls store data in the `features` object, but some display/calculation 
 **ALWAYS use the `features` object for ALL feature-related data**
 
 ### ✅ CORRECT - Read from features object:
+
 ```javascript
 // Order Summary display
 {features.bottom_metal ? (() => {
@@ -39,18 +41,23 @@ if (features.bottom_metal) {
 }
 
 // Form controls
-<Select 
-  value={features.bottom_metal || ''} 
+<Select
+  value={features.bottom_metal || ''}
   onValueChange={(value) => setFeatures(prev => ({ ...prev, bottom_metal: value }))}
 >
 ```
 
 ### ❌ WRONG - Don't use separate state variables:
+
 ```javascript
 // Don't read from separate state
-{bottomMetal ? (() => {
-  // This will be empty even when features.bottom_metal has data
-})() : 'Not selected'}
+{
+  bottomMetal
+    ? (() => {
+        // This will be empty even when features.bottom_metal has data
+      })()
+    : 'Not selected';
+}
 
 // Don't calculate prices from separate state
 if (bottomMetal) {
@@ -77,7 +84,7 @@ If you find inconsistencies, search for these patterns and replace:
 grep -n "bottomMetal.*?" client/src/components/OrderEntry.tsx
 grep -n "otherOptions.*?" client/src/components/OrderEntry.tsx
 
-# Find price calculation inconsistencies  
+# Find price calculation inconsistencies
 grep -n "if (bottomMetal)" client/src/components/OrderEntry.tsx
 grep -n "if (otherOptions" client/src/components/OrderEntry.tsx
 ```

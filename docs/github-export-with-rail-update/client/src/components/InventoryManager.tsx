@@ -5,8 +5,20 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Plus, Edit, Trash2, AlertTriangle, Package } from 'lucide-react';
@@ -32,7 +44,7 @@ const categories = [
   'Safety Equipment',
   'Raw Materials',
   'Finished Goods',
-  'Other'
+  'Other',
 ];
 
 interface InventoryFormData {
@@ -50,7 +62,7 @@ export default function InventoryManager() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
-  
+
   const [formData, setFormData] = useState<InventoryFormData>({
     code: '',
     name: '',
@@ -69,10 +81,11 @@ export default function InventoryManager() {
 
   // Create mutation
   const createMutation = useMutation({
-    mutationFn: (data: any) => apiRequest('/api/inventory', {
-      method: 'POST',
-      body: data
-    }),
+    mutationFn: (data: any) =>
+      apiRequest('/api/inventory', {
+        method: 'POST',
+        body: data,
+      }),
     onSuccess: () => {
       toast.success('Inventory item created successfully');
       setIsCreateOpen(false);
@@ -84,10 +97,11 @@ export default function InventoryManager() {
 
   // Update mutation
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: number; data: any }) => apiRequest(`/api/inventory/${id}`, {
-      method: 'PUT',
-      body: data
-    }),
+    mutationFn: ({ id, data }: { id: number; data: any }) =>
+      apiRequest(`/api/inventory/${id}`, {
+        method: 'PUT',
+        body: data,
+      }),
     onSuccess: () => {
       toast.success('Inventory item updated successfully');
       setIsEditOpen(false);
@@ -100,9 +114,10 @@ export default function InventoryManager() {
 
   // Delete mutation
   const deleteMutation = useMutation({
-    mutationFn: (id: number) => apiRequest(`/api/inventory/${id}`, {
-      method: 'DELETE'
-    }),
+    mutationFn: (id: number) =>
+      apiRequest(`/api/inventory/${id}`, {
+        method: 'DELETE',
+      }),
     onSuccess: () => {
       toast.success('Inventory item deleted successfully');
       queryClient.invalidateQueries({ queryKey: ['/api/inventory'] });
@@ -122,23 +137,25 @@ export default function InventoryManager() {
     });
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  const handleChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+  ) => {
     const { name, value } = e.target;
     // For number inputs, allow empty string and any valid number input
     if (e.target.type === 'number') {
-      setFormData(prev => ({ ...prev, [name]: value }));
+      setFormData((prev) => ({ ...prev, [name]: value }));
     } else {
-      setFormData(prev => ({ ...prev, [name]: value }));
+      setFormData((prev) => ({ ...prev, [name]: value }));
     }
   };
 
   const handleSelectChange = (name: string, value: string) => {
-    setFormData(prev => ({ ...prev, [name]: value }));
+    setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!formData.code || !formData.name || !formData.category) {
       toast.error('Please fill in all required fields');
       return;
@@ -176,7 +193,9 @@ export default function InventoryManager() {
   };
 
   const handleDelete = (id: number) => {
-    if (window.confirm('Are you sure you want to delete this inventory item?')) {
+    if (
+      window.confirm('Are you sure you want to delete this inventory item?')
+    ) {
       deleteMutation.mutate(id);
     }
   };
@@ -184,7 +203,8 @@ export default function InventoryManager() {
   const getStockStatus = (item: InventoryItem) => {
     const available = item.onHand - item.committed;
     if (available <= 0) return { status: 'Out of Stock', color: 'destructive' };
-    if (available <= item.reorderPoint) return { status: 'Low Stock', color: 'warning' };
+    if (available <= item.reorderPoint)
+      return { status: 'Low Stock', color: 'warning' };
     return { status: 'In Stock', color: 'success' };
   };
 
@@ -229,8 +249,8 @@ export default function InventoryManager() {
 
       <div>
         <Label htmlFor="category">Category *</Label>
-        <Select 
-          value={formData.category} 
+        <Select
+          value={formData.category}
           onValueChange={(value) => handleSelectChange('category', value)}
         >
           <SelectTrigger>
@@ -286,9 +306,9 @@ export default function InventoryManager() {
       </div>
 
       <div className="flex justify-end space-x-2">
-        <Button 
-          type="button" 
-          variant="outline" 
+        <Button
+          type="button"
+          variant="outline"
           onClick={() => {
             if (editingItem) {
               setIsEditOpen(false);
@@ -301,8 +321,8 @@ export default function InventoryManager() {
         >
           Cancel
         </Button>
-        <Button 
-          type="submit" 
+        <Button
+          type="submit"
           disabled={createMutation.isPending || updateMutation.isPending}
         >
           {editingItem ? 'Update' : 'Create'} Item
@@ -315,12 +335,15 @@ export default function InventoryManager() {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold">Inventory Management</h2>
-        <Dialog open={isCreateOpen} onOpenChange={(open) => {
-          setIsCreateOpen(open);
-          if (open) {
-            resetForm();
-          }
-        }}>
+        <Dialog
+          open={isCreateOpen}
+          onOpenChange={(open) => {
+            setIsCreateOpen(open);
+            if (open) {
+              resetForm();
+            }
+          }}
+        >
           <DialogTrigger asChild>
             <Button>
               <Plus className="h-4 w-4 mr-2" />
@@ -351,38 +374,76 @@ export default function InventoryManager() {
               <table className="w-full border-collapse border border-gray-200">
                 <thead>
                   <tr className="bg-gray-50">
-                    <th className="border border-gray-200 px-4 py-2 text-left">Code</th>
-                    <th className="border border-gray-200 px-4 py-2 text-left">Name</th>
-                    <th className="border border-gray-200 px-4 py-2 text-left">Category</th>
-                    <th className="border border-gray-200 px-4 py-2 text-left">On Hand</th>
-                    <th className="border border-gray-200 px-4 py-2 text-left">Committed</th>
-                    <th className="border border-gray-200 px-4 py-2 text-left">Available</th>
-                    <th className="border border-gray-200 px-4 py-2 text-left">Status</th>
-                    <th className="border border-gray-200 px-4 py-2 text-left">Actions</th>
+                    <th className="border border-gray-200 px-4 py-2 text-left">
+                      Code
+                    </th>
+                    <th className="border border-gray-200 px-4 py-2 text-left">
+                      Name
+                    </th>
+                    <th className="border border-gray-200 px-4 py-2 text-left">
+                      Category
+                    </th>
+                    <th className="border border-gray-200 px-4 py-2 text-left">
+                      On Hand
+                    </th>
+                    <th className="border border-gray-200 px-4 py-2 text-left">
+                      Committed
+                    </th>
+                    <th className="border border-gray-200 px-4 py-2 text-left">
+                      Available
+                    </th>
+                    <th className="border border-gray-200 px-4 py-2 text-left">
+                      Status
+                    </th>
+                    <th className="border border-gray-200 px-4 py-2 text-left">
+                      Actions
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
                   {items.map((item) => {
                     const available = item.onHand - item.committed;
                     const stockStatus = getStockStatus(item);
-                    
+
                     return (
                       <tr key={item.id} className="hover:bg-gray-50">
-                        <td className="border border-gray-200 px-4 py-2 font-medium">{item.code}</td>
-                        <td className="border border-gray-200 px-4 py-2">{item.name}</td>
-                        <td className="border border-gray-200 px-4 py-2">{item.category}</td>
-                        <td className="border border-gray-200 px-4 py-2">{item.onHand}</td>
-                        <td className="border border-gray-200 px-4 py-2">{item.committed}</td>
-                        <td className="border border-gray-200 px-4 py-2">{available}</td>
+                        <td className="border border-gray-200 px-4 py-2 font-medium">
+                          {item.code}
+                        </td>
                         <td className="border border-gray-200 px-4 py-2">
-                          <Badge 
-                            variant={stockStatus.color as 'default' | 'destructive' | 'secondary'}
+                          {item.name}
+                        </td>
+                        <td className="border border-gray-200 px-4 py-2">
+                          {item.category}
+                        </td>
+                        <td className="border border-gray-200 px-4 py-2">
+                          {item.onHand}
+                        </td>
+                        <td className="border border-gray-200 px-4 py-2">
+                          {item.committed}
+                        </td>
+                        <td className="border border-gray-200 px-4 py-2">
+                          {available}
+                        </td>
+                        <td className="border border-gray-200 px-4 py-2">
+                          <Badge
+                            variant={
+                              stockStatus.color as
+                                | 'default'
+                                | 'destructive'
+                                | 'secondary'
+                            }
                             className={
-                              stockStatus.color === 'warning' ? 'bg-yellow-100 text-yellow-800' :
-                              stockStatus.color === 'success' ? 'bg-green-100 text-green-800' : ''
+                              stockStatus.color === 'warning'
+                                ? 'bg-yellow-100 text-yellow-800'
+                                : stockStatus.color === 'success'
+                                  ? 'bg-green-100 text-green-800'
+                                  : ''
                             }
                           >
-                            {stockStatus.status === 'Low Stock' && <AlertTriangle className="h-3 w-3 mr-1" />}
+                            {stockStatus.status === 'Low Stock' && (
+                              <AlertTriangle className="h-3 w-3 mr-1" />
+                            )}
                             {stockStatus.status}
                           </Badge>
                         </td>
@@ -416,13 +477,16 @@ export default function InventoryManager() {
       </Card>
 
       {/* Edit Dialog */}
-      <Dialog open={isEditOpen} onOpenChange={(open) => {
-        setIsEditOpen(open);
-        if (!open) {
-          setEditingItem(null);
-          resetForm();
-        }
-      }}>
+      <Dialog
+        open={isEditOpen}
+        onOpenChange={(open) => {
+          setIsEditOpen(open);
+          if (!open) {
+            setEditingItem(null);
+            resetForm();
+          }
+        }}
+      >
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Edit Inventory Item</DialogTitle>

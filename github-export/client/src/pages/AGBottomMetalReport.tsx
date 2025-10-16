@@ -1,7 +1,14 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Download, FileText, Filter } from 'lucide-react';
@@ -30,21 +37,25 @@ interface Order {
 export default function AGBottomMetalReport() {
   const [showExportOptions, setShowExportOptions] = useState(false);
 
-  const { data: orders = [], isLoading, error } = useQuery<Order[]>({
+  const {
+    data: orders = [],
+    isLoading,
+    error,
+  } = useQuery<Order[]>({
     queryKey: ['/api/orders/drafts'],
   });
 
   // Filter orders with bottom metal that begins with "AG"
-  const filteredOrders = orders.filter(order => {
+  const filteredOrders = orders.filter((order) => {
     if (!order.features || typeof order.features !== 'object') {
       return false;
     }
-    
+
     const bottomMetal = order.features.bottom_metal;
     if (!bottomMetal || typeof bottomMetal !== 'string') {
       return false;
     }
-    
+
     return bottomMetal.toLowerCase().startsWith('ag');
   });
 
@@ -66,7 +77,7 @@ export default function AGBottomMetalReport() {
   const formatBottomMetal = (bottomMetal: string) => {
     return bottomMetal
       .split('_')
-      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
       .join(' ');
   };
 
@@ -86,7 +97,7 @@ export default function AGBottomMetalReport() {
   const exportToCSV = () => {
     const headers = [
       'Order ID',
-      'Order Date', 
+      'Order Date',
       'Due Date',
       'Customer ID',
       'Customer PO',
@@ -95,10 +106,10 @@ export default function AGBottomMetalReport() {
       'Handedness',
       'Bottom Metal',
       'Status',
-      'Shipping'
+      'Shipping',
     ];
 
-    const csvData = filteredOrders.map(order => [
+    const csvData = filteredOrders.map((order) => [
       order.order_id,
       formatDate(order.order_date),
       formatDate(order.due_date),
@@ -109,19 +120,22 @@ export default function AGBottomMetalReport() {
       order.handedness || 'N/A',
       formatBottomMetal(order.features.bottom_metal),
       order.status,
-      `$${order.shipping?.toFixed(2) || '0.00'}`
+      `$${order.shipping?.toFixed(2) || '0.00'}`,
     ]);
 
     const csvContent = [
       headers.join(','),
-      ...csvData.map(row => row.map(cell => `"${cell}"`).join(','))
+      ...csvData.map((row) => row.map((cell) => `"${cell}"`).join(',')),
     ].join('\n');
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
     link.setAttribute('href', url);
-    link.setAttribute('download', `ag-bottom-metal-report-${format(new Date(), 'yyyy-MM-dd')}.csv`);
+    link.setAttribute(
+      'download',
+      `ag-bottom-metal-report-${format(new Date(), 'yyyy-MM-dd')}.csv`
+    );
     link.style.visibility = 'hidden';
     document.body.appendChild(link);
     link.click();
@@ -210,7 +224,8 @@ export default function AGBottomMetalReport() {
         <CardContent>
           {filteredOrders.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
-              No orders found with bottom metal specifications beginning with "AG"
+              No orders found with bottom metal specifications beginning with
+              "AG"
             </div>
           ) : (
             <div className="overflow-auto">
@@ -234,12 +249,8 @@ export default function AGBottomMetalReport() {
                       <TableCell className="font-medium">
                         {order.order_id}
                       </TableCell>
-                      <TableCell>
-                        {formatDate(order.order_date)}
-                      </TableCell>
-                      <TableCell>
-                        {formatDate(order.due_date)}
-                      </TableCell>
+                      <TableCell>{formatDate(order.order_date)}</TableCell>
+                      <TableCell>{formatDate(order.due_date)}</TableCell>
                       <TableCell>{order.customer_id || 'N/A'}</TableCell>
                       <TableCell>{order.customer_po || 'N/A'}</TableCell>
                       <TableCell>{order.model_id || 'N/A'}</TableCell>
@@ -253,7 +264,9 @@ export default function AGBottomMetalReport() {
                           {order.status}
                         </Badge>
                       </TableCell>
-                      <TableCell>${order.shipping?.toFixed(2) || '0.00'}</TableCell>
+                      <TableCell>
+                        ${order.shipping?.toFixed(2) || '0.00'}
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -268,13 +281,16 @@ export default function AGBottomMetalReport() {
           <CardContent className="pt-4">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
               <div>
-                <span className="font-medium">Total Orders:</span> {filteredOrders.length}
+                <span className="font-medium">Total Orders:</span>{' '}
+                {filteredOrders.length}
               </div>
               <div>
-                <span className="font-medium">Draft Orders:</span> {filteredOrders.filter(o => o.status === 'DRAFT').length}
+                <span className="font-medium">Draft Orders:</span>{' '}
+                {filteredOrders.filter((o) => o.status === 'DRAFT').length}
               </div>
               <div>
-                <span className="font-medium">Finalized Orders:</span> {filteredOrders.filter(o => o.status === 'FINALIZED').length}
+                <span className="font-medium">Finalized Orders:</span>{' '}
+                {filteredOrders.filter((o) => o.status === 'FINALIZED').length}
               </div>
             </div>
           </CardContent>

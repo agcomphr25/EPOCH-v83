@@ -10,20 +10,20 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
   // Admin users with full navigation access
   glennj: {
     routes: [],
-    fullAccess: true
+    fullAccess: true,
   },
   tasham: {
     routes: [],
-    fullAccess: true
+    fullAccess: true,
   },
-  
+
   staciw: {
     routes: [],
-    fullAccess: true
+    fullAccess: true,
   },
-  
+
   // Regular users with limited access based on their dashboard cards
-  
+
   agrace: {
     routes: [
       '/order-entry',
@@ -34,10 +34,10 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
       '/inventory/dashboard',
       '/inventory/manager',
       '/customers',
-      '/customer-management'
-    ]
+      '/customer-management',
+    ],
   },
-  
+
   faleeshah: {
     routes: [
       '/department-queue/finish-qc',
@@ -46,10 +46,10 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
       '/department-queue/shipping',
       '/orders-list',
       '/all-orders',
-      '/customer-management'
-    ]
+      '/customer-management',
+    ],
   },
-  
+
   angiet: {
     routes: [
       '/order-entry',
@@ -57,10 +57,10 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
       '/orders',
       '/production-queue',
       '/layup-scheduler',
-      '/customer-management'
-    ]
+      '/customer-management',
+    ],
   },
-  
+
   blaket: {
     routes: [
       '/layup-scheduler',
@@ -68,19 +68,19 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
       '/inventory/dashboard',
       '/inventory/manager',
       '/orders-list',
-      '/orders'
-    ]
+      '/orders',
+    ],
   },
-  
+
   bradw: {
     routes: [
       '/department-queue/gunsmith',
       '/orders-list',
       '/orders',
-      '/employee-portal'
-    ]
+      '/employee-portal',
+    ],
   },
-  
+
   darleneb: {
     routes: [
       '/order-entry',
@@ -88,93 +88,88 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
       '/orders',
       '/draft-orders',
       '/customers',
-      '/customer-management'
-    ]
+      '/customer-management',
+    ],
   },
-  
+
   halls: {
     routes: [
       '/production-queue',
       '/layup-scheduler',
       '/orders-list',
-      '/orders'
-    ]
+      '/orders',
+    ],
   },
-  
+
   hunta: {
     routes: [
       '/production-queue',
       '/layup-scheduler',
       '/orders-list',
-      '/orders'
-    ]
+      '/orders',
+    ],
   },
-  
+
   jens: {
     routes: [
       '/department-queue/finish-qc',
       '/orders-list',
       '/orders',
       '/employee-portal',
-      '/barcode-scanner'
-    ]
+      '/barcode-scanner',
+    ],
   },
-  
+
   joeyb: {
     routes: [
       '/department-queue/cnc',
       '/department-queue/gunsmith',
       '/orders-list',
-      '/orders'
-    ]
+      '/orders',
+    ],
   },
-  
+
   johnl: {
     routes: [
       '/department-queue/cnc',
       '/orders-list',
       '/orders',
-      '/employee-portal'
-    ]
+      '/employee-portal',
+    ],
   },
-  
+
   lauriet: {
-    routes: [
-      '/order-entry',
-      '/orders-list',
-      '/orders',
-      '/customer-management'
-    ]
+    routes: ['/order-entry', '/orders-list', '/orders', '/customer-management'],
   },
-  
+
   tandyd: {
     routes: [
       '/production-queue',
       '/layup-scheduler',
       '/orders-list',
-      '/orders'
-    ]
+      '/orders',
+    ],
   },
-  
+
   tandym: {
     routes: [
       '/production-queue',
       '/layup-scheduler',
       '/orders-list',
       '/orders',
-      '/inventory/dashboard'
-    ]
+      '/inventory/dashboard',
+    ],
   },
-  
+
   tims: {
     routes: [
       '/department-queue/cnc',
       '/department-queue/finish-qc',
       '/orders-list',
       '/all-orders',
-      '/maintenance'
-    ]
-  }
+      '/maintenance',
+    ],
+  },
 };
 
 /**
@@ -182,15 +177,15 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
  */
 export function hasRouteAccess(username: string, route: string): boolean {
   const permissions = USER_PERMISSIONS[username.toLowerCase()];
-  
+
   if (!permissions) {
     return false; // No permissions defined = no access
   }
-  
+
   if (permissions.fullAccess) {
     return true; // Full access users can access everything
   }
-  
+
   return permissions.routes.includes(route);
 }
 
@@ -199,15 +194,15 @@ export function hasRouteAccess(username: string, route: string): boolean {
  */
 export function getAllowedRoutes(username: string): string[] {
   const permissions = USER_PERMISSIONS[username.toLowerCase()];
-  
+
   if (!permissions) {
     return [];
   }
-  
+
   if (permissions.fullAccess) {
     return []; // Empty array indicates full access
   }
-  
+
   return permissions.routes;
 }
 

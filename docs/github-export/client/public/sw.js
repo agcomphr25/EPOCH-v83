@@ -5,31 +5,29 @@ const urlsToCache = [
   '/static/css/main.css',
   '/manifest.json',
   '/icons/icon-192.svg',
-  '/icons/icon-512.svg'
+  '/icons/icon-512.svg',
 ];
 
 // Install event - cache resources
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then((cache) => {
-        console.log('Opened cache');
-        return cache.addAll(urlsToCache);
-      })
+    caches.open(CACHE_NAME).then((cache) => {
+      console.log('Opened cache');
+      return cache.addAll(urlsToCache);
+    })
   );
 });
 
 // Fetch event - serve from cache, fallback to network
 self.addEventListener('fetch', (event) => {
   event.respondWith(
-    caches.match(event.request)
-      .then((response) => {
-        // Cache hit - return response
-        if (response) {
-          return response;
-        }
-        return fetch(event.request);
-      })
+    caches.match(event.request).then((response) => {
+      // Cache hit - return response
+      if (response) {
+        return response;
+      }
+      return fetch(event.request);
+    })
   );
 });
 

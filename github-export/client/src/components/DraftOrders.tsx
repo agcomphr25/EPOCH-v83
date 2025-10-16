@@ -31,27 +31,34 @@ export default function DraftOrders() {
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
 
-  const { data: drafts = [], isLoading, error } = useQuery({
+  const {
+    data: drafts = [],
+    isLoading,
+    error,
+  } = useQuery({
     queryKey: ['/api/orders/drafts', 'excludeFinalized'],
     queryFn: () => apiRequest('/api/orders/drafts?excludeFinalized=true'),
   });
 
   const deleteDraftMutation = useMutation({
-    mutationFn: (orderId: string) => apiRequest(`/api/orders/draft/${orderId}`, {
-      method: 'DELETE',
-    }),
+    mutationFn: (orderId: string) =>
+      apiRequest(`/api/orders/draft/${orderId}`, {
+        method: 'DELETE',
+      }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/orders/drafts', 'excludeFinalized'] });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/orders/drafts', 'excludeFinalized'],
+      });
       toast({
-        title: "Draft Deleted",
-        description: "Draft order has been deleted successfully",
+        title: 'Draft Deleted',
+        description: 'Draft order has been deleted successfully',
       });
     },
     onError: () => {
       toast({
-        title: "Error",
-        description: "Failed to delete draft order",
-        variant: "destructive",
+        title: 'Error',
+        description: 'Failed to delete draft order',
+        variant: 'destructive',
       });
     },
   });
@@ -72,8 +79,8 @@ export default function DraftOrders() {
 
   const getFeatureCount = (features: Record<string, any> | null) => {
     if (!features) return 0;
-    return Object.values(features).filter(value => 
-      value !== null && value !== undefined && value !== ''
+    return Object.values(features).filter(
+      (value) => value !== null && value !== undefined && value !== ''
     ).length;
   };
 
@@ -112,7 +119,9 @@ export default function DraftOrders() {
           <CardContent className="py-12">
             <div className="text-center">
               <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No draft orders found</h3>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">
+                No draft orders found
+              </h3>
               <p className="text-gray-500 mb-4">
                 Create a new order and save it as a draft to see it here.
               </p>
@@ -133,8 +142,8 @@ export default function DraftOrders() {
                     <Badge variant="secondary">{draft.status}</Badge>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Button 
-                      variant="outline" 
+                    <Button
+                      variant="outline"
                       size="sm"
                       onClick={() => {
                         setLocation(`/order-entry?draft=${draft.orderId}`);
@@ -167,19 +176,27 @@ export default function DraftOrders() {
                   </div>
                   <div>
                     <p className="text-sm text-gray-500">Customer</p>
-                    <p className="font-medium">{draft.customerId || 'Not specified'}</p>
+                    <p className="font-medium">
+                      {draft.customerId || 'Not specified'}
+                    </p>
                   </div>
                   <div>
                     <p className="text-sm text-gray-500">Stock Model</p>
-                    <p className="font-medium">{draft.modelId || 'Not selected'}</p>
+                    <p className="font-medium">
+                      {draft.modelId || 'Not selected'}
+                    </p>
                   </div>
                   <div>
                     <p className="text-sm text-gray-500">Handedness</p>
-                    <p className="font-medium">{draft.handedness || 'Not specified'}</p>
+                    <p className="font-medium">
+                      {draft.handedness || 'Not specified'}
+                    </p>
                   </div>
                   <div>
                     <p className="text-sm text-gray-500">Features</p>
-                    <p className="font-medium">{getFeatureCount(draft.features)} configured</p>
+                    <p className="font-medium">
+                      {getFeatureCount(draft.features)} configured
+                    </p>
                   </div>
                   <div>
                     <p className="text-sm text-gray-500">Shipping</p>
@@ -190,7 +207,7 @@ export default function DraftOrders() {
                     <p className="font-medium">{formatDate(draft.updatedAt)}</p>
                   </div>
                 </div>
-                
+
                 {draft.customerPO && (
                   <div className="mt-4 pt-4 border-t">
                     <p className="text-sm text-gray-500">Customer PO</p>

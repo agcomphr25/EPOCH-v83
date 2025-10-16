@@ -18,9 +18,31 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ArrowRight, AlertTriangle, Package2, Edit, Search, X, Mail, MessageSquare } from 'lucide-react';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import {
+  ArrowRight,
+  AlertTriangle,
+  Package2,
+  Edit,
+  Search,
+  X,
+  Mail,
+  MessageSquare,
+} from 'lucide-react';
 import { apiRequest } from '@/lib/queryClient';
 import ScrapOrderModal from './ScrapOrderModal';
 import OrderSummaryModal from './OrderSummaryModal';
@@ -30,7 +52,16 @@ import { getDisplayOrderId } from '@/lib/orderUtils';
 import CustomerDetailsTooltip from './CustomerDetailsTooltip';
 import CommunicationCompose from './CommunicationCompose';
 
-const departments = ['Layup', 'Plugging', 'CNC', 'Finish', 'Gunsmith', 'Paint', 'QC', 'Shipping'];
+const departments = [
+  'Layup',
+  'Plugging',
+  'CNC',
+  'Finish',
+  'Gunsmith',
+  'Paint',
+  'QC',
+  'Shipping',
+];
 
 export default function AllOrdersList() {
   const [selectedDepartment, setSelectedDepartment] = useState('all');
@@ -50,7 +81,7 @@ export default function AllOrdersList() {
 
   const { data: orders, isLoading } = useQuery<Order[]>({
     queryKey: ['/api/orders'],
-    refetchInterval: 30000 // Refresh every 30 seconds
+    refetchInterval: 30000, // Refresh every 30 seconds
   });
 
   // Fetch stock models to get display names
@@ -64,49 +95,67 @@ export default function AllOrdersList() {
     if (!modelId || !stockModels || stockModels.length === 0) {
       return modelId || 'Unknown Model';
     }
-    const model = (stockModels as any[]).find((m: any) => m && m.id === modelId);
+    const model = (stockModels as any[]).find(
+      (m: any) => m && m.id === modelId
+    );
     return model?.displayName || model?.name || modelId;
   };
 
   const progressOrderMutation = useMutation({
-    mutationFn: async ({ orderId, nextDepartment }: { orderId: string, nextDepartment: string }) => {
+    mutationFn: async ({
+      orderId,
+      nextDepartment,
+    }: {
+      orderId: string;
+      nextDepartment: string;
+    }) => {
       return apiRequest(`/api/orders/${orderId}/progress`, {
         method: 'POST',
-        body: { nextDepartment }
+        body: { nextDepartment },
       });
     },
     onSuccess: () => {
       toast.success('Order progressed successfully');
       queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/orders/pipeline-counts'] });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/orders/pipeline-counts'],
+      });
     },
     onError: (error) => {
       toast.error(`Failed to progress order: ${error.message}`);
-    }
+    },
   });
 
   const scrapOrderMutation = useMutation({
-    mutationFn: async ({ orderId, scrapData }: { orderId: string, scrapData: any }) => {
+    mutationFn: async ({
+      orderId,
+      scrapData,
+    }: {
+      orderId: string;
+      scrapData: any;
+    }) => {
       return apiRequest(`/api/orders/${orderId}/scrap`, {
         method: 'POST',
-        body: scrapData
+        body: scrapData,
       });
     },
     onSuccess: () => {
       toast.success('Order scrapped successfully');
       queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/orders/pipeline-counts'] });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/orders/pipeline-counts'],
+      });
       setScrapModalOrder(null);
     },
     onError: (error) => {
       toast.error(`Failed to scrap order: ${error.message}`);
-    }
+    },
   });
 
   const createReplacementMutation = useMutation({
     mutationFn: async (orderId: string) => {
       return apiRequest(`/api/orders/${orderId}/reload-replacement`, {
-        method: 'POST'
+        method: 'POST',
       });
     },
     onSuccess: () => {
@@ -115,32 +164,37 @@ export default function AllOrdersList() {
     },
     onError: (error) => {
       toast.error(`Failed to create replacement: ${error.message}`);
-    }
+    },
   });
 
-  const filteredOrders = orders?.filter(order => {
-    // Department filter
-    const departmentMatch = selectedDepartment === 'all' || order.currentDepartment === selectedDepartment;
+  const filteredOrders =
+    orders?.filter((order) => {
+      // Department filter
+      const departmentMatch =
+        selectedDepartment === 'all' ||
+        order.currentDepartment === selectedDepartment;
 
-    // Search filter - search in multiple fields
-    if (!searchTerm.trim()) {
-      return departmentMatch;
-    }
+      // Search filter - search in multiple fields
+      if (!searchTerm.trim()) {
+        return departmentMatch;
+      }
 
-    const searchLower = searchTerm.toLowerCase();
-    const searchFields = [
-      order.orderId?.toLowerCase(),
-      order.fbOrderNumber?.toLowerCase(),
-      order.customer?.toLowerCase(),
-      order.customerId?.toLowerCase(),
-      order.product?.toLowerCase(),
-      order.modelId?.toLowerCase()
-    ].filter(Boolean);
+      const searchLower = searchTerm.toLowerCase();
+      const searchFields = [
+        order.orderId?.toLowerCase(),
+        order.fbOrderNumber?.toLowerCase(),
+        order.customer?.toLowerCase(),
+        order.customerId?.toLowerCase(),
+        order.product?.toLowerCase(),
+        order.modelId?.toLowerCase(),
+      ].filter(Boolean);
 
-    const searchMatch = searchFields.some(field => field?.includes(searchLower));
+      const searchMatch = searchFields.some((field) =>
+        field?.includes(searchLower)
+      );
 
-    return departmentMatch && searchMatch;
-  }) || [];
+      return departmentMatch && searchMatch;
+    }) || [];
 
   const handleProgressOrder = (orderId: string, nextDepartment: string) => {
     progressOrderMutation.mutate({ orderId, nextDepartment });
@@ -148,35 +202,37 @@ export default function AllOrdersList() {
 
   const handleScrapOrder = (scrapData: any) => {
     if (scrapModalOrder) {
-      scrapOrderMutation.mutate({ 
-        orderId: scrapModalOrder.orderId, 
-        scrapData 
+      scrapOrderMutation.mutate({
+        orderId: scrapModalOrder.orderId,
+        scrapData,
       });
     }
   };
 
   const getDepartmentBadgeColor = (department: string) => {
     const colors: { [key: string]: string } = {
-      'Layup': 'bg-blue-500',
-      'Plugging': 'bg-orange-500',
-      'CNC': 'bg-green-500',
-      'Finish': 'bg-yellow-500',
-      'Gunsmith': 'bg-purple-500',
-      'Paint': 'bg-pink-500',
-      'QC': 'bg-indigo-500',
-      'Shipping': 'bg-gray-500'
+      Layup: 'bg-blue-500',
+      Plugging: 'bg-orange-500',
+      CNC: 'bg-green-500',
+      Finish: 'bg-yellow-500',
+      Gunsmith: 'bg-purple-500',
+      Paint: 'bg-pink-500',
+      QC: 'bg-indigo-500',
+      Shipping: 'bg-gray-500',
     };
     return colors[department] || 'bg-gray-400';
   };
 
   const getNextDepartment = (currentDept: string) => {
     const index = departments.indexOf(currentDept);
-    return index >= 0 && index < departments.length - 1 ? departments[index + 1] : null;
+    return index >= 0 && index < departments.length - 1
+      ? departments[index + 1]
+      : null;
   };
   const handleCommunicationOpen = (customer, communicationType) => {
     setSelectedCustomer({
       ...customer,
-      preferredCommunication: communicationType
+      preferredCommunication: communicationType,
     });
     setCommunicationModalOpen(true);
   };
@@ -228,14 +284,19 @@ export default function AllOrdersList() {
               </div>
 
               {/* Department Filter */}
-              <Select value={selectedDepartment} onValueChange={setSelectedDepartment}>
+              <Select
+                value={selectedDepartment}
+                onValueChange={setSelectedDepartment}
+              >
                 <SelectTrigger className="w-48">
                   <SelectValue placeholder="Filter by department" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Departments</SelectItem>
-                  {departments.map(dept => (
-                    <SelectItem key={dept} value={dept}>{dept}</SelectItem>
+                  {departments.map((dept) => (
+                    <SelectItem key={dept} value={dept}>
+                      {dept}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -257,7 +318,7 @@ export default function AllOrdersList() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredOrders.map(order => {
+              {filteredOrders.map((order) => {
                 const nextDept = getNextDepartment(order.currentDepartment);
                 const isComplete = order.currentDepartment === 'Shipping';
                 const isScrapped = order.status === 'SCRAPPED';
@@ -272,22 +333,27 @@ export default function AllOrdersList() {
                       </OrderSummaryModal>
                     </TableCell>
                     <TableCell>
-                      {order.orderDate ? (() => {
-                        // Handle timezone issues by creating date without timezone conversion
-                        const date = new Date(order.orderDate);
-                        // If the date string contains 'T' (ISO format), extract just the date part
-                        if (typeof order.orderDate === 'string' && order.orderDate.includes('T')) {
-                          const datePart = order.orderDate.split('T')[0];
-                          const [year, month, day] = datePart.split('-');
-                          return `${month}/${day}/${year}`;
-                        }
-                        return date.toLocaleDateString('en-US', { 
-                          year: 'numeric', 
-                          month: '2-digit', 
-                          day: '2-digit',
-                          timeZone: 'UTC'
-                        });
-                      })() : '-'}
+                      {order.orderDate
+                        ? (() => {
+                            // Handle timezone issues by creating date without timezone conversion
+                            const date = new Date(order.orderDate);
+                            // If the date string contains 'T' (ISO format), extract just the date part
+                            if (
+                              typeof order.orderDate === 'string' &&
+                              order.orderDate.includes('T')
+                            ) {
+                              const datePart = order.orderDate.split('T')[0];
+                              const [year, month, day] = datePart.split('-');
+                              return `${month}/${day}/${year}`;
+                            }
+                            return date.toLocaleDateString('en-US', {
+                              year: 'numeric',
+                              month: '2-digit',
+                              day: '2-digit',
+                              timeZone: 'UTC',
+                            });
+                          })()
+                        : '-'}
                     </TableCell>
                     <TableCell>
                       <CustomerDetailsTooltip customer={order.customer}>
@@ -299,31 +365,40 @@ export default function AllOrdersList() {
                     <TableCell>
                       {order.product || getModelDisplayName(order.modelId)}
                       {stockModels.length === 0 && (
-                        <span className="text-xs text-gray-400 ml-2">(Loading...)</span>
+                        <span className="text-xs text-gray-400 ml-2">
+                          (Loading...)
+                        </span>
                       )}
                     </TableCell>
                     <TableCell>
-                      <Badge className={`${getDepartmentBadgeColor(order.currentDepartment)} text-white`}>
+                      <Badge
+                        className={`${getDepartmentBadgeColor(order.currentDepartment)} text-white`}
+                      >
                         {order.currentDepartment}
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      {order.dueDate ? (() => {
-                        // Handle timezone issues by creating date without timezone conversion
-                        const date = new Date(order.dueDate);
-                        // If the date string contains 'T' (ISO format), extract just the date part
-                        if (typeof order.dueDate === 'string' && order.dueDate.includes('T')) {
-                          const datePart = order.dueDate.split('T')[0];
-                          const [year, month, day] = datePart.split('-');
-                          return `${month}/${day}/${year}`;
-                        }
-                        return date.toLocaleDateString('en-US', { 
-                          year: 'numeric', 
-                          month: '2-digit', 
-                          day: '2-digit',
-                          timeZone: 'UTC'
-                        });
-                      })() : '-'}
+                      {order.dueDate
+                        ? (() => {
+                            // Handle timezone issues by creating date without timezone conversion
+                            const date = new Date(order.dueDate);
+                            // If the date string contains 'T' (ISO format), extract just the date part
+                            if (
+                              typeof order.dueDate === 'string' &&
+                              order.dueDate.includes('T')
+                            ) {
+                              const datePart = order.dueDate.split('T')[0];
+                              const [year, month, day] = datePart.split('-');
+                              return `${month}/${day}/${year}`;
+                            }
+                            return date.toLocaleDateString('en-US', {
+                              year: 'numeric',
+                              month: '2-digit',
+                              day: '2-digit',
+                              timeZone: 'UTC',
+                            });
+                          })()
+                        : '-'}
                     </TableCell>
                     <TableCell>
                       <Badge variant={isScrapped ? 'destructive' : 'default'}>
@@ -347,7 +422,9 @@ export default function AllOrdersList() {
                         {!isScrapped && !isComplete && nextDept && (
                           <Button
                             size="sm"
-                            onClick={() => handleProgressOrder(order.orderId, nextDept)}
+                            onClick={() =>
+                              handleProgressOrder(order.orderId, nextDept)
+                            }
                             disabled={progressOrderMutation.isPending}
                           >
                             <ArrowRight className="w-4 h-4 mr-1" />
@@ -371,7 +448,9 @@ export default function AllOrdersList() {
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => createReplacementMutation.mutate(order.orderId)}
+                            onClick={() =>
+                              createReplacementMutation.mutate(order.orderId)
+                            }
                             disabled={createReplacementMutation.isPending}
                           >
                             <Package2 className="w-4 h-4 mr-1" />

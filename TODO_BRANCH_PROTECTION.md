@@ -5,9 +5,11 @@
 **Layer 3 of the CI/CD protection system is NOT enabled yet.**
 
 ### What's Missing?
+
 GitHub Branch Protection rules for the `main` branch.
 
 ### Why Wait?
+
 Waiting for co-worker to return from vacation to avoid hindering their work.
 
 ---
@@ -38,6 +40,7 @@ Waiting for co-worker to return from vacation to avoid hindering their work.
 ## ✅ What This Does
 
 Prevents ANY code from merging to `main` unless:
+
 - TypeScript has no errors ✅
 - ESLint has no warnings ✅
 - Code is properly formatted ✅

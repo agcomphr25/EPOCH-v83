@@ -2,7 +2,14 @@ import React from 'react';
 import { useInventory } from '../hooks/useInventory';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { RefreshCw } from 'lucide-react';
 
@@ -63,19 +70,33 @@ export default function InventoryDashboard() {
                   const available = item.onHand - item.committed;
                   const isLowStock = available <= item.reorderPoint;
                   const isOutOfStock = available <= 0;
-                  
+
                   return (
-                    <TableRow 
-                      key={item.code} 
-                      className={isOutOfStock ? 'bg-red-50' : isLowStock ? 'bg-yellow-50' : ''}
+                    <TableRow
+                      key={item.code}
+                      className={
+                        isOutOfStock
+                          ? 'bg-red-50'
+                          : isLowStock
+                            ? 'bg-yellow-50'
+                            : ''
+                      }
                     >
                       <TableCell className="font-medium">{item.code}</TableCell>
                       <TableCell>{item.name}</TableCell>
                       <TableCell>{item.category || 'N/A'}</TableCell>
-                      <TableCell className="text-right">{item.onHand}</TableCell>
-                      <TableCell className="text-right">{item.committed}</TableCell>
-                      <TableCell className="text-right font-medium">{available}</TableCell>
-                      <TableCell className="text-right">{item.reorderPoint}</TableCell>
+                      <TableCell className="text-right">
+                        {item.onHand}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {item.committed}
+                      </TableCell>
+                      <TableCell className="text-right font-medium">
+                        {available}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {item.reorderPoint}
+                      </TableCell>
                       <TableCell>
                         {isOutOfStock ? (
                           <Badge variant="destructive">Out of Stock</Badge>

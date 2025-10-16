@@ -15,10 +15,19 @@ console.log('Period index:', periodIndex);
 const firstIdx = Math.floor(periodIndex / 26) % 26;
 const secondIdx = periodIndex % 26;
 
-console.log('First index:', firstIdx, '(letter: ' + String.fromCharCode(65 + firstIdx) + ')');
-console.log('Second index:', secondIdx, '(letter: ' + String.fromCharCode(65 + secondIdx) + ')');
+console.log(
+  'First index:',
+  firstIdx,
+  '(letter: ' + String.fromCharCode(65 + firstIdx) + ')'
+);
+console.log(
+  'Second index:',
+  secondIdx,
+  '(letter: ' + String.fromCharCode(65 + secondIdx) + ')'
+);
 
-const prefix = String.fromCharCode(65 + firstIdx) + String.fromCharCode(65 + secondIdx);
+const prefix =
+  String.fromCharCode(65 + firstIdx) + String.fromCharCode(65 + secondIdx);
 console.log('Current prefix:', prefix);
 
 // Check if AN001 is in the current period

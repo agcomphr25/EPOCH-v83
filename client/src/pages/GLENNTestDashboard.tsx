@@ -2,11 +2,30 @@ import React from 'react';
 import { Link } from 'wouter';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { 
-  Plus, List, FilePenLine, TestTube, Users, ClipboardList, FileText, 
-  TrendingUp, Package, Scan, Calendar, BarChart, Warehouse, Shield, 
-  Wrench, FormInput, PieChart, DollarSign, Receipt, TrendingDown,
-  Factory, User, Settings
+import {
+  Plus,
+  List,
+  FilePenLine,
+  TestTube,
+  Users,
+  ClipboardList,
+  FileText,
+  TrendingUp,
+  Package,
+  Scan,
+  Calendar,
+  BarChart,
+  Warehouse,
+  Shield,
+  Wrench,
+  FormInput,
+  PieChart,
+  DollarSign,
+  Receipt,
+  TrendingDown,
+  Factory,
+  User,
+  Settings,
 } from 'lucide-react';
 
 export default function ADMINTestDashboard() {
@@ -15,20 +34,20 @@ export default function ADMINTestDashboard() {
       path: '/order-entry',
       label: 'New Order',
       icon: Plus,
-      description: 'Create new customer orders'
+      description: 'Create new customer orders',
     },
     {
       path: '/orders-list',
       label: 'View All Orders',
       icon: List,
-      description: 'View and manage all orders'
+      description: 'View and manage all orders',
     },
     {
       path: '/draft-orders',
       label: 'Draft Orders',
       icon: FilePenLine,
-      description: 'Manage saved draft orders'
-    }
+      description: 'Manage saved draft orders',
+    },
   ];
 
   const inventoryItems = [
@@ -36,26 +55,26 @@ export default function ADMINTestDashboard() {
       path: '/inventory/dashboard',
       label: 'Dashboard',
       icon: BarChart,
-      description: 'Inventory overview and analytics'
+      description: 'Inventory overview and analytics',
     },
     {
       path: '/inventory/scanner',
       label: 'Scanner',
       icon: Scan,
-      description: 'Scan inventory items'
+      description: 'Scan inventory items',
     },
     {
       path: '/inventory/manager',
       label: 'Manager',
       icon: Package,
-      description: 'Manage inventory items'
+      description: 'Manage inventory items',
     },
     {
       path: '/inventory/receiving',
       label: 'Receiving',
       icon: Receipt,
-      description: 'Receive incoming inventory'
-    }
+      description: 'Receive incoming inventory',
+    },
   ];
 
   const qcMaintenanceItems = [
@@ -63,14 +82,14 @@ export default function ADMINTestDashboard() {
       path: '/qc',
       label: 'Quality Control',
       icon: Shield,
-      description: 'QC inspections and definitions'
+      description: 'QC inspections and definitions',
     },
     {
       path: '/maintenance',
       label: 'Maintenance',
       icon: Wrench,
-      description: 'Equipment maintenance tracking'
-    }
+      description: 'Equipment maintenance tracking',
+    },
   ];
 
   const employeePortalItems = [
@@ -78,14 +97,14 @@ export default function ADMINTestDashboard() {
       path: '/employee-portal',
       label: 'Employee Portal',
       icon: User,
-      description: 'Employee time tracking and tasks'
+      description: 'Employee time tracking and tasks',
     },
     {
       path: '/time-clock-admin',
       label: 'Time Clock Admin',
       icon: Settings,
-      description: 'Administrative time tracking'
-    }
+      description: 'Administrative time tracking',
+    },
   ];
 
   const financeItems = [
@@ -93,26 +112,26 @@ export default function ADMINTestDashboard() {
       path: '/finance/dashboard',
       label: 'Dashboard',
       icon: BarChart,
-      description: 'Financial overview and metrics'
+      description: 'Financial overview and metrics',
     },
     {
       path: '/finance/ap-journal',
       label: 'AP Journal',
       icon: Receipt,
-      description: 'Accounts payable journal'
+      description: 'Accounts payable journal',
     },
     {
       path: '/finance/ar-journal',
       label: 'AR Journal',
       icon: TrendingUp,
-      description: 'Accounts receivable journal'
+      description: 'Accounts receivable journal',
     },
     {
       path: '/finance/cogs-report',
       label: 'COGS Report',
       icon: TrendingDown,
-      description: 'Cost of goods sold reporting'
-    }
+      description: 'Cost of goods sold reporting',
+    },
   ];
 
   const formsReportsItems = [
@@ -120,14 +139,14 @@ export default function ADMINTestDashboard() {
       path: '/enhanced-forms',
       label: 'Form Builder',
       icon: FormInput,
-      description: 'Enhanced form builder with drag-and-drop'
+      description: 'Enhanced form builder with drag-and-drop',
     },
     {
       path: '/enhanced-reports',
       label: 'Reports',
       icon: PieChart,
-      description: 'Advanced reporting with PDF/CSV export'
-    }
+      description: 'Advanced reporting with PDF/CSV export',
+    },
   ];
 
   const mainNavItems = [
@@ -135,61 +154,64 @@ export default function ADMINTestDashboard() {
       path: '/module8-test',
       label: 'Module 8 Test',
       icon: TestTube,
-      description: 'Test API integrations and communications'
+      description: 'Test API integrations and communications',
     },
     {
       path: '/customers',
       label: 'Customer Management',
       icon: Users,
-      description: 'Manage customer database'
+      description: 'Manage customer database',
     },
     {
       path: '/purchase-orders',
       label: 'P1 Purchase Orders',
       icon: ClipboardList,
-      description: 'Customer PO management'
+      description: 'Customer PO management',
     },
     {
       path: '/p2-purchase-orders',
       label: 'P2 Purchase Orders',
       icon: FileText,
-      description: 'P2 customer management and purchase orders'
+      description: 'P2 customer management and purchase orders',
     },
     {
       path: '/production-tracking',
       label: 'Production Tracking',
       icon: TrendingUp,
-      description: 'Track production orders from POs'
+      description: 'Track production orders from POs',
     },
     {
       path: '/bom-administration',
       label: 'BOM Administration',
       icon: Package,
-      description: 'Manage Bill of Materials for P2 operations'
+      description: 'Manage Bill of Materials for P2 operations',
     },
     {
       path: '/barcode-scanner',
       label: 'Barcode Scanner',
       icon: Scan,
-      description: 'Scan order barcodes'
+      description: 'Scan order barcodes',
     },
     {
       path: '/layup-scheduler',
       label: 'Layup Scheduler',
       icon: Calendar,
-      description: 'Schedule and manage layup production orders'
+      description: 'Schedule and manage layup production orders',
     },
     {
       path: '/ag-dashboard',
       label: 'AG Dashboard',
       icon: BarChart,
-      description: 'Unified production dashboard'
-    }
+      description: 'Unified production dashboard',
+    },
   ];
 
   const renderNavigationCard = (item: any) => (
     <Link key={item.path} href={item.path}>
-      <Button variant="ghost" className="h-auto p-4 justify-start text-left w-full">
+      <Button
+        variant="ghost"
+        className="h-auto p-4 justify-start text-left w-full"
+      >
         <div className="flex items-center space-x-3">
           <item.icon className="w-5 h-5 text-gray-600" />
           <div>
@@ -201,7 +223,13 @@ export default function ADMINTestDashboard() {
     </Link>
   );
 
-  const renderSectionCard = (title: string, items: any[], bgColor: string, iconColor: string, icon: any) => {
+  const renderSectionCard = (
+    title: string,
+    items: any[],
+    bgColor: string,
+    iconColor: string,
+    icon: any
+  ) => {
     const Icon = icon;
     return (
       <Card className="h-fit">
@@ -225,7 +253,9 @@ export default function ADMINTestDashboard() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">ADMINTEST Dashboard</h1>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
+            ADMINTEST Dashboard
+          </h1>
           <p className="text-gray-600 dark:text-gray-400 mt-1">
             Welcome to your comprehensive manufacturing management system
           </p>
@@ -237,61 +267,59 @@ export default function ADMINTestDashboard() {
 
       {/* Main Navigation Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
         {/* Order Management */}
         {renderSectionCard(
-          'Order Management', 
-          orderManagementItems, 
-          'bg-green-100', 
+          'Order Management',
+          orderManagementItems,
+          'bg-green-100',
           'text-green-600',
           Plus
         )}
 
         {/* Inventory */}
         {renderSectionCard(
-          'Inventory', 
-          inventoryItems, 
-          'bg-blue-100', 
+          'Inventory',
+          inventoryItems,
+          'bg-blue-100',
           'text-blue-600',
           Warehouse
         )}
 
         {/* QC & Maintenance */}
         {renderSectionCard(
-          'QC & Maintenance', 
-          qcMaintenanceItems, 
-          'bg-orange-100', 
+          'QC & Maintenance',
+          qcMaintenanceItems,
+          'bg-orange-100',
           'text-orange-600',
           Shield
         )}
 
         {/* Employee Portal */}
         {renderSectionCard(
-          'Employee Portal', 
-          employeePortalItems, 
-          'bg-purple-100', 
+          'Employee Portal',
+          employeePortalItems,
+          'bg-purple-100',
           'text-purple-600',
           User
         )}
 
         {/* Finance */}
         {renderSectionCard(
-          'Finance', 
-          financeItems, 
-          'bg-red-100', 
+          'Finance',
+          financeItems,
+          'bg-red-100',
           'text-red-600',
           DollarSign
         )}
 
         {/* Forms & Reports */}
         {renderSectionCard(
-          'Forms & Reports', 
-          formsReportsItems, 
-          'bg-indigo-100', 
+          'Forms & Reports',
+          formsReportsItems,
+          'bg-indigo-100',
           'text-indigo-600',
           FormInput
         )}
-
       </div>
 
       {/* Additional Navigation Items */}
@@ -317,18 +345,22 @@ export default function ADMINTestDashboard() {
           <CardContent className="p-4 text-center">
             <div className="text-2xl font-bold text-green-600">✓</div>
             <div className="text-sm font-medium">System Online</div>
-            <div className="text-xs text-gray-500">All services operational</div>
+            <div className="text-xs text-gray-500">
+              All services operational
+            </div>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardContent className="p-4 text-center">
             <div className="text-2xl font-bold text-blue-600">📊</div>
             <div className="text-sm font-medium">Real-time Data</div>
-            <div className="text-xs text-gray-500">Live production tracking</div>
+            <div className="text-xs text-gray-500">
+              Live production tracking
+            </div>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardContent className="p-4 text-center">
             <div className="text-2xl font-bold text-purple-600">🔧</div>
@@ -336,7 +368,7 @@ export default function ADMINTestDashboard() {
             <div className="text-xs text-gray-500">Complete ERP solution</div>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardContent className="p-4 text-center">
             <div className="text-2xl font-bold text-orange-600">⚡</div>

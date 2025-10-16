@@ -19,9 +19,9 @@ class BulkAddressImporter {
 
   async importFromCSV(csvFilePath) {
     console.log(`Starting bulk address import from ${csvFilePath}`);
-    
+
     const addresses = [];
-    
+
     return new Promise((resolve, reject) => {
       fs.createReadStream(csvFilePath)
         .pipe(csv())
@@ -34,7 +34,7 @@ class BulkAddressImporter {
             zipCode: row.zip_code,
             country: row.country || 'United States',
             type: row.type || 'both',
-            isDefault: row.is_default === 'true' || row.is_default === true
+            isDefault: row.is_default === 'true' || row.is_default === true,
           });
         })
         .on('end', async () => {
@@ -54,7 +54,7 @@ class BulkAddressImporter {
     const results = {
       successful: 0,
       failed: 0,
-      errors: []
+      errors: [],
     };
 
     for (const address of addresses) {
@@ -73,7 +73,7 @@ class BulkAddressImporter {
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify(address)
+          body: JSON.stringify(address),
         });
 
         if (response.ok) {
@@ -95,7 +95,9 @@ class BulkAddressImporter {
 
   async validateCustomer(customerId) {
     try {
-      const response = await fetch(`${this.apiBaseUrl}/api/customers/${customerId}`);
+      const response = await fetch(
+        `${this.apiBaseUrl}/api/customers/${customerId}`
+      );
       return response.ok;
     } catch (error) {
       return false;
@@ -108,7 +110,7 @@ class BulkAddressImporter {
       '11,"123 Main Street","Anytown","NY","12345","United States","both","true"',
       '12,"456 Oak Avenue","Springfield","IL","62701","United States","both","true"',
       '20,"789 Pine Road","Denver","CO","80202","United States","both","true"',
-      '// Add more rows for customers 11-115 as needed'
+      '// Add more rows for customers 11-115 as needed',
     ];
 
     fs.writeFileSync(outputPath, sampleData.join('\n'));
@@ -116,26 +118,36 @@ class BulkAddressImporter {
   }
 
   async bulkCreateForMissingCustomers() {
-    console.log('Creating placeholder addresses for customers without addresses...');
-    
+    console.log(
+      'Creating placeholder addresses for customers without addresses...'
+    );
+
     // Get all customers
     const customersResponse = await fetch(`${this.apiBaseUrl}/api/customers`);
     const customers = await customersResponse.json();
-    
+
     // Get all addresses
-    const addressesResponse = await fetch(`${this.apiBaseUrl}/api/addresses/all`);
+    const addressesResponse = await fetch(
+      `${this.apiBaseUrl}/api/addresses/all`
+    );
     const addresses = await addressesResponse.json();
-    
+
     // Find customers without addresses
-    const addressedCustomerIds = new Set(addresses.map(addr => parseInt(addr.customerId)));
-    const customersWithoutAddresses = customers.filter(c => !addressedCustomerIds.has(c.id));
-    
-    console.log(`Found ${customersWithoutAddresses.length} customers without addresses`);
-    
+    const addressedCustomerIds = new Set(
+      addresses.map((addr) => parseInt(addr.customerId))
+    );
+    const customersWithoutAddresses = customers.filter(
+      (c) => !addressedCustomerIds.has(c.id)
+    );
+
+    console.log(
+      `Found ${customersWithoutAddresses.length} customers without addresses`
+    );
+
     const results = {
       successful: 0,
       failed: 0,
-      errors: []
+      errors: [],
     };
 
     for (const customer of customersWithoutAddresses) {
@@ -148,7 +160,7 @@ class BulkAddressImporter {
           zipCode: '00000',
           country: 'United States',
           type: 'both',
-          isDefault: true
+          isDefault: true,
         };
 
         const response = await fetch(`${this.apiBaseUrl}/api/addresses`, {
@@ -156,12 +168,14 @@ class BulkAddressImporter {
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify(placeholderAddress)
+          body: JSON.stringify(placeholderAddress),
         });
 
         if (response.ok) {
           results.successful++;
-          console.log(`✓ Created placeholder address for ${customer.name} (ID: ${customer.id})`);
+          console.log(
+            `✓ Created placeholder address for ${customer.name} (ID: ${customer.id})`
+          );
         } else {
           results.failed++;
           const error = await response.text();
@@ -180,14 +194,14 @@ class BulkAddressImporter {
 // Usage examples:
 async function main() {
   const importer = new BulkAddressImporter();
-  
+
   const command = process.argv[2];
-  
+
   switch (command) {
     case 'sample':
       await importer.generateSampleCSV();
       break;
-      
+
     case 'import':
       const csvFile = process.argv[3];
       if (!csvFile) {
@@ -197,17 +211,23 @@ async function main() {
       const results = await importer.importFromCSV(csvFile);
       console.log('Import Results:', results);
       break;
-      
+
     case 'placeholder':
       const placeholderResults = await importer.bulkCreateForMissingCustomers();
       console.log('Placeholder Creation Results:', placeholderResults);
       break;
-      
+
     default:
       console.log('Usage:');
-      console.log('  node bulk-address-import.js sample              # Generate sample CSV');
-      console.log('  node bulk-address-import.js import <csv-file>   # Import from CSV');
-      console.log('  node bulk-address-import.js placeholder         # Create placeholder addresses');
+      console.log(
+        '  node bulk-address-import.js sample              # Generate sample CSV'
+      );
+      console.log(
+        '  node bulk-address-import.js import <csv-file>   # Import from CSV'
+      );
+      console.log(
+        '  node bulk-address-import.js placeholder         # Create placeholder addresses'
+      );
   }
 }
 

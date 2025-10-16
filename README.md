@@ -5,6 +5,7 @@ A full-stack manufacturing ERP system built for small manufacturing companies, f
 ## Tech Stack Architecture
 
 ### Frontend
+
 - **React 18** with TypeScript
 - **Vite** as build tool and development server
 - **ShadCN UI** component library (built on Radix UI)
@@ -13,16 +14,19 @@ A full-stack manufacturing ERP system built for small manufacturing companies, f
 - **Wouter** for client-side routing
 
 ### Backend
+
 - **Express.js** with TypeScript
 - **PostgreSQL** database with Neon hosting
 - **Drizzle ORM** for type-safe database operations
 - **Zod** for schema validation
 
 ### Mobile
+
 - **Capacitor** for mobile app deployment (optional)
 - **PWA** capabilities for offline functionality
 
 ### Development Tools
+
 - **TypeScript** for type safety across the stack
 - **ESBuild** for production bundling
 - **Drizzle Kit** for database migrations
@@ -65,10 +69,12 @@ A full-stack manufacturing ERP system built for small manufacturing companies, f
 ## Development
 
 ### Prerequisites
+
 - Node.js 18+
 - PostgreSQL database (configured via DATABASE_URL)
 
 ### Getting Started
+
 ```bash
 # Install dependencies
 npm install
@@ -84,6 +90,7 @@ npm run dev
 ```
 
 ### Database Management
+
 ```bash
 # Push schema changes to database
 npm run db:push
@@ -95,16 +102,19 @@ npm run check
 ## Architecture Decisions
 
 ### Database Schema Location
+
 - **Primary Schema**: Located in `/server/schema.ts`
 - **Shared Access**: Re-exported through `/shared/schema.ts` for client components
 - **Rationale**: Keeps database definitions with server code while maintaining client access
 
 ### Framework Choice
+
 - **Vite + React**: Chosen for development speed and modern tooling
 - **Not Next.js**: Avoiding SSR complexity for this internal business application
 - **Drizzle ORM**: Type-safe database operations with excellent TypeScript integration
 
 ### State Management
+
 - **TanStack Query**: Server state caching and synchronization
 - **React Hooks**: Local component state
 - **No Redux**: Unnecessary complexity for this application size
@@ -112,11 +122,13 @@ npm run check
 ## Deployment
 
 ### Development
+
 ```bash
 npm run dev
 ```
 
 ### Production
+
 ```bash
 npm run build
 npm start

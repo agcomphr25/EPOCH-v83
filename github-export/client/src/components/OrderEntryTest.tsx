@@ -22,10 +22,8 @@ export default function OrderEntryTest() {
                 Test Checkbox
               </label>
             </div>
-            
-            <Button className="w-full">
-              Test Button
-            </Button>
+
+            <Button className="w-full">Test Button</Button>
           </div>
         </CardContent>
       </Card>

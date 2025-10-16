@@ -21,7 +21,7 @@ export default function APJournal({ dateFrom, dateTo }) {
 
   // Handle date range changes
   const handleDateChange = (field, value) => {
-    setDateRange(prev => ({ ...prev, [field]: value }));
+    setDateRange((prev) => ({ ...prev, [field]: value }));
   };
 
   // Navigate to detailed AP transaction view
@@ -33,17 +33,21 @@ export default function APJournal({ dateFrom, dateTo }) {
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
-      currency: 'USD'
+      currency: 'USD',
     }).format(amount);
   };
 
   // Get status badge variant based on status
   const getStatusVariant = (status) => {
     switch (status) {
-      case 'paid': return 'success';
-      case 'pending': return 'warning';
-      case 'overdue': return 'destructive';
-      default: return 'secondary';
+      case 'paid':
+        return 'success';
+      case 'pending':
+        return 'warning';
+      case 'overdue':
+        return 'destructive';
+      default:
+        return 'secondary';
     }
   };
 
@@ -122,7 +126,9 @@ export default function APJournal({ dateFrom, dateTo }) {
                       className="border-b hover:bg-gray-50 cursor-pointer transition-colors"
                       onClick={() => handleRowClick(transaction)}
                     >
-                      <td className="p-4 font-mono text-sm">{transaction.poNumber}</td>
+                      <td className="p-4 font-mono text-sm">
+                        {transaction.poNumber}
+                      </td>
                       <td className="p-4">{transaction.vendorName}</td>
                       <td className="p-4 text-right font-medium">
                         {formatCurrency(transaction.amount)}

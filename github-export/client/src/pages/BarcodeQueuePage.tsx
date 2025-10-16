@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { BarcodeScanner } from '@/components/BarcodeScanner';
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { Scan, ArrowLeft, ArrowRight } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
@@ -15,26 +15,29 @@ export default function BarcodeQueuePage() {
 
   // Get orders in barcode department
   const barcodeOrders = useMemo(() => {
-    return allOrders.filter((order: any) => 
-      order.currentDepartment === 'Barcode' || 
-      (order.department === 'Barcode' && order.status === 'IN_PROGRESS')
+    return allOrders.filter(
+      (order: any) =>
+        order.currentDepartment === 'Barcode' ||
+        (order.department === 'Barcode' && order.status === 'IN_PROGRESS')
     );
   }, [allOrders]);
 
   // Count orders in previous department (Layup/Plugging)
   const layupCount = useMemo(() => {
-    return allOrders.filter((order: any) => 
-      order.currentDepartment === 'Layup' || 
-      order.currentDepartment === 'Plugging' ||
-      (order.department === 'Layup' && order.status === 'IN_PROGRESS')
+    return allOrders.filter(
+      (order: any) =>
+        order.currentDepartment === 'Layup' ||
+        order.currentDepartment === 'Plugging' ||
+        (order.department === 'Layup' && order.status === 'IN_PROGRESS')
     ).length;
   }, [allOrders]);
 
   // Count orders in next department (CNC)
   const cncCount = useMemo(() => {
-    return allOrders.filter((order: any) => 
-      order.currentDepartment === 'CNC' || 
-      (order.department === 'CNC' && order.status === 'IN_PROGRESS')
+    return allOrders.filter(
+      (order: any) =>
+        order.currentDepartment === 'CNC' ||
+        (order.department === 'CNC' && order.status === 'IN_PROGRESS')
     ).length;
   }, [allOrders]);
 
@@ -117,11 +120,17 @@ export default function BarcodeQueuePage() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {barcodeOrders.map((order: any) => {
                 const modelId = order.stockModelId || order.modelId;
-                const materialType = modelId?.startsWith('cf_') ? 'CF' : 
-                                   modelId?.startsWith('fg_') ? 'FG' : null;
+                const materialType = modelId?.startsWith('cf_')
+                  ? 'CF'
+                  : modelId?.startsWith('fg_')
+                    ? 'FG'
+                    : null;
 
                 return (
-                  <Card key={order.orderId} className="border-l-4 border-l-blue-500">
+                  <Card
+                    key={order.orderId}
+                    className="border-l-4 border-l-blue-500"
+                  >
                     <CardHeader className="pb-2">
                       <div className="flex justify-between items-start">
                         <div className="font-semibold text-lg">
@@ -153,13 +162,22 @@ export default function BarcodeQueuePage() {
 
                         {order.dueDate && (
                           <div className="text-xs text-gray-500">
-                            Due: {format(new Date(order.dueDate), 'MMM d, yyyy')}
+                            Due:{' '}
+                            {format(new Date(order.dueDate), 'MMM d, yyyy')}
                           </div>
                         )}
 
                         {order.createdAt && (
                           <div className="text-xs text-gray-500">
-                            In Dept: {Math.floor((Date.now() - new Date(order.updatedAt || order.createdAt).getTime()) / (1000 * 60 * 60 * 24))} days
+                            In Dept:{' '}
+                            {Math.floor(
+                              (Date.now() -
+                                new Date(
+                                  order.updatedAt || order.createdAt
+                                ).getTime()) /
+                                (1000 * 60 * 60 * 24)
+                            )}{' '}
+                            days
                           </div>
                         )}
                       </div>

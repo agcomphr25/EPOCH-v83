@@ -8,7 +8,7 @@ export default function ARJournalPage() {
     const thirtyDaysAgo = subDays(today, 30);
     return {
       dateFrom: format(thirtyDaysAgo, 'yyyy-MM-dd'),
-      dateTo: format(today, 'yyyy-MM-dd')
+      dateTo: format(today, 'yyyy-MM-dd'),
     };
   });
 

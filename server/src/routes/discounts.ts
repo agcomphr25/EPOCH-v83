@@ -1,6 +1,9 @@
 import { Router, Request, Response } from 'express';
 import { storage } from '../../storage';
-import { insertPersistentDiscountSchema, insertShortTermSaleSchema } from '@shared/schema';
+import {
+  insertPersistentDiscountSchema,
+  insertShortTermSaleSchema,
+} from '@shared/schema';
 
 const router = Router();
 
@@ -11,7 +14,7 @@ router.get('/persistent-discounts', async (req: Request, res: Response) => {
     res.json(discounts);
   } catch (error) {
     console.error('Error retrieving persistent discounts:', error);
-    res.status(500).json({ error: "Failed to retrieve persistent discounts" });
+    res.status(500).json({ error: 'Failed to retrieve persistent discounts' });
   }
 });
 
@@ -22,7 +25,7 @@ router.post('/persistent-discounts', async (req: Request, res: Response) => {
     res.json(discount);
   } catch (error) {
     console.error('Error creating persistent discount:', error);
-    res.status(400).json({ error: "Invalid persistent discount data" });
+    res.status(400).json({ error: 'Invalid persistent discount data' });
   }
 });
 
@@ -34,20 +37,23 @@ router.put('/persistent-discounts/:id', async (req: Request, res: Response) => {
     res.json(discount);
   } catch (error) {
     console.error('Error updating persistent discount:', error);
-    res.status(400).json({ error: "Invalid persistent discount data" });
+    res.status(400).json({ error: 'Invalid persistent discount data' });
   }
 });
 
-router.delete('/persistent-discounts/:id', async (req: Request, res: Response) => {
-  try {
-    const id = parseInt(req.params.id);
-    await storage.deletePersistentDiscount(id);
-    res.json({ success: true });
-  } catch (error) {
-    console.error('Error deleting persistent discount:', error);
-    res.status(500).json({ error: "Failed to delete persistent discount" });
+router.delete(
+  '/persistent-discounts/:id',
+  async (req: Request, res: Response) => {
+    try {
+      const id = parseInt(req.params.id);
+      await storage.deletePersistentDiscount(id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error deleting persistent discount:', error);
+      res.status(500).json({ error: 'Failed to delete persistent discount' });
+    }
   }
-});
+);
 
 // Short Term Sales routes
 router.get('/short-term-sales', async (req: Request, res: Response) => {
@@ -56,7 +62,7 @@ router.get('/short-term-sales', async (req: Request, res: Response) => {
     res.json(sales);
   } catch (error) {
     console.error('Error retrieving short term sales:', error);
-    res.status(500).json({ error: "Failed to retrieve short term sales" });
+    res.status(500).json({ error: 'Failed to retrieve short term sales' });
   }
 });
 
@@ -67,7 +73,7 @@ router.post('/short-term-sales', async (req: Request, res: Response) => {
     res.json(sale);
   } catch (error) {
     console.error('Error creating short term sale:', error);
-    res.status(400).json({ error: "Invalid short term sale data" });
+    res.status(400).json({ error: 'Invalid short term sale data' });
   }
 });
 
@@ -79,7 +85,7 @@ router.put('/short-term-sales/:id', async (req: Request, res: Response) => {
     res.json(sale);
   } catch (error) {
     console.error('Error updating short term sale:', error);
-    res.status(400).json({ error: "Invalid short term sale data" });
+    res.status(400).json({ error: 'Invalid short term sale data' });
   }
 });
 
@@ -90,7 +96,7 @@ router.delete('/short-term-sales/:id', async (req: Request, res: Response) => {
     res.json({ success: true });
   } catch (error) {
     console.error('Error deleting short term sale:', error);
-    res.status(500).json({ error: "Failed to delete short term sale" });
+    res.status(500).json({ error: 'Failed to delete short term sale' });
   }
 });
 

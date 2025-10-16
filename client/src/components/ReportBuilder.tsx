@@ -2,7 +2,13 @@ import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Download, FileText } from 'lucide-react';
@@ -30,7 +36,9 @@ export default function ReportBuilder() {
   });
 
   // Fetch submissions for selected form
-  const { data: submissions = [], isLoading: loadingSubmissions } = useQuery<FormSubmission[]>({
+  const { data: submissions = [], isLoading: loadingSubmissions } = useQuery<
+    FormSubmission[]
+  >({
     queryKey: ['/api/form-submissions', selectedFormId],
     queryFn: () => apiRequest(`/api/form-submissions?formId=${selectedFormId}`),
     enabled: !!selectedFormId,
@@ -39,7 +47,8 @@ export default function ReportBuilder() {
   if (loadingForms) return <div>Loading forms...</div>;
 
   // Derive columns from first submission's data keys
-  const columns = submissions.length > 0 ? Object.keys(submissions[0].data) : [];
+  const columns =
+    submissions.length > 0 ? Object.keys(submissions[0].data) : [];
 
   const exportToCsv = () => {
     if (submissions.length === 0) return;
@@ -47,10 +56,14 @@ export default function ReportBuilder() {
     const headers = [...columns, 'Submitted At'];
     const csvContent = [
       headers.join(','),
-      ...submissions.map(s => [
-        ...columns.map(col => `"${String(s.data[col] || '').replace(/"/g, '""')}"`),
-        `"${new Date(s.createdAt).toLocaleString()}"`
-      ].join(','))
+      ...submissions.map((s) =>
+        [
+          ...columns.map(
+            (col) => `"${String(s.data[col] || '').replace(/"/g, '""')}"`
+          ),
+          `"${new Date(s.createdAt).toLocaleString()}"`,
+        ].join(',')
+      ),
     ].join('\n');
 
     const blob = new Blob([csvContent], { type: 'text/csv' });
@@ -87,7 +100,7 @@ export default function ReportBuilder() {
                 <SelectValue placeholder="— Choose a form —" />
               </SelectTrigger>
               <SelectContent>
-                {forms.map(form => (
+                {forms.map((form) => (
                   <SelectItem key={form.id} value={form.id.toString()}>
                     {form.name}
                   </SelectItem>
@@ -119,8 +132,11 @@ export default function ReportBuilder() {
                 <table className="w-full border-collapse border border-gray-300">
                   <thead>
                     <tr className="bg-gray-100">
-                      {columns.map(col => (
-                        <th key={col} className="border border-gray-300 p-2 text-left font-medium">
+                      {columns.map((col) => (
+                        <th
+                          key={col}
+                          className="border border-gray-300 p-2 text-left font-medium"
+                        >
                           {col}
                         </th>
                       ))}
@@ -130,14 +146,15 @@ export default function ReportBuilder() {
                     </tr>
                   </thead>
                   <tbody>
-                    {submissions.map(submission => (
+                    {submissions.map((submission) => (
                       <tr key={submission.id} className="hover:bg-gray-50">
-                        {columns.map(col => (
+                        {columns.map((col) => (
                           <td key={col} className="border border-gray-300 p-2">
                             {typeof submission.data[col] === 'boolean'
-                              ? submission.data[col] ? 'Yes' : 'No'
-                              : String(submission.data[col] || '')
-                            }
+                              ? submission.data[col]
+                                ? 'Yes'
+                                : 'No'
+                              : String(submission.data[col] || '')}
                           </td>
                         ))}
                         <td className="border border-gray-300 p-2">

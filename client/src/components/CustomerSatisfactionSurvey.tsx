@@ -6,25 +6,35 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Progress } from '@/components/ui/progress';
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Calendar } from "@/components/ui/calendar";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
 import { useToast } from '@/hooks/use-toast';
-import { format } from "date-fns";
-import { 
-  Star, 
-  Send, 
-  Save, 
-  ArrowLeft, 
-  ArrowRight, 
-  CheckCircle, 
+import { format } from 'date-fns';
+import {
+  Star,
+  Send,
+  Save,
+  ArrowLeft,
+  ArrowRight,
+  CheckCircle,
   AlertCircle,
   ThumbsUp,
   ThumbsDown,
   BarChart3,
-  CalendarIcon
+  CalendarIcon,
 } from 'lucide-react';
 
 interface SurveyQuestion {
@@ -74,18 +84,32 @@ export default function CustomerSatisfactionSurvey({
   customerId,
   orderId,
   existingResponse,
-  onComplete
+  onComplete,
 }: CustomerSatisfactionSurveyProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  
-  const [responses, setResponses] = useState<Record<string, any>>(existingResponse?.responses || {});
+
+  const [responses, setResponses] = useState<Record<string, any>>(
+    existingResponse?.responses || {}
+  );
   const [startTime, setStartTime] = useState<Date>(new Date());
-  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
-  const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(customerId || existingResponse?.customerId || null);
-  const [orderNumber, setOrderNumber] = useState<string>(existingResponse?.orderId || '');
-  const [csrName, setCsrName] = useState<string>(existingResponse?.csrName || '');
-  const [surveyDate, setSurveyDate] = useState<Date | undefined>(existingResponse?.surveyDate ? new Date(existingResponse.surveyDate) : new Date());
+  const [validationErrors, setValidationErrors] = useState<
+    Record<string, string>
+  >({});
+  const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(
+    customerId || existingResponse?.customerId || null
+  );
+  const [orderNumber, setOrderNumber] = useState<string>(
+    existingResponse?.orderId || ''
+  );
+  const [csrName, setCsrName] = useState<string>(
+    existingResponse?.csrName || ''
+  );
+  const [surveyDate, setSurveyDate] = useState<Date | undefined>(
+    existingResponse?.surveyDate
+      ? new Date(existingResponse.surveyDate)
+      : new Date()
+  );
 
   // Fetch active surveys
   const { data: surveys = [], isLoading: surveysLoading } = useQuery({
@@ -106,19 +130,20 @@ export default function CustomerSatisfactionSurvey({
   });
 
   // Selected survey (either from prop or first active survey)
-  const selectedSurvey = surveys.find((s: Survey) => s.id === surveyId) || 
-                        surveys.find((s: Survey) => s.isActive) || 
-                        null;
+  const selectedSurvey =
+    surveys.find((s: Survey) => s.id === surveyId) ||
+    surveys.find((s: Survey) => s.isActive) ||
+    null;
 
   // Submit survey response mutation
   const submitResponse = useMutation({
     mutationFn: async (data: any) => {
       const isUpdating = existingResponse?.id;
-      const url = isUpdating 
+      const url = isUpdating
         ? `/api/customer-satisfaction/responses/${existingResponse.id}`
         : '/api/customer-satisfaction/responses';
       const method = isUpdating ? 'PUT' : 'POST';
-      
+
       return apiRequest(url, {
         method,
         body: JSON.stringify(data),
@@ -127,25 +152,29 @@ export default function CustomerSatisfactionSurvey({
     onSuccess: (response) => {
       const isUpdating = existingResponse?.id;
       toast({
-        title: isUpdating ? "Survey Updated" : "Survey Submitted",
-        description: isUpdating ? "Response has been updated successfully!" : "Thank you for your feedback!",
+        title: isUpdating ? 'Survey Updated' : 'Survey Submitted',
+        description: isUpdating
+          ? 'Response has been updated successfully!'
+          : 'Thank you for your feedback!',
       });
-      
+
       if (!isUpdating) {
         setResponses({});
         setStartTime(new Date());
       }
-      
+
       if (onComplete) {
         onComplete(response.id);
       }
-      queryClient.invalidateQueries({ queryKey: ['/api/customer-satisfaction/responses'] });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/customer-satisfaction/responses'],
+      });
     },
     onError: (error: any) => {
       toast({
-        title: "Submission Failed",
-        description: error.message || "Failed to submit survey response",
-        variant: "destructive",
+        title: 'Submission Failed',
+        description: error.message || 'Failed to submit survey response',
+        variant: 'destructive',
       });
     },
   });
@@ -154,10 +183,10 @@ export default function CustomerSatisfactionSurvey({
   const handleResponseChange = (questionId: string, value: any) => {
     const newResponses = { ...responses, [questionId]: value };
     setResponses(newResponses);
-    
+
     // Clear validation error for this question
     if (validationErrors[questionId]) {
-      setValidationErrors(prev => {
+      setValidationErrors((prev) => {
         const newErrors = { ...prev };
         delete newErrors[questionId];
         return newErrors;
@@ -170,18 +199,18 @@ export default function CustomerSatisfactionSurvey({
     // Validate we have the required data
     if (!selectedSurvey?.id) {
       toast({
-        title: "Error",
-        description: "No survey selected",
-        variant: "destructive",
+        title: 'Error',
+        description: 'No survey selected',
+        variant: 'destructive',
       });
       return;
     }
 
     if (!selectedCustomerId) {
       toast({
-        title: "Error", 
-        description: "Please select a customer before submitting",
-        variant: "destructive",
+        title: 'Error',
+        description: 'Please select a customer before submitting',
+        variant: 'destructive',
       });
       return;
     }
@@ -189,7 +218,11 @@ export default function CustomerSatisfactionSurvey({
     // Validate all required questions
     const errors: Record<string, string> = {};
     selectedSurvey.questions.forEach((question: SurveyQuestion) => {
-      if (question.required && (!responses[question.id] && responses[question.id] !== 0)) {
+      if (
+        question.required &&
+        !responses[question.id] &&
+        responses[question.id] !== 0
+      ) {
         errors[question.id] = 'This question is required';
       }
     });
@@ -197,21 +230,25 @@ export default function CustomerSatisfactionSurvey({
     if (Object.keys(errors).length > 0) {
       setValidationErrors(errors);
       toast({
-        title: "Validation Error",
-        description: "Please answer all required questions",
-        variant: "destructive",
+        title: 'Validation Error',
+        description: 'Please answer all required questions',
+        variant: 'destructive',
       });
       return;
     }
 
     // Calculate scores - get highest rating for overall satisfaction
     const productQuality = responses['product-quality'] || null;
-    const recommendationLikelihood = responses['recommendation-likelihood'] || null;
+    const recommendationLikelihood =
+      responses['recommendation-likelihood'] || null;
 
     // Calculate aggregate score (sum of all numeric responses)
-    const aggregateScore = Object.values(responses).reduce((sum: number, value: any) => {
-      return typeof value === 'number' ? sum + value : sum;
-    }, 0);
+    const aggregateScore = Object.values(responses).reduce(
+      (sum: number, value: any) => {
+        return typeof value === 'number' ? sum + value : sum;
+      },
+      0
+    );
 
     const responseData = {
       surveyId: selectedSurvey.id,
@@ -221,9 +258,13 @@ export default function CustomerSatisfactionSurvey({
       overallSatisfaction: productQuality, // Use product quality as overall satisfaction
       npsScore: recommendationLikelihood, // Use recommendation as NPS equivalent
       aggregateScore, // Sum of all question responses
-      responseTimeSeconds: Math.floor((new Date().getTime() - startTime.getTime()) / 1000),
+      responseTimeSeconds: Math.floor(
+        (new Date().getTime() - startTime.getTime()) / 1000
+      ),
       csrName: csrName || null, // Customer Service Representative name
-      surveyDate: surveyDate ? surveyDate.toISOString() : new Date().toISOString(),
+      surveyDate: surveyDate
+        ? surveyDate.toISOString()
+        : new Date().toISOString(),
       isComplete: true,
       submittedAt: new Date().toISOString(),
     };
@@ -260,8 +301,8 @@ export default function CustomerSatisfactionSurvey({
                 {question.type === 'nps' ? (
                   <span className="text-sm font-medium">{rating}</span>
                 ) : (
-                  <Star 
-                    className={`h-6 w-6 ${value === rating ? 'fill-current' : ''}`} 
+                  <Star
+                    className={`h-6 w-6 ${value === rating ? 'fill-current' : ''}`}
                   />
                 )}
               </button>
@@ -332,9 +373,9 @@ export default function CustomerSatisfactionSurvey({
         </div>
 
         {question.type === 'rating' && renderRatingQuestion(question)}
-        
+
         {question.type === 'nps' && renderNPSQuestion(question)}
-        
+
         {question.type === 'multiple_choice' && (
           <RadioGroup
             value={responses[question.id] || ''}
@@ -348,7 +389,7 @@ export default function CustomerSatisfactionSurvey({
             ))}
           </RadioGroup>
         )}
-        
+
         {question.type === 'yes_no' && (
           <RadioGroup
             value={responses[question.id] || ''}
@@ -356,37 +397,43 @@ export default function CustomerSatisfactionSurvey({
           >
             <div className="flex items-center space-x-2">
               <RadioGroupItem value="yes" id={`${question.id}-yes`} />
-              <Label htmlFor={`${question.id}-yes`} className="flex items-center space-x-2">
+              <Label
+                htmlFor={`${question.id}-yes`}
+                className="flex items-center space-x-2"
+              >
                 <ThumbsUp className="h-4 w-4 text-green-600" />
                 <span>Yes</span>
               </Label>
             </div>
             <div className="flex items-center space-x-2">
               <RadioGroupItem value="no" id={`${question.id}-no`} />
-              <Label htmlFor={`${question.id}-no`} className="flex items-center space-x-2">
+              <Label
+                htmlFor={`${question.id}-no`}
+                className="flex items-center space-x-2"
+              >
                 <ThumbsDown className="h-4 w-4 text-red-600" />
                 <span>No</span>
               </Label>
             </div>
           </RadioGroup>
         )}
-        
+
         {question.type === 'text' && (
           <Input
             value={responses[question.id] || ''}
             onChange={(e) => handleResponseChange(question.id, e.target.value)}
             placeholder="Enter your response..."
-            className={error ? "border-red-500" : ""}
+            className={error ? 'border-red-500' : ''}
           />
         )}
-        
+
         {question.type === 'textarea' && (
           <Textarea
             value={responses[question.id] || ''}
             onChange={(e) => handleResponseChange(question.id, e.target.value)}
             placeholder="Enter your response..."
             rows={4}
-            className={error ? "border-red-500" : ""}
+            className={error ? 'border-red-500' : ''}
           />
         )}
       </div>
@@ -414,15 +461,18 @@ export default function CustomerSatisfactionSurvey({
           <div className="text-center space-y-4">
             <AlertCircle className="h-12 w-12 text-gray-400 mx-auto" />
             <div>
-              <h3 className="text-lg font-medium text-gray-900">No Active Survey</h3>
-              <p className="text-gray-600">There are no active customer satisfaction surveys available.</p>
+              <h3 className="text-lg font-medium text-gray-900">
+                No Active Survey
+              </h3>
+              <p className="text-gray-600">
+                There are no active customer satisfaction surveys available.
+              </p>
             </div>
           </div>
         </CardContent>
       </Card>
     );
   }
-
 
   return (
     <div className="space-y-6">
@@ -436,13 +486,13 @@ export default function CustomerSatisfactionSurvey({
             <p className="text-gray-600">{selectedSurvey.description}</p>
           )}
         </CardHeader>
-        
+
         <CardContent className="space-y-6">
           {/* Customer Selection */}
           <div className="space-y-2">
             <Label htmlFor="customer">Select Customer *</Label>
-            <Select 
-              value={selectedCustomerId?.toString() || ""} 
+            <Select
+              value={selectedCustomerId?.toString() || ''}
               onValueChange={(value) => setSelectedCustomerId(parseInt(value))}
             >
               <SelectTrigger>
@@ -473,8 +523,8 @@ export default function CustomerSatisfactionSurvey({
             </div>
             <div className="space-y-2">
               <Label htmlFor="csrName">CSR</Label>
-              <Select 
-                value={csrName} 
+              <Select
+                value={csrName}
                 onValueChange={(value) => setCsrName(value)}
               >
                 <SelectTrigger data-testid="select-csr">
@@ -482,7 +532,10 @@ export default function CustomerSatisfactionSurvey({
                 </SelectTrigger>
                 <SelectContent>
                   {users.map((user: any) => (
-                    <SelectItem key={user.id} value={user.firstName || user.username}>
+                    <SelectItem
+                      key={user.id}
+                      value={user.firstName || user.username}
+                    >
                       {user.firstName || user.username}
                     </SelectItem>
                   ))}
@@ -499,7 +552,11 @@ export default function CustomerSatisfactionSurvey({
                     data-testid="button-survey-date"
                   >
                     <CalendarIcon className="mr-2 h-4 w-4" />
-                    {surveyDate ? format(surveyDate, "MM/dd/yyyy") : <span>Pick a date</span>}
+                    {surveyDate ? (
+                      format(surveyDate, 'MM/dd/yyyy')
+                    ) : (
+                      <span>Pick a date</span>
+                    )}
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0" align="start">
@@ -516,81 +573,112 @@ export default function CustomerSatisfactionSurvey({
 
           {/* All Questions */}
           <div className="space-y-6">
-            {selectedSurvey.questions.map((question: SurveyQuestion, index: number) => {
-              // Only number main questions, not comment questions
-              const isCommentQuestion = question.question.toLowerCase().includes('comment');
-              
-              // Count the actual question number by counting non-comment questions up to this index
-              let questionNumber = 0;
-              if (!isCommentQuestion) {
-                for (let i = 0; i <= index; i++) {
-                  if (!selectedSurvey.questions[i].question.toLowerCase().includes('comment')) {
-                    questionNumber++;
+            {selectedSurvey.questions.map(
+              (question: SurveyQuestion, index: number) => {
+                // Only number main questions, not comment questions
+                const isCommentQuestion = question.question
+                  .toLowerCase()
+                  .includes('comment');
+
+                // Count the actual question number by counting non-comment questions up to this index
+                let questionNumber = 0;
+                if (!isCommentQuestion) {
+                  for (let i = 0; i <= index; i++) {
+                    if (
+                      !selectedSurvey.questions[i].question
+                        .toLowerCase()
+                        .includes('comment')
+                    ) {
+                      questionNumber++;
+                    }
                   }
                 }
-              }
-              
-              return (
-                <div key={question.id} className="bg-gray-50 p-4 rounded-lg">
-                  <div className="space-y-3">
-                    <Label className="text-base font-medium">
-                      {isCommentQuestion ? '' : `${questionNumber}. `}{question.question}
-                      {question.required && <span className="text-red-500 ml-1">*</span>}
-                    </Label>
-                  
-                  {validationErrors[question.id] && (
-                    <div className="flex items-center space-x-2 text-red-600">
-                      <AlertCircle className="h-4 w-4" />
-                      <span className="text-sm">{validationErrors[question.id]}</span>
-                    </div>
-                  )}
 
-                  {(question.type === 'rating' || question.type === 'nps') && (
-                    <div className="space-y-2">
-                      <div className="flex justify-between text-sm text-gray-600">
-                        <span>{question.scale?.minLabel}</span>
-                        <span>{question.scale?.maxLabel}</span>
-                      </div>
-                      <div className="flex justify-center space-x-1">
-                        {Array.from({ length: (question.scale?.max || 5) - (question.scale?.min || 1) + 1 }, (_, i) => {
-                          const rating = (question.scale?.min || 1) + i;
-                          return (
-                            <button
-                              key={rating}
-                              type="button"
-                              onClick={() => handleResponseChange(question.id, rating)}
-                              className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                                responses[question.id] === rating
-                                  ? 'bg-blue-600 text-white'
-                                  : 'bg-white border border-gray-300 hover:bg-gray-50 text-gray-700'
-                              }`}
-                            >
-                              {rating}
-                            </button>
-                          );
-                        })}
-                      </div>
-                      {responses[question.id] !== undefined && (
-                        <div className="text-center text-sm text-gray-600">
-                          Selected: {responses[question.id]} / {question.scale?.max || 5}
+                return (
+                  <div key={question.id} className="bg-gray-50 p-4 rounded-lg">
+                    <div className="space-y-3">
+                      <Label className="text-base font-medium">
+                        {isCommentQuestion ? '' : `${questionNumber}. `}
+                        {question.question}
+                        {question.required && (
+                          <span className="text-red-500 ml-1">*</span>
+                        )}
+                      </Label>
+
+                      {validationErrors[question.id] && (
+                        <div className="flex items-center space-x-2 text-red-600">
+                          <AlertCircle className="h-4 w-4" />
+                          <span className="text-sm">
+                            {validationErrors[question.id]}
+                          </span>
                         </div>
                       )}
-                    </div>
-                  )}
 
-                  {question.type === 'textarea' && (
-                    <Textarea
-                      value={responses[question.id] || ''}
-                      onChange={(e) => handleResponseChange(question.id, e.target.value)}
-                      placeholder="Enter your comments..."
-                      rows={3}
-                      className={validationErrors[question.id] ? "border-red-500" : ""}
-                    />
-                  )}
+                      {(question.type === 'rating' ||
+                        question.type === 'nps') && (
+                        <div className="space-y-2">
+                          <div className="flex justify-between text-sm text-gray-600">
+                            <span>{question.scale?.minLabel}</span>
+                            <span>{question.scale?.maxLabel}</span>
+                          </div>
+                          <div className="flex justify-center space-x-1">
+                            {Array.from(
+                              {
+                                length:
+                                  (question.scale?.max || 5) -
+                                  (question.scale?.min || 1) +
+                                  1,
+                              },
+                              (_, i) => {
+                                const rating = (question.scale?.min || 1) + i;
+                                return (
+                                  <button
+                                    key={rating}
+                                    type="button"
+                                    onClick={() =>
+                                      handleResponseChange(question.id, rating)
+                                    }
+                                    className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                                      responses[question.id] === rating
+                                        ? 'bg-blue-600 text-white'
+                                        : 'bg-white border border-gray-300 hover:bg-gray-50 text-gray-700'
+                                    }`}
+                                  >
+                                    {rating}
+                                  </button>
+                                );
+                              }
+                            )}
+                          </div>
+                          {responses[question.id] !== undefined && (
+                            <div className="text-center text-sm text-gray-600">
+                              Selected: {responses[question.id]} /{' '}
+                              {question.scale?.max || 5}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {question.type === 'textarea' && (
+                        <Textarea
+                          value={responses[question.id] || ''}
+                          onChange={(e) =>
+                            handleResponseChange(question.id, e.target.value)
+                          }
+                          placeholder="Enter your comments..."
+                          rows={3}
+                          className={
+                            validationErrors[question.id]
+                              ? 'border-red-500'
+                              : ''
+                          }
+                        />
+                      )}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              }
+            )}
           </div>
 
           {/* Submit Button */}
@@ -609,7 +697,9 @@ export default function CustomerSatisfactionSurvey({
               ) : (
                 <>
                   <CheckCircle className="h-4 w-4" />
-                  <span>{existingResponse?.id ? 'Update Response' : 'Submit Survey'}</span>
+                  <span>
+                    {existingResponse?.id ? 'Update Response' : 'Submit Survey'}
+                  </span>
                 </>
               )}
             </Button>

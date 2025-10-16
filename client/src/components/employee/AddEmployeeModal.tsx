@@ -3,7 +3,13 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { Eye, EyeOff, RefreshCw } from 'lucide-react';
 
@@ -29,12 +35,12 @@ export default function AddEmployeeModal({ onClose }: AddEmployeeModalProps) {
     buildingKeyAccess: false,
     tciAccess: false,
   });
-  
+
   const [credentials, setCredentials] = useState({
     username: '',
     password: '',
   });
-  
+
   const [showPassword, setShowPassword] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -54,34 +60,37 @@ export default function AddEmployeeModal({ onClose }: AddEmployeeModalProps) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/employees'] });
       toast({
-        title: "Success",
-        description: "Employee added successfully",
+        title: 'Success',
+        description: 'Employee added successfully',
       });
       onClose();
     },
     onError: (error) => {
       toast({
-        title: "Error",
-        description: "Failed to add employee. Please try again.",
-        variant: "destructive",
+        title: 'Error',
+        description: 'Failed to add employee. Please try again.',
+        variant: 'destructive',
       });
     },
   });
 
   const generateCredentials = () => {
-    const username = formData.name.toLowerCase().replace(/\s+/g, '.') + Math.floor(Math.random() * 1000);
-    const password = Math.random().toString(36).slice(-8) + Math.floor(Math.random() * 100);
+    const username =
+      formData.name.toLowerCase().replace(/\s+/g, '.') +
+      Math.floor(Math.random() * 1000);
+    const password =
+      Math.random().toString(36).slice(-8) + Math.floor(Math.random() * 100);
     setCredentials({ username, password });
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!formData.name || !formData.jobTitle) {
       toast({
-        title: "Validation Error",
-        description: "Name and job title are required fields",
-        variant: "destructive",
+        title: 'Validation Error',
+        description: 'Name and job title are required fields',
+        variant: 'destructive',
       });
       return;
     }
@@ -91,9 +100,9 @@ export default function AddEmployeeModal({ onClose }: AddEmployeeModalProps) {
 
   const handleInputChange = (field: string, value: string) => {
     if (field === 'buildingKeyAccess' || field === 'tciAccess') {
-      setFormData(prev => ({ ...prev, [field]: value === 'true' }));
+      setFormData((prev) => ({ ...prev, [field]: value === 'true' }));
     } else {
-      setFormData(prev => ({ ...prev, [field]: value }));
+      setFormData((prev) => ({ ...prev, [field]: value }));
     }
   };
 
@@ -134,13 +143,18 @@ export default function AddEmployeeModal({ onClose }: AddEmployeeModalProps) {
 
         <div>
           <Label htmlFor="jobTitle">Job Title *</Label>
-          <Select value={formData.jobTitle} onValueChange={(value) => handleInputChange('jobTitle', value)}>
+          <Select
+            value={formData.jobTitle}
+            onValueChange={(value) => handleInputChange('jobTitle', value)}
+          >
             <SelectTrigger>
               <SelectValue placeholder="Select job title" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="HR Manager">HR Manager</SelectItem>
-              <SelectItem value="Production Manager">Production Manager</SelectItem>
+              <SelectItem value="Production Manager">
+                Production Manager
+              </SelectItem>
               <SelectItem value="Quality Control">Quality Control</SelectItem>
               <SelectItem value="Technician">Technician</SelectItem>
               <SelectItem value="Operator">Operator</SelectItem>
@@ -153,7 +167,10 @@ export default function AddEmployeeModal({ onClose }: AddEmployeeModalProps) {
 
         <div>
           <Label htmlFor="userRole">System Access Level</Label>
-          <Select value={formData.userRole} onValueChange={(value) => handleInputChange('userRole', value)}>
+          <Select
+            value={formData.userRole}
+            onValueChange={(value) => handleInputChange('userRole', value)}
+          >
             <SelectTrigger>
               <SelectValue placeholder="Select system role" />
             </SelectTrigger>
@@ -163,12 +180,17 @@ export default function AddEmployeeModal({ onClose }: AddEmployeeModalProps) {
               <SelectItem value="OWNER">Owner</SelectItem>
             </SelectContent>
           </Select>
-          <p className="text-xs text-gray-500 mt-1">System access level determines basic permissions</p>
+          <p className="text-xs text-gray-500 mt-1">
+            System access level determines basic permissions
+          </p>
         </div>
 
         <div>
           <Label htmlFor="department">Department</Label>
-          <Select value={formData.department} onValueChange={(value) => handleInputChange('department', value)}>
+          <Select
+            value={formData.department}
+            onValueChange={(value) => handleInputChange('department', value)}
+          >
             <SelectTrigger>
               <SelectValue placeholder="Select department" />
             </SelectTrigger>
@@ -185,7 +207,12 @@ export default function AddEmployeeModal({ onClose }: AddEmployeeModalProps) {
 
         <div>
           <Label htmlFor="employmentType">Employment Type</Label>
-          <Select value={formData.employmentType} onValueChange={(value) => handleInputChange('employmentType', value)}>
+          <Select
+            value={formData.employmentType}
+            onValueChange={(value) =>
+              handleInputChange('employmentType', value)
+            }
+          >
             <SelectTrigger>
               <SelectValue placeholder="Select type" />
             </SelectTrigger>
@@ -212,7 +239,9 @@ export default function AddEmployeeModal({ onClose }: AddEmployeeModalProps) {
           <Input
             id="gateCardNumber"
             value={formData.gateCardNumber}
-            onChange={(e) => handleInputChange('gateCardNumber', e.target.value)}
+            onChange={(e) =>
+              handleInputChange('gateCardNumber', e.target.value)
+            }
             placeholder="Card number"
           />
         </div>
@@ -245,7 +274,9 @@ export default function AddEmployeeModal({ onClose }: AddEmployeeModalProps) {
             <Input
               id="emergencyContact"
               value={formData.emergencyContact}
-              onChange={(e) => handleInputChange('emergencyContact', e.target.value)}
+              onChange={(e) =>
+                handleInputChange('emergencyContact', e.target.value)
+              }
               placeholder="Jane Doe"
             />
           </div>
@@ -255,7 +286,9 @@ export default function AddEmployeeModal({ onClose }: AddEmployeeModalProps) {
             <Input
               id="emergencyPhone"
               value={formData.emergencyPhone}
-              onChange={(e) => handleInputChange('emergencyPhone', e.target.value)}
+              onChange={(e) =>
+                handleInputChange('emergencyPhone', e.target.value)
+              }
               placeholder="(555) 987-6543"
             />
           </div>
@@ -268,7 +301,12 @@ export default function AddEmployeeModal({ onClose }: AddEmployeeModalProps) {
               type="checkbox"
               id="buildingKeyAccess"
               checked={formData.buildingKeyAccess}
-              onChange={(e) => handleInputChange('buildingKeyAccess', e.target.checked.toString())}
+              onChange={(e) =>
+                handleInputChange(
+                  'buildingKeyAccess',
+                  e.target.checked.toString()
+                )
+              }
               className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
             />
             <Label htmlFor="buildingKeyAccess">Building Key Access</Label>
@@ -279,7 +317,9 @@ export default function AddEmployeeModal({ onClose }: AddEmployeeModalProps) {
               type="checkbox"
               id="tciAccess"
               checked={formData.tciAccess}
-              onChange={(e) => handleInputChange('tciAccess', e.target.checked.toString())}
+              onChange={(e) =>
+                handleInputChange('tciAccess', e.target.checked.toString())
+              }
               className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
             />
             <Label htmlFor="tciAccess">TCI Access</Label>
@@ -290,7 +330,9 @@ export default function AddEmployeeModal({ onClose }: AddEmployeeModalProps) {
       {/* Auto-generate credentials section */}
       <div className="border-t pt-4">
         <div className="flex items-center justify-between mb-3">
-          <Label className="text-sm font-medium">System Access Credentials</Label>
+          <Label className="text-sm font-medium">
+            System Access Credentials
+          </Label>
           <Button
             type="button"
             variant="outline"
@@ -302,27 +344,41 @@ export default function AddEmployeeModal({ onClose }: AddEmployeeModalProps) {
             Generate
           </Button>
         </div>
-        
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <Label htmlFor="username" className="text-xs">Username</Label>
+            <Label htmlFor="username" className="text-xs">
+              Username
+            </Label>
             <Input
               id="username"
               value={credentials.username}
-              onChange={(e) => setCredentials(prev => ({ ...prev, username: e.target.value }))}
+              onChange={(e) =>
+                setCredentials((prev) => ({
+                  ...prev,
+                  username: e.target.value,
+                }))
+              }
               placeholder="Auto-generated username"
               className="text-xs"
             />
           </div>
 
           <div>
-            <Label htmlFor="password" className="text-xs">Password</Label>
+            <Label htmlFor="password" className="text-xs">
+              Password
+            </Label>
             <div className="relative">
               <Input
                 id="password"
-                type={showPassword ? "text" : "password"}
+                type={showPassword ? 'text' : 'password'}
                 value={credentials.password}
-                onChange={(e) => setCredentials(prev => ({ ...prev, password: e.target.value }))}
+                onChange={(e) =>
+                  setCredentials((prev) => ({
+                    ...prev,
+                    password: e.target.value,
+                  }))
+                }
                 placeholder="Auto-generated password"
                 className="text-xs pr-8"
               />
@@ -333,14 +389,19 @@ export default function AddEmployeeModal({ onClose }: AddEmployeeModalProps) {
                 className="absolute right-0 top-0 h-full px-2"
                 onClick={() => setShowPassword(!showPassword)}
               >
-                {showPassword ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                {showPassword ? (
+                  <EyeOff className="w-3 h-3" />
+                ) : (
+                  <Eye className="w-3 h-3" />
+                )}
               </Button>
             </div>
           </div>
         </div>
-        
+
         <p className="text-xs text-gray-500 mt-2">
-          These credentials will be used for system login and employee portal access.
+          These credentials will be used for system login and employee portal
+          access.
         </p>
       </div>
 

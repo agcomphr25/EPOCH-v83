@@ -17,7 +17,7 @@ console.log('');
 
 // Calculate when period 15 starts
 const periodIndex = 15;
-const periodStartMs = BASE_DATE.getTime() + (periodIndex * PERIOD_MS);
+const periodStartMs = BASE_DATE.getTime() + periodIndex * PERIOD_MS;
 const periodStartDate = new Date(periodStartMs);
 
 console.log('Period 15 (AP) calculation:');
@@ -33,7 +33,10 @@ console.log('Jan 10, 2025 + (15 × 14) days = Jan 10, 2025 + 210 days');
 // Manual verification
 const manualDate = new Date(2025, 0, 10); // Jan 10
 manualDate.setDate(manualDate.getDate() + 210);
-console.log('Manual calculation: Jan 10 + 210 days =', manualDate.toISOString().split('T')[0]);
+console.log(
+  'Manual calculation: Jan 10 + 210 days =',
+  manualDate.toISOString().split('T')[0]
+);
 
 console.log('');
 console.log('=== Period Timeline ===');
@@ -43,5 +46,7 @@ for (let i = 0; i <= 15; i++) {
   const secondIdx = i % 26;
   const letter = (idx) => String.fromCharCode(65 + idx);
   const prefix = `${letter(firstIdx)}${letter(secondIdx)}`;
-  console.log(`Period ${i.toString().padStart(2)}: ${prefix} starts ${start.toISOString().split('T')[0]}`);
+  console.log(
+    `Period ${i.toString().padStart(2)}: ${prefix} starts ${start.toISOString().split('T')[0]}`
+  );
 }

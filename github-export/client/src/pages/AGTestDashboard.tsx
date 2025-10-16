@@ -19,7 +19,9 @@ export default function AGTestDashboard() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">AGTEST Dashboard</h1>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
+            AGTEST Dashboard
+          </h1>
           <p className="text-gray-600 dark:text-gray-400 mt-1">
             Production Pipeline Overview, Order Management & Layup Scheduling
           </p>
@@ -42,7 +44,7 @@ export default function AGTestDashboard() {
             </p>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center space-x-2">
@@ -54,7 +56,7 @@ export default function AGTestDashboard() {
             </p>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center space-x-2">
@@ -77,7 +79,9 @@ export default function AGTestDashboard() {
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
               <div className="flex items-center space-x-2">
                 <BarChart3 className="w-5 h-5 text-blue-600" />
-                <CardTitle className="text-lg">Production Pipeline Overview</CardTitle>
+                <CardTitle className="text-lg">
+                  Production Pipeline Overview
+                </CardTitle>
               </div>
               <Button
                 variant="ghost"
@@ -147,19 +151,25 @@ export default function AGTestDashboard() {
               {expandedSection === 'pipeline' && (
                 <>
                   <BarChart3 className="w-5 h-5 text-blue-600" />
-                  <CardTitle className="text-xl">Production Pipeline Overview - Expanded</CardTitle>
+                  <CardTitle className="text-xl">
+                    Production Pipeline Overview - Expanded
+                  </CardTitle>
                 </>
               )}
               {expandedSection === 'orders' && (
                 <>
                   <List className="w-5 h-5 text-green-600" />
-                  <CardTitle className="text-xl">All Orders - Expanded</CardTitle>
+                  <CardTitle className="text-xl">
+                    All Orders - Expanded
+                  </CardTitle>
                 </>
               )}
               {expandedSection === 'scheduler' && (
                 <>
                   <Calendar className="w-5 h-5 text-purple-600" />
-                  <CardTitle className="text-xl">Layup Scheduler - Expanded</CardTitle>
+                  <CardTitle className="text-xl">
+                    Layup Scheduler - Expanded
+                  </CardTitle>
                 </>
               )}
             </div>

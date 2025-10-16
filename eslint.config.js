@@ -45,18 +45,21 @@ export default [
     },
     rules: {
       // TypeScript rules
-      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_' },
+      ],
       '@typescript-eslint/no-explicit-any': 'warn',
       '@typescript-eslint/explicit-function-return-type': 'off',
       '@typescript-eslint/no-inferrable-types': 'off',
-      
+
       // React rules
       'react/jsx-uses-react': 'off',
       'react/react-in-jsx-scope': 'off',
       'react/prop-types': 'off',
       'react-hooks/rules-of-hooks': 'error',
       'react-hooks/exhaustive-deps': 'warn',
-      
+
       // Import rules
       'import/order': [
         'error',
@@ -71,13 +74,13 @@ export default [
           'newlines-between': 'always',
         },
       ],
-      
+
       // General rules
       'no-console': 'off', // Allow console.log for debugging
       'no-unused-vars': 'off', // Use TypeScript version instead
       'prefer-const': 'error',
       'no-var': 'error',
-      
+
       // Prettier integration
       'prettier/prettier': 'error',
     },

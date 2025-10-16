@@ -110,11 +110,15 @@ The application adopts a monorepo structure utilizing a full-stack TypeScript ap
 
 ### October 16, 2025 - Training Module Quiz Display Fixed
 - **Critical Bug Fixed**: Training modules in production were missing their quizzes/questions
-- **Root Cause**: Duplicate hardcoded training routes in `server/src/routes/index.ts` were overriding the database routes from `server/src/routes/training.ts`
+- **Root Cause 1**: Duplicate hardcoded training routes in `server/src/routes/index.ts` were overriding the database routes from `server/src/routes/training.ts`
   - Hardcoded routes returned static training data without quiz questions
   - Database routes properly fetch modules with their associated questions and options
-- **Solution**: Removed 504 lines of hardcoded training array and duplicate routes (lines 3543-4046)
-- **Result**: Training modules now correctly display quizzes loaded from the production database
+- **Root Cause 2**: Duplicate training module in database (ID 1) with 0 questions
+  - Module IDs 2-10 had the correct data with 5 questions each
+- **Solution**: 
+  - Removed 504 lines of hardcoded training array and duplicate routes (lines 3543-4046)
+  - Deleted duplicate module ID 1 from database
+- **Result**: All 9 training modules now correctly display with their quizzes (5 questions each)
 - **Files Modified**: `server/src/routes/index.ts` - cleaned up to use only database-backed training routes
 
 ### October 16, 2025 - Training Navigation Fixed

@@ -328,7 +328,7 @@ export default function CustomerSatisfaction() {
 
       {/* Analytics Cards */}
       {analytics && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center space-x-2">
@@ -336,18 +336,6 @@ export default function CustomerSatisfaction() {
                 <div>
                   <p className="text-sm text-gray-600">Total Responses</p>
                   <p className="text-2xl font-bold">{analytics.totalResponses}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center space-x-2">
-                <CheckCircle className="h-5 w-5 text-green-600" />
-                <div>
-                  <p className="text-sm text-gray-600">Completion Rate</p>
-                  <p className="text-2xl font-bold">{analytics.completionRate?.toFixed(1) || '0'}%</p>
                 </div>
               </div>
             </CardContent>

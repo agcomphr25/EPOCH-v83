@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { storage } from '../../storage';
+import { pool } from '../../db';
 import { uploadMiddleware, getFileInfo, getFileUrl, validateEmployeeDocumentAccess, getDocumentType } from '../../utils/fileUpload';
 import {
   insertEmployeeSchema,
@@ -93,6 +94,175 @@ router.patch("/employee-capabilities/:id/toggle", async (req: Request, res: Resp
   } catch (error) {
     console.error("Toggle hardcoded capability error:", error);
     res.status(500).json({ error: "Failed to toggle hardcoded capability" });
+  }
+});
+
+// Employee Certifications Matrix - Get all employees with their certifications (MUST be before /:id)
+router.get("/certifications-matrix", async (req: Request, res: Response) => {
+  try {
+    // Get all active certifications and all active employees in a CROSS JOIN
+    // Then LEFT JOIN to employee_certifications to show which ones they have
+    const result = await pool.query`
+      SELECT 
+        e.id as "employeeId",
+        e.name as "employeeName",
+        e.job_title as "jobTitle",
+        e.department as "department",
+        c.id as "certificationId",
+        c.name as "certificationName",
+        ec.id as "certificationRecordId",
+        ec.date_obtained as "dateEarned",
+        ec.expiry_date as "expiryDate",
+        ec.status,
+        ec.notes
+      FROM employees e
+      CROSS JOIN certifications c
+      LEFT JOIN employee_certifications ec 
+        ON e.id = ec.employee_id AND c.id = ec.certification_id
+      WHERE e.is_active = true AND c.is_active = true
+      ORDER BY e.name, c.name
+    `;
+    
+    res.json(result || []);
+  } catch (error) {
+    console.error("Get certifications matrix error:", error);
+    res.status(500).json({ error: "Failed to fetch certifications matrix" });
+  }
+});
+
+// All Evaluations - Get all employees with their evaluations (MUST be before /:id)
+router.get("/evaluations", async (req: Request, res: Response) => {
+  try {
+    const result = await pool.query`
+      SELECT 
+        e.id as "employeeId",
+        e.name as "employeeName",
+        e.job_title as "jobTitle",
+        e.department as "department",
+        ev.id as "evaluationId",
+        ev.evaluation_type as "evaluationType",
+        ev.evaluation_period_start as "evaluationPeriodStart",
+        ev.evaluation_period_end as "evaluationPeriodEnd",
+        ev.overall_rating as "overallRating",
+        ev.achievements as "strengths",
+        ev.areas_for_improvement as "areasForImprovement",
+        ev.goals,
+        ev.evaluator_id as "evaluatedBy",
+        ev.reviewed_at as "evaluatedAt",
+        ev.status
+      FROM employees e
+      LEFT JOIN evaluations ev ON e.id = ev.employee_id
+      WHERE e.is_active = true
+      ORDER BY e.name, ev.evaluation_period_end DESC
+    `;
+    
+    res.json(result || []);
+  } catch (error) {
+    console.error("Get evaluations error:", error);
+    res.status(500).json({ error: "Failed to fetch evaluations" });
+  }
+});
+
+// Create new evaluation (MUST be before /:id)
+router.post("/evaluations", async (req: Request, res: Response) => {
+  try {
+    const {
+      employeeId,
+      evaluationType,
+      certificationIds,
+      strengths,
+      areasForImprovement,
+      goals,
+      evaluatedBy,
+      status
+    } = req.body;
+
+    if (!employeeId) {
+      return res.status(400).json({ error: "Employee ID is required" });
+    }
+
+    // Calculate period start/end based on evaluation type
+    const now = new Date();
+    const periodEnd = now;
+    let periodStart = new Date(now);
+    
+    switch (evaluationType) {
+      case 'BIANNUAL':
+        periodStart.setMonth(periodStart.getMonth() - 6);
+        break;
+      case 'ANNUAL':
+        periodStart.setFullYear(periodStart.getFullYear() - 1);
+        break;
+      case 'QUARTERLY':
+        periodStart.setMonth(periodStart.getMonth() - 3);
+        break;
+      case 'PROBATION':
+        periodStart.setMonth(periodStart.getMonth() - 3);
+        break;
+      default:
+        periodStart.setMonth(periodStart.getMonth() - 6);
+    }
+
+    // Create evaluation
+    const result = await pool.query`
+      INSERT INTO evaluations (
+        employee_id,
+        evaluation_type,
+        evaluation_period_start,
+        evaluation_period_end,
+        achievements,
+        areas_for_improvement,
+        goals,
+        evaluator_id,
+        status,
+        reviewed_at,
+        created_at,
+        updated_at
+      ) VALUES (
+        ${employeeId},
+        ${evaluationType},
+        ${periodStart.toISOString()},
+        ${periodEnd.toISOString()},
+        ${strengths || ''},
+        ${areasForImprovement || ''},
+        ${goals || ''},
+        ${evaluatedBy || 'system'},
+        ${status || 'COMPLETED'},
+        ${now.toISOString()},
+        NOW(),
+        NOW()
+      )
+      RETURNING id
+    `;
+
+    const evaluationId = result[0]?.id;
+
+    // Link certifications to evaluation if provided
+    if (certificationIds && certificationIds.length > 0) {
+      for (const certId of certificationIds) {
+        await pool.query`
+          INSERT INTO evaluation_certifications (
+            evaluation_id,
+            certification_id
+          ) VALUES (
+            ${evaluationId},
+            ${certId}
+          )
+        `;
+      }
+    }
+
+    res.status(201).json({
+      success: true,
+      evaluationId,
+      message: "Evaluation created successfully"
+    });
+  } catch (error) {
+    console.error("Create evaluation error:", error);
+    if (error instanceof Error) {
+      return res.status(500).json({ error: error.message });
+    }
+    res.status(500).json({ error: "Failed to create evaluation" });
   }
 });
 

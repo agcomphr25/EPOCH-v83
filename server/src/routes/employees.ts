@@ -163,6 +163,109 @@ router.get("/evaluations", async (req: Request, res: Response) => {
   }
 });
 
+// Create new evaluation (MUST be before /:id)
+router.post("/evaluations", async (req: Request, res: Response) => {
+  try {
+    const {
+      employeeId,
+      evaluationType,
+      certificationIds,
+      strengths,
+      areasForImprovement,
+      goals,
+      evaluatedBy,
+      status
+    } = req.body;
+
+    if (!employeeId) {
+      return res.status(400).json({ error: "Employee ID is required" });
+    }
+
+    // Calculate period start/end based on evaluation type
+    const now = new Date();
+    const periodEnd = now;
+    let periodStart = new Date(now);
+    
+    switch (evaluationType) {
+      case 'BIANNUAL':
+        periodStart.setMonth(periodStart.getMonth() - 6);
+        break;
+      case 'ANNUAL':
+        periodStart.setFullYear(periodStart.getFullYear() - 1);
+        break;
+      case 'QUARTERLY':
+        periodStart.setMonth(periodStart.getMonth() - 3);
+        break;
+      case 'PROBATION':
+        periodStart.setMonth(periodStart.getMonth() - 3);
+        break;
+      default:
+        periodStart.setMonth(periodStart.getMonth() - 6);
+    }
+
+    // Create evaluation
+    const result = await pool.query`
+      INSERT INTO evaluations (
+        employee_id,
+        evaluation_type,
+        evaluation_period_start,
+        evaluation_period_end,
+        achievements,
+        areas_for_improvement,
+        goals,
+        evaluator_id,
+        status,
+        reviewed_at,
+        created_at,
+        updated_at
+      ) VALUES (
+        ${employeeId},
+        ${evaluationType},
+        ${periodStart.toISOString()},
+        ${periodEnd.toISOString()},
+        ${strengths || ''},
+        ${areasForImprovement || ''},
+        ${goals || ''},
+        ${evaluatedBy || 'system'},
+        ${status || 'COMPLETED'},
+        ${now.toISOString()},
+        NOW(),
+        NOW()
+      )
+      RETURNING id
+    `;
+
+    const evaluationId = result[0]?.id;
+
+    // Link certifications to evaluation if provided
+    if (certificationIds && certificationIds.length > 0) {
+      for (const certId of certificationIds) {
+        await pool.query`
+          INSERT INTO evaluation_certifications (
+            evaluation_id,
+            certification_id
+          ) VALUES (
+            ${evaluationId},
+            ${certId}
+          )
+        `;
+      }
+    }
+
+    res.status(201).json({
+      success: true,
+      evaluationId,
+      message: "Evaluation created successfully"
+    });
+  } catch (error) {
+    console.error("Create evaluation error:", error);
+    if (error instanceof Error) {
+      return res.status(500).json({ error: error.message });
+    }
+    res.status(500).json({ error: "Failed to create evaluation" });
+  }
+});
+
 router.get('/:id', async (req: Request, res: Response) => {
   try {
     const employee = await storage.getEmployee(parseInt(req.params.id));

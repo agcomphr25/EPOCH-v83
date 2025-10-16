@@ -14,7 +14,8 @@ const emailSchema = z.object({
   to: z.string().email(),
   subject: z.string().min(1),
   message: z.string().min(1),
-  customerId: z.union([z.string(), z.number()]).transform(val => String(val)),
+  html: z.string().optional(), // For HTML email content
+  customerId: z.union([z.string(), z.number()]).transform(val => String(val)).optional().nullable(),
   orderId: z.string().optional().nullable()
 });
 
@@ -45,28 +46,30 @@ router.post('/email', async (req, res) => {
       from: 'stacisales@agcomposites.com',
       subject: data.subject,
       text: data.message,
-      html: data.message.replace(/\n/g, '<br>')
+      html: data.html || data.message.replace(/\n/g, '<br>')
     };
     
     const emailResult = await sgMail.send(msg);
     
-    // Store in database with new columns
-    const [communicationLog] = await db.insert(communicationLogs).values({
-      customerId: data.customerId,
-      orderId: data.orderId || null,
-      messageType: 'email-outbound',
-      type: 'shipping-notification',
-      method: 'email',
-      direction: 'outbound',
-      sender: 'stacisales@agcomposites.com',
-      recipient: data.to,
-      subject: data.subject,
-      message: data.message,
-      status: 'sent',
-      isRead: false,
-      externalId: emailResult[0].headers['x-message-id'],
-      sentAt: new Date()
-    }).returning();
+    // Store in database with new columns (only if customerId is provided)
+    if (data.customerId) {
+      const [communicationLog] = await db.insert(communicationLogs).values({
+        customerId: data.customerId,
+        orderId: data.orderId || null,
+        messageType: 'email-outbound',
+        type: 'shipping-notification',
+        method: 'email',
+        direction: 'outbound',
+        sender: 'stacisales@agcomposites.com',
+        recipient: data.to,
+        subject: data.subject,
+        message: data.message,
+        status: 'sent',
+        isRead: false,
+        externalId: emailResult[0].headers['x-message-id'],
+        sentAt: new Date()
+      }).returning();
+    }
     
     console.log(`Email sent to ${data.to} for customer ${data.customerId}${data.orderId ? ` (Order: ${data.orderId})` : ''}`);
     

@@ -5,6 +5,22 @@ EPOCH v8 is a comprehensive Manufacturing ERP system designed for small manufact
 
 ## Recent Changes
 
+**October 16, 2025 - Vendor Management UX Improvement: Single-Step Contact Addition**
+- **Fixed Vendor Modal Contact Workflow**: Additional Contacts tab now works during vendor creation (not just editing)
+  - **Previous Limitation**: Contacts tab was disabled for new vendors, requiring two-step process (create vendor → edit → add contacts)
+  - **New Behavior**: Users can add contacts while creating a new vendor in a single, streamlined workflow
+  - **Implementation Details**:
+    - Added `pendingContacts` state to store contacts temporarily before vendor creation
+    - Removed disabled condition on "Additional Contacts" tab - now always accessible
+    - Updated contact mutations to handle both pending (new vendor) and API (existing vendor) contacts
+    - Modified create vendor mutation to create vendor + all pending contacts in one transaction
+    - Dual UI logic: shows pending contacts during creation, API contacts during editing
+    - Added proper state management with tempId tracking for pending contacts
+    - Includes edit/delete functionality for pending contacts before vendor creation
+    - Separate delete dialogs for pending vs. existing contacts
+  - **User Experience**: Single-flow onboarding - add vendor info, contacts, and evaluation notes, then save everything at once
+  - **Status**: ✅ Implemented and verified - all TypeScript checks passing, server running successfully
+
 **October 15, 2025 - Enhanced Vendor Management with Tabbed Interface & Multiple Contacts**
 - **Tabbed Vendor Management System**: Comprehensive CRUD module with three-tab interface under Inventory section
   - **Database Schema**: 
@@ -17,7 +33,7 @@ EPOCH v8 is a comprehensive Manufacturing ERP system designed for small manufact
   - **Storage Layer**: Complete CRUD methods for vendors and contacts with soft delete functionality
   - **Frontend Tabbed Modal**: 
     - **Tab 1 - Main Info**: Basic vendor details (name, primary contact, email, phone, address, approval status)
-    - **Tab 2 - Additional Contacts**: List and CRUD for unlimited vendor contacts (disabled for new vendors, enabled on edit)
+    - **Tab 2 - Additional Contacts**: List and CRUD for unlimited vendor contacts (now works for both new and existing vendors)
     - **Tab 3 - Evaluation & Notes**: Evaluation tracking with date, status, and detailed notes
   - **Features**: 
     - Inline contact forms with add/edit capability

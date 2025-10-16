@@ -66,7 +66,8 @@ import { Loader2, Plus, Pencil, Trash2, X, Check } from 'lucide-react';
 const metalAccessorySchema = z.object({
   name: z.string().min(1, 'Name is required'),
   category: z.enum(['Bottom Metals', 'Rails', 'Other']),
-  inventory: z.number().min(0, 'Must be 0 or greater'),
+  inventory: z.number().int('Must be a whole number'), // Allow negative values
+  minimumThreshold: z.number().int('Must be a whole number').min(0, 'Must be 0 or greater'),
   machined: z.number().min(0, 'Must be 0 or greater'),
   atAnodizer: z.number().min(0, 'Must be 0 or greater'),
 });
@@ -106,6 +107,7 @@ export default function MetalAccessoriesTracker() {
       name: '',
       category: 'Bottom Metals' as const,
       inventory: 0,
+      minimumThreshold: 0,
       machined: 0,
       atAnodizer: 0,
     },
@@ -117,6 +119,7 @@ export default function MetalAccessoriesTracker() {
       name: '',
       category: 'Bottom Metals' as const,
       inventory: 0,
+      minimumThreshold: 0,
       machined: 0,
       atAnodizer: 0,
     },
@@ -207,6 +210,7 @@ export default function MetalAccessoriesTracker() {
       name: item.name,
       category: item.category as any,
       inventory: item.inventory,
+      minimumThreshold: item.minimumThreshold,
       machined: item.machined,
       atAnodizer: item.atAnodizer,
     });
@@ -472,7 +476,7 @@ export default function MetalAccessoriesTracker() {
                           name="inventory"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Current Inventory</FormLabel>
+                              <FormLabel>Current Inventory (can be negative)</FormLabel>
                               <FormControl>
                                 <Input
                                   type="number"
@@ -483,6 +487,29 @@ export default function MetalAccessoriesTracker() {
                                     )
                                   }
                                   data-testid="edit-input-inventory"
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={editForm.control}
+                          name="minimumThreshold"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Minimum Threshold</FormLabel>
+                              <FormControl>
+                                <Input
+                                  type="number"
+                                  {...field}
+                                  onChange={(e) =>
+                                    field.onChange(
+                                      parseInt(e.target.value) || 0
+                                    )
+                                  }
+                                  data-testid="edit-input-minimum-threshold"
                                 />
                               </FormControl>
                               <FormMessage />
@@ -584,6 +611,7 @@ export default function MetalAccessoriesTracker() {
                       <TableHead>Name</TableHead>
                       <TableHead>Category</TableHead>
                       <TableHead>Inventory</TableHead>
+                      <TableHead>Min. Threshold</TableHead>
                       <TableHead>Quantity Machined</TableHead>
                       <TableHead>Quantity at Anodizer</TableHead>
                       <TableHead>Actions</TableHead>
@@ -606,6 +634,9 @@ export default function MetalAccessoriesTracker() {
                         </TableCell>
                         <TableCell data-testid={`text-inventory-${item.id}`}>
                           {item.inventory}
+                        </TableCell>
+                        <TableCell data-testid={`text-min-threshold-${item.id}`}>
+                          {item.minimumThreshold}
                         </TableCell>
                         <TableCell data-testid={`text-machined-${item.id}`}>
                           {item.machined}
@@ -709,7 +740,7 @@ export default function MetalAccessoriesTracker() {
                       name="inventory"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Current Inventory</FormLabel>
+                          <FormLabel>Current Inventory (can be negative)</FormLabel>
                           <FormControl>
                             <Input
                               type="number"
@@ -718,6 +749,27 @@ export default function MetalAccessoriesTracker() {
                                 field.onChange(parseInt(e.target.value) || 0)
                               }
                               data-testid="input-inventory"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="minimumThreshold"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Minimum Threshold</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="number"
+                              {...field}
+                              onChange={(e) =>
+                                field.onChange(parseInt(e.target.value) || 0)
+                              }
+                              data-testid="input-minimum-threshold"
                             />
                           </FormControl>
                           <FormMessage />

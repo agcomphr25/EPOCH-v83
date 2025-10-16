@@ -276,6 +276,82 @@ function parseQuestions(content: string): TrainingContent['questions'] {
   return questions;
 }
 
+export interface CertificationContent {
+  name: string;
+  description: string;
+  issuingOrganization: string | null;
+  validityPeriod: number | null;
+  category: string | null;
+  requirements: string;
+  jobPosition: string | null;
+  workInstructions: string[];
+}
+
+export async function extractCertificationContent(fileBuffer: Buffer): Promise<CertificationContent> {
+  const result = await analyzeDocument(fileBuffer, 'document');
+  
+  const content = result.content || '';
+  const lines = content.split('\n').filter(line => line.trim());
+  
+  const name = lines[0]?.trim() || 'Untitled Certification';
+  
+  const descriptionMatch = content.match(/(?:description|summary|overview|purpose):?\s*([^\n]+)/i);
+  const description = descriptionMatch ? descriptionMatch[1].trim() : '';
+  
+  const orgMatch = content.match(/(?:issuing organization|issued by|certifying body):?\s*([^\n]+)/i);
+  const issuingOrganization = orgMatch ? orgMatch[1].trim() : null;
+  
+  const validityMatch = content.match(/(?:validity|valid for|expiry period):?\s*(\d+)\s*(?:months?|years?)/i);
+  let validityPeriod: number | null = null;
+  if (validityMatch) {
+    validityPeriod = parseInt(validityMatch[1]);
+    if (validityMatch[0].toLowerCase().includes('year')) {
+      validityPeriod = validityPeriod * 12;
+    }
+  }
+  
+  const categoryMatch = content.match(/(?:category|type|certification type):?\s*([^\n]+)/i);
+  const category = categoryMatch ? categoryMatch[1].trim().toUpperCase() : 'TECHNICAL';
+  
+  const positionMatch = content.match(/(?:job position|position|role|job title):?\s*([^\n]+)/i);
+  const jobPosition = positionMatch ? positionMatch[1].trim() : null;
+  
+  const requirementsMatch = content.match(/(?:requirements|prerequisites|qualifications):?\s*([\s\S]*?)(?:\n\n|work instructions|$)/i);
+  const requirements = requirementsMatch ? requirementsMatch[1].trim() : content.substring(0, 500);
+  
+  const workInstructions: string[] = [];
+  const instructionsPattern = /(?:work instructions?|procedure|steps?|tasks?):?\s*([\s\S]*?)(?:\n\n|$)/gi;
+  const instructionsMatches = Array.from(content.matchAll(instructionsPattern));
+  
+  instructionsMatches.forEach(match => {
+    const instructionText = match[1].trim();
+    const steps = instructionText.split(/\n/).filter(s => s.trim());
+    workInstructions.push(...steps);
+  });
+  
+  if (workInstructions.length === 0 && lines.length > 3) {
+    const startIdx = lines.findIndex(line => 
+      line.toLowerCase().includes('instruction') || 
+      line.toLowerCase().includes('procedure') ||
+      line.toLowerCase().includes('step')
+    );
+    if (startIdx > 0 && startIdx < lines.length - 1) {
+      workInstructions.push(...lines.slice(startIdx + 1, Math.min(startIdx + 10, lines.length)));
+    }
+  }
+  
+  return {
+    name,
+    description,
+    issuingOrganization,
+    validityPeriod,
+    category,
+    requirements,
+    jobPosition,
+    workInstructions
+  };
+}
+
 export interface TrainingMatrixData {
   entries: Array<{
     employeeName: string | null;

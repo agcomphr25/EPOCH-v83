@@ -97,46 +97,46 @@ router.patch("/employee-capabilities/:id/toggle", async (req: Request, res: Resp
   }
 });
 
-// Employee Certifications Matrix - Get all employee certifications in a flattened format (MUST be before /:id)
+// Employee Certifications Matrix - Get all employees with their certifications (MUST be before /:id)
 router.get("/certifications-matrix", async (req: Request, res: Response) => {
   try {
-    const result = await pool.query(`
+    const result = await pool.query`
       SELECT 
-        ec.id,
-        ec.employee_id as "employeeId",
+        e.id as "employeeId",
         e.name as "employeeName",
         e.job_title as "jobTitle",
         e.department as "department",
+        ec.id as "certificationRecordId",
         ec.certification_id as "certificationId",
         c.name as "certificationName",
         ec.date_obtained as "dateEarned",
         ec.expiry_date as "expiryDate",
         ec.status,
         ec.notes
-      FROM employee_certifications ec
-      INNER JOIN employees e ON ec.employee_id = e.id
-      INNER JOIN certifications c ON ec.certification_id = c.id
+      FROM employees e
+      LEFT JOIN employee_certifications ec ON e.id = ec.employee_id
+      LEFT JOIN certifications c ON ec.certification_id = c.id
       WHERE e.is_active = true
       ORDER BY e.name, c.name
-    `);
+    `;
     
-    res.json((result as any).rows || []);
+    res.json(result || []);
   } catch (error) {
     console.error("Get certifications matrix error:", error);
     res.status(500).json({ error: "Failed to fetch certifications matrix" });
   }
 });
 
-// All Evaluations - Get all employee evaluations (MUST be before /:id)
+// All Evaluations - Get all employees with their evaluations (MUST be before /:id)
 router.get("/evaluations", async (req: Request, res: Response) => {
   try {
-    const result = await pool.query(`
+    const result = await pool.query`
       SELECT 
-        ev.id,
-        ev.employee_id as "employeeId",
+        e.id as "employeeId",
         e.name as "employeeName",
         e.job_title as "jobTitle",
         e.department as "department",
+        ev.id as "evaluationId",
         ev.evaluation_type as "evaluationType",
         ev.evaluation_period_start as "evaluationPeriodStart",
         ev.evaluation_period_end as "evaluationPeriodEnd",
@@ -147,13 +147,13 @@ router.get("/evaluations", async (req: Request, res: Response) => {
         ev.evaluator_id as "evaluatedBy",
         ev.reviewed_at as "evaluatedAt",
         ev.status
-      FROM evaluations ev
-      INNER JOIN employees e ON ev.employee_id = e.id
+      FROM employees e
+      LEFT JOIN evaluations ev ON e.id = ev.employee_id
       WHERE e.is_active = true
-      ORDER BY ev.evaluation_period_end DESC, e.name
-    `);
+      ORDER BY e.name, ev.evaluation_period_end DESC
+    `;
     
-    res.json((result as any).rows || []);
+    res.json(result || []);
   } catch (error) {
     console.error("Get evaluations error:", error);
     res.status(500).json({ error: "Failed to fetch evaluations" });

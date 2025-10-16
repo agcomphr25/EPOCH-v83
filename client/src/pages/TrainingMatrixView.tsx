@@ -444,10 +444,12 @@ export default function TrainingMatrixView() {
       sortOrder === "asc" ? a.name.localeCompare(b.name) : b.name.localeCompare(a.name)
     );
 
-    // Extract unique certifications
-    const certifications = Array.from(new Set(certificationsData.map(c => c.certificationName))).sort((a, b) =>
-      sortOrder === "asc" ? a.localeCompare(b) : b.localeCompare(a)
-    );
+    // Extract unique certifications (filter out nulls)
+    const certifications = Array.from(new Set(certificationsData.map(c => c.certificationName)))
+      .filter(name => name !== null && name !== undefined)
+      .sort((a, b) =>
+        sortOrder === "asc" ? a.localeCompare(b) : b.localeCompare(a)
+      );
 
     const filteredEmployees = searchTerm
       ? employees.filter(emp => emp.name.toLowerCase().includes(searchTerm.toLowerCase()))

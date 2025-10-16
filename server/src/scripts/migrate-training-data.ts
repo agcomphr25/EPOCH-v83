@@ -134,14 +134,30 @@ async function migrateTrainingData() {
       console.log(`   Migrated attempt ID ${id} (record ${trainingRecordId} → ${newRecordId})`);
     }
 
-    // Step 12: Import training matrix to PROD
+    // Step 12: Import training matrix to PROD (only entries without employee references)
     console.log('\n📥 Step 12: Importing training matrix to PROD database...');
+    let skippedMatrixCount = 0;
+    let migratedMatrixCount = 0;
+    
     for (const entry of devMatrix) {
       const { id, ...matrixData } = entry;
+      
+      // Skip entries with employee_id references (employees may not exist in prod)
+      if (entry.employeeId) {
+        skippedMatrixCount++;
+        continue;
+      }
+      
       await prodDb.insert(schema.trainingMatrix)
         .values(matrixData);
+      migratedMatrixCount++;
       console.log(`   Migrated matrix entry ID ${id}: ${entry.trainingName}`);
     }
+    
+    if (skippedMatrixCount > 0) {
+      console.log(`   ⚠️  Skipped ${skippedMatrixCount} entries with employee references (employees not in production)`);
+    }
+    console.log(`   ✅ Migrated ${migratedMatrixCount} training matrix entries`);
 
     // Step 13: Verify migration
     console.log('\n✅ Step 13: Verifying migration...');

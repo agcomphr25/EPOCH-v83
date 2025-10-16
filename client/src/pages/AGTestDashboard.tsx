@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { BarChart3, Calendar, List, Maximize2, Minimize2, Search, ArrowRight, Edit, QrCode, Users, ExternalLink, LogOut, ListOrdered, Repeat, Package } from 'lucide-react';
+import { BarChart3, Calendar, List, Maximize2, Minimize2, Search, ArrowRight, Edit, QrCode, Users, ExternalLink, LogOut, ListOrdered, Repeat, Package, GraduationCap } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import PipelineVisualization from '@/components/PipelineVisualization';
@@ -225,6 +225,25 @@ export default function AGTestDashboard() {
             </div>
             <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
               Track metal parts demand and production forecasting
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card 
+          className="hover:shadow-md transition-all duration-200 cursor-pointer hover:bg-emerald-50 dark:hover:bg-emerald-900/20"
+          onClick={() => navigateTo('/training')}
+          data-testid="card-training-modules"
+        >
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <GraduationCap className="w-5 h-5 text-emerald-600" />
+                <span className="text-sm font-medium">Training Modules</span>
+              </div>
+              <ExternalLink className="w-4 h-4 text-gray-400" />
+            </div>
+            <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+              Complete training courses and certifications
             </p>
           </CardContent>
         </Card>

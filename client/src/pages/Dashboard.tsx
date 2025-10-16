@@ -11,7 +11,8 @@ import {
   Users, 
   DollarSign,
   BarChart3,
-  CheckCircle
+  CheckCircle,
+  GraduationCap
 } from "lucide-react";
 
 export default function Dashboard() {
@@ -137,6 +138,33 @@ export default function Dashboard() {
                 <Button className="w-full justify-start" variant="outline">
                   <Settings className="h-4 w-4 mr-2" />
                   Time Clock Admin
+                </Button>
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Training Modules */}
+        <Card className="hover:shadow-lg transition-shadow">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2">
+              <GraduationCap className="h-5 w-5 text-teal-600" />
+              Training
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-gray-600 mb-4">Complete training modules and certifications</p>
+            <div className="space-y-2">
+              <Link href="/training">
+                <Button className="w-full justify-start" variant="outline">
+                  <GraduationCap className="h-4 w-4 mr-2" />
+                  All Training Modules
+                </Button>
+              </Link>
+              <Link href="/training-matrix">
+                <Button className="w-full justify-start" variant="outline">
+                  <CheckCircle className="h-4 w-4 mr-2" />
+                  Training Matrix
                 </Button>
               </Link>
             </div>

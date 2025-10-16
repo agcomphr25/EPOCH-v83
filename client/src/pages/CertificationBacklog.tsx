@@ -74,17 +74,23 @@ export default function CertificationBacklog() {
     }) => {
       if (data.existingId) {
         // Update existing
-        return apiRequest('/api/employees/certifications/' + data.existingId, 'PATCH', {
-          dateObtained: data.dateObtained,
-          isActive: !!data.dateObtained,
+        return apiRequest('/api/employees/certifications/' + data.existingId, {
+          method: 'PATCH',
+          body: {
+            dateObtained: data.dateObtained,
+            isActive: !!data.dateObtained,
+          },
         });
       } else {
         // Create new
-        return apiRequest('/api/employees/certifications', 'POST', {
-          employeeId: data.employeeId,
-          certificationId: data.certificationId,
-          dateObtained: data.dateObtained,
-          isActive: true,
+        return apiRequest('/api/employees/certifications', {
+          method: 'POST',
+          body: {
+            employeeId: data.employeeId,
+            certificationId: data.certificationId,
+            dateObtained: data.dateObtained,
+            isActive: true,
+          },
         });
       }
     },

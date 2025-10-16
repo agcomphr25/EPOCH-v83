@@ -3168,4 +3168,26 @@ export const insertFeatureSelectionSchema = createInsertSchema(featureSelections
 export type FeatureSelection = typeof featureSelections.$inferSelect;
 export type InsertFeatureSelection = z.infer<typeof insertFeatureSelectionSchema>;
 
+// Magic Link Tokens - Passwordless authentication and secure actions
+export const magicLinkTokens = pgTable("magic_link_tokens", {
+  id: serial("id").primaryKey(),
+  token: text("token").notNull().unique(), // Unique cryptographic token
+  email: text("email").notNull(), // Email address to send link to
+  purpose: text("purpose").notNull(), // e.g., 'login', 'order_confirmation', 'password_reset', 'customer_action'
+  metadata: jsonb("metadata"), // Additional data (userId, orderId, customerId, etc.)
+  expiresAt: timestamp("expires_at").notNull(), // Token expiration time
+  usedAt: timestamp("used_at"), // When token was used (null if not used)
+  ipAddress: text("ip_address"), // IP that requested the link
+  userAgent: text("user_agent"), // User agent that requested the link
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertMagicLinkTokenSchema = createInsertSchema(magicLinkTokens).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type MagicLinkToken = typeof magicLinkTokens.$inferSelect;
+export type InsertMagicLinkToken = z.infer<typeof insertMagicLinkTokenSchema>;
+
 export * from './calendar.schema';

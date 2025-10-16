@@ -84,6 +84,7 @@ import TrainingManagement from '@/pages/TrainingManagement';
 import TrainingMatrixView from '@/pages/TrainingMatrixView';
 import TrainingMatrixImport from '@/pages/TrainingMatrixImport';
 import TrainingMatrixManage from '@/pages/TrainingMatrixManage';
+import ImportCertifications from '@/pages/ImportCertifications';
 import Calendar from './pages/Calendar';
 import LayupPluggingQueuePage from './pages/LayupPluggingQueuePage';
 import BarcodeQueuePage from './pages/BarcodeQueuePage';
@@ -472,6 +473,10 @@ function App() {
                   <Route
                     path="/training-matrix-manage"
                     component={TrainingMatrixManage}
+                  />
+                  <Route
+                    path="/import-certifications"
+                    component={ImportCertifications}
                   />
                   <Route
                     path="/training/:moduleId"

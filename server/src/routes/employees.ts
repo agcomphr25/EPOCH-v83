@@ -137,7 +137,7 @@ router.get('/certifications-matrix', async (req: Request, res: Response) => {
       CROSS JOIN certifications c
       LEFT JOIN employee_certifications ec 
         ON e.id = ec.employee_id AND c.id = ec.certification_id
-      WHERE e.is_active = true AND c.is_active = true AND c.category = 'DEPARTMENT'
+      WHERE c.is_active = true AND c.category = 'DEPARTMENT'
       ORDER BY e.name, c.name
     `;
 
@@ -171,7 +171,6 @@ router.get('/evaluations', async (req: Request, res: Response) => {
         ev.status
       FROM employees e
       LEFT JOIN evaluations ev ON e.id = ev.employee_id
-      WHERE e.is_active = true
       ORDER BY e.name, ev.evaluation_period_end DESC
     `;
 

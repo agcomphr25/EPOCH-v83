@@ -165,8 +165,7 @@ export default function CertificationBacklog() {
     }
   };
 
-  // Filter to only active employees and department certifications
-  const activeEmployees = employees.filter(e => e.isActive);
+  // Filter to department certifications (show all employees, active or inactive)
   const departmentCerts = certifications.filter(c => c.category === 'DEPARTMENT');
 
   if (employeesLoading || certsLoading || empCertsLoading) {
@@ -198,7 +197,7 @@ export default function CertificationBacklog() {
               <CardTitle>Certification Backlog</CardTitle>
             </div>
             <Badge variant="secondary" data-testid="badge-cert-count">
-              {activeEmployees.length} Employees × {departmentCerts.length} Certifications
+              {employees.length} Employees × {departmentCerts.length} Certifications
             </Badge>
           </div>
         </CardHeader>
@@ -228,7 +227,7 @@ export default function CertificationBacklog() {
                 </tr>
               </thead>
               <tbody>
-                {activeEmployees.map(employee => (
+                {employees.map(employee => (
                   <tr key={employee.id} className="border-b hover:bg-muted/30">
                     <td className="sticky left-0 z-10 bg-background p-3 border-r font-medium">
                       <div className="flex flex-col">

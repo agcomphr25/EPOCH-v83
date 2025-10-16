@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import {
   MessageSquare,
@@ -69,8 +69,9 @@ export default function InternalCommunicationBoard() {
   const [isUrgent, setIsUrgent] = useState(false);
   const [showCompose, setShowCompose] = useState(false);
   const [filterType, setFilterType] = useState<'all' | 'sent' | 'received'>(
-    'all'
+    'received'
   );
+  const [hasShownNotification, setHasShownNotification] = useState(false);
 
   // Attachment state
   const [attachmentType, setAttachmentType] = useState<
@@ -412,6 +413,25 @@ export default function InternalCommunicationBoard() {
     }
     return true;
   });
+
+  // Show notification for new unread messages on load
+  useEffect(() => {
+    if (!messages || messages.length === 0 || hasShownNotification || !currentUserId) return;
+
+    const unreadMessages = messages.filter((msg) => {
+      const recipient = msg.recipients?.find((r) => r.userId === currentUserId);
+      return recipient && !recipient.isRead && !recipient.isAccomplished;
+    });
+
+    if (unreadMessages.length > 0) {
+      toast({
+        title: `📬 You have ${unreadMessages.length} new message${unreadMessages.length > 1 ? 's' : ''}`,
+        description: `Click on "Received" to view your unread messages.`,
+        duration: 8000,
+      });
+      setHasShownNotification(true);
+    }
+  }, [messages, currentUserId, hasShownNotification, toast]);
 
   return (
     <div className="space-y-6">
@@ -813,10 +833,17 @@ export default function InternalCommunicationBoard() {
             );
             const isSent = msg.senderId === currentUserId;
 
+            const isUnread = isReceived && recipientStatus && !recipientStatus.isRead;
+            const isUnaccomplished = isReceived && recipientStatus && !recipientStatus.isAccomplished;
+            
             return (
               <Card
                 key={msg.id}
-                className={msg.isUrgent ? 'border-orange-500 border-2' : ''}
+                className={`
+                  ${msg.isUrgent ? 'border-orange-500 border-2' : ''}
+                  ${isUnread ? 'bg-blue-50 dark:bg-blue-950/20 border-blue-300 dark:border-blue-700' : ''}
+                  ${isUnaccomplished && !isUnread ? 'bg-yellow-50 dark:bg-yellow-950/20 border-yellow-300 dark:border-yellow-700' : ''}
+                `.trim()}
                 data-testid={`card-message-${msg.id}`}
               >
                 <CardHeader>

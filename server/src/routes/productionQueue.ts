@@ -261,6 +261,7 @@ router.get('/prioritized', async (req: Request, res: Response) => {
         o.fb_order_number as fbOrderNumber,
         o.model_id as modelId,
         o.model_id as stockModelId,
+        sm.display_name as stockModelDisplayName,
         o.due_date as dueDate,
         o.order_date as orderDate,
         o.current_department as currentDepartment,
@@ -273,6 +274,7 @@ router.get('/prioritized', async (req: Request, res: Response) => {
         c.name as customerName
       FROM all_orders o
       LEFT JOIN customers c ON CAST(o.customer_id AS INTEGER) = c.id
+      LEFT JOIN stock_models sm ON o.model_id = sm.id
       WHERE o.current_department = 'P1 Production Queue'
         AND o.status IN ('FINALIZED', 'Active')
         AND o.model_id IS NOT NULL 
@@ -299,6 +301,7 @@ router.get('/prioritized', async (req: Request, res: Response) => {
         fbOrderNumber: order.fbordernumber,
         modelId: order.modelid,
         stockModelId: order.modelid,
+        stockModelDisplayName: order.stockmodeldisplayname,
         dueDate: order.duedate,
         orderDate: order.orderdate,
         currentDepartment: order.currentdepartment,

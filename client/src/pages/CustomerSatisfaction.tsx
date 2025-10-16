@@ -70,6 +70,17 @@ interface Analytics {
     detractors: number;
   };
   averageResponseTimeMinutes: number;
+  questionScores?: Array<{
+    questionId: string;
+    question: string;
+    averageScore: number;
+    responseCount: number;
+    monthlyTrends: Array<{
+      month: string;
+      averageScore: number;
+      count: number;
+    }>;
+  }>;
 }
 
 // PDF Styles
@@ -600,6 +611,88 @@ export default function CustomerSatisfaction() {
               </CardContent>
             </Card>
           </div>
+
+          {/* Question-Level Analytics */}
+          {analytics.questionScores && analytics.questionScores.length > 0 && (
+            <div className="space-y-4">
+              <h3 className="text-xl font-semibold">Question Breakdown</h3>
+              <div className="grid grid-cols-1 gap-4">
+                {analytics.questionScores.map((questionScore) => (
+                  <Card key={questionScore.questionId} data-testid={`card-question-${questionScore.questionId}`}>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-base font-medium">
+                        {questionScore.question}
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-4">
+                        {/* Average Score Display */}
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm text-gray-600">Average Score</p>
+                            <p className="text-2xl font-bold text-blue-600" data-testid={`text-avg-score-${questionScore.questionId}`}>
+                              {questionScore.averageScore.toFixed(1)} / 10
+                            </p>
+                            <p className="text-xs text-gray-500">{questionScore.responseCount} responses</p>
+                          </div>
+                          
+                          {/* Progress Bar */}
+                          <div className="flex-1 max-w-xs ml-8">
+                            <div className="w-full bg-gray-200 rounded-full h-3">
+                              <div
+                                className="bg-gradient-to-r from-blue-500 to-blue-600 h-3 rounded-full transition-all"
+                                style={{ width: `${(questionScore.averageScore / 10) * 100}%` }}
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* 3-Month Trend */}
+                        <div className="border-t pt-4">
+                          <p className="text-sm font-medium text-gray-700 mb-3">3-Month Trend</p>
+                          <div className="grid grid-cols-3 gap-4">
+                            {questionScore.monthlyTrends.map((trend, index) => (
+                              <div 
+                                key={`${questionScore.questionId}-${trend.month}`}
+                                className="bg-gray-50 rounded-lg p-3"
+                                data-testid={`trend-${questionScore.questionId}-${index}`}
+                              >
+                                <p className="text-xs text-gray-600 mb-1">{trend.month}</p>
+                                <p className="text-lg font-semibold text-gray-900">
+                                  {trend.averageScore > 0 ? trend.averageScore.toFixed(1) : 'N/A'}
+                                </p>
+                                <p className="text-xs text-gray-500">
+                                  {trend.count} {trend.count === 1 ? 'response' : 'responses'}
+                                </p>
+                                {/* Trend Indicator */}
+                                {index < questionScore.monthlyTrends.length - 1 && trend.averageScore > 0 && (
+                                  <div className="mt-1">
+                                    {trend.averageScore > questionScore.monthlyTrends[index + 1].averageScore ? (
+                                      <span className="text-xs text-green-600 flex items-center">
+                                        <TrendingUp className="h-3 w-3 mr-1" />
+                                        Up
+                                      </span>
+                                    ) : trend.averageScore < questionScore.monthlyTrends[index + 1].averageScore ? (
+                                      <span className="text-xs text-red-600 flex items-center">
+                                        <TrendingUp className="h-3 w-3 mr-1 rotate-180" />
+                                        Down
+                                      </span>
+                                    ) : (
+                                      <span className="text-xs text-gray-600">Stable</span>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       ) : (
         <Card>

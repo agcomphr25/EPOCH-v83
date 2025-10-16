@@ -293,7 +293,7 @@ router.get('/prioritized', async (req: Request, res: Response) => {
     // Calculate current priority metrics
     const now = new Date();
     const enhancedQueue = prioritizedQueue.map((order: any, index: number) => {
-      const dueDate = new Date(order.dueDate || order.orderDate);
+      const dueDate = new Date(order.duedate || order.orderdate);
       const daysToDue = Math.floor((dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
       
       return {

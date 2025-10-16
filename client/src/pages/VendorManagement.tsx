@@ -40,11 +40,16 @@ interface VendorsResponse {
   };
 }
 
+type PendingContact = VendorContactFormData & { tempId: string };
+
 export default function VendorManagement() {
   const { toast } = useToast();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingVendor, setEditingVendor] = useState<Vendor | null>(null);
   const [deleteVendor, setDeleteVendor] = useState<Vendor | null>(null);
+  
+  // Pending contacts for new vendors (before vendor is created)
+  const [pendingContacts, setPendingContacts] = useState<PendingContact[]>([]);
   
   // Filter and pagination state
   const [search, setSearch] = useState('');
@@ -97,12 +102,34 @@ export default function VendorManagement() {
   // Create vendor mutation
   const createVendorMutation = useMutation({
     mutationFn: async (data: VendorFormData) => {
-      return await apiRequest('/api/vendors', { method: 'POST', body: data });
+      const vendor = await apiRequest('/api/vendors', { method: 'POST', body: data }) as Vendor;
+      
+      // Create pending contacts if any
+      if (pendingContacts.length > 0) {
+        await Promise.all(
+          pendingContacts.map(contact => 
+            apiRequest(`/api/vendors/${vendor.id}/contacts`, {
+              method: 'POST',
+              body: {
+                name: contact.name,
+                title: contact.title,
+                email: contact.email,
+                phone: contact.phone,
+                isPrimary: contact.isPrimary,
+                notes: contact.notes,
+              }
+            })
+          )
+        );
+      }
+      
+      return vendor;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/vendors'] });
       toast({ title: 'Vendor created successfully' });
       setIsModalOpen(false);
+      setPendingContacts([]);
       form.reset();
     },
     onError: () => {
@@ -144,7 +171,9 @@ export default function VendorManagement() {
 
   // Contact management state
   const [editingContact, setEditingContact] = useState<VendorContact | null>(null);
+  const [editingPendingContact, setEditingPendingContact] = useState<PendingContact | null>(null);
   const [deleteContact, setDeleteContact] = useState<VendorContact | null>(null);
+  const [deletePendingContact, setDeletePendingContact] = useState<PendingContact | null>(null);
   const [isAddingContact, setIsAddingContact] = useState(false);
   
   const contactForm = useForm<VendorContactFormData>({
@@ -174,30 +203,54 @@ export default function VendorManagement() {
   // Create contact mutation
   const createContactMutation = useMutation({
     mutationFn: async (data: VendorContactFormData) => {
-      if (!editingVendor?.id) throw new Error('No vendor selected');
-      return await apiRequest(`/api/vendors/${editingVendor.id}/contacts`, { method: 'POST', body: data });
+      if (editingVendor?.id) {
+        // Editing existing vendor - create via API
+        return await apiRequest(`/api/vendors/${editingVendor.id}/contacts`, { method: 'POST', body: data });
+      } else {
+        // Creating new vendor - add to pending contacts
+        const newContact: PendingContact = {
+          ...data,
+          tempId: `temp-${Date.now()}-${Math.random()}`,
+        };
+        setPendingContacts(prev => [...prev, newContact]);
+        return newContact;
+      }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/vendors', editingVendor?.id, 'contacts'] });
-      toast({ title: 'Contact created successfully' });
+      if (editingVendor?.id) {
+        queryClient.invalidateQueries({ queryKey: ['/api/vendors', editingVendor.id, 'contacts'] });
+      }
+      toast({ title: 'Contact added successfully' });
       setIsAddingContact(false);
       contactForm.reset();
     },
     onError: () => {
-      toast({ title: 'Failed to create contact', variant: 'destructive' });
+      toast({ title: 'Failed to add contact', variant: 'destructive' });
     },
   });
 
   // Update contact mutation
   const updateContactMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: number; data: VendorContactFormData }) => {
-      if (!editingVendor?.id) throw new Error('No vendor selected');
-      return await apiRequest(`/api/vendors/${editingVendor.id}/contacts/${id}`, { method: 'PUT', body: data });
+    mutationFn: async ({ id, data, tempId }: { id?: number; data: VendorContactFormData; tempId?: string }) => {
+      if (tempId) {
+        // Update pending contact
+        setPendingContacts(prev => 
+          prev.map(c => c.tempId === tempId ? { ...c, ...data } : c)
+        );
+        return data;
+      } else if (id && editingVendor?.id) {
+        // Update existing contact via API
+        return await apiRequest(`/api/vendors/${editingVendor.id}/contacts/${id}`, { method: 'PUT', body: data });
+      }
+      throw new Error('No contact identifier provided');
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/vendors', editingVendor?.id, 'contacts'] });
+      if (editingVendor?.id) {
+        queryClient.invalidateQueries({ queryKey: ['/api/vendors', editingVendor.id, 'contacts'] });
+      }
       toast({ title: 'Contact updated successfully' });
       setEditingContact(null);
+      setEditingPendingContact(null);
       contactForm.reset();
     },
     onError: () => {
@@ -207,14 +260,24 @@ export default function VendorManagement() {
 
   // Delete contact mutation
   const deleteContactMutation = useMutation({
-    mutationFn: async (id: number) => {
-      if (!editingVendor?.id) throw new Error('No vendor selected');
-      return await apiRequest(`/api/vendors/${editingVendor.id}/contacts/${id}`, { method: 'DELETE' });
+    mutationFn: async ({ id, tempId }: { id?: number; tempId?: string }) => {
+      if (tempId) {
+        // Delete pending contact
+        setPendingContacts(prev => prev.filter(c => c.tempId !== tempId));
+        return;
+      } else if (id && editingVendor?.id) {
+        // Delete existing contact via API
+        return await apiRequest(`/api/vendors/${editingVendor.id}/contacts/${id}`, { method: 'DELETE' });
+      }
+      throw new Error('No contact identifier provided');
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/vendors', editingVendor?.id, 'contacts'] });
+      if (editingVendor?.id) {
+        queryClient.invalidateQueries({ queryKey: ['/api/vendors', editingVendor.id, 'contacts'] });
+      }
       toast({ title: 'Contact deleted successfully' });
       setDeleteContact(null);
+      setDeletePendingContact(null);
     },
     onError: () => {
       toast({ title: 'Failed to delete contact', variant: 'destructive' });
@@ -246,6 +309,7 @@ export default function VendorManagement() {
   const handleCloseModal = () => {
     setIsModalOpen(false);
     setEditingVendor(null);
+    setPendingContacts([]);
     form.reset();
     // Reset contact form states
     setIsAddingContact(false);
@@ -306,8 +370,8 @@ export default function VendorManagement() {
             <Tabs defaultValue="main" className="w-full">
               <TabsList className="grid w-full grid-cols-3">
                 <TabsTrigger value="main" data-testid="tab-main-info">Main Info</TabsTrigger>
-                <TabsTrigger value="contacts" data-testid="tab-contacts" disabled={!editingVendor}>
-                  Additional Contacts
+                <TabsTrigger value="contacts" data-testid="tab-contacts">
+                  Additional Contacts {!editingVendor && pendingContacts.length > 0 && `(${pendingContacts.length})`}
                 </TabsTrigger>
                 <TabsTrigger value="evaluation" data-testid="tab-evaluation">Evaluation & Notes</TabsTrigger>
               </TabsList>
@@ -448,11 +512,69 @@ export default function VendorManagement() {
                   </Button>
                 </div>
                 
-                {contactsLoading ? (
+                {!editingVendor && !isAddingContact && pendingContacts.length === 0 && (
+                  <p className="text-center text-gray-500 py-4">No additional contacts added yet. Contacts will be saved when you create the vendor.</p>
+                )}
+                
+                {editingVendor && contactsLoading ? (
                   <p className="text-center text-gray-500 py-4">Loading contacts...</p>
-                ) : contacts.length === 0 ? (
+                ) : editingVendor && contacts.length === 0 && !isAddingContact ? (
                   <p className="text-center text-gray-500 py-4">No additional contacts added yet.</p>
-                ) : (
+                ) : null}
+                
+                {/* Display pending contacts (for new vendors) */}
+                {!editingVendor && pendingContacts.length > 0 && (
+                  <div className="space-y-2">
+                    {pendingContacts.map((contact) => (
+                      <div key={contact.tempId} className="border rounded-lg p-3 flex justify-between items-start" data-testid={`contact-card-${contact.tempId}`}>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <User className="w-4 h-4 text-gray-400" />
+                            <span className="font-medium">{contact.name}</span>
+                            {contact.isPrimary && (
+                              <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">Primary</span>
+                            )}
+                          </div>
+                          {contact.title && <p className="text-sm text-gray-600 mt-1">{contact.title}</p>}
+                          {contact.email && <p className="text-sm text-gray-600">{contact.email}</p>}
+                          {contact.phone && <p className="text-sm text-gray-600">{contact.phone}</p>}
+                          {contact.notes && <p className="text-sm text-gray-500 mt-1 italic">{contact.notes}</p>}
+                        </div>
+                        <div className="flex gap-2">
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            onClick={() => {
+                              setEditingPendingContact(contact);
+                              contactForm.reset({
+                                name: contact.name,
+                                title: contact.title || '',
+                                email: contact.email || '',
+                                phone: contact.phone || '',
+                                isPrimary: contact.isPrimary ?? false,
+                                notes: contact.notes || '',
+                              });
+                            }}
+                            data-testid={`button-edit-contact-${contact.tempId}`}
+                          >
+                            <Edit className="w-4 h-4" />
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            onClick={() => setDeletePendingContact(contact)}
+                            data-testid={`button-delete-contact-${contact.tempId}`}
+                          >
+                            <Trash2 className="w-4 h-4 text-red-500" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                
+                {/* Display API contacts (for existing vendors) */}
+                {editingVendor && contacts.length > 0 && (
                   <div className="space-y-2">
                     {contacts.map((contact) => (
                       <div key={contact.id} className="border rounded-lg p-3 flex justify-between items-start" data-testid={`contact-card-${contact.id}`}>
@@ -503,13 +625,15 @@ export default function VendorManagement() {
                 )}
                 
                 {/* Add/Edit Contact Form */}
-                {(isAddingContact || editingContact) && (
+                {(isAddingContact || editingContact || editingPendingContact) && (
                   <div className="border rounded-lg p-4 bg-gray-50 dark:bg-gray-800">
-                    <h4 className="font-semibold mb-3">{editingContact ? 'Edit Contact' : 'New Contact'}</h4>
+                    <h4 className="font-semibold mb-3">{(editingContact || editingPendingContact) ? 'Edit Contact' : 'New Contact'}</h4>
                     <Form {...contactForm}>
                       <form onSubmit={contactForm.handleSubmit((data) => {
                         if (editingContact) {
                           updateContactMutation.mutate({ id: editingContact.id, data });
+                        } else if (editingPendingContact) {
+                          updateContactMutation.mutate({ tempId: editingPendingContact.tempId, data });
                         } else {
                           createContactMutation.mutate(data);
                         }
@@ -615,6 +739,7 @@ export default function VendorManagement() {
                             onClick={() => {
                               setIsAddingContact(false);
                               setEditingContact(null);
+                              setEditingPendingContact(null);
                               contactForm.reset();
                             }}
                             data-testid="button-cancel-contact"
@@ -1002,11 +1127,33 @@ export default function VendorManagement() {
           <AlertDialogFooter>
             <AlertDialogCancel data-testid="button-cancel-delete-contact">Cancel</AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => deleteContact && deleteContactMutation.mutate(deleteContact.id)}
+              onClick={() => deleteContact && deleteContactMutation.mutate({ id: deleteContact.id })}
               className="bg-red-600 hover:bg-red-700"
               data-testid="button-confirm-delete-contact"
             >
               Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      
+      {/* Delete Pending Contact Confirmation Dialog */}
+      <AlertDialog open={!!deletePendingContact} onOpenChange={() => setDeletePendingContact(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Contact</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to remove "{deletePendingContact?.name}" from the contact list?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-delete-pending-contact">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deletePendingContact && deleteContactMutation.mutate({ tempId: deletePendingContact.tempId })}
+              className="bg-red-600 hover:bg-red-700"
+              data-testid="button-confirm-delete-pending-contact"
+            >
+              Remove
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

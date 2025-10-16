@@ -228,7 +228,7 @@ function App() {
                   />
 
                   {/* Vendor Management Routes */}
-
+                  <Route path="/vendor-management" component={VendorManagement} />
                   <Route path="/vendors" component={VendorManagement} />
                   <Route path="/vendor-pos" component={VendorPOPage} />
 

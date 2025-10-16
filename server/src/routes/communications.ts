@@ -2,14 +2,13 @@ import { Router } from 'express';
 import { z } from 'zod';
 import sgMail from '@sendgrid/mail';
 import twilio from 'twilio';
-import { eq, desc, and, sql } from 'drizzle-orm';
-
 import { db } from '../../db';
 import {
   communicationLogs,
   customerCommunications,
   customers,
 } from '../../schema';
+import { eq, desc, and, sql } from 'drizzle-orm';
 
 const router = Router();
 

@@ -1,6 +1,5 @@
 import { Router, Request, Response } from 'express';
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
-
 import { storage } from '../../storage';
 
 const router = Router();
@@ -20,9 +19,11 @@ router.post(
       } = req.body;
 
       if (!shipToCountry || shipToCountry === 'US') {
-        return res.status(400).json({
-          error: 'Commercial invoice only needed for international shipments',
-        });
+        return res
+          .status(400)
+          .json({
+            error: 'Commercial invoice only needed for international shipments',
+          });
       }
 
       // Get order data

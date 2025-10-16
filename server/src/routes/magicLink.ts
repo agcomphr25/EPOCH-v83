@@ -1,12 +1,11 @@
 import { Router, Request, Response } from 'express';
-import { z } from 'zod';
-
 import {
   generateMagicLink,
   validateMagicLink,
   sendMagicLink,
   cleanupExpiredMagicLinks,
 } from '../../utils/magicLink';
+import { z } from 'zod';
 import { authenticateToken } from '../../middleware/auth';
 
 const router = Router();

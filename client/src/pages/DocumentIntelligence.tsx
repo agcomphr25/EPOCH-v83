@@ -1,6 +1,4 @@
 import { useState } from 'react';
-import { Upload, FileText, Loader2, CheckCircle2 } from 'lucide-react';
-
 import {
   Card,
   CardContent,
@@ -20,6 +18,7 @@ import {
 } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
+import { Upload, FileText, Loader2, CheckCircle2 } from 'lucide-react';
 import { apiRequest } from '@/lib/queryClient';
 
 type DocumentType =

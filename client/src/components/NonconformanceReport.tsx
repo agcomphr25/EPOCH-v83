@@ -1,9 +1,8 @@
 import React from 'react';
-import { ArrowLeft, Download, FileText } from 'lucide-react';
-import { Link } from 'wouter';
-
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { ArrowLeft, Download, FileText } from 'lucide-react';
+import { Link } from 'wouter';
 
 const NonconformanceReport: React.FC = () => {
   return (

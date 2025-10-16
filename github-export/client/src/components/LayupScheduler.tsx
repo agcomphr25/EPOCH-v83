@@ -1,4 +1,14 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import { generateLayupSchedule } from '../utils/schedulerUtils';
+import {
+  scheduleLOPAdjustments,
+  identifyLOPOrders,
+  getLOPStatus,
+} from '../utils/lopScheduler';
+import useMoldSettings from '../hooks/useMoldSettings';
+import useEmployeeSettings from '../hooks/useEmployeeSettings';
+import { useUnifiedLayupOrders } from '../hooks/useUnifiedLayupOrders';
+import { apiRequest } from '@/lib/queryClient';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   DndContext,
@@ -10,6 +20,7 @@ import {
   useDroppable,
   useDraggable,
 } from '@dnd-kit/core';
+// SortableContext removed - using basic drag and drop instead
 import { CSS } from '@dnd-kit/utilities';
 import {
   addDays,
@@ -20,6 +31,18 @@ import {
   endOfMonth,
   eachDayOfInterval,
 } from 'date-fns';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Badge } from '@/components/ui/badge';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import {
   ChevronLeft,
   ChevronRight,
@@ -33,32 +56,6 @@ import {
   Printer,
   ArrowRight,
 } from 'lucide-react';
-
-import { generateLayupSchedule } from '../utils/schedulerUtils';
-import {
-  scheduleLOPAdjustments,
-  identifyLOPOrders,
-  getLOPStatus,
-} from '../utils/lopScheduler';
-import useMoldSettings from '../hooks/useMoldSettings';
-import useEmployeeSettings from '../hooks/useEmployeeSettings';
-import { useUnifiedLayupOrders } from '../hooks/useUnifiedLayupOrders';
-
-import { apiRequest } from '@/lib/queryClient';
-// SortableContext removed - using basic drag and drop instead
-
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Badge } from '@/components/ui/badge';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import {
   Dialog,
   DialogContent,
@@ -1508,7 +1505,7 @@ export default function LayupScheduler() {
 
       if (isAPR) {
         // For APR orders, show both action type AND action length
-        const actionType = order.features.action_inlet || order.features.action;
+        let actionType = order.features.action_inlet || order.features.action;
         let actionLength = order.features.action_length;
 
         if (!actionLength || actionLength === 'none') {

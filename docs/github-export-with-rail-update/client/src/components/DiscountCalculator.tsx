@@ -1,6 +1,4 @@
 import { useState } from 'react';
-import { Calculator, DollarSign, Info } from 'lucide-react';
-
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,6 +12,7 @@ import {
 } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
+import { Calculator, DollarSign, Info } from 'lucide-react';
 import {
   calculateFinalPrice,
   getActiveShortTermDiscounts,

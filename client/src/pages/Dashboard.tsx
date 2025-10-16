@@ -1,3 +1,5 @@
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { Link } from 'wouter';
 import {
   Plus,
@@ -12,9 +14,6 @@ import {
   CheckCircle,
   GraduationCap,
 } from 'lucide-react';
-
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 
 export default function Dashboard() {
   return (

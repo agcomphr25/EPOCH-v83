@@ -5,6 +5,17 @@ import React, {
   useCallback,
   useRef,
 } from 'react';
+import { generateLayupSchedule } from '../utils/schedulerUtils';
+import {
+  scheduleLOPAdjustments,
+  identifyLOPOrders,
+  getLOPStatus,
+} from '../utils/lopScheduler';
+import useMoldSettings from '../hooks/useMoldSettings';
+import useEmployeeSettings from '../hooks/useEmployeeSettings';
+import { useUnifiedLayupOrders } from '../hooks/useUnifiedLayupOrders';
+import { apiRequest } from '@/lib/queryClient';
+import AlgorithmicScheduler from './AlgorithmicScheduler';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   DndContext,
@@ -18,6 +29,7 @@ import {
   closestCenter,
   closestCorners,
 } from '@dnd-kit/core';
+// SortableContext removed - using basic drag and drop instead
 import { CSS } from '@dnd-kit/utilities';
 import {
   addDays,
@@ -29,6 +41,18 @@ import {
   endOfMonth,
   eachDayOfInterval,
 } from 'date-fns';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Badge } from '@/components/ui/badge';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import {
   ChevronLeft,
   ChevronRight,
@@ -46,33 +70,6 @@ import {
   X,
   CheckCircle,
 } from 'lucide-react';
-
-import { generateLayupSchedule } from '../utils/schedulerUtils';
-import {
-  scheduleLOPAdjustments,
-  identifyLOPOrders,
-  getLOPStatus,
-} from '../utils/lopScheduler';
-import useMoldSettings from '../hooks/useMoldSettings';
-import useEmployeeSettings from '../hooks/useEmployeeSettings';
-import { useUnifiedLayupOrders } from '../hooks/useUnifiedLayupOrders';
-import AlgorithmicScheduler from './AlgorithmicScheduler';
-
-import { apiRequest } from '@/lib/queryClient';
-// SortableContext removed - using basic drag and drop instead
-
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Badge } from '@/components/ui/badge';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import {
   Dialog,
   DialogContent,
@@ -2061,11 +2058,13 @@ export default function LayupScheduler() {
     console.log('🏔️ MESA UNIVERSAL DEBUG:', {
       totalOrders: allOrders?.length || 0,
       mesaUniversalCount: mesaUniversalOrders.length,
-      mesaOrders: mesaUniversalOrders.slice(0, 3).map((o) => ({
-        orderId: o.orderId,
-        modelId: o.modelId,
-        product: o.product,
-      })),
+      mesaOrders: mesaUniversalOrders
+        .slice(0, 3)
+        .map((o) => ({
+          orderId: o.orderId,
+          modelId: o.modelId,
+          product: o.product,
+        })),
     });
 
     console.log('🔍 LayupScheduler orders debug:', {
@@ -2421,7 +2420,7 @@ export default function LayupScheduler() {
     // Find compatible molds for each order
     const getCompatibleMolds = (order: any) => {
       // Use the intelligent stock model detection function defined above
-      const modelId = getOrderStockModelId(order);
+      let modelId = getOrderStockModelId(order);
 
       if (!modelId || modelId === 'unknown') {
         console.log(
@@ -3147,8 +3146,7 @@ export default function LayupScheduler() {
 
         if (isAPR) {
           // For APR orders, show both action type AND action length
-          const actionType =
-            order.features.action_inlet || order.features.action;
+          let actionType = order.features.action_inlet || order.features.action;
           let actionLength = order.features.action_length;
 
           if (!actionLength || actionLength === 'none') {

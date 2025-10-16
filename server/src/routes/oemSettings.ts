@@ -1,5 +1,4 @@
 import { Router } from 'express';
-
 import { storage } from '../../storage';
 import type { PurchaseOrder } from '../../schema';
 
@@ -22,9 +21,11 @@ router.post('/priority-settings/save', async (req, res) => {
 
     // Validate required fields
     if (!vendorId || !poId || !poNumber) {
-      return res.status(400).json({
-        error: 'Missing required fields: vendorId, poId, or poNumber',
-      });
+      return res
+        .status(400)
+        .json({
+          error: 'Missing required fields: vendorId, poId, or poNumber',
+        });
     }
 
     if (

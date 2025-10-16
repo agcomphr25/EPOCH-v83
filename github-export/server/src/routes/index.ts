@@ -1,7 +1,5 @@
-import { createServer, type Server } from 'http';
-
 import { Express } from 'express';
-
+import { createServer, type Server } from 'http';
 import authRoutes from './auth';
 import employeesRoutes from './employees';
 import ordersRoutes from './orders';
@@ -773,10 +771,12 @@ export function registerRoutes(app: Express): Server {
           res.json(result);
         } catch (parseError) {
           console.error('Failed to parse Python scheduler output:', parseError);
-          res.status(500).json({
-            error: 'Failed to parse scheduler output',
-            raw_output: output,
-          });
+          res
+            .status(500)
+            .json({
+              error: 'Failed to parse scheduler output',
+              raw_output: output,
+            });
         }
       });
 

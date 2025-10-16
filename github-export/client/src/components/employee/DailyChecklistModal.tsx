@@ -1,7 +1,4 @@
 import { useState, useEffect } from 'react';
-import { CheckSquare, AlertCircle, CheckCircle, X, Clock } from 'lucide-react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-
 import {
   Dialog,
   DialogContent,
@@ -26,7 +23,9 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
+import { CheckSquare, AlertCircle, CheckCircle, X, Clock } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 interface ChecklistItem {
   id: number;

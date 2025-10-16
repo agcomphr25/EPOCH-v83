@@ -1,4 +1,9 @@
 import React, { useState } from 'react';
+import { useCOGS } from '../hooks/useTransactions';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { RefreshCw, TrendingUp, TrendingDown } from 'lucide-react';
 import {
   BarChart,
@@ -10,13 +15,6 @@ import {
   Legend,
   ResponsiveContainer,
 } from 'recharts';
-
-import { useCOGS } from '../hooks/useTransactions';
-
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 
 /**
  * Cost of Goods Sold (COGS) Report component

@@ -1,9 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
 import JsBarcode from 'jsbarcode';
-import { Download, Printer, Package, Tag } from 'lucide-react';
-
-import { AveryLabelPrint } from './AveryLabelPrint';
-
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
@@ -13,6 +9,8 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import { Download, Printer, Package, Tag } from 'lucide-react';
+import { AveryLabelPrint } from './AveryLabelPrint';
 
 interface BarcodeDisplayProps {
   orderId: string;

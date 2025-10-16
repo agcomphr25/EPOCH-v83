@@ -1,4 +1,7 @@
 import React, { useMemo, useState } from 'react';
+import { BarcodeScanner } from '@/components/BarcodeScanner';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import {
   TrendingUp,
   ArrowLeft,
@@ -15,13 +18,6 @@ import {
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react';
-import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
-import { format, differenceInDays } from 'date-fns';
-import { useLocation } from 'wouter';
-
-import { BarcodeScanner } from '@/components/BarcodeScanner';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -30,10 +26,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import UPSLabelCreator from '@/components/UPSLabelCreator';
 import { apiRequest } from '@/lib/queryClient';
+import { format, differenceInDays } from 'date-fns';
 import { getDisplayOrderId } from '@/lib/orderUtils';
 import { useToast } from '@/hooks/use-toast';
+import { useLocation } from 'wouter';
 import { OrderSearchBox } from '@/components/OrderSearchBox';
 
 export default function QCShippingQueuePage() {

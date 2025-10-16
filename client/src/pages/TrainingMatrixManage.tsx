@@ -1,18 +1,55 @@
-import { useState } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
-import { useToast } from "@/hooks/use-toast";
-import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Plus, Edit, Trash2, CheckCircle2, Circle, Calendar, Users, BookOpen, Bell } from "lucide-react";
+import { useState } from 'react';
+import { useQuery, useMutation } from '@tanstack/react-query';
+import {
+  Plus,
+  Edit,
+  Trash2,
+  CheckCircle2,
+  Circle,
+  Calendar,
+  Users,
+  BookOpen,
+  Bell,
+} from 'lucide-react';
+
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
+import { useToast } from '@/hooks/use-toast';
+import { apiRequest, queryClient } from '@/lib/queryClient';
 
 type Employee = {
   id: number;
@@ -54,83 +91,91 @@ type FormData = {
 export default function TrainingMatrixManage() {
   const { toast } = useToast();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingEntry, setEditingEntry] = useState<TrainingMatrixEntry | null>(null);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [viewMode, setViewMode] = useState<"employee" | "training">("employee");
+  const [editingEntry, setEditingEntry] = useState<TrainingMatrixEntry | null>(
+    null
+  );
+  const [searchTerm, setSearchTerm] = useState('');
+  const [viewMode, setViewMode] = useState<'employee' | 'training'>('employee');
   const [isAssignDialogOpen, setIsAssignDialogOpen] = useState(false);
-  const [assignTraining, setAssignTraining] = useState<string>("");
+  const [assignTraining, setAssignTraining] = useState<string>('');
   const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<number[]>([]);
-  const [notificationMessage, setNotificationMessage] = useState("");
-  
+  const [notificationMessage, setNotificationMessage] = useState('');
+
   const [formData, setFormData] = useState<FormData>({
-    trainingName: "",
-    status: "PENDING",
+    trainingName: '',
+    status: 'PENDING',
   });
 
   // Fetch current user
   const { data: currentUser } = useQuery<{ id: number; username: string }>({
-    queryKey: ["/api/auth/session"],
+    queryKey: ['/api/auth/session'],
   });
 
   // Fetch employees
   const { data: employees = [] } = useQuery<Employee[]>({
-    queryKey: ["/api/employees"],
+    queryKey: ['/api/employees'],
   });
 
   // Fetch training modules
   const { data: modules = [] } = useQuery<TrainingModule[]>({
-    queryKey: ["/api/training/modules"],
+    queryKey: ['/api/training/modules'],
   });
 
   // Fetch training matrix
   const { data: matrixData = [], isLoading } = useQuery<TrainingMatrixEntry[]>({
-    queryKey: ["/api/training/matrix"],
+    queryKey: ['/api/training/matrix'],
   });
 
   // Fetch users for notification
   const { data: users = [] } = useQuery<any[]>({
-    queryKey: ["/api/users"],
+    queryKey: ['/api/users'],
   });
 
   // Create mutation
   const createMutation = useMutation({
     mutationFn: async (data: FormData) => {
-      return apiRequest("/api/training/matrix", {
-        method: "POST",
+      return apiRequest('/api/training/matrix', {
+        method: 'POST',
         body: JSON.stringify(data),
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/training/matrix"] });
+      queryClient.invalidateQueries({ queryKey: ['/api/training/matrix'] });
       toast({
-        title: "Success",
-        description: "Training assignment added successfully",
+        title: 'Success',
+        description: 'Training assignment added successfully',
       });
       setIsDialogOpen(false);
       resetForm();
     },
     onError: (error: any) => {
       toast({
-        title: "Error",
-        description: error.message || "Failed to create training assignment",
-        variant: "destructive",
+        title: 'Error',
+        description: error.message || 'Failed to create training assignment',
+        variant: 'destructive',
       });
     },
   });
 
   // Update mutation
   const updateMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: number; data: Partial<FormData> }) => {
+    mutationFn: async ({
+      id,
+      data,
+    }: {
+      id: number;
+      data: Partial<FormData>;
+    }) => {
       return apiRequest(`/api/training/matrix/${id}`, {
-        method: "PATCH",
+        method: 'PATCH',
         body: JSON.stringify(data),
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/training/matrix"] });
+      queryClient.invalidateQueries({ queryKey: ['/api/training/matrix'] });
       toast({
-        title: "Success",
-        description: "Training assignment updated successfully",
+        title: 'Success',
+        description: 'Training assignment updated successfully',
       });
       setIsDialogOpen(false);
       setEditingEntry(null);
@@ -138,9 +183,9 @@ export default function TrainingMatrixManage() {
     },
     onError: (error: any) => {
       toast({
-        title: "Error",
-        description: error.message || "Failed to update training assignment",
-        variant: "destructive",
+        title: 'Error',
+        description: error.message || 'Failed to update training assignment',
+        variant: 'destructive',
       });
     },
   });
@@ -149,29 +194,29 @@ export default function TrainingMatrixManage() {
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
       return apiRequest(`/api/training/matrix/${id}`, {
-        method: "DELETE",
+        method: 'DELETE',
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/training/matrix"] });
+      queryClient.invalidateQueries({ queryKey: ['/api/training/matrix'] });
       toast({
-        title: "Success",
-        description: "Training assignment deleted successfully",
+        title: 'Success',
+        description: 'Training assignment deleted successfully',
       });
     },
     onError: (error: any) => {
       toast({
-        title: "Error",
-        description: error.message || "Failed to delete training assignment",
-        variant: "destructive",
+        title: 'Error',
+        description: error.message || 'Failed to delete training assignment',
+        variant: 'destructive',
       });
     },
   });
 
   const resetForm = () => {
     setFormData({
-      trainingName: "",
-      status: "PENDING",
+      trainingName: '',
+      status: 'PENDING',
     });
     setEditingEntry(null);
   };
@@ -185,8 +230,12 @@ export default function TrainingMatrixManage() {
         jobTitle: entry.jobTitle ?? undefined,
         department: entry.department ?? undefined,
         trainingName: entry.trainingName,
-        lastCompleted: entry.lastCompleted ? new Date(entry.lastCompleted).toISOString().split('T')[0] : undefined,
-        nextDue: entry.nextDue ? new Date(entry.nextDue).toISOString().split('T')[0] : undefined,
+        lastCompleted: entry.lastCompleted
+          ? new Date(entry.lastCompleted).toISOString().split('T')[0]
+          : undefined,
+        nextDue: entry.nextDue
+          ? new Date(entry.nextDue).toISOString().split('T')[0]
+          : undefined,
         status: entry.status,
         notes: entry.notes ?? undefined,
       });
@@ -199,16 +248,16 @@ export default function TrainingMatrixManage() {
   const handleSubmit = () => {
     if (!formData.trainingName) {
       toast({
-        title: "Validation Error",
-        description: "Please select a training module",
-        variant: "destructive",
+        title: 'Validation Error',
+        description: 'Please select a training module',
+        variant: 'destructive',
       });
       return;
     }
 
     // If employee ID is selected, get employee details
     if (formData.employeeId) {
-      const employee = employees.find(e => e.id === formData.employeeId);
+      const employee = employees.find((e) => e.id === formData.employeeId);
       if (employee) {
         formData.employeeName = employee.name;
         formData.jobTitle = employee.jobTitle ?? undefined;
@@ -224,7 +273,11 @@ export default function TrainingMatrixManage() {
   };
 
   const handleDelete = (entry: TrainingMatrixEntry) => {
-    if (confirm(`Are you sure you want to delete this training assignment for ${entry.employeeName}?`)) {
+    if (
+      confirm(
+        `Are you sure you want to delete this training assignment for ${entry.employeeName}?`
+      )
+    ) {
       deleteMutation.mutate(entry.id);
     }
   };
@@ -232,29 +285,33 @@ export default function TrainingMatrixManage() {
   const handleOpenAssignDialog = (trainingName: string) => {
     setAssignTraining(trainingName);
     setSelectedEmployeeIds([]);
-    setNotificationMessage(`You have been assigned the training: ${trainingName}. Please complete it at your earliest convenience.`);
+    setNotificationMessage(
+      `You have been assigned the training: ${trainingName}. Please complete it at your earliest convenience.`
+    );
     setIsAssignDialogOpen(true);
   };
 
   const handleAssignAndNotify = async () => {
     if (selectedEmployeeIds.length === 0) {
       toast({
-        title: "Validation Error",
-        description: "Please select at least one employee",
-        variant: "destructive",
+        title: 'Validation Error',
+        description: 'Please select at least one employee',
+        variant: 'destructive',
       });
       return;
     }
 
     try {
       // Find the training module to get the ID for linking
-      const trainingModule = modules.find(m => m.title === assignTraining);
-      const moduleLink = trainingModule ? `\n\nClick here to start: /training/modules/${trainingModule.id}` : '';
-      
+      const trainingModule = modules.find((m) => m.title === assignTraining);
+      const moduleLink = trainingModule
+        ? `\n\nClick here to start: /training/modules/${trainingModule.id}`
+        : '';
+
       // Create training assignments and send notifications
       for (const empId of selectedEmployeeIds) {
-        const employee = employees.find(e => e.id === empId);
-        const user = users.find(u => u.id === empId);
+        const employee = employees.find((e) => e.id === empId);
+        const user = users.find((u) => u.id === empId);
         if (!employee || !user) continue;
 
         // Create training matrix entry
@@ -267,7 +324,7 @@ export default function TrainingMatrixManage() {
             department: employee.department,
             trainingName: assignTraining,
             status: 'PENDING',
-            notes: 'Assigned with notification'
+            notes: 'Assigned with notification',
           }),
         });
 
@@ -291,41 +348,48 @@ export default function TrainingMatrixManage() {
       queryClient.invalidateQueries({ queryKey: ['/api/internal-messages'] });
 
       toast({
-        title: "Success",
+        title: 'Success',
         description: `${assignTraining} assigned to ${selectedEmployeeIds.length} employee(s) with notifications sent.`,
       });
 
       setIsAssignDialogOpen(false);
       setSelectedEmployeeIds([]);
-      setNotificationMessage("");
+      setNotificationMessage('');
     } catch (error: any) {
       toast({
-        title: "Error",
-        description: error.message || "Failed to assign training and send notifications",
-        variant: "destructive",
+        title: 'Error',
+        description:
+          error.message || 'Failed to assign training and send notifications',
+        variant: 'destructive',
       });
     }
   };
 
-  const filteredMatrix = matrixData.filter(entry =>
-    ((entry.employeeName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-    entry.trainingName.toLowerCase().includes(searchTerm.toLowerCase()))
+  const filteredMatrix = matrixData.filter(
+    (entry) =>
+      (entry.employeeName || '')
+        .toLowerCase()
+        .includes(searchTerm.toLowerCase()) ||
+      entry.trainingName.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   // Group data by training for training view
-  const trainingGroups = filteredMatrix.reduce((acc, entry) => {
-    if (!acc[entry.trainingName]) {
-      acc[entry.trainingName] = [];
-    }
-    acc[entry.trainingName].push(entry);
-    return acc;
-  }, {} as Record<string, TrainingMatrixEntry[]>);
+  const trainingGroups = filteredMatrix.reduce(
+    (acc, entry) => {
+      if (!acc[entry.trainingName]) {
+        acc[entry.trainingName] = [];
+      }
+      acc[entry.trainingName].push(entry);
+      return acc;
+    },
+    {} as Record<string, TrainingMatrixEntry[]>
+  );
 
   // Get sorted list of trainings
   const sortedTrainings = Object.keys(trainingGroups).sort();
 
   const formatDate = (dateStr: string | null) => {
-    if (!dateStr) return "N/A";
+    if (!dateStr) return 'N/A';
     return new Date(dateStr).toLocaleDateString();
   };
 
@@ -334,9 +398,14 @@ export default function TrainingMatrixManage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">Training Matrix Management</h1>
-          <p className="text-muted-foreground">Assign trainings to employees and track completion</p>
+          <p className="text-muted-foreground">
+            Assign trainings to employees and track completion
+          </p>
         </div>
-        <Button onClick={() => handleOpenDialog()} data-testid="button-add-assignment">
+        <Button
+          onClick={() => handleOpenDialog()}
+          data-testid="button-add-assignment"
+        >
           <Plus className="h-4 w-4 mr-2" />
           Add Assignment
         </Button>
@@ -353,18 +422,18 @@ export default function TrainingMatrixManage() {
             </div>
             <div className="flex gap-2">
               <Button
-                variant={viewMode === "employee" ? "default" : "outline"}
+                variant={viewMode === 'employee' ? 'default' : 'outline'}
                 size="sm"
-                onClick={() => setViewMode("employee")}
+                onClick={() => setViewMode('employee')}
                 data-testid="button-view-employee"
               >
                 <Users className="h-4 w-4 mr-2" />
                 By Employee
               </Button>
               <Button
-                variant={viewMode === "training" ? "default" : "outline"}
+                variant={viewMode === 'training' ? 'default' : 'outline'}
                 size="sm"
-                onClick={() => setViewMode("training")}
+                onClick={() => setViewMode('training')}
                 data-testid="button-view-training"
               >
                 <BookOpen className="h-4 w-4 mr-2" />
@@ -373,7 +442,11 @@ export default function TrainingMatrixManage() {
             </div>
           </div>
           <Input
-            placeholder={viewMode === "employee" ? "Search by employee or training..." : "Search by training or employee..."}
+            placeholder={
+              viewMode === 'employee'
+                ? 'Search by employee or training...'
+                : 'Search by training or employee...'
+            }
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="max-w-md"
@@ -385,9 +458,10 @@ export default function TrainingMatrixManage() {
             <div className="text-center py-8">Loading...</div>
           ) : filteredMatrix.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
-              No training assignments found. Click "Add Assignment" to get started.
+              No training assignments found. Click "Add Assignment" to get
+              started.
             </div>
-          ) : viewMode === "employee" ? (
+          ) : viewMode === 'employee' ? (
             <Table>
               <TableHeader>
                 <TableRow>
@@ -402,29 +476,48 @@ export default function TrainingMatrixManage() {
               </TableHeader>
               <TableBody>
                 {filteredMatrix.map((entry) => (
-                  <TableRow key={entry.id} data-testid={`row-assignment-${entry.id}`}>
+                  <TableRow
+                    key={entry.id}
+                    data-testid={`row-assignment-${entry.id}`}
+                  >
                     <TableCell>
                       <div className="flex flex-col">
-                        <span className="font-medium">{entry.employeeName}</span>
+                        <span className="font-medium">
+                          {entry.employeeName}
+                        </span>
                         {entry.jobTitle && (
-                          <span className="text-xs text-muted-foreground">{entry.jobTitle}</span>
+                          <span className="text-xs text-muted-foreground">
+                            {entry.jobTitle}
+                          </span>
                         )}
                       </div>
                     </TableCell>
                     <TableCell>{entry.trainingName}</TableCell>
                     <TableCell>
                       <Badge
-                        variant={entry.status === 'COMPLETED' ? 'default' : entry.status === 'PENDING' ? 'secondary' : 'destructive'}
+                        variant={
+                          entry.status === 'COMPLETED'
+                            ? 'default'
+                            : entry.status === 'PENDING'
+                              ? 'secondary'
+                              : 'destructive'
+                        }
                         data-testid={`badge-status-${entry.id}`}
                       >
-                        {entry.status === 'COMPLETED' && <CheckCircle2 className="h-3 w-3 mr-1" />}
-                        {entry.status === 'PENDING' && <Circle className="h-3 w-3 mr-1" />}
+                        {entry.status === 'COMPLETED' && (
+                          <CheckCircle2 className="h-3 w-3 mr-1" />
+                        )}
+                        {entry.status === 'PENDING' && (
+                          <Circle className="h-3 w-3 mr-1" />
+                        )}
                         {entry.status}
                       </Badge>
                     </TableCell>
                     <TableCell>{formatDate(entry.lastCompleted)}</TableCell>
                     <TableCell>{formatDate(entry.nextDue)}</TableCell>
-                    <TableCell className="max-w-xs truncate">{entry.notes || "-"}</TableCell>
+                    <TableCell className="max-w-xs truncate">
+                      {entry.notes || '-'}
+                    </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
                         <Button
@@ -453,9 +546,11 @@ export default function TrainingMatrixManage() {
             <div className="space-y-6">
               {sortedTrainings.map((training) => {
                 const entries = trainingGroups[training];
-                const completedCount = entries.filter(e => e.status === 'COMPLETED').length;
+                const completedCount = entries.filter(
+                  (e) => e.status === 'COMPLETED'
+                ).length;
                 const totalCount = entries.length;
-                
+
                 return (
                   <div key={training} className="border rounded-lg p-4">
                     <div className="flex items-center justify-between mb-4">
@@ -466,8 +561,15 @@ export default function TrainingMatrixManage() {
                         </p>
                       </div>
                       <div className="flex items-center gap-3">
-                        <Badge variant={completedCount === totalCount ? "default" : "secondary"}>
-                          {Math.round((completedCount / totalCount) * 100)}% Complete
+                        <Badge
+                          variant={
+                            completedCount === totalCount
+                              ? 'default'
+                              : 'secondary'
+                          }
+                        >
+                          {Math.round((completedCount / totalCount) * 100)}%
+                          Complete
                         </Badge>
                         <Button
                           size="sm"
@@ -492,28 +594,49 @@ export default function TrainingMatrixManage() {
                       </TableHeader>
                       <TableBody>
                         {entries.map((entry) => (
-                          <TableRow key={entry.id} data-testid={`row-training-assignment-${entry.id}`}>
+                          <TableRow
+                            key={entry.id}
+                            data-testid={`row-training-assignment-${entry.id}`}
+                          >
                             <TableCell>
                               <div className="flex flex-col">
-                                <span className="font-medium">{entry.employeeName}</span>
+                                <span className="font-medium">
+                                  {entry.employeeName}
+                                </span>
                                 {entry.jobTitle && (
-                                  <span className="text-xs text-muted-foreground">{entry.jobTitle}</span>
+                                  <span className="text-xs text-muted-foreground">
+                                    {entry.jobTitle}
+                                  </span>
                                 )}
                               </div>
                             </TableCell>
                             <TableCell>
                               <Badge
-                                variant={entry.status === 'COMPLETED' ? 'default' : entry.status === 'PENDING' ? 'secondary' : 'destructive'}
+                                variant={
+                                  entry.status === 'COMPLETED'
+                                    ? 'default'
+                                    : entry.status === 'PENDING'
+                                      ? 'secondary'
+                                      : 'destructive'
+                                }
                                 data-testid={`badge-status-${entry.id}`}
                               >
-                                {entry.status === 'COMPLETED' && <CheckCircle2 className="h-3 w-3 mr-1" />}
-                                {entry.status === 'PENDING' && <Circle className="h-3 w-3 mr-1" />}
+                                {entry.status === 'COMPLETED' && (
+                                  <CheckCircle2 className="h-3 w-3 mr-1" />
+                                )}
+                                {entry.status === 'PENDING' && (
+                                  <Circle className="h-3 w-3 mr-1" />
+                                )}
                                 {entry.status}
                               </Badge>
                             </TableCell>
-                            <TableCell>{formatDate(entry.lastCompleted)}</TableCell>
+                            <TableCell>
+                              {formatDate(entry.lastCompleted)}
+                            </TableCell>
                             <TableCell>{formatDate(entry.nextDue)}</TableCell>
-                            <TableCell className="max-w-xs truncate">{entry.notes || "-"}</TableCell>
+                            <TableCell className="max-w-xs truncate">
+                              {entry.notes || '-'}
+                            </TableCell>
                             <TableCell className="text-right">
                               <div className="flex justify-end gap-2">
                                 <Button
@@ -549,9 +672,12 @@ export default function TrainingMatrixManage() {
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="max-w-2xl" data-testid="dialog-assignment">
           <DialogHeader>
-            <DialogTitle>{editingEntry ? "Edit" : "Add"} Training Assignment</DialogTitle>
+            <DialogTitle>
+              {editingEntry ? 'Edit' : 'Add'} Training Assignment
+            </DialogTitle>
             <DialogDescription>
-              {editingEntry ? "Update" : "Create"} a training assignment for an employee
+              {editingEntry ? 'Update' : 'Create'} a training assignment for an
+              employee
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
@@ -561,9 +687,14 @@ export default function TrainingMatrixManage() {
               </Label>
               <Select
                 value={formData.employeeId?.toString()}
-                onValueChange={(value) => setFormData({ ...formData, employeeId: parseInt(value) })}
+                onValueChange={(value) =>
+                  setFormData({ ...formData, employeeId: parseInt(value) })
+                }
               >
-                <SelectTrigger className="col-span-3" data-testid="select-employee">
+                <SelectTrigger
+                  className="col-span-3"
+                  data-testid="select-employee"
+                >
                   <SelectValue placeholder="Select employee" />
                 </SelectTrigger>
                 <SelectContent>
@@ -582,9 +713,14 @@ export default function TrainingMatrixManage() {
               </Label>
               <Select
                 value={formData.trainingName}
-                onValueChange={(value) => setFormData({ ...formData, trainingName: value })}
+                onValueChange={(value) =>
+                  setFormData({ ...formData, trainingName: value })
+                }
               >
-                <SelectTrigger className="col-span-3" data-testid="select-training">
+                <SelectTrigger
+                  className="col-span-3"
+                  data-testid="select-training"
+                >
                   <SelectValue placeholder="Select training" />
                 </SelectTrigger>
                 <SelectContent>
@@ -603,9 +739,14 @@ export default function TrainingMatrixManage() {
               </Label>
               <Select
                 value={formData.status}
-                onValueChange={(value) => setFormData({ ...formData, status: value })}
+                onValueChange={(value) =>
+                  setFormData({ ...formData, status: value })
+                }
               >
-                <SelectTrigger className="col-span-3" data-testid="select-status">
+                <SelectTrigger
+                  className="col-span-3"
+                  data-testid="select-status"
+                >
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -625,8 +766,10 @@ export default function TrainingMatrixManage() {
                 id="lastCompleted"
                 type="date"
                 className="col-span-3"
-                value={formData.lastCompleted || ""}
-                onChange={(e) => setFormData({ ...formData, lastCompleted: e.target.value })}
+                value={formData.lastCompleted || ''}
+                onChange={(e) =>
+                  setFormData({ ...formData, lastCompleted: e.target.value })
+                }
                 data-testid="input-last-completed"
               />
             </div>
@@ -639,8 +782,10 @@ export default function TrainingMatrixManage() {
                 id="nextDue"
                 type="date"
                 className="col-span-3"
-                value={formData.nextDue || ""}
-                onChange={(e) => setFormData({ ...formData, nextDue: e.target.value })}
+                value={formData.nextDue || ''}
+                onChange={(e) =>
+                  setFormData({ ...formData, nextDue: e.target.value })
+                }
                 data-testid="input-next-due"
               />
             </div>
@@ -652,8 +797,10 @@ export default function TrainingMatrixManage() {
               <Textarea
                 id="notes"
                 className="col-span-3"
-                value={formData.notes || ""}
-                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                value={formData.notes || ''}
+                onChange={(e) =>
+                  setFormData({ ...formData, notes: e.target.value })
+                }
                 placeholder="Add any notes about this training..."
                 data-testid="textarea-notes"
               />
@@ -669,10 +816,10 @@ export default function TrainingMatrixManage() {
               data-testid="button-submit"
             >
               {createMutation.isPending || updateMutation.isPending
-                ? "Saving..."
+                ? 'Saving...'
                 : editingEntry
-                ? "Update"
-                : "Create"}
+                  ? 'Update'
+                  : 'Create'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -686,48 +833,67 @@ export default function TrainingMatrixManage() {
               Assign Training & Send Notifications
             </DialogTitle>
             <DialogDescription>
-              Assign "{assignTraining}" to employees and notify them via internal messages
+              Assign "{assignTraining}" to employees and notify them via
+              internal messages
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="space-y-2">
-              <Label>Select Employees ({selectedEmployeeIds.length} selected)</Label>
+              <Label>
+                Select Employees ({selectedEmployeeIds.length} selected)
+              </Label>
               <div className="border rounded-md p-3 max-h-60 overflow-y-auto space-y-2 bg-background">
                 <div className="flex items-center space-x-2 p-2 bg-muted rounded-md">
                   <Checkbox
                     id="select-all-assign"
-                    checked={selectedEmployeeIds.length === employees.length && employees.length > 0}
+                    checked={
+                      selectedEmployeeIds.length === employees.length &&
+                      employees.length > 0
+                    }
                     onCheckedChange={() => {
                       if (selectedEmployeeIds.length === employees.length) {
                         setSelectedEmployeeIds([]);
                       } else {
-                        setSelectedEmployeeIds(employees.map(e => e.id));
+                        setSelectedEmployeeIds(employees.map((e) => e.id));
                       }
                     }}
                     data-testid="checkbox-select-all-assign"
                   />
-                  <Label htmlFor="select-all-assign" className="font-bold cursor-pointer flex-1">
+                  <Label
+                    htmlFor="select-all-assign"
+                    className="font-bold cursor-pointer flex-1"
+                  >
                     Select All ({employees.length} employees)
                   </Label>
                 </div>
-                
+
                 {employees.map((emp) => (
-                  <div key={emp.id} className="flex items-center space-x-2 p-2 hover:bg-muted rounded-md">
+                  <div
+                    key={emp.id}
+                    className="flex items-center space-x-2 p-2 hover:bg-muted rounded-md"
+                  >
                     <Checkbox
                       id={`assign-emp-${emp.id}`}
                       checked={selectedEmployeeIds.includes(emp.id)}
                       onCheckedChange={() => {
-                        setSelectedEmployeeIds(prev => 
-                          prev.includes(emp.id) 
-                            ? prev.filter(id => id !== emp.id)
+                        setSelectedEmployeeIds((prev) =>
+                          prev.includes(emp.id)
+                            ? prev.filter((id) => id !== emp.id)
                             : [...prev, emp.id]
                         );
                       }}
                       data-testid={`checkbox-assign-emp-${emp.id}`}
                     />
-                    <Label htmlFor={`assign-emp-${emp.id}`} className="cursor-pointer flex-1">
+                    <Label
+                      htmlFor={`assign-emp-${emp.id}`}
+                      className="cursor-pointer flex-1"
+                    >
                       {emp.name}
-                      {emp.jobTitle && <span className="text-xs text-muted-foreground ml-2">({emp.jobTitle})</span>}
+                      {emp.jobTitle && (
+                        <span className="text-xs text-muted-foreground ml-2">
+                          ({emp.jobTitle})
+                        </span>
+                      )}
                     </Label>
                   </div>
                 ))}
@@ -747,7 +913,10 @@ export default function TrainingMatrixManage() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsAssignDialogOpen(false)}>
+            <Button
+              variant="outline"
+              onClick={() => setIsAssignDialogOpen(false)}
+            >
               Cancel
             </Button>
             <Button

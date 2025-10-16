@@ -1,18 +1,31 @@
 import React, { useState } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { AlertTriangle } from 'lucide-react';
+
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { AlertTriangle } from 'lucide-react';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 export default function ScrapOrderModal({ order, onSubmit, onClose }) {
   const [formData, setFormData] = useState({
     reason: '',
     disposition: '',
     authorization: '',
-    scrapDate: new Date().toISOString().split('T')[0]
+    scrapDate: new Date().toISOString().split('T')[0],
   });
 
   const handleSubmit = (e) => {
@@ -21,7 +34,7 @@ export default function ScrapOrderModal({ order, onSubmit, onClose }) {
   };
 
   const handleInputChange = (field, value) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
   const scrapReasons = [
@@ -32,7 +45,7 @@ export default function ScrapOrderModal({ order, onSubmit, onClose }) {
     'Tooling Issue',
     'Customer Change Request',
     'Design Error',
-    'Other'
+    'Other',
   ];
 
   const dispositionOptions = [
@@ -40,7 +53,7 @@ export default function ScrapOrderModal({ order, onSubmit, onClose }) {
     'Rework',
     'Return to Supplier',
     'Salvage Parts',
-    'Engineering Review'
+    'Engineering Review',
   ];
 
   return (
@@ -52,10 +65,11 @@ export default function ScrapOrderModal({ order, onSubmit, onClose }) {
             <span>Scrap Order {order.orderId}</span>
           </DialogTitle>
         </DialogHeader>
-        
+
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm">
-            <strong>Warning:</strong> This action will mark the order as scrapped and remove it from the active pipeline.
+            <strong>Warning:</strong> This action will mark the order as
+            scrapped and remove it from the active pipeline.
           </div>
 
           <div>
@@ -69,8 +83,10 @@ export default function ScrapOrderModal({ order, onSubmit, onClose }) {
                 <SelectValue placeholder="Select reason" />
               </SelectTrigger>
               <SelectContent>
-                {scrapReasons.map(reason => (
-                  <SelectItem key={reason} value={reason}>{reason}</SelectItem>
+                {scrapReasons.map((reason) => (
+                  <SelectItem key={reason} value={reason}>
+                    {reason}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -87,8 +103,10 @@ export default function ScrapOrderModal({ order, onSubmit, onClose }) {
                 <SelectValue placeholder="Select disposition" />
               </SelectTrigger>
               <SelectContent>
-                {dispositionOptions.map(option => (
-                  <SelectItem key={option} value={option}>{option}</SelectItem>
+                {dispositionOptions.map((option) => (
+                  <SelectItem key={option} value={option}>
+                    {option}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -99,7 +117,9 @@ export default function ScrapOrderModal({ order, onSubmit, onClose }) {
             <Input
               id="authorization"
               value={formData.authorization}
-              onChange={(e) => handleInputChange('authorization', e.target.value)}
+              onChange={(e) =>
+                handleInputChange('authorization', e.target.value)
+              }
               placeholder="Enter authorizing person/department"
               required
             />
@@ -120,10 +140,14 @@ export default function ScrapOrderModal({ order, onSubmit, onClose }) {
             <Button type="button" variant="outline" onClick={onClose}>
               Cancel
             </Button>
-            <Button 
-              type="submit" 
+            <Button
+              type="submit"
               variant="destructive"
-              disabled={!formData.reason || !formData.disposition || !formData.authorization}
+              disabled={
+                !formData.reason ||
+                !formData.disposition ||
+                !formData.authorization
+              }
             >
               Confirm Scrap
             </Button>

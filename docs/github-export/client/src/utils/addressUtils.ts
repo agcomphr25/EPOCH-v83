@@ -17,23 +17,23 @@ export async function autocompleteAddress(query: string): Promise<string[]> {
   try {
     const url = `/api/address/autocomplete?query=${encodeURIComponent(query)}`;
     console.log('Making API request to:', url);
-    
+
     // Try direct fetch first
     const response = await fetch(url, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
       },
-      credentials: 'include'
+      credentials: 'include',
     });
-    
+
     console.log('Response status:', response.status);
     console.log('Response ok:', response.ok);
-    
+
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
-    
+
     const data = await response.json();
     console.log('API response:', data);
     return data;
@@ -49,11 +49,13 @@ export async function autocompleteAddress(query: string): Promise<string[]> {
  * @param address - Address object to validate
  * @returns Validated address object
  */
-export async function validateAddress(address: AddressData): Promise<AddressData> {
+export async function validateAddress(
+  address: AddressData
+): Promise<AddressData> {
   try {
     const response = await apiRequest('/api/address/validate', {
       method: 'POST',
-      body: { address }
+      body: { address },
     });
     return response;
   } catch (error) {

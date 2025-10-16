@@ -1,6 +1,7 @@
 # EPOCH v8 - Complete System Architecture & Structure
 
 ## Table of Contents
+
 1. [System Overview](#system-overview)
 2. [Technology Stack](#technology-stack)
 3. [Database Architecture](#database-architecture)
@@ -21,6 +22,7 @@
 EPOCH v8 is a comprehensive Manufacturing ERP system designed for small manufacturing companies specializing in customizable products. The system provides end-to-end order management, inventory tracking, quality control, employee management, and dynamic form generation capabilities.
 
 ### Core Features
+
 - **Order Management**: Complete order lifecycle from creation to fulfillment
 - **Inventory Tracking**: Real-time inventory management with barcode scanning
 - **Quality Control**: Comprehensive QC workflows with digital signatures
@@ -35,6 +37,7 @@ EPOCH v8 is a comprehensive Manufacturing ERP system designed for small manufact
 ## Technology Stack
 
 ### Frontend
+
 - **React 18** - Modern component-based UI framework
 - **TypeScript** - Type-safe JavaScript development
 - **Vite** - Fast build tool and development server
@@ -46,6 +49,7 @@ EPOCH v8 is a comprehensive Manufacturing ERP system designed for small manufact
 - **React Hook Form** - Form handling with validation
 
 ### Backend
+
 - **Node.js** - JavaScript runtime
 - **Express.js** - Web application framework
 - **TypeScript** - Type-safe server development
@@ -55,12 +59,14 @@ EPOCH v8 is a comprehensive Manufacturing ERP system designed for small manufact
 - **Passport.js** - Authentication middleware
 
 ### Development Tools
+
 - **TSX** - TypeScript execution for development
 - **ESBuild** - Fast JavaScript bundler
 - **Drizzle Kit** - Database schema management
 - **Replit** - Cloud development environment
 
 ### External Integrations
+
 - **Neon Database** - Managed PostgreSQL hosting
 - **Address Validation APIs** - Address autocomplete and validation
 - **PDF Generation** - Document generation services
@@ -74,6 +80,7 @@ EPOCH v8 is a comprehensive Manufacturing ERP system designed for small manufact
 ### Core Tables
 
 #### Customer Management
+
 ```sql
 customers (25 tables total)
 ├── customers - Customer master records
@@ -83,6 +90,7 @@ customers (25 tables total)
 ```
 
 #### Order Management
+
 ```sql
 order_system
 ├── order_drafts - Manufacturing orders (draft & completed)
@@ -92,6 +100,7 @@ order_system
 ```
 
 #### Product & Feature Management
+
 ```sql
 product_system
 ├── stock_models - Product model definitions
@@ -101,6 +110,7 @@ product_system
 ```
 
 #### Inventory Management
+
 ```sql
 inventory_system
 ├── inventory_items - Item master records
@@ -109,6 +119,7 @@ inventory_system
 ```
 
 #### Quality Control
+
 ```sql
 qc_system
 ├── qc_definitions - Quality check definitions
@@ -118,6 +129,7 @@ qc_system
 ```
 
 #### Employee Management
+
 ```sql
 employee_system
 ├── employees - Employee master records
@@ -127,6 +139,7 @@ employee_system
 ```
 
 #### Form System
+
 ```sql
 forms_system
 ├── forms - Basic form definitions
@@ -138,6 +151,7 @@ forms_system
 ```
 
 #### Discounts & Sales
+
 ```sql
 pricing_system
 ├── persistent_discounts - Long-term customer discounts
@@ -145,12 +159,14 @@ pricing_system
 ```
 
 #### System Management
+
 ```sql
 system_tables
 └── users - System user accounts
 ```
 
 ### Key Relationships
+
 - `customers` ↔ `customer_addresses` (1:many)
 - `order_drafts` → `customers` (many:1)
 - `features` → `feature_categories` (many:1)
@@ -163,6 +179,7 @@ system_tables
 ## Frontend Architecture
 
 ### Component Structure
+
 ```
 client/src/
 ├── components/
@@ -180,42 +197,50 @@ client/src/
 ### Key Components
 
 #### Navigation & Layout
+
 - **Navigation** - Main navigation bar with module links
 - **InstallPWAButton** - PWA installation prompt
 - **OfflineIndicator** - Connection status display
 
 #### Order Management
+
 - **OrderEntry** - Single order creation form
 - **OrdersList** - Comprehensive order listing
 - **DraftOrders** - Draft order management
 - **OrderManagement** - CSV import and bulk operations
 
 #### Feature Management
+
 - **FeatureManager** - Dynamic feature configuration
 - **StockModels** - Product model management
 - **DiscountManagement** - Pricing and discount configuration
 
 #### Inventory
+
 - **InventoryManager** - CRUD operations for inventory
 - **InventoryScanner** - Barcode scanning interface
 - **InventoryDashboard** - Stock level monitoring
 
 #### Forms
+
 - **EnhancedFormBuilder** - Visual form designer
 - **EnhancedFormRenderer** - Dynamic form display
 - **EnhancedReportBuilder** - Report generation interface
 
 #### Employee Portal
+
 - **TimeClockAdmin** - Time tracking management
 - **EmployeeChecklistPage** - Daily task management
 - **OnboardingPage** - Document signing workflow
 
 ### State Management
+
 - **TanStack Query** - Server state caching and synchronization
 - **React Context** - CSV import state management
 - **Local State** - Component-level state with hooks
 
 ### Routing Structure
+
 ```
 / - Order Management (main dashboard)
 /order-entry - Single order creation
@@ -236,6 +261,7 @@ client/src/
 ## Backend Architecture
 
 ### API Structure
+
 ```
 server/
 ├── index.ts - Server entry point
@@ -246,7 +272,9 @@ server/
 ```
 
 ### Storage Interface
+
 The system uses an abstracted storage interface (`IStorage`) that provides:
+
 - **CRUD Operations** for all entities
 - **Search Functionality** for customers and inventory
 - **Relationship Management** between entities
@@ -255,6 +283,7 @@ The system uses an abstracted storage interface (`IStorage`) that provides:
 ### API Endpoints
 
 #### Customer Management
+
 ```
 GET    /api/customers - List all customers
 GET    /api/customers/search?query= - Search customers
@@ -265,6 +294,7 @@ DELETE /api/customers/:id - Delete customer
 ```
 
 #### Order Management
+
 ```
 GET    /api/orders/draft - Get draft orders
 POST   /api/orders/draft - Create draft order
@@ -274,6 +304,7 @@ GET    /api/orders/last-id - Get last order ID
 ```
 
 #### Feature Management
+
 ```
 GET    /api/feature-categories - List categories
 POST   /api/feature-categories - Create category
@@ -283,6 +314,7 @@ PUT    /api/features/:id - Update feature
 ```
 
 #### Inventory Management
+
 ```
 GET    /api/inventory/items - List inventory items
 POST   /api/inventory/items - Create item
@@ -291,6 +323,7 @@ POST   /api/inventory/scans - Record scan
 ```
 
 ### Middleware Stack
+
 1. **Express JSON Parser** - Request body parsing
 2. **Request Logging** - API call tracking
 3. **Error Handling** - Centralized error management
@@ -302,69 +335,89 @@ POST   /api/inventory/scans - Record scan
 ## Module Breakdown
 
 ### Module 1: Order ID Generator & CSV Import
+
 **Purpose**: Generate unique order IDs and import historical data
+
 - **P1 Order ID Algorithm**: Year-month format (AG001, AG002...)
 - **CSV Import**: Papa Parse integration for bulk data import
 - **Data Validation**: Schema validation for imported data
 
 ### Module 2: Feature Manager
+
 **Purpose**: Dynamic product feature configuration
+
 - **Categories**: Organize features into logical groups
 - **Field Types**: Support for dropdown, text, number, textarea
 - **Validation**: Custom validation rules per feature
 - **Pricing**: Individual feature pricing support
 
 ### Module 3: Discount Management
+
 **Purpose**: Customer pricing and discount administration
+
 - **Customer Types**: Classification-based discounts
 - **Persistent Discounts**: Long-term customer rates
 - **Short-term Sales**: Temporary promotions
 - **Discount Calculator**: Real-time pricing calculations
 
 ### Module 4: Order Entry System
+
 **Purpose**: Single order creation and management
+
 - **Dynamic Forms**: Feature-driven order forms
 - **Customer Integration**: Live customer search and creation
 - **Stock Model Selection**: Product model configuration
 - **Price Calculation**: Real-time order totaling
 
 ### Module 5: Inventory & Scanning
+
 **Purpose**: Inventory management with barcode integration
+
 - **Item Management**: Full CRUD for inventory items
 - **Barcode Scanning**: Mock scanning with Ctrl+S
 - **Stock Tracking**: On-hand, committed, reorder points
 - **Dashboard**: Visual stock level monitoring
 
 ### Module 6: Quality Control
+
 **Purpose**: Manufacturing quality assurance workflows
+
 - **QC Definitions**: Configurable quality checks
 - **Line-specific Checks**: P1/P2 production line support
 - **Digital Signatures**: Electronic signature capture
 - **Pass/Fail Tracking**: Quality metrics and reporting
 
 ### Module 7: Employee Portal
+
 **Purpose**: Employee management and self-service
+
 - **Time Clock**: Clock in/out with status tracking
 - **Daily Checklists**: Task management system
 - **Onboarding**: Document signing workflow
 - **Maintenance**: Equipment maintenance scheduling
 
 ### Module 8: API Integrations
+
 **Purpose**: External service integrations
+
 - **Address Validation**: Autocomplete and verification
 - **PDF Generation**: Document generation for orders
 - **Communication**: Email/SMS customer notifications
 - **File Management**: Document storage and retrieval
 
 ### Module 9: Enhanced Forms
+
 **Purpose**: Advanced form builder and reporting
+
 - **Visual Form Builder**: Drag-and-drop form creation
 - **Signature Capture**: Digital signature integration
 - **Version Control**: Form versioning system
 - **Advanced Reporting**: Multi-format export capabilities
 
 ### Module 10: PWA Capabilities
+
 **Purpose**: Progressive web app functionality
+
 - **Service Workers**: Offline caching strategies
 - **Install Prompts**: App installation flow
 - **Offline Indicators**: Connection status monitoring
@@ -375,6 +428,7 @@ POST   /api/inventory/scans - Record scan
 ## Data Flow
 
 ### Order Creation Flow
+
 1. **User Access** → Order Entry page
 2. **Customer Selection** → Search existing or create new
 3. **Product Configuration** → Select stock model and features
@@ -384,6 +438,7 @@ POST   /api/inventory/scans - Record scan
 7. **Database Storage** → Persist order data
 
 ### Inventory Management Flow
+
 1. **Item Setup** → Create/configure inventory items
 2. **Barcode Scanning** → Record inventory transactions
 3. **Stock Updates** → Automatic quantity adjustments
@@ -391,6 +446,7 @@ POST   /api/inventory/scans - Record scan
 5. **Dashboard Updates** → Real-time inventory status
 
 ### Quality Control Flow
+
 1. **QC Definition** → Configure quality checks per line
 2. **Order Assignment** → Link QC tasks to orders
 3. **Inspection Execution** → Complete quality checks
@@ -403,18 +459,21 @@ POST   /api/inventory/scans - Record scan
 ## Security & Authentication
 
 ### Authentication Strategy
+
 - **Local Authentication** - Username/password with Passport.js
 - **Session Management** - Express sessions with PostgreSQL storage
 - **Password Security** - Bcrypt hashing for passwords
 - **CORS Protection** - Cross-origin request security
 
 ### Data Security
+
 - **Input Validation** - Zod schema validation on all inputs
 - **SQL Injection Protection** - Drizzle ORM parameterized queries
 - **XSS Prevention** - React's built-in XSS protection
 - **HTTPS Enforcement** - TLS encryption for all connections
 
 ### Access Control
+
 - **Role-based Access** - Employee role-based permissions
 - **Route Protection** - Authentication required for sensitive areas
 - **API Security** - Authenticated API endpoints
@@ -425,18 +484,21 @@ POST   /api/inventory/scans - Record scan
 ## Deployment Architecture
 
 ### Development Environment
+
 - **Replit Cloud IDE** - Cloud-based development
 - **Hot Module Replacement** - Instant development feedback
 - **TypeScript Compilation** - Real-time type checking
 - **Database Seeding** - Sample data for development
 
 ### Production Deployment
+
 - **Frontend**: Vite build → Static file serving
 - **Backend**: ESBuild bundling → Node.js execution
 - **Database**: Neon PostgreSQL → Connection pooling
 - **CDN**: Static asset delivery optimization
 
 ### Environment Configuration
+
 ```bash
 DATABASE_URL - PostgreSQL connection string
 NODE_ENV - Environment detection
@@ -444,6 +506,7 @@ PORT - Server port (default: 5000)
 ```
 
 ### Monitoring & Logging
+
 - **Express Logging** - API request/response logging
 - **Error Tracking** - Centralized error handling
 - **Performance Monitoring** - Response time tracking
@@ -454,6 +517,7 @@ PORT - Server port (default: 5000)
 ## Integration Points
 
 ### External Services
+
 1. **Address Validation APIs**
    - Autocomplete suggestions
    - Address verification
@@ -471,6 +535,7 @@ PORT - Server port (default: 5000)
    - Delivery confirmations
 
 ### Internal Integrations
+
 1. **Database Synchronization**
    - Real-time data updates
    - Cross-module data sharing
@@ -491,18 +556,21 @@ PORT - Server port (default: 5000)
 ## Performance Optimizations
 
 ### Frontend Optimizations
+
 - **Code Splitting** - Module-based loading
 - **Image Optimization** - WebP format support
 - **Caching Strategies** - TanStack Query caching
 - **Bundle Optimization** - Tree shaking and minification
 
 ### Backend Optimizations
+
 - **Database Indexing** - Optimized query performance
 - **Connection Pooling** - Efficient database connections
 - **Query Optimization** - Efficient Drizzle ORM queries
 - **Response Compression** - Gzip compression
 
 ### Caching Strategy
+
 - **Browser Caching** - Static asset caching
 - **API Response Caching** - TanStack Query caching
 - **Database Query Caching** - Prepared statement caching
@@ -513,6 +581,7 @@ PORT - Server port (default: 5000)
 ## Future Enhancements
 
 ### Planned Features
+
 1. **Advanced Analytics** - Business intelligence dashboards
 2. **Mobile App** - Native mobile application
 3. **API Gateway** - Microservices architecture
@@ -520,6 +589,7 @@ PORT - Server port (default: 5000)
 5. **Advanced Workflow Engine** - Business process automation
 
 ### Scalability Considerations
+
 1. **Horizontal Scaling** - Load balancer implementation
 2. **Database Sharding** - Data partitioning strategies
 3. **Microservices Migration** - Service decomposition
@@ -528,4 +598,4 @@ PORT - Server port (default: 5000)
 
 ---
 
-*This document serves as the complete architectural reference for the EPOCH v8 Manufacturing ERP System. Last updated: July 14, 2025*
+_This document serves as the complete architectural reference for the EPOCH v8 Manufacturing ERP System. Last updated: July 14, 2025_

@@ -4,25 +4,38 @@
  */
 
 import { useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useToast } from '@/hooks/use-toast';
-import { apiRequest } from '@/lib/queryClient';
-import { 
-  Zap, 
-  Target, 
-  Calendar, 
-  TrendingUp, 
-  BarChart3, 
-  Settings, 
+import {
+  Zap,
+  Target,
+  Calendar,
+  TrendingUp,
+  BarChart3,
+  Settings,
   RefreshCw,
   CheckCircle,
   AlertTriangle,
-  Info
+  Info,
 } from 'lucide-react';
+
+import { Button } from '@/components/ui/button';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { useToast } from '@/hooks/use-toast';
+import { apiRequest } from '@/lib/queryClient';
 
 interface AlgorithmicSchedulerProps {
   onScheduleGenerated?: (allocations: any[]) => void;
@@ -45,57 +58,64 @@ interface StockModelGroup {
   urgentCount: number;
 }
 
-export default function AlgorithmicScheduler({ 
-  onScheduleGenerated, 
+export default function AlgorithmicScheduler({
+  onScheduleGenerated,
   currentOrderCount = 0,
-  workDays = [1, 2, 3, 4]
+  workDays = [1, 2, 3, 4],
 }: AlgorithmicSchedulerProps) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [analytics, setAnalytics] = useState<ScheduleAnalytics | null>(null);
-  const [stockModelGroups, setStockModelGroups] = useState<StockModelGroup[]>([]);
+  const [stockModelGroups, setStockModelGroups] = useState<StockModelGroup[]>(
+    []
+  );
   const [lastGenerated, setLastGenerated] = useState<Date | null>(null);
-  
+
   // Configuration parameters
   const [stockModelFilter, setStockModelFilter] = useState('');
   const [maxOrdersPerDay, setMaxOrdersPerDay] = useState(20);
   const [scheduleDays, setScheduleDays] = useState(20);
   const [priorityWeighting, setPriorityWeighting] = useState('balanced');
-  
+
   const { toast } = useToast();
 
   const generateAlgorithmicSchedule = async () => {
     if (isGenerating) return;
-    
+
     setIsGenerating(true);
     try {
       console.log('🔄 Generating algorithmic schedule...');
-      
-      const response = await apiRequest('/api/scheduler/generate-algorithmic-schedule', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: {
-          stockModelFilter: stockModelFilter.trim() || undefined,
-          maxOrdersPerDay,
-          scheduleDays,
-          priorityWeighting,
-          workDays: workDays
+
+      const response = await apiRequest(
+        '/api/scheduler/generate-algorithmic-schedule',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: {
+            stockModelFilter: stockModelFilter.trim() || undefined,
+            maxOrdersPerDay,
+            scheduleDays,
+            priorityWeighting,
+            workDays: workDays,
+          },
         }
-      });
+      );
 
       if (response.success) {
-        console.log(`✅ Generated ${response.allocations.length} schedule allocations`);
-        
+        console.log(
+          `✅ Generated ${response.allocations.length} schedule allocations`
+        );
+
         setAnalytics(response.analytics);
         setStockModelGroups(response.stockModelGroups || []);
         setLastGenerated(new Date());
-        
+
         // Pass allocations back to parent component
         if (onScheduleGenerated) {
           onScheduleGenerated(response.allocations);
         }
-        
+
         toast({
-          title: "Schedule Generated Successfully",
+          title: 'Schedule Generated Successfully',
           description: `Created ${response.allocations.length} order allocations with ${response.analytics.efficiency.toFixed(1)}% efficiency`,
         });
       } else {
@@ -104,9 +124,10 @@ export default function AlgorithmicScheduler({
     } catch (error) {
       console.error('🔄 Schedule generation error:', error);
       toast({
-        title: "Schedule Generation Failed", 
-        description: error instanceof Error ? error.message : 'Unknown error occurred',
-        variant: "destructive"
+        title: 'Schedule Generation Failed',
+        description:
+          error instanceof Error ? error.message : 'Unknown error occurred',
+        variant: 'destructive',
       });
     } finally {
       setIsGenerating(false);
@@ -120,8 +141,10 @@ export default function AlgorithmicScheduler({
   };
 
   const getEfficiencyIcon = (efficiency: number) => {
-    if (efficiency >= 90) return <CheckCircle className="w-4 h-4 text-green-600" />;
-    if (efficiency >= 70) return <AlertTriangle className="w-4 h-4 text-yellow-600" />;
+    if (efficiency >= 90)
+      return <CheckCircle className="w-4 h-4 text-green-600" />;
+    if (efficiency >= 70)
+      return <AlertTriangle className="w-4 h-4 text-yellow-600" />;
     return <AlertTriangle className="w-4 h-4 text-red-600" />;
   };
 
@@ -135,17 +158,18 @@ export default function AlgorithmicScheduler({
             Algorithmic Scheduler
           </h2>
           <p className="text-gray-600 mt-1">
-            Intelligent order allocation by stock model categorization and priority scoring
+            Intelligent order allocation by stock model categorization and
+            priority scoring
           </p>
         </div>
-        
+
         <div className="flex items-center gap-2">
           {lastGenerated && (
             <div className="text-sm text-gray-500">
               Last generated: {lastGenerated.toLocaleTimeString()}
             </div>
           )}
-          <Button 
+          <Button
             onClick={generateAlgorithmicSchedule}
             disabled={isGenerating}
             size="lg"
@@ -188,9 +212,11 @@ export default function AlgorithmicScheduler({
                 onChange={(e) => setStockModelFilter(e.target.value)}
                 disabled={isGenerating}
               />
-              <p className="text-xs text-gray-500">Leave empty for all models</p>
+              <p className="text-xs text-gray-500">
+                Leave empty for all models
+              </p>
             </div>
-            
+
             <div className="space-y-2">
               <Label htmlFor="maxOrdersPerDay">Max Orders/Day</Label>
               <Input
@@ -199,11 +225,13 @@ export default function AlgorithmicScheduler({
                 min="1"
                 max="100"
                 value={maxOrdersPerDay}
-                onChange={(e) => setMaxOrdersPerDay(parseInt(e.target.value) || 20)}
+                onChange={(e) =>
+                  setMaxOrdersPerDay(parseInt(e.target.value) || 20)
+                }
                 disabled={isGenerating}
               />
             </div>
-            
+
             <div className="space-y-2">
               <Label htmlFor="scheduleDays">Schedule Days</Label>
               <Input
@@ -212,16 +240,18 @@ export default function AlgorithmicScheduler({
                 min="5"
                 max="60"
                 value={scheduleDays}
-                onChange={(e) => setScheduleDays(parseInt(e.target.value) || 20)}
+                onChange={(e) =>
+                  setScheduleDays(parseInt(e.target.value) || 20)
+                }
                 disabled={isGenerating}
               />
               <p className="text-xs text-gray-500">Mon-Thu work days only</p>
             </div>
-            
+
             <div className="space-y-2">
               <Label htmlFor="priorityWeighting">Priority Weighting</Label>
-              <Select 
-                value={priorityWeighting} 
+              <Select
+                value={priorityWeighting}
                 onValueChange={setPriorityWeighting}
                 disabled={isGenerating}
               >
@@ -253,25 +283,29 @@ export default function AlgorithmicScheduler({
               </div>
             </CardContent>
           </Card>
-          
+
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-gray-600">Scheduled</p>
-                  <p className="text-2xl font-bold">{analytics.scheduledOrders}</p>
+                  <p className="text-2xl font-bold">
+                    {analytics.scheduledOrders}
+                  </p>
                 </div>
                 <Calendar className="w-8 h-8 text-green-600" />
               </div>
             </CardContent>
           </Card>
-          
+
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-gray-600">Efficiency</p>
-                  <p className={`text-2xl font-bold ${getEfficiencyColor(analytics.efficiency)}`}>
+                  <p
+                    className={`text-2xl font-bold ${getEfficiencyColor(analytics.efficiency)}`}
+                  >
                     {analytics.efficiency.toFixed(1)}%
                   </p>
                 </div>
@@ -279,13 +313,15 @@ export default function AlgorithmicScheduler({
               </div>
             </CardContent>
           </Card>
-          
+
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-gray-600">Daily Capacity</p>
-                  <p className="text-2xl font-bold">{analytics.dailyCapacity}</p>
+                  <p className="text-2xl font-bold">
+                    {analytics.dailyCapacity}
+                  </p>
                 </div>
                 <TrendingUp className="w-8 h-8 text-purple-600" />
               </div>
@@ -309,7 +345,7 @@ export default function AlgorithmicScheduler({
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {stockModelGroups.map((group) => (
-                <div 
+                <div
                   key={group.stockModelId}
                   className="p-4 border rounded-lg bg-gray-50"
                 >
@@ -325,7 +361,11 @@ export default function AlgorithmicScheduler({
                     <span>{group.orderCount} orders</span>
                     <span className="flex items-center gap-1">
                       <Info className="w-3 h-3" />
-                      {((group.orderCount / analytics!.totalOrders) * 100).toFixed(1)}%
+                      {(
+                        (group.orderCount / analytics!.totalOrders) *
+                        100
+                      ).toFixed(1)}
+                      %
                     </span>
                   </div>
                 </div>
@@ -339,18 +379,20 @@ export default function AlgorithmicScheduler({
       <Card>
         <CardContent className="p-4">
           <div className="flex items-center gap-3">
-            <div className={`w-3 h-3 rounded-full ${isGenerating ? 'bg-yellow-500 animate-pulse' : analytics ? 'bg-green-500' : 'bg-gray-400'}`} />
+            <div
+              className={`w-3 h-3 rounded-full ${isGenerating ? 'bg-yellow-500 animate-pulse' : analytics ? 'bg-green-500' : 'bg-gray-400'}`}
+            />
             <div>
               <p className="font-medium">
-                {isGenerating 
-                  ? 'Generating algorithmic schedule...' 
-                  : analytics 
+                {isGenerating
+                  ? 'Generating algorithmic schedule...'
+                  : analytics
                     ? 'Algorithm ready - schedule generated successfully'
-                    : 'Ready to generate algorithmic schedule'
-                }
+                    : 'Ready to generate algorithmic schedule'}
               </p>
               <p className="text-sm text-gray-600">
-                {currentOrderCount > 0 && `${currentOrderCount} orders in production queue`}
+                {currentOrderCount > 0 &&
+                  `${currentOrderCount} orders in production queue`}
               </p>
             </div>
           </div>

@@ -1,8 +1,20 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
+import {
+  FileText,
+  Package,
+  Settings,
+  CreditCard,
+  User,
+  Calendar,
+} from 'lucide-react';
+
+import {
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from '@/components/ui/hover-card';
 import { Badge } from '@/components/ui/badge';
-import { FileText, Package, Settings, CreditCard, User, Calendar } from 'lucide-react';
 
 interface Order {
   id: number;
@@ -30,7 +42,10 @@ interface OrderPricingTooltipProps {
   children: React.ReactNode;
 }
 
-export default function OrderPricingTooltip({ orderId, children }: OrderPricingTooltipProps) {
+export default function OrderPricingTooltip({
+  orderId,
+  children,
+}: OrderPricingTooltipProps) {
   const [isOpen, setIsOpen] = useState(false);
 
   // Fetch order details
@@ -57,13 +72,29 @@ export default function OrderPricingTooltip({ orderId, children }: OrderPricingT
       case 'paid':
         return { label: 'Paid', variant: 'default' as const, icon: CreditCard };
       case 'pending':
-        return { label: 'Payment Pending', variant: 'secondary' as const, icon: CreditCard };
+        return {
+          label: 'Payment Pending',
+          variant: 'secondary' as const,
+          icon: CreditCard,
+        };
       case 'draft':
-        return { label: 'Draft - Not Invoiced', variant: 'outline' as const, icon: FileText };
+        return {
+          label: 'Draft - Not Invoiced',
+          variant: 'outline' as const,
+          icon: FileText,
+        };
       case 'cancelled':
-        return { label: 'Cancelled', variant: 'destructive' as const, icon: FileText };
+        return {
+          label: 'Cancelled',
+          variant: 'destructive' as const,
+          icon: FileText,
+        };
       default:
-        return { label: 'Unknown Status', variant: 'secondary' as const, icon: CreditCard };
+        return {
+          label: 'Unknown Status',
+          variant: 'secondary' as const,
+          icon: CreditCard,
+        };
     }
   };
 
@@ -146,21 +177,28 @@ export default function OrderPricingTooltip({ orderId, children }: OrderPricingT
                     <div className="mb-1">
                       <span className="font-medium">Model:</span>
                       <span className="ml-2 text-gray-600">
-                        {stockModels?.find(m => m.id === order.modelId)?.displayName || order.modelId}
+                        {stockModels?.find((m) => m.id === order.modelId)
+                          ?.displayName || order.modelId}
                       </span>
                     </div>
                     {order.handedness && (
                       <div className="mb-1">
                         <span className="font-medium">Handedness:</span>
                         <span className="ml-2 text-gray-600">
-                          {order.handedness === 'right' ? 'Right' : order.handedness === 'left' ? 'Left' : order.handedness}
+                          {order.handedness === 'right'
+                            ? 'Right'
+                            : order.handedness === 'left'
+                              ? 'Left'
+                              : order.handedness}
                         </span>
                       </div>
                     )}
                     {order.shankLength && (
                       <div className="mb-1">
                         <span className="font-medium">Shank Length:</span>
-                        <span className="ml-2 text-gray-600">{order.shankLength}</span>
+                        <span className="ml-2 text-gray-600">
+                          {order.shankLength}
+                        </span>
                       </div>
                     )}
                   </div>
@@ -176,41 +214,68 @@ export default function OrderPricingTooltip({ orderId, children }: OrderPricingT
                   </div>
                   <div className="text-sm ml-6 space-y-1">
                     {Object.entries(order.features).map(([key, value]) => {
-                      if (!value || value === 'none' || value === '') return null;
-                      
+                      if (!value || value === 'none' || value === '')
+                        return null;
+
                       // Find the feature definition to get the display name
-                      const feature = features?.find(f => f.id === key);
-                      const featureName = feature?.displayName || key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-                      
+                      const feature = features?.find((f) => f.id === key);
+                      const featureName =
+                        feature?.displayName ||
+                        key
+                          .replace(/_/g, ' ')
+                          .replace(/\b\w/g, (l) => l.toUpperCase());
+
                       // Get the display value (label) instead of the raw value
                       let displayValue = String(value);
-                      
+
                       // Handle special case for paint options (format: "featureId:optionValue")
-                      if (key === 'paint_options_combined' && typeof value === 'string' && value.includes(':')) {
+                      if (
+                        key === 'paint_options_combined' &&
+                        typeof value === 'string' &&
+                        value.includes(':')
+                      ) {
                         const [paintFeatureId, optionValue] = value.split(':');
-                        const paintFeature = features?.find(f => f.id === paintFeatureId);
-                        if (paintFeature?.options && Array.isArray(paintFeature.options)) {
-                          const option = paintFeature.options.find(opt => opt.value === optionValue);
+                        const paintFeature = features?.find(
+                          (f) => f.id === paintFeatureId
+                        );
+                        if (
+                          paintFeature?.options &&
+                          Array.isArray(paintFeature.options)
+                        ) {
+                          const option = paintFeature.options.find(
+                            (opt) => opt.value === optionValue
+                          );
                           displayValue = option?.label || optionValue;
                         }
-                      } else if (feature?.options && Array.isArray(feature.options)) {
+                      } else if (
+                        feature?.options &&
+                        Array.isArray(feature.options)
+                      ) {
                         if (Array.isArray(value)) {
                           // Handle multiselect
-                          displayValue = value.map(v => {
-                            const option = feature.options.find(opt => opt.value === v);
-                            return option?.label || v;
-                          }).join(', ');
+                          displayValue = value
+                            .map((v) => {
+                              const option = feature.options.find(
+                                (opt) => opt.value === v
+                              );
+                              return option?.label || v;
+                            })
+                            .join(', ');
                         } else {
                           // Handle single select
-                          const option = feature.options.find(opt => opt.value === value);
+                          const option = feature.options.find(
+                            (opt) => opt.value === value
+                          );
                           displayValue = option?.label || String(value);
                         }
                       }
-                      
+
                       return (
                         <div key={key} className="flex justify-between">
                           <span className="font-medium">{featureName}:</span>
-                          <span className="text-gray-600 ml-2">{displayValue}</span>
+                          <span className="text-gray-600 ml-2">
+                            {displayValue}
+                          </span>
                         </div>
                       );
                     })}
@@ -225,13 +290,17 @@ export default function OrderPricingTooltip({ orderId, children }: OrderPricingT
                     {order.fbOrderNumber && (
                       <div>
                         <span className="font-medium">FB Order Number:</span>
-                        <span className="ml-2 text-gray-600">{order.fbOrderNumber}</span>
+                        <span className="ml-2 text-gray-600">
+                          {order.fbOrderNumber}
+                        </span>
                       </div>
                     )}
                     {order.agrOrderDetails && (
                       <div>
                         <span className="font-medium">AGR Order Details:</span>
-                        <span className="ml-2 text-gray-600">{order.agrOrderDetails}</span>
+                        <span className="ml-2 text-gray-600">
+                          {order.agrOrderDetails}
+                        </span>
                       </div>
                     )}
                   </div>

@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+
 import { AuthService } from '../auth';
 
 // Extend Express Request type to include user session data
@@ -21,7 +22,11 @@ declare global {
 /**
  * Authentication middleware to verify session tokens
  */
-export async function authenticateToken(req: Request, res: Response, next: NextFunction) {
+export async function authenticateToken(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
   try {
     const authHeader = req.headers['authorization'];
     const bearerToken = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
@@ -86,13 +91,17 @@ export function requireRole(...allowedRoles: string[]) {
  * Employee-specific access middleware
  * Ensures users can only access their own data or admins can access any data
  */
-export function requireEmployeeAccess(req: Request, res: Response, next: NextFunction) {
+export function requireEmployeeAccess(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
   if (!req.user) {
     return res.status(401).json({ error: 'Authentication required' });
   }
 
   const targetEmployeeId = parseInt(req.params.employeeId || req.params.id);
-  
+
   // Admins and HR can access any employee data
   if (req.user.role === 'ADMIN' || req.user.role === 'HR') {
     return next();
@@ -109,10 +118,14 @@ export function requireEmployeeAccess(req: Request, res: Response, next: NextFun
 /**
  * Employee portal token authentication (for public portal access)
  */
-export async function authenticatePortalToken(req: Request, res: Response, next: NextFunction) {
+export async function authenticatePortalToken(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
   try {
     const token = req.params.portalId || req.params.token;
-    
+
     if (!token) {
       return res.status(401).json({ error: 'Portal token required' });
     }

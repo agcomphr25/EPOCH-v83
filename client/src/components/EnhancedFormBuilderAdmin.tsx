@@ -1,23 +1,21 @@
 import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { DndContext, useDraggable, useDroppable, DragEndEvent } from '@dnd-kit/core';
+import {
+  DndContext,
+  useDraggable,
+  useDroppable,
+  DragEndEvent,
+} from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 import SignaturePad from 'signature_pad';
 import toast from 'react-hot-toast';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Textarea } from '@/components/ui/textarea';
-import { Badge } from '@/components/ui/badge';
-import { 
-  Plus, 
-  Edit2, 
-  Trash2, 
-  Save, 
-  Eye, 
-  Move, 
+import {
+  Plus,
+  Edit2,
+  Trash2,
+  Save,
+  Eye,
+  Move,
   Settings,
   Type,
   MousePointer,
@@ -25,9 +23,22 @@ import {
   Database,
   Repeat,
   ChevronDown,
-  Grid3x3
+  Grid3x3,
 } from 'lucide-react';
 
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
+import { Badge } from '@/components/ui/badge';
 import * as catAPI from '@/api/categories';
 import * as schemaAPI from '@/api/schema';
 import * as formAPI from '@/api/enhancedForms';
@@ -35,7 +46,15 @@ import { apiRequest } from '@/lib/queryClient';
 
 interface FormElement {
   id: string;
-  type: 'text' | 'input' | 'signature' | 'column' | 'repeat' | 'dropdown' | 'textarea' | 'checkbox';
+  type:
+    | 'text'
+    | 'input'
+    | 'signature'
+    | 'column'
+    | 'repeat'
+    | 'dropdown'
+    | 'textarea'
+    | 'checkbox';
   x: number;
   y: number;
   width: number;
@@ -92,13 +111,24 @@ interface FormVersion {
 }
 
 // Draggable Component
-function Draggable({ id, children, style }: { id: string; children: React.ReactNode; style?: React.CSSProperties }) {
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id });
+function Draggable({
+  id,
+  children,
+  style,
+}: {
+  id: string;
+  children: React.ReactNode;
+  style?: React.CSSProperties;
+}) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } =
+    useDraggable({ id });
 
   const dragStyle = {
-    transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
+    transform: transform
+      ? `translate3d(${transform.x}px, ${transform.y}px, 0)`
+      : undefined,
     opacity: isDragging ? 0.5 : 1,
-    ...style
+    ...style,
   };
 
   return (
@@ -115,12 +145,12 @@ function Draggable({ id, children, style }: { id: string; children: React.ReactN
 }
 
 // Canvas Component
-function Canvas({ 
-  elements, 
-  selectedElId, 
+function Canvas({
+  elements,
+  selectedElId,
   onElementSelect,
-  onElementMove 
-}: { 
+  onElementMove,
+}: {
   elements: FormElement[];
   selectedElId: string | null;
   onElementSelect: (id: string) => void;
@@ -137,7 +167,7 @@ function Canvas({
         Drag elements here to build your form
       </div>
 
-      {elements.map(el => (
+      {elements.map((el) => (
         <Draggable
           key={el.id}
           id={el.id}
@@ -147,14 +177,17 @@ function Canvas({
             top: el.y,
             width: el.width,
             height: el.height,
-            border: selectedElId === el.id ? '2px solid #3b82f6' : '1px solid #d1d5db',
+            border:
+              selectedElId === el.id
+                ? '2px solid #3b82f6'
+                : '1px solid #d1d5db',
             padding: '8px',
             background: '#f9fafb',
             borderRadius: '4px',
-            cursor: 'move'
+            cursor: 'move',
           }}
         >
-          <div 
+          <div
             onClick={() => onElementSelect(el.id)}
             className="h-full w-full flex items-center justify-center"
           >
@@ -164,14 +197,14 @@ function Canvas({
               </div>
             )}
             {el.type === 'input' && (
-              <Input 
-                placeholder={el.config.label || 'Input Field'} 
+              <Input
+                placeholder={el.config.label || 'Input Field'}
                 className="pointer-events-none"
               />
             )}
             {el.type === 'textarea' && (
-              <Textarea 
-                placeholder={el.config.label || 'Textarea Field'} 
+              <Textarea
+                placeholder={el.config.label || 'Textarea Field'}
                 className="pointer-events-none resize-none"
               />
             )}
@@ -242,7 +275,7 @@ export default function EnhancedFormBuilderAdmin() {
       try {
         const [categoriesRes, formsRes] = await Promise.all([
           apiRequest('/api/enhanced-forms/categories'),
-          apiRequest('/api/enhanced-forms')
+          apiRequest('/api/enhanced-forms'),
         ]);
         setCategories(categoriesRes);
         setForms(formsRes);
@@ -259,7 +292,9 @@ export default function EnhancedFormBuilderAdmin() {
 
     const fetchTables = async () => {
       try {
-        const response = await apiRequest(`/api/enhanced-forms/schema?category=${formDef.categoryId}`);
+        const response = await apiRequest(
+          `/api/enhanced-forms/schema?category=${formDef.categoryId}`
+        );
         setTables(response.tables || []);
       } catch (error) {
         toast.error('Failed to load tables');
@@ -274,7 +309,9 @@ export default function EnhancedFormBuilderAdmin() {
 
     const fetchColumns = async () => {
       try {
-        const response = await apiRequest(`/api/enhanced-forms/schema/${formDef.tableName}/columns`);
+        const response = await apiRequest(
+          `/api/enhanced-forms/schema/${formDef.tableName}/columns`
+        );
         setColumns(response.columns || []);
       } catch (error) {
         toast.error('Failed to load columns');
@@ -289,16 +326,21 @@ export default function EnhancedFormBuilderAdmin() {
       if (!catEditing) {
         const response = await apiRequest('/api/enhanced-forms/categories', {
           method: 'POST',
-          body: { name: newCat, description: '' }
+          body: { name: newCat, description: '' },
         });
         setCategories([...categories, response]);
         toast.success('Category created');
       } else {
-        const response = await apiRequest(`/api/enhanced-forms/categories/${catEditing.id}`, {
-          method: 'PUT',
-          body: { name: newCat }
-        });
-        setCategories(categories.map(c => c.id === response.id ? response : c));
+        const response = await apiRequest(
+          `/api/enhanced-forms/categories/${catEditing.id}`,
+          {
+            method: 'PUT',
+            body: { name: newCat },
+          }
+        );
+        setCategories(
+          categories.map((c) => (c.id === response.id ? response : c))
+        );
         toast.success('Category updated');
       }
       setNewCat('');
@@ -309,11 +351,16 @@ export default function EnhancedFormBuilderAdmin() {
   };
 
   const deleteCategory = async (id: number) => {
-    if (!confirm('Delete category? This will also delete all associated forms.')) return;
+    if (
+      !confirm('Delete category? This will also delete all associated forms.')
+    )
+      return;
 
     try {
-      await apiRequest(`/api/enhanced-forms/categories/${id}`, { method: 'DELETE' });
-      setCategories(categories.filter(c => c.id !== id));
+      await apiRequest(`/api/enhanced-forms/categories/${id}`, {
+        method: 'DELETE',
+      });
+      setCategories(categories.filter((c) => c.id !== id));
       toast.success('Category deleted');
     } catch (error) {
       toast.error('Failed to delete category');
@@ -326,7 +373,7 @@ export default function EnhancedFormBuilderAdmin() {
       setSelectedFormId(id);
       const [formRes, versionsRes] = await Promise.all([
         apiRequest(`/api/enhanced-forms/${id}`),
-        apiRequest(`/api/enhanced-forms/${id}/versions`)
+        apiRequest(`/api/enhanced-forms/${id}/versions`),
       ]);
       setFormDef(formRes);
       setElements(formRes.layout || []);
@@ -340,7 +387,9 @@ export default function EnhancedFormBuilderAdmin() {
     if (!selectedFormId) return;
 
     try {
-      const response = await apiRequest(`/api/enhanced-forms/${selectedFormId}/versions/${version}`);
+      const response = await apiRequest(
+        `/api/enhanced-forms/${selectedFormId}/versions/${version}`
+      );
       setFormVersion(version);
       setFormDef(response);
       setElements(response.layout || []);
@@ -359,7 +408,7 @@ export default function EnhancedFormBuilderAdmin() {
       y: 20,
       width: 200,
       height: type === 'textarea' ? 80 : type === 'signature' ? 100 : 50,
-      config: {}
+      config: {},
     };
 
     if (type === 'column' && formDef?.tableName) {
@@ -371,13 +420,13 @@ export default function EnhancedFormBuilderAdmin() {
   };
 
   const updateElement = (id: string, updates: Partial<FormElement>) => {
-    setElements(elements.map(el => 
-      el.id === id ? { ...el, ...updates } : el
-    ));
+    setElements(
+      elements.map((el) => (el.id === id ? { ...el, ...updates } : el))
+    );
   };
 
   const deleteElement = (id: string) => {
-    setElements(elements.filter(el => el.id !== id));
+    setElements(elements.filter((el) => el.id !== id));
     if (selectedElId === id) {
       setSelectedElId(null);
     }
@@ -393,14 +442,14 @@ export default function EnhancedFormBuilderAdmin() {
     try {
       const formData = {
         ...formDef,
-        layout: elements
+        layout: elements,
       };
 
       if (!selectedFormId) {
         // Create new form
         const response = await apiRequest('/api/enhanced-forms', {
           method: 'POST',
-          body: formData
+          body: formData,
         });
         setForms([...forms, response]);
         setSelectedFormId(response.id);
@@ -409,7 +458,7 @@ export default function EnhancedFormBuilderAdmin() {
         // Update existing form
         await apiRequest(`/api/enhanced-forms/${selectedFormId}`, {
           method: 'PUT',
-          body: formData
+          body: formData,
         });
         toast.success('Form saved');
       }
@@ -419,7 +468,9 @@ export default function EnhancedFormBuilderAdmin() {
   };
 
   // Get selected element
-  const selectedElement = selectedElId ? elements.find(el => el.id === selectedElId) : null;
+  const selectedElement = selectedElId
+    ? elements.find((el) => el.id === selectedElId)
+    : null;
 
   return (
     <div className="p-6 space-y-6">
@@ -442,14 +493,21 @@ export default function EnhancedFormBuilderAdmin() {
         </CardHeader>
         <CardContent>
           <div className="flex flex-wrap gap-2 mb-4">
-            {categories.map(cat => (
-              <Badge key={cat.id} variant="outline" className="flex items-center gap-1">
+            {categories.map((cat) => (
+              <Badge
+                key={cat.id}
+                variant="outline"
+                className="flex items-center gap-1"
+              >
                 {cat.name}
                 <Button
                   variant="ghost"
                   size="sm"
                   className="h-4 w-4 p-0"
-                  onClick={() => { setCatEditing(cat); setNewCat(cat.name); }}
+                  onClick={() => {
+                    setCatEditing(cat);
+                    setNewCat(cat.name);
+                  }}
                 >
                   <Edit2 className="h-3 w-3" />
                 </Button>
@@ -486,16 +544,18 @@ export default function EnhancedFormBuilderAdmin() {
         </CardHeader>
         <CardContent>
           <div className="flex gap-4 items-center">
-            <Select 
-              value={selectedFormId?.toString() || ''} 
-              onValueChange={(value) => value ? loadForm(parseInt(value)) : setSelectedFormId(null)}
+            <Select
+              value={selectedFormId?.toString() || ''}
+              onValueChange={(value) =>
+                value ? loadForm(parseInt(value)) : setSelectedFormId(null)
+              }
             >
               <SelectTrigger className="w-[300px]">
                 <SelectValue placeholder="Select or create new form" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="new">— Create New Form —</SelectItem>
-                {forms.map(form => (
+                {forms.map((form) => (
                   <SelectItem key={form.id} value={form.id.toString()}>
                     {form.name}
                   </SelectItem>
@@ -504,18 +564,26 @@ export default function EnhancedFormBuilderAdmin() {
             </Select>
 
             {selectedFormId && versions.length > 0 && (
-              <Select 
-                value={formVersion?.toString() || 'latest'} 
-                onValueChange={(value) => value !== 'latest' ? loadVersion(parseInt(value)) : setFormVersion(null)}
+              <Select
+                value={formVersion?.toString() || 'latest'}
+                onValueChange={(value) =>
+                  value !== 'latest'
+                    ? loadVersion(parseInt(value))
+                    : setFormVersion(null)
+                }
               >
                 <SelectTrigger className="w-[200px]">
                   <SelectValue placeholder="Latest Version" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="latest">— Latest Version —</SelectItem>
-                  {versions.map(version => (
-                    <SelectItem key={version.version} value={version.version.toString()}>
-                      v{version.version} ({new Date(version.createdAt).toLocaleDateString()})
+                  {versions.map((version) => (
+                    <SelectItem
+                      key={version.version}
+                      value={version.version.toString()}
+                    >
+                      v{version.version} (
+                      {new Date(version.createdAt).toLocaleDateString()})
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -538,7 +606,9 @@ export default function EnhancedFormBuilderAdmin() {
                 <Input
                   id="form-name"
                   value={formDef?.name || ''}
-                  onChange={(e) => setFormDef(prev => ({ ...prev, name: e.target.value }))}
+                  onChange={(e) =>
+                    setFormDef((prev) => ({ ...prev, name: e.target.value }))
+                  }
                   placeholder="Enter form name"
                 />
               </div>
@@ -547,16 +617,25 @@ export default function EnhancedFormBuilderAdmin() {
                 <Input
                   id="form-description"
                   value={formDef?.description || ''}
-                  onChange={(e) => setFormDef(prev => ({ ...prev, description: e.target.value }))}
+                  onChange={(e) =>
+                    setFormDef((prev) => ({
+                      ...prev,
+                      description: e.target.value,
+                    }))
+                  }
                   placeholder="Form description"
                 />
               </div>
               <div>
                 <Label htmlFor="form-category">Category</Label>
-                <Select 
-                  value={formDef?.categoryId?.toString() || 'none'} 
+                <Select
+                  value={formDef?.categoryId?.toString() || 'none'}
                   onValueChange={(value) => {
-                    setFormDef(prev => ({ ...prev, categoryId: value !== 'none' ? parseInt(value) : undefined }));
+                    setFormDef((prev) => ({
+                      ...prev,
+                      categoryId:
+                        value !== 'none' ? parseInt(value) : undefined,
+                    }));
                     setTables([]);
                     setColumns([]);
                   }}
@@ -566,7 +645,7 @@ export default function EnhancedFormBuilderAdmin() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">— Select Category —</SelectItem>
-                    {categories.map(cat => (
+                    {categories.map((cat) => (
                       <SelectItem key={cat.id} value={cat.id.toString()}>
                         {cat.name}
                       </SelectItem>
@@ -576,16 +655,21 @@ export default function EnhancedFormBuilderAdmin() {
               </div>
               <div>
                 <Label htmlFor="form-table">Database Table</Label>
-                <Select 
-                  value={formDef?.tableName || 'none'} 
-                  onValueChange={(value) => setFormDef(prev => ({ ...prev, tableName: value !== 'none' ? value : undefined }))}
+                <Select
+                  value={formDef?.tableName || 'none'}
+                  onValueChange={(value) =>
+                    setFormDef((prev) => ({
+                      ...prev,
+                      tableName: value !== 'none' ? value : undefined,
+                    }))
+                  }
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select table" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">— Select Table —</SelectItem>
-                    {tables.map(table => (
+                    {tables.map((table) => (
                       <SelectItem key={table.name} value={table.name}>
                         {table.label}
                       </SelectItem>
@@ -606,35 +690,67 @@ export default function EnhancedFormBuilderAdmin() {
           </CardHeader>
           <CardContent>
             <div className="flex flex-wrap gap-2">
-              <Button onClick={() => addElement('text')} variant="outline" size="sm">
+              <Button
+                onClick={() => addElement('text')}
+                variant="outline"
+                size="sm"
+              >
                 <Type className="h-4 w-4 mr-2" />
                 Text
               </Button>
-              <Button onClick={() => addElement('input')} variant="outline" size="sm">
+              <Button
+                onClick={() => addElement('input')}
+                variant="outline"
+                size="sm"
+              >
                 <MousePointer className="h-4 w-4 mr-2" />
                 Input
               </Button>
-              <Button onClick={() => addElement('textarea')} variant="outline" size="sm">
+              <Button
+                onClick={() => addElement('textarea')}
+                variant="outline"
+                size="sm"
+              >
                 <MousePointer className="h-4 w-4 mr-2" />
                 Textarea
               </Button>
-              <Button onClick={() => addElement('dropdown')} variant="outline" size="sm">
+              <Button
+                onClick={() => addElement('dropdown')}
+                variant="outline"
+                size="sm"
+              >
                 <ChevronDown className="h-4 w-4 mr-2" />
                 Dropdown
               </Button>
-              <Button onClick={() => addElement('checkbox')} variant="outline" size="sm">
+              <Button
+                onClick={() => addElement('checkbox')}
+                variant="outline"
+                size="sm"
+              >
                 <MousePointer className="h-4 w-4 mr-2" />
                 Checkbox
               </Button>
-              <Button onClick={() => addElement('signature')} variant="outline" size="sm">
+              <Button
+                onClick={() => addElement('signature')}
+                variant="outline"
+                size="sm"
+              >
                 <PenTool className="h-4 w-4 mr-2" />
                 Signature
               </Button>
-              <Button onClick={() => addElement('column')} variant="outline" size="sm">
+              <Button
+                onClick={() => addElement('column')}
+                variant="outline"
+                size="sm"
+              >
                 <Database className="h-4 w-4 mr-2" />
                 DB Column
               </Button>
-              <Button onClick={() => addElement('repeat')} variant="outline" size="sm">
+              <Button
+                onClick={() => addElement('repeat')}
+                variant="outline"
+                size="sm"
+              >
                 <Repeat className="h-4 w-4 mr-2" />
                 Repeat Group
               </Button>
@@ -651,18 +767,20 @@ export default function EnhancedFormBuilderAdmin() {
               <CardTitle>Form Canvas</CardTitle>
             </CardHeader>
             <CardContent>
-              <DndContext onDragEnd={(event: DragEndEvent) => {
-                const { active, delta } = event;
-                if (delta.x === 0 && delta.y === 0) return;
+              <DndContext
+                onDragEnd={(event: DragEndEvent) => {
+                  const { active, delta } = event;
+                  if (delta.x === 0 && delta.y === 0) return;
 
-                const element = elements.find(el => el.id === active.id);
-                if (element) {
-                  updateElement(element.id, {
-                    x: element.x + delta.x,
-                    y: element.y + delta.y
-                  });
-                }
-              }}>
+                  const element = elements.find((el) => el.id === active.id);
+                  if (element) {
+                    updateElement(element.id, {
+                      x: element.x + delta.x,
+                      y: element.y + delta.y,
+                    });
+                  }
+                }}
+              >
                 <Canvas
                   elements={elements}
                   selectedElId={selectedElId}
@@ -696,15 +814,27 @@ export default function EnhancedFormBuilderAdmin() {
                   <Badge variant="outline">{selectedElement.type}</Badge>
                 </div>
 
-                {['input', 'textarea', 'dropdown', 'checkbox', 'column', 'repeat'].includes(selectedElement.type) && (
+                {[
+                  'input',
+                  'textarea',
+                  'dropdown',
+                  'checkbox',
+                  'column',
+                  'repeat',
+                ].includes(selectedElement.type) && (
                   <div>
                     <Label htmlFor="element-label">Label</Label>
                     <Input
                       id="element-label"
                       value={selectedElement.config.label || ''}
-                      onChange={(e) => updateElement(selectedElement.id, {
-                        config: { ...selectedElement.config, label: e.target.value }
-                      })}
+                      onChange={(e) =>
+                        updateElement(selectedElement.id, {
+                          config: {
+                            ...selectedElement.config,
+                            label: e.target.value,
+                          },
+                        })
+                      }
                       placeholder="Element label"
                     />
                   </div>
@@ -716,9 +846,14 @@ export default function EnhancedFormBuilderAdmin() {
                     <Textarea
                       id="element-text"
                       value={selectedElement.config.text || ''}
-                      onChange={(e) => updateElement(selectedElement.id, {
-                        config: { ...selectedElement.config, text: e.target.value }
-                      })}
+                      onChange={(e) =>
+                        updateElement(selectedElement.id, {
+                          config: {
+                            ...selectedElement.config,
+                            text: e.target.value,
+                          },
+                        })
+                      }
                       placeholder="Text content"
                     />
                   </div>
@@ -727,17 +862,19 @@ export default function EnhancedFormBuilderAdmin() {
                 {selectedElement.type === 'column' && (
                   <div>
                     <Label htmlFor="element-column">Column</Label>
-                    <Select 
-                      value={selectedElement.config.column || ''} 
-                      onValueChange={(value) => updateElement(selectedElement.id, {
-                        config: { ...selectedElement.config, column: value }
-                      })}
+                    <Select
+                      value={selectedElement.config.column || ''}
+                      onValueChange={(value) =>
+                        updateElement(selectedElement.id, {
+                          config: { ...selectedElement.config, column: value },
+                        })
+                      }
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Select column" />
                       </SelectTrigger>
                       <SelectContent>
-                        {columns.map(col => (
+                        {columns.map((col) => (
                           <SelectItem key={col.name} value={col.name}>
                             {col.label}
                           </SelectItem>
@@ -752,9 +889,14 @@ export default function EnhancedFormBuilderAdmin() {
                     type="checkbox"
                     id="element-required"
                     checked={selectedElement.config.required || false}
-                    onChange={(e) => updateElement(selectedElement.id, {
-                      config: { ...selectedElement.config, required: e.target.checked }
-                    })}
+                    onChange={(e) =>
+                      updateElement(selectedElement.id, {
+                        config: {
+                          ...selectedElement.config,
+                          required: e.target.checked,
+                        },
+                      })
+                    }
                   />
                   <Label htmlFor="element-required">Required</Label>
                 </div>
@@ -764,9 +906,14 @@ export default function EnhancedFormBuilderAdmin() {
                   <Input
                     id="element-visible-if"
                     value={selectedElement.config.visibleIf || ''}
-                    onChange={(e) => updateElement(selectedElement.id, {
-                      config: { ...selectedElement.config, visibleIf: e.target.value }
-                    })}
+                    onChange={(e) =>
+                      updateElement(selectedElement.id, {
+                        config: {
+                          ...selectedElement.config,
+                          visibleIf: e.target.value,
+                        },
+                      })
+                    }
                     placeholder="e.g. quantity > 0"
                   />
                 </div>
@@ -778,9 +925,11 @@ export default function EnhancedFormBuilderAdmin() {
                       id="element-width"
                       type="number"
                       value={selectedElement.width}
-                      onChange={(e) => updateElement(selectedElement.id, {
-                        width: parseInt(e.target.value) || 200
-                      })}
+                      onChange={(e) =>
+                        updateElement(selectedElement.id, {
+                          width: parseInt(e.target.value) || 200,
+                        })
+                      }
                     />
                   </div>
                   <div>
@@ -789,9 +938,11 @@ export default function EnhancedFormBuilderAdmin() {
                       id="element-height"
                       type="number"
                       value={selectedElement.height}
-                      onChange={(e) => updateElement(selectedElement.id, {
-                        height: parseInt(e.target.value) || 50
-                      })}
+                      onChange={(e) =>
+                        updateElement(selectedElement.id, {
+                          height: parseInt(e.target.value) || 50,
+                        })
+                      }
                     />
                   </div>
                 </div>

@@ -1,23 +1,65 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Textarea } from '@/components/ui/textarea';
-import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Calendar } from '@/components/ui/calendar';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { CalendarIcon, Plus, Search, BarChart3, AlertTriangle, CheckCircle, Clock, XCircle, Eye, RefreshCw } from 'lucide-react';
+import {
+  CalendarIcon,
+  Plus,
+  Search,
+  BarChart3,
+  AlertTriangle,
+  CheckCircle,
+  Clock,
+  XCircle,
+  Eye,
+  RefreshCw,
+} from 'lucide-react';
 import { format } from 'date-fns';
-import { cn } from '@/lib/utils';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { insertKickbackSchema, type Kickback } from '@shared/schema';
+
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
+import { Badge } from '@/components/ui/badge';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/ui/form';
+import { Calendar } from '@/components/ui/calendar';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 
 // Form validation schema
@@ -31,7 +73,8 @@ type KickbackFormData = z.infer<typeof kickbackFormSchema>;
 // Status color mapping
 const statusColors = {
   OPEN: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300',
-  IN_PROGRESS: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300',
+  IN_PROGRESS:
+    'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300',
   RESOLVED: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
   CLOSED: 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300',
 };
@@ -39,7 +82,8 @@ const statusColors = {
 // Priority color mapping
 const priorityColors = {
   LOW: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
-  MEDIUM: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300',
+  MEDIUM:
+    'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300',
   HIGH: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300',
   CRITICAL: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300',
 };
@@ -57,15 +101,21 @@ export default function KickbackTracking() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [departmentFilter, setDepartmentFilter] = useState<string>('all');
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
-  const [selectedKickback, setSelectedKickback] = useState<Kickback | null>(null);
+  const [selectedKickback, setSelectedKickback] = useState<Kickback | null>(
+    null
+  );
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
   // Fetch all kickbacks with better refresh settings
-  const { data: kickbacks = [], isLoading, refetch: refetchKickbacks } = useQuery({
+  const {
+    data: kickbacks = [],
+    isLoading,
+    refetch: refetchKickbacks,
+  } = useQuery({
     queryKey: ['/api/kickbacks'],
-    queryFn: () => fetch('/api/kickbacks').then(res => res.json()),
+    queryFn: () => fetch('/api/kickbacks').then((res) => res.json()),
     refetchOnWindowFocus: true, // Refresh when window regains focus
     refetchInterval: 60000, // Auto-refresh every 60 seconds
   });
@@ -73,7 +123,7 @@ export default function KickbackTracking() {
   // Fetch analytics data
   const { data: analytics } = useQuery({
     queryKey: ['/api/kickbacks/analytics'],
-    queryFn: () => fetch('/api/kickbacks/analytics').then(res => res.json()),
+    queryFn: () => fetch('/api/kickbacks/analytics').then((res) => res.json()),
   });
 
   // Create kickback mutation
@@ -83,7 +133,7 @@ export default function KickbackTracking() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
-      }).then(res => res.json()),
+      }).then((res) => res.json()),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/kickbacks'] });
       queryClient.invalidateQueries({ queryKey: ['/api/kickbacks/analytics'] });
@@ -91,25 +141,39 @@ export default function KickbackTracking() {
       toast({ title: 'Success', description: 'Kickback created successfully' });
     },
     onError: () => {
-      toast({ title: 'Error', description: 'Failed to create kickback', variant: 'destructive' });
+      toast({
+        title: 'Error',
+        description: 'Failed to create kickback',
+        variant: 'destructive',
+      });
     },
   });
 
   // Update kickback mutation
   const updateKickbackMutation = useMutation({
-    mutationFn: ({ id, data }: { id: number; data: Partial<KickbackFormData> }) =>
+    mutationFn: ({
+      id,
+      data,
+    }: {
+      id: number;
+      data: Partial<KickbackFormData>;
+    }) =>
       fetch(`/api/kickbacks/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
-      }).then(res => res.json()),
+      }).then((res) => res.json()),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/kickbacks'] });
       queryClient.invalidateQueries({ queryKey: ['/api/kickbacks/analytics'] });
       toast({ title: 'Success', description: 'Kickback updated successfully' });
     },
     onError: () => {
-      toast({ title: 'Error', description: 'Failed to update kickback', variant: 'destructive' });
+      toast({
+        title: 'Error',
+        description: 'Failed to update kickback',
+        variant: 'destructive',
+      });
     },
   });
 
@@ -126,13 +190,16 @@ export default function KickbackTracking() {
 
   // Filter kickbacks based on search and filters
   const filteredKickbacks = kickbacks.filter((kickback: Kickback) => {
-    const matchesSearch = kickback.orderId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         kickback.reasonText?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         kickback.reportedBy.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    const matchesStatus = statusFilter === 'all' || kickback.status === statusFilter;
-    const matchesDepartment = departmentFilter === 'all' || kickback.kickbackDept === departmentFilter;
-    
+    const matchesSearch =
+      kickback.orderId.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      kickback.reasonText?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      kickback.reportedBy.toLowerCase().includes(searchTerm.toLowerCase());
+
+    const matchesStatus =
+      statusFilter === 'all' || kickback.status === statusFilter;
+    const matchesDepartment =
+      departmentFilter === 'all' || kickback.kickbackDept === departmentFilter;
+
     return matchesSearch && matchesStatus && matchesDepartment;
   });
 
@@ -142,12 +209,12 @@ export default function KickbackTracking() {
 
   const handleStatusChange = (kickbackId: number, newStatus: string) => {
     const updateData: Partial<KickbackFormData> = { status: newStatus as any };
-    
+
     if (newStatus === 'RESOLVED' || newStatus === 'CLOSED') {
       updateData.resolvedAt = new Date();
       updateData.resolvedBy = 'Current User'; // In real app, get from auth context
     }
-    
+
     updateKickbackMutation.mutate({ id: kickbackId, data: updateData });
   };
 
@@ -161,7 +228,9 @@ export default function KickbackTracking() {
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold">Kickback Tracking</h1>
-          <p className="text-muted-foreground">Monitor and resolve production issues</p>
+          <p className="text-muted-foreground">
+            Monitor and resolve production issues
+          </p>
         </div>
         <div className="flex gap-2">
           <Button
@@ -169,10 +238,15 @@ export default function KickbackTracking() {
             onClick={() => refetchKickbacks()}
             disabled={isLoading}
           >
-            <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+            <RefreshCw
+              className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`}
+            />
             Refresh
           </Button>
-          <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+          <Dialog
+            open={isCreateDialogOpen}
+            onOpenChange={setIsCreateDialogOpen}
+          >
             <DialogTrigger asChild>
               <Button>
                 <Plus className="h-4 w-4 mr-2" />
@@ -187,7 +261,10 @@ export default function KickbackTracking() {
                 </DialogDescription>
               </DialogHeader>
               <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                <form
+                  onSubmit={form.handleSubmit(onSubmit)}
+                  className="space-y-4"
+                >
                   <div className="grid grid-cols-2 gap-4">
                     <FormField
                       control={form.control}
@@ -208,7 +285,10 @@ export default function KickbackTracking() {
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>Department</FormLabel>
-                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <Select
+                            onValueChange={field.onChange}
+                            defaultValue={field.value}
+                          >
                             <FormControl>
                               <SelectTrigger>
                                 <SelectValue placeholder="Select department" />
@@ -238,19 +318,34 @@ export default function KickbackTracking() {
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>Reason Code</FormLabel>
-                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <Select
+                            onValueChange={field.onChange}
+                            defaultValue={field.value}
+                          >
                             <FormControl>
                               <SelectTrigger>
                                 <SelectValue placeholder="Select reason" />
                               </SelectTrigger>
                             </FormControl>
                             <SelectContent>
-                              <SelectItem value="MATERIAL_DEFECT">Material Defect</SelectItem>
-                              <SelectItem value="MACHINE_FAILURE">Machine Failure</SelectItem>
-                              <SelectItem value="QUALITY_ISSUE">Quality Issue</SelectItem>
-                              <SelectItem value="PROCESS_ERROR">Process Error</SelectItem>
-                              <SelectItem value="DESIGN_ISSUE">Design Issue</SelectItem>
-                              <SelectItem value="SUPPLIER_ISSUE">Supplier Issue</SelectItem>
+                              <SelectItem value="MATERIAL_DEFECT">
+                                Material Defect
+                              </SelectItem>
+                              <SelectItem value="MACHINE_FAILURE">
+                                Machine Failure
+                              </SelectItem>
+                              <SelectItem value="QUALITY_ISSUE">
+                                Quality Issue
+                              </SelectItem>
+                              <SelectItem value="PROCESS_ERROR">
+                                Process Error
+                              </SelectItem>
+                              <SelectItem value="DESIGN_ISSUE">
+                                Design Issue
+                              </SelectItem>
+                              <SelectItem value="SUPPLIER_ISSUE">
+                                Supplier Issue
+                              </SelectItem>
                               <SelectItem value="OTHER">Other</SelectItem>
                             </SelectContent>
                           </Select>
@@ -264,7 +359,10 @@ export default function KickbackTracking() {
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>Priority</FormLabel>
-                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <Select
+                            onValueChange={field.onChange}
+                            defaultValue={field.value}
+                          >
                             <FormControl>
                               <SelectTrigger>
                                 <SelectValue placeholder="Select priority" />
@@ -296,12 +394,12 @@ export default function KickbackTracking() {
                                 <Button
                                   variant="outline"
                                   className={cn(
-                                    "w-full pl-3 text-left font-normal",
-                                    !field.value && "text-muted-foreground"
+                                    'w-full pl-3 text-left font-normal',
+                                    !field.value && 'text-muted-foreground'
                                   )}
                                 >
                                   {field.value ? (
-                                    format(field.value, "PPP")
+                                    format(field.value, 'PPP')
                                   ) : (
                                     <span>Pick a date</span>
                                   )}
@@ -309,13 +407,17 @@ export default function KickbackTracking() {
                                 </Button>
                               </FormControl>
                             </PopoverTrigger>
-                            <PopoverContent className="w-auto p-0" align="start">
+                            <PopoverContent
+                              className="w-auto p-0"
+                              align="start"
+                            >
                               <Calendar
                                 mode="single"
                                 selected={field.value}
                                 onSelect={field.onChange}
                                 disabled={(date) =>
-                                  date > new Date() || date < new Date("1900-01-01")
+                                  date > new Date() ||
+                                  date < new Date('1900-01-01')
                                 }
                                 initialFocus
                               />
@@ -347,7 +449,7 @@ export default function KickbackTracking() {
                       <FormItem>
                         <FormLabel>Description</FormLabel>
                         <FormControl>
-                          <Textarea 
+                          <Textarea
                             placeholder="Detailed description of the issue..."
                             className="resize-none"
                             {...field}
@@ -360,11 +462,20 @@ export default function KickbackTracking() {
                   />
 
                   <div className="flex justify-end space-x-2 pt-4">
-                    <Button type="button" variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setIsCreateDialogOpen(false)}
+                    >
                       Cancel
                     </Button>
-                    <Button type="submit" disabled={createKickbackMutation.isPending}>
-                      {createKickbackMutation.isPending ? 'Creating...' : 'Create Kickback'}
+                    <Button
+                      type="submit"
+                      disabled={createKickbackMutation.isPending}
+                    >
+                      {createKickbackMutation.isPending
+                        ? 'Creating...'
+                        : 'Create Kickback'}
                     </Button>
                   </div>
                 </form>
@@ -379,11 +490,15 @@ export default function KickbackTracking() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Kickbacks</CardTitle>
+              <CardTitle className="text-sm font-medium">
+                Total Kickbacks
+              </CardTitle>
               <BarChart3 className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{analytics.totalKickbacks}</div>
+              <div className="text-2xl font-bold">
+                {analytics.totalKickbacks}
+              </div>
             </CardContent>
           </Card>
           <Card>
@@ -392,23 +507,28 @@ export default function KickbackTracking() {
               <CheckCircle className="h-4 w-4 text-green-600" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{analytics.resolvedKickbacks}</div>
+              <div className="text-2xl font-bold">
+                {analytics.resolvedKickbacks}
+              </div>
               <p className="text-xs text-muted-foreground">
-                {analytics.totalKickbacks > 0 
+                {analytics.totalKickbacks > 0
                   ? `${Math.round((analytics.resolvedKickbacks / analytics.totalKickbacks) * 100)}% resolution rate`
-                  : 'No data'
-                }
+                  : 'No data'}
               </p>
             </CardContent>
           </Card>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Avg Resolution Time</CardTitle>
+              <CardTitle className="text-sm font-medium">
+                Avg Resolution Time
+              </CardTitle>
               <Clock className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {analytics.averageResolutionTime ? `${Math.round(analytics.averageResolutionTime * 24)}h` : 'N/A'}
+                {analytics.averageResolutionTime
+                  ? `${Math.round(analytics.averageResolutionTime * 24)}h`
+                  : 'N/A'}
               </div>
               <p className="text-xs text-muted-foreground">In hours</p>
             </CardContent>
@@ -422,7 +542,9 @@ export default function KickbackTracking() {
               <div className="text-2xl font-bold">
                 {analytics.totalKickbacks - analytics.resolvedKickbacks}
               </div>
-              <p className="text-xs text-muted-foreground">Requiring attention</p>
+              <p className="text-xs text-muted-foreground">
+                Requiring attention
+              </p>
             </CardContent>
           </Card>
         </div>
@@ -473,19 +595,24 @@ export default function KickbackTracking() {
       <Card>
         <CardHeader>
           <CardTitle>All Kickbacks ({filteredKickbacks.length})</CardTitle>
-          <CardDescription>Click on any kickback to view details</CardDescription>
+          <CardDescription>
+            Click on any kickback to view details
+          </CardDescription>
         </CardHeader>
         <CardContent>
           {filteredKickbacks.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
-              {searchTerm || statusFilter !== 'all' || departmentFilter !== 'all' 
-                ? 'No kickbacks match your current filters' 
+              {searchTerm ||
+              statusFilter !== 'all' ||
+              departmentFilter !== 'all'
+                ? 'No kickbacks match your current filters'
                 : 'No kickbacks found'}
             </div>
           ) : (
             <div className="space-y-4">
               {filteredKickbacks.map((kickback: Kickback) => {
-                const StatusIcon = statusIcons[kickback.status as keyof typeof statusIcons];
+                const StatusIcon =
+                  statusIcons[kickback.status as keyof typeof statusIcons];
                 return (
                   <div
                     key={kickback.id}
@@ -494,25 +621,50 @@ export default function KickbackTracking() {
                     <div className="space-y-2 flex-1">
                       <div className="flex items-center gap-3">
                         <StatusIcon className="h-5 w-5 text-muted-foreground" />
-                        <span className="font-medium">Order {kickback.orderId}</span>
-                        <Badge className={statusColors[kickback.status as keyof typeof statusColors]}>
+                        <span className="font-medium">
+                          Order {kickback.orderId}
+                        </span>
+                        <Badge
+                          className={
+                            statusColors[
+                              kickback.status as keyof typeof statusColors
+                            ]
+                          }
+                        >
                           {kickback.status.replace('_', ' ')}
                         </Badge>
-                        <Badge 
-                          className={priorityColors[kickback.priority as keyof typeof priorityColors]}
+                        <Badge
+                          className={
+                            priorityColors[
+                              kickback.priority as keyof typeof priorityColors
+                            ]
+                          }
                         >
                           {kickback.priority}
                         </Badge>
-                        <Badge variant="secondary">{kickback.kickbackDept}</Badge>
+                        <Badge variant="secondary">
+                          {kickback.kickbackDept}
+                        </Badge>
                       </div>
                       <p className="text-sm text-muted-foreground">
                         {kickback.reasonText || kickback.reasonCode}
                       </p>
                       <div className="flex items-center gap-4 text-xs text-muted-foreground">
                         <span>Reported by {kickback.reportedBy}</span>
-                        <span>{format(new Date(kickback.kickbackDate), 'MMM d, yyyy')}</span>
+                        <span>
+                          {format(
+                            new Date(kickback.kickbackDate),
+                            'MMM d, yyyy'
+                          )}
+                        </span>
                         {kickback.resolvedAt && (
-                          <span>Resolved {format(new Date(kickback.resolvedAt), 'MMM d, yyyy')}</span>
+                          <span>
+                            Resolved{' '}
+                            {format(
+                              new Date(kickback.resolvedAt),
+                              'MMM d, yyyy'
+                            )}
+                          </span>
                         )}
                       </div>
                     </div>
@@ -532,7 +684,9 @@ export default function KickbackTracking() {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => handleStatusChange(kickback.id, 'IN_PROGRESS')}
+                          onClick={() =>
+                            handleStatusChange(kickback.id, 'IN_PROGRESS')
+                          }
                         >
                           Start Work
                         </Button>
@@ -541,7 +695,9 @@ export default function KickbackTracking() {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => handleStatusChange(kickback.id, 'RESOLVED')}
+                          onClick={() =>
+                            handleStatusChange(kickback.id, 'RESOLVED')
+                          }
                         >
                           Resolve
                         </Button>
@@ -576,13 +732,25 @@ export default function KickbackTracking() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label>Status</Label>
-                  <Badge className={statusColors[selectedKickback.status as keyof typeof statusColors]}>
+                  <Badge
+                    className={
+                      statusColors[
+                        selectedKickback.status as keyof typeof statusColors
+                      ]
+                    }
+                  >
                     {selectedKickback.status}
                   </Badge>
                 </div>
                 <div>
                   <Label>Priority</Label>
-                  <Badge className={priorityColors[selectedKickback.priority as keyof typeof priorityColors]}>
+                  <Badge
+                    className={
+                      priorityColors[
+                        selectedKickback.priority as keyof typeof priorityColors
+                      ]
+                    }
+                  >
                     {selectedKickback.priority}
                   </Badge>
                 </div>
@@ -596,13 +764,17 @@ export default function KickbackTracking() {
               {selectedKickback.rootCause && (
                 <div>
                   <Label>Root Cause</Label>
-                  <p className="mt-1 p-3 bg-muted rounded-md">{selectedKickback.rootCause}</p>
+                  <p className="mt-1 p-3 bg-muted rounded-md">
+                    {selectedKickback.rootCause}
+                  </p>
                 </div>
               )}
               {selectedKickback.correctiveAction && (
                 <div>
                   <Label>Corrective Action</Label>
-                  <p className="mt-1 p-3 bg-muted rounded-md">{selectedKickback.correctiveAction}</p>
+                  <p className="mt-1 p-3 bg-muted rounded-md">
+                    {selectedKickback.correctiveAction}
+                  </p>
                 </div>
               )}
               <div className="grid grid-cols-2 gap-4 text-sm text-muted-foreground">
@@ -612,7 +784,9 @@ export default function KickbackTracking() {
                 </div>
                 <div>
                   <Label>Reported On</Label>
-                  <p>{format(new Date(selectedKickback.kickbackDate), 'PPP')}</p>
+                  <p>
+                    {format(new Date(selectedKickback.kickbackDate), 'PPP')}
+                  </p>
                 </div>
               </div>
               {selectedKickback.resolvedAt && (
@@ -623,7 +797,9 @@ export default function KickbackTracking() {
                   </div>
                   <div>
                     <Label>Resolved On</Label>
-                    <p>{format(new Date(selectedKickback.resolvedAt), 'PPP')}</p>
+                    <p>
+                      {format(new Date(selectedKickback.resolvedAt), 'PPP')}
+                    </p>
                   </div>
                 </div>
               )}

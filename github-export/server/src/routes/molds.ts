@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
-import { storage } from '../../storage';
 import { insertMoldSchema } from '@shared/schema';
+
+import { storage } from '../../storage';
 
 const router = Router();
 
@@ -10,8 +11,8 @@ router.get('/', async (req: Request, res: Response) => {
     const molds = await storage.getAllMolds();
     res.json(molds);
   } catch (error) {
-    console.error("Molds fetch error:", error);
-    res.status(500).json({ error: "Failed to fetch molds" });
+    console.error('Molds fetch error:', error);
+    res.status(500).json({ error: 'Failed to fetch molds' });
   }
 });
 
@@ -22,11 +23,11 @@ router.get('/:moldId', async (req: Request, res: Response) => {
     if (mold) {
       res.json(mold);
     } else {
-      res.status(404).json({ error: "Mold not found" });
+      res.status(404).json({ error: 'Mold not found' });
     }
   } catch (error) {
-    console.error("Mold fetch error:", error);
-    res.status(500).json({ error: "Failed to fetch mold" });
+    console.error('Mold fetch error:', error);
+    res.status(500).json({ error: 'Failed to fetch mold' });
   }
 });
 
@@ -37,8 +38,8 @@ router.post('/', async (req: Request, res: Response) => {
     const mold = await storage.createMold(result);
     res.json(mold);
   } catch (error) {
-    console.error("Mold creation error:", error);
-    res.status(400).json({ error: "Invalid mold data" });
+    console.error('Mold creation error:', error);
+    res.status(400).json({ error: 'Invalid mold data' });
   }
 });
 
@@ -48,13 +49,13 @@ router.put('/:moldId', async (req: Request, res: Response) => {
     // Ensure updatedAt is properly set
     const updateData = {
       ...req.body,
-      updatedAt: new Date()
+      updatedAt: new Date(),
     };
     const mold = await storage.updateMold(req.params.moldId, updateData);
     res.json(mold);
   } catch (error) {
-    console.error("Mold update error:", error);
-    res.status(400).json({ error: "Failed to update mold" });
+    console.error('Mold update error:', error);
+    res.status(400).json({ error: 'Failed to update mold' });
   }
 });
 
@@ -64,8 +65,8 @@ router.delete('/:moldId', async (req: Request, res: Response) => {
     await storage.deleteMold(req.params.moldId);
     res.json({ success: true });
   } catch (error) {
-    console.error("Mold deletion error:", error);
-    res.status(500).json({ error: "Failed to delete mold" });
+    console.error('Mold deletion error:', error);
+    res.status(500).json({ error: 'Failed to delete mold' });
   }
 });
 

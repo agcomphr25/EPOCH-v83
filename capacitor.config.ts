@@ -12,23 +12,23 @@ const config: CapacitorConfig = {
       androidSplashResourceName: 'splash',
       androidScaleType: 'CENTER_CROP',
       showSpinner: false,
-      spinnerColor: '#1d4ed8'
+      spinnerColor: '#1d4ed8',
     },
     StatusBar: {
-      style: 'DARK'
+      style: 'DARK',
     },
     Keyboard: {
       resize: 'body',
-      style: 'DARK'
+      style: 'DARK',
     },
     PushNotifications: {
-      presentationOptions: ['badge', 'sound', 'alert']
-    }
+      presentationOptions: ['badge', 'sound', 'alert'],
+    },
   },
   server: {
     androidScheme: 'https',
-    iosScheme: 'https'
-  }
+    iosScheme: 'https',
+  },
 };
 
 export default config;

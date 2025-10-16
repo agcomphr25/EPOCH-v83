@@ -1,7 +1,8 @@
 import { Router } from 'express';
+import { eq, and, desc, sql } from 'drizzle-orm';
+
 import { db } from '../../db';
 import { featureSelections } from '../../schema';
-import { eq, and, desc, sql } from 'drizzle-orm';
 
 const router = Router();
 
@@ -14,8 +15,8 @@ router.post('/track', async (req, res) => {
     const { featureName, optionValue, optionLabel } = req.body;
 
     if (!featureName || !optionValue || !optionLabel) {
-      return res.status(400).json({ 
-        error: 'featureName, optionValue, and optionLabel are required' 
+      return res.status(400).json({
+        error: 'featureName, optionValue, and optionLabel are required',
       });
     }
 

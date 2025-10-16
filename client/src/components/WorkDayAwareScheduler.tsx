@@ -1,27 +1,41 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import {
+  Calendar,
+  Settings,
+  Save,
+  RefreshCw,
+  Clock,
+  AlertTriangle,
+} from 'lucide-react';
+
 import { apiRequest } from '@/lib/queryClient';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
-import { Calendar, Settings, Save, RefreshCw, Clock, AlertTriangle } from 'lucide-react';
 
 interface WorkDayAwareSchedulerProps {
   onScheduleGenerated?: (schedule: any) => void;
 }
 
-export default function WorkDayAwareScheduler({ onScheduleGenerated }: WorkDayAwareSchedulerProps) {
+export default function WorkDayAwareScheduler({
+  onScheduleGenerated,
+}: WorkDayAwareSchedulerProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  
-  const [selectedWorkDays, setSelectedWorkDays] = useState<number[]>([1, 2, 3, 4]); // Monday-Thursday default
+
+  const [selectedWorkDays, setSelectedWorkDays] = useState<number[]>([
+    1, 2, 3, 4,
+  ]); // Monday-Thursday default
   const [scheduleGenerated, setScheduleGenerated] = useState(false);
   const [lastScheduleResult, setLastScheduleResult] = useState<any>(null);
 
   // Get production queue data
-  const { data: productionQueue = [], isLoading: queueLoading } = useQuery<any[]>({
+  const { data: productionQueue = [], isLoading: queueLoading } = useQuery<
+    any[]
+  >({
     queryKey: ['/api/production-queue/prioritized'],
     queryFn: () => apiRequest('/api/production-queue/prioritized'),
   });
@@ -34,29 +48,33 @@ export default function WorkDayAwareScheduler({ onScheduleGenerated }: WorkDayAw
 
   // Auto-populate production queue mutation
   const autoPopulateMutation = useMutation({
-    mutationFn: () => apiRequest('/api/production-queue/auto-populate', { method: 'POST' }),
+    mutationFn: () =>
+      apiRequest('/api/production-queue/auto-populate', { method: 'POST' }),
     onSuccess: (result: any) => {
       if (result.success) {
         toast({
-          title: "Production Queue Updated",
+          title: 'Production Queue Updated',
           description: `Auto-populated queue with ${result.ordersProcessed || 0} orders`,
         });
-        queryClient.invalidateQueries({ queryKey: ['/api/production-queue/prioritized'] });
+        queryClient.invalidateQueries({
+          queryKey: ['/api/production-queue/prioritized'],
+        });
       } else {
         toast({
-          title: "Auto-Populate Failed",
-          description: result.message || "No orders were processed",
-          variant: "destructive",
+          title: 'Auto-Populate Failed',
+          description: result.message || 'No orders were processed',
+          variant: 'destructive',
         });
       }
     },
     onError: (error: any) => {
       toast({
-        title: "Auto-Populate Failed",
-        description: error.message || "Failed to auto-populate production queue",
-        variant: "destructive",
+        title: 'Auto-Populate Failed',
+        description:
+          error.message || 'Failed to auto-populate production queue',
+        variant: 'destructive',
       });
-    }
+    },
   });
 
   // Generate work-day aware schedule mutation
@@ -68,43 +86,44 @@ export default function WorkDayAwareScheduler({ onScheduleGenerated }: WorkDayAw
         body: JSON.stringify({
           maxOrdersPerDay: 50,
           scheduleDays: 5, // Only generate for 5 days
-          workDays: selectedWorkDays // Critical: Pass selected work days
-        })
+          workDays: selectedWorkDays, // Critical: Pass selected work days
+        }),
       });
     },
     onSuccess: (result: any) => {
       console.log('📊 Schedule generation result:', result);
-      
+
       if (result.success && result.allocations) {
         const totalScheduled = result.allocations.length;
         toast({
-          title: "Schedule Generated Successfully",
+          title: 'Schedule Generated Successfully',
           description: `Scheduled ${totalScheduled} orders on selected work days only`,
         });
-        
+
         setScheduleGenerated(true);
         setLastScheduleResult(result);
-        
+
         // Notify parent component if callback provided
         if (onScheduleGenerated) {
           onScheduleGenerated(result);
         }
       } else {
         toast({
-          title: "Schedule Generation Warning",
-          description: result.message || "No orders were scheduled",
-          variant: "destructive",
+          title: 'Schedule Generation Warning',
+          description: result.message || 'No orders were scheduled',
+          variant: 'destructive',
         });
       }
     },
     onError: (error: any) => {
       console.error('❌ Schedule generation error:', error);
       toast({
-        title: "Schedule Generation Failed",
-        description: error.message || "Failed to generate work-day aware schedule",
-        variant: "destructive",
+        title: 'Schedule Generation Failed',
+        description:
+          error.message || 'Failed to generate work-day aware schedule',
+        variant: 'destructive',
       });
-    }
+    },
   });
 
   const workDayOptions = [
@@ -116,9 +135,9 @@ export default function WorkDayAwareScheduler({ onScheduleGenerated }: WorkDayAw
   ];
 
   const toggleWorkDay = (dayNumber: number) => {
-    setSelectedWorkDays(prev => {
+    setSelectedWorkDays((prev) => {
       if (prev.includes(dayNumber)) {
-        return prev.filter(d => d !== dayNumber);
+        return prev.filter((d) => d !== dayNumber);
       } else {
         return [...prev, dayNumber].sort();
       }
@@ -126,13 +145,16 @@ export default function WorkDayAwareScheduler({ onScheduleGenerated }: WorkDayAw
     setScheduleGenerated(false); // Reset when work days change
   };
 
-  const totalCapacity = employeeSettings.reduce((total: number, emp: any) => 
-    total + (emp.rate * emp.hours), 0
+  const totalCapacity = employeeSettings.reduce(
+    (total: number, emp: any) => total + emp.rate * emp.hours,
+    0
   );
 
-  const selectedDayNames = selectedWorkDays.map(d => 
-    workDayOptions.find(opt => opt.day === d)?.short || d.toString()
-  ).join(', ');
+  const selectedDayNames = selectedWorkDays
+    .map(
+      (d) => workDayOptions.find((opt) => opt.day === d)?.short || d.toString()
+    )
+    .join(', ');
 
   return (
     <div className="space-y-6">
@@ -144,7 +166,8 @@ export default function WorkDayAwareScheduler({ onScheduleGenerated }: WorkDayAw
             Work Day Configuration
           </CardTitle>
           <p className="text-sm text-gray-500">
-            Select which days to schedule orders. Orders will ONLY be scheduled on selected days.
+            Select which days to schedule orders. Orders will ONLY be scheduled
+            on selected days.
           </p>
         </CardHeader>
         <CardContent>
@@ -168,7 +191,7 @@ export default function WorkDayAwareScheduler({ onScheduleGenerated }: WorkDayAw
               </label>
             ))}
           </div>
-          
+
           <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
             <div className="flex items-center gap-2">
               <Calendar className="w-4 h-4 text-blue-600" />
@@ -193,12 +216,14 @@ export default function WorkDayAwareScheduler({ onScheduleGenerated }: WorkDayAw
               <Clock className="w-5 h-5 text-blue-500" />
               <div>
                 <p className="text-sm text-gray-500">Daily Capacity</p>
-                <p className="text-xl font-bold">{Math.floor(totalCapacity)} parts/day</p>
+                <p className="text-xl font-bold">
+                  {Math.floor(totalCapacity)} parts/day
+                </p>
               </div>
             </div>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-2">
@@ -210,7 +235,7 @@ export default function WorkDayAwareScheduler({ onScheduleGenerated }: WorkDayAw
             </div>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-2">
@@ -244,10 +269,13 @@ export default function WorkDayAwareScheduler({ onScheduleGenerated }: WorkDayAw
                 <RefreshCw className="w-4 h-4" />
                 Auto-Populate Queue
               </Button>
-              
+
               <Button
                 onClick={() => generateScheduleMutation.mutate()}
-                disabled={generateScheduleMutation.isPending || selectedWorkDays.length === 0}
+                disabled={
+                  generateScheduleMutation.isPending ||
+                  selectedWorkDays.length === 0
+                }
                 className="bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-2"
               >
                 <Calendar className="w-4 h-4" />
@@ -262,7 +290,9 @@ export default function WorkDayAwareScheduler({ onScheduleGenerated }: WorkDayAw
       {scheduleGenerated && lastScheduleResult && (
         <Card className="border-green-200 bg-green-50">
           <CardHeader>
-            <CardTitle className="text-green-800">Schedule Generated Successfully</CardTitle>
+            <CardTitle className="text-green-800">
+              Schedule Generated Successfully
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -291,10 +321,11 @@ export default function WorkDayAwareScheduler({ onScheduleGenerated }: WorkDayAw
                 <div className="text-sm text-orange-700">Weekly Capacity</div>
               </div>
             </div>
-            
+
             <div className="mt-4 p-3 bg-white border border-green-200 rounded">
               <p className="text-sm text-green-800">
-                <strong>✅ Schedule respects work day selection:</strong> Orders scheduled only on {selectedDayNames}
+                <strong>✅ Schedule respects work day selection:</strong> Orders
+                scheduled only on {selectedDayNames}
               </p>
             </div>
           </CardContent>

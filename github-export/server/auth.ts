@@ -1,15 +1,18 @@
-import bcrypt from 'bcrypt';
 import { randomBytes } from 'crypto';
+
+import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
+import { eq, and, lt, gt } from 'drizzle-orm';
+
 import { db } from './db';
 import { users, userSessions, employeeAuditLog } from './schema';
-import { eq, and, lt, gt } from 'drizzle-orm';
 
 const SALT_ROUNDS = 12;
 const MAX_LOGIN_ATTEMPTS = 5;
 const LOCK_TIME = 15 * 60 * 1000; // 15 minutes
 const SESSION_TIMEOUT = 8 * 60 * 60 * 1000; // 8 hours
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+const JWT_SECRET =
+  process.env.JWT_SECRET || 'your-secret-key-change-in-production';
 
 export interface AuthUser {
   id: number;
@@ -33,7 +36,10 @@ export class AuthService {
     return bcrypt.hash(password, SALT_ROUNDS);
   }
 
-  static async verifyPassword(password: string, hash: string): Promise<boolean> {
+  static async verifyPassword(
+    password: string,
+    hash: string
+  ): Promise<boolean> {
     return bcrypt.compare(password, hash);
   }
 
@@ -41,30 +47,42 @@ export class AuthService {
     return randomBytes(32).toString('hex');
   }
 
-  static generateJWT(userId: number, role: string, employeeId: number | null = null): string {
-    const payload = { 
-      userId, 
-      role, 
+  static generateJWT(
+    userId: number,
+    role: string,
+    employeeId: number | null = null
+  ): string {
+    const payload = {
+      userId,
+      role,
       employeeId,
-      type: 'access'
+      type: 'access',
     };
     return jwt.sign(payload, JWT_SECRET, { expiresIn: '2h' });
   }
 
-  static verifyJWT(token: string): { userId: number; role: string; employeeId: number | null } | null {
+  static verifyJWT(
+    token: string
+  ): { userId: number; role: string; employeeId: number | null } | null {
     try {
       const decoded = jwt.verify(token, JWT_SECRET) as any;
       return {
         userId: decoded.userId,
         role: decoded.role,
-        employeeId: decoded.employeeId || null
+        employeeId: decoded.employeeId || null,
       };
     } catch (error) {
       return null;
     }
   }
 
-  static async createSession(userId: number, userType: string, employeeId: number | null, ipAddress: string | null, userAgent: string | null): Promise<string> {
+  static async createSession(
+    userId: number,
+    userType: string,
+    employeeId: number | null,
+    ipAddress: string | null,
+    userAgent: string | null
+  ): Promise<string> {
     const sessionToken = this.generateSessionToken();
     const expiresAt = new Date(Date.now() + SESSION_TIMEOUT);
 
@@ -82,7 +100,9 @@ export class AuthService {
     return sessionToken;
   }
 
-  static async validateSession(sessionToken: string): Promise<SessionData | null> {
+  static async validateSession(
+    sessionToken: string
+  ): Promise<SessionData | null> {
     const [session] = await db
       .select()
       .from(userSessions)
@@ -93,7 +113,7 @@ export class AuthService {
           gt(userSessions.expiresAt, new Date())
         )
       );
-    
+
     if (!session) {
       return null;
     }
@@ -128,7 +148,12 @@ export class AuthService {
       .where(eq(userSessions.userId, userId));
   }
 
-  static async authenticate(username: string, password: string, ipAddress: string | null, userAgent: string | null): Promise<{ user: AuthUser; sessionToken: string } | null> {
+  static async authenticate(
+    username: string,
+    password: string,
+    ipAddress: string | null,
+    userAgent: string | null
+  ): Promise<{ user: AuthUser; sessionToken: string } | null> {
     const [user] = await db
       .select()
       .from(users)
@@ -140,7 +165,9 @@ export class AuthService {
 
     // Check if account is locked
     if (user.lockedUntil && new Date() < user.lockedUntil) {
-      throw new Error('Account is temporarily locked due to too many failed login attempts');
+      throw new Error(
+        'Account is temporarily locked due to too many failed login attempts'
+      );
     }
 
     // Check if account is active
@@ -149,12 +176,18 @@ export class AuthService {
     }
 
     // Verify password
-    const isValidPassword = await this.verifyPassword(password, user.passwordHash);
+    const isValidPassword = await this.verifyPassword(
+      password,
+      user.passwordHash
+    );
 
     if (!isValidPassword) {
       // Increment failed login attempts
       const failedAttempts = (user.failedLoginAttempts || 0) + 1;
-      const lockUntil = failedAttempts >= MAX_LOGIN_ATTEMPTS ? new Date(Date.now() + LOCK_TIME) : null;
+      const lockUntil =
+        failedAttempts >= MAX_LOGIN_ATTEMPTS
+          ? new Date(Date.now() + LOCK_TIME)
+          : null;
 
       await db
         .update(users)
@@ -165,7 +198,9 @@ export class AuthService {
         .where(eq(users.id, user.id));
 
       if (lockUntil) {
-        throw new Error(`Account locked for ${LOCK_TIME / 60000} minutes due to too many failed login attempts`);
+        throw new Error(
+          `Account locked for ${LOCK_TIME / 60000} minutes due to too many failed login attempts`
+        );
       }
 
       return null;
@@ -214,21 +249,25 @@ export class AuthService {
         isActive: user.isActive,
       },
       sessionToken,
-      token: jwtToken // Add JWT token to response
+      token: jwtToken, // Add JWT token to response
     };
   }
 
-  static async changePassword(userId: number, currentPassword: string, newPassword: string): Promise<boolean> {
-    const [user] = await db
-      .select()
-      .from(users)
-      .where(eq(users.id, userId));
+  static async changePassword(
+    userId: number,
+    currentPassword: string,
+    newPassword: string
+  ): Promise<boolean> {
+    const [user] = await db.select().from(users).where(eq(users.id, userId));
 
     if (!user) {
       return false;
     }
 
-    const isValidCurrentPassword = await this.verifyPassword(currentPassword, user.passwordHash);
+    const isValidCurrentPassword = await this.verifyPassword(
+      currentPassword,
+      user.passwordHash
+    );
     if (!isValidCurrentPassword) {
       return false;
     }
@@ -249,10 +288,7 @@ export class AuthService {
   }
 
   static async getUserById(userId: number): Promise<AuthUser | null> {
-    const [user] = await db
-      .select()
-      .from(users)
-      .where(eq(users.id, userId));
+    const [user] = await db.select().from(users).where(eq(users.id, userId));
 
     if (!user || !user.isActive) {
       return null;
@@ -268,7 +304,9 @@ export class AuthService {
     };
   }
 
-  static async getUserBySession(sessionToken: string): Promise<AuthUser | null> {
+  static async getUserBySession(
+    sessionToken: string
+  ): Promise<AuthUser | null> {
     const session = await this.validateSession(sessionToken);
     if (!session) {
       return null;
@@ -277,7 +315,9 @@ export class AuthService {
     return this.getUserById(session.userId);
   }
 
-  static async validatePortalToken(portalToken: string): Promise<{ employeeId: number; isValid: boolean }> {
+  static async validatePortalToken(
+    portalToken: string
+  ): Promise<{ employeeId: number; isValid: boolean }> {
     const { storage } = await import('./storage');
     return storage.validatePortalToken(portalToken);
   }
@@ -286,7 +326,9 @@ export class AuthService {
 // Middleware for authentication
 export const requireAuth = (allowedRoles?: string[]) => {
   return async (req: any, res: any, next: any) => {
-    const sessionToken = req.headers.authorization?.replace('Bearer ', '') || req.cookies?.sessionToken;
+    const sessionToken =
+      req.headers.authorization?.replace('Bearer ', '') ||
+      req.cookies?.sessionToken;
 
     if (!sessionToken) {
       return res.status(401).json({ error: 'Authentication required' });

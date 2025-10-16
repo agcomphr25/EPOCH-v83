@@ -1,30 +1,36 @@
-<!DOCTYPE html>
+<!doctype html>
 <html>
-<head>
+  <head>
     <title>Minimal React Test</title>
-</head>
-<body>
+  </head>
+  <body>
     <div id="root"></div>
     <script>
-        // Test if React is working
-        setTimeout(() => {
-            fetch('http://localhost:5000/')
-                .then(response => response.text())
-                .then(html => {
-                    document.body.innerHTML = html;
-                    
-                    // Check for errors in the page
-                    const scripts = document.querySelectorAll('script');
-                    scripts.forEach(script => {
-                        if (script.src.includes('App') || script.textContent.includes('useRef')) {
-                            console.log('Found potential error script:', script.src || 'inline');
-                        }
-                    });
-                })
-                .catch(err => {
-                    console.error('Error loading page:', err);
-                });
-        }, 2000);
+      // Test if React is working
+      setTimeout(() => {
+        fetch('http://localhost:5000/')
+          .then((response) => response.text())
+          .then((html) => {
+            document.body.innerHTML = html;
+
+            // Check for errors in the page
+            const scripts = document.querySelectorAll('script');
+            scripts.forEach((script) => {
+              if (
+                script.src.includes('App') ||
+                script.textContent.includes('useRef')
+              ) {
+                console.log(
+                  'Found potential error script:',
+                  script.src || 'inline'
+                );
+              }
+            });
+          })
+          .catch((err) => {
+            console.error('Error loading page:', err);
+          });
+      }, 2000);
     </script>
-</body>
+  </body>
 </html>

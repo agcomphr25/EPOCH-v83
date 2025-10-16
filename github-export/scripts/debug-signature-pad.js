@@ -2,7 +2,10 @@
 const SignaturePad = require('signature_pad');
 
 console.log('SignaturePad constructor:', typeof SignaturePad);
-console.log('SignaturePad prototype:', Object.getOwnPropertyNames(SignaturePad.prototype));
+console.log(
+  'SignaturePad prototype:',
+  Object.getOwnPropertyNames(SignaturePad.prototype)
+);
 
 // Test with a mock canvas
 const mockCanvas = {
@@ -13,12 +16,12 @@ const mockCanvas = {
     stroke: () => {},
     beginPath: () => {},
     closePath: () => {},
-    canvas: { width: 300, height: 150 }
+    canvas: { width: 300, height: 150 },
   }),
   width: 300,
   height: 150,
   addEventListener: () => {},
-  removeEventListener: () => {}
+  removeEventListener: () => {},
 };
 
 try {

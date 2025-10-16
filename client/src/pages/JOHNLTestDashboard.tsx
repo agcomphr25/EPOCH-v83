@@ -1,7 +1,16 @@
 import React from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Settings, FileText, Users, Wrench, Factory, Package, GraduationCap } from 'lucide-react';
+import {
+  Settings,
+  FileText,
+  Users,
+  Wrench,
+  Factory,
+  Package,
+  GraduationCap,
+} from 'lucide-react';
 import { Link } from 'wouter';
+
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import PipelineVisualization from '@/components/PipelineVisualization';
 
 export default function JOHNLTestDashboard() {
@@ -10,7 +19,9 @@ export default function JOHNLTestDashboard() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">johnl dashboard</h1>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
+            johnl dashboard
+          </h1>
           <p className="text-gray-600 dark:text-gray-400 mt-1">
             CNC Operations & Production Management
           </p>
@@ -26,8 +37,12 @@ export default function JOHNLTestDashboard() {
           <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-blue-200">
             <CardContent className="p-4 text-center">
               <Wrench className="w-8 h-8 text-blue-600 mx-auto mb-3" />
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">CNC Queue</h3>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">CNC production queue</p>
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                CNC Queue
+              </h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                CNC production queue
+              </p>
             </CardContent>
           </Card>
         </Link>
@@ -36,8 +51,12 @@ export default function JOHNLTestDashboard() {
           <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-green-200">
             <CardContent className="p-4 text-center">
               <FileText className="w-8 h-8 text-green-600 mx-auto mb-3" />
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">All Orders</h3>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">View all orders</p>
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                All Orders
+              </h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                View all orders
+              </p>
             </CardContent>
           </Card>
         </Link>
@@ -46,8 +65,12 @@ export default function JOHNLTestDashboard() {
           <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-amber-200">
             <CardContent className="p-4 text-center">
               <Package className="w-8 h-8 text-amber-600 mx-auto mb-3" />
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Metal Accessories</h3>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Track metal parts demand</p>
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                Metal Accessories
+              </h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                Track metal parts demand
+              </p>
             </CardContent>
           </Card>
         </Link>
@@ -56,8 +79,12 @@ export default function JOHNLTestDashboard() {
           <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-teal-200">
             <CardContent className="p-4 text-center">
               <GraduationCap className="w-8 h-8 text-teal-600 mx-auto mb-3" />
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Training Modules</h3>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Complete training courses</p>
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                Training Modules
+              </h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                Complete training courses
+              </p>
             </CardContent>
           </Card>
         </Link>
@@ -79,7 +106,6 @@ export default function JOHNLTestDashboard() {
           </CardContent>
         </Card>
       </div>
-
     </div>
   );
 }

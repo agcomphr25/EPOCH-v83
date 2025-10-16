@@ -45,7 +45,7 @@ if (result.isValid && result.token) {
   // Token is valid - authenticate the user
   const email = result.token.email;
   const metadata = result.token.metadata;
-  
+
   // Create session, log them in, etc.
 } else {
   // Token is invalid or expired
@@ -74,10 +74,10 @@ await sendMagicLink({
   purpose: 'order_confirmation',
   subject: `Confirm Your Order ${orderId}`,
   buttonText: 'Confirm Order',
-  metadata: { 
+  metadata: {
     orderId: orderId,
     customerId: customer.id,
-    orderTotal: orderTotal 
+    orderTotal: orderTotal,
   },
   expiresInMinutes: 60,
 });
@@ -105,9 +105,9 @@ await sendMagicLink({
   subject: 'Please Sign Your Document',
   message: 'Click the button below to review and sign your document.',
   buttonText: 'Sign Document',
-  metadata: { 
+  metadata: {
     documentId: doc.id,
-    customerId: customer.id 
+    customerId: customer.id,
   },
   expiresInMinutes: 120, // 2 hours
 });
@@ -120,6 +120,7 @@ await sendMagicLink({
 Send a magic link via email.
 
 **Request Body:**
+
 ```json
 {
   "email": "customer@example.com",
@@ -133,6 +134,7 @@ Send a magic link via email.
 ```
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -146,6 +148,7 @@ Send a magic link via email.
 Verify and consume a magic link token.
 
 **Response (Success):**
+
 ```json
 {
   "success": true,
@@ -157,6 +160,7 @@ Verify and consume a magic link token.
 ```
 
 **Response (Error):**
+
 ```json
 {
   "success": false,
@@ -169,6 +173,7 @@ Verify and consume a magic link token.
 Generate a magic link without sending it (for manual delivery).
 
 **Request Body:**
+
 ```json
 {
   "email": "customer@example.com",
@@ -179,6 +184,7 @@ Generate a magic link without sending it (for manual delivery).
 ```
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -192,6 +198,7 @@ Generate a magic link without sending it (for manual delivery).
 Clean up expired tokens (run periodically).
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -221,7 +228,7 @@ await sendMagicLink({
         </body>
       </html>
     `,
-    text: `Welcome! Click here to continue: ${link}`
+    text: `Welcome! Click here to continue: ${link}`,
   }),
 });
 ```
@@ -242,15 +249,15 @@ The system uses a `magic_link_tokens` table:
 ```typescript
 {
   id: number;
-  token: string;           // Unique cryptographic token
-  email: string;           // Recipient email
-  purpose: string;         // 'login', 'order_confirmation', etc.
-  metadata: object;        // Additional data (customerId, orderId, etc.)
-  expiresAt: Date;         // Token expiration timestamp
-  usedAt: Date | null;     // When token was used (null if unused)
-  ipAddress: string;       // IP that requested the link
-  userAgent: string;       // User agent that requested the link
-  createdAt: Date;         // Creation timestamp
+  token: string; // Unique cryptographic token
+  email: string; // Recipient email
+  purpose: string; // 'login', 'order_confirmation', etc.
+  metadata: object; // Additional data (customerId, orderId, etc.)
+  expiresAt: Date; // Token expiration timestamp
+  usedAt: Date | null; // When token was used (null if unused)
+  ipAddress: string; // IP that requested the link
+  userAgent: string; // User agent that requested the link
+  createdAt: Date; // Creation timestamp
 }
 ```
 
@@ -286,7 +293,7 @@ import { sendMagicLink } from '../utils/magicLink';
 async function notifyCustomerOrderShipped(orderId: string) {
   const order = await storage.getOrderById(orderId);
   const customer = await storage.getCustomerById(order.customerId);
-  
+
   // Send magic link for order tracking
   await sendMagicLink({
     email: customer.email,
@@ -297,7 +304,7 @@ async function notifyCustomerOrderShipped(orderId: string) {
     metadata: {
       orderId: orderId,
       customerId: customer.id,
-      trackingNumber: order.trackingNumber
+      trackingNumber: order.trackingNumber,
     },
     expiresInMinutes: 720, // 12 hours
   });
@@ -315,17 +322,17 @@ function MagicLinkVerification() {
   const [location] = useLocation();
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [data, setData] = useState<any>(null);
-  
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const token = params.get('token');
     const purpose = params.get('purpose');
-    
+
     if (!token) {
       setStatus('error');
       return;
     }
-    
+
     fetch(`/api/magic-link/verify?token=${token}&purpose=${purpose}`)
       .then(res => res.json())
       .then(result => {
@@ -340,10 +347,10 @@ function MagicLinkVerification() {
       })
       .catch(() => setStatus('error'));
   }, []);
-  
+
   if (status === 'loading') return <div>Verifying...</div>;
   if (status === 'error') return <div>Invalid or expired link</div>;
-  
+
   return <div>Success! Email: {data.email}</div>;
 }
 ```

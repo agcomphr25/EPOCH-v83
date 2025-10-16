@@ -1,10 +1,17 @@
 import { Router, Request, Response } from 'express';
-import { db } from '../../db';
-import { refundRequests, allOrders, customers, payments, creditCardTransactions } from '../../schema';
-import { insertRefundRequestSchema } from '../../schema';
 import { eq, desc, and, sql } from 'drizzle-orm';
-// @ts-ignore - AuthorizeNet doesn't have proper TypeScript definitions
 import AuthorizeNet from 'authorizenet';
+
+import { db } from '../../db';
+import {
+  refundRequests,
+  allOrders,
+  customers,
+  payments,
+  creditCardTransactions,
+} from '../../schema';
+import { insertRefundRequestSchema } from '../../schema';
+// @ts-ignore - AuthorizeNet doesn't have proper TypeScript definitions
 
 const router = Router();
 
@@ -14,25 +21,37 @@ const transactionKey = process.env.AUTHORIZE_NET_TRANSACTION_KEY;
 const isTestMode = process.env.NODE_ENV !== 'production';
 
 // Function to process refund through Authorize.Net
-async function processAuthorizeNetRefund(transactionId: string, refundAmount: number): Promise<{ success: boolean; message: string; refundTransactionId?: string }> {
+async function processAuthorizeNetRefund(
+  transactionId: string,
+  refundAmount: number
+): Promise<{
+  success: boolean;
+  message: string;
+  refundTransactionId?: string;
+}> {
   try {
     if (!apiLoginId || !transactionKey) {
       throw new Error('Authorize.Net credentials not configured');
     }
 
-    console.log(`🔄 Processing Authorize.Net refund for transaction ${transactionId}, amount: $${refundAmount}`);
+    console.log(
+      `🔄 Processing Authorize.Net refund for transaction ${transactionId}, amount: $${refundAmount}`
+    );
 
     const apiContracts = AuthorizeNet.APIContracts;
     const apiControllers = AuthorizeNet.APIControllers;
 
     // Set up merchant authentication
-    const merchantAuthenticationType = new apiContracts.MerchantAuthenticationType();
+    const merchantAuthenticationType =
+      new apiContracts.MerchantAuthenticationType();
     merchantAuthenticationType.setName(apiLoginId);
     merchantAuthenticationType.setTransactionKey(transactionKey);
 
     // Set up transaction request for refund
     const transactionRequestType = new apiContracts.TransactionRequestType();
-    transactionRequestType.setTransactionType(apiContracts.TransactionTypeEnum.REFUNDTRANSACTION);
+    transactionRequestType.setTransactionType(
+      apiContracts.TransactionTypeEnum.REFUNDTRANSACTION
+    );
     transactionRequestType.setAmount(refundAmount);
     transactionRequestType.setRefTransId(transactionId);
 
@@ -42,38 +61,55 @@ async function processAuthorizeNetRefund(transactionId: string, refundAmount: nu
     createRequest.setTransactionRequest(transactionRequestType);
 
     // Execute the refund
-    const ctrl = new apiControllers.CreateTransactionController(createRequest.getJSON());
+    const ctrl = new apiControllers.CreateTransactionController(
+      createRequest.getJSON()
+    );
 
     return new Promise((resolve, reject) => {
       ctrl.execute(() => {
         const apiResponse = ctrl.getResponse();
-        const response = new apiContracts.CreateTransactionResponse(apiResponse);
+        const response = new apiContracts.CreateTransactionResponse(
+          apiResponse
+        );
 
         console.log('✅ Authorize.Net refund response received');
         console.log('Response Code:', response.getMessages().getResultCode());
 
-        if (response.getMessages().getResultCode() === apiContracts.MessageTypeEnum.OK) {
+        if (
+          response.getMessages().getResultCode() ===
+          apiContracts.MessageTypeEnum.OK
+        ) {
           const transactionResponse = response.getTransactionResponse();
           if (transactionResponse.getMessages() != null) {
             console.log('✅ Refund processed successfully');
             console.log('Transaction ID:', transactionResponse.getTransId());
-            console.log('Response Code:', transactionResponse.getResponseCode());
-            console.log('Message Code:', transactionResponse.getMessages().getMessage()[0].getCode());
-            console.log('Description:', transactionResponse.getMessages().getMessage()[0].getDescription());
+            console.log(
+              'Response Code:',
+              transactionResponse.getResponseCode()
+            );
+            console.log(
+              'Message Code:',
+              transactionResponse.getMessages().getMessage()[0].getCode()
+            );
+            console.log(
+              'Description:',
+              transactionResponse.getMessages().getMessage()[0].getDescription()
+            );
 
             resolve({
               success: true,
               message: 'Refund processed successfully',
-              refundTransactionId: transactionResponse.getTransId()
+              refundTransactionId: transactionResponse.getTransId(),
             });
           } else {
-            const errorMessage = transactionResponse.getErrors() != null ? 
-              transactionResponse.getErrors().getError()[0].getErrorText() : 
-              'Refund failed';
+            const errorMessage =
+              transactionResponse.getErrors() != null
+                ? transactionResponse.getErrors().getError()[0].getErrorText()
+                : 'Refund failed';
             console.error('❌ Refund transaction failed:', errorMessage);
             resolve({
               success: false,
-              message: errorMessage
+              message: errorMessage,
             });
           }
         } else {
@@ -81,17 +117,19 @@ async function processAuthorizeNetRefund(transactionId: string, refundAmount: nu
           console.error('❌ Refund request failed:', errorMessage);
           resolve({
             success: false,
-            message: errorMessage
+            message: errorMessage,
           });
         }
       });
     });
-
   } catch (error) {
     console.error('❌ Error processing Authorize.Net refund:', error);
     return {
       success: false,
-      message: error instanceof Error ? error.message : 'Unknown error processing refund'
+      message:
+        error instanceof Error
+          ? error.message
+          : 'Unknown error processing refund',
     };
   }
 }
@@ -100,7 +138,7 @@ async function processAuthorizeNetRefund(transactionId: string, refundAmount: nu
 router.get('/', async (req: Request, res: Response) => {
   try {
     console.log('🔍 Getting all refund requests');
-    
+
     const requests = await db
       .select()
       .from(refundRequests)
@@ -118,13 +156,13 @@ router.get('/', async (req: Request, res: Response) => {
 router.post('/', async (req: Request, res: Response) => {
   try {
     console.log('📝 Creating new refund request:', req.body);
-    
+
     // Validate request data
     const validatedData = insertRefundRequestSchema.parse(req.body);
-    
+
     // For now, we'll use a hardcoded user. In production, this would come from auth
     const requestedBy = 'CSR'; // TODO: Get from authentication context
-    
+
     const [newRequest] = await db
       .insert(refundRequests)
       .values({
@@ -146,7 +184,7 @@ router.post('/:id/approve', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     console.log(`✅ Approving refund request ${id}`);
-    
+
     // Get the refund request details
     const [refundRequest] = await db
       .select()
@@ -158,10 +196,10 @@ router.post('/:id/approve', async (req: Request, res: Response) => {
     }
 
     // REMOVED: Credit card transaction check since manual processing handles all payment types
-    
+
     // For now, we'll use a hardcoded manager. In production, this would come from auth
     const approvedBy = 'MANAGER'; // TODO: Get from authentication context
-    
+
     // Update the refund request status to APPROVED first
     const [updatedRequest] = await db
       .update(refundRequests)
@@ -176,22 +214,23 @@ router.post('/:id/approve', async (req: Request, res: Response) => {
 
     console.log('✅ Approved refund request:', updatedRequest.id);
 
-    // REMOVED: Automatic Authorize.Net processing 
+    // REMOVED: Automatic Authorize.Net processing
     // Refunds are now approved for manual processing outside of Epoch
     console.log('📝 Refund approved for manual processing outside of Epoch');
     await db
       .update(refundRequests)
       .set({
-        notes: 'Refund approved and recorded for manual processing outside of Epoch system.',
+        notes:
+          'Refund approved and recorded for manual processing outside of Epoch system.',
         updatedAt: new Date(),
       })
       .where(eq(refundRequests.id, parseInt(id)));
-    
+
     res.json({
       ...updatedRequest,
-      message: 'Refund approved successfully and recorded for manual processing.'
+      message:
+        'Refund approved successfully and recorded for manual processing.',
     });
-    
   } catch (error) {
     console.error('❌ Error approving refund request:', error);
     res.status(500).json({ error: 'Failed to approve refund request' });
@@ -203,16 +242,16 @@ router.post('/:id/reject', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { rejectionReason } = req.body;
-    
+
     console.log(`❌ Rejecting refund request ${id}:`, rejectionReason);
-    
+
     if (!rejectionReason?.trim()) {
       return res.status(400).json({ error: 'Rejection reason is required' });
     }
-    
+
     // For now, we'll use a hardcoded manager. In production, this would come from auth
     const approvedBy = 'MANAGER'; // TODO: Get from authentication context
-    
+
     const [updatedRequest] = await db
       .update(refundRequests)
       .set({
@@ -242,14 +281,16 @@ router.get('/customer/:customerId', async (req: Request, res: Response) => {
   try {
     const { customerId } = req.params;
     console.log(`🔍 Getting refund requests for customer ${customerId}`);
-    
+
     const requests = await db
       .select()
       .from(refundRequests)
       .where(eq(refundRequests.customerId, customerId))
       .orderBy(desc(refundRequests.createdAt));
 
-    console.log(`✅ Found ${requests.length} refund requests for customer ${customerId}`);
+    console.log(
+      `✅ Found ${requests.length} refund requests for customer ${customerId}`
+    );
     res.json(requests);
   } catch (error) {
     console.error('❌ Error fetching customer refund requests:', error);

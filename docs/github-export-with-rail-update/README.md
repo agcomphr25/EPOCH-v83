@@ -24,28 +24,33 @@ A comprehensive Enterprise Resource Planning (ERP) system built with React, Expr
 ## Installation
 
 1. Clone the repository:
+
 ```bash
 git clone <your-repo-url>
 cd epoch-v8-erp
 ```
 
 2. Install dependencies:
+
 ```bash
 npm install
 ```
 
 3. Set up environment variables:
+
 ```bash
 cp .env.example .env
 # Edit .env with your database credentials
 ```
 
 4. Set up the database:
+
 ```bash
 npm run db:push
 ```
 
 5. Start the development server:
+
 ```bash
 npm run dev
 ```
@@ -53,11 +58,13 @@ npm run dev
 ## Production Deployment
 
 1. Build the application:
+
 ```bash
 npm run build
 ```
 
 2. Start the production server:
+
 ```bash
 npm start
 ```
@@ -85,18 +92,21 @@ NODE_ENV=production
 This app supports mobile deployment via Capacitor:
 
 1. Set up Capacitor:
+
 ```bash
 chmod +x scripts/setup-capacitor.sh
 ./scripts/setup-capacitor.sh
 ```
 
 2. Build and sync:
+
 ```bash
 npm run build
 npx cap sync
 ```
 
 3. Open in mobile IDE:
+
 ```bash
 npx cap open android  # For Android
 npx cap open ios      # For iOS

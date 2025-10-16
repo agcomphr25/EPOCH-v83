@@ -1,21 +1,25 @@
 # Code Quality Guide
 
 ## Overview
+
 This project now has comprehensive linting and formatting setup to prevent code drift and maintain consistent code quality.
 
 ## Tools Installed
 
 ### ESLint (v9.32.0)
+
 - **Purpose**: Code quality and style enforcement
 - **Configuration**: `eslint.config.js`
 - **Rules**: TypeScript, React, React Hooks, Import ordering, Prettier integration
 
 ### Prettier (v3.6.2)
+
 - **Purpose**: Code formatting
 - **Configuration**: `.prettierrc`
 - **Integration**: Works with ESLint via `eslint-plugin-prettier`
 
 ### Lint-staged
+
 - **Purpose**: Run linting only on staged files
 - **Configuration**: `.lintstagedrc.json`
 
@@ -46,12 +50,14 @@ npx lint-staged
 ## Development Workflow
 
 ### Daily Development
+
 1. **Write code normally**
 2. **Before committing**: Run `npx eslint . --fix && npx prettier --write .`
 3. **Type check**: Run `npm run check`
 4. **Fix any remaining issues manually**
 
 ### VS Code Integration
+
 - Install these extensions:
   - ESLint (dbaeumer.vscode-eslint)
   - Prettier (esbenp.prettier-vscode)
@@ -61,6 +67,7 @@ npx lint-staged
 ## Common Issues and Fixes
 
 ### Import Ordering
+
 ```javascript
 // ❌ Wrong
 import { Button } from '@/components/ui/button';
@@ -76,6 +83,7 @@ import { Button } from '@/components/ui/button';
 ```
 
 ### Unused Imports
+
 ```javascript
 // ❌ Wrong - unused imports
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -86,6 +94,7 @@ import { Building } from 'lucide-react';
 ```
 
 ### Formatting Issues
+
 - Use single quotes for strings
 - Trailing commas where appropriate
 - Consistent spacing and indentation
@@ -94,16 +103,19 @@ import { Building } from 'lucide-react';
 ## Code Quality Rules
 
 ### TypeScript Rules
+
 - Unused variables prefixed with `_` are allowed
 - `any` type triggers warnings (should be avoided)
 - Implicit return types are allowed
 
 ### React Rules
+
 - No need to import React (JSX transform handles it)
 - Hooks rules enforced (rules of hooks, dependency arrays)
 - Prop types not required (TypeScript handles this)
 
 ### Import Rules
+
 - Organized in groups: builtin, external, internal, relative
 - Empty lines between groups
 - Alphabetical sorting within groups
@@ -111,6 +123,7 @@ import { Building } from 'lucide-react';
 ## Preventing Code Drift
 
 ### Before Each Commit
+
 ```bash
 # Full quality check
 npx eslint . --fix
@@ -119,6 +132,7 @@ npm run check
 ```
 
 ### Weekly Maintenance
+
 ```bash
 # Check for new linting issues
 npx eslint . --ext .js,.jsx,.ts,.tsx
@@ -128,6 +142,7 @@ npx prettier --check .
 ```
 
 ### Monthly Review
+
 - Review and update ESLint rules as needed
 - Check for new best practices
 - Update dependencies: `npm update`
@@ -139,11 +154,12 @@ npx prettier --check .
 ✅ **Import Organization**: Clean, organized import statements  
 ✅ **TypeScript Integration**: Full type checking with linting  
 ✅ **React Best Practices**: Hooks rules and component patterns enforced  
-✅ **Automated Fixing**: Most issues auto-fixable with `--fix` flag  
+✅ **Automated Fixing**: Most issues auto-fixable with `--fix` flag
 
 ## Current Status
 
 The linting setup caught several existing issues:
+
 - Import ordering problems
 - Unused imports (Alert, AlertDescription, Building)
 - Formatting inconsistencies

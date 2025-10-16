@@ -2,7 +2,15 @@ import { apiRequest } from '@/lib/queryClient';
 
 export interface FormElement {
   id: string;
-  type: 'text' | 'input' | 'signature' | 'column' | 'repeat' | 'dropdown' | 'textarea' | 'checkbox';
+  type:
+    | 'text'
+    | 'input'
+    | 'signature'
+    | 'column'
+    | 'repeat'
+    | 'dropdown'
+    | 'textarea'
+    | 'checkbox';
   x: number;
   y: number;
   width: number;
@@ -66,46 +74,59 @@ export const createForm = async (data: {
 }): Promise<EnhancedForm> => {
   return apiRequest('/api/enhanced-forms', {
     method: 'POST',
-    body: data
+    body: data,
   });
 };
 
-export const updateForm = async (id: number, data: {
-  name?: string;
-  description?: string;
-  categoryId?: number;
-  tableName?: string;
-  layout?: FormElement[];
-}): Promise<EnhancedForm> => {
+export const updateForm = async (
+  id: number,
+  data: {
+    name?: string;
+    description?: string;
+    categoryId?: number;
+    tableName?: string;
+    layout?: FormElement[];
+  }
+): Promise<EnhancedForm> => {
   return apiRequest(`/api/enhanced-forms/${id}`, {
     method: 'PUT',
-    body: data
+    body: data,
   });
 };
 
 export const deleteForm = async (id: number): Promise<void> => {
   return apiRequest(`/api/enhanced-forms/${id}`, {
-    method: 'DELETE'
+    method: 'DELETE',
   });
 };
 
-export const getFormVersions = async (formId: number): Promise<FormVersion[]> => {
+export const getFormVersions = async (
+  formId: number
+): Promise<FormVersion[]> => {
   return apiRequest(`/api/enhanced-forms/${formId}/versions`);
 };
 
-export const getFormVersion = async (formId: number, version: number): Promise<FormVersion> => {
+export const getFormVersion = async (
+  formId: number,
+  version: number
+): Promise<FormVersion> => {
   return apiRequest(`/api/enhanced-forms/${formId}/versions/${version}`);
 };
 
-export const submitForm = async (formId: number, data: Record<string, any>): Promise<FormSubmission> => {
+export const submitForm = async (
+  formId: number,
+  data: Record<string, any>
+): Promise<FormSubmission> => {
   return apiRequest('/api/enhanced-forms/submissions', {
     method: 'POST',
-    body: { formId, data }
+    body: { formId, data },
   });
 };
 
-export const getFormSubmissions = async (formId: number): Promise<FormSubmission[]> => {
+export const getFormSubmissions = async (
+  formId: number
+): Promise<FormSubmission[]> => {
   return apiRequest('/api/enhanced-forms/submissions', {
-    params: { formId }
+    params: { formId },
   });
 };

@@ -6,3 +6,6 @@ vite.config.ts.*
 *.tar.gz
 # uploads (runtime files)
 uploads/
+
+# runtime uploads
+uploads/

@@ -1,4 +1,5 @@
 import { Router } from 'express';
+
 import { storage } from '../../storage';
 import type { PurchaseOrder } from '../../schema';
 
@@ -8,15 +9,31 @@ const router = Router();
 router.post('/priority-settings/save', async (req, res) => {
   try {
     console.log('💾 Saving OEM priority settings:', req.body);
-    const { vendorId, vendorName, poId, poNumber, selectionMode, stockItemIds, manualQuantities, priorityLevel } = req.body;
+    const {
+      vendorId,
+      vendorName,
+      poId,
+      poNumber,
+      selectionMode,
+      stockItemIds,
+      manualQuantities,
+      priorityLevel,
+    } = req.body;
 
     // Validate required fields
     if (!vendorId || !poId || !poNumber) {
-      return res.status(400).json({ error: 'Missing required fields: vendorId, poId, or poNumber' });
+      return res.status(400).json({
+        error: 'Missing required fields: vendorId, poId, or poNumber',
+      });
     }
 
-    if (selectionMode === 'specific_items' && (!stockItemIds || stockItemIds.length === 0)) {
-      return res.status(400).json({ error: 'Stock item IDs required for specific_items mode' });
+    if (
+      selectionMode === 'specific_items' &&
+      (!stockItemIds || stockItemIds.length === 0)
+    ) {
+      return res
+        .status(400)
+        .json({ error: 'Stock item IDs required for specific_items mode' });
     }
 
     // Delete existing priority settings for this PO to avoid duplicates
@@ -33,15 +50,18 @@ router.post('/priority-settings/save', async (req, res) => {
       manualQuantities: manualQuantities || null, // Persist manual quantity overrides
       priorityLevel: priorityLevel || 1,
       isActive: true,
-      createdBy: 'system' // TODO: Replace with actual user when auth is available
+      createdBy: 'system', // TODO: Replace with actual user when auth is available
     });
 
-    console.log('✅ OEM priority settings saved successfully with manual quantities:', prioritySettings);
+    console.log(
+      '✅ OEM priority settings saved successfully with manual quantities:',
+      prioritySettings
+    );
 
     res.json({
       success: true,
       message: 'OEM priority settings saved successfully',
-      settings: prioritySettings
+      settings: prioritySettings,
     });
   } catch (error) {
     console.error('❌ Error saving OEM priority settings:', error);
@@ -77,7 +97,10 @@ router.delete('/priority-settings/:id', async (req, res) => {
   try {
     const { id } = req.params;
     await storage.deleteOemPrioritySettings(parseInt(id));
-    res.json({ success: true, message: 'OEM priority settings deleted successfully' });
+    res.json({
+      success: true,
+      message: 'OEM priority settings deleted successfully',
+    });
   } catch (error) {
     console.error('❌ Error deleting OEM priority settings:', error);
     res.status(500).json({ error: 'Failed to delete OEM priority settings' });
@@ -88,16 +111,22 @@ router.delete('/priority-settings/:id', async (req, res) => {
 router.get('/layup-scheduler/oem-priority/:vendorId', async (req, res) => {
   try {
     const { vendorId } = req.params;
-    console.log('🔍 Fetching consolidated OEM priority data for vendor:', vendorId);
+    console.log(
+      '🔍 Fetching consolidated OEM priority data for vendor:',
+      vendorId
+    );
 
     // Get all POs for this vendor
     const allPOs = await storage.getAllPurchaseOrders();
-    const vendorPOs = allPOs.filter((po: PurchaseOrder) => po.customerId === vendorId && po.status === 'OPEN');
+    const vendorPOs = allPOs.filter(
+      (po: PurchaseOrder) => po.customerId === vendorId && po.status === 'OPEN'
+    );
 
     // Get vendor info
-    const vendor = vendorPOs.length > 0 
-      ? { id: vendorId, name: vendorPOs[0].customerName }
-      : { id: vendorId, name: 'Unknown Vendor' };
+    const vendor =
+      vendorPOs.length > 0
+        ? { id: vendorId, name: vendorPOs[0].customerName }
+        : { id: vendorId, name: 'Unknown Vendor' };
 
     if (vendorPOs.length === 0) {
       return res.json({ vendor, pos: [] });
@@ -108,19 +137,27 @@ router.get('/layup-scheduler/oem-priority/:vendorId', async (req, res) => {
       vendorPOs.map(async (po: PurchaseOrder) => {
         // Get all items for this PO
         const items = await storage.getPurchaseOrderItems(po.id);
-        
+
         // Filter to only stock items (stock_model or custom_model)
-        const stockItems = items.filter(item => 
-          item.itemType === 'stock_model' || 
-          item.itemType === 'custom_model' ||
-          (item.itemName && (item.itemName.includes('AG-') || item.itemName.includes('stock')))
+        const stockItems = items.filter(
+          (item) =>
+            item.itemType === 'stock_model' ||
+            item.itemType === 'custom_model' ||
+            (item.itemName &&
+              (item.itemName.includes('AG-') ||
+                item.itemName.includes('stock')))
         );
 
         // Get current priority settings for this PO (if any)
-        const prioritySettings = await storage.getOemPrioritySettingsByPO(po.id);
+        const prioritySettings = await storage.getOemPrioritySettingsByPO(
+          po.id
+        );
 
         // Calculate total stock quantity
-        const totalStockQuantity = stockItems.reduce((sum, item) => sum + item.quantity, 0);
+        const totalStockQuantity = stockItems.reduce(
+          (sum, item) => sum + item.quantity,
+          0
+        );
 
         return {
           id: po.id,
@@ -131,7 +168,7 @@ router.get('/layup-scheduler/oem-priority/:vendorId', async (req, res) => {
           status: po.status,
           totalStockQuantity,
           distinctStockItems: stockItems.length,
-          stockItems: stockItems.map(item => ({
+          stockItems: stockItems.map((item) => ({
             id: item.id,
             itemId: item.itemId,
             itemName: item.itemName,
@@ -140,14 +177,16 @@ router.get('/layup-scheduler/oem-priority/:vendorId', async (req, res) => {
             unitPrice: item.unitPrice,
             totalPrice: item.totalPrice,
             specifications: item.specifications,
-            orderCount: item.orderCount
+            orderCount: item.orderCount,
           })),
-          prioritySettings: prioritySettings || null
+          prioritySettings: prioritySettings || null,
         };
       })
     );
 
-    console.log(`✅ Returning ${consolidatedData.length} POs for vendor ${vendor.name} with ${consolidatedData.reduce((sum, po) => sum + po.stockItems.length, 0)} total stock items`);
+    console.log(
+      `✅ Returning ${consolidatedData.length} POs for vendor ${vendor.name} with ${consolidatedData.reduce((sum, po) => sum + po.stockItems.length, 0)} total stock items`
+    );
     res.json({ vendor, pos: consolidatedData });
   } catch (error) {
     console.error('❌ Error fetching consolidated OEM priority data:', error);

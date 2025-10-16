@@ -1,19 +1,32 @@
 import { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Badge } from "@/components/ui/badge";
-import { Calculator, DollarSign, Info } from "lucide-react";
-import { calculateFinalPrice, getActiveShortTermDiscounts, type ShortTermSale } from '@/utils/discountUtils';
+import { Calculator, DollarSign, Info } from 'lucide-react';
+
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Badge } from '@/components/ui/badge';
+import {
+  calculateFinalPrice,
+  getActiveShortTermDiscounts,
+  type ShortTermSale,
+} from '@/utils/discountUtils';
 
 interface DiscountCalculatorProps {
   activeSales: ShortTermSale[];
 }
 
-export default function DiscountCalculator({ activeSales }: DiscountCalculatorProps) {
+export default function DiscountCalculator({
+  activeSales,
+}: DiscountCalculatorProps) {
   const [basePrice, setBasePrice] = useState<number>(1000);
   const [customerType, setCustomerType] = useState<string>('AGR–Individual');
   const [isMilLeo, setIsMilLeo] = useState<boolean>(false);
@@ -26,14 +39,15 @@ export default function DiscountCalculator({ activeSales }: DiscountCalculatorPr
       const finalPrice = Math.max(0, basePrice - milLeoDiscount);
       setResult({
         finalPrice,
-        breakdown: [
-          { type: 'MIL/LEO Discount', amount: milLeoDiscount }
-        ]
+        breakdown: [{ type: 'MIL/LEO Discount', amount: milLeoDiscount }],
       });
       return;
     }
-    
-    const activeDiscounts = getActiveShortTermDiscounts(new Date(), activeSales);
+
+    const activeDiscounts = getActiveShortTermDiscounts(
+      new Date(),
+      activeSales
+    );
     const calculation = calculateFinalPrice(
       basePrice,
       customerType,
@@ -47,9 +61,9 @@ export default function DiscountCalculator({ activeSales }: DiscountCalculatorPr
 
   const customerTypes = [
     'AGR–Individual',
-    'AGR–Gunbuilder', 
+    'AGR–Gunbuilder',
     'OEM',
-    'Distributor'
+    'Distributor',
   ];
 
   return (
@@ -85,8 +99,10 @@ export default function DiscountCalculator({ activeSales }: DiscountCalculatorPr
                 <SelectValue placeholder="Select customer type" />
               </SelectTrigger>
               <SelectContent>
-                {customerTypes.map(type => (
-                  <SelectItem key={type} value={type}>{type}</SelectItem>
+                {customerTypes.map((type) => (
+                  <SelectItem key={type} value={type}>
+                    {type}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -140,7 +156,10 @@ export default function DiscountCalculator({ activeSales }: DiscountCalculatorPr
               {result.breakdown.length > 0 ? (
                 <div className="space-y-2">
                   {result.breakdown.map((item: any, index: number) => (
-                    <div key={index} className="flex justify-between items-center p-2 bg-gray-50 rounded">
+                    <div
+                      key={index}
+                      className="flex justify-between items-center p-2 bg-gray-50 rounded"
+                    >
                       <Badge variant="outline">{item.type}</Badge>
                       <span className="text-sm font-medium text-red-600">
                         -${item.amount.toFixed(2)}
@@ -150,7 +169,13 @@ export default function DiscountCalculator({ activeSales }: DiscountCalculatorPr
                   <div className="flex justify-between items-center pt-2 border-t border-gray-200">
                     <span className="font-medium">Total Savings:</span>
                     <span className="font-bold text-red-600">
-                      -${result.breakdown.reduce((sum: number, item: any) => sum + item.amount, 0).toFixed(2)}
+                      -$
+                      {result.breakdown
+                        .reduce(
+                          (sum: number, item: any) => sum + item.amount,
+                          0
+                        )
+                        .toFixed(2)}
                     </span>
                   </div>
                 </div>

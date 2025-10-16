@@ -1,15 +1,16 @@
 import React, { useMemo, useState } from 'react';
-import { BarcodeScanner } from '@/components/BarcodeScanner';
-import { ShippingActions } from '@/components/ShippingActions';
-import { BulkShippingActions } from '@/components/BulkShippingActions';
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Package, ArrowLeft } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
-import { getDisplayOrderId } from '@/lib/orderUtils';
 import { Link } from 'wouter';
+
+import { BarcodeScanner } from '@/components/BarcodeScanner';
+import { ShippingActions } from '@/components/ShippingActions';
+import { BulkShippingActions } from '@/components/BulkShippingActions';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
+import { getDisplayOrderId } from '@/lib/orderUtils';
 import { fetchPdf, downloadPdf } from '@/utils/pdfUtils';
 import { useToast } from '@/hooks/use-toast';
 
@@ -17,7 +18,7 @@ export default function ShippingQueuePage() {
   const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
   const [selectedCard, setSelectedCard] = useState<string | null>(null);
   const { toast } = useToast();
-  
+
   // Get all orders from production pipeline
   const { data: allOrders = [] } = useQuery({
     queryKey: ['/api/orders/all'],
@@ -26,18 +27,20 @@ export default function ShippingQueuePage() {
   // Get orders in Shipping department
   const shippingOrders = useMemo(() => {
     const orders = allOrders as any[];
-    return orders.filter((order: any) => 
-      order.currentDepartment === 'Shipping' || 
-      (order.department === 'Shipping' && order.status === 'IN_PROGRESS')
+    return orders.filter(
+      (order: any) =>
+        order.currentDepartment === 'Shipping' ||
+        (order.department === 'Shipping' && order.status === 'IN_PROGRESS')
     );
   }, [allOrders]);
 
   // Count orders in previous department (Shipping QC)
   const shippingQCCount = useMemo(() => {
     const orders = allOrders as any[];
-    return orders.filter((order: any) => 
-      order.currentDepartment === 'QC' || 
-      (order.department === 'QC' && order.status === 'IN_PROGRESS')
+    return orders.filter(
+      (order: any) =>
+        order.currentDepartment === 'QC' ||
+        (order.department === 'QC' && order.status === 'IN_PROGRESS')
     ).length;
   }, [allOrders]);
 
@@ -55,15 +58,15 @@ export default function ShippingQueuePage() {
 
   const handleOrderSelection = (orderId: string, checked: boolean) => {
     if (checked) {
-      setSelectedOrders(prev => [...prev, orderId]);
+      setSelectedOrders((prev) => [...prev, orderId]);
     } else {
-      setSelectedOrders(prev => prev.filter(id => id !== orderId));
+      setSelectedOrders((prev) => prev.filter((id) => id !== orderId));
     }
   };
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
-      setSelectedOrders(shippingOrders.map(order => order.orderId));
+      setSelectedOrders(shippingOrders.map((order) => order.orderId));
     } else {
       setSelectedOrders([]);
     }
@@ -79,7 +82,7 @@ export default function ShippingQueuePage() {
 
   const getSelectedOrder = () => {
     if (!selectedCard) return null;
-    return shippingOrders.find(order => order.orderId === selectedCard);
+    return shippingOrders.find((order) => order.orderId === selectedCard);
   };
 
   const handleQCChecklistDownload = async () => {
@@ -94,29 +97,30 @@ export default function ShippingQueuePage() {
     } else if (selectedOrders.length === 1) {
       // Use single checkbox selection if only one order is selected
       orderId = selectedOrders[0];
-      targetOrder = shippingOrders.find(order => order.orderId === orderId);
+      targetOrder = shippingOrders.find((order) => order.orderId === orderId);
     } else {
       toast({
-        title: "No order selected",
-        description: "Please select a single order by clicking on it or checking one checkbox",
-        variant: "destructive"
+        title: 'No order selected',
+        description:
+          'Please select a single order by clicking on it or checking one checkbox',
+        variant: 'destructive',
       });
       return;
     }
 
     if (!targetOrder) {
       toast({
-        title: "Order not found",
-        description: "Selected order not found in shipping queue",
-        variant: "destructive"
+        title: 'Order not found',
+        description: 'Selected order not found in shipping queue',
+        variant: 'destructive',
       });
       return;
     }
 
     try {
       toast({
-        title: "Generating QC checklist...",
-        description: "Please wait while we generate the PDF"
+        title: 'Generating QC checklist...',
+        description: 'Please wait while we generate the PDF',
       });
 
       const response = await fetch(`/api/shipping-pdf/qc-checklist/${orderId}`);
@@ -125,17 +129,17 @@ export default function ShippingQueuePage() {
       }
       const pdfBlob = await response.blob();
       downloadPdf(pdfBlob, `QC-Checklist-${orderId}.pdf`);
-      
+
       toast({
-        title: "QC checklist downloaded",
-        description: `QC checklist for order ${orderId} has been downloaded`
+        title: 'QC checklist downloaded',
+        description: `QC checklist for order ${orderId} has been downloaded`,
       });
     } catch (error) {
       console.error('Error generating QC checklist:', error);
       toast({
-        title: "Error generating QC checklist",
-        description: "Failed to generate QC checklist PDF",
-        variant: "destructive"
+        title: 'Error generating QC checklist',
+        description: 'Failed to generate QC checklist PDF',
+        variant: 'destructive',
       });
     }
   };
@@ -152,29 +156,30 @@ export default function ShippingQueuePage() {
     } else if (selectedOrders.length === 1) {
       // Use single checkbox selection if only one order is selected
       orderId = selectedOrders[0];
-      targetOrder = shippingOrders.find(order => order.orderId === orderId);
+      targetOrder = shippingOrders.find((order) => order.orderId === orderId);
     } else {
       toast({
-        title: "No order selected",
-        description: "Please select a single order by clicking on it or checking one checkbox",
-        variant: "destructive"
+        title: 'No order selected',
+        description:
+          'Please select a single order by clicking on it or checking one checkbox',
+        variant: 'destructive',
       });
       return;
     }
 
     if (!targetOrder) {
       toast({
-        title: "Order not found",
-        description: "Selected order not found in shipping queue",
-        variant: "destructive"
+        title: 'Order not found',
+        description: 'Selected order not found in shipping queue',
+        variant: 'destructive',
       });
       return;
     }
 
     try {
       toast({
-        title: "Generating sales order invoice...",
-        description: "Please wait while we generate the PDF"
+        title: 'Generating sales order invoice...',
+        description: 'Please wait while we generate the PDF',
       });
 
       const response = await fetch(`/api/shipping-pdf/sales-order/${orderId}`);
@@ -183,17 +188,17 @@ export default function ShippingQueuePage() {
       }
       const pdfBlob = await response.blob();
       downloadPdf(pdfBlob, `Sales-Order-${orderId}.pdf`);
-      
+
       toast({
-        title: "Sales order invoice downloaded",
-        description: `Sales order invoice for ${orderId} has been downloaded`
+        title: 'Sales order invoice downloaded',
+        description: `Sales order invoice for ${orderId} has been downloaded`,
       });
     } catch (error) {
       console.error('Error generating sales order:', error);
       toast({
-        title: "Error generating sales order",
-        description: "Failed to generate sales order PDF",
-        variant: "destructive"
+        title: 'Error generating sales order',
+        description: 'Failed to generate sales order PDF',
+        variant: 'destructive',
       });
     }
   };
@@ -210,8 +215,8 @@ export default function ShippingQueuePage() {
 
       {/* Bulk Shipping Actions */}
       {selectedOrders.length > 0 && (
-        <BulkShippingActions 
-          selectedOrders={selectedOrders} 
+        <BulkShippingActions
+          selectedOrders={selectedOrders}
           onClearSelection={clearSelection}
           shippingOrders={shippingOrders}
         />
@@ -260,7 +265,9 @@ export default function ShippingQueuePage() {
       <Card>
         <CardHeader className="pb-4">
           <div className="flex items-center justify-between">
-            <CardTitle>Shipping Queue ({shippingOrders.length} orders)</CardTitle>
+            <CardTitle>
+              Shipping Queue ({shippingOrders.length} orders)
+            </CardTitle>
             {shippingOrders.length > 0 && (
               <div className="flex items-center gap-2">
                 <Checkbox
@@ -276,8 +283,12 @@ export default function ShippingQueuePage() {
           {shippingOrders.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
               <Package className="h-12 w-12 mx-auto mb-3 text-gray-300" />
-              <div className="text-lg font-medium mb-2">No orders in shipping queue</div>
-              <div className="text-sm">Orders will appear here when they're ready for shipping</div>
+              <div className="text-lg font-medium mb-2">
+                No orders in shipping queue
+              </div>
+              <div className="text-sm">
+                Orders will appear here when they're ready for shipping
+              </div>
             </div>
           ) : (
             <div className="grid gap-4">
@@ -285,13 +296,13 @@ export default function ShippingQueuePage() {
                 const isSelected = selectedCard === order.orderId;
                 const modelId = order.stockModelId || order.modelId;
                 const materialType = order.features?.material_type;
-                
+
                 return (
-                  <Card 
+                  <Card
                     key={order.orderId}
                     className={`hover:shadow-md transition-all cursor-pointer ${
-                      isSelected 
-                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 shadow-md' 
+                      isSelected
+                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 shadow-md'
                         : 'border-gray-200 hover:border-gray-300'
                     }`}
                     onClick={() => handleCardSelection(order.orderId)}
@@ -301,10 +312,17 @@ export default function ShippingQueuePage() {
                         <div className="flex items-center gap-2">
                           <Checkbox
                             checked={selectedOrders.includes(order.orderId)}
-                            onCheckedChange={(checked) => handleOrderSelection(order.orderId, checked as boolean)}
+                            onCheckedChange={(checked) =>
+                              handleOrderSelection(
+                                order.orderId,
+                                checked as boolean
+                              )
+                            }
                             onClick={(e) => e.stopPropagation()} // Prevent card selection when clicking checkbox
                           />
-                          <div className={`text-sm font-semibold ${isSelected ? 'text-blue-700' : 'text-blue-600'}`}>
+                          <div
+                            className={`text-sm font-semibold ${isSelected ? 'text-blue-700' : 'text-blue-600'}`}
+                          >
                             {getDisplayOrderId(order)}
                           </div>
                         </div>
@@ -314,20 +332,24 @@ export default function ShippingQueuePage() {
                           </Badge>
                         )}
                       </div>
-                      
+
                       <div className="space-y-1 text-sm">
                         <div className="text-gray-600">
-                          <span className="font-medium">Customer:</span> {order.customer}
+                          <span className="font-medium">Customer:</span>{' '}
+                          {order.customer}
                         </div>
                         <div className="text-gray-600">
-                          <span className="font-medium">Model:</span> {getModelDisplayName(modelId)}
+                          <span className="font-medium">Model:</span>{' '}
+                          {getModelDisplayName(modelId)}
                         </div>
                         <div className="text-gray-600">
-                          <span className="font-medium">Order Date:</span> {format(new Date(order.orderDate), 'MMM dd, yyyy')}
+                          <span className="font-medium">Order Date:</span>{' '}
+                          {format(new Date(order.orderDate), 'MMM dd, yyyy')}
                         </div>
                         {order.dueDate && (
                           <div className="text-gray-600">
-                            <span className="font-medium">Due Date:</span> {format(new Date(order.dueDate), 'MMM dd, yyyy')}
+                            <span className="font-medium">Due Date:</span>{' '}
+                            {format(new Date(order.dueDate), 'MMM dd, yyyy')}
                           </div>
                         )}
                       </div>
@@ -362,14 +384,22 @@ export default function ShippingQueuePage() {
                     ×
                   </button>
                 </div>
-                
+
                 {/* Shipping Actions for Selected Order */}
-                <ShippingActions orderId={selectedCard} orderData={getSelectedOrder()} />
+                <ShippingActions
+                  orderId={selectedCard}
+                  orderData={getSelectedOrder()}
+                />
               </div>
             ) : (
               <div className="text-center py-8 text-gray-500">
-                <div className="text-lg font-medium mb-2">Select an order to print shipping documents</div>
-                <div className="text-sm">Click on any order card above to see available printing options</div>
+                <div className="text-lg font-medium mb-2">
+                  Select an order to print shipping documents
+                </div>
+                <div className="text-sm">
+                  Click on any order card above to see available printing
+                  options
+                </div>
               </div>
             )}
           </CardContent>
@@ -379,34 +409,40 @@ export default function ShippingQueuePage() {
       {/* Bottom Action Buttons */}
       <div className="mt-8 bg-white border-t border-gray-200 shadow-lg">
         <div className="flex justify-around items-center py-4 px-4 max-w-lg mx-auto">
-          <button 
+          <button
             onClick={handleQCChecklistDownload}
             className="flex flex-col items-center space-y-1 px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors duration-200 flex-1 text-center"
           >
             <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
               <span className="text-white text-sm font-bold">✓</span>
             </div>
-            <span className="text-sm font-medium text-gray-700">QC Checklist</span>
+            <span className="text-sm font-medium text-gray-700">
+              QC Checklist
+            </span>
           </button>
-          
-          <button 
+
+          <button
             onClick={handleSalesOrderDownload}
             className="flex flex-col items-center space-y-1 px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors duration-200 flex-1 text-center"
           >
             <div className="w-8 h-8 bg-green-600 rounded-full flex items-center justify-center">
               <span className="text-white text-sm font-bold">📋</span>
             </div>
-            <span className="text-sm font-medium text-gray-700">Sales Order</span>
+            <span className="text-sm font-medium text-gray-700">
+              Sales Order
+            </span>
           </button>
-          
-          <Link 
-            href="/shipping-management" 
+
+          <Link
+            href="/shipping-management"
             className="flex flex-col items-center space-y-1 px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors duration-200 flex-1 text-center"
           >
             <div className="w-8 h-8 bg-orange-600 rounded-full flex items-center justify-center">
               <span className="text-white text-sm font-bold">📦</span>
             </div>
-            <span className="text-sm font-medium text-gray-700">Shipping Label</span>
+            <span className="text-sm font-medium text-gray-700">
+              Shipping Label
+            </span>
           </Link>
         </div>
       </div>

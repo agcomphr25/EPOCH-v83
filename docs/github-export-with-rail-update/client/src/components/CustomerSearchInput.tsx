@@ -1,16 +1,42 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Button } from '@/components/ui/button';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Check, ChevronDown, Mail, MapPin, Phone, Plus, User } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
-import { apiRequest } from '@/lib/queryClient';
+import {
+  Check,
+  ChevronDown,
+  Mail,
+  MapPin,
+  Phone,
+  Plus,
+  User,
+} from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import debounce from 'lodash.debounce';
 import type { Customer } from '@shared/schema';
+
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Button } from '@/components/ui/button';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+import { useToast } from '@/hooks/use-toast';
+import { apiRequest } from '@/lib/queryClient';
 import SimpleAddressInput from '@/components/SimpleAddressInput';
 import type { AddressData } from '@/utils/addressUtils';
 
@@ -51,10 +77,7 @@ export default function CustomerSearchInput({
     country: 'United States',
   });
 
-  const {
-    data: customers = [],
-    refetch: searchCustomers,
-  } = useQuery({
+  const { data: customers = [], refetch: searchCustomers } = useQuery({
     queryKey: ['/api/customers/search', searchQuery],
     queryFn: async () => {
       if (!searchQuery.trim()) return [];
@@ -77,7 +100,10 @@ export default function CustomerSearchInput({
     }, 300);
 
     return () => {
-      if (debouncedSearchRef.current && (debouncedSearchRef.current as any).cancel) {
+      if (
+        debouncedSearchRef.current &&
+        (debouncedSearchRef.current as any).cancel
+      ) {
         (debouncedSearchRef.current as any).cancel();
       }
     };
@@ -209,7 +235,9 @@ export default function CustomerSearchInput({
               <CommandList>
                 <CommandEmpty>
                   <div className="py-6 text-center text-sm">
-                    {searchQuery ? 'No customers found.' : 'Type to search customers...'}
+                    {searchQuery
+                      ? 'No customers found.'
+                      : 'Type to search customers...'}
                   </div>
                 </CommandEmpty>
                 {customers.length > 0 && (
@@ -225,7 +253,9 @@ export default function CustomerSearchInput({
                           <User className="h-4 w-4 text-gray-500" />
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center space-x-2">
-                              <span className="font-medium">{customer.name}</span>
+                              <span className="font-medium">
+                                {customer.name}
+                              </span>
                               {customer.company && (
                                 <span className="text-sm text-gray-500">
                                   ({customer.company})
@@ -277,7 +307,12 @@ export default function CustomerSearchInput({
                       <Input
                         id="name"
                         value={newCustomer.name}
-                        onChange={(e) => setNewCustomer(prev => ({ ...prev, name: e.target.value }))}
+                        onChange={(e) =>
+                          setNewCustomer((prev) => ({
+                            ...prev,
+                            name: e.target.value,
+                          }))
+                        }
                         className="col-span-3"
                         placeholder="John Smith"
                       />
@@ -289,7 +324,12 @@ export default function CustomerSearchInput({
                       <Input
                         id="company"
                         value={newCustomer.company}
-                        onChange={(e) => setNewCustomer(prev => ({ ...prev, company: e.target.value }))}
+                        onChange={(e) =>
+                          setNewCustomer((prev) => ({
+                            ...prev,
+                            company: e.target.value,
+                          }))
+                        }
                         className="col-span-3"
                         placeholder="ABC Defense"
                       />
@@ -302,7 +342,12 @@ export default function CustomerSearchInput({
                         id="email"
                         type="email"
                         value={newCustomer.email}
-                        onChange={(e) => setNewCustomer(prev => ({ ...prev, email: e.target.value }))}
+                        onChange={(e) =>
+                          setNewCustomer((prev) => ({
+                            ...prev,
+                            email: e.target.value,
+                          }))
+                        }
                         className="col-span-3"
                         placeholder="john@example.com"
                       />
@@ -314,7 +359,12 @@ export default function CustomerSearchInput({
                       <Input
                         id="phone"
                         value={newCustomer.phone}
-                        onChange={(e) => setNewCustomer(prev => ({ ...prev, phone: e.target.value }))}
+                        onChange={(e) =>
+                          setNewCustomer((prev) => ({
+                            ...prev,
+                            phone: e.target.value,
+                          }))
+                        }
                         className="col-span-3"
                         placeholder="555-0123"
                       />
@@ -326,7 +376,12 @@ export default function CustomerSearchInput({
                       <Input
                         id="notes"
                         value={newCustomer.notes}
-                        onChange={(e) => setNewCustomer(prev => ({ ...prev, notes: e.target.value }))}
+                        onChange={(e) =>
+                          setNewCustomer((prev) => ({
+                            ...prev,
+                            notes: e.target.value,
+                          }))
+                        }
                         className="col-span-3"
                         placeholder="Additional notes..."
                       />
@@ -338,7 +393,7 @@ export default function CustomerSearchInput({
                         <MapPin className="h-4 w-4 text-gray-500" />
                         <Label>Address (Optional)</Label>
                       </div>
-                      <SimpleAddressInput 
+                      <SimpleAddressInput
                         label=""
                         value={customerAddress}
                         onChange={setCustomerAddress}
@@ -346,18 +401,20 @@ export default function CustomerSearchInput({
                     </div>
                   </div>
                   <div className="flex justify-end space-x-2">
-                    <Button 
-                      variant="outline" 
+                    <Button
+                      variant="outline"
                       onClick={() => setShowAddDialog(false)}
                       disabled={createCustomerMutation.isPending}
                     >
                       Cancel
                     </Button>
-                    <Button 
+                    <Button
                       onClick={handleAddCustomer}
                       disabled={createCustomerMutation.isPending}
                     >
-                      {createCustomerMutation.isPending ? 'Adding...' : 'Add Customer'}
+                      {createCustomerMutation.isPending
+                        ? 'Adding...'
+                        : 'Add Customer'}
                     </Button>
                   </div>
                 </DialogContent>

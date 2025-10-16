@@ -1,18 +1,36 @@
 import React, { useMemo, useState } from 'react';
-import { BarcodeScanner } from '@/components/BarcodeScanner';
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { OrderTooltip } from '@/components/OrderTooltip';
-import { Target, ArrowLeft, ArrowRight, CheckSquare, Square, ArrowRightCircle, CheckCircle, AlertTriangle, FileText, Eye, TrendingDown } from 'lucide-react';
+import {
+  Target,
+  ArrowLeft,
+  ArrowRight,
+  CheckSquare,
+  Square,
+  ArrowRightCircle,
+  CheckCircle,
+  AlertTriangle,
+  FileText,
+  Eye,
+  TrendingDown,
+} from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
+import { useLocation } from 'wouter';
+
+import { BarcodeScanner } from '@/components/BarcodeScanner';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
+import { OrderTooltip } from '@/components/OrderTooltip';
 import { getDisplayOrderId } from '@/lib/orderUtils';
 import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
-import { useLocation } from 'wouter';
 import { OrderSearchBox } from '@/components/OrderSearchBox';
 import { SalesOrderModal } from '@/components/SalesOrderModal';
 import { isOrderInDepartment } from '@/lib/departmentUtils';
@@ -22,7 +40,9 @@ export default function GunsimthQueuePage() {
   const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
   const [salesOrderModalOpen, setSalesOrderModalOpen] = useState(false);
   const [selectedOrderId, setSelectedOrderId] = useState<string>('');
-  const [highlightedOrderId, setHighlightedOrderId] = useState<string | null>(null);
+  const [highlightedOrderId, setHighlightedOrderId] = useState<string | null>(
+    null
+  );
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
@@ -35,26 +55,33 @@ export default function GunsimthQueuePage() {
   // Fetch all kickbacks to determine which orders have kickbacks
   const { data: allKickbacks = [] } = useQuery({
     queryKey: ['/api/kickbacks'],
-    refetchInterval: 30000 // Refresh every 30 seconds
+    refetchInterval: 30000, // Refresh every 30 seconds
   });
 
   // Helper function to check if an order has kickbacks
   const hasKickbacks = (orderId: string) => {
-    return (allKickbacks as any[]).some((kickback: any) => kickback.orderId === orderId);
+    return (allKickbacks as any[]).some(
+      (kickback: any) => kickback.orderId === orderId
+    );
   };
 
   // Helper function to get the most severe kickback status for an order
   const getKickbackStatus = (orderId: string) => {
-    const orderKickbacks = (allKickbacks as any[]).filter((kickback: any) => kickback.orderId === orderId);
+    const orderKickbacks = (allKickbacks as any[]).filter(
+      (kickback: any) => kickback.orderId === orderId
+    );
     if (orderKickbacks.length === 0) return null;
 
     // Priority order: CRITICAL > HIGH > MEDIUM > LOW
     const priorities = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'];
-    const highestPriority = orderKickbacks.reduce((highest: string, kickback: any) => {
-      const currentIndex = priorities.indexOf(kickback.priority);
-      const highestIndex = priorities.indexOf(highest);
-      return currentIndex < highestIndex ? kickback.priority : highest;
-    }, 'LOW');
+    const highestPriority = orderKickbacks.reduce(
+      (highest: string, kickback: any) => {
+        const currentIndex = priorities.indexOf(kickback.priority);
+        const highestIndex = priorities.indexOf(highest);
+        return currentIndex < highestIndex ? kickback.priority : highest;
+      },
+      'LOW'
+    );
 
     return highestPriority;
   };
@@ -74,10 +101,10 @@ export default function GunsimthQueuePage() {
   const progressMutation = useMutation({
     mutationFn: async (orderIds: string[]) => {
       // Process each order individually using the existing progress endpoint
-      const progressPromises = orderIds.map(orderId => 
+      const progressPromises = orderIds.map((orderId) =>
         apiRequest(`/api/orders/${orderId}/progress`, {
           method: 'POST',
-          body: { nextDepartment: 'Finish' }
+          body: { nextDepartment: 'Finish' },
         })
       );
       return Promise.all(progressPromises);
@@ -85,18 +112,19 @@ export default function GunsimthQueuePage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
       toast({
-        title: "Success",
+        title: 'Success',
         description: `Successfully progressed ${selectedOrders.size} order(s) to Finish department.`,
       });
       setSelectedOrders(new Set());
     },
     onError: (error: any) => {
       toast({
-        title: "Error",
-        description: error.message || "Failed to progress orders. Please try again.",
-        variant: "destructive",
+        title: 'Error',
+        description:
+          error.message || 'Failed to progress orders. Please try again.',
+        variant: 'destructive',
       });
-    }
+    },
   });
 
   // Handler function for progressing selected orders
@@ -107,10 +135,10 @@ export default function GunsimthQueuePage() {
 
   // Get orders in Gunsmith department
   const gunsmithOrders = useMemo(() => {
-    const filtered = (allOrders as any[]).filter((order: any) => 
+    const filtered = (allOrders as any[]).filter((order: any) =>
       isOrderInDepartment(order, 'Gunsmith')
     );
-    
+
     return filtered;
   }, [allOrders]);
 
@@ -121,7 +149,7 @@ export default function GunsimthQueuePage() {
     tomorrow.setDate(tomorrow.getDate() + 1);
     const nextWeek = new Date(today);
     nextWeek.setDate(nextWeek.getDate() + 7);
-    
+
     const overdue = [];
     const dueToday = [];
     const dueTomorrow = [];
@@ -147,9 +175,13 @@ export default function GunsimthQueuePage() {
         dueToday.push(order);
       } else if (dueDate.getTime() === tomorrow.getTime()) {
         dueTomorrow.push(order);
-      } else if (dueDate <= new Date(todayNorm.getTime() + 7 * 24 * 60 * 60 * 1000)) {
+      } else if (
+        dueDate <= new Date(todayNorm.getTime() + 7 * 24 * 60 * 60 * 1000)
+      ) {
         dueThisWeek.push(order);
-      } else if (dueDate <= new Date(todayNorm.getTime() + 14 * 24 * 60 * 60 * 1000)) {
+      } else if (
+        dueDate <= new Date(todayNorm.getTime() + 14 * 24 * 60 * 60 * 1000)
+      ) {
         dueNextWeek.push(order);
       } else {
         futureDue.push(order);
@@ -159,7 +191,8 @@ export default function GunsimthQueuePage() {
     // Sort each category by due date and order ID
     const sortFn = (a: any, b: any) => {
       if (a.dueDate && b.dueDate) {
-        const dateCompare = new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+        const dateCompare =
+          new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
         if (dateCompare !== 0) return dateCompare;
       }
       return a.orderId.localeCompare(b.orderId);
@@ -172,21 +205,21 @@ export default function GunsimthQueuePage() {
       dueThisWeek: dueThisWeek.sort(sortFn),
       dueNextWeek: dueNextWeek.sort(sortFn),
       futureDue: futureDue.sort(sortFn),
-      noDueDate: noDueDate.sort((a, b) => a.orderId.localeCompare(b.orderId))
+      noDueDate: noDueDate.sort((a, b) => a.orderId.localeCompare(b.orderId)),
     };
   }, [gunsmithOrders]);
 
   // Count orders in previous department (CNC)
   const cncCount = useMemo(() => {
-    return (allOrders as any[]).filter((order: any) => 
-      order.currentDepartment === 'CNC'
+    return (allOrders as any[]).filter(
+      (order: any) => order.currentDepartment === 'CNC'
     ).length;
   }, [allOrders]);
 
   // Count orders in next department (Finish)
   const finishCount = useMemo(() => {
-    return (allOrders as any[]).filter((order: any) => 
-      order.currentDepartment === 'Finish'
+    return (allOrders as any[]).filter(
+      (order: any) => order.currentDepartment === 'Finish'
     ).length;
   }, [allOrders]);
 
@@ -207,16 +240,18 @@ export default function GunsimthQueuePage() {
     const features = order.features || {};
 
     // Check for QD accessories with location details - exclude no_qds, none, and empty values
-    if (features.qd_accessory && 
-        features.qd_accessory !== 'no_qds' && 
-        features.qd_accessory !== 'none' && 
-        features.qd_accessory !== '' && 
-        features.qd_accessory !== null && 
-        features.qd_accessory !== undefined &&
-        !features.qd_accessory.toLowerCase().includes('no')) {
+    if (
+      features.qd_accessory &&
+      features.qd_accessory !== 'no_qds' &&
+      features.qd_accessory !== 'none' &&
+      features.qd_accessory !== '' &&
+      features.qd_accessory !== null &&
+      features.qd_accessory !== undefined &&
+      !features.qd_accessory.toLowerCase().includes('no')
+    ) {
       let qdDetail = 'QDs';
       const qdValue = features.qd_accessory;
-      
+
       if (qdValue.includes('qd_2_left')) qdDetail = 'QDs (2 Left)';
       else if (qdValue.includes('qd_2_right')) qdDetail = 'QDs (2 Right)';
       else if (qdValue.includes('qd_2_both')) qdDetail = 'QDs (2 Both Sides)';
@@ -225,24 +260,29 @@ export default function GunsimthQueuePage() {
       else if (qdValue.includes('left')) qdDetail = 'QDs (Left)';
       else if (qdValue.includes('right')) qdDetail = 'QDs (Right)';
       else if (qdValue.includes('both')) qdDetail = 'QDs (Both Sides)';
-      
+
       tasks.push(qdDetail);
     }
 
     // Check for rails with type details - exclude no_rail, none, and empty values
-    if (features.rail_accessory && 
-        features.rail_accessory !== 'no_rail' && 
-        features.rail_accessory !== 'none' && 
-        features.rail_accessory !== '' && 
-        features.rail_accessory !== null && 
-        features.rail_accessory !== undefined) {
+    if (
+      features.rail_accessory &&
+      features.rail_accessory !== 'no_rail' &&
+      features.rail_accessory !== 'none' &&
+      features.rail_accessory !== '' &&
+      features.rail_accessory !== null &&
+      features.rail_accessory !== undefined
+    ) {
       let railDetails = [];
       const railValue = features.rail_accessory;
-      
+
       if (Array.isArray(railValue)) {
         railDetails = railValue
-          .filter(rail => rail && rail !== 'no_rail' && rail !== 'none' && rail !== '')
-          .map(rail => {
+          .filter(
+            (rail) =>
+              rail && rail !== 'no_rail' && rail !== 'none' && rail !== ''
+          )
+          .map((rail) => {
             if (rail.includes('arca_6')) return 'ARCA 6"';
             if (rail.includes('arca_12')) return 'ARCA 12"';
             if (rail.includes('arca_18')) return 'ARCA 18"';
@@ -250,15 +290,19 @@ export default function GunsimthQueuePage() {
             if (rail.includes('picatinny')) return 'Picatinny';
             return rail;
           });
-      } else if (typeof railValue === 'string' && railValue.toLowerCase() !== 'no rail') {
+      } else if (
+        typeof railValue === 'string' &&
+        railValue.toLowerCase() !== 'no rail'
+      ) {
         if (railValue.includes('arca_6')) railDetails.push('ARCA 6"');
         else if (railValue.includes('arca_12')) railDetails.push('ARCA 12"');
         else if (railValue.includes('arca_18')) railDetails.push('ARCA 18"');
         else if (railValue.includes('mlok')) railDetails.push('M-LOK');
         else if (railValue.includes('picatinny')) railDetails.push('Picatinny');
-        else if (!railValue.toLowerCase().includes('no')) railDetails.push(railValue);
+        else if (!railValue.toLowerCase().includes('no'))
+          railDetails.push(railValue);
       }
-      
+
       if (railDetails.length > 0) {
         tasks.push(`Rails (${railDetails.join(', ')})`);
       }
@@ -266,7 +310,10 @@ export default function GunsimthQueuePage() {
 
     // Check for tripod mount and tap
     if (features.other_options && Array.isArray(features.other_options)) {
-      if (features.other_options.includes('tripod_mount') || features.other_options.includes('mount_and_tap')) {
+      if (
+        features.other_options.includes('tripod_mount') ||
+        features.other_options.includes('mount_and_tap')
+      ) {
         tasks.push('Mount & Tap');
       }
       if (features.other_options.includes('tripod')) {
@@ -275,22 +322,25 @@ export default function GunsimthQueuePage() {
     }
 
     // Check for bipod with type details - exclude no_bipod, none, and empty values
-    if (features.bipod_accessory && 
-        features.bipod_accessory !== 'no_bipod' && 
-        features.bipod_accessory !== 'none' && 
-        features.bipod_accessory !== '' && 
-        features.bipod_accessory !== null && 
-        features.bipod_accessory !== undefined &&
-        !features.bipod_accessory.toLowerCase().includes('no')) {
+    if (
+      features.bipod_accessory &&
+      features.bipod_accessory !== 'no_bipod' &&
+      features.bipod_accessory !== 'none' &&
+      features.bipod_accessory !== '' &&
+      features.bipod_accessory !== null &&
+      features.bipod_accessory !== undefined &&
+      !features.bipod_accessory.toLowerCase().includes('no')
+    ) {
       let bipodDetail = 'Bipod';
       const bipodValue = features.bipod_accessory;
-      
-      if (bipodValue.includes('spartan_javelin')) bipodDetail = 'Spartan Javelin';
+
+      if (bipodValue.includes('spartan_javelin'))
+        bipodDetail = 'Spartan Javelin';
       else if (bipodValue.includes('spartan_tac')) bipodDetail = 'Spartan TAC';
       else if (bipodValue.includes('spartan')) bipodDetail = 'Spartan Bipod';
       else if (bipodValue.includes('harris')) bipodDetail = 'Harris Bipod';
       else if (bipodValue.includes('atlas')) bipodDetail = 'Atlas Bipod';
-      
+
       tasks.push(bipodDetail);
     }
 
@@ -299,7 +349,7 @@ export default function GunsimthQueuePage() {
 
   // Multi-select functions
   const handleSelectOrder = (orderId: string) => {
-    setSelectedOrders(prev => {
+    setSelectedOrders((prev) => {
       const newSet = new Set(prev);
       if (newSet.has(orderId)) {
         newSet.delete(orderId);
@@ -314,7 +364,9 @@ export default function GunsimthQueuePage() {
     if (selectedOrders.size === gunsmithOrders.length) {
       setSelectedOrders(new Set());
     } else {
-      setSelectedOrders(new Set(gunsmithOrders.map((order: any) => order.orderId)));
+      setSelectedOrders(
+        new Set(gunsmithOrders.map((order: any) => order.orderId))
+      );
     }
   };
 
@@ -330,26 +382,26 @@ export default function GunsimthQueuePage() {
         body: JSON.stringify({
           orderIds: orderIds,
           department: 'Shipping QC',
-          status: 'IN_PROGRESS'
-        })
+          status: 'IN_PROGRESS',
+        }),
       });
       return response;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
       toast({
-        title: "Success",
+        title: 'Success',
         description: `${selectedOrders.size} orders moved to Shipping QC department`,
       });
       setSelectedOrders(new Set());
     },
     onError: () => {
       toast({
-        title: "Error",
-        description: "Failed to move orders to Shipping QC",
-        variant: "destructive",
+        title: 'Error',
+        description: 'Failed to move orders to Shipping QC',
+        variant: 'destructive',
       });
-    }
+    },
   });
 
   const handleProgressToShippingQc = () => {
@@ -360,25 +412,29 @@ export default function GunsimthQueuePage() {
   // Auto-select order when scanned
   const handleOrderScanned = (orderId: string) => {
     // Check if the order exists in the current queue
-    const orderExists = gunsmithOrders.some((order: any) => order.orderId === orderId);
+    const orderExists = gunsmithOrders.some(
+      (order: any) => order.orderId === orderId
+    );
     if (orderExists) {
-      setSelectedOrders(prev => new Set([...Array.from(prev), orderId]));
+      setSelectedOrders((prev) => new Set([...Array.from(prev), orderId]));
       toast({
-        title: "Success",
+        title: 'Success',
         description: `Order ${orderId} selected automatically`,
       });
     } else {
       toast({
-        title: "Error",
+        title: 'Error',
         description: `Order ${orderId} is not in the Gunsmith department`,
-        variant: "destructive",
+        variant: 'destructive',
       });
     }
   };
 
   // Handle order search selection
   const handleOrderSearchSelect = (order: any) => {
-    const orderExists = gunsmithOrders.some((o: any) => o.orderId === order.orderId);
+    const orderExists = gunsmithOrders.some(
+      (o: any) => o.orderId === order.orderId
+    );
     if (orderExists) {
       setHighlightedOrderId(order.orderId);
       // Auto-scroll to the highlighted order
@@ -389,14 +445,14 @@ export default function GunsimthQueuePage() {
         }
       }, 100);
       toast({
-        title: "Success",
+        title: 'Success',
         description: `Order ${order.orderId} highlighted in the list`,
       });
     } else {
       toast({
-        title: "Error",
+        title: 'Error',
         description: `Order ${order.orderId} is not in the Gunsmith department`,
-        variant: "destructive",
+        variant: 'destructive',
       });
     }
   };
@@ -415,7 +471,7 @@ export default function GunsimthQueuePage() {
       <Card>
         <CardContent className="p-4">
           <div className="flex items-center gap-4">
-            <OrderSearchBox 
+            <OrderSearchBox
               orders={gunsmithOrders}
               placeholder="Search orders by Order ID or FishBowl Number..."
               onOrderSelect={handleOrderSearchSelect}
@@ -481,7 +537,7 @@ export default function GunsimthQueuePage() {
               <Target className="h-5 w-5" />
               Gunsmith Orders ({gunsmithOrders.length})
             </CardTitle>
-            
+
             {gunsmithOrders.length > 0 && (
               <div className="flex items-center gap-2">
                 <Button
@@ -495,9 +551,11 @@ export default function GunsimthQueuePage() {
                   ) : (
                     <Square className="h-4 w-4" />
                   )}
-                  {selectedOrders.size === gunsmithOrders.length ? 'Deselect All' : 'Select All'}
+                  {selectedOrders.size === gunsmithOrders.length
+                    ? 'Deselect All'
+                    : 'Select All'}
                 </Button>
-                
+
                 {selectedOrders.size > 0 && (
                   <>
                     <Button
@@ -507,7 +565,7 @@ export default function GunsimthQueuePage() {
                     >
                       Clear ({selectedOrders.size})
                     </Button>
-                    
+
                     <Button
                       onClick={handleProgressToShippingQc}
                       disabled={progressToShippingQcMutation.isPending}
@@ -543,21 +601,29 @@ export default function GunsimthQueuePage() {
                         <div className="absolute top-2 left-2 z-10">
                           <Checkbox
                             checked={selectedOrders.has(order.orderId)}
-                            onCheckedChange={() => handleSelectOrder(order.orderId)}
+                            onCheckedChange={() =>
+                              handleSelectOrder(order.orderId)
+                            }
                             className="bg-white dark:bg-gray-800 border-2"
                           />
                         </div>
-                        <Card 
-                          className={`${selectedOrders.has(order.orderId) 
-                            ? 'bg-red-100 dark:bg-red-800/40 border-red-400 dark:border-red-600 ring-2 ring-red-300 dark:ring-red-700' 
-                            : 'bg-red-50 dark:bg-red-900/20 border-red-300 dark:border-red-700'
+                        <Card
+                          className={`${
+                            selectedOrders.has(order.orderId)
+                              ? 'bg-red-100 dark:bg-red-800/40 border-red-400 dark:border-red-600 ring-2 ring-red-300 dark:ring-red-700'
+                              : 'bg-red-50 dark:bg-red-900/20 border-red-300 dark:border-red-700'
                           } pl-8`}
                         >
                           <CardContent className="p-3">
                             <div className="flex items-center justify-between mb-2">
-                              <div className="font-semibold">{getDisplayOrderId(order)}</div>
+                              <div className="font-semibold">
+                                {getDisplayOrderId(order)}
+                              </div>
                               {order.dueDate && (
-                                <Badge variant="destructive" className="text-xs">
+                                <Badge
+                                  variant="destructive"
+                                  className="text-xs"
+                                >
                                   Due: {format(new Date(order.dueDate), 'M/d')}
                                 </Badge>
                               )}
@@ -571,7 +637,11 @@ export default function GunsimthQueuePage() {
                             {getGunsimthTasks(order).length > 0 && (
                               <div className="flex flex-wrap gap-1 mt-2">
                                 {getGunsimthTasks(order).map((task, idx) => (
-                                  <Badge key={idx} variant="outline" className="text-xs">
+                                  <Badge
+                                    key={idx}
+                                    variant="outline"
+                                    className="text-xs"
+                                  >
                                     {task}
                                   </Badge>
                                 ))}
@@ -592,12 +662,20 @@ export default function GunsimthQueuePage() {
                                 <Badge
                                   variant="destructive"
                                   className={`cursor-pointer hover:opacity-80 transition-opacity text-xs ${
-                                    getKickbackStatus(order.orderId) === 'CRITICAL' ? 'bg-red-600 hover:bg-red-700' :
-                                    getKickbackStatus(order.orderId) === 'HIGH' ? 'bg-orange-600 hover:bg-orange-700' :
-                                    getKickbackStatus(order.orderId) === 'MEDIUM' ? 'bg-yellow-600 hover:bg-yellow-700' :
-                                    'bg-gray-600 hover:bg-gray-700'
+                                    getKickbackStatus(order.orderId) ===
+                                    'CRITICAL'
+                                      ? 'bg-red-600 hover:bg-red-700'
+                                      : getKickbackStatus(order.orderId) ===
+                                          'HIGH'
+                                        ? 'bg-orange-600 hover:bg-orange-700'
+                                        : getKickbackStatus(order.orderId) ===
+                                            'MEDIUM'
+                                          ? 'bg-yellow-600 hover:bg-yellow-700'
+                                          : 'bg-gray-600 hover:bg-gray-700'
                                   }`}
-                                  onClick={() => handleKickbackClick(order.orderId)}
+                                  onClick={() =>
+                                    handleKickbackClick(order.orderId)
+                                  }
                                 >
                                   <AlertTriangle className="w-3 h-3 mr-1" />
                                   Kickback
@@ -626,21 +704,29 @@ export default function GunsimthQueuePage() {
                         <div className="absolute top-2 left-2 z-10">
                           <Checkbox
                             checked={selectedOrders.has(order.orderId)}
-                            onCheckedChange={() => handleSelectOrder(order.orderId)}
+                            onCheckedChange={() =>
+                              handleSelectOrder(order.orderId)
+                            }
                             className="bg-white dark:bg-gray-800 border-2"
                           />
                         </div>
-                        <Card 
-                          className={`${selectedOrders.has(order.orderId) 
-                            ? 'bg-orange-100 dark:bg-orange-800/40 border-orange-400 dark:border-orange-600 ring-2 ring-orange-300 dark:ring-orange-700' 
-                            : 'bg-orange-50 dark:bg-orange-900/20 border-orange-300 dark:border-orange-700'
+                        <Card
+                          className={`${
+                            selectedOrders.has(order.orderId)
+                              ? 'bg-orange-100 dark:bg-orange-800/40 border-orange-400 dark:border-orange-600 ring-2 ring-orange-300 dark:ring-orange-700'
+                              : 'bg-orange-50 dark:bg-orange-900/20 border-orange-300 dark:border-orange-700'
                           } pl-8`}
                         >
                           <CardContent className="p-3">
                             <div className="flex items-center justify-between mb-2">
-                              <div className="font-semibold">{getDisplayOrderId(order)}</div>
+                              <div className="font-semibold">
+                                {getDisplayOrderId(order)}
+                              </div>
                               {order.dueDate && (
-                                <Badge variant="destructive" className="text-xs">
+                                <Badge
+                                  variant="destructive"
+                                  className="text-xs"
+                                >
                                   Due: {format(new Date(order.dueDate), 'M/d')}
                                 </Badge>
                               )}
@@ -654,7 +740,11 @@ export default function GunsimthQueuePage() {
                             {getGunsimthTasks(order).length > 0 && (
                               <div className="flex flex-wrap gap-1 mt-2">
                                 {getGunsimthTasks(order).map((task, idx) => (
-                                  <Badge key={idx} variant="outline" className="text-xs">
+                                  <Badge
+                                    key={idx}
+                                    variant="outline"
+                                    className="text-xs"
+                                  >
                                     {task}
                                   </Badge>
                                 ))}
@@ -675,12 +765,20 @@ export default function GunsimthQueuePage() {
                                 <Badge
                                   variant="destructive"
                                   className={`cursor-pointer hover:opacity-80 transition-opacity text-xs ${
-                                    getKickbackStatus(order.orderId) === 'CRITICAL' ? 'bg-red-600 hover:bg-red-700' :
-                                    getKickbackStatus(order.orderId) === 'HIGH' ? 'bg-orange-600 hover:bg-orange-700' :
-                                    getKickbackStatus(order.orderId) === 'MEDIUM' ? 'bg-yellow-600 hover:bg-yellow-700' :
-                                    'bg-gray-600 hover:bg-gray-700'
+                                    getKickbackStatus(order.orderId) ===
+                                    'CRITICAL'
+                                      ? 'bg-red-600 hover:bg-red-700'
+                                      : getKickbackStatus(order.orderId) ===
+                                          'HIGH'
+                                        ? 'bg-orange-600 hover:bg-orange-700'
+                                        : getKickbackStatus(order.orderId) ===
+                                            'MEDIUM'
+                                          ? 'bg-yellow-600 hover:bg-yellow-700'
+                                          : 'bg-gray-600 hover:bg-gray-700'
                                   }`}
-                                  onClick={() => handleKickbackClick(order.orderId)}
+                                  onClick={() =>
+                                    handleKickbackClick(order.orderId)
+                                  }
                                 >
                                   <AlertTriangle className="w-3 h-3 mr-1" />
                                   Kickback
@@ -709,19 +807,24 @@ export default function GunsimthQueuePage() {
                         <div className="absolute top-2 left-2 z-10">
                           <Checkbox
                             checked={selectedOrders.has(order.orderId)}
-                            onCheckedChange={() => handleSelectOrder(order.orderId)}
+                            onCheckedChange={() =>
+                              handleSelectOrder(order.orderId)
+                            }
                             className="bg-white dark:bg-gray-800 border-2"
                           />
                         </div>
-                        <Card 
-                          className={`${selectedOrders.has(order.orderId) 
-                            ? 'bg-yellow-100 dark:bg-yellow-800/40 border-yellow-400 dark:border-yellow-600 ring-2 ring-yellow-300 dark:ring-yellow-700' 
-                            : 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-300 dark:border-yellow-700'
+                        <Card
+                          className={`${
+                            selectedOrders.has(order.orderId)
+                              ? 'bg-yellow-100 dark:bg-yellow-800/40 border-yellow-400 dark:border-yellow-600 ring-2 ring-yellow-300 dark:ring-yellow-700'
+                              : 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-300 dark:border-yellow-700'
                           } pl-8`}
                         >
                           <CardContent className="p-3">
                             <div className="flex items-center justify-between mb-2">
-                              <div className="font-semibold">{getDisplayOrderId(order)}</div>
+                              <div className="font-semibold">
+                                {getDisplayOrderId(order)}
+                              </div>
                               {order.dueDate && (
                                 <Badge variant="secondary" className="text-xs">
                                   Due: {format(new Date(order.dueDate), 'M/d')}
@@ -737,7 +840,11 @@ export default function GunsimthQueuePage() {
                             {getGunsimthTasks(order).length > 0 && (
                               <div className="flex flex-wrap gap-1 mt-2">
                                 {getGunsimthTasks(order).map((task, idx) => (
-                                  <Badge key={idx} variant="outline" className="text-xs">
+                                  <Badge
+                                    key={idx}
+                                    variant="outline"
+                                    className="text-xs"
+                                  >
                                     {task}
                                   </Badge>
                                 ))}
@@ -758,12 +865,20 @@ export default function GunsimthQueuePage() {
                                 <Badge
                                   variant="destructive"
                                   className={`cursor-pointer hover:opacity-80 transition-opacity text-xs ${
-                                    getKickbackStatus(order.orderId) === 'CRITICAL' ? 'bg-red-600 hover:bg-red-700' :
-                                    getKickbackStatus(order.orderId) === 'HIGH' ? 'bg-orange-600 hover:bg-orange-700' :
-                                    getKickbackStatus(order.orderId) === 'MEDIUM' ? 'bg-yellow-600 hover:bg-yellow-700' :
-                                    'bg-gray-600 hover:bg-gray-700'
+                                    getKickbackStatus(order.orderId) ===
+                                    'CRITICAL'
+                                      ? 'bg-red-600 hover:bg-red-700'
+                                      : getKickbackStatus(order.orderId) ===
+                                          'HIGH'
+                                        ? 'bg-orange-600 hover:bg-orange-700'
+                                        : getKickbackStatus(order.orderId) ===
+                                            'MEDIUM'
+                                          ? 'bg-yellow-600 hover:bg-yellow-700'
+                                          : 'bg-gray-600 hover:bg-gray-700'
                                   }`}
-                                  onClick={() => handleKickbackClick(order.orderId)}
+                                  onClick={() =>
+                                    handleKickbackClick(order.orderId)
+                                  }
                                 >
                                   <AlertTriangle className="w-3 h-3 mr-1" />
                                   Kickback
@@ -792,19 +907,24 @@ export default function GunsimthQueuePage() {
                         <div className="absolute top-2 left-2 z-10">
                           <Checkbox
                             checked={selectedOrders.has(order.orderId)}
-                            onCheckedChange={() => handleSelectOrder(order.orderId)}
+                            onCheckedChange={() =>
+                              handleSelectOrder(order.orderId)
+                            }
                             className="bg-white dark:bg-gray-800 border-2"
                           />
                         </div>
-                        <Card 
-                          className={`${selectedOrders.has(order.orderId) 
-                            ? 'bg-blue-100 dark:bg-blue-800/40 border-blue-400 dark:border-blue-600 ring-2 ring-blue-300 dark:ring-blue-700' 
-                            : 'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-700'
+                        <Card
+                          className={`${
+                            selectedOrders.has(order.orderId)
+                              ? 'bg-blue-100 dark:bg-blue-800/40 border-blue-400 dark:border-blue-600 ring-2 ring-blue-300 dark:ring-blue-700'
+                              : 'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-700'
                           } pl-8`}
                         >
                           <CardContent className="p-3">
                             <div className="flex items-center justify-between mb-2">
-                              <div className="font-semibold">{getDisplayOrderId(order)}</div>
+                              <div className="font-semibold">
+                                {getDisplayOrderId(order)}
+                              </div>
                               {order.dueDate && (
                                 <Badge variant="outline" className="text-xs">
                                   Due: {format(new Date(order.dueDate), 'M/d')}
@@ -820,7 +940,11 @@ export default function GunsimthQueuePage() {
                             {getGunsimthTasks(order).length > 0 && (
                               <div className="flex flex-wrap gap-1 mt-2">
                                 {getGunsimthTasks(order).map((task, idx) => (
-                                  <Badge key={idx} variant="outline" className="text-xs">
+                                  <Badge
+                                    key={idx}
+                                    variant="outline"
+                                    className="text-xs"
+                                  >
                                     {task}
                                   </Badge>
                                 ))}
@@ -841,12 +965,20 @@ export default function GunsimthQueuePage() {
                                 <Badge
                                   variant="destructive"
                                   className={`cursor-pointer hover:opacity-80 transition-opacity text-xs ${
-                                    getKickbackStatus(order.orderId) === 'CRITICAL' ? 'bg-red-600 hover:bg-red-700' :
-                                    getKickbackStatus(order.orderId) === 'HIGH' ? 'bg-orange-600 hover:bg-orange-700' :
-                                    getKickbackStatus(order.orderId) === 'MEDIUM' ? 'bg-yellow-600 hover:bg-yellow-700' :
-                                    'bg-gray-600 hover:bg-gray-700'
+                                    getKickbackStatus(order.orderId) ===
+                                    'CRITICAL'
+                                      ? 'bg-red-600 hover:bg-red-700'
+                                      : getKickbackStatus(order.orderId) ===
+                                          'HIGH'
+                                        ? 'bg-orange-600 hover:bg-orange-700'
+                                        : getKickbackStatus(order.orderId) ===
+                                            'MEDIUM'
+                                          ? 'bg-yellow-600 hover:bg-yellow-700'
+                                          : 'bg-gray-600 hover:bg-gray-700'
                                   }`}
-                                  onClick={() => handleKickbackClick(order.orderId)}
+                                  onClick={() =>
+                                    handleKickbackClick(order.orderId)
+                                  }
                                 >
                                   <AlertTriangle className="w-3 h-3 mr-1" />
                                   Kickback
@@ -875,19 +1007,24 @@ export default function GunsimthQueuePage() {
                         <div className="absolute top-2 left-2 z-10">
                           <Checkbox
                             checked={selectedOrders.has(order.orderId)}
-                            onCheckedChange={() => handleSelectOrder(order.orderId)}
+                            onCheckedChange={() =>
+                              handleSelectOrder(order.orderId)
+                            }
                             className="bg-white dark:bg-gray-800 border-2"
                           />
                         </div>
-                        <Card 
-                          className={`${selectedOrders.has(order.orderId) 
-                            ? 'bg-green-100 dark:bg-green-800/40 border-green-400 dark:border-green-600 ring-2 ring-green-300 dark:ring-green-700' 
-                            : 'bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700'
+                        <Card
+                          className={`${
+                            selectedOrders.has(order.orderId)
+                              ? 'bg-green-100 dark:bg-green-800/40 border-green-400 dark:border-green-600 ring-2 ring-green-300 dark:ring-green-700'
+                              : 'bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700'
                           } pl-8`}
                         >
                           <CardContent className="p-3">
                             <div className="flex items-center justify-between mb-2">
-                              <div className="font-semibold">{getDisplayOrderId(order)}</div>
+                              <div className="font-semibold">
+                                {getDisplayOrderId(order)}
+                              </div>
                               {order.dueDate && (
                                 <Badge variant="outline" className="text-xs">
                                   Due: {format(new Date(order.dueDate), 'M/d')}
@@ -903,7 +1040,11 @@ export default function GunsimthQueuePage() {
                             {getGunsimthTasks(order).length > 0 && (
                               <div className="flex flex-wrap gap-1 mt-2">
                                 {getGunsimthTasks(order).map((task, idx) => (
-                                  <Badge key={idx} variant="outline" className="text-xs">
+                                  <Badge
+                                    key={idx}
+                                    variant="outline"
+                                    className="text-xs"
+                                  >
                                     {task}
                                   </Badge>
                                 ))}
@@ -924,12 +1065,20 @@ export default function GunsimthQueuePage() {
                                 <Badge
                                   variant="destructive"
                                   className={`cursor-pointer hover:opacity-80 transition-opacity text-xs ${
-                                    getKickbackStatus(order.orderId) === 'CRITICAL' ? 'bg-red-600 hover:bg-red-700' :
-                                    getKickbackStatus(order.orderId) === 'HIGH' ? 'bg-orange-600 hover:bg-orange-700' :
-                                    getKickbackStatus(order.orderId) === 'MEDIUM' ? 'bg-yellow-600 hover:bg-yellow-700' :
-                                    'bg-gray-600 hover:bg-gray-700'
+                                    getKickbackStatus(order.orderId) ===
+                                    'CRITICAL'
+                                      ? 'bg-red-600 hover:bg-red-700'
+                                      : getKickbackStatus(order.orderId) ===
+                                          'HIGH'
+                                        ? 'bg-orange-600 hover:bg-orange-700'
+                                        : getKickbackStatus(order.orderId) ===
+                                            'MEDIUM'
+                                          ? 'bg-yellow-600 hover:bg-yellow-700'
+                                          : 'bg-gray-600 hover:bg-gray-700'
                                   }`}
-                                  onClick={() => handleKickbackClick(order.orderId)}
+                                  onClick={() =>
+                                    handleKickbackClick(order.orderId)
+                                  }
                                 >
                                   <AlertTriangle className="w-3 h-3 mr-1" />
                                   Kickback
@@ -958,19 +1107,24 @@ export default function GunsimthQueuePage() {
                         <div className="absolute top-2 left-2 z-10">
                           <Checkbox
                             checked={selectedOrders.has(order.orderId)}
-                            onCheckedChange={() => handleSelectOrder(order.orderId)}
+                            onCheckedChange={() =>
+                              handleSelectOrder(order.orderId)
+                            }
                             className="bg-white dark:bg-gray-800 border-2"
                           />
                         </div>
-                        <Card 
-                          className={`${selectedOrders.has(order.orderId) 
-                            ? 'bg-purple-100 dark:bg-purple-800/40 border-purple-400 dark:border-purple-600 ring-2 ring-purple-300 dark:ring-purple-700' 
-                            : 'bg-purple-50 dark:bg-purple-900/20 border-purple-300 dark:border-purple-700'
+                        <Card
+                          className={`${
+                            selectedOrders.has(order.orderId)
+                              ? 'bg-purple-100 dark:bg-purple-800/40 border-purple-400 dark:border-purple-600 ring-2 ring-purple-300 dark:ring-purple-700'
+                              : 'bg-purple-50 dark:bg-purple-900/20 border-purple-300 dark:border-purple-700'
                           } pl-8`}
                         >
                           <CardContent className="p-3">
                             <div className="flex items-center justify-between mb-2">
-                              <div className="font-semibold">{getDisplayOrderId(order)}</div>
+                              <div className="font-semibold">
+                                {getDisplayOrderId(order)}
+                              </div>
                               {order.dueDate && (
                                 <Badge variant="outline" className="text-xs">
                                   Due: {format(new Date(order.dueDate), 'M/d')}
@@ -986,7 +1140,11 @@ export default function GunsimthQueuePage() {
                             {getGunsimthTasks(order).length > 0 && (
                               <div className="flex flex-wrap gap-1 mt-2">
                                 {getGunsimthTasks(order).map((task, idx) => (
-                                  <Badge key={idx} variant="outline" className="text-xs">
+                                  <Badge
+                                    key={idx}
+                                    variant="outline"
+                                    className="text-xs"
+                                  >
                                     {task}
                                   </Badge>
                                 ))}
@@ -1007,12 +1165,20 @@ export default function GunsimthQueuePage() {
                                 <Badge
                                   variant="destructive"
                                   className={`cursor-pointer hover:opacity-80 transition-opacity text-xs ${
-                                    getKickbackStatus(order.orderId) === 'CRITICAL' ? 'bg-red-600 hover:bg-red-700' :
-                                    getKickbackStatus(order.orderId) === 'HIGH' ? 'bg-orange-600 hover:bg-orange-700' :
-                                    getKickbackStatus(order.orderId) === 'MEDIUM' ? 'bg-yellow-600 hover:bg-yellow-700' :
-                                    'bg-gray-600 hover:bg-gray-700'
+                                    getKickbackStatus(order.orderId) ===
+                                    'CRITICAL'
+                                      ? 'bg-red-600 hover:bg-red-700'
+                                      : getKickbackStatus(order.orderId) ===
+                                          'HIGH'
+                                        ? 'bg-orange-600 hover:bg-orange-700'
+                                        : getKickbackStatus(order.orderId) ===
+                                            'MEDIUM'
+                                          ? 'bg-yellow-600 hover:bg-yellow-700'
+                                          : 'bg-gray-600 hover:bg-gray-700'
                                   }`}
-                                  onClick={() => handleKickbackClick(order.orderId)}
+                                  onClick={() =>
+                                    handleKickbackClick(order.orderId)
+                                  }
                                 >
                                   <AlertTriangle className="w-3 h-3 mr-1" />
                                   Kickback
@@ -1041,19 +1207,24 @@ export default function GunsimthQueuePage() {
                         <div className="absolute top-2 left-2 z-10">
                           <Checkbox
                             checked={selectedOrders.has(order.orderId)}
-                            onCheckedChange={() => handleSelectOrder(order.orderId)}
+                            onCheckedChange={() =>
+                              handleSelectOrder(order.orderId)
+                            }
                             className="bg-white dark:bg-gray-800 border-2"
                           />
                         </div>
-                        <Card 
-                          className={`${selectedOrders.has(order.orderId) 
-                            ? 'bg-gray-100 dark:bg-gray-800/40 border-gray-400 dark:border-gray-600 ring-2 ring-gray-300 dark:ring-gray-700' 
-                            : 'bg-gray-50 dark:bg-gray-900/20 border-gray-300 dark:border-gray-700'
+                        <Card
+                          className={`${
+                            selectedOrders.has(order.orderId)
+                              ? 'bg-gray-100 dark:bg-gray-800/40 border-gray-400 dark:border-gray-600 ring-2 ring-gray-300 dark:ring-gray-700'
+                              : 'bg-gray-50 dark:bg-gray-900/20 border-gray-300 dark:border-gray-700'
                           } pl-8`}
                         >
                           <CardContent className="p-3">
                             <div className="flex items-center justify-between mb-2">
-                              <div className="font-semibold">{getDisplayOrderId(order)}</div>
+                              <div className="font-semibold">
+                                {getDisplayOrderId(order)}
+                              </div>
                               <Badge variant="secondary" className="text-xs">
                                 No Due Date
                               </Badge>
@@ -1067,7 +1238,11 @@ export default function GunsimthQueuePage() {
                             {getGunsimthTasks(order).length > 0 && (
                               <div className="flex flex-wrap gap-1 mt-2">
                                 {getGunsimthTasks(order).map((task, idx) => (
-                                  <Badge key={idx} variant="outline" className="text-xs">
+                                  <Badge
+                                    key={idx}
+                                    variant="outline"
+                                    className="text-xs"
+                                  >
                                     {task}
                                   </Badge>
                                 ))}
@@ -1088,12 +1263,20 @@ export default function GunsimthQueuePage() {
                                 <Badge
                                   variant="destructive"
                                   className={`cursor-pointer hover:opacity-80 transition-opacity text-xs ${
-                                    getKickbackStatus(order.orderId) === 'CRITICAL' ? 'bg-red-600 hover:bg-red-700' :
-                                    getKickbackStatus(order.orderId) === 'HIGH' ? 'bg-orange-600 hover:bg-orange-700' :
-                                    getKickbackStatus(order.orderId) === 'MEDIUM' ? 'bg-yellow-600 hover:bg-yellow-700' :
-                                    'bg-gray-600 hover:bg-gray-700'
+                                    getKickbackStatus(order.orderId) ===
+                                    'CRITICAL'
+                                      ? 'bg-red-600 hover:bg-red-700'
+                                      : getKickbackStatus(order.orderId) ===
+                                          'HIGH'
+                                        ? 'bg-orange-600 hover:bg-orange-700'
+                                        : getKickbackStatus(order.orderId) ===
+                                            'MEDIUM'
+                                          ? 'bg-yellow-600 hover:bg-yellow-700'
+                                          : 'bg-gray-600 hover:bg-gray-700'
                                   }`}
-                                  onClick={() => handleKickbackClick(order.orderId)}
+                                  onClick={() =>
+                                    handleKickbackClick(order.orderId)
+                                  }
                                 >
                                   <AlertTriangle className="w-3 h-3 mr-1" />
                                   Kickback
@@ -1120,7 +1303,8 @@ export default function GunsimthQueuePage() {
               <div className="flex items-center gap-2">
                 <CheckCircle className="h-5 w-5 text-blue-600 dark:text-blue-400" />
                 <span className="font-medium text-blue-800 dark:text-blue-200">
-                  {selectedOrders.size} order{selectedOrders.size > 1 ? 's' : ''} selected for progression
+                  {selectedOrders.size} order
+                  {selectedOrders.size > 1 ? 's' : ''} selected for progression
                 </span>
               </div>
               <div className="flex items-center gap-2">
@@ -1133,12 +1317,14 @@ export default function GunsimthQueuePage() {
                 </Button>
                 <Button
                   onClick={handleProgressOrders}
-                  disabled={selectedOrders.size === 0 || progressMutation.isPending}
+                  disabled={
+                    selectedOrders.size === 0 || progressMutation.isPending
+                  }
                   className="bg-blue-600 hover:bg-blue-700 text-white"
                 >
                   <ArrowRight className="h-4 w-4 mr-2" />
-                  {progressMutation.isPending 
-                    ? 'Progressing...' 
+                  {progressMutation.isPending
+                    ? 'Progressing...'
                     : `Progress to Finish (${selectedOrders.size})`}
                 </Button>
               </div>
@@ -1148,7 +1334,7 @@ export default function GunsimthQueuePage() {
       )}
 
       {/* Sales Order Modal */}
-      <SalesOrderModal 
+      <SalesOrderModal
         isOpen={salesOrderModalOpen}
         onClose={() => setSalesOrderModalOpen(false)}
         orderId={selectedOrderId}

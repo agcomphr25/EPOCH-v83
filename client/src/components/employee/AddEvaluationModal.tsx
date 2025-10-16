@@ -1,19 +1,34 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { Plus } from 'lucide-react';
+
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-import { Plus } from 'lucide-react';
 
 interface AddEvaluationModalProps {
   employeeId: number;
 }
 
-export default function AddEvaluationModal({ employeeId }: AddEvaluationModalProps) {
+export default function AddEvaluationModal({
+  employeeId,
+}: AddEvaluationModalProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [formData, setFormData] = useState({
     evaluationPeriodStart: '',
@@ -22,7 +37,7 @@ export default function AddEvaluationModal({ employeeId }: AddEvaluationModalPro
     status: 'DRAFT',
     comments: '',
   });
-  
+
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -37,14 +52,18 @@ export default function AddEvaluationModal({ employeeId }: AddEvaluationModalPro
           ...data,
           employeeId,
           evaluatorId: 1, // TODO: Get from current user session
-          overallRating: data.overallRating ? parseFloat(data.overallRating) : null,
+          overallRating: data.overallRating
+            ? parseFloat(data.overallRating)
+            : null,
         }),
       });
       if (!response.ok) throw new Error('Failed to create evaluation');
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/evaluations', { employeeId }] });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/evaluations', { employeeId }],
+      });
       setIsOpen(false);
       setFormData({
         evaluationPeriodStart: '',
@@ -54,36 +73,39 @@ export default function AddEvaluationModal({ employeeId }: AddEvaluationModalPro
         comments: '',
       });
       toast({
-        title: "Success",
-        description: "Evaluation created successfully",
+        title: 'Success',
+        description: 'Evaluation created successfully',
       });
     },
     onError: (error) => {
       toast({
-        title: "Error",
-        description: "Failed to create evaluation. Please try again.",
-        variant: "destructive",
+        title: 'Error',
+        description: 'Failed to create evaluation. Please try again.',
+        variant: 'destructive',
       });
     },
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!formData.evaluationPeriodStart || !formData.evaluationPeriodEnd) {
       toast({
-        title: "Validation Error",
-        description: "Evaluation period start and end dates are required",
-        variant: "destructive",
+        title: 'Validation Error',
+        description: 'Evaluation period start and end dates are required',
+        variant: 'destructive',
       });
       return;
     }
 
-    if (new Date(formData.evaluationPeriodStart) >= new Date(formData.evaluationPeriodEnd)) {
+    if (
+      new Date(formData.evaluationPeriodStart) >=
+      new Date(formData.evaluationPeriodEnd)
+    ) {
       toast({
-        title: "Validation Error",
-        description: "End date must be after start date",
-        variant: "destructive",
+        title: 'Validation Error',
+        description: 'End date must be after start date',
+        variant: 'destructive',
       });
       return;
     }
@@ -92,7 +114,7 @@ export default function AddEvaluationModal({ employeeId }: AddEvaluationModalPro
   };
 
   const handleInputChange = (field: string, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
   return (
@@ -115,7 +137,9 @@ export default function AddEvaluationModal({ employeeId }: AddEvaluationModalPro
                 id="evaluationPeriodStart"
                 type="date"
                 value={formData.evaluationPeriodStart}
-                onChange={(e) => handleInputChange('evaluationPeriodStart', e.target.value)}
+                onChange={(e) =>
+                  handleInputChange('evaluationPeriodStart', e.target.value)
+                }
                 required
               />
             </div>
@@ -126,7 +150,9 @@ export default function AddEvaluationModal({ employeeId }: AddEvaluationModalPro
                 id="evaluationPeriodEnd"
                 type="date"
                 value={formData.evaluationPeriodEnd}
-                onChange={(e) => handleInputChange('evaluationPeriodEnd', e.target.value)}
+                onChange={(e) =>
+                  handleInputChange('evaluationPeriodEnd', e.target.value)
+                }
                 required
               />
             </div>
@@ -134,7 +160,12 @@ export default function AddEvaluationModal({ employeeId }: AddEvaluationModalPro
 
           <div>
             <Label htmlFor="overallRating">Overall Rating (1-5)</Label>
-            <Select value={formData.overallRating} onValueChange={(value) => handleInputChange('overallRating', value)}>
+            <Select
+              value={formData.overallRating}
+              onValueChange={(value) =>
+                handleInputChange('overallRating', value)
+              }
+            >
               <SelectTrigger>
                 <SelectValue placeholder="Select rating" />
               </SelectTrigger>
@@ -150,7 +181,10 @@ export default function AddEvaluationModal({ employeeId }: AddEvaluationModalPro
 
           <div>
             <Label htmlFor="status">Status</Label>
-            <Select value={formData.status} onValueChange={(value) => handleInputChange('status', value)}>
+            <Select
+              value={formData.status}
+              onValueChange={(value) => handleInputChange('status', value)}
+            >
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
@@ -174,11 +208,17 @@ export default function AddEvaluationModal({ employeeId }: AddEvaluationModalPro
           </div>
 
           <div className="flex justify-end space-x-2 pt-4">
-            <Button type="button" variant="outline" onClick={() => setIsOpen(false)}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIsOpen(false)}
+            >
               Cancel
             </Button>
             <Button type="submit" disabled={createEvaluationMutation.isPending}>
-              {createEvaluationMutation.isPending ? 'Creating...' : 'Create Evaluation'}
+              {createEvaluationMutation.isPending
+                ? 'Creating...'
+                : 'Create Evaluation'}
             </Button>
           </div>
         </form>

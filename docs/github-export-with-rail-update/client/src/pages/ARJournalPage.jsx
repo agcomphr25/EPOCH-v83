@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import ARJournal from '../components/ARJournal';
 import { format, subDays } from 'date-fns';
+
+import ARJournal from '../components/ARJournal';
 
 export default function ARJournalPage() {
   const [range, setRange] = useState(() => {
@@ -8,7 +9,7 @@ export default function ARJournalPage() {
     const thirtyDaysAgo = subDays(today, 30);
     return {
       dateFrom: format(thirtyDaysAgo, 'yyyy-MM-dd'),
-      dateTo: format(today, 'yyyy-MM-dd')
+      dateTo: format(today, 'yyyy-MM-dd'),
     };
   });
 

@@ -1,10 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
 import JsBarcode from 'jsbarcode';
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Download, Printer, Package, Tag } from 'lucide-react';
+
 import { AveryLabelPrint } from './AveryLabelPrint';
+
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 
 interface BarcodeDisplayProps {
   orderId: string;
@@ -20,7 +28,19 @@ interface BarcodeDisplayProps {
   paintOption?: string;
 }
 
-export function BarcodeDisplay({ orderId, barcode, showTitle = true, size = 'medium', customerName, orderDate, dueDate, status, actionLength, stockModel, paintOption }: BarcodeDisplayProps) {
+export function BarcodeDisplay({
+  orderId,
+  barcode,
+  showTitle = true,
+  size = 'medium',
+  customerName,
+  orderDate,
+  dueDate,
+  status,
+  actionLength,
+  stockModel,
+  paintOption,
+}: BarcodeDisplayProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [showAveryDialog, setShowAveryDialog] = useState(false);
 
@@ -38,21 +58,21 @@ export function BarcodeDisplay({ orderId, barcode, showTitle = true, size = 'med
   useEffect(() => {
     if (canvasRef.current && barcode) {
       const config = getSizeConfig();
-      
+
       try {
         JsBarcode(canvasRef.current, barcode, {
-          format: "CODE39",
+          format: 'CODE39',
           width: config.width,
           height: config.height,
           displayValue: true,
           fontSize: config.fontSize,
-          textAlign: "center",
-          textPosition: "bottom",
+          textAlign: 'center',
+          textPosition: 'bottom',
           textMargin: 2,
-          fontOptions: "",
-          font: "monospace",
-          background: "#ffffff",
-          lineColor: "#000000",
+          fontOptions: '',
+          font: 'monospace',
+          background: '#ffffff',
+          lineColor: '#000000',
           margin: 10,
           marginTop: undefined,
           marginBottom: undefined,
@@ -83,9 +103,9 @@ export function BarcodeDisplay({ orderId, barcode, showTitle = true, size = 'med
         const currentDate = new Date().toLocaleDateString('en-US', {
           month: '2-digit',
           day: '2-digit',
-          year: 'numeric'
+          year: 'numeric',
         });
-        
+
         printWindow.document.write(`
           <html>
             <head>
@@ -161,7 +181,10 @@ export function BarcodeDisplay({ orderId, barcode, showTitle = true, size = 'med
             <body>
               <div class="labels-container">
                 <!-- Print 6 copies for easy use -->
-                ${Array(6).fill().map((_, i) => `
+                ${Array(6)
+                  .fill()
+                  .map(
+                    (_, i) => `
                   <div class="avery-label">
                     <div class="label-content">
                       <div class="order-header">P1 ORDER</div>
@@ -172,14 +195,16 @@ export function BarcodeDisplay({ orderId, barcode, showTitle = true, size = 'med
                       </div>
                     </div>
                   </div>
-                `).join('')}
+                `
+                  )
+                  .join('')}
               </div>
             </body>
           </html>
         `);
         printWindow.document.close();
         printWindow.focus();
-        
+
         // Small delay to ensure content loads before printing
         setTimeout(() => {
           printWindow.print();
@@ -217,12 +242,12 @@ export function BarcodeDisplay({ orderId, barcode, showTitle = true, size = 'med
           <div className="bg-white p-4 rounded border">
             <canvas ref={canvasRef} />
           </div>
-          
+
           <div className="text-center text-sm text-gray-600">
             <p className="font-mono">{barcode}</p>
             <p className="mt-1">CODE39 Format</p>
           </div>
-          
+
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={handleDownload}>
               <Download className="h-4 w-4 mr-2" />
@@ -243,7 +268,7 @@ export function BarcodeDisplay({ orderId, barcode, showTitle = true, size = 'med
                 <DialogHeader>
                   <DialogTitle>Print Avery Labels</DialogTitle>
                 </DialogHeader>
-                <AveryLabelPrint 
+                <AveryLabelPrint
                   orderId={orderId}
                   barcode={barcode}
                   customerName={customerName}

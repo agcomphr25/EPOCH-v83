@@ -2,8 +2,9 @@
 
 import fs from 'fs';
 import path from 'path';
-import { Client } from 'pg';
 import { fileURLToPath } from 'url';
+
+import { Client } from 'pg';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -20,13 +21,13 @@ async function exportDatabase() {
   try {
     await client.connect();
     console.log('🔗 Connected to database');
-    
+
     let sqlExport = '';
-    
+
     // Add header
     sqlExport += `-- Database Export Created: ${new Date().toISOString()}\n`;
     sqlExport += `-- EPOCH v8 Manufacturing ERP System\n\n`;
-    
+
     // Get all table names
     const tablesQuery = `
       SELECT table_name 
@@ -35,16 +36,16 @@ async function exportDatabase() {
       AND table_type = 'BASE TABLE'
       ORDER BY table_name;
     `;
-    
+
     const tablesResult = await client.query(tablesQuery);
-    const tableNames = tablesResult.rows.map(row => row.table_name);
-    
+    const tableNames = tablesResult.rows.map((row) => row.table_name);
+
     console.log(`📊 Found ${tableNames.length} tables to export`);
-    
+
     // Export each table
     for (const tableName of tableNames) {
       console.log(`📁 Exporting table: ${tableName}`);
-      
+
       // Get table structure
       const createTableQuery = `
         SELECT 
@@ -61,7 +62,7 @@ async function exportDatabase() {
         ) a
         GROUP BY schemaname, tablename;
       `;
-      
+
       try {
         const createResult = await client.query(createTableQuery);
         if (createResult.rows.length > 0) {
@@ -69,44 +70,48 @@ async function exportDatabase() {
           sqlExport += `DROP TABLE IF EXISTS ${tableName} CASCADE;\n`;
           sqlExport += createResult.rows[0].create_statement + '\n';
         }
-        
+
         // Get table data
         const dataQuery = `SELECT * FROM ${tableName}`;
         const dataResult = await client.query(dataQuery);
-        
+
         if (dataResult.rows.length > 0) {
           const columns = Object.keys(dataResult.rows[0]);
           sqlExport += `\n-- Data for ${tableName}\n`;
-          
+
           for (const row of dataResult.rows) {
-            const values = columns.map(col => {
+            const values = columns.map((col) => {
               const value = row[col];
               if (value === null) return 'NULL';
-              if (typeof value === 'string') return `'${value.replace(/'/g, "''")}'`;
+              if (typeof value === 'string')
+                return `'${value.replace(/'/g, "''")}'`;
               if (value instanceof Date) return `'${value.toISOString()}'`;
-              if (typeof value === 'object') return `'${JSON.stringify(value).replace(/'/g, "''")}'`;
+              if (typeof value === 'object')
+                return `'${JSON.stringify(value).replace(/'/g, "''")}'`;
               return value;
             });
-            
+
             sqlExport += `INSERT INTO ${tableName} (${columns.join(', ')}) VALUES (${values.join(', ')});\n`;
           }
         }
-        
+
         sqlExport += '\n';
-        
       } catch (tableError) {
-        console.warn(`⚠️  Warning: Could not export table ${tableName}:`, tableError.message);
+        console.warn(
+          `⚠️  Warning: Could not export table ${tableName}:`,
+          tableError.message
+        );
         sqlExport += `-- Warning: Could not export table ${tableName}: ${tableError.message}\n\n`;
       }
     }
-    
+
     // Write to file
     fs.writeFileSync(exportPath, sqlExport);
-    
+
     // Get file size
     const stats = fs.statSync(exportPath);
     const fileSizeInMB = (stats.size / (1024 * 1024)).toFixed(2);
-    
+
     console.log('✅ Database export completed successfully!');
     console.log(`📁 Export saved to: ${exportFileName}`);
     console.log(`📊 Export size: ${fileSizeInMB} MB`);
@@ -114,9 +119,10 @@ async function exportDatabase() {
     console.log('📋 Instructions for external backup:');
     console.log('1. Download the file from Replit file explorer');
     console.log('2. Save it to your external hard drive');
-    console.log('3. To restore: Run the SQL file against a PostgreSQL database');
+    console.log(
+      '3. To restore: Run the SQL file against a PostgreSQL database'
+    );
     console.log('   Example: psql -d database_name -f ' + exportFileName);
-    
   } catch (error) {
     console.error('❌ Export failed:', error.message);
   } finally {

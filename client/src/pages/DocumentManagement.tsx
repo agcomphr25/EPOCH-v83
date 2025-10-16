@@ -1,20 +1,10 @@
 import React, { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { toast } from '@/hooks/use-toast';
-import { 
-  Upload, 
-  Search, 
-  FileText, 
-  Tag, 
+import {
+  Upload,
+  Search,
+  FileText,
+  Tag,
   FolderOpen,
   Download,
   Edit3,
@@ -24,8 +14,31 @@ import {
   Grid,
   List,
   Eye,
-  AlertCircle
+  AlertCircle,
 } from 'lucide-react';
+
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { toast } from '@/hooks/use-toast';
 
 interface Document {
   id: number;
@@ -68,16 +81,35 @@ interface DocumentCollection {
 }
 
 const documentTypes = [
-  'RFQ', 'QUOTE', 'PO', 'PACKING_SLIP', 'RISK_ASSESSMENT', 
-  'FORM_SUBMISSION', 'SPECIFICATION', 'CONTRACT', 'INVOICE', 'OTHER'
+  'RFQ',
+  'QUOTE',
+  'PO',
+  'PACKING_SLIP',
+  'RISK_ASSESSMENT',
+  'FORM_SUBMISSION',
+  'SPECIFICATION',
+  'CONTRACT',
+  'INVOICE',
+  'OTHER',
 ];
 
 const collectionTypes = [
-  'purchase_order', 'customer_project', 'quote_process', 'form_workflow', 'general'
+  'purchase_order',
+  'customer_project',
+  'quote_process',
+  'form_workflow',
+  'general',
 ];
 
 const tagCategories = [
-  'project', 'customer', 'po_number', 'status', 'document_type', 'priority', 'department', 'other'
+  'project',
+  'customer',
+  'po_number',
+  'status',
+  'document_type',
+  'priority',
+  'department',
+  'other',
 ];
 
 export default function DocumentManagement() {
@@ -88,30 +120,32 @@ export default function DocumentManagement() {
   const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
   const [isTagDialogOpen, setIsTagDialogOpen] = useState(false);
   const [isCollectionDialogOpen, setIsCollectionDialogOpen] = useState(false);
-  const [selectedDocument, setSelectedDocument] = useState<Document | null>(null);
+  const [selectedDocument, setSelectedDocument] = useState<Document | null>(
+    null
+  );
   const [uploadForm, setUploadForm] = useState({
     title: '',
     description: '',
-    documentType: ''
+    documentType: '',
   });
-  
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
 
   // API queries
   const { data: documents = [], isLoading: documentsLoading } = useQuery({
     queryKey: ['/api/documents'],
-    enabled: activeTab === 'documents'
+    enabled: activeTab === 'documents',
   });
 
   const { data: tags = [], isLoading: tagsLoading } = useQuery({
     queryKey: ['/api/documents/tags'],
-    enabled: activeTab === 'tags'
+    enabled: activeTab === 'tags',
   });
 
   const { data: collections = [], isLoading: collectionsLoading } = useQuery({
     queryKey: ['/api/documents/collections'],
-    enabled: activeTab === 'collections'
+    enabled: activeTab === 'collections',
   });
 
   // Upload mutation
@@ -121,28 +155,31 @@ export default function DocumentManagement() {
         file: formData.get('file'),
         title: formData.get('title'),
         description: formData.get('description'),
-        documentType: formData.get('documentType')
+        documentType: formData.get('documentType'),
       });
-      
+
       try {
         const response = await fetch('/api/documents/upload', {
           method: 'POST',
-          body: formData
+          body: formData,
         });
-        
+
         console.log('Upload response status:', response.status);
-        console.log('Upload response headers:', Object.fromEntries(response.headers.entries()));
-        
+        console.log(
+          'Upload response headers:',
+          Object.fromEntries(response.headers.entries())
+        );
+
         // Check if response is ok before trying to parse JSON
         if (!response.ok) {
           const errorText = await response.text();
           console.error('Upload error response:', errorText);
           throw new Error(`Upload failed: ${response.status} - ${errorText}`);
         }
-        
+
         const result = await response.json();
         console.log('Upload response data:', result);
-        
+
         return result;
       } catch (networkError) {
         console.error('Network error during upload:', networkError);
@@ -155,18 +192,18 @@ export default function DocumentManagement() {
       setIsUploadDialogOpen(false);
       setUploadForm({ title: '', description: '', documentType: '' });
       toast({
-        title: "Success",
-        description: "Document uploaded successfully"
+        title: 'Success',
+        description: 'Document uploaded successfully',
       });
     },
     onError: (error: any) => {
       console.error('Upload error:', error);
       toast({
-        title: "Error",
-        description: error.message || "Failed to upload document",
-        variant: "destructive"
+        title: 'Error',
+        description: error.message || 'Failed to upload document',
+        variant: 'destructive',
       });
-    }
+    },
   });
 
   // Tag creation mutation
@@ -175,7 +212,7 @@ export default function DocumentManagement() {
       const response = await fetch('/api/documents/tags', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(tagData)
+        body: JSON.stringify(tagData),
       });
       if (!response.ok) throw new Error('Failed to create tag');
       return response.json();
@@ -184,10 +221,10 @@ export default function DocumentManagement() {
       queryClient.invalidateQueries({ queryKey: ['/api/documents/tags'] });
       setIsTagDialogOpen(false);
       toast({
-        title: "Success",
-        description: "Tag created successfully"
+        title: 'Success',
+        description: 'Tag created successfully',
       });
-    }
+    },
   });
 
   // Collection creation mutation
@@ -196,44 +233,46 @@ export default function DocumentManagement() {
       const response = await fetch('/api/documents/collections', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(collectionData)
+        body: JSON.stringify(collectionData),
       });
       if (!response.ok) throw new Error('Failed to create collection');
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/documents/collections'] });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/documents/collections'],
+      });
       setIsCollectionDialogOpen(false);
       toast({
-        title: "Success",
-        description: "Collection created successfully"
+        title: 'Success',
+        description: 'Collection created successfully',
       });
-    }
+    },
   });
 
   const handleFileUpload = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
-    
+
     // Manually append the controlled form values
     formData.set('title', uploadForm.title);
     formData.set('description', uploadForm.description);
     formData.set('documentType', uploadForm.documentType);
-    
+
     if (!formData.get('file')) {
       toast({
-        title: "Error",
-        description: "Please select a file to upload",
-        variant: "destructive"
+        title: 'Error',
+        description: 'Please select a file to upload',
+        variant: 'destructive',
       });
       return;
     }
 
     if (!uploadForm.title || !uploadForm.documentType) {
       toast({
-        title: "Error",
-        description: "Please fill in all required fields",
-        variant: "destructive"
+        title: 'Error',
+        description: 'Please fill in all required fields',
+        variant: 'destructive',
       });
       return;
     }
@@ -248,7 +287,7 @@ export default function DocumentManagement() {
       name: formData.get('name'),
       category: formData.get('category'),
       color: formData.get('color'),
-      description: formData.get('description')
+      description: formData.get('description'),
     };
     createTagMutation.mutate(tagData);
   };
@@ -261,7 +300,7 @@ export default function DocumentManagement() {
       description: formData.get('description'),
       collectionType: formData.get('collectionType'),
       primaryIdentifier: formData.get('primaryIdentifier'),
-      status: 'active'
+      status: 'active',
     };
     createCollectionMutation.mutate(collectionData);
   };
@@ -270,7 +309,7 @@ export default function DocumentManagement() {
     try {
       const response = await fetch(`/api/documents/${document.id}/download`);
       if (!response.ok) throw new Error('Download failed');
-      
+
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const a = window.document.createElement('a');
@@ -282,9 +321,9 @@ export default function DocumentManagement() {
       window.URL.revokeObjectURL(url);
     } catch (error) {
       toast({
-        title: "Error",
-        description: "Failed to download document",
-        variant: "destructive"
+        title: 'Error',
+        description: 'Failed to download document',
+        variant: 'destructive',
       });
     }
   };
@@ -306,12 +345,16 @@ export default function DocumentManagement() {
   };
 
   const filteredDocuments = documents.filter((doc: Document) => {
-    const matchesSearch = searchQuery === '' || 
+    const matchesSearch =
+      searchQuery === '' ||
       doc.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       doc.description?.toLowerCase().includes(searchQuery.toLowerCase());
-    
-    const matchesType = selectedDocumentType === '' || selectedDocumentType === 'all' || doc.documentType === selectedDocumentType;
-    
+
+    const matchesType =
+      selectedDocumentType === '' ||
+      selectedDocumentType === 'all' ||
+      doc.documentType === selectedDocumentType;
+
     return matchesSearch && matchesType;
   });
 
@@ -325,9 +368,12 @@ export default function DocumentManagement() {
             Unified document repository with advanced tagging and organization
           </p>
         </div>
-        
+
         <div className="flex gap-2">
-          <Dialog open={isUploadDialogOpen} onOpenChange={setIsUploadDialogOpen}>
+          <Dialog
+            open={isUploadDialogOpen}
+            onOpenChange={setIsUploadDialogOpen}
+          >
             <DialogTrigger asChild>
               <Button>
                 <Upload className="w-4 h-4 mr-2" />
@@ -350,43 +396,66 @@ export default function DocumentManagement() {
                 </div>
                 <div>
                   <Label htmlFor="title">Title</Label>
-                  <Input 
-                    name="title" 
-                    placeholder="Document title" 
+                  <Input
+                    name="title"
+                    placeholder="Document title"
                     value={uploadForm.title}
-                    onChange={(e) => setUploadForm(prev => ({ ...prev, title: e.target.value }))}
-                    required 
+                    onChange={(e) =>
+                      setUploadForm((prev) => ({
+                        ...prev,
+                        title: e.target.value,
+                      }))
+                    }
+                    required
                   />
                 </div>
                 <div>
                   <Label htmlFor="description">Description</Label>
-                  <Textarea 
-                    name="description" 
-                    placeholder="Optional description" 
+                  <Textarea
+                    name="description"
+                    placeholder="Optional description"
                     value={uploadForm.description}
-                    onChange={(e) => setUploadForm(prev => ({ ...prev, description: e.target.value }))}
+                    onChange={(e) =>
+                      setUploadForm((prev) => ({
+                        ...prev,
+                        description: e.target.value,
+                      }))
+                    }
                   />
                 </div>
                 <div>
                   <Label htmlFor="documentType">Document Type</Label>
-                  <Select 
-                    name="documentType" 
+                  <Select
+                    name="documentType"
                     value={uploadForm.documentType}
-                    onValueChange={(value) => setUploadForm(prev => ({ ...prev, documentType: value }))}
+                    onValueChange={(value) =>
+                      setUploadForm((prev) => ({
+                        ...prev,
+                        documentType: value,
+                      }))
+                    }
                     required
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Select type" />
                     </SelectTrigger>
                     <SelectContent>
-                      {documentTypes.map(type => (
-                        <SelectItem key={type} value={type || 'OTHER'}>{type}</SelectItem>
+                      {documentTypes.map((type) => (
+                        <SelectItem key={type} value={type || 'OTHER'}>
+                          {type}
+                        </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
-                <Button type="submit" disabled={uploadMutation.isPending} className="w-full">
-                  {uploadMutation.isPending ? 'Uploading...' : 'Upload Document'}
+                <Button
+                  type="submit"
+                  disabled={uploadMutation.isPending}
+                  className="w-full"
+                >
+                  {uploadMutation.isPending
+                    ? 'Uploading...'
+                    : 'Upload Document'}
                 </Button>
               </form>
             </DialogContent>
@@ -424,14 +493,19 @@ export default function DocumentManagement() {
                 className="pl-10"
               />
             </div>
-            <Select value={selectedDocumentType} onValueChange={setSelectedDocumentType}>
+            <Select
+              value={selectedDocumentType}
+              onValueChange={setSelectedDocumentType}
+            >
               <SelectTrigger className="w-48">
                 <SelectValue placeholder="Filter by type" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Types</SelectItem>
-                {documentTypes.map(type => (
-                  <SelectItem key={type} value={type || 'OTHER'}>{type}</SelectItem>
+                {documentTypes.map((type) => (
+                  <SelectItem key={type} value={type || 'OTHER'}>
+                    {type}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -459,22 +533,39 @@ export default function DocumentManagement() {
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
             </div>
           ) : (
-            <div className={viewMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4' : 'space-y-2'}>
+            <div
+              className={
+                viewMode === 'grid'
+                  ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4'
+                  : 'space-y-2'
+              }
+            >
               {filteredDocuments.map((document: Document) => (
-                <Card key={document.id} className={viewMode === 'list' ? 'p-4' : ''}>
+                <Card
+                  key={document.id}
+                  className={viewMode === 'list' ? 'p-4' : ''}
+                >
                   <CardHeader className={viewMode === 'list' ? 'p-0 pb-2' : ''}>
                     <div className="flex justify-between items-start">
                       <div className="flex items-center gap-2">
-                        <span className="text-2xl">{getDocumentIcon(document.mimeType)}</span>
+                        <span className="text-2xl">
+                          {getDocumentIcon(document.mimeType)}
+                        </span>
                         <div>
-                          <CardTitle className="text-lg">{document.title}</CardTitle>
-                          <p className="text-sm text-muted-foreground">{document.originalFileName}</p>
+                          <CardTitle className="text-lg">
+                            {document.title}
+                          </CardTitle>
+                          <p className="text-sm text-muted-foreground">
+                            {document.originalFileName}
+                          </p>
                         </div>
                       </div>
                       <Badge variant="secondary">{document.documentType}</Badge>
                     </div>
                   </CardHeader>
-                  <CardContent className={viewMode === 'list' ? 'p-0 pt-2' : ''}>
+                  <CardContent
+                    className={viewMode === 'list' ? 'p-0 pt-2' : ''}
+                  >
                     {document.description && (
                       <p className="text-sm text-muted-foreground mb-3 line-clamp-2">
                         {document.description}
@@ -482,7 +573,9 @@ export default function DocumentManagement() {
                     )}
                     <div className="flex justify-between items-center text-xs text-muted-foreground mb-3">
                       <span>{formatFileSize(document.fileSize)}</span>
-                      <span>{new Date(document.uploadDate).toLocaleDateString()}</span>
+                      <span>
+                        {new Date(document.uploadDate).toLocaleDateString()}
+                      </span>
                     </div>
                     <div className="flex gap-2">
                       <Button
@@ -512,7 +605,9 @@ export default function DocumentManagement() {
             <div className="text-center py-12">
               <AlertCircle className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
               <p className="text-lg font-medium">No documents found</p>
-              <p className="text-muted-foreground">Try adjusting your search or upload a new document</p>
+              <p className="text-muted-foreground">
+                Try adjusting your search or upload a new document
+              </p>
             </div>
           )}
         </TabsContent>
@@ -544,8 +639,13 @@ export default function DocumentManagement() {
                         <SelectValue placeholder="Select category" />
                       </SelectTrigger>
                       <SelectContent>
-                        {tagCategories.map(category => (
-                          <SelectItem key={category} value={category || 'other'}>{category}</SelectItem>
+                        {tagCategories.map((category) => (
+                          <SelectItem
+                            key={category}
+                            value={category || 'other'}
+                          >
+                            {category}
+                          </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
@@ -556,9 +656,16 @@ export default function DocumentManagement() {
                   </div>
                   <div>
                     <Label htmlFor="description">Description</Label>
-                    <Textarea name="description" placeholder="Optional description" />
+                    <Textarea
+                      name="description"
+                      placeholder="Optional description"
+                    />
                   </div>
-                  <Button type="submit" disabled={createTagMutation.isPending} className="w-full">
+                  <Button
+                    type="submit"
+                    disabled={createTagMutation.isPending}
+                    className="w-full"
+                  >
                     {createTagMutation.isPending ? 'Creating...' : 'Create Tag'}
                   </Button>
                 </form>
@@ -576,7 +683,9 @@ export default function DocumentManagement() {
                 <Card key={tag.id}>
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between mb-2">
-                      <Badge style={{ backgroundColor: tag.color, color: 'white' }}>
+                      <Badge
+                        style={{ backgroundColor: tag.color, color: 'white' }}
+                      >
                         {tag.name}
                       </Badge>
                       {tag.category && (
@@ -586,7 +695,9 @@ export default function DocumentManagement() {
                       )}
                     </div>
                     {tag.description && (
-                      <p className="text-sm text-muted-foreground">{tag.description}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {tag.description}
+                      </p>
                     )}
                   </CardContent>
                 </Card>
@@ -599,7 +710,10 @@ export default function DocumentManagement() {
         <TabsContent value="collections" className="space-y-4">
           <div className="flex justify-between items-center">
             <h2 className="text-xl font-semibold">Document Collections</h2>
-            <Dialog open={isCollectionDialogOpen} onOpenChange={setIsCollectionDialogOpen}>
+            <Dialog
+              open={isCollectionDialogOpen}
+              onOpenChange={setIsCollectionDialogOpen}
+            >
               <DialogTrigger asChild>
                 <Button>
                   <Plus className="w-4 h-4 mr-2" />
@@ -622,24 +736,40 @@ export default function DocumentManagement() {
                         <SelectValue placeholder="Select type" />
                       </SelectTrigger>
                       <SelectContent>
-                        {collectionTypes.map(type => (
+                        {collectionTypes.map((type) => (
                           <SelectItem key={type} value={type || 'general'}>
-                            {type.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                            {type
+                              .replace('_', ' ')
+                              .replace(/\b\w/g, (l) => l.toUpperCase())}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
                   <div>
-                    <Label htmlFor="primaryIdentifier">Primary Identifier</Label>
-                    <Input name="primaryIdentifier" placeholder="PO number, project ID, etc." />
+                    <Label htmlFor="primaryIdentifier">
+                      Primary Identifier
+                    </Label>
+                    <Input
+                      name="primaryIdentifier"
+                      placeholder="PO number, project ID, etc."
+                    />
                   </div>
                   <div>
                     <Label htmlFor="description">Description</Label>
-                    <Textarea name="description" placeholder="Optional description" />
+                    <Textarea
+                      name="description"
+                      placeholder="Optional description"
+                    />
                   </div>
-                  <Button type="submit" disabled={createCollectionMutation.isPending} className="w-full">
-                    {createCollectionMutation.isPending ? 'Creating...' : 'Create Collection'}
+                  <Button
+                    type="submit"
+                    disabled={createCollectionMutation.isPending}
+                    className="w-full"
+                  >
+                    {createCollectionMutation.isPending
+                      ? 'Creating...'
+                      : 'Create Collection'}
                   </Button>
                 </form>
               </DialogContent>
@@ -656,8 +786,16 @@ export default function DocumentManagement() {
                 <Card key={collection.id}>
                   <CardHeader>
                     <div className="flex justify-between items-start">
-                      <CardTitle className="text-lg">{collection.name}</CardTitle>
-                      <Badge variant={collection.status === 'active' ? 'default' : 'secondary'}>
+                      <CardTitle className="text-lg">
+                        {collection.name}
+                      </CardTitle>
+                      <Badge
+                        variant={
+                          collection.status === 'active'
+                            ? 'default'
+                            : 'secondary'
+                        }
+                      >
                         {collection.status}
                       </Badge>
                     </div>
@@ -669,13 +807,19 @@ export default function DocumentManagement() {
                   </CardHeader>
                   <CardContent>
                     <p className="text-sm text-muted-foreground mb-3">
-                      Type: {collection.collectionType.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                      Type:{' '}
+                      {collection.collectionType
+                        .replace('_', ' ')
+                        .replace(/\b\w/g, (l) => l.toUpperCase())}
                     </p>
                     {collection.description && (
-                      <p className="text-sm line-clamp-2 mb-3">{collection.description}</p>
+                      <p className="text-sm line-clamp-2 mb-3">
+                        {collection.description}
+                      </p>
                     )}
                     <div className="text-xs text-muted-foreground">
-                      Created: {new Date(collection.createdAt).toLocaleDateString()}
+                      Created:{' '}
+                      {new Date(collection.createdAt).toLocaleDateString()}
                     </div>
                   </CardContent>
                 </Card>

@@ -1,11 +1,30 @@
 import React, { useState, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import {
+  Search,
+  AlertTriangle,
+  Package,
+  MapPin,
+  TrendingUp,
+  TrendingDown,
+  Edit,
+  RefreshCw,
+  Target,
+} from 'lucide-react';
+import { toast } from 'react-hot-toast';
+
 import { apiRequest } from '@/lib/queryClient';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
 import {
   Table,
   TableBody,
@@ -14,20 +33,14 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { 
-  Search, 
-  AlertTriangle, 
-  Package, 
-  MapPin, 
-  TrendingUp, 
-  TrendingDown,
-  Edit,
-  RefreshCw,
-  Target
-} from 'lucide-react';
-import { toast } from 'react-hot-toast';
 
 interface InventoryBalance {
   partId: string;
@@ -54,45 +67,66 @@ export default function InventoryBalancesCard() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedLocationFilter, setSelectedLocationFilter] = useState('');
   const [showLowStockOnly, setShowLowStockOnly] = useState(false);
-  const [editingBalance, setEditingBalance] = useState<InventoryBalance | null>(null);
+  const [editingBalance, setEditingBalance] = useState<InventoryBalance | null>(
+    null
+  );
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const queryClient = useQueryClient();
 
   // Fetch inventory balances
-  const { data: balances = [], isLoading, refetch } = useQuery<InventoryBalance[]>({
-    queryKey: ['/api/enhanced/inventory/balances', { 
-      partId: searchQuery, 
-      locationId: selectedLocationFilter, 
-      lowStock: showLowStockOnly 
-    }],
+  const {
+    data: balances = [],
+    isLoading,
+    refetch,
+  } = useQuery<InventoryBalance[]>({
+    queryKey: [
+      '/api/enhanced/inventory/balances',
+      {
+        partId: searchQuery,
+        locationId: selectedLocationFilter,
+        lowStock: showLowStockOnly,
+      },
+    ],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (searchQuery) params.append('partId', searchQuery);
-      if (selectedLocationFilter) params.append('locationId', selectedLocationFilter);
+      if (selectedLocationFilter)
+        params.append('locationId', selectedLocationFilter);
       if (showLowStockOnly) params.append('lowStock', 'true');
-      
-      const response = await apiRequest(`/api/enhanced/inventory/balances?${params.toString()}`);
+
+      const response = await apiRequest(
+        `/api/enhanced/inventory/balances?${params.toString()}`
+      );
       return response;
-    }
+    },
   });
 
   // Update balance mutation
   const updateBalanceMutation = useMutation({
-    mutationFn: async ({ partId, locationId, data }: { 
-      partId: string; 
-      locationId: string; 
-      data: UpdateBalanceData 
+    mutationFn: async ({
+      partId,
+      locationId,
+      data,
+    }: {
+      partId: string;
+      locationId: string;
+      data: UpdateBalanceData;
     }) => {
-      return await apiRequest(`/api/enhanced/inventory/balances/${partId}/${locationId}`, {
-        method: 'PUT',
-        body: JSON.stringify(data),
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
+      return await apiRequest(
+        `/api/enhanced/inventory/balances/${partId}/${locationId}`,
+        {
+          method: 'PUT',
+          body: JSON.stringify(data),
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
+      );
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/enhanced/inventory/balances'] });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/enhanced/inventory/balances'],
+      });
       toast.success('Inventory balance updated successfully');
       setIsEditDialogOpen(false);
       setEditingBalance(null);
@@ -107,51 +141,70 @@ export default function InventoryBalancesCard() {
     setIsEditDialogOpen(true);
   };
 
-  const handleUpdateBalance = useCallback((e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (!editingBalance) return;
+  const handleUpdateBalance = useCallback(
+    (e: React.FormEvent<HTMLFormElement>) => {
+      e.preventDefault();
+      if (!editingBalance) return;
 
-    const formData = new FormData(e.currentTarget);
-    const updateData: UpdateBalanceData = {
-      onHandQty: Number(formData.get('onHandQty')),
-      reorderPoint: Number(formData.get('reorderPoint')) || null,
-      maxStockLevel: Number(formData.get('maxStockLevel')) || null,
-    };
+      const formData = new FormData(e.currentTarget);
+      const updateData: UpdateBalanceData = {
+        onHandQty: Number(formData.get('onHandQty')),
+        reorderPoint: Number(formData.get('reorderPoint')) || null,
+        maxStockLevel: Number(formData.get('maxStockLevel')) || null,
+      };
 
-    updateBalanceMutation.mutate({
-      partId: editingBalance.partId,
-      locationId: editingBalance.locationId,
-      data: updateData
-    });
-  }, [editingBalance, updateBalanceMutation]);
+      updateBalanceMutation.mutate({
+        partId: editingBalance.partId,
+        locationId: editingBalance.locationId,
+        data: updateData,
+      });
+    },
+    [editingBalance, updateBalanceMutation]
+  );
 
   const getStockStatus = (balance: InventoryBalance) => {
     if (balance.availableQty <= 0) {
-      return { status: 'Out of Stock', color: 'bg-red-100 text-red-800', icon: AlertTriangle };
+      return {
+        status: 'Out of Stock',
+        color: 'bg-red-100 text-red-800',
+        icon: AlertTriangle,
+      };
     }
     if (balance.reorderPoint && balance.availableQty <= balance.reorderPoint) {
-      return { status: 'Low Stock', color: 'bg-yellow-100 text-yellow-800', icon: AlertTriangle };
+      return {
+        status: 'Low Stock',
+        color: 'bg-yellow-100 text-yellow-800',
+        icon: AlertTriangle,
+      };
     }
-    return { status: 'In Stock', color: 'bg-green-100 text-green-800', icon: Package };
+    return {
+      status: 'In Stock',
+      color: 'bg-green-100 text-green-800',
+      icon: Package,
+    };
   };
 
-  const filteredBalances = balances.filter(balance => {
-    const matchesSearch = !searchQuery || 
+  const filteredBalances = balances.filter((balance) => {
+    const matchesSearch =
+      !searchQuery ||
       balance.partId.toLowerCase().includes(searchQuery.toLowerCase()) ||
       balance.partName?.toLowerCase().includes(searchQuery.toLowerCase());
-    
-    const matchesLocation = !selectedLocationFilter || 
-      balance.locationId === selectedLocationFilter;
-    
-    const matchesLowStock = !showLowStockOnly || 
+
+    const matchesLocation =
+      !selectedLocationFilter || balance.locationId === selectedLocationFilter;
+
+    const matchesLowStock =
+      !showLowStockOnly ||
       (balance.reorderPoint && balance.availableQty <= balance.reorderPoint) ||
       balance.availableQty <= 0;
-    
+
     return matchesSearch && matchesLocation && matchesLowStock;
   });
 
   // Get unique locations for filter
-  const uniqueLocations = Array.from(new Set(balances.map(b => b.locationId)));
+  const uniqueLocations = Array.from(
+    new Set(balances.map((b) => b.locationId))
+  );
 
   return (
     <div className="space-y-6">
@@ -166,9 +219,9 @@ export default function InventoryBalancesCard() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button 
-            variant="outline" 
-            size="sm" 
+          <Button
+            variant="outline"
+            size="sm"
             onClick={() => refetch()}
             data-testid="button-refresh-balances"
           >
@@ -199,7 +252,7 @@ export default function InventoryBalancesCard() {
                 />
               </div>
             </div>
-            
+
             <div>
               <Label htmlFor="location">Location</Label>
               <select
@@ -210,8 +263,10 @@ export default function InventoryBalancesCard() {
                 data-testid="select-location-filter"
               >
                 <option value="">All Locations</option>
-                {uniqueLocations.map(location => (
-                  <option key={location} value={location}>{location}</option>
+                {uniqueLocations.map((location) => (
+                  <option key={location} value={location}>
+                    {location}
+                  </option>
                 ))}
               </select>
             </div>
@@ -239,7 +294,9 @@ export default function InventoryBalancesCard() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Total Parts</p>
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                  Total Parts
+                </p>
                 <p className="text-2xl font-bold text-gray-900 dark:text-white">
                   {filteredBalances.length}
                 </p>
@@ -253,11 +310,17 @@ export default function InventoryBalancesCard() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Low Stock Items</p>
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                  Low Stock Items
+                </p>
                 <p className="text-2xl font-bold text-yellow-600">
-                  {filteredBalances.filter(b => 
-                    (b.reorderPoint && b.availableQty <= b.reorderPoint) || b.availableQty <= 0
-                  ).length}
+                  {
+                    filteredBalances.filter(
+                      (b) =>
+                        (b.reorderPoint && b.availableQty <= b.reorderPoint) ||
+                        b.availableQty <= 0
+                    ).length
+                  }
                 </p>
               </div>
               <AlertTriangle className="h-8 w-8 text-yellow-500" />
@@ -269,9 +332,11 @@ export default function InventoryBalancesCard() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Out of Stock</p>
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                  Out of Stock
+                </p>
                 <p className="text-2xl font-bold text-red-600">
-                  {filteredBalances.filter(b => b.availableQty <= 0).length}
+                  {filteredBalances.filter((b) => b.availableQty <= 0).length}
                 </p>
               </div>
               <AlertTriangle className="h-8 w-8 text-red-500" />
@@ -283,7 +348,9 @@ export default function InventoryBalancesCard() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Locations</p>
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                  Locations
+                </p>
                 <p className="text-2xl font-bold text-green-600">
                   {uniqueLocations.length}
                 </p>
@@ -327,10 +394,14 @@ export default function InventoryBalancesCard() {
                 {filteredBalances.map((balance, index) => {
                   const stockStatus = getStockStatus(balance);
                   const IconComponent = stockStatus.icon;
-                  
+
                   return (
-                    <TableRow key={`${balance.partId}-${balance.locationId}-${index}`}>
-                      <TableCell className="font-medium">{balance.partId}</TableCell>
+                    <TableRow
+                      key={`${balance.partId}-${balance.locationId}-${index}`}
+                    >
+                      <TableCell className="font-medium">
+                        {balance.partId}
+                      </TableCell>
                       <TableCell>{balance.partName || 'Unknown'}</TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1">
@@ -372,7 +443,7 @@ export default function InventoryBalancesCard() {
               </TableBody>
             </Table>
           )}
-          
+
           {!isLoading && filteredBalances.length === 0 && (
             <div className="text-center py-8 text-gray-500">
               No inventory balances found matching your criteria.
@@ -399,7 +470,7 @@ export default function InventoryBalancesCard() {
                   <Input value={editingBalance.locationId} disabled />
                 </div>
               </div>
-              
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="onHandQty">On Hand Quantity *</Label>
@@ -442,19 +513,21 @@ export default function InventoryBalancesCard() {
               </div>
 
               <div className="flex justify-end gap-2 pt-4">
-                <Button 
-                  type="button" 
-                  variant="outline" 
+                <Button
+                  type="button"
+                  variant="outline"
                   onClick={() => setIsEditDialogOpen(false)}
                 >
                   Cancel
                 </Button>
-                <Button 
-                  type="submit" 
+                <Button
+                  type="submit"
                   disabled={updateBalanceMutation.isPending}
                   data-testid="button-save-balance"
                 >
-                  {updateBalanceMutation.isPending ? 'Saving...' : 'Save Changes'}
+                  {updateBalanceMutation.isPending
+                    ? 'Saving...'
+                    : 'Save Changes'}
                 </Button>
               </div>
             </form>

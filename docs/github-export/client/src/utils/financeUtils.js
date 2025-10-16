@@ -9,7 +9,7 @@ import axios from 'axios';
  */
 export async function fetchAPTransactions({ dateFrom, dateTo }) {
   const response = await axios.get(`/api/finance/ap`, {
-    params: { dateFrom, dateTo }
+    params: { dateFrom, dateTo },
   });
   return response.data;
 }
@@ -23,7 +23,7 @@ export async function fetchAPTransactions({ dateFrom, dateTo }) {
  */
 export async function fetchARTransactions({ dateFrom, dateTo }) {
   const response = await axios.get(`/api/finance/ar`, {
-    params: { dateFrom, dateTo }
+    params: { dateFrom, dateTo },
   });
   return response.data;
 }
@@ -37,7 +37,7 @@ export async function fetchARTransactions({ dateFrom, dateTo }) {
  */
 export async function fetchCOGS({ dateFrom, dateTo }) {
   const response = await axios.get(`/api/finance/cogs`, {
-    params: { dateFrom, dateTo }
+    params: { dateFrom, dateTo },
   });
   return response.data;
 }

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import COGSReport from '../components/COGSReport';
 import { format, subDays } from 'date-fns';
+
+import COGSReport from '../components/COGSReport';
 
 export default function COGSReportPage() {
   const [range, setRange] = useState(() => {
@@ -8,7 +9,7 @@ export default function COGSReportPage() {
     const thirtyDaysAgo = subDays(today, 30);
     return {
       dateFrom: format(thirtyDaysAgo, 'yyyy-MM-dd'),
-      dateTo: format(today, 'yyyy-MM-dd')
+      dateTo: format(today, 'yyyy-MM-dd'),
     };
   });
 

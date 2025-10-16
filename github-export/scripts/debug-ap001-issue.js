@@ -6,7 +6,7 @@ function generateP1OrderId(date, lastId) {
   console.log('=== Debug P1 Generator ===');
   console.log('Input date:', date.toISOString().split('T')[0]);
   console.log('Input lastId:', lastId);
-  
+
   // compute how many 14-day periods since BASE_DATE
   const delta = date.getTime() - BASE_DATE.getTime();
   const periodIndex = Math.floor(delta / PERIOD_MS);
@@ -16,9 +16,19 @@ function generateP1OrderId(date, lastId) {
   // determine two letters
   const firstIdx = Math.floor(periodIndex / 26) % 26;
   const secondIdx = periodIndex % 26;
-  console.log('First index:', firstIdx, '(letter:', String.fromCharCode(65 + firstIdx) + ')');
-  console.log('Second index:', secondIdx, '(letter:', String.fromCharCode(65 + secondIdx) + ')');
-  
+  console.log(
+    'First index:',
+    firstIdx,
+    '(letter:',
+    String.fromCharCode(65 + firstIdx) + ')'
+  );
+  console.log(
+    'Second index:',
+    secondIdx,
+    '(letter:',
+    String.fromCharCode(65 + secondIdx) + ')'
+  );
+
   const letter = (i) => String.fromCharCode(65 + i); // 0→A, 25→Z
   const prefix = `${letter(firstIdx)}${letter(secondIdx)}`;
   console.log('Calculated prefix:', prefix);
@@ -26,7 +36,7 @@ function generateP1OrderId(date, lastId) {
   // parse last numeric part if lastId matches pattern
   const match = /^[A-Z]{2}(\d{3})$/.exec(lastId);
   console.log('Regex match:', match);
-  
+
   let seq = 1;
   if (match && lastId.slice(0, 2) === prefix) {
     seq = parseInt(match[1], 10) + 1; // increment within same period-block
@@ -34,10 +44,15 @@ function generateP1OrderId(date, lastId) {
   } else {
     console.log('Different period or no match - using sequence 1');
     if (match) {
-      console.log('LastId prefix:', lastId.slice(0, 2), 'vs calculated prefix:', prefix);
+      console.log(
+        'LastId prefix:',
+        lastId.slice(0, 2),
+        'vs calculated prefix:',
+        prefix
+      );
     }
   }
-  
+
   // reset to 1 when letters change or lastId invalid
   const num = String(seq).padStart(3, '0');
   const result = prefix + num;
@@ -56,14 +71,29 @@ console.log('RESULT:', result);
 console.log('\n=== AP Period Analysis ===');
 // AP = A(0) + P(15) = period 15
 const apPeriodIndex = 15;
-const apPeriodStartDate = new Date(BASE_DATE.getTime() + apPeriodIndex * PERIOD_MS);
-console.log('AP period (index 15) starts on:', apPeriodStartDate.toISOString().split('T')[0]);
-console.log('AP period ends on:', new Date(apPeriodStartDate.getTime() + PERIOD_MS - 1).toISOString().split('T')[0]);
+const apPeriodStartDate = new Date(
+  BASE_DATE.getTime() + apPeriodIndex * PERIOD_MS
+);
+console.log(
+  'AP period (index 15) starts on:',
+  apPeriodStartDate.toISOString().split('T')[0]
+);
+console.log(
+  'AP period ends on:',
+  new Date(apPeriodStartDate.getTime() + PERIOD_MS - 1)
+    .toISOString()
+    .split('T')[0]
+);
 
 // Check current period for July 11, 2025
 console.log('\n=== Current Period Analysis ===');
 const currentDelta = testDate.getTime() - BASE_DATE.getTime();
 const currentPeriodIndex = Math.floor(currentDelta / PERIOD_MS);
 console.log('July 11, 2025 is in period:', currentPeriodIndex);
-const currentPeriodStart = new Date(BASE_DATE.getTime() + currentPeriodIndex * PERIOD_MS);
-console.log('Current period starts on:', currentPeriodStart.toISOString().split('T')[0]);
+const currentPeriodStart = new Date(
+  BASE_DATE.getTime() + currentPeriodIndex * PERIOD_MS
+);
+console.log(
+  'Current period starts on:',
+  currentPeriodStart.toISOString().split('T')[0]
+);

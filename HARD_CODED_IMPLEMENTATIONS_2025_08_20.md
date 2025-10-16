@@ -1,6 +1,7 @@
 # Hard-Coded Implementations - August 20, 2025
 
 ## Critical Notice
+
 **ALL FUNCTIONALITY LISTED BELOW IS HARD-CODED AND MUST NOT BE LOST**
 
 This document serves as a permanent record of features implemented and preserved on August 20, 2025. These implementations are critical to the system's operation and must be maintained in all future updates.
@@ -8,12 +9,14 @@ This document serves as a permanent record of features implemented and preserved
 ## 1. Employee Management Access (CRITICAL)
 
 ### Implementation Details
+
 - **File Modified**: `server/src/routes/employees.ts`
 - **Route Added**: `/api/employees` (GET) - NO AUTHENTICATION REQUIRED in development
 - **Frontend Route**: `/employee` properly configured in `client/src/App.tsx`
 - **Purpose**: Production floor access to employee data without authentication barriers
 
 ### Hard-Coded Logic
+
 ```typescript
 // Line 20-30 in server/src/routes/employees.ts
 router.get('/', async (req: Request, res: Response) => {
@@ -24,12 +27,13 @@ router.get('/', async (req: Request, res: Response) => {
     res.json(employees);
   } catch (error) {
     console.error('Get employees error:', error);
-    res.status(500).json({ error: "Failed to fetch employees" });
+    res.status(500).json({ error: 'Failed to fetch employees' });
   }
 });
 ```
 
 ### Verification
+
 - API Endpoint: `GET /api/employees` returns 5 employees without authentication
 - Frontend: Employee Dashboard accessible via `/employee` route
 - Console logs confirm functionality: "🔧 EMPLOYEES ROUTE CALLED (development mode - no auth)"
@@ -37,35 +41,45 @@ router.get('/', async (req: Request, res: Response) => {
 ## 2. STACITEST Dashboard Navigation Cards (CRITICAL)
 
 ### Implementation Details
+
 - **File Modified**: `client/src/pages/STACITestDashboard.tsx`
 - **Lines Added**: 26-77 (Quick Navigation Cards section)
 - **Purpose**: Rapid access to core ERP functions from centralized dashboard
 
 ### Hard-Coded Components
+
 ```tsx
-{/* Quick Navigation Cards */}
+{
+  /* Quick Navigation Cards */
+}
 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 mb-6">
   <Link href="/order-entry">
     <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-blue-200">
       <CardContent className="p-4 text-center">
         <PlusCircle className="w-8 h-8 text-blue-600 mx-auto mb-3" />
-        <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Order Entry</h3>
-        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Create new orders</p>
+        <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+          Order Entry
+        </h3>
+        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+          Create new orders
+        </p>
       </CardContent>
     </Card>
   </Link>
   // ... 4 additional cards with same structure
-</div>
+</div>;
 ```
 
 ### Navigation Targets (HARD-CODED)
+
 1. **Order Entry** (Blue) → `/order-entry`
-2. **All Orders** (Green) → `/all-orders`  
+2. **All Orders** (Green) → `/all-orders`
 3. **Draft Orders** (Yellow) → `/draft-orders`
 4. **Layup/Plugging** (Purple) → `/department-queue/layup-plugging`
 5. **Customer Management** (Orange) → `/customer-management`
 
 ### Styling Features
+
 - Responsive grid: 1-5 columns based on screen size
 - Color-coded hover effects with border transitions
 - Consistent icon usage (PlusCircle, FileText, Settings, Wrench, Users)
@@ -74,11 +88,13 @@ router.get('/', async (req: Request, res: Response) => {
 ## 3. Route Configuration (CRITICAL)
 
 ### Employee Route Preservation
-- **File**: `client/src/App.tsx` 
+
+- **File**: `client/src/App.tsx`
 - **Line 195**: `<Route path="/employee" component={EmployeeDashboard} />`
 - **Status**: CONFIRMED WORKING - must not be removed
 
 ### STACITEST Dashboard Route
+
 - **File**: `client/src/App.tsx`
 - **Line 208**: `<Route path="/stacitest-dashboard" component={STACITestDashboard} />`
 - **Status**: CONFIRMED WORKING with navigation cards
@@ -86,12 +102,14 @@ router.get('/', async (req: Request, res: Response) => {
 ## 4. Authentication Bypass (CRITICAL)
 
 ### Development Mode Configuration
+
 - **Purpose**: Allow production floor access without login credentials
 - **Implementation**: Main employees route (`GET /`) bypasses all authentication middleware
 - **Scope**: Only affects employee listing endpoint, all other employee routes maintain authentication
 - **Environment**: Development mode only
 
 ### Security Notes
+
 - Individual employee details still require authentication (`GET /:id`)
 - Create/Update/Delete operations still require admin role
 - Only the employee listing is publicly accessible for production floor use
@@ -99,13 +117,15 @@ router.get('/', async (req: Request, res: Response) => {
 ## 5. Alt Ship To Address Functionality (PREVIOUS IMPLEMENTATION)
 
 ### Status: PRESERVED
+
 - Database integration complete
 - UI implementation active
 - Shipping address alternates functional
 
 ## 6. Verification Status Sync (PREVIOUS IMPLEMENTATION)
 
-### Status: PRESERVED  
+### Status: PRESERVED
+
 - Order AG107 and AG168 verification highlighting resolved
 - Sync between order_drafts and all_orders tables maintained
 - Manual SQL fixes applied and preserved
@@ -113,6 +133,7 @@ router.get('/', async (req: Request, res: Response) => {
 ## 7. Department Transfer System (PREVIOUS IMPLEMENTATION)
 
 ### Status: PRESERVED
+
 - Order department transfers functional (EH036 to Layup/Plugging confirmed)
 - AG309 in Gunsmith department confirmed
 - Transfer workflows maintained
@@ -120,6 +141,7 @@ router.get('/', async (req: Request, res: Response) => {
 ## Technical Specifications
 
 ### Dependencies Added
+
 ```typescript
 // STACITestDashboard.tsx imports
 import { PlusCircle, FileText, Users, Settings, Wrench } from 'lucide-react';
@@ -127,9 +149,10 @@ import { Link } from 'wouter';
 ```
 
 ### File Structure Integrity
+
 ```
 server/src/routes/employees.ts - AUTHENTICATION BYPASS IMPLEMENTED
-client/src/pages/STACITestDashboard.tsx - NAVIGATION CARDS IMPLEMENTED  
+client/src/pages/STACITestDashboard.tsx - NAVIGATION CARDS IMPLEMENTED
 client/src/App.tsx - ROUTES CONFIRMED
 replit.md - DOCUMENTATION UPDATED
 ```
@@ -137,6 +160,7 @@ replit.md - DOCUMENTATION UPDATED
 ## User Preferences Preserved
 
 ### Hard-Coded Preferences from replit.md
+
 - Default shipping charge: 36.95
 - Simple, everyday language for communication
 - Critical requirement: All completed functionality hard-coded to prevent data loss
@@ -146,12 +170,14 @@ replit.md - DOCUMENTATION UPDATED
 ## Validation Commands
 
 ### API Testing
+
 ```bash
 curl -s "http://localhost:5000/api/employees" | jq 'length'
 # Expected: 5 (number of employees)
 ```
 
 ### Route Verification
+
 - `/employee` → Employee Dashboard (accessible without auth)
 - `/stacitest-dashboard` → Dashboard with 5 navigation cards
 - Navigation cards link to correct routes with proper styling
@@ -159,11 +185,13 @@ curl -s "http://localhost:5000/api/employees" | jq 'length'
 ## Maintenance Instructions
 
 ### DO NOT MODIFY
+
 1. The authentication bypass in `server/src/routes/employees.ts` line 20-30
 2. The navigation cards section in `client/src/pages/STACITestDashboard.tsx` lines 26-77
 3. The route definitions in `client/src/App.tsx` for `/employee` and `/stacitest-dashboard`
 
 ### SAFE TO MODIFY
+
 1. Styling of navigation cards (colors, sizes) - but preserve functionality
 2. Additional employee routes with authentication
 3. Additional dashboard content - but preserve navigation cards section
@@ -171,6 +199,7 @@ curl -s "http://localhost:5000/api/employees" | jq 'length'
 ## Deployment Notes
 
 All implementations are:
+
 - ✅ Type-safe (no LSP errors remaining)
 - ✅ Tested and verified working
 - ✅ Hard-coded with proper error handling
@@ -180,11 +209,13 @@ All implementations are:
 ## 10. Shipping QC Checkboxes for Specific Items (August 20, 2025 PM)
 
 ### Implementation Details
+
 - **File Modified**: `client/src/pages/QCShippingQueuePage.tsx`
 - **Feature Added**: Individual checkboxes on Shipping QC cards for specific quality control items
 - **Purpose**: Enable QC verification for specific bottom metals and paid options
 
 ### Hard-Coded Logic
+
 ```typescript
 // Helper function to check for specific bottom metals (lines 131-136)
 const hasSpecificBottomMetal = (order: any) => {
@@ -196,7 +227,7 @@ const hasSpecificBottomMetal = (order: any) => {
 // Helper function to detect paid options (lines 138-182)
 const getPaidOtherOptions = (order: any) => {
   const paidOptions: string[] = [];
-  
+
   // Check other_options array for shirt, hat, touch-up paint
   if (order.features?.other_options && Array.isArray(order.features.other_options)) {
     order.features.other_options.forEach((option: string) => {
@@ -221,7 +252,7 @@ const getPaidOtherOptions = (order: any) => {
       </label>
     </div>
   )}
-  
+
   {/* Paid Other Options Checkboxes */}
   {getPaidOtherOptions(order).map((option, index) => (
     <div key={index} className="flex items-center space-x-2">
@@ -235,6 +266,7 @@ const getPaidOtherOptions = (order: any) => {
 ```
 
 ### Key Features
+
 1. **Specific Bottom Metal Detection**: Automatically detects orders with bottom metals requiring QC verification (AG-M5-SA, AG-M5-LA, AG-M5-LA-CIP, AG-BDL-SA, AG-BDL-LA)
 2. **Paid Options Detection**: Identifies shirt, hat, and touch-up paint options from order features
 3. **Color-Coded Labels**: Blue labels for bottom metals, green labels for paid options
@@ -242,12 +274,14 @@ const getPaidOtherOptions = (order: any) => {
 5. **Smart Detection**: Checks both other_options arrays and feature pricing for paid items
 
 ### User Experience
+
 - **Bottom Metal Orders**: Display blue checkbox with specific bottom metal model number
 - **Paid Options**: Display green checkboxes for each paid option (shirt, hat, touch-up paint)
 - **Conditional Display**: Checkboxes only appear for orders containing the specified items
 - **Clear Labeling**: Each checkbox clearly indicates what is being verified
 
 ### Status
+
 - ✅ Feature implemented and working
 - ✅ TypeScript errors resolved
 - ✅ Helper functions created with proper typing
@@ -257,25 +291,28 @@ const getPaidOtherOptions = (order: any) => {
 ## Emergency Recovery
 
 If functionality is lost, restore from this documentation:
+
 1. Copy authentication bypass code from Section 1
-2. Copy navigation cards code from Section 2  
+2. Copy navigation cards code from Section 2
 3. Verify route configurations match Section 3
 4. Test with validation commands from Section 7
 
 ## 8. Layup Scheduler Drag-and-Drop Fix (CRITICAL - August 20, 2025 PM)
 
 ### Implementation Details
+
 - **File Modified**: `client/src/components/LayupScheduler.tsx`
 - **Issue Fixed**: Disappearing order cards during drag-and-drop operations
 - **Solution**: Auto-save functionality with proper data validation and locked/unlocked modes
 
 ### Hard-Coded Logic
+
 ```typescript
 // Fixed drag-and-drop parsing (lines 649-720)
 const handleDragEnd = async (event: DragEndEvent) => {
   const dropTargetId = over.id as string;
   const [moldId, date] = dropTargetId.split('|'); // Fixed: moldId|date instead of date|moldId
-  
+
   // Auto-save to prevent disappearing cards
   await apiRequest('/api/layup-schedule', {
     method: 'POST',
@@ -310,6 +347,7 @@ const scheduledOrderIds = allScheduledOrders.map(order => order.orderId);
 ```
 
 ### Key Features
+
 1. **Auto-Save**: Every drag operation immediately saves to backend
 2. **Visual Feedback**: Locked 🔒 vs Editing 📝 badges
 3. **Cell Visibility**: Empty cells hidden when locked, shown when unlocked
@@ -318,6 +356,7 @@ const scheduledOrderIds = allScheduledOrders.map(order => order.orderId);
 6. **Full Schedule Scope**: Lock and push affects ALL scheduled orders, not just visible week
 
 ### User Experience
+
 - **Unlocked Mode**: Shows all available mold cells for drag-and-drop scheduling
 - **Locked Mode**: Hides empty cells, shows only assigned orders, disables dragging
 - **Clear Visual Indicators**: Users immediately know if schedule is editable or locked
@@ -325,11 +364,13 @@ const scheduledOrderIds = allScheduledOrders.map(order => order.orderId);
 ## 9. Week-Specific Locking System (CRITICAL - August 20, 2025 PM)
 
 ### Implementation Details
+
 - **File Modified**: `client/src/components/LayupScheduler.tsx`
 - **Issue Fixed**: Global lock affecting all weeks instead of individual week locking
 - **Solution**: Per-week lock state with individual week controls and visual indicators
 
 ### Hard-Coded Logic
+
 ```typescript
 // Week-specific lock state (lines 630-633)
 const [lockedWeeks, setLockedWeeks] = useState<{[weekKey: string]: boolean}>({
@@ -359,6 +400,7 @@ className={`${dateWeekLocked ? 'border-red-300 bg-red-50' : 'border-green-300 bg
 ```
 
 ### Key Features
+
 1. **Individual Week Control**: Each week can be locked/unlocked independently
 2. **Drag Prevention**: Cannot drag orders TO locked weeks
 3. **Visual Indicators**: Red headers for locked weeks, green for unlocked
@@ -366,6 +408,7 @@ className={`${dateWeekLocked ? 'border-red-300 bg-red-50' : 'border-green-300 bg
 5. **Status Preservation**: Week 8/18-8/22 locked, 8/25-8/29 unlocked as specified
 
 ### User Experience
+
 - **Locked Weeks**: Red date headers with 🔒 LOCKED indicators, cannot receive dropped orders
 - **Unlocked Weeks**: Green headers, allow drag-and-drop scheduling
 - **Week-Specific Buttons**: Show "Lock Week (MM/dd)" or "Unlock Week (MM/dd)"

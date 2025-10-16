@@ -1,5 +1,5 @@
-
 import React from 'react';
+
 import P2LayupScheduler from '@/components/P2LayupScheduler';
 
 export default function P2LayupSchedulerPage() {

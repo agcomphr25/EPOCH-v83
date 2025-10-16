@@ -1,16 +1,23 @@
 import { useState, useEffect, useRef } from 'react';
-import { useQuery } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Checkbox } from "@/components/ui/checkbox";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
-import { Save, Printer, Download, FileText } from "lucide-react";
+import { useQuery } from '@tanstack/react-query';
+import { Save, Printer, Download, FileText } from 'lucide-react';
 import SignatureCanvas from 'react-signature-canvas';
+
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Separator } from '@/components/ui/separator';
 
 // SmartyStreets address autocomplete hook
 const useSmartyStreetsAutocomplete = (query: string) => {
@@ -29,7 +36,7 @@ const useSmartyStreetsAutocomplete = (query: string) => {
         const response = await fetch('/api/address/autocomplete', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ query })
+          body: JSON.stringify({ query }),
         });
         const data = await response.json();
         setSuggestions(data.suggestions || []);
@@ -54,18 +61,20 @@ export default function PurchaseReviewChecklist() {
   // Fetch P2 customers for dropdown including ship-to information
   const { data: p2Customers = [] } = useQuery({
     queryKey: ['/api/p2/customers'],
-    select: (data: any[]) => data.map(customer => ({
-      id: customer.id,
-      customerId: customer.customerId,
-      customerName: customer.customerName,
-      shipToAddress: customer.shipToAddress
-    }))
+    select: (data: any[]) =>
+      data.map((customer) => ({
+        id: customer.id,
+        customerId: customer.customerId,
+        customerName: customer.customerName,
+        shipToAddress: customer.shipToAddress,
+      })),
   });
 
   // Address autocomplete state
   const [addressQuery, setAddressQuery] = useState('');
   const [showAddressSuggestions, setShowAddressSuggestions] = useState(false);
-  const { suggestions: addressSuggestions } = useSmartyStreetsAutocomplete(addressQuery);
+  const { suggestions: addressSuggestions } =
+    useSmartyStreetsAutocomplete(addressQuery);
 
   const [formData, setFormData] = useState({
     // Section A - Customer Information - moved customerId to top
@@ -99,17 +108,17 @@ export default function PurchaseReviewChecklist() {
     additionalCost: '0',
     amount: '0', // Will be calculated
     disbursementSchedule: 'As Delivered', // Set default
-    
+
     // Level 1 Assembly
     level1ItemNumber: '',
     level1PartsKits: '',
     level1Exhibits: '',
-    
+
     // Level 2 CNC
     level2ItemNumber: '',
     level2PartsKits: '',
     level2Programming: '',
-    
+
     // Level 3 Manufacturing
     level3ItemNumber: '',
     level3PartsKits: '',
@@ -149,13 +158,13 @@ export default function PurchaseReviewChecklist() {
     certifications: [] as string[],
     retentionRequirements: '',
     dpasRating: '',
-    
+
     // Reviewers
     reviewerName: '',
     reviewerTitle: '',
     acceptance: '',
     signature: '',
-    date: ''
+    date: '',
   });
 
   // Calculate amount when quantity, unit price, tooling, or additional cost changes
@@ -164,33 +173,38 @@ export default function PurchaseReviewChecklist() {
     const unitPrice = parseFloat(formData.unitPrice) || 0;
     const tooling = parseFloat(formData.toolingPrice) || 0;
     const additional = parseFloat(formData.additionalCost) || 0;
-    
-    const calculatedAmount = (quantity * unitPrice) + tooling + additional;
-    
-    setFormData(prev => ({
+
+    const calculatedAmount = quantity * unitPrice + tooling + additional;
+
+    setFormData((prev) => ({
       ...prev,
-      amount: calculatedAmount.toLocaleString('en-US', { 
-        minimumFractionDigits: 2, 
-        maximumFractionDigits: 2 
-      })
+      amount: calculatedAmount.toLocaleString('en-US', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }),
     }));
-  }, [formData.quantityRequested, formData.unitPrice, formData.toolingPrice, formData.additionalCost]);
+  }, [
+    formData.quantityRequested,
+    formData.unitPrice,
+    formData.toolingPrice,
+    formData.additionalCost,
+  ]);
 
   // Auto-set First Article fields to N/A when quantity is 0
   useEffect(() => {
     const quantity = parseFloat(formData.firstArticleQuantity) || 0;
     if (quantity === 0) {
-      setFormData(prev => ({
+      setFormData((prev) => ({
         ...prev,
         firstArticleDueDate: 'N/A',
         inspectionLocation: 'N/A',
-        acceptanceTimeframe: 'N/A'
+        acceptanceTimeframe: 'N/A',
       }));
     }
   }, [formData.firstArticleQuantity]);
 
   const handleInputChange = (field: string, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
   const handleAddressChange = (value: string) => {
@@ -201,17 +215,22 @@ export default function PurchaseReviewChecklist() {
 
   const selectAddressSuggestion = (suggestion: any) => {
     console.log('Selected address suggestion:', suggestion);
-    
+
     // Handle different possible data structures from SmartyStreets API
-    const streetLine = suggestion.streetLine || suggestion.street_line || suggestion.street || '';
+    const streetLine =
+      suggestion.streetLine ||
+      suggestion.street_line ||
+      suggestion.street ||
+      '';
     const city = suggestion.city || '';
     const state = suggestion.state || '';
     const zipcode = suggestion.zipCode || suggestion.zipcode || '';
-    
-    const fullAddress = streetLine && city && state ? 
-      `${streetLine}, ${city}, ${state}${zipcode ? ' ' + zipcode : ''}` :
-      (suggestion.text || streetLine);
-      
+
+    const fullAddress =
+      streetLine && city && state
+        ? `${streetLine}, ${city}, ${state}${zipcode ? ' ' + zipcode : ''}`
+        : suggestion.text || streetLine;
+
     handleInputChange('address', fullAddress);
     setAddressQuery(fullAddress);
     setShowAddressSuggestions(false);
@@ -222,26 +241,31 @@ export default function PurchaseReviewChecklist() {
       // Handle certifications array
       return;
     }
-    setFormData(prev => ({ ...prev, [field]: checked ? 'Y' : 'N' }));
+    setFormData((prev) => ({ ...prev, [field]: checked ? 'Y' : 'N' }));
   };
 
-  const handleCertificationChange = (certification: string, checked: boolean) => {
-    setFormData(prev => ({
+  const handleCertificationChange = (
+    certification: string,
+    checked: boolean
+  ) => {
+    setFormData((prev) => ({
       ...prev,
-      certifications: checked 
+      certifications: checked
         ? [...prev.certifications, certification]
-        : prev.certifications.filter(c => c !== certification)
+        : prev.certifications.filter((c) => c !== certification),
     }));
   };
 
   // Handle customer selection to populate ship-to information
   const handleCustomerChange = (customerId: string) => {
-    const selectedCustomer = p2Customers.find(c => c.customerId === customerId);
-    setFormData(prev => ({
+    const selectedCustomer = p2Customers.find(
+      (c) => c.customerId === customerId
+    );
+    setFormData((prev) => ({
       ...prev,
       customerId,
       customerName: selectedCustomer?.customerName || '',
-      shipToInformation: selectedCustomer?.shipToAddress || ''
+      shipToInformation: selectedCustomer?.shipToAddress || '',
     }));
   };
 
@@ -256,19 +280,19 @@ export default function PurchaseReviewChecklist() {
   const saveSignature = () => {
     if (signatureCanvasRef.current) {
       const signatureData = signatureCanvasRef.current.toDataURL();
-      setFormData(prev => ({ ...prev, signature: signatureData }));
+      setFormData((prev) => ({ ...prev, signature: signatureData }));
     }
   };
 
   const handleSave = async () => {
     try {
       console.log('Saving form data:', formData);
-      
+
       const checklistData = {
         customerId: formData.customerId || null,
         formData: formData,
         createdBy: 'current_user', // Replace with actual user context
-        status: 'DRAFT' as const
+        status: 'DRAFT' as const,
       };
 
       const response = await fetch('/api/purchase-review-checklists', {
@@ -276,7 +300,7 @@ export default function PurchaseReviewChecklist() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(checklistData)
+        body: JSON.stringify(checklistData),
       });
 
       if (!response.ok) {
@@ -285,7 +309,7 @@ export default function PurchaseReviewChecklist() {
 
       const result = await response.json();
       console.log('Checklist saved successfully:', result);
-      
+
       // Show success message
       alert('Purchase Review Checklist saved successfully!');
     } catch (error) {
@@ -313,17 +337,25 @@ export default function PurchaseReviewChecklist() {
         <div className="mb-6 text-center">
           <div className="mb-4">
             <h1 className="text-2xl font-bold text-gray-900">LLC</h1>
-            <p className="text-sm text-gray-600">Responsive • Reliable • Supportive</p>
+            <p className="text-sm text-gray-600">
+              Responsive • Reliable • Supportive
+            </p>
           </div>
-          <h2 className="text-xl font-semibold text-gray-800 mb-4">Purchase Review Checklist</h2>
-          
+          <h2 className="text-xl font-semibold text-gray-800 mb-4">
+            Purchase Review Checklist
+          </h2>
+
           {/* Action Buttons */}
           <div className="flex justify-center gap-3 mb-6">
             <Button onClick={handleSave} className="flex items-center gap-2">
               <Save className="h-4 w-4" />
               Save Form
             </Button>
-            <Button onClick={handlePrint} variant="outline" className="flex items-center gap-2">
+            <Button
+              onClick={handlePrint}
+              variant="outline"
+              className="flex items-center gap-2"
+            >
               <Printer className="h-4 w-4" />
               Print
             </Button>
@@ -342,12 +374,15 @@ export default function PurchaseReviewChecklist() {
           <CardContent>
             <div className="space-y-2">
               <Label htmlFor="customerId">Select Customer</Label>
-              <Select value={formData.customerId} onValueChange={handleCustomerChange}>
+              <Select
+                value={formData.customerId}
+                onValueChange={handleCustomerChange}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Select a customer" />
                 </SelectTrigger>
                 <SelectContent>
-                  {p2Customers.map(customer => (
+                  {p2Customers.map((customer) => (
                     <SelectItem key={customer.id} value={customer.customerId}>
                       {customer.customerName} ({customer.customerId})
                     </SelectItem>
@@ -367,7 +402,12 @@ export default function PurchaseReviewChecklist() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>1. Is this an existing customer?</Label>
-                <RadioGroup value={formData.existingCustomer} onValueChange={(value) => handleInputChange('existingCustomer', value)}>
+                <RadioGroup
+                  value={formData.existingCustomer}
+                  onValueChange={(value) =>
+                    handleInputChange('existingCustomer', value)
+                  }
+                >
                   <div className="flex items-center space-x-2">
                     <RadioGroupItem value="Y" id="existing-y" />
                     <Label htmlFor="existing-y">Yes</Label>
@@ -380,8 +420,16 @@ export default function PurchaseReviewChecklist() {
               </div>
 
               <div className="space-y-2">
-                <Label>2. Are there any significant changes to products/services requested or new products?</Label>
-                <RadioGroup value={formData.significantChanges} onValueChange={(value) => handleInputChange('significantChanges', value)}>
+                <Label>
+                  2. Are there any significant changes to products/services
+                  requested or new products?
+                </Label>
+                <RadioGroup
+                  value={formData.significantChanges}
+                  onValueChange={(value) =>
+                    handleInputChange('significantChanges', value)
+                  }
+                >
                   <div className="flex items-center space-x-2">
                     <RadioGroupItem value="Y" id="changes-y" />
                     <Label htmlFor="changes-y">Yes</Label>
@@ -391,35 +439,43 @@ export default function PurchaseReviewChecklist() {
                     <Label htmlFor="changes-n">No</Label>
                   </div>
                 </RadioGroup>
-                <p className="text-xs text-gray-500">(If No complete Sections B, D, & F only)</p>
+                <p className="text-xs text-gray-500">
+                  (If No complete Sections B, D, & F only)
+                </p>
               </div>
             </div>
 
             <Separator className="my-4" />
-            <h4 className="font-semibold">For New Customers, Products, and/or Services:</h4>
+            <h4 className="font-semibold">
+              For New Customers, Products, and/or Services:
+            </h4>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="companyName">3. Company Name</Label>
-                <Input 
+                <Input
                   id="companyName"
                   value={formData.companyName}
-                  onChange={(e) => handleInputChange('companyName', e.target.value)}
+                  onChange={(e) =>
+                    handleInputChange('companyName', e.target.value)
+                  }
                 />
               </div>
               <div>
                 <Label htmlFor="contractingOfficer">Contracting Officer</Label>
-                <Input 
+                <Input
                   id="contractingOfficer"
                   value={formData.contractingOfficer}
-                  onChange={(e) => handleInputChange('contractingOfficer', e.target.value)}
+                  onChange={(e) =>
+                    handleInputChange('contractingOfficer', e.target.value)
+                  }
                 />
               </div>
             </div>
 
             <div className="relative">
               <Label htmlFor="address">Address</Label>
-              <Textarea 
+              <Textarea
                 id="address"
                 value={formData.address}
                 onChange={(e) => handleAddressChange(e.target.value)}
@@ -435,13 +491,15 @@ export default function PurchaseReviewChecklist() {
                       onClick={() => selectAddressSuggestion(suggestion)}
                     >
                       <div className="font-medium">
-                        {suggestion.streetLine || suggestion.street_line || suggestion.street || suggestion.text}
+                        {suggestion.streetLine ||
+                          suggestion.street_line ||
+                          suggestion.street ||
+                          suggestion.text}
                       </div>
                       <div className="text-sm text-gray-600">
-                        {(suggestion.city && suggestion.state) ? 
-                          `${suggestion.city}, ${suggestion.state}${suggestion.zipCode || suggestion.zipcode ? ' ' + (suggestion.zipCode || suggestion.zipcode) : ''}` :
-                          'Address information'
-                        }
+                        {suggestion.city && suggestion.state
+                          ? `${suggestion.city}, ${suggestion.state}${suggestion.zipCode || suggestion.zipcode ? ' ' + (suggestion.zipCode || suggestion.zipcode) : ''}`
+                          : 'Address information'}
                       </div>
                     </div>
                   ))}
@@ -452,7 +510,7 @@ export default function PurchaseReviewChecklist() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="phone">Phone</Label>
-                <Input 
+                <Input
                   id="phone"
                   value={formData.phone}
                   onChange={(e) => handleInputChange('phone', e.target.value)}
@@ -460,7 +518,7 @@ export default function PurchaseReviewChecklist() {
               </div>
               <div>
                 <Label htmlFor="email">Email</Label>
-                <Input 
+                <Input
                   id="email"
                   type="email"
                   value={formData.email}
@@ -472,7 +530,10 @@ export default function PurchaseReviewChecklist() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div className="space-y-2">
                 <Label>FFL</Label>
-                <RadioGroup value={formData.ffl} onValueChange={(value) => handleInputChange('ffl', value)}>
+                <RadioGroup
+                  value={formData.ffl}
+                  onValueChange={(value) => handleInputChange('ffl', value)}
+                >
                   <div className="flex items-center space-x-2">
                     <RadioGroupItem value="Y" id="ffl-y" />
                     <Label htmlFor="ffl-y">Y</Label>
@@ -490,7 +551,12 @@ export default function PurchaseReviewChecklist() {
 
               <div className="space-y-2">
                 <Label>FFL copy on hand?</Label>
-                <RadioGroup value={formData.fflCopyOnHand} onValueChange={(value) => handleInputChange('fflCopyOnHand', value)}>
+                <RadioGroup
+                  value={formData.fflCopyOnHand}
+                  onValueChange={(value) =>
+                    handleInputChange('fflCopyOnHand', value)
+                  }
+                >
                   <div className="flex items-center space-x-2">
                     <RadioGroupItem value="Y" id="ffl-copy-y" />
                     <Label htmlFor="ffl-copy-y">Y</Label>
@@ -508,7 +574,12 @@ export default function PurchaseReviewChecklist() {
 
               <div className="space-y-2">
                 <Label>Credit Check Authorization</Label>
-                <RadioGroup value={formData.creditCheckAuth} onValueChange={(value) => handleInputChange('creditCheckAuth', value)}>
+                <RadioGroup
+                  value={formData.creditCheckAuth}
+                  onValueChange={(value) =>
+                    handleInputChange('creditCheckAuth', value)
+                  }
+                >
                   <div className="flex items-center space-x-2">
                     <RadioGroupItem value="Y" id="credit-auth-y" />
                     <Label htmlFor="credit-auth-y">Y</Label>
@@ -526,7 +597,12 @@ export default function PurchaseReviewChecklist() {
 
               <div className="space-y-2">
                 <Label>Credit Approval</Label>
-                <RadioGroup value={formData.creditApproval} onValueChange={(value) => handleInputChange('creditApproval', value)}>
+                <RadioGroup
+                  value={formData.creditApproval}
+                  onValueChange={(value) =>
+                    handleInputChange('creditApproval', value)
+                  }
+                >
                   <div className="flex items-center space-x-2">
                     <RadioGroupItem value="Y" id="credit-approval-y" />
                     <Label htmlFor="credit-approval-y">Y</Label>
@@ -549,28 +625,38 @@ export default function PurchaseReviewChecklist() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="poNumber">PO #</Label>
-                <Input 
+                <Input
                   id="poNumber"
                   value={formData.poNumber}
-                  onChange={(e) => handleInputChange('poNumber', e.target.value)}
+                  onChange={(e) =>
+                    handleInputChange('poNumber', e.target.value)
+                  }
                 />
               </div>
               <div>
-                <Label htmlFor="contractNumber">Contract #/Procurement Instrument</Label>
-                <Input 
+                <Label htmlFor="contractNumber">
+                  Contract #/Procurement Instrument
+                </Label>
+                <Input
                   id="contractNumber"
                   value={formData.contractNumber}
-                  onChange={(e) => handleInputChange('contractNumber', e.target.value)}
+                  onChange={(e) =>
+                    handleInputChange('contractNumber', e.target.value)
+                  }
                 />
               </div>
             </div>
 
             <div>
-              <Label htmlFor="invoiceRemittance">Invoice Remittance Information</Label>
-              <Textarea 
+              <Label htmlFor="invoiceRemittance">
+                Invoice Remittance Information
+              </Label>
+              <Textarea
                 id="invoiceRemittance"
                 value={formData.invoiceRemittance}
-                onChange={(e) => handleInputChange('invoiceRemittance', e.target.value)}
+                onChange={(e) =>
+                  handleInputChange('invoiceRemittance', e.target.value)
+                }
                 rows={2}
               />
             </div>
@@ -578,7 +664,12 @@ export default function PurchaseReviewChecklist() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="paymentTerms">Payment Terms</Label>
-                <Select value={formData.paymentTerms} onValueChange={(value) => handleInputChange('paymentTerms', value)}>
+                <Select
+                  value={formData.paymentTerms}
+                  onValueChange={(value) =>
+                    handleInputChange('paymentTerms', value)
+                  }
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="Select payment terms" />
                   </SelectTrigger>
@@ -591,11 +682,15 @@ export default function PurchaseReviewChecklist() {
                 </Select>
               </div>
               <div>
-                <Label htmlFor="earlyPayDiscount">Early Pay & Discount Requested</Label>
-                <Input 
+                <Label htmlFor="earlyPayDiscount">
+                  Early Pay & Discount Requested
+                </Label>
+                <Input
                   id="earlyPayDiscount"
                   value={formData.earlyPayDiscount}
-                  onChange={(e) => handleInputChange('earlyPayDiscount', e.target.value)}
+                  onChange={(e) =>
+                    handleInputChange('earlyPayDiscount', e.target.value)
+                  }
                   placeholder="Enter early pay discount terms or N/A"
                 />
               </div>
@@ -603,10 +698,18 @@ export default function PurchaseReviewChecklist() {
 
             <div className="space-y-2">
               <Label>Method of Payment</Label>
-              <RadioGroup value={formData.paymentMethod} onValueChange={(value) => handleInputChange('paymentMethod', value)}>
+              <RadioGroup
+                value={formData.paymentMethod}
+                onValueChange={(value) =>
+                  handleInputChange('paymentMethod', value)
+                }
+              >
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                   <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="electronic" id="payment-electronic" />
+                    <RadioGroupItem
+                      value="electronic"
+                      id="payment-electronic"
+                    />
                     <Label htmlFor="payment-electronic">Electronic Funds</Label>
                   </div>
                   <div className="flex items-center space-x-2">
@@ -624,10 +727,12 @@ export default function PurchaseReviewChecklist() {
                 </div>
               </RadioGroup>
               {formData.paymentMethod === 'other' && (
-                <Input 
+                <Input
                   placeholder="Specify other payment method"
                   value={formData.paymentMethodOther}
-                  onChange={(e) => handleInputChange('paymentMethodOther', e.target.value)}
+                  onChange={(e) =>
+                    handleInputChange('paymentMethodOther', e.target.value)
+                  }
                 />
               )}
             </div>
@@ -637,26 +742,34 @@ export default function PurchaseReviewChecklist() {
         {/* Section B - Service/Product Requested and Prices */}
         <Card className="mb-6">
           <CardHeader>
-            <CardTitle>Section B - Service/Product Requested and Prices</CardTitle>
+            <CardTitle>
+              Section B - Service/Product Requested and Prices
+            </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="outsideServices">Outside services required to complete job</Label>
-                <Input 
+                <Label htmlFor="outsideServices">
+                  Outside services required to complete job
+                </Label>
+                <Input
                   id="outsideServices"
                   value={formData.outsideServices}
-                  onChange={(e) => handleInputChange('outsideServices', e.target.value)}
+                  onChange={(e) =>
+                    handleInputChange('outsideServices', e.target.value)
+                  }
                 />
               </div>
               <div>
                 <Label htmlFor="quantityRequested">Quantity Requested</Label>
-                <Input 
+                <Input
                   id="quantityRequested"
                   type="number"
                   min="1"
                   value={formData.quantityRequested}
-                  onChange={(e) => handleInputChange('quantityRequested', e.target.value)}
+                  onChange={(e) =>
+                    handleInputChange('quantityRequested', e.target.value)
+                  }
                 />
               </div>
             </div>
@@ -664,7 +777,12 @@ export default function PurchaseReviewChecklist() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <Label htmlFor="unitOfMeasure">Unit of Measure</Label>
-                <Select value={formData.unitOfMeasure} onValueChange={(value) => handleInputChange('unitOfMeasure', value)}>
+                <Select
+                  value={formData.unitOfMeasure}
+                  onValueChange={(value) =>
+                    handleInputChange('unitOfMeasure', value)
+                  }
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="Select unit" />
                   </SelectTrigger>
@@ -684,22 +802,26 @@ export default function PurchaseReviewChecklist() {
               </div>
               <div>
                 <Label htmlFor="unitPrice">Unit Price ($)</Label>
-                <Input 
+                <Input
                   id="unitPrice"
                   type="number"
                   step="0.01"
                   value={formData.unitPrice}
-                  onChange={(e) => handleInputChange('unitPrice', e.target.value)}
+                  onChange={(e) =>
+                    handleInputChange('unitPrice', e.target.value)
+                  }
                 />
               </div>
               <div>
                 <Label htmlFor="toolingPrice">Tooling Price ($)</Label>
-                <Input 
+                <Input
                   id="toolingPrice"
                   type="number"
                   step="0.01"
                   value={formData.toolingPrice}
-                  onChange={(e) => handleInputChange('toolingPrice', e.target.value)}
+                  onChange={(e) =>
+                    handleInputChange('toolingPrice', e.target.value)
+                  }
                 />
               </div>
             </div>
@@ -707,25 +829,29 @@ export default function PurchaseReviewChecklist() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <Label htmlFor="additionalItems">Add'l Items</Label>
-                <Input 
+                <Input
                   id="additionalItems"
                   value={formData.additionalItems}
-                  onChange={(e) => handleInputChange('additionalItems', e.target.value)}
+                  onChange={(e) =>
+                    handleInputChange('additionalItems', e.target.value)
+                  }
                 />
               </div>
               <div>
                 <Label htmlFor="additionalCost">Additional Cost ($)</Label>
-                <Input 
+                <Input
                   id="additionalCost"
                   type="number"
                   step="0.01"
                   value={formData.additionalCost}
-                  onChange={(e) => handleInputChange('additionalCost', e.target.value)}
+                  onChange={(e) =>
+                    handleInputChange('additionalCost', e.target.value)
+                  }
                 />
               </div>
               <div>
                 <Label htmlFor="amount">Amount (Calculated) ($)</Label>
-                <Input 
+                <Input
                   id="amount"
                   value={`$${formData.amount}`}
                   disabled
@@ -735,13 +861,22 @@ export default function PurchaseReviewChecklist() {
             </div>
 
             <div>
-              <Label htmlFor="disbursementSchedule">Disbursement Schedule</Label>
-              <Select value={formData.disbursementSchedule} onValueChange={(value) => handleInputChange('disbursementSchedule', value)}>
+              <Label htmlFor="disbursementSchedule">
+                Disbursement Schedule
+              </Label>
+              <Select
+                value={formData.disbursementSchedule}
+                onValueChange={(value) =>
+                  handleInputChange('disbursementSchedule', value)
+                }
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Select disbursement schedule" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Paid in Advance">Paid in Advance</SelectItem>
+                  <SelectItem value="Paid in Advance">
+                    Paid in Advance
+                  </SelectItem>
                   <SelectItem value="At Completion">At Completion</SelectItem>
                   <SelectItem value="As Delivered">As Delivered</SelectItem>
                 </SelectContent>
@@ -756,15 +891,22 @@ export default function PurchaseReviewChecklist() {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
                     <Label htmlFor="level1ItemNumber">Item #</Label>
-                    <Input 
+                    <Input
                       id="level1ItemNumber"
                       value={formData.level1ItemNumber}
-                      onChange={(e) => handleInputChange('level1ItemNumber', e.target.value)}
+                      onChange={(e) =>
+                        handleInputChange('level1ItemNumber', e.target.value)
+                      }
                     />
                   </div>
                   <div className="space-y-2">
                     <Label>Parts or Kits Provided</Label>
-                    <RadioGroup value={formData.level1PartsKits} onValueChange={(value) => handleInputChange('level1PartsKits', value)}>
+                    <RadioGroup
+                      value={formData.level1PartsKits}
+                      onValueChange={(value) =>
+                        handleInputChange('level1PartsKits', value)
+                      }
+                    >
                       <div className="flex space-x-4">
                         <div className="flex items-center space-x-2">
                           <RadioGroupItem value="Y" id="level1-parts-y" />
@@ -783,7 +925,12 @@ export default function PurchaseReviewChecklist() {
                   </div>
                   <div className="space-y-2">
                     <Label>Exhibits/Drawings Provided</Label>
-                    <RadioGroup value={formData.level1Exhibits} onValueChange={(value) => handleInputChange('level1Exhibits', value)}>
+                    <RadioGroup
+                      value={formData.level1Exhibits}
+                      onValueChange={(value) =>
+                        handleInputChange('level1Exhibits', value)
+                      }
+                    >
                       <div className="flex space-x-4">
                         <div className="flex items-center space-x-2">
                           <RadioGroupItem value="Y" id="level1-exhibits-y" />
@@ -809,15 +956,22 @@ export default function PurchaseReviewChecklist() {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
                     <Label htmlFor="level2ItemNumber">Item #</Label>
-                    <Input 
+                    <Input
                       id="level2ItemNumber"
                       value={formData.level2ItemNumber}
-                      onChange={(e) => handleInputChange('level2ItemNumber', e.target.value)}
+                      onChange={(e) =>
+                        handleInputChange('level2ItemNumber', e.target.value)
+                      }
                     />
                   </div>
                   <div className="space-y-2">
                     <Label>Parts or Kits Provided</Label>
-                    <RadioGroup value={formData.level2PartsKits} onValueChange={(value) => handleInputChange('level2PartsKits', value)}>
+                    <RadioGroup
+                      value={formData.level2PartsKits}
+                      onValueChange={(value) =>
+                        handleInputChange('level2PartsKits', value)
+                      }
+                    >
                       <div className="flex space-x-4">
                         <div className="flex items-center space-x-2">
                           <RadioGroupItem value="Y" id="level2-parts-y" />
@@ -836,7 +990,12 @@ export default function PurchaseReviewChecklist() {
                   </div>
                   <div className="space-y-2">
                     <Label>Programming Provided</Label>
-                    <RadioGroup value={formData.level2Programming} onValueChange={(value) => handleInputChange('level2Programming', value)}>
+                    <RadioGroup
+                      value={formData.level2Programming}
+                      onValueChange={(value) =>
+                        handleInputChange('level2Programming', value)
+                      }
+                    >
                       <div className="flex space-x-4">
                         <div className="flex items-center space-x-2">
                           <RadioGroupItem value="Y" id="level2-programming-y" />
@@ -847,7 +1006,10 @@ export default function PurchaseReviewChecklist() {
                           <Label htmlFor="level2-programming-n">N</Label>
                         </div>
                         <div className="flex items-center space-x-2">
-                          <RadioGroupItem value="NA" id="level2-programming-na" />
+                          <RadioGroupItem
+                            value="NA"
+                            id="level2-programming-na"
+                          />
                           <Label htmlFor="level2-programming-na">N/A</Label>
                         </div>
                       </div>
@@ -862,15 +1024,22 @@ export default function PurchaseReviewChecklist() {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
                     <Label htmlFor="level3ItemNumber">Item #</Label>
-                    <Input 
+                    <Input
                       id="level3ItemNumber"
                       value={formData.level3ItemNumber}
-                      onChange={(e) => handleInputChange('level3ItemNumber', e.target.value)}
+                      onChange={(e) =>
+                        handleInputChange('level3ItemNumber', e.target.value)
+                      }
                     />
                   </div>
                   <div className="space-y-2">
                     <Label>Parts or Kits Provided</Label>
-                    <RadioGroup value={formData.level3PartsKits} onValueChange={(value) => handleInputChange('level3PartsKits', value)}>
+                    <RadioGroup
+                      value={formData.level3PartsKits}
+                      onValueChange={(value) =>
+                        handleInputChange('level3PartsKits', value)
+                      }
+                    >
                       <div className="flex space-x-4">
                         <div className="flex items-center space-x-2">
                           <RadioGroupItem value="Y" id="level3-parts-y" />
@@ -889,7 +1058,12 @@ export default function PurchaseReviewChecklist() {
                   </div>
                   <div className="space-y-2">
                     <Label>Exhibits Provided</Label>
-                    <RadioGroup value={formData.level3Exhibits} onValueChange={(value) => handleInputChange('level3Exhibits', value)}>
+                    <RadioGroup
+                      value={formData.level3Exhibits}
+                      onValueChange={(value) =>
+                        handleInputChange('level3Exhibits', value)
+                      }
+                    >
                       <div className="flex space-x-4">
                         <div className="flex items-center space-x-2">
                           <RadioGroupItem value="Y" id="level3-exhibits-y" />
@@ -915,13 +1089,20 @@ export default function PurchaseReviewChecklist() {
         {/* Section C - Description/Specifications/Statement of Work */}
         <Card className="mb-6">
           <CardHeader>
-            <CardTitle>Section C - Description/Specifications/Statement of Work</CardTitle>
+            <CardTitle>
+              Section C - Description/Specifications/Statement of Work
+            </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Are critical safety items being ordered?</Label>
-                <RadioGroup value={formData.criticalSafetyItems} onValueChange={(value) => handleInputChange('criticalSafetyItems', value)}>
+                <RadioGroup
+                  value={formData.criticalSafetyItems}
+                  onValueChange={(value) =>
+                    handleInputChange('criticalSafetyItems', value)
+                  }
+                >
                   <div className="flex items-center space-x-2">
                     <RadioGroupItem value="Y" id="safety-y" />
                     <Label htmlFor="safety-y">Yes</Label>
@@ -935,7 +1116,12 @@ export default function PurchaseReviewChecklist() {
 
               <div className="space-y-2">
                 <Label>Are the quality requirements included?</Label>
-                <RadioGroup value={formData.qualityRequirements} onValueChange={(value) => handleInputChange('qualityRequirements', value)}>
+                <RadioGroup
+                  value={formData.qualityRequirements}
+                  onValueChange={(value) =>
+                    handleInputChange('qualityRequirements', value)
+                  }
+                >
                   <div className="flex items-center space-x-2">
                     <RadioGroupItem value="Y" id="quality-y" />
                     <Label htmlFor="quality-y">Yes</Label>
@@ -949,18 +1135,30 @@ export default function PurchaseReviewChecklist() {
             </div>
 
             <div>
-              <Label htmlFor="acceptanceRejectionCriteria">What are the acceptance/rejection criteria?</Label>
-              <Textarea 
+              <Label htmlFor="acceptanceRejectionCriteria">
+                What are the acceptance/rejection criteria?
+              </Label>
+              <Textarea
                 id="acceptanceRejectionCriteria"
                 value={formData.acceptanceRejectionCriteria}
-                onChange={(e) => handleInputChange('acceptanceRejectionCriteria', e.target.value)}
+                onChange={(e) =>
+                  handleInputChange(
+                    'acceptanceRejectionCriteria',
+                    e.target.value
+                  )
+                }
                 rows={2}
               />
             </div>
 
             <div className="space-y-2">
               <Label>Are verification operations required?</Label>
-              <RadioGroup value={formData.verificationOperations} onValueChange={(value) => handleInputChange('verificationOperations', value)}>
+              <RadioGroup
+                value={formData.verificationOperations}
+                onValueChange={(value) =>
+                  handleInputChange('verificationOperations', value)
+                }
+              >
                 <div className="flex items-center space-x-2">
                   <RadioGroupItem value="Y" id="verification-y" />
                   <Label htmlFor="verification-y">Yes</Label>
@@ -973,48 +1171,73 @@ export default function PurchaseReviewChecklist() {
             </div>
 
             <div>
-              <Label htmlFor="verificationRequirements">If YES, What are the verification requirements?</Label>
-              <Textarea 
+              <Label htmlFor="verificationRequirements">
+                If YES, What are the verification requirements?
+              </Label>
+              <Textarea
                 id="verificationRequirements"
                 value={formData.verificationRequirements}
-                onChange={(e) => handleInputChange('verificationRequirements', e.target.value)}
+                onChange={(e) =>
+                  handleInputChange('verificationRequirements', e.target.value)
+                }
                 rows={2}
               />
             </div>
 
             <div>
-              <Label htmlFor="verificationSequence">Where in the manufacturing sequence are verification operations required?</Label>
-              <Input 
+              <Label htmlFor="verificationSequence">
+                Where in the manufacturing sequence are verification operations
+                required?
+              </Label>
+              <Input
                 id="verificationSequence"
                 value={formData.verificationSequence}
-                onChange={(e) => handleInputChange('verificationSequence', e.target.value)}
+                onChange={(e) =>
+                  handleInputChange('verificationSequence', e.target.value)
+                }
               />
             </div>
 
             <div>
-              <Label htmlFor="measurementResults">What measurement results must be retained?</Label>
-              <Textarea 
+              <Label htmlFor="measurementResults">
+                What measurement results must be retained?
+              </Label>
+              <Textarea
                 id="measurementResults"
                 value={formData.measurementResults}
-                onChange={(e) => handleInputChange('measurementResults', e.target.value)}
+                onChange={(e) =>
+                  handleInputChange('measurementResults', e.target.value)
+                }
                 rows={2}
               />
             </div>
 
             <div>
-              <Label htmlFor="measurementEquipment">What specific monitoring and measurement equipment is required?</Label>
-              <Textarea 
+              <Label htmlFor="measurementEquipment">
+                What specific monitoring and measurement equipment is required?
+              </Label>
+              <Textarea
                 id="measurementEquipment"
                 value={formData.measurementEquipment}
-                onChange={(e) => handleInputChange('measurementEquipment', e.target.value)}
+                onChange={(e) =>
+                  handleInputChange('measurementEquipment', e.target.value)
+                }
                 rows={2}
               />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-2">
-                <Label>Are there special instructions for the use of the required measuring instruments?</Label>
-                <RadioGroup value={formData.specialInstructions} onValueChange={(value) => handleInputChange('specialInstructions', value)}>
+                <Label>
+                  Are there special instructions for the use of the required
+                  measuring instruments?
+                </Label>
+                <RadioGroup
+                  value={formData.specialInstructions}
+                  onValueChange={(value) =>
+                    handleInputChange('specialInstructions', value)
+                  }
+                >
                   <div className="flex space-x-4">
                     <div className="flex items-center space-x-2">
                       <RadioGroupItem value="Y" id="special-instructions-y" />
@@ -1033,8 +1256,15 @@ export default function PurchaseReviewChecklist() {
               </div>
 
               <div className="space-y-2">
-                <Label>Are there special instructions for material sourcing?</Label>
-                <RadioGroup value={formData.materialSourcing} onValueChange={(value) => handleInputChange('materialSourcing', value)}>
+                <Label>
+                  Are there special instructions for material sourcing?
+                </Label>
+                <RadioGroup
+                  value={formData.materialSourcing}
+                  onValueChange={(value) =>
+                    handleInputChange('materialSourcing', value)
+                  }
+                >
                   <div className="flex space-x-4">
                     <div className="flex items-center space-x-2">
                       <RadioGroupItem value="Y" id="material-sourcing-y" />
@@ -1050,7 +1280,12 @@ export default function PurchaseReviewChecklist() {
 
               <div className="space-y-2">
                 <Label>Are there "optional" design elements?</Label>
-                <RadioGroup value={formData.optionalDesignElements} onValueChange={(value) => handleInputChange('optionalDesignElements', value)}>
+                <RadioGroup
+                  value={formData.optionalDesignElements}
+                  onValueChange={(value) =>
+                    handleInputChange('optionalDesignElements', value)
+                  }
+                >
                   <div className="flex space-x-4">
                     <div className="flex items-center space-x-2">
                       <RadioGroupItem value="Y" id="optional-design-y" />
@@ -1065,7 +1300,12 @@ export default function PurchaseReviewChecklist() {
                 {formData.optionalDesignElements === 'Y' && (
                   <div className="mt-2">
                     <Label>If so, are tolerances provided?</Label>
-                    <RadioGroup value={formData.tolerancesProvided} onValueChange={(value) => handleInputChange('tolerancesProvided', value)}>
+                    <RadioGroup
+                      value={formData.tolerancesProvided}
+                      onValueChange={(value) =>
+                        handleInputChange('tolerancesProvided', value)
+                      }
+                    >
                       <div className="flex space-x-4">
                         <div className="flex items-center space-x-2">
                           <RadioGroupItem value="Y" id="tolerances-y" />
@@ -1096,24 +1336,36 @@ export default function PurchaseReviewChecklist() {
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="firstArticleQuantity">First Article Quantity</Label>
-                <Input 
+                <Label htmlFor="firstArticleQuantity">
+                  First Article Quantity
+                </Label>
+                <Input
                   id="firstArticleQuantity"
                   type="number"
                   min="0"
                   value={formData.firstArticleQuantity}
-                  onChange={(e) => handleInputChange('firstArticleQuantity', e.target.value)}
+                  onChange={(e) =>
+                    handleInputChange('firstArticleQuantity', e.target.value)
+                  }
                 />
               </div>
               <div>
-                <Label htmlFor="firstArticleDueDate">First Article Due Date</Label>
-                <Input 
+                <Label htmlFor="firstArticleDueDate">
+                  First Article Due Date
+                </Label>
+                <Input
                   id="firstArticleDueDate"
                   type="date"
                   value={formData.firstArticleDueDate}
-                  onChange={(e) => handleInputChange('firstArticleDueDate', e.target.value)}
+                  onChange={(e) =>
+                    handleInputChange('firstArticleDueDate', e.target.value)
+                  }
                   disabled={parseFloat(formData.firstArticleQuantity) === 0}
-                  className={parseFloat(formData.firstArticleQuantity) === 0 ? "bg-gray-100" : ""}
+                  className={
+                    parseFloat(formData.firstArticleQuantity) === 0
+                      ? 'bg-gray-100'
+                      : ''
+                  }
                 />
               </div>
             </div>
@@ -1121,22 +1373,36 @@ export default function PurchaseReviewChecklist() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="inspectionLocation">Inspection Location</Label>
-                <Input 
+                <Input
                   id="inspectionLocation"
                   value={formData.inspectionLocation}
-                  onChange={(e) => handleInputChange('inspectionLocation', e.target.value)}
+                  onChange={(e) =>
+                    handleInputChange('inspectionLocation', e.target.value)
+                  }
                   disabled={parseFloat(formData.firstArticleQuantity) === 0}
-                  className={parseFloat(formData.firstArticleQuantity) === 0 ? "bg-gray-100" : ""}
+                  className={
+                    parseFloat(formData.firstArticleQuantity) === 0
+                      ? 'bg-gray-100'
+                      : ''
+                  }
                 />
               </div>
               <div>
-                <Label htmlFor="acceptanceTimeframe">Acceptance Timeframe</Label>
-                <Input 
+                <Label htmlFor="acceptanceTimeframe">
+                  Acceptance Timeframe
+                </Label>
+                <Input
                   id="acceptanceTimeframe"
                   value={formData.acceptanceTimeframe}
-                  onChange={(e) => handleInputChange('acceptanceTimeframe', e.target.value)}
+                  onChange={(e) =>
+                    handleInputChange('acceptanceTimeframe', e.target.value)
+                  }
                   disabled={parseFloat(formData.firstArticleQuantity) === 0}
-                  className={parseFloat(formData.firstArticleQuantity) === 0 ? "bg-gray-100" : ""}
+                  className={
+                    parseFloat(formData.firstArticleQuantity) === 0
+                      ? 'bg-gray-100'
+                      : ''
+                  }
                 />
               </div>
             </div>
@@ -1152,7 +1418,12 @@ export default function PurchaseReviewChecklist() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Are there special packaging instructions?</Label>
-                <RadioGroup value={formData.specialPackaging} onValueChange={(value) => handleInputChange('specialPackaging', value)}>
+                <RadioGroup
+                  value={formData.specialPackaging}
+                  onValueChange={(value) =>
+                    handleInputChange('specialPackaging', value)
+                  }
+                >
                   <div className="flex items-center space-x-2">
                     <RadioGroupItem value="Y" id="packaging-y" />
                     <Label htmlFor="packaging-y">Yes</Label>
@@ -1166,7 +1437,12 @@ export default function PurchaseReviewChecklist() {
 
               <div className="space-y-2">
                 <Label>Are there special marking instructions?</Label>
-                <RadioGroup value={formData.specialMarking} onValueChange={(value) => handleInputChange('specialMarking', value)}>
+                <RadioGroup
+                  value={formData.specialMarking}
+                  onValueChange={(value) =>
+                    handleInputChange('specialMarking', value)
+                  }
+                >
                   <div className="flex items-center space-x-2">
                     <RadioGroupItem value="Y" id="marking-y" />
                     <Label htmlFor="marking-y">Yes</Label>
@@ -1181,7 +1457,10 @@ export default function PurchaseReviewChecklist() {
 
             <div className="space-y-2">
               <Label>FOB</Label>
-              <RadioGroup value={formData.fobType} onValueChange={(value) => handleInputChange('fobType', value)}>
+              <RadioGroup
+                value={formData.fobType}
+                onValueChange={(value) => handleInputChange('fobType', value)}
+              >
                 <div className="flex items-center space-x-2">
                   <RadioGroupItem value="destination" id="fob-destination" />
                   <Label htmlFor="fob-destination">Destination</Label>
@@ -1196,7 +1475,12 @@ export default function PurchaseReviewChecklist() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="shippingCompany">Shipping Company</Label>
-                <Select value={formData.shippingCompany} onValueChange={(value) => handleInputChange('shippingCompany', value)}>
+                <Select
+                  value={formData.shippingCompany}
+                  onValueChange={(value) =>
+                    handleInputChange('shippingCompany', value)
+                  }
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="Select shipping company" />
                   </SelectTrigger>
@@ -1210,17 +1494,24 @@ export default function PurchaseReviewChecklist() {
               </div>
               <div>
                 <Label htmlFor="clientAccountNumber">Client Account #</Label>
-                <Input 
+                <Input
                   id="clientAccountNumber"
                   value={formData.clientAccountNumber}
-                  onChange={(e) => handleInputChange('clientAccountNumber', e.target.value)}
+                  onChange={(e) =>
+                    handleInputChange('clientAccountNumber', e.target.value)
+                  }
                 />
               </div>
             </div>
 
             <div className="space-y-2">
               <Label>Shipping Type</Label>
-              <RadioGroup value={formData.shippingType} onValueChange={(value) => handleInputChange('shippingType', value)}>
+              <RadioGroup
+                value={formData.shippingType}
+                onValueChange={(value) =>
+                  handleInputChange('shippingType', value)
+                }
+              >
                 <div className="flex items-center space-x-2">
                   <RadioGroupItem value="freight" id="shipping-freight" />
                   <Label htmlFor="shipping-freight">Freight</Label>
@@ -1234,19 +1525,23 @@ export default function PurchaseReviewChecklist() {
 
             <div>
               <Label htmlFor="deliverySchedule">Delivery Schedule</Label>
-              <Input 
+              <Input
                 id="deliverySchedule"
                 value={formData.deliverySchedule}
-                onChange={(e) => handleInputChange('deliverySchedule', e.target.value)}
+                onChange={(e) =>
+                  handleInputChange('deliverySchedule', e.target.value)
+                }
               />
             </div>
 
             <div>
               <Label htmlFor="shipToInformation">Ship To Information</Label>
-              <Textarea 
+              <Textarea
                 id="shipToInformation"
                 value={formData.shipToInformation}
-                onChange={(e) => handleInputChange('shipToInformation', e.target.value)}
+                onChange={(e) =>
+                  handleInputChange('shipToInformation', e.target.value)
+                }
                 rows={3}
               />
             </div>
@@ -1267,7 +1562,9 @@ export default function PurchaseReviewChecklist() {
                     <Checkbox
                       id={`cert-${cert}`}
                       checked={formData.certifications.includes(cert)}
-                      onCheckedChange={(checked) => handleCertificationChange(cert, checked as boolean)}
+                      onCheckedChange={(checked) =>
+                        handleCertificationChange(cert, checked as boolean)
+                      }
                     />
                     <Label htmlFor={`cert-${cert}`}>{cert}</Label>
                   </div>
@@ -1275,15 +1572,21 @@ export default function PurchaseReviewChecklist() {
                 <div className="flex items-center space-x-2">
                   <Checkbox
                     id="cert-other"
-                    checked={formData.certifications.some(c => !['ISO9001', 'AS9100', 'ITAR', 'FFL', 'N/A'].includes(c))}
+                    checked={formData.certifications.some(
+                      (c) =>
+                        !['ISO9001', 'AS9100', 'ITAR', 'FFL', 'N/A'].includes(c)
+                    )}
                   />
                   <Label htmlFor="cert-other">Other:</Label>
-                  <Input 
+                  <Input
                     placeholder="Specify"
                     className="flex-1"
                     onChange={(e) => {
                       if (e.target.value) {
-                        handleCertificationChange(`Other: ${e.target.value}`, true);
+                        handleCertificationChange(
+                          `Other: ${e.target.value}`,
+                          true
+                        );
                       }
                     }}
                   />
@@ -1292,11 +1595,15 @@ export default function PurchaseReviewChecklist() {
             </div>
 
             <div>
-              <Label htmlFor="retentionRequirements">Retention Requirements</Label>
-              <Input 
+              <Label htmlFor="retentionRequirements">
+                Retention Requirements
+              </Label>
+              <Input
                 id="retentionRequirements"
                 value={formData.retentionRequirements}
-                onChange={(e) => handleInputChange('retentionRequirements', e.target.value)}
+                onChange={(e) =>
+                  handleInputChange('retentionRequirements', e.target.value)
+                }
               />
             </div>
 
@@ -1304,10 +1611,12 @@ export default function PurchaseReviewChecklist() {
               <Label htmlFor="dpasRating">DPAS Rating</Label>
               <div className="flex items-center space-x-2">
                 <span>D</span>
-                <Input 
+                <Input
                   id="dpasRating"
                   value={formData.dpasRating}
-                  onChange={(e) => handleInputChange('dpasRating', e.target.value)}
+                  onChange={(e) =>
+                    handleInputChange('dpasRating', e.target.value)
+                  }
                   className="w-32"
                   placeholder="__-___"
                 />
@@ -1329,15 +1638,22 @@ export default function PurchaseReviewChecklist() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="reviewerName">Name/Title</Label>
-                <Input 
+                <Input
                   id="reviewerName"
                   value={formData.reviewerName}
-                  onChange={(e) => handleInputChange('reviewerName', e.target.value)}
+                  onChange={(e) =>
+                    handleInputChange('reviewerName', e.target.value)
+                  }
                 />
               </div>
               <div className="space-y-2">
                 <Label>Acceptance</Label>
-                <RadioGroup value={formData.acceptance} onValueChange={(value) => handleInputChange('acceptance', value)}>
+                <RadioGroup
+                  value={formData.acceptance}
+                  onValueChange={(value) =>
+                    handleInputChange('acceptance', value)
+                  }
+                >
                   <div className="flex items-center space-x-2">
                     <RadioGroupItem value="Yes" id="acceptance-yes" />
                     <Label htmlFor="acceptance-yes">Yes</Label>
@@ -1360,7 +1676,7 @@ export default function PurchaseReviewChecklist() {
                     canvasProps={{
                       width: 300,
                       height: 150,
-                      className: 'signature-canvas border rounded'
+                      className: 'signature-canvas border rounded',
                     }}
                     onEnd={saveSignature}
                   />
@@ -1376,7 +1692,7 @@ export default function PurchaseReviewChecklist() {
               </div>
               <div>
                 <Label htmlFor="date">Date</Label>
-                <Input 
+                <Input
                   id="date"
                   type="date"
                   value={formData.date}
@@ -1389,7 +1705,7 @@ export default function PurchaseReviewChecklist() {
 
         {/* Submit Button */}
         <div className="flex justify-center mb-6">
-          <Button 
+          <Button
             onClick={handleSubmitChecklist}
             className="bg-green-600 hover:bg-green-700 text-white px-8 py-3 text-lg font-medium"
             size="lg"
@@ -1399,7 +1715,9 @@ export default function PurchaseReviewChecklist() {
         </div>
 
         <div className="text-center mt-8 mb-4">
-          <p className="text-sm text-gray-500">FO Form 12 • Version 1.4 07/22/2025</p>
+          <p className="text-sm text-gray-500">
+            FO Form 12 • Version 1.4 07/22/2025
+          </p>
         </div>
       </div>
     </div>

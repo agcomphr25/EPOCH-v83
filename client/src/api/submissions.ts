@@ -8,14 +8,19 @@ export interface FormSubmission {
   updatedAt: Date;
 }
 
-export const submitForm = async (formId: number, data: Record<string, any>): Promise<FormSubmission> => {
+export const submitForm = async (
+  formId: number,
+  data: Record<string, any>
+): Promise<FormSubmission> => {
   return apiRequest('/api/enhanced-forms/submissions', {
     method: 'POST',
-    body: { formId, data }
+    body: { formId, data },
   });
 };
 
-export const getSubmissions = async (formId: number): Promise<FormSubmission[]> => {
+export const getSubmissions = async (
+  formId: number
+): Promise<FormSubmission[]> => {
   return apiRequest(`/api/enhanced-forms/submissions?formId=${formId}`);
 };
 
@@ -23,15 +28,18 @@ export const getSubmission = async (id: number): Promise<FormSubmission> => {
   return apiRequest(`/api/enhanced-forms/submissions/${id}`);
 };
 
-export const updateSubmission = async (id: number, data: Record<string, any>): Promise<FormSubmission> => {
+export const updateSubmission = async (
+  id: number,
+  data: Record<string, any>
+): Promise<FormSubmission> => {
   return apiRequest(`/api/enhanced-forms/submissions/${id}`, {
     method: 'PUT',
-    body: { data }
+    body: { data },
   });
 };
 
 export const deleteSubmission = async (id: number): Promise<void> => {
   return apiRequest(`/api/enhanced-forms/submissions/${id}`, {
-    method: 'DELETE'
+    method: 'DELETE',
   });
 };

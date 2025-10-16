@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery } from '@tanstack/react-query';
 
 export interface UnifiedLayupOrder {
   id: string;
@@ -48,6 +48,6 @@ export function useUnifiedLayupOrders() {
   return {
     orders: combinedOrders,
     loading,
-    reloadOrders
+    reloadOrders,
   };
 }

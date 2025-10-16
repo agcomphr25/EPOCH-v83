@@ -651,21 +651,173 @@ router.post(
 
       console.log('📄 Extracting certification data from PDF...');
       
-      // Import the Azure Document Intelligence function
-      const { extractTrainingMatrixData } = await import('../lib/azureDocumentIntelligence');
+      try {
+        // Import the Azure Document Intelligence function
+        const { extractTrainingMatrixData } = await import('../lib/azureDocumentIntelligence');
+        
+        // Extract data from PDF
+        const extractedData = await extractTrainingMatrixData(req.file.buffer);
+        console.log(`✅ Extracted ${extractedData.entries.length} certification entries from PDF`);
+
+        // Get all employees and certifications for mapping
+        const [employees, certifications] = await Promise.all([
+          pool.query`SELECT id, name FROM employees WHERE is_active = true`,
+          pool.query`SELECT id, name FROM certifications WHERE category = 'DEPARTMENT'`
+        ]);
+
+        // Create mapping helpers
+        const employeeNameToId = new Map<string, number>();
+        employees.forEach((emp: any) => {
+          const normalizedName = emp.name.toLowerCase().trim();
+          employeeNameToId.set(normalizedName, emp.id);
+        });
+
+        const certNameToId = new Map<string, number>();
+        certifications.forEach((cert: any) => {
+          const normalizedName = cert.name.toLowerCase().trim();
+          certNameToId.set(normalizedName, cert.id);
+        });
+
+        // Process extracted entries
+        const importResults = {
+          total: extractedData.entries.length,
+          imported: 0,
+          skipped: 0,
+          errors: [] as string[],
+          details: [] as any[]
+        };
+
+        for (const entry of extractedData.entries) {
+          try {
+            const employeeName = entry.employeeName?.toLowerCase().trim();
+            const employeeId = employeeName ? employeeNameToId.get(employeeName) : null;
+
+            if (!employeeId) {
+              importResults.skipped++;
+              importResults.errors.push(`Employee not found: ${entry.employeeName}`);
+              continue;
+            }
+
+            const certName = entry.trainingName?.toLowerCase().trim();
+            const certificationId = certName ? certNameToId.get(certName) : null;
+
+            if (!certificationId) {
+              importResults.skipped++;
+              importResults.errors.push(`Certification not found: ${entry.trainingName}`);
+              continue;
+            }
+
+            const existingCert = await pool.query`
+              SELECT id FROM employee_certifications 
+              WHERE employee_id = ${employeeId} 
+              AND certification_id = ${certificationId}
+            `;
+
+            if (existingCert.length > 0) {
+              await pool.query`
+                UPDATE employee_certifications 
+                SET date_obtained = ${entry.lastCompleted},
+                    is_active = true,
+                    updated_at = NOW()
+                WHERE employee_id = ${employeeId} 
+                AND certification_id = ${certificationId}
+              `;
+              importResults.details.push({
+                employee: entry.employeeName,
+                certification: entry.trainingName,
+                action: 'updated',
+                date: entry.lastCompleted
+              });
+            } else {
+              await pool.query`
+                INSERT INTO employee_certifications (
+                  employee_id, 
+                  certification_id, 
+                  date_obtained, 
+                  is_active
+                ) VALUES (
+                  ${employeeId}, 
+                  ${certificationId}, 
+                  ${entry.lastCompleted}, 
+                  true
+                )
+              `;
+              importResults.details.push({
+                employee: entry.employeeName,
+                certification: entry.trainingName,
+                action: 'created',
+                date: entry.lastCompleted
+              });
+            }
+
+            importResults.imported++;
+          } catch (error) {
+            importResults.skipped++;
+            importResults.errors.push(
+              `Error processing ${entry.employeeName} - ${entry.trainingName}: ${(error as Error).message}`
+            );
+          }
+        }
+
+        console.log(`✅ PDF Import complete: ${importResults.imported} imported, ${importResults.skipped} skipped`);
+        return res.json(importResults);
+      } catch (azureError: any) {
+        // Handle Azure Document Intelligence specific errors
+        if (azureError.code === 'InvalidRequest' || azureError.code === 'InvalidContent') {
+          return res.status(422).json({
+            error: 'PDF format not supported',
+            details: 'This PDF format cannot be processed by Azure Document Intelligence. Please export your training matrix as a CSV file instead.',
+            suggestion: 'Use CSV format with columns: Employee, Certification, Date'
+          });
+        }
+        throw azureError;
+      }
+    } catch (error) {
+      console.error('Import certifications PDF error:', error);
+      res.status(500).json({ 
+        error: 'Failed to import certifications from PDF',
+        details: (error as Error).message 
+      });
+    }
+  }
+);
+
+// Import Certifications from CSV
+router.post(
+  '/import-certifications-csv',
+  uploadMiddleware.single('file'),
+  async (req: Request, res: Response) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: 'No file uploaded' });
+      }
+
+      console.log('📄 Parsing CSV certification data...');
       
-      // Extract data from PDF
-      const extractedData = await extractTrainingMatrixData(req.file.buffer);
-      console.log(`✅ Extracted ${extractedData.entries.length} certification entries from PDF`);
+      const Papa = await import('papaparse');
+      const csvText = req.file.buffer.toString('utf-8');
+      
+      const parseResult = Papa.parse(csvText, {
+        header: true,
+        skipEmptyLines: true,
+        transformHeader: (header: string) => header.trim().toLowerCase()
+      });
+
+      if (parseResult.errors.length > 0) {
+        console.error('CSV parsing errors:', parseResult.errors);
+        return res.status(422).json({
+          error: 'CSV parsing failed',
+          details: parseResult.errors.map((e: any) => e.message).join(', ')
+        });
+      }
+
+      console.log(`✅ Parsed ${parseResult.data.length} rows from CSV`);
 
       // Get all employees and certifications for mapping
-      const [employeesResult, certificationsResult] = await Promise.all([
+      const [employees, certifications] = await Promise.all([
         pool.query`SELECT id, name FROM employees WHERE is_active = true`,
         pool.query`SELECT id, name FROM certifications WHERE category = 'DEPARTMENT'`
       ]);
-
-      const employees = employeesResult.rows;
-      const certifications = certificationsResult.rows;
 
       // Create mapping helpers
       const employeeNameToId = new Map<string, number>();
@@ -680,35 +832,59 @@ router.post(
         certNameToId.set(normalizedName, cert.id);
       });
 
-      // Process extracted entries
+      // Process CSV entries
       const importResults = {
-        total: extractedData.entries.length,
+        total: parseResult.data.length,
         imported: 0,
         skipped: 0,
         errors: [] as string[],
         details: [] as any[]
       };
 
-      for (const entry of extractedData.entries) {
+      for (const row of parseResult.data as any[]) {
         try {
+          // Expected columns: employee, certification, date
+          const employeeName = row.employee || row['employee name'] || row.name;
+          const certName = row.certification || row['certification name'] || row.training;
+          const dateStr = row.date || row['date obtained'] || row.completed;
+
+          if (!employeeName || !certName) {
+            importResults.skipped++;
+            importResults.errors.push(`Missing employee or certification name in row`);
+            continue;
+          }
+
           // Map employee name to ID
-          const employeeName = entry.employeeName?.toLowerCase().trim();
-          const employeeId = employeeName ? employeeNameToId.get(employeeName) : null;
+          const normalizedEmpName = employeeName.toLowerCase().trim();
+          const employeeId = employeeNameToId.get(normalizedEmpName);
 
           if (!employeeId) {
             importResults.skipped++;
-            importResults.errors.push(`Employee not found: ${entry.employeeName}`);
+            importResults.errors.push(`Employee not found: ${employeeName}`);
             continue;
           }
 
           // Map certification name to ID
-          const certName = entry.trainingName?.toLowerCase().trim();
-          const certificationId = certName ? certNameToId.get(certName) : null;
+          const normalizedCertName = certName.toLowerCase().trim();
+          const certificationId = certNameToId.get(normalizedCertName);
 
           if (!certificationId) {
             importResults.skipped++;
-            importResults.errors.push(`Certification not found: ${entry.trainingName}`);
+            importResults.errors.push(`Certification not found: ${certName}`);
             continue;
+          }
+
+          // Parse date
+          let dateObtained: Date | null = null;
+          if (dateStr) {
+            try {
+              dateObtained = new Date(dateStr);
+              if (isNaN(dateObtained.getTime())) {
+                dateObtained = null;
+              }
+            } catch (e) {
+              dateObtained = null;
+            }
           }
 
           // Check if certification already exists
@@ -722,17 +898,17 @@ router.post(
             // Update existing certification
             await pool.query`
               UPDATE employee_certifications 
-              SET date_obtained = ${entry.lastCompleted},
+              SET date_obtained = ${dateObtained},
                   is_active = true,
                   updated_at = NOW()
               WHERE employee_id = ${employeeId} 
               AND certification_id = ${certificationId}
             `;
             importResults.details.push({
-              employee: entry.employeeName,
-              certification: entry.trainingName,
+              employee: employeeName,
+              certification: certName,
               action: 'updated',
-              date: entry.lastCompleted
+              date: dateObtained
             });
           } else {
             // Insert new certification
@@ -745,15 +921,15 @@ router.post(
               ) VALUES (
                 ${employeeId}, 
                 ${certificationId}, 
-                ${entry.lastCompleted}, 
+                ${dateObtained}, 
                 true
               )
             `;
             importResults.details.push({
-              employee: entry.employeeName,
-              certification: entry.trainingName,
+              employee: employeeName,
+              certification: certName,
               action: 'created',
-              date: entry.lastCompleted
+              date: dateObtained
             });
           }
 
@@ -761,17 +937,17 @@ router.post(
         } catch (error) {
           importResults.skipped++;
           importResults.errors.push(
-            `Error processing ${entry.employeeName} - ${entry.trainingName}: ${(error as Error).message}`
+            `Error processing row: ${(error as Error).message}`
           );
         }
       }
 
-      console.log(`✅ Import complete: ${importResults.imported} imported, ${importResults.skipped} skipped`);
+      console.log(`✅ CSV Import complete: ${importResults.imported} imported, ${importResults.skipped} skipped`);
       res.json(importResults);
     } catch (error) {
-      console.error('Import certifications error:', error);
+      console.error('Import certifications CSV error:', error);
       res.status(500).json({ 
-        error: 'Failed to import certifications from PDF',
+        error: 'Failed to import certifications from CSV',
         details: (error as Error).message 
       });
     }

@@ -108,6 +108,15 @@ The application adopts a monorepo structure utilizing a full-stack TypeScript ap
 - **Schema Consistency**: Critical fix applied to synchronize both schema.ts files (root and server/schema.ts) to prevent Drizzle ORM caching issues
 - **Status**: ✅ Fully functional and architect-approved
 
+### October 16, 2025 - Training Module Quiz Display Fixed
+- **Critical Bug Fixed**: Training modules in production were missing their quizzes/questions
+- **Root Cause**: Duplicate hardcoded training routes in `server/src/routes/index.ts` were overriding the database routes from `server/src/routes/training.ts`
+  - Hardcoded routes returned static training data without quiz questions
+  - Database routes properly fetch modules with their associated questions and options
+- **Solution**: Removed 504 lines of hardcoded training array and duplicate routes (lines 3543-4046)
+- **Result**: Training modules now correctly display quizzes loaded from the production database
+- **Files Modified**: `server/src/routes/index.ts` - cleaned up to use only database-backed training routes
+
 ### October 16, 2025 - Training Navigation Fixed
 - **Removed hardcoded training module links** from navigation dropdown
 - **Issue**: Individual module links (training/2, training/3, etc.) were pointing to wrong IDs after production migration

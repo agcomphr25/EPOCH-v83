@@ -11,6 +11,9 @@ import {
   date,
   pgEnum,
   unique,
+  uuid,
+  numeric,
+  index,
 } from 'drizzle-orm/pg-core';
 import { createInsertSchema } from 'drizzle-zod';
 import { z } from 'zod';
@@ -2967,6 +2970,155 @@ export type InsertBomDefinition = z.infer<typeof insertBomDefinitionSchema>;
 export type BomDefinition = typeof bomDefinitions.$inferSelect;
 export type InsertBomItem = z.infer<typeof insertBomItemSchema>;
 export type BomItem = typeof bomItems.$inferSelect;
+
+// ========================================
+// ROBUST BOM SYSTEM - Advanced BOM with Revisions, Parts Library, and Multi-level Explosions
+// Uses UUID primary keys for better scalability and avoiding serial ID issues
+// ========================================
+
+// Parts library - stores all parts that can be used in BOMs
+export const parts = pgTable('parts', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  sku: text('sku').notNull(),
+  name: text('name').notNull(),
+  uom: text('uom').notNull().default('EA'),
+  stdCost: numeric('std_cost', { precision: 18, scale: 6 }).notNull().default('0'),
+  weight: numeric('weight', { precision: 18, scale: 6 }).notNull().default('0'),
+  isMake: boolean('is_make').notNull().default(false),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+}, (t) => ({
+  bySku: index('parts_sku_idx').on(t.sku),
+}));
+
+// BOM definitions - parent record for each BOM
+export const boms = pgTable('boms', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  parentPartId: uuid('parent_part_id').notNull().references(() => parts.id, { onDelete: 'cascade' }),
+  code: text('code').notNull(),
+  description: text('description').default(''),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+}, (t) => ({
+  byParent: index('boms_parent_idx').on(t.parentPartId),
+  byCode: index('boms_code_idx').on(t.code),
+}));
+
+// BOM revisions - allows multiple versions of each BOM with release control
+export const bomRevisions = pgTable('bom_revisions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  bomId: uuid('bom_id').notNull().references(() => boms.id, { onDelete: 'cascade' }),
+  revCode: text('rev_code').notNull(),
+  notes: text('notes').default(''),
+  isReleased: boolean('is_released').notNull().default(false),
+  effectiveFrom: timestamp('effective_from', { withTimezone: true }),
+  effectiveTo: timestamp('effective_to', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+}, (t) => ({
+  uniqueBomRev: index('bom_rev_unique').on(t.bomId, t.revCode),
+}));
+
+// BOM lines - individual line items within a revision
+export const bomLines = pgTable('bom_lines', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  revisionId: uuid('revision_id').notNull().references(() => bomRevisions.id, { onDelete: 'cascade' }),
+  childPartId: uuid('child_part_id').notNull().references(() => parts.id, { onDelete: 'restrict' }),
+  qtyPer: numeric('qty_per', { precision: 18, scale: 6 }).notNull().default('1'),
+  scrapPct: numeric('scrap_pct', { precision: 6, scale: 3 }).notNull().default('0'),
+  uom: text('uom').notNull().default('EA'),
+  reference: text('reference').default(''),
+  operationSeq: integer('operation_seq').default(10),
+  notes: text('notes').default(''),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+}, (t) => ({
+  byRev: index('bom_lines_rev_idx').on(t.revisionId),
+  byChild: index('bom_lines_child_idx').on(t.childPartId),
+}));
+
+// Robust BOM Relations
+export const partsRelations = relations(parts, ({ many }) => ({
+  childBomLines: many(bomLines),
+  parentBoms: many(boms),
+}));
+
+export const bomsRelations = relations(boms, ({ many, one }) => ({
+  revisions: many(bomRevisions),
+  parentPart: one(parts, { fields: [boms.parentPartId], references: [parts.id] }),
+}));
+
+export const bomRevisionsRelations = relations(bomRevisions, ({ many, one }) => ({
+  bom: one(boms, { fields: [bomRevisions.bomId], references: [boms.id] }),
+  lines: many(bomLines),
+}));
+
+export const bomLinesRelations = relations(bomLines, ({ one }) => ({
+  revision: one(bomRevisions, { fields: [bomLines.revisionId], references: [bomRevisions.id] }),
+  childPart: one(parts, { fields: [bomLines.childPartId], references: [parts.id] }),
+}));
+
+// Robust BOM Insert Schemas
+export const insertPartSchema = createInsertSchema(parts).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  sku: z.string().min(1, 'SKU is required'),
+  name: z.string().min(1, 'Name is required'),
+  uom: z.string().default('EA'),
+  stdCost: z.string().default('0'),
+  weight: z.string().default('0'),
+  isMake: z.boolean().default(false),
+});
+
+export const insertBomSchema = createInsertSchema(boms).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  parentPartId: z.string().uuid('Invalid parent part ID'),
+  code: z.string().min(1, 'Code is required'),
+  description: z.string().default(''),
+});
+
+export const insertBomRevisionSchema = createInsertSchema(bomRevisions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  bomId: z.string().uuid('Invalid BOM ID'),
+  revCode: z.string().min(1, 'Revision code is required'),
+  notes: z.string().default(''),
+  isReleased: z.boolean().default(false),
+  effectiveFrom: z.date().optional(),
+  effectiveTo: z.date().optional(),
+});
+
+export const insertBomLineSchema = createInsertSchema(bomLines).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  revisionId: z.string().uuid('Invalid revision ID'),
+  childPartId: z.string().uuid('Invalid child part ID'),
+  qtyPer: z.string().default('1'),
+  scrapPct: z.string().default('0'),
+  uom: z.string().default('EA'),
+  reference: z.string().default(''),
+  operationSeq: z.number().default(10),
+  notes: z.string().default(''),
+});
+
+// Robust BOM Types
+export type Part = typeof parts.$inferSelect;
+export type InsertPart = z.infer<typeof insertPartSchema>;
+export type Bom = typeof boms.$inferSelect;
+export type InsertBom = z.infer<typeof insertBomSchema>;
+export type BomRevision = typeof bomRevisions.$inferSelect;
+export type InsertBomRevision = z.infer<typeof insertBomRevisionSchema>;
+export type BomLine = typeof bomLines.$inferSelect;
+export type InsertBomLine = z.infer<typeof insertBomLineSchema>;
 
 // Order ID Reservation System - Eliminates race conditions for concurrent order creation
 export const orderIdReservations = pgTable('order_id_reservations', {

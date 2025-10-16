@@ -19,7 +19,8 @@ import shippingRoutes from './shipping';
 import shippingTestRoutes from './shipping-test';
 import orderAttachmentsRoutes from './orderAttachments';
 import discountsRoutes from './discounts';
-import bomsRoutes from './boms';
+// import bomsRoutes from './boms'; // Legacy BOM routes - replaced by Robust BOM system
+import robustBomsRoutes from './robustBoms';
 import communicationsRoutes from './communications';
 import internalMessagesRoutes from './internalMessages';
 import nonconformanceRoutes from '../../routes/nonconformance';
@@ -110,8 +111,11 @@ export function registerRoutes(app: Express): Server {
   // Discount management routes
   app.use('/api', discountsRoutes);
 
-  // BOM management routes
-  app.use('/api/boms', bomsRoutes);
+  // BOM management routes - Legacy BOM system commented out, replaced by Robust BOM
+  // app.use('/api/boms', bomsRoutes);
+
+  // Robust BOM management routes - Advanced BOM system with revisions and parts library
+  app.use('/api/robust-boms', robustBomsRoutes);
 
   // Communications management routes
   app.use('/api/communications', communicationsRoutes);

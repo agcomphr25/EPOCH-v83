@@ -86,6 +86,20 @@ The application adopts a monorepo structure utilizing a full-stack TypeScript ap
 
 ## Recent Changes
 
+### October 16, 2025 - Customer Satisfaction Analytics Enhanced with Question-Level Insights
+- **Question-Level Analytics**: Analytics tab now displays detailed breakdown for each survey question with average scores and response counts
+- **3-Month Trend Tracking**: Each question shows trend data across the last 3 months with visual indicators (Up/Down/Stable)
+- **Backend Enhancements**: 
+  - Analytics endpoint now calculates question-level averages and monthly trends
+  - Fixed month boundary logic to include all responses from the last day of each month
+  - Survey question mapping now correctly uses filtered surveyId when provided
+- **Frontend Display**: 
+  - New Question Breakdown section below summary cards
+  - Progress bars visualizing average scores per question
+  - 3-column monthly trend display with month-over-month comparison
+  - Responsive design with proper testid attributes
+- **Status**: ✅ Fully functional and architect-approved
+
 ### October 16, 2025 - Customer Satisfaction Survey Date Display Enhancement
 - **Enhanced Survey Responses Display**: Survey Responses tab now displays user-selected survey date (surveyDate) instead of submission timestamp
 - **Database Schema**: Added `survey_date` timestamp column to `customer_satisfaction_responses` table in both root and server schema files

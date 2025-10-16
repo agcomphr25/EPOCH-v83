@@ -882,7 +882,7 @@ export default function ProductionQueueManager() {
                   <TableHead>Bottom Metal</TableHead>
                   <TableHead>Special</TableHead>
                   <TableHead>Due Date</TableHead>
-                  <TableHead>Days to Due</TableHead>
+                  <TableHead className="w-28">Days to Due</TableHead>
                   <TableHead>Urgency</TableHead>
                   <TableHead>Score</TableHead>
                   <TableHead className="w-32">Actions</TableHead>

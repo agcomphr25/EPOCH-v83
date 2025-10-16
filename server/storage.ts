@@ -128,6 +128,9 @@ import {
   // Vendor types
   type Vendor, type InsertVendor,
   type VendorContact, type InsertVendorContact,
+  // Magic link token types
+  magicLinkTokens,
+  type MagicLinkToken, type InsertMagicLinkToken,
 
 } from "./schema";
 import { db } from "./db";
@@ -706,6 +709,12 @@ export interface IStorage {
   updateMetalAccessory(id: number, data: Partial<InsertMetalAccessory>): Promise<MetalAccessory>;
   deleteMetalAccessory(id: number): Promise<void>;
   getMetalAccessoriesDemands(): Promise<any[]>;
+
+  // Magic Link Token Methods
+  createMagicLinkToken(data: InsertMagicLinkToken): Promise<MagicLinkToken>;
+  getMagicLinkToken(token: string): Promise<MagicLinkToken | undefined>;
+  markMagicLinkTokenAsUsed(token: string): Promise<void>;
+  deleteExpiredMagicLinkTokens(): Promise<number>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -7251,6 +7260,36 @@ export class DatabaseStorage implements IStorage {
     });
 
     return demands;
+  }
+
+  async createMagicLinkToken(data: InsertMagicLinkToken): Promise<MagicLinkToken> {
+    const [token] = await db
+      .insert(magicLinkTokens)
+      .values(data)
+      .returning();
+    return token;
+  }
+
+  async getMagicLinkToken(token: string): Promise<MagicLinkToken | undefined> {
+    const [linkToken] = await db
+      .select()
+      .from(magicLinkTokens)
+      .where(eq(magicLinkTokens.token, token));
+    return linkToken || undefined;
+  }
+
+  async markMagicLinkTokenAsUsed(token: string): Promise<void> {
+    await db
+      .update(magicLinkTokens)
+      .set({ usedAt: new Date() })
+      .where(eq(magicLinkTokens.token, token));
+  }
+
+  async deleteExpiredMagicLinkTokens(): Promise<number> {
+    const result = await db
+      .delete(magicLinkTokens)
+      .where(lt(magicLinkTokens.expiresAt, new Date()));
+    return result.rowCount || 0;
   }
 
 }

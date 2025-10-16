@@ -390,6 +390,32 @@ router.delete(
   }
 );
 
+// Get all employee certifications (MUST be before /:id to avoid route collision)
+router.get('/certifications', async (req: Request, res: Response) => {
+  try {
+    const result = await pool.query`
+      SELECT 
+        ec.id,
+        ec.employee_id as "employeeId",
+        ec.certification_id as "certificationId",
+        ec.date_obtained as "dateObtained",
+        ec.expiry_date as "expiryDate",
+        ec.is_active as "isActive",
+        ec.notes,
+        e.name as "employeeName",
+        c.name as "certificationName"
+      FROM employee_certifications ec
+      JOIN employees e ON ec.employee_id = e.id
+      JOIN certifications c ON ec.certification_id = c.id
+      ORDER BY e.name, c.name
+    `;
+    res.json(result);
+  } catch (error) {
+    console.error('Get employee certifications error:', error);
+    res.status(500).json({ error: 'Failed to fetch employee certifications' });
+  }
+});
+
 // Create or update employee certification (MUST be before /:id to avoid route collision)
 router.post('/certifications', async (req: Request, res: Response) => {
   try {

@@ -63,3 +63,12 @@ The application uses a monorepo structure with a full-stack TypeScript approach.
 - Google Calendar (Event Integration)
 - Google APIs (`googleapis` package)
 - Azure Document Intelligence (AI-powered document analysis)
+
+## Recent Changes
+
+### October 16, 2025 - Training Modules Added to All Dashboards
+- **Enhancement**: Added Training Modules card to all user dashboards for easy access
+- **Main Dashboard**: Added dedicated Training section with links to All Training Modules and Training Matrix
+- **User Dashboards**: Added Training Modules navigation card to individual dashboards (AGTestDashboard, TIMSTestDashboard, etc.)
+- **Features**: Quick access to complete training courses and view certification status
+- **Status**: ✅ Training now accessible from every dashboard including TIMS

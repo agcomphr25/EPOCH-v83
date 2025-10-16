@@ -75,6 +75,20 @@ The application uses a monorepo structure with a full-stack TypeScript approach.
 
 ## Recent Changes
 
+### October 16, 2025 - Vendor Management Database Schema Fixed
+
+- **Database Schema Synchronization**: Fixed missing columns in vendors table causing "column does not exist" errors
+- **Columns Added**:
+  - `street` (text) - Street address field
+  - `city` (text) - City field
+  - `state` (text) - State field
+  - `zip_code` (text) - ZIP code field
+  - `country` (text) - Country field with default 'United States'
+  - `role` (text) - Added to employees table to resolve migration blocker
+- **Frontend Updates**: Updated vendor form to use `street` field instead of `address` to match database schema
+- **Address Input**: Vendor address is now captured using individual text input fields (street, city, state, ZIP, country) without autocomplete validation
+- **Status**: ✅ Vendor creation and editing now working correctly
+
 ### October 16, 2025 - Training Modules Added to All Dashboards
 
 - **Enhancement**: Added Training Modules card to all user dashboards for easy access

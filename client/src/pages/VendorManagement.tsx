@@ -390,7 +390,7 @@ export default function VendorManagement() {
         email: vendor.email || '',
         additionalEmail: vendor.additionalEmail || '',
         phone: vendor.phone || '',
-        address: vendor.address || '',
+        street: vendor.street || '',
         city: vendor.city || '',
         state: vendor.state || '',
         zipCode: vendor.zipCode || '',
@@ -425,7 +425,7 @@ export default function VendorManagement() {
       email: data.email || undefined,
       additionalEmail: data.additionalEmail || undefined,
       phone: data.phone || undefined,
-      address: data.address || undefined,
+      street: data.street || undefined,
       city: data.city || undefined,
       state: data.state || undefined,
       zipCode: data.zipCode || undefined,
@@ -597,7 +597,7 @@ export default function VendorManagement() {
                     <div className="space-y-4">
                       <FormField
                         control={form.control}
-                        name="address"
+                        name="street"
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>Street Address</FormLabel>

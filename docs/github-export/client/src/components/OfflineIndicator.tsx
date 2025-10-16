@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
+import { Wifi, WifiOff, CloudOff } from 'lucide-react';
+
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Wifi, WifiOff, CloudOff } from 'lucide-react';
 
 /**
  * Component to show online/offline status and PWA connectivity
@@ -44,7 +45,10 @@ export default function OfflineIndicator() {
           {isOnline ? (
             <>
               <Wifi className="h-4 w-4 text-green-600" />
-              <Badge variant="outline" className="text-green-600 border-green-600">
+              <Badge
+                variant="outline"
+                className="text-green-600 border-green-600"
+              >
                 Connected
               </Badge>
             </>

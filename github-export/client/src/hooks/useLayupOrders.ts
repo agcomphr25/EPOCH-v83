@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+
 import { apiRequest } from '@/lib/queryClient';
 
 // Simple order interface for layup scheduling
@@ -19,14 +20,15 @@ export default function useLayupOrders() {
   const fetchOrders = async () => {
     try {
       setLoading(true);
-      // Fetch finalized orders from the main orders database where department is "Layup"  
+      // Fetch finalized orders from the main orders database where department is "Layup"
       const data = await apiRequest('/api/orders/all');
-      
+
       // Filter for Layup department and FINALIZED status, map to simplified format
       const layupOrders = data
-        .filter((order: any) => 
-          order.status === 'FINALIZED' && 
-          (order.department === 'Layup' || !order.department) // Include orders without department for now
+        .filter(
+          (order: any) =>
+            order.status === 'FINALIZED' &&
+            (order.department === 'Layup' || !order.department) // Include orders without department for now
         )
         .map((order: any) => ({
           orderId: order.orderId,
@@ -35,9 +37,9 @@ export default function useLayupOrders() {
           priorityScore: order.priorityScore || 1,
           status: order.status,
           customer: order.customerName || order.customer,
-          customerName: order.customerName || order.customer
+          customerName: order.customerName || order.customer,
         }));
-        
+
       setOrders(layupOrders);
     } catch (error) {
       console.error('Failed to fetch layup orders:', error);

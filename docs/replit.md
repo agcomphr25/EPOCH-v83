@@ -39,7 +39,7 @@ This is a full-stack manufacturing ERP system built with React, TypeScript, Expr
 - **July 13, 2025 (Late Evening)**: Added InstallPWAButton component to navigation for app installation, OfflineIndicator for connection status, and comprehensive PWA utilities for service worker management
 - **July 13, 2025 (Late Evening)**: Created proper PWA icons, manifest configuration, and integrated service worker with caching strategies for offline functionality
 - **July 13, 2025 (Evening)**: Successfully implemented Module 8: API Integrations & Communications with complete frontend and backend scaffolding - includes address validation, PDF generation, and customer communication systems
-- **July 13, 2025 (Evening)**: Created comprehensive AddressInput component with autocomplete, PdfViewer component with download functionality, and CommunicationPanel with email/SMS support 
+- **July 13, 2025 (Evening)**: Created comprehensive AddressInput component with autocomplete, PdfViewer component with download functionality, and CommunicationPanel with email/SMS support
 - **July 13, 2025 (Evening)**: Added Module 8 database schema with customer_addresses, communication_logs, and pdf_documents tables with proper relationships and validation
 - **July 13, 2025 (Evening)**: Implemented mock API endpoints for address autocomplete/validation, PDF generation (order-confirmation, packing-slip, invoice), and communication sending with logging
 - **July 13, 2025 (Evening)**: Fixed Time Clock Admin button state issue by adding proper database query ordering to get most recent entries for accurate clock in/out status
@@ -92,12 +92,14 @@ Preferred communication style: Simple, everyday language.
 ## System Architecture
 
 ### Full-Stack Monorepo Structure
+
 - **Client**: React frontend with TypeScript, located in `/client`
 - **Server**: Express.js backend with TypeScript, located in `/server`
 - **Shared**: Common schemas and types, located in `/shared`
 - **Database**: PostgreSQL with Drizzle ORM for data persistence
 
 ### Build System
+
 - **Vite**: Frontend build tool and development server
 - **ESBuild**: Backend bundling for production
 - **TypeScript**: Type safety across the entire codebase
@@ -105,11 +107,13 @@ Preferred communication style: Simple, everyday language.
 ## Current Data State (Session Preserved)
 
 ### Feature Manager Data
+
 - **Categories**: Custom Features, Finish Options, Personal Features, Test Category
 - **Features**: Action Length (dropdown), Barrel Length (dropdown), Finish Type (dropdown), Special Instructions (textarea)
 - **Database**: All features stored in PostgreSQL with proper validation and options
 
 ### Order Entry Integration
+
 - **Dynamic Features**: Loading from database (no longer hardcoded)
 - **Form Layout**: Order ID/Date/Due Date header + Customer/CustomerPO/StockModel/Handedness + Dynamic Features
 - **Field Types**: Supports dropdown, textarea, text, number inputs
@@ -117,6 +121,7 @@ Preferred communication style: Simple, everyday language.
 - **Handedness**: Right/Left dropdown selection
 
 ### P1 Order ID System
+
 - **Current Date**: July 13, 2025 (AG period)
 - **Format**: Year-Month-Sequence (AG001, AG002, etc.)
 - **Year Letters**: 2025=A, 2026=B, ..., 2047=W, 2048=AA, 2049=AB...
@@ -127,6 +132,7 @@ Preferred communication style: Simple, everyday language.
 ## Key Components
 
 ### Frontend Architecture
+
 - **React 18**: Modern React with hooks and functional components
 - **ShadCN UI**: Comprehensive UI component library built on Radix UI
 - **TanStack Query**: Server state management and data fetching
@@ -134,18 +140,21 @@ Preferred communication style: Simple, everyday language.
 - **Tailwind CSS**: Utility-first styling with custom design system
 
 ### Module 8: API Integrations & Communications
+
 - **AddressInput**: Advanced address autocomplete with validation
 - **PdfViewer**: Document preview and download functionality
 - **CommunicationPanel**: Multi-channel customer communication system
 - **Mock Integrations**: Address validation, PDF generation, email/SMS sending
 
 ### Backend Architecture
+
 - **Express.js**: RESTful API server with middleware support
 - **TypeScript**: Full type safety on the backend
 - **Storage Interface**: Abstracted storage layer with in-memory implementation
 - **Middleware**: Request logging, JSON parsing, and error handling
 
 ### Database Layer
+
 - **Drizzle ORM**: Type-safe database interactions
 - **PostgreSQL**: Production database (configured for Neon)
 - **Schema**: Centralized database schema definition
@@ -154,12 +163,14 @@ Preferred communication style: Simple, everyday language.
 ## Data Flow
 
 ### Order Management Flow
+
 1. **Order ID Generation**: Custom algorithms for P1 (bi-weekly cycling) and P2 (customer-based) order IDs
 2. **CSV Import**: File upload → Papa Parse → Data validation → State management
 3. **Data Display**: Real-time data visualization with sorting and filtering
 4. **Export**: CSV export functionality for processed data
 
 ### State Management
+
 - **TanStack Query**: Server state caching and synchronization
 - **React Hooks**: Local component state management
 - **Custom Hooks**: Reusable business logic (CSV import, mobile detection)
@@ -167,6 +178,7 @@ Preferred communication style: Simple, everyday language.
 ## External Dependencies
 
 ### Core Libraries
+
 - **@neondatabase/serverless**: Database connectivity for Neon PostgreSQL
 - **drizzle-orm**: Type-safe database operations
 - **@tanstack/react-query**: Server state management
@@ -174,34 +186,40 @@ Preferred communication style: Simple, everyday language.
 - **date-fns**: Date manipulation utilities
 
 ### UI Framework
-- **@radix-ui/***: Accessible UI primitives
+
+- **@radix-ui/\***: Accessible UI primitives
 - **lucide-react**: Modern icon library
 - **tailwindcss**: Utility-first CSS framework
 - **class-variance-authority**: Type-safe component variants
 
 ### Development Tools
+
 - **tsx**: TypeScript execution for development
-- **@replit/vite-plugin-***: Replit-specific development enhancements
+- **@replit/vite-plugin-\***: Replit-specific development enhancements
 - **drizzle-kit**: Database schema management and migrations
 
 ## Deployment Strategy
 
 ### Development Environment
+
 - **Vite Dev Server**: Hot module replacement and fast refresh
 - **TSX**: Direct TypeScript execution for backend development
 - **Replit Integration**: Optimized for Replit development environment
 
 ### Production Build
+
 - **Frontend**: Vite build with static file generation
 - **Backend**: ESBuild bundling with external package handling
 - **Database**: PostgreSQL with connection pooling via Neon
 
 ### Environment Configuration
+
 - **DATABASE_URL**: PostgreSQL connection string (required)
 - **NODE_ENV**: Environment detection for conditional features
 - **REPL_ID**: Replit-specific environment detection
 
 ### File Structure
+
 ```
 /
 ├── client/           # React frontend

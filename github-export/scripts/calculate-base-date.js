@@ -7,19 +7,26 @@ const targetDate = new Date('2025-07-11');
 const targetPeriodIndex = 13; // AN period
 
 // Calculate what the BASE_DATE should be
-const baseDateTime = targetDate.getTime() - (targetPeriodIndex * PERIOD_MS);
+const baseDateTime = targetDate.getTime() - targetPeriodIndex * PERIOD_MS;
 const calculatedBaseDate = new Date(baseDateTime);
 
-console.log('Target date (July 11, 2025):', targetDate.toISOString().split('T')[0]);
+console.log(
+  'Target date (July 11, 2025):',
+  targetDate.toISOString().split('T')[0]
+);
 console.log('Target period index (AN):', targetPeriodIndex);
-console.log('Calculated BASE_DATE:', calculatedBaseDate.toISOString().split('T')[0]);
+console.log(
+  'Calculated BASE_DATE:',
+  calculatedBaseDate.toISOString().split('T')[0]
+);
 
 // Test with the calculated BASE_DATE
 const delta = targetDate.getTime() - calculatedBaseDate.getTime();
 const periodIndex = Math.floor(delta / PERIOD_MS);
 const firstIdx = Math.floor(periodIndex / 26) % 26;
 const secondIdx = periodIndex % 26;
-const prefix = String.fromCharCode(65 + firstIdx) + String.fromCharCode(65 + secondIdx);
+const prefix =
+  String.fromCharCode(65 + firstIdx) + String.fromCharCode(65 + secondIdx);
 
 console.log('Verification:');
 console.log('Period index:', periodIndex);
@@ -32,11 +39,11 @@ const testDates = [
   new Date('2025-07-11'),
   new Date('2025-07-12'),
   new Date('2025-07-24'), // Should be AO (next period)
-  new Date('2025-07-25')
+  new Date('2025-07-25'),
 ];
 
 console.log('\nTesting multiple dates:');
-testDates.forEach(date => {
+testDates.forEach((date) => {
   const d = date.getTime() - calculatedBaseDate.getTime();
   const pi = Math.floor(d / PERIOD_MS);
   const fi = Math.floor(pi / 26) % 26;

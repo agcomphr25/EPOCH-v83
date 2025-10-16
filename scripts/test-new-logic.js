@@ -17,7 +17,7 @@ function generateP1OrderId(date, lastId) {
 
   const delta = date.getTime() - BASE_DATE.getTime();
   const currentPeriodIndex = Math.floor(delta / PERIOD_MS);
-  
+
   const secondIdx = currentPeriodIndex % 26;
   const firstIdx = Math.floor(currentPeriodIndex / 26) % 26;
   const letter = (i) => String.fromCharCode(65 + i);
@@ -42,7 +42,9 @@ function generateP1OrderId(date, lastId) {
     if (nextSeq > 999) {
       return currentPrefix + '001';
     }
-    console.log(`Same period - incrementing: ${firstLetter}${secondLetter}${String(nextSeq).padStart(3, '0')}`);
+    console.log(
+      `Same period - incrementing: ${firstLetter}${secondLetter}${String(nextSeq).padStart(3, '0')}`
+    );
     return firstLetter + secondLetter + String(nextSeq).padStart(3, '0');
   }
 }

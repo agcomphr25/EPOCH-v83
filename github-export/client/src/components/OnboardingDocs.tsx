@@ -1,13 +1,25 @@
 import { useEffect, useState, useRef } from 'react';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Badge } from '@/components/ui/badge';
 import { FileText, CheckCircle, Signature } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import SignatureCanvas from 'react-signature-canvas';
 import type { OnboardingDoc } from '@shared/schema';
+
+import { Button } from '@/components/ui/button';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Badge } from '@/components/ui/badge';
+import { useToast } from '@/hooks/use-toast';
 
 interface OnboardingDocsProps {
   employeeId: string;
@@ -23,10 +35,12 @@ export default function OnboardingDocs({ employeeId }: OnboardingDocsProps) {
   const { data: docs = [], isLoading } = useQuery({
     queryKey: ['/api/onboarding-docs', employeeId],
     queryFn: async () => {
-      const response = await fetch(`/api/onboarding-docs?employeeId=${employeeId}`);
+      const response = await fetch(
+        `/api/onboarding-docs?employeeId=${employeeId}`
+      );
       if (!response.ok) throw new Error('Failed to fetch onboarding documents');
       return response.json() as Promise<OnboardingDoc[]>;
-    }
+    },
   });
 
   const openSignModal = (doc: OnboardingDoc) => {
@@ -38,25 +52,30 @@ export default function OnboardingDocs({ employeeId }: OnboardingDocsProps) {
       toast({ title: 'Please provide a signature', variant: 'destructive' });
       return;
     }
-    
+
     if (!signingDoc) return;
 
     const dataURL = sigPadRef.current.getTrimmedCanvas().toDataURL('image/png');
-    
+
     try {
-      const response = await fetch(`/api/onboarding-docs/${signingDoc.id}/sign`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          signatureDataURL: dataURL,
-        }),
-      });
+      const response = await fetch(
+        `/api/onboarding-docs/${signingDoc.id}/sign`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            signatureDataURL: dataURL,
+          }),
+        }
+      );
 
       if (!response.ok) throw new Error('Failed to save signature');
 
       // Invalidate and refetch the docs
-      queryClient.invalidateQueries({ queryKey: ['/api/onboarding-docs', employeeId] });
-      
+      queryClient.invalidateQueries({
+        queryKey: ['/api/onboarding-docs', employeeId],
+      });
+
       toast({ title: 'Document signed successfully!' });
       setSigningDoc(null);
       if (sigPadRef.current) sigPadRef.current.clear();
@@ -94,7 +113,10 @@ export default function OnboardingDocs({ employeeId }: OnboardingDocsProps) {
         ) : (
           <div className="space-y-4">
             {docs.map((doc) => (
-              <div key={doc.id} className="flex items-center justify-between p-4 border rounded-lg">
+              <div
+                key={doc.id}
+                className="flex items-center justify-between p-4 border rounded-lg"
+              >
                 <div className="flex items-center gap-3">
                   <FileText className="h-5 w-5 text-gray-500" />
                   <div>
@@ -106,7 +128,7 @@ export default function OnboardingDocs({ employeeId }: OnboardingDocsProps) {
                     )}
                   </div>
                 </div>
-                
+
                 <div className="flex items-center gap-2">
                   {doc.signed ? (
                     <>
@@ -145,9 +167,10 @@ export default function OnboardingDocs({ employeeId }: OnboardingDocsProps) {
             </DialogHeader>
             <div className="space-y-4">
               <p className="text-sm text-gray-600">
-                Please sign in the canvas below to acknowledge that you have read and understood this document.
+                Please sign in the canvas below to acknowledge that you have
+                read and understood this document.
               </p>
-              
+
               <div className="border rounded-lg p-4 bg-gray-50">
                 <SignatureCanvas
                   penColor="black"
@@ -157,18 +180,21 @@ export default function OnboardingDocs({ employeeId }: OnboardingDocsProps) {
                   ref={sigPadRef}
                 />
               </div>
-              
+
               <div className="flex justify-end gap-2">
                 <Button variant="outline" onClick={closeModal}>
                   Cancel
                 </Button>
-                <Button 
+                <Button
                   onClick={() => sigPadRef.current?.clear()}
                   variant="outline"
                 >
                   Clear
                 </Button>
-                <Button onClick={saveSignature} className="bg-green-500 hover:bg-green-600">
+                <Button
+                  onClick={saveSignature}
+                  className="bg-green-500 hover:bg-green-600"
+                >
                   Save Signature
                 </Button>
               </div>

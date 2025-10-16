@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -25,7 +26,7 @@ export default function OrderEntry() {
                 placeholder="Enter order ID"
               />
             </div>
-            
+
             <div>
               <Label htmlFor="customerName">Customer Name</Label>
               <Input
@@ -44,10 +45,8 @@ export default function OrderEntry() {
               />
               <Label htmlFor="test-checkbox">Test Option</Label>
             </div>
-            
-            <Button className="w-full">
-              Create Order
-            </Button>
+
+            <Button className="w-full">Create Order</Button>
           </div>
         </CardContent>
       </Card>

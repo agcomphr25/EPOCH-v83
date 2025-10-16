@@ -1,17 +1,31 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import {
+  Plus,
+  Edit,
+  Trash2,
+  Package,
+  DollarSign,
+  ArrowUpDown,
+} from 'lucide-react';
+
 import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { Plus, Edit, Trash2, Package, DollarSign, ArrowUpDown } from 'lucide-react';
 
 interface StockModel {
   id: string;
@@ -37,7 +51,7 @@ interface StockModelFormData {
 export default function StockModelManager() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  
+
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editingModel, setEditingModel] = useState<StockModel | null>(null);
   const [modelForm, setModelForm] = useState<StockModelFormData>({
@@ -46,7 +60,7 @@ export default function StockModelManager() {
     price: 0,
     description: '',
     isActive: true,
-    sortOrder: 0
+    sortOrder: 0,
   });
 
   // Fetch stock models
@@ -57,71 +71,77 @@ export default function StockModelManager() {
 
   // Create stock model mutation
   const createMutation = useMutation({
-    mutationFn: (data: StockModelFormData) => apiRequest('/api/stock-models', {
-      method: 'POST',
-      body: data,
-    }),
+    mutationFn: (data: StockModelFormData) =>
+      apiRequest('/api/stock-models', {
+        method: 'POST',
+        body: data,
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/stock-models'] });
       toast({
-        title: "Success",
-        description: "Stock model created successfully",
+        title: 'Success',
+        description: 'Stock model created successfully',
       });
       setIsCreateModalOpen(false);
       resetForm();
     },
     onError: (error: any) => {
       toast({
-        title: "Error",
-        description: error.response?.data?.error || "Failed to create stock model",
-        variant: "destructive",
+        title: 'Error',
+        description:
+          error.response?.data?.error || 'Failed to create stock model',
+        variant: 'destructive',
       });
-    }
+    },
   });
 
   // Update stock model mutation
   const updateMutation = useMutation({
-    mutationFn: (data: StockModelFormData) => apiRequest(`/api/stock-models/${editingModel?.id}`, {
-      method: 'PUT',
-      body: data,
-    }),
+    mutationFn: (data: StockModelFormData) =>
+      apiRequest(`/api/stock-models/${editingModel?.id}`, {
+        method: 'PUT',
+        body: data,
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/stock-models'] });
       toast({
-        title: "Success",
-        description: "Stock model updated successfully",
+        title: 'Success',
+        description: 'Stock model updated successfully',
       });
       setEditingModel(null);
       resetForm();
     },
     onError: (error: any) => {
       toast({
-        title: "Error",
-        description: error.response?.data?.error || "Failed to update stock model",
-        variant: "destructive",
+        title: 'Error',
+        description:
+          error.response?.data?.error || 'Failed to update stock model',
+        variant: 'destructive',
       });
-    }
+    },
   });
 
   // Delete stock model mutation
   const deleteMutation = useMutation({
-    mutationFn: (id: string) => apiRequest(`/api/stock-models/${id}`, {
-      method: 'DELETE',
-    }),
+    mutationFn: (id: string) =>
+      apiRequest(`/api/stock-models/${id}`, {
+        method: 'DELETE',
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/stock-models'] });
       toast({
-        title: "Success",
-        description: "Stock model deleted successfully",
+        title: 'Success',
+        description: 'Stock model deleted successfully',
       });
     },
     onError: (error: any) => {
       toast({
-        title: "Error",
-        description: error.response?.data?.error || "Failed to delete stock model",
-        variant: "destructive",
+        title: 'Error',
+        description:
+          error.response?.data?.error || 'Failed to delete stock model',
+        variant: 'destructive',
       });
-    }
+    },
   });
 
   const resetForm = () => {
@@ -131,7 +151,7 @@ export default function StockModelManager() {
       price: 0,
       description: '',
       isActive: true,
-      sortOrder: 0
+      sortOrder: 0,
     });
   };
 
@@ -151,7 +171,7 @@ export default function StockModelManager() {
       price: stockModel.price,
       description: stockModel.description || '',
       isActive: stockModel.isActive,
-      sortOrder: stockModel.sortOrder
+      sortOrder: stockModel.sortOrder,
     });
   };
 
@@ -191,7 +211,9 @@ export default function StockModelManager() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h2 className="text-2xl font-bold">Stock Model Manager</h2>
-          <p className="text-gray-600">Manage your stock models, prices, and descriptions</p>
+          <p className="text-gray-600">
+            Manage your stock models, prices, and descriptions
+          </p>
         </div>
         <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
           <DialogTrigger asChild>
@@ -212,7 +234,12 @@ export default function StockModelManager() {
                     id="name"
                     type="text"
                     value={modelForm.name}
-                    onChange={(e) => setModelForm(prev => ({ ...prev, name: e.target.value }))}
+                    onChange={(e) =>
+                      setModelForm((prev) => ({
+                        ...prev,
+                        name: e.target.value,
+                      }))
+                    }
                     placeholder="e.g., cf_stock_model_1"
                     required
                   />
@@ -223,13 +250,18 @@ export default function StockModelManager() {
                     id="displayName"
                     type="text"
                     value={modelForm.displayName}
-                    onChange={(e) => setModelForm(prev => ({ ...prev, displayName: e.target.value }))}
+                    onChange={(e) =>
+                      setModelForm((prev) => ({
+                        ...prev,
+                        displayName: e.target.value,
+                      }))
+                    }
                     placeholder="e.g., Carbon Fiber Stock Model"
                     required
                   />
                 </div>
               </div>
-              
+
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="price">Price ($)</Label>
@@ -239,7 +271,12 @@ export default function StockModelManager() {
                     step="0.01"
                     min="0"
                     value={modelForm.price}
-                    onChange={(e) => setModelForm(prev => ({ ...prev, price: parseFloat(e.target.value) || 0 }))}
+                    onChange={(e) =>
+                      setModelForm((prev) => ({
+                        ...prev,
+                        price: parseFloat(e.target.value) || 0,
+                      }))
+                    }
                     required
                   />
                 </div>
@@ -250,36 +287,50 @@ export default function StockModelManager() {
                     type="number"
                     min="0"
                     value={modelForm.sortOrder}
-                    onChange={(e) => setModelForm(prev => ({ ...prev, sortOrder: parseInt(e.target.value) || 0 }))}
+                    onChange={(e) =>
+                      setModelForm((prev) => ({
+                        ...prev,
+                        sortOrder: parseInt(e.target.value) || 0,
+                      }))
+                    }
                   />
                 </div>
               </div>
-              
+
               <div className="space-y-2">
                 <Label htmlFor="description">Description</Label>
                 <Textarea
                   id="description"
                   value={modelForm.description}
-                  onChange={(e) => setModelForm(prev => ({ ...prev, description: e.target.value }))}
+                  onChange={(e) =>
+                    setModelForm((prev) => ({
+                      ...prev,
+                      description: e.target.value,
+                    }))
+                  }
                   placeholder="Optional description..."
                 />
               </div>
-              
+
               <div className="flex items-center space-x-2">
                 <Switch
                   id="isActive"
                   checked={modelForm.isActive}
-                  onCheckedChange={(checked) => setModelForm(prev => ({ ...prev, isActive: checked }))}
+                  onCheckedChange={(checked) =>
+                    setModelForm((prev) => ({ ...prev, isActive: checked }))
+                  }
                 />
                 <Label htmlFor="isActive">Active</Label>
               </div>
-              
+
               <div className="flex justify-end space-x-2">
                 <Button type="button" variant="outline" onClick={handleCancel}>
                   Cancel
                 </Button>
                 <Button type="submit" disabled={createMutation.isPending}>
-                  {createMutation.isPending ? 'Creating...' : 'Create Stock Model'}
+                  {createMutation.isPending
+                    ? 'Creating...'
+                    : 'Create Stock Model'}
                 </Button>
               </div>
             </form>
@@ -295,13 +346,17 @@ export default function StockModelManager() {
                 <div className="flex items-center gap-3">
                   <Package className="h-5 w-5 text-blue-600" />
                   <div>
-                    <CardTitle className="text-lg">{stockModel.displayName}</CardTitle>
+                    <CardTitle className="text-lg">
+                      {stockModel.displayName}
+                    </CardTitle>
                     <p className="text-sm text-gray-600">{stockModel.name}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Badge variant={stockModel.isActive ? "default" : "secondary"}>
-                    {stockModel.isActive ? "Active" : "Inactive"}
+                  <Badge
+                    variant={stockModel.isActive ? 'default' : 'secondary'}
+                  >
+                    {stockModel.isActive ? 'Active' : 'Inactive'}
                   </Badge>
                   <div className="flex items-center gap-1 text-green-600 font-semibold">
                     <DollarSign className="h-4 w-4" />
@@ -313,9 +368,11 @@ export default function StockModelManager() {
             <CardContent>
               <div className="space-y-3">
                 {stockModel.description && (
-                  <p className="text-sm text-gray-700">{stockModel.description}</p>
+                  <p className="text-sm text-gray-700">
+                    {stockModel.description}
+                  </p>
                 )}
-                
+
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 text-sm text-gray-500">
                     <ArrowUpDown className="h-4 w-4" />
@@ -345,13 +402,15 @@ export default function StockModelManager() {
             </CardContent>
           </Card>
         ))}
-        
+
         {stockModels.length === 0 && (
           <Card>
             <CardContent className="text-center py-8">
               <Package className="h-12 w-12 text-gray-400 mx-auto mb-4" />
               <p className="text-gray-500">No stock models found</p>
-              <p className="text-sm text-gray-400">Click "Add Stock Model" to create your first model</p>
+              <p className="text-sm text-gray-400">
+                Click "Add Stock Model" to create your first model
+              </p>
             </CardContent>
           </Card>
         )}
@@ -359,7 +418,10 @@ export default function StockModelManager() {
 
       {/* Edit Modal */}
       {editingModel && (
-        <Dialog open={!!editingModel} onOpenChange={() => setEditingModel(null)}>
+        <Dialog
+          open={!!editingModel}
+          onOpenChange={() => setEditingModel(null)}
+        >
           <DialogContent className="max-w-2xl">
             <DialogHeader>
               <DialogTitle>Edit Stock Model</DialogTitle>
@@ -372,7 +434,12 @@ export default function StockModelManager() {
                     id="edit-name"
                     type="text"
                     value={modelForm.name}
-                    onChange={(e) => setModelForm(prev => ({ ...prev, name: e.target.value }))}
+                    onChange={(e) =>
+                      setModelForm((prev) => ({
+                        ...prev,
+                        name: e.target.value,
+                      }))
+                    }
                     placeholder="e.g., cf_stock_model_1"
                     required
                   />
@@ -383,13 +450,18 @@ export default function StockModelManager() {
                     id="edit-displayName"
                     type="text"
                     value={modelForm.displayName}
-                    onChange={(e) => setModelForm(prev => ({ ...prev, displayName: e.target.value }))}
+                    onChange={(e) =>
+                      setModelForm((prev) => ({
+                        ...prev,
+                        displayName: e.target.value,
+                      }))
+                    }
                     placeholder="e.g., Carbon Fiber Stock Model"
                     required
                   />
                 </div>
               </div>
-              
+
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="edit-price">Price ($)</Label>
@@ -399,7 +471,12 @@ export default function StockModelManager() {
                     step="0.01"
                     min="0"
                     value={modelForm.price}
-                    onChange={(e) => setModelForm(prev => ({ ...prev, price: parseFloat(e.target.value) || 0 }))}
+                    onChange={(e) =>
+                      setModelForm((prev) => ({
+                        ...prev,
+                        price: parseFloat(e.target.value) || 0,
+                      }))
+                    }
                     required
                   />
                 </div>
@@ -410,36 +487,50 @@ export default function StockModelManager() {
                     type="number"
                     min="0"
                     value={modelForm.sortOrder}
-                    onChange={(e) => setModelForm(prev => ({ ...prev, sortOrder: parseInt(e.target.value) || 0 }))}
+                    onChange={(e) =>
+                      setModelForm((prev) => ({
+                        ...prev,
+                        sortOrder: parseInt(e.target.value) || 0,
+                      }))
+                    }
                   />
                 </div>
               </div>
-              
+
               <div className="space-y-2">
                 <Label htmlFor="edit-description">Description</Label>
                 <Textarea
                   id="edit-description"
                   value={modelForm.description}
-                  onChange={(e) => setModelForm(prev => ({ ...prev, description: e.target.value }))}
+                  onChange={(e) =>
+                    setModelForm((prev) => ({
+                      ...prev,
+                      description: e.target.value,
+                    }))
+                  }
                   placeholder="Optional description..."
                 />
               </div>
-              
+
               <div className="flex items-center space-x-2">
                 <Switch
                   id="edit-isActive"
                   checked={modelForm.isActive}
-                  onCheckedChange={(checked) => setModelForm(prev => ({ ...prev, isActive: checked }))}
+                  onCheckedChange={(checked) =>
+                    setModelForm((prev) => ({ ...prev, isActive: checked }))
+                  }
                 />
                 <Label htmlFor="edit-isActive">Active</Label>
               </div>
-              
+
               <div className="flex justify-end space-x-2">
                 <Button type="button" variant="outline" onClick={handleCancel}>
                   Cancel
                 </Button>
                 <Button type="submit" disabled={updateMutation.isPending}>
-                  {updateMutation.isPending ? 'Updating...' : 'Update Stock Model'}
+                  {updateMutation.isPending
+                    ? 'Updating...'
+                    : 'Update Stock Model'}
                 </Button>
               </div>
             </form>

@@ -1,11 +1,25 @@
 import React, { useState } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
-import { FileText, Download, Loader2, User, Package, Calendar, DollarSign } from "lucide-react";
+import {
+  FileText,
+  Download,
+  Loader2,
+  User,
+  Package,
+  Calendar,
+  DollarSign,
+} from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
+
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Separator } from '@/components/ui/separator';
 
 interface SalesOrderModalProps {
   isOpen: boolean;
@@ -27,11 +41,19 @@ interface OrderData {
   notes?: string;
 }
 
-export function SalesOrderModal({ isOpen, onClose, orderId }: SalesOrderModalProps) {
+export function SalesOrderModal({
+  isOpen,
+  onClose,
+  orderId,
+}: SalesOrderModalProps) {
   const [downloadingPdf, setDownloadingPdf] = useState(false);
 
   // Fetch order data - we'll use the existing orders API
-  const { data: orderData, isLoading, error } = useQuery({
+  const {
+    data: orderData,
+    isLoading,
+    error,
+  } = useQuery({
     queryKey: ['/api/orders/all', orderId],
     queryFn: async () => {
       const response = await fetch('/api/orders/all');
@@ -39,7 +61,7 @@ export function SalesOrderModal({ isOpen, onClose, orderId }: SalesOrderModalPro
       const allOrders = await response.json();
       return allOrders.find((order: any) => order.orderId === orderId);
     },
-    enabled: isOpen && !!orderId
+    enabled: isOpen && !!orderId,
   });
 
   const handleDownloadPdf = async () => {
@@ -61,15 +83,13 @@ export function SalesOrderModal({ isOpen, onClose, orderId }: SalesOrderModalPro
       return value ? 'Yes' : 'No';
     }
     if (typeof value === 'string') {
-      return value.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+      return value.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
     }
     return String(value);
   };
 
   const formatFeatureName = (key: string): string => {
-    return key
-      .replace(/_/g, ' ')
-      .replace(/\b\w/g, l => l.toUpperCase());
+    return key.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
   };
 
   return (
@@ -119,21 +139,25 @@ export function SalesOrderModal({ isOpen, onClose, orderId }: SalesOrderModalPro
                 </div>
                 <p className="text-sm">{orderData.customerName}</p>
                 {orderData.customerEmail && (
-                  <p className="text-sm text-gray-600">{orderData.customerEmail}</p>
+                  <p className="text-sm text-gray-600">
+                    {orderData.customerEmail}
+                  </p>
                 )}
               </div>
-              
+
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
                   <Calendar className="w-4 h-4 text-gray-500" />
                   <span className="font-semibold">Dates</span>
                 </div>
                 <p className="text-sm">
-                  <span className="text-gray-600">Ordered:</span> {format(new Date(orderData.orderDate), 'MMM d, yyyy')}
+                  <span className="text-gray-600">Ordered:</span>{' '}
+                  {format(new Date(orderData.orderDate), 'MMM d, yyyy')}
                 </p>
                 {orderData.dueDate && (
                   <p className="text-sm">
-                    <span className="text-gray-600">Due:</span> {format(new Date(orderData.dueDate), 'MMM d, yyyy')}
+                    <span className="text-gray-600">Due:</span>{' '}
+                    {format(new Date(orderData.dueDate), 'MMM d, yyyy')}
                   </p>
                 )}
               </div>
@@ -148,43 +172,61 @@ export function SalesOrderModal({ isOpen, onClose, orderId }: SalesOrderModalPro
                 <span className="font-semibold">Product Details</span>
               </div>
               <div className="bg-gray-50 dark:bg-gray-800 p-3 rounded-lg">
-                <p className="font-medium">{orderData.modelId?.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}</p>
+                <p className="font-medium">
+                  {orderData.modelId
+                    ?.replace(/_/g, ' ')
+                    .replace(/\b\w/g, (l: string) => l.toUpperCase())}
+                </p>
                 <div className="flex items-center gap-2 mt-1">
                   <Badge variant="outline">{orderData.currentDepartment}</Badge>
-                  {orderData.isPaid && (
-                    <Badge variant="secondary">PAID</Badge>
-                  )}
+                  {orderData.isPaid && <Badge variant="secondary">PAID</Badge>}
                 </div>
               </div>
             </div>
 
             {/* Features/Options */}
-            {orderData.features && Object.keys(orderData.features).length > 0 && (
-              <>
-                <Separator />
-                <div className="space-y-2">
-                  <h3 className="font-semibold">Features & Options</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                    {/* Ensure action_length is always shown if it exists */}
-                    {orderData.features.action_length && (
-                      <div key="action_length" className="flex justify-between items-center text-sm">
-                        <span className="text-gray-600">Action Length:</span>
-                        <span className="font-medium">{formatFeatureValue('action_length', orderData.features.action_length)}</span>
-                      </div>
-                    )}
-                    {/* Show all other features */}
-                    {Object.entries(orderData.features)
-                      .filter(([key]) => key !== 'action_length') // Avoid duplicating action_length
-                      .map(([key, value]) => (
-                        <div key={key} className="flex justify-between items-center text-sm">
-                          <span className="text-gray-600">{formatFeatureName(key)}:</span>
-                          <span className="font-medium">{formatFeatureValue(key, value)}</span>
+            {orderData.features &&
+              Object.keys(orderData.features).length > 0 && (
+                <>
+                  <Separator />
+                  <div className="space-y-2">
+                    <h3 className="font-semibold">Features & Options</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                      {/* Ensure action_length is always shown if it exists */}
+                      {orderData.features.action_length && (
+                        <div
+                          key="action_length"
+                          className="flex justify-between items-center text-sm"
+                        >
+                          <span className="text-gray-600">Action Length:</span>
+                          <span className="font-medium">
+                            {formatFeatureValue(
+                              'action_length',
+                              orderData.features.action_length
+                            )}
+                          </span>
                         </div>
-                      ))}
+                      )}
+                      {/* Show all other features */}
+                      {Object.entries(orderData.features)
+                        .filter(([key]) => key !== 'action_length') // Avoid duplicating action_length
+                        .map(([key, value]) => (
+                          <div
+                            key={key}
+                            className="flex justify-between items-center text-sm"
+                          >
+                            <span className="text-gray-600">
+                              {formatFeatureName(key)}:
+                            </span>
+                            <span className="font-medium">
+                              {formatFeatureValue(key, value)}
+                            </span>
+                          </div>
+                        ))}
+                    </div>
                   </div>
-                </div>
-              </>
-            )}
+                </>
+              )}
 
             {/* Pricing */}
             <Separator />
@@ -194,7 +236,9 @@ export function SalesOrderModal({ isOpen, onClose, orderId }: SalesOrderModalPro
                 <span className="font-semibold">Pricing</span>
               </div>
               <div className="text-right">
-                <p className="text-2xl font-bold">${orderData.totalPrice?.toFixed(2) || '0.00'}</p>
+                <p className="text-2xl font-bold">
+                  ${orderData.totalPrice?.toFixed(2) || '0.00'}
+                </p>
               </div>
             </div>
 
@@ -204,8 +248,8 @@ export function SalesOrderModal({ isOpen, onClose, orderId }: SalesOrderModalPro
               <Button variant="outline" onClick={onClose}>
                 Close
               </Button>
-              <Button 
-                onClick={handleDownloadPdf} 
+              <Button
+                onClick={handleDownloadPdf}
                 disabled={downloadingPdf}
                 className="flex items-center gap-2"
               >

@@ -1,4 +1,5 @@
 import React from 'react';
+
 import FormBuilderAdmin from '@/components/FormBuilderAdmin';
 
 export default function AdminFormsPage() {

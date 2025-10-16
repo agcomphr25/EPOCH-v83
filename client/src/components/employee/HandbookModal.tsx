@@ -1,9 +1,30 @@
 import { useState } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  BookOpen,
+  Download,
+  FileText,
+  Shield,
+  Users,
+  Clock,
+  X,
+  ExternalLink,
+} from 'lucide-react';
+
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { BookOpen, Download, FileText, Shield, Users, Clock, X, ExternalLink } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface HandbookModalProps {
@@ -18,7 +39,7 @@ export default function HandbookModal({ isOpen, onClose }: HandbookModalProps) {
   const handleDownload = (section: string) => {
     // In a real implementation, this would download the actual PDF
     toast({
-      title: "Download Started",
+      title: 'Download Started',
       description: `Downloading ${section} section...`,
     });
   };
@@ -146,7 +167,9 @@ export default function HandbookModal({ isOpen, onClose }: HandbookModalProps) {
     },
   ];
 
-  const currentSection = handbookSections.find(section => section.id === selectedSection);
+  const currentSection = handbookSections.find(
+    (section) => section.id === selectedSection
+  );
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -177,7 +200,9 @@ export default function HandbookModal({ isOpen, onClose }: HandbookModalProps) {
           {/* Sidebar Navigation */}
           <div className="md:col-span-1 border-r pr-4">
             <div className="space-y-2">
-              <h3 className="font-semibold text-sm text-gray-700 mb-3">Sections</h3>
+              <h3 className="font-semibold text-sm text-gray-700 mb-3">
+                Sections
+              </h3>
               {handbookSections.map((section) => {
                 const IconComponent = section.icon;
                 return (
@@ -192,9 +217,13 @@ export default function HandbookModal({ isOpen, onClose }: HandbookModalProps) {
                   >
                     <div className="flex items-center space-x-2 mb-1">
                       <IconComponent className="w-4 h-4" />
-                      <span className="font-medium text-sm">{section.title}</span>
+                      <span className="font-medium text-sm">
+                        {section.title}
+                      </span>
                     </div>
-                    <p className="text-xs text-gray-500">{section.description}</p>
+                    <p className="text-xs text-gray-500">
+                      {section.description}
+                    </p>
                   </button>
                 );
               })}
@@ -220,7 +249,9 @@ export default function HandbookModal({ isOpen, onClose }: HandbookModalProps) {
                       Download
                     </Button>
                   </div>
-                  <CardDescription>{currentSection.description}</CardDescription>
+                  <CardDescription>
+                    {currentSection.description}
+                  </CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="prose prose-sm max-w-none">

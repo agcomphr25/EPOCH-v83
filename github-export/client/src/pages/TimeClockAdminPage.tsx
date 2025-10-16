@@ -1,4 +1,5 @@
 import React from 'react';
+
 import TimeClockAdmin from '../components/TimeClockAdmin';
 
 export default function TimeClockAdminPage() {

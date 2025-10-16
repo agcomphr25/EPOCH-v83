@@ -1,26 +1,60 @@
-import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
-import { useToast } from "@/hooks/use-toast";
-import { Pencil, Trash2, Plus, Package, ArrowLeft } from "lucide-react";
-import { apiRequest } from "@/lib/queryClient";
+import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { Pencil, Trash2, Plus, Package, ArrowLeft } from 'lucide-react';
+
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/ui/form';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
+import { useToast } from '@/hooks/use-toast';
+import { apiRequest } from '@/lib/queryClient';
 
 const p2PurchaseOrderItemSchema = z.object({
-  partNumber: z.string().min(1, "SKU is required"),
-  partName: z.string().min(1, "Part Name is required"),
-  quantity: z.number().min(1, "Quantity must be at least 1"),
-  unitPrice: z.number().min(0, "Unit price must be non-negative").default(0),
+  partNumber: z.string().min(1, 'SKU is required'),
+  partName: z.string().min(1, 'Part Name is required'),
+  quantity: z.number().min(1, 'Quantity must be at least 1'),
+  unitPrice: z.number().min(0, 'Unit price must be non-negative').default(0),
   specifications: z.string().optional(),
   notes: z.string().optional(),
 });
@@ -50,43 +84,60 @@ interface P2POItemsManagerProps {
   onBack: () => void;
 }
 
-export function P2POItemsManager({ poId, poNumber, onBack }: P2POItemsManagerProps) {
-  const [selectedItem, setSelectedItem] = useState<P2PurchaseOrderItem | null>(null);
+export function P2POItemsManager({
+  poId,
+  poNumber,
+  onBack,
+}: P2POItemsManagerProps) {
+  const [selectedItem, setSelectedItem] = useState<P2PurchaseOrderItem | null>(
+    null
+  );
   const [dialogOpen, setDialogOpen] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
   const { data: items = [], isLoading } = useQuery<P2PurchaseOrderItem[]>({
-    queryKey: ["/api/p2/purchase-orders", poId, "items"],
+    queryKey: ['/api/p2/purchase-orders', poId, 'items'],
     queryFn: () => apiRequest(`/api/p2/purchase-orders/${poId}/items`),
   });
 
   const { data: boms = [] } = useQuery<BOMDefinition[]>({
-    queryKey: ["/api/boms"],
+    queryKey: ['/api/boms'],
   });
 
   const { data: productionOrders = [] } = useQuery({
-    queryKey: ["/api/p2/purchase-orders", poId, "production-orders"],
-    queryFn: () => apiRequest(`/api/p2/purchase-orders/${poId}/production-orders`),
+    queryKey: ['/api/p2/purchase-orders', poId, 'production-orders'],
+    queryFn: () =>
+      apiRequest(`/api/p2/purchase-orders/${poId}/production-orders`),
   });
 
   const { data: materialRequirements = [] } = useQuery({
-    queryKey: ["/api/p2/purchase-orders", poId, "material-requirements"],
-    queryFn: () => apiRequest(`/api/p2/purchase-orders/${poId}/material-requirements`),
+    queryKey: ['/api/p2/purchase-orders', poId, 'material-requirements'],
+    queryFn: () =>
+      apiRequest(`/api/p2/purchase-orders/${poId}/material-requirements`),
     enabled: items.length > 0, // Only fetch when items exist
   });
 
   const generateProductionOrdersMutation = useMutation({
-    mutationFn: () => apiRequest(`/api/p2/purchase-orders/${poId}/generate-production-orders`, { method: "POST" }),
+    mutationFn: () =>
+      apiRequest(`/api/p2/purchase-orders/${poId}/generate-production-orders`, {
+        method: 'POST',
+      }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/p2/purchase-orders", poId, "production-orders"] });
-      toast({ title: "Success", description: "P2 production orders generated successfully" });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/p2/purchase-orders', poId, 'production-orders'],
+      });
+      toast({
+        title: 'Success',
+        description: 'P2 production orders generated successfully',
+      });
     },
     onError: (error: any) => {
-      toast({ 
-        title: "Error", 
-        description: error?.message || "Failed to generate P2 production orders",
-        variant: "destructive" 
+      toast({
+        title: 'Error',
+        description:
+          error?.message || 'Failed to generate P2 production orders',
+        variant: 'destructive',
       });
     },
   });
@@ -94,57 +145,94 @@ export function P2POItemsManager({ poId, poNumber, onBack }: P2POItemsManagerPro
   const form = useForm<P2PurchaseOrderItemForm>({
     resolver: zodResolver(p2PurchaseOrderItemSchema),
     defaultValues: {
-      partNumber: "",
-      partName: "",
+      partNumber: '',
+      partName: '',
       quantity: 1,
       unitPrice: 0,
-      specifications: "",
-      notes: "",
+      specifications: '',
+      notes: '',
     },
   });
 
   const createMutation = useMutation({
-    mutationFn: (data: P2PurchaseOrderItemForm) => apiRequest(`/api/p2/purchase-orders/${poId}/items`, {
-      method: "POST",
-      body: data,
-    }),
+    mutationFn: (data: P2PurchaseOrderItemForm) =>
+      apiRequest(`/api/p2/purchase-orders/${poId}/items`, {
+        method: 'POST',
+        body: data,
+      }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/p2/purchase-orders", poId, "items"] });
-      toast({ title: "Success", description: "P2 Purchase Order item added successfully" });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/p2/purchase-orders', poId, 'items'],
+      });
+      toast({
+        title: 'Success',
+        description: 'P2 Purchase Order item added successfully',
+      });
       setDialogOpen(false);
       form.reset();
     },
     onError: (error: any) => {
-      toast({ title: "Error", description: error.message || "Failed to add P2 purchase order item", variant: "destructive" });
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to add P2 purchase order item',
+        variant: 'destructive',
+      });
     },
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ itemId, data }: { itemId: number; data: Partial<P2PurchaseOrderItemForm> }) =>
+    mutationFn: ({
+      itemId,
+      data,
+    }: {
+      itemId: number;
+      data: Partial<P2PurchaseOrderItemForm>;
+    }) =>
       apiRequest(`/api/p2/purchase-orders/${poId}/items/${itemId}`, {
-        method: "PUT",
+        method: 'PUT',
         body: data,
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/p2/purchase-orders", poId, "items"] });
-      toast({ title: "Success", description: "P2 Purchase Order item updated successfully" });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/p2/purchase-orders', poId, 'items'],
+      });
+      toast({
+        title: 'Success',
+        description: 'P2 Purchase Order item updated successfully',
+      });
       setDialogOpen(false);
       setSelectedItem(null);
       form.reset();
     },
     onError: (error: any) => {
-      toast({ title: "Error", description: error.message || "Failed to update P2 purchase order item", variant: "destructive" });
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to update P2 purchase order item',
+        variant: 'destructive',
+      });
     },
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (itemId: number) => apiRequest(`/api/p2/purchase-orders/${poId}/items/${itemId}`, { method: "DELETE" }),
+    mutationFn: (itemId: number) =>
+      apiRequest(`/api/p2/purchase-orders/${poId}/items/${itemId}`, {
+        method: 'DELETE',
+      }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/p2/purchase-orders", poId, "items"] });
-      toast({ title: "Success", description: "P2 Purchase Order item deleted successfully" });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/p2/purchase-orders', poId, 'items'],
+      });
+      toast({
+        title: 'Success',
+        description: 'P2 Purchase Order item deleted successfully',
+      });
     },
     onError: (error: any) => {
-      toast({ title: "Error", description: error.message || "Failed to delete P2 purchase order item", variant: "destructive" });
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to delete P2 purchase order item',
+        variant: 'destructive',
+      });
     },
   });
 
@@ -163,8 +251,8 @@ export function P2POItemsManager({ poId, poNumber, onBack }: P2POItemsManagerPro
       partName: item.partName,
       quantity: item.quantity,
       unitPrice: item.unitPrice,
-      specifications: item.specifications || "",
-      notes: item.notes || "",
+      specifications: item.specifications || '',
+      notes: item.notes || '',
     });
     setDialogOpen(true);
   };
@@ -172,12 +260,12 @@ export function P2POItemsManager({ poId, poNumber, onBack }: P2POItemsManagerPro
   const openCreateDialog = () => {
     setSelectedItem(null);
     form.reset({
-      partNumber: "",
-      partName: "",
+      partNumber: '',
+      partName: '',
       quantity: 1,
       unitPrice: 0,
-      specifications: "",
-      notes: "",
+      specifications: '',
+      notes: '',
     });
     setDialogOpen(true);
   };
@@ -204,17 +292,25 @@ export function P2POItemsManager({ poId, poNumber, onBack }: P2POItemsManagerPro
             Back to P2 Purchase Orders
           </Button>
           <div>
-            <h2 className="text-2xl font-bold tracking-tight">P2 PO Items - {poNumber}</h2>
-            <p className="text-muted-foreground">Manage parts and quantities for this P2 purchase order</p>
+            <h2 className="text-2xl font-bold tracking-tight">
+              P2 PO Items - {poNumber}
+            </h2>
+            <p className="text-muted-foreground">
+              Manage parts and quantities for this P2 purchase order
+            </p>
           </div>
         </div>
         <div className="flex gap-2">
-          <Button 
-            variant="outline" 
+          <Button
+            variant="outline"
             onClick={() => generateProductionOrdersMutation.mutate()}
-            disabled={generateProductionOrdersMutation.isPending || items.length === 0}
+            disabled={
+              generateProductionOrdersMutation.isPending || items.length === 0
+            }
           >
-            {generateProductionOrdersMutation.isPending ? "Generating..." : "Generate Production Orders"}
+            {generateProductionOrdersMutation.isPending
+              ? 'Generating...'
+              : 'Generate Production Orders'}
           </Button>
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
@@ -225,69 +321,117 @@ export function P2POItemsManager({ poId, poNumber, onBack }: P2POItemsManagerPro
             </DialogTrigger>
             <DialogContent className="max-w-2xl">
               <DialogHeader>
-              <DialogTitle>
-                {selectedItem ? "Edit P2 PO Item" : "Add P2 PO Item"}
-              </DialogTitle>
-              <DialogDescription>
-                {selectedItem ? "Update item information" : "Add a new part to this P2 purchase order"}
-              </DialogDescription>
-            </DialogHeader>
-            <Form {...form}>
-              <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="partNumber"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>SKU</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
+                <DialogTitle>
+                  {selectedItem ? 'Edit P2 PO Item' : 'Add P2 PO Item'}
+                </DialogTitle>
+                <DialogDescription>
+                  {selectedItem
+                    ? 'Update item information'
+                    : 'Add a new part to this P2 purchase order'}
+                </DialogDescription>
+              </DialogHeader>
+              <Form {...form}>
+                <form
+                  onSubmit={form.handleSubmit(handleSubmit)}
+                  className="space-y-4"
+                >
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="partNumber"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>SKU</FormLabel>
+                          <Select
+                            onValueChange={field.onChange}
+                            value={field.value}
+                          >
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select SKU from BOM" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {boms
+                                .filter((bom) => bom.isActive && bom.sku)
+                                .map((bom) => (
+                                  <SelectItem key={bom.id} value={bom.sku}>
+                                    {bom.sku} - {bom.modelName}
+                                  </SelectItem>
+                                ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="partName"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Part Name</FormLabel>
                           <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select SKU from BOM" />
-                            </SelectTrigger>
+                            <Input placeholder="Part description" {...field} />
                           </FormControl>
-                          <SelectContent>
-                            {boms
-                              .filter(bom => bom.isActive && bom.sku)
-                              .map((bom) => (
-                                <SelectItem key={bom.id} value={bom.sku}>
-                                  {bom.sku} - {bom.modelName}
-                                </SelectItem>
-                              ))}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="quantity"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Quantity</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="number"
+                              min="1"
+                              {...field}
+                              onChange={(e) =>
+                                field.onChange(parseInt(e.target.value) || 1)
+                              }
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="unitPrice"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Unit Price ($)</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              {...field}
+                              onChange={(e) =>
+                                field.onChange(parseFloat(e.target.value) || 0)
+                              }
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
                   <FormField
                     control={form.control}
-                    name="partName"
+                    name="specifications"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Part Name</FormLabel>
+                        <FormLabel>Specifications</FormLabel>
                         <FormControl>
-                          <Input placeholder="Part description" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="quantity"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Quantity</FormLabel>
-                        <FormControl>
-                          <Input 
-                            type="number" 
-                            min="1" 
+                          <Textarea
+                            placeholder="Part specifications and requirements..."
                             {...field}
-                            onChange={(e) => field.onChange(parseInt(e.target.value) || 1)}
                           />
                         </FormControl>
                         <FormMessage />
@@ -296,62 +440,41 @@ export function P2POItemsManager({ poId, poNumber, onBack }: P2POItemsManagerPro
                   />
                   <FormField
                     control={form.control}
-                    name="unitPrice"
+                    name="notes"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Unit Price ($)</FormLabel>
+                        <FormLabel>Notes</FormLabel>
                         <FormControl>
-                          <Input 
-                            type="number" 
-                            step="0.01" 
-                            min="0" 
+                          <Textarea
+                            placeholder="Additional notes..."
                             {...field}
-                            onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
                           />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
-                </div>
-                <FormField
-                  control={form.control}
-                  name="specifications"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Specifications</FormLabel>
-                      <FormControl>
-                        <Textarea placeholder="Part specifications and requirements..." {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="notes"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Notes</FormLabel>
-                      <FormControl>
-                        <Textarea placeholder="Additional notes..." {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <div className="flex justify-end space-x-2">
-                  <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
-                    Cancel
-                  </Button>
-                  <Button type="submit" disabled={createMutation.isPending || updateMutation.isPending}>
-                    {selectedItem ? "Update" : "Add"} Item
-                  </Button>
-                </div>
-              </form>
-            </Form>
-          </DialogContent>
-        </Dialog>
+                  <div className="flex justify-end space-x-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setDialogOpen(false)}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      type="submit"
+                      disabled={
+                        createMutation.isPending || updateMutation.isPending
+                      }
+                    >
+                      {selectedItem ? 'Update' : 'Add'} Item
+                    </Button>
+                  </div>
+                </form>
+              </Form>
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
 
@@ -380,7 +503,8 @@ export function P2POItemsManager({ poId, poNumber, onBack }: P2POItemsManagerPro
                 </Badge>
               </CardTitle>
               <CardDescription>
-                {items.length} item{items.length !== 1 ? 's' : ''} in this P2 purchase order
+                {items.length} item{items.length !== 1 ? 's' : ''} in this P2
+                purchase order
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -398,28 +522,40 @@ export function P2POItemsManager({ poId, poNumber, onBack }: P2POItemsManagerPro
                 <TableBody>
                   {items.map((item) => (
                     <TableRow key={item.id}>
-                      <TableCell className="font-medium">{item.partNumber}</TableCell>
+                      <TableCell className="font-medium">
+                        {item.partNumber}
+                      </TableCell>
                       <TableCell>
                         <div>
                           <p className="font-medium">{item.partName}</p>
                           {item.specifications && (
-                            <p className="text-sm text-muted-foreground">{item.specifications}</p>
+                            <p className="text-sm text-muted-foreground">
+                              {item.specifications}
+                            </p>
                           )}
                         </div>
                       </TableCell>
-                      <TableCell className="text-right">{item.quantity}</TableCell>
-                      <TableCell className="text-right">{formatCurrency(item.unitPrice)}</TableCell>
+                      <TableCell className="text-right">
+                        {item.quantity}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {formatCurrency(item.unitPrice)}
+                      </TableCell>
                       <TableCell className="text-right font-medium">
                         {formatCurrency(item.totalPrice)}
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
-                          <Button variant="outline" size="sm" onClick={() => openEditDialog(item)}>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => openEditDialog(item)}
+                          >
                             <Pencil className="h-4 w-4" />
                           </Button>
-                          <Button 
-                            variant="outline" 
-                            size="sm" 
+                          <Button
+                            variant="outline"
+                            size="sm"
                             onClick={() => deleteMutation.mutate(item.id)}
                             disabled={deleteMutation.isPending}
                           >
@@ -442,7 +578,9 @@ export function P2POItemsManager({ poId, poNumber, onBack }: P2POItemsManagerPro
           <CardHeader>
             <CardTitle>Generated Production Orders</CardTitle>
             <CardDescription>
-              {productionOrders.length} production order{productionOrders.length !== 1 ? 's' : ''} generated from this P2 purchase order
+              {productionOrders.length} production order
+              {productionOrders.length !== 1 ? 's' : ''} generated from this P2
+              purchase order
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -461,22 +599,36 @@ export function P2POItemsManager({ poId, poNumber, onBack }: P2POItemsManagerPro
               <TableBody>
                 {productionOrders.map((order: any) => (
                   <TableRow key={order.id}>
-                    <TableCell className="font-mono text-sm">{order.orderId}</TableCell>
+                    <TableCell className="font-mono text-sm">
+                      {order.orderId}
+                    </TableCell>
                     <TableCell className="font-medium">{order.sku}</TableCell>
                     <TableCell>{order.partName}</TableCell>
                     <TableCell>
                       <Badge variant="outline">{order.department}</Badge>
                     </TableCell>
-                    <TableCell className="text-right">{order.quantity}</TableCell>
+                    <TableCell className="text-right">
+                      {order.quantity}
+                    </TableCell>
                     <TableCell>
-                      <Badge variant={order.status === 'PENDING' ? 'secondary' : 
-                                    order.status === 'IN_PROGRESS' ? 'default' : 
-                                    order.status === 'COMPLETED' ? 'success' : 'destructive'}>
+                      <Badge
+                        variant={
+                          order.status === 'PENDING'
+                            ? 'secondary'
+                            : order.status === 'IN_PROGRESS'
+                              ? 'default'
+                              : order.status === 'COMPLETED'
+                                ? 'success'
+                                : 'destructive'
+                        }
+                      >
                         {order.status}
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      {order.dueDate ? new Date(order.dueDate).toLocaleDateString() : 'No due date'}
+                      {order.dueDate
+                        ? new Date(order.dueDate).toLocaleDateString()
+                        : 'No due date'}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -492,7 +644,8 @@ export function P2POItemsManager({ poId, poNumber, onBack }: P2POItemsManagerPro
           <CardHeader>
             <CardTitle>Material Requirements</CardTitle>
             <CardDescription>
-              Materials needed for production (quantity tracking only - no production orders created)
+              Materials needed for production (quantity tracking only - no
+              production orders created)
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -508,19 +661,32 @@ export function P2POItemsManager({ poId, poNumber, onBack }: P2POItemsManagerPro
               <TableBody>
                 {materialRequirements.map((material: any, index: number) => (
                   <TableRow key={index}>
-                    <TableCell className="font-medium">{material.partName}</TableCell>
+                    <TableCell className="font-medium">
+                      {material.partName}
+                    </TableCell>
                     <TableCell>
                       <Badge variant="outline">{material.department}</Badge>
                     </TableCell>
-                    <TableCell className="text-right font-mono">{material.totalQuantity}</TableCell>
+                    <TableCell className="text-right font-mono">
+                      {material.totalQuantity}
+                    </TableCell>
                     <TableCell>
                       <div className="space-y-1">
-                        {material.sources.map((source: any, sourceIndex: number) => (
-                          <div key={sourceIndex} className="text-sm text-muted-foreground">
-                            {source.sku} × {source.skuQuantity} = {source.subtotal} 
-                            <span className="text-xs"> ({source.bomQuantity} each)</span>
-                          </div>
-                        ))}
+                        {material.sources.map(
+                          (source: any, sourceIndex: number) => (
+                            <div
+                              key={sourceIndex}
+                              className="text-sm text-muted-foreground"
+                            >
+                              {source.sku} × {source.skuQuantity} ={' '}
+                              {source.subtotal}
+                              <span className="text-xs">
+                                {' '}
+                                ({source.bomQuantity} each)
+                              </span>
+                            </div>
+                          )
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>

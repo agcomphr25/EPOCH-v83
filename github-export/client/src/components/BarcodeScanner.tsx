@@ -1,13 +1,22 @@
 import { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
-import { Scan, Package, User, Calendar, DollarSign, CreditCard, Settings } from 'lucide-react';
+import {
+  Scan,
+  Package,
+  User,
+  Calendar,
+  DollarSign,
+  CreditCard,
+  Settings,
+} from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
-import { apiRequest } from '@/lib/queryClient';
 import { useLocation } from 'wouter';
+
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+import { apiRequest } from '@/lib/queryClient';
 import { formatOrderDetails } from '@/components/OrderTooltip';
 
 interface LineItem {
@@ -79,10 +88,14 @@ export function BarcodeScanner() {
     queryKey: ['/api/stock-models'],
   });
 
-  const { data: orderSummary, isLoading, error } = useQuery({
+  const {
+    data: orderSummary,
+    isLoading,
+    error,
+  } = useQuery({
     queryKey: ['/api/barcode/scan', scannedBarcode],
     enabled: !!scannedBarcode,
-    retry: false
+    retry: false,
   });
 
   const handleScan = () => {
@@ -113,7 +126,7 @@ export function BarcodeScanner() {
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
-      currency: 'USD'
+      currency: 'USD',
     }).format(amount);
   };
 
@@ -121,7 +134,7 @@ export function BarcodeScanner() {
     return new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',
-      day: 'numeric'
+      day: 'numeric',
     });
   };
 
@@ -187,13 +200,16 @@ export function BarcodeScanner() {
                   Scanned Order: {orderSummary.orderId}
                 </CardTitle>
                 <div className="flex gap-2">
-                  <Badge variant="outline" className={getPaymentStatusColor(orderSummary.paymentStatus)}>
+                  <Badge
+                    variant="outline"
+                    className={getPaymentStatusColor(
+                      orderSummary.paymentStatus
+                    )}
+                  >
                     <CreditCard className="h-3 w-3 mr-1" />
                     {orderSummary.paymentStatus}
                   </Badge>
-                  <Badge variant="outline">
-                    {orderSummary.status}
-                  </Badge>
+                  <Badge variant="outline">{orderSummary.status}</Badge>
                 </div>
               </div>
             </CardHeader>
@@ -222,20 +238,33 @@ export function BarcodeScanner() {
                 {/* Base Model */}
                 {orderSummary.baseModel && (
                   <div className="bg-gray-50 p-3 rounded-lg">
-                    <div className="font-semibold text-blue-900">Base Model</div>
-                    <div className="text-lg font-medium">{orderSummary.baseModel.name}</div>
+                    <div className="font-semibold text-blue-900">
+                      Base Model
+                    </div>
+                    <div className="text-lg font-medium">
+                      {orderSummary.baseModel.name}
+                    </div>
                   </div>
                 )}
-                
+
                 {/* Features */}
                 {orderSummary.features && orderSummary.features.length > 0 && (
                   <div className="space-y-2">
-                    <div className="font-semibold text-gray-700 border-b pb-1">Selected Features</div>
+                    <div className="font-semibold text-gray-700 border-b pb-1">
+                      Selected Features
+                    </div>
                     {orderSummary.features.map((feature, index) => (
-                      <div key={index} className="flex items-start justify-between py-2 border-b border-gray-100 last:border-0">
+                      <div
+                        key={index}
+                        className="flex items-start justify-between py-2 border-b border-gray-100 last:border-0"
+                      >
                         <div className="flex-1">
-                          <div className="font-medium text-gray-900">{feature.name}</div>
-                          <div className="text-sm text-gray-600">{feature.value}</div>
+                          <div className="font-medium text-gray-900">
+                            {feature.name}
+                          </div>
+                          <div className="text-sm text-gray-600">
+                            {feature.value}
+                          </div>
                         </div>
                         <Badge variant="outline" className="text-xs ml-2">
                           {feature.type}
@@ -244,8 +273,9 @@ export function BarcodeScanner() {
                     ))}
                   </div>
                 )}
-                
-                {(!orderSummary.features || orderSummary.features.length === 0) && (
+
+                {(!orderSummary.features ||
+                  orderSummary.features.length === 0) && (
                   <div className="text-center text-gray-500 py-4">
                     No custom features selected
                   </div>
@@ -268,32 +298,41 @@ export function BarcodeScanner() {
             <CardContent>
               <div className="space-y-3">
                 {orderSummary.lineItems.map((item, index) => (
-                  <div key={index} className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
+                  <div
+                    key={index}
+                    className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0"
+                  >
                     <div className="flex-1">
                       <div className="font-medium">{item.name}</div>
-                      <div className="text-sm text-gray-600">{item.description}</div>
+                      <div className="text-sm text-gray-600">
+                        {item.description}
+                      </div>
                     </div>
                     <div className="text-right">
-                      <div className="text-sm text-gray-500">Qty: {item.quantity}</div>
+                      <div className="text-sm text-gray-500">
+                        Qty: {item.quantity}
+                      </div>
                       <Badge variant="outline" className="text-xs mt-1">
                         {item.type}
                       </Badge>
                     </div>
                   </div>
                 ))}
-                
+
                 <Separator />
-                
+
                 <div className="space-y-2 pt-2 text-center text-gray-500">
                   <div className="flex items-center justify-center gap-2">
                     <span>💰</span>
                     <span>Pricing information is hidden for security</span>
                   </div>
-                  {orderSummary.pricing.discounts && orderSummary.pricing.discounts.length > 0 && (
-                    <div className="text-sm text-blue-600">
-                      ✅ {orderSummary.pricing.discounts.length} discount(s) applied
-                    </div>
-                  )}
+                  {orderSummary.pricing.discounts &&
+                    orderSummary.pricing.discounts.length > 0 && (
+                      <div className="text-sm text-blue-600">
+                        ✅ {orderSummary.pricing.discounts.length} discount(s)
+                        applied
+                      </div>
+                    )}
                   {orderSummary.pricing.override && (
                     <div className="text-sm text-orange-600">
                       ⚠️ Custom pricing override applied
@@ -314,17 +353,20 @@ export function BarcodeScanner() {
             </CardHeader>
             <CardContent>
               <div className="flex items-center justify-center p-6">
-                <Badge 
-                  variant="outline" 
+                <Badge
+                  variant="outline"
                   className={`${getPaymentStatusColor(orderSummary.paymentStatus)} text-lg px-4 py-2`}
                 >
                   {orderSummary.paymentStatus}
                 </Badge>
               </div>
               <div className="text-center text-sm text-gray-600">
-                {orderSummary.paymentStatus === 'PAID' && 'Payment has been processed successfully'}
-                {orderSummary.paymentStatus === 'PENDING' && 'Payment is being processed'}
-                {orderSummary.paymentStatus === 'UNPAID' && 'Payment is required for this order'}
+                {orderSummary.paymentStatus === 'PAID' &&
+                  'Payment has been processed successfully'}
+                {orderSummary.paymentStatus === 'PENDING' &&
+                  'Payment is being processed'}
+                {orderSummary.paymentStatus === 'UNPAID' &&
+                  'Payment is required for this order'}
               </div>
             </CardContent>
           </Card>

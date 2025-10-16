@@ -1,20 +1,43 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
+import { Package, Users, ChevronDown, Send, CheckCircle } from 'lucide-react';
+import debounce from 'lodash.debounce';
+import { useLocation, useRoute } from 'wouter';
+import type { Customer } from '@shared/schema';
+
 import { apiRequest } from '@/lib/queryClient';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { Package, Users, ChevronDown, Send, CheckCircle } from 'lucide-react';
-import debounce from 'lodash.debounce';
-import { useLocation, useRoute } from 'wouter';
 import CustomerSearchInput from '@/components/CustomerSearchInput';
-import type { Customer } from '@shared/schema';
 
 interface StockModel {
   id: string;
@@ -56,7 +79,9 @@ export default function OrderEntry() {
   const [features, setFeatures] = useState<Record<string, any>>({});
 
   const [orderDate, setOrderDate] = useState(new Date());
-  const [dueDate, setDueDate] = useState(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)); // 30 days from now
+  const [dueDate, setDueDate] = useState(
+    new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+  ); // 30 days from now
   const [lastOrderId, setLastOrderId] = useState<string | null>(null);
   const [orderId, setOrderId] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -108,10 +133,8 @@ export default function OrderEntry() {
                 />
               </div>
             )}
-            
-            <Button className="w-full">
-              Create Order
-            </Button>
+
+            <Button className="w-full">Create Order</Button>
           </div>
         </CardContent>
       </Card>

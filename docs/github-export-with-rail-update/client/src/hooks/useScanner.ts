@@ -18,13 +18,14 @@ export default function useScanner() {
         e.preventDefault();
         // Simulate scanning a barcode
         const mockBarcodes = ['PART001', 'PART002', 'PART003'];
-        const randomBarcode = mockBarcodes[Math.floor(Math.random() * mockBarcodes.length)];
+        const randomBarcode =
+          mockBarcodes[Math.floor(Math.random() * mockBarcodes.length)];
         setScannedData(randomBarcode);
       }
     };
 
     window.addEventListener('keydown', handleKeyPress);
-    
+
     return () => {
       window.removeEventListener('keydown', handleKeyPress);
       // In production: ScannerSDK.disconnect();

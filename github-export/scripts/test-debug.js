@@ -5,25 +5,28 @@ const PERIOD_MS = 14 * 24 * 60 * 60 * 1000;
 function getNextPeriodPrefix(firstLetter, secondLetter, periodsToAdvance = 1) {
   let firstIdx = firstLetter.charCodeAt(0) - 65;
   let secondIdx = secondLetter.charCodeAt(0) - 65;
-  
+
   secondIdx += periodsToAdvance;
-  
+
   while (secondIdx > 25) {
     secondIdx -= 26;
     firstIdx++;
   }
-  
+
   if (firstIdx > 25) {
     firstIdx = firstIdx % 26;
   }
-  
+
   const letter = (i) => String.fromCharCode(65 + i);
   return letter(firstIdx) + letter(secondIdx);
 }
 
 function generateP1OrderId(date, lastId) {
-  console.log('P1 Generator called with:', { date: date.toISOString(), lastId });
-  
+  console.log('P1 Generator called with:', {
+    date: date.toISOString(),
+    lastId,
+  });
+
   // If no last ID is provided or invalid, start with AA001
   if (!lastId || lastId.trim() === '') {
     console.log('No last ID provided, returning AA001');
@@ -45,16 +48,18 @@ function generateP1OrderId(date, lastId) {
   const lastFirstIdx = firstLetter.charCodeAt(0) - 65;
   const lastSecondIdx = secondLetter.charCodeAt(0) - 65;
   const lastPeriodIndex = lastFirstIdx * 26 + lastSecondIdx;
-  const lastPeriodDate = new Date(BASE_DATE.getTime() + lastPeriodIndex * PERIOD_MS);
+  const lastPeriodDate = new Date(
+    BASE_DATE.getTime() + lastPeriodIndex * PERIOD_MS
+  );
 
   // Check if we're still in the same 14-day period as the last order
   const timeSinceLastPeriod = date.getTime() - lastPeriodDate.getTime();
   const periodsElapsed = Math.floor(timeSinceLastPeriod / PERIOD_MS);
-  
-  console.log('Period calculation:', { 
-    lastPeriodIndex, 
-    lastPeriodDate: lastPeriodDate.toISOString().split('T')[0], 
-    periodsElapsed 
+
+  console.log('Period calculation:', {
+    lastPeriodIndex,
+    lastPeriodDate: lastPeriodDate.toISOString().split('T')[0],
+    periodsElapsed,
   });
 
   if (periodsElapsed === 0) {
@@ -66,12 +71,14 @@ function generateP1OrderId(date, lastId) {
       console.log('Sequence > 999, advancing to:', result);
       return result;
     }
-    const result = firstLetter + secondLetter + String(nextSeq).padStart(3, '0');
+    const result =
+      firstLetter + secondLetter + String(nextSeq).padStart(3, '0');
     console.log('Same period, incrementing to:', result);
     return result;
   } else {
     // Different period: advance the letters based on periods elapsed
-    const result = getNextPeriodPrefix(firstLetter, secondLetter, periodsElapsed) + '001';
+    const result =
+      getNextPeriodPrefix(firstLetter, secondLetter, periodsElapsed) + '001';
     console.log('Different period, advancing to:', result);
     return result;
   }

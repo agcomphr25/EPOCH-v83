@@ -1,7 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { Button } from '@/components/ui/button';
 import { Download, Smartphone, X } from 'lucide-react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+
+import { Button } from '@/components/ui/button';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
 import { showInstallPrompt, isAppInstalled, isMobileDevice } from '@/utils/pwa';
 
 interface InstallPWAButtonProps {
@@ -16,12 +23,12 @@ export default function InstallPWAButton({ className }: InstallPWAButtonProps) {
   useEffect(() => {
     // Check if app is already installed
     setIsInstalled(isAppInstalled());
-    
+
     // Listen for beforeinstallprompt event
     const handleBeforeInstallPrompt = (e: Event) => {
       e.preventDefault();
       setCanInstall(true);
-      
+
       // Show install banner for mobile devices
       if (isMobileDevice() && !isAppInstalled()) {
         setShowInstallBanner(true);
@@ -31,7 +38,10 @@ export default function InstallPWAButton({ className }: InstallPWAButtonProps) {
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
 
     return () => {
-      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      window.removeEventListener(
+        'beforeinstallprompt',
+        handleBeforeInstallPrompt
+      );
     };
   }, []);
 
@@ -74,7 +84,8 @@ export default function InstallPWAButton({ className }: InstallPWAButtonProps) {
             </Button>
           </div>
           <CardDescription>
-            Get the full app experience! Install EPOCH v8 on your device for offline access and better performance.
+            Get the full app experience! Install EPOCH v8 on your device for
+            offline access and better performance.
           </CardDescription>
         </CardHeader>
         <CardContent className="pt-0">

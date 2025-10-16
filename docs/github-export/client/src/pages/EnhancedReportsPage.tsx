@@ -1,4 +1,5 @@
 import React from 'react';
+
 import EnhancedReportBuilder from '@/components/EnhancedReportBuilder';
 
 export default function EnhancedReportsPage() {

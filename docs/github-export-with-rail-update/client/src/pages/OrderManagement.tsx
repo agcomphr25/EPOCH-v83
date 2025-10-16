@@ -1,9 +1,10 @@
-import React from "react";
-import { Factory, User } from "lucide-react";
-import { OrderIDGenerator } from "@/components/OrderIDGenerator";
-import { CSVImport } from "@/components/CSVImport";
-import { DataDisplay } from "@/components/DataDisplay";
-import { TestResults } from "@/components/TestResults";
+import React from 'react';
+import { Factory, User } from 'lucide-react';
+
+import { OrderIDGenerator } from '@/components/OrderIDGenerator';
+import { CSVImport } from '@/components/CSVImport';
+import { DataDisplay } from '@/components/DataDisplay';
+import { TestResults } from '@/components/TestResults';
 
 export default function OrderManagement() {
   return (

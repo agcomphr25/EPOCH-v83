@@ -5,16 +5,20 @@ This directory contains step-by-step user guides for common tasks in the EPOCH v
 ## Available Guides
 
 ### Customer Management
+
 - **[Customer Creation Guide](./customer-creation-guide.md)** - Complete walkthrough for adding new customers with address validation
 
 ## Coming Soon
+
 - Order Entry Guide
 - Feature Management Guide
 - Inventory Management Guide
 - Production Pipeline Guide
 
 ## Guide Format
+
 Each guide includes:
+
 - Step-by-step instructions with screenshots
 - Key features and benefits
 - Common issues and solutions
@@ -22,7 +26,9 @@ Each guide includes:
 - Integration information
 
 ## For System Administrators
+
 These guides are designed for end users and can be:
+
 - Shared with new employees for training
 - Used as reference documentation
 - Customized for specific business processes
@@ -30,4 +36,4 @@ These guides are designed for end users and can be:
 
 ---
 
-*EPOCH v8 Manufacturing ERP System - User Documentation*
+_EPOCH v8 Manufacturing ERP System - User Documentation_

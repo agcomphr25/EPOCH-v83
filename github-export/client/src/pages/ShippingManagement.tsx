@@ -1,12 +1,34 @@
 import { useState, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import {
+  Truck,
+  Package,
+  Search,
+  Filter,
+  Send,
+  CheckCircle,
+  Clock,
+} from 'lucide-react';
+
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { useQuery } from '@tanstack/react-query';
-import { Truck, Package, Search, Filter, Send, CheckCircle, Clock } from 'lucide-react';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { ShippingTracker } from '@/components/ShippingTracker';
 
 interface OrderWithTracking {
@@ -29,26 +51,38 @@ export default function ShippingManagement() {
   const [filterStatus, setFilterStatus] = useState('all');
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
 
-  const { data: orders, isLoading, refetch } = useQuery({
+  const {
+    data: orders,
+    isLoading,
+    refetch,
+  } = useQuery({
     queryKey: ['/api/order-drafts'],
-    select: (data: any[]) => data.filter(order => 
-      order.currentDepartment === 'Shipping' || 
-      order.trackingNumber ||
-      order.shippedDate
-    )
+    select: (data: any[]) =>
+      data.filter(
+        (order) =>
+          order.currentDepartment === 'Shipping' ||
+          order.trackingNumber ||
+          order.shippedDate
+      ),
   });
 
   const filteredOrders = orders?.filter((order: OrderWithTracking) => {
-    const matchesSearch = order.orderId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         order.customer.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         (order.trackingNumber && order.trackingNumber.toLowerCase().includes(searchTerm.toLowerCase()));
-    
+    const matchesSearch =
+      order.orderId.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      order.customer.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (order.trackingNumber &&
+        order.trackingNumber.toLowerCase().includes(searchTerm.toLowerCase()));
+
     if (filterStatus === 'all') return matchesSearch;
-    if (filterStatus === 'shipped') return matchesSearch && order.trackingNumber;
-    if (filterStatus === 'pending') return matchesSearch && !order.trackingNumber;
-    if (filterStatus === 'delivered') return matchesSearch && order.deliveryConfirmed;
-    if (filterStatus === 'notified') return matchesSearch && order.customerNotified;
-    
+    if (filterStatus === 'shipped')
+      return matchesSearch && order.trackingNumber;
+    if (filterStatus === 'pending')
+      return matchesSearch && !order.trackingNumber;
+    if (filterStatus === 'delivered')
+      return matchesSearch && order.deliveryConfirmed;
+    if (filterStatus === 'notified')
+      return matchesSearch && order.customerNotified;
+
     return matchesSearch;
   });
 
@@ -100,7 +134,10 @@ export default function ShippingManagement() {
         <CardContent>
           <div className="flex gap-4 items-end">
             <div className="flex-1">
-              <label htmlFor="search" className="block text-sm font-medium mb-1">
+              <label
+                htmlFor="search"
+                className="block text-sm font-medium mb-1"
+              >
                 Search Orders
               </label>
               <div className="relative">
@@ -115,7 +152,10 @@ export default function ShippingManagement() {
               </div>
             </div>
             <div className="w-48">
-              <label htmlFor="status" className="block text-sm font-medium mb-1">
+              <label
+                htmlFor="status"
+                className="block text-sm font-medium mb-1"
+              >
                 Status
               </label>
               <Select value={filterStatus} onValueChange={setFilterStatus}>
@@ -190,7 +230,10 @@ export default function ShippingManagement() {
                     <TableCell>{formatDate(order.shippedDate)}</TableCell>
                     <TableCell>
                       {order.customerNotified ? (
-                        <Badge variant="default" className="flex items-center gap-1 w-fit">
+                        <Badge
+                          variant="default"
+                          className="flex items-center gap-1 w-fit"
+                        >
                           <Send className="h-3 w-3" />
                           {order.notificationMethod || 'Yes'}
                         </Badge>
@@ -221,7 +264,9 @@ export default function ShippingManagement() {
           <div className="bg-white rounded-lg max-w-md w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-bold">Manage Shipping - {selectedOrderId}</h2>
+                <h2 className="text-xl font-bold">
+                  Manage Shipping - {selectedOrderId}
+                </h2>
                 <Button
                   variant="ghost"
                   size="sm"

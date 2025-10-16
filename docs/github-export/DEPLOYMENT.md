@@ -1,9 +1,9 @@
-
 # Deployment Guide
 
 ## Local Development
 
 1. **Clone and Install**:
+
 ```bash
 git clone <your-repo-url>
 cd epoch-v8-erp
@@ -11,17 +11,20 @@ npm install
 ```
 
 2. **Environment Setup**:
+
 ```bash
 cp .env.example .env
 # Edit .env with your database credentials
 ```
 
 3. **Database Setup**:
+
 ```bash
 npm run db:push
 ```
 
 4. **Start Development**:
+
 ```bash
 npm run dev
 ```
@@ -31,17 +34,20 @@ npm run dev
 ### Option 1: Traditional VPS/Server
 
 1. **Build the application**:
+
 ```bash
 npm run build
 ```
 
 2. **Set production environment**:
+
 ```bash
 export NODE_ENV=production
 export DATABASE_URL=your_production_db_url
 ```
 
 3. **Start the server**:
+
 ```bash
 npm start
 ```
@@ -68,6 +74,7 @@ CMD ["npm", "start"]
 ## Database Migration
 
 If you have an existing database, run:
+
 ```bash
 npm run db:generate
 npm run db:migrate
@@ -76,6 +83,7 @@ npm run db:migrate
 ## Mobile App Deployment
 
 For mobile app deployment:
+
 ```bash
 npm run mobile:setup
 npm run mobile:sync
@@ -91,5 +99,6 @@ Required environment variables:
 - `NODE_ENV`: Environment (development/production)
 
 Optional:
+
 - `SMARTYSTREETS_AUTH_ID`: For address validation
 - `SMARTYSTREETS_AUTH_TOKEN`: For address validation

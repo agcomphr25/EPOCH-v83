@@ -1,19 +1,24 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
-import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
-import { 
-  Package, 
-  Calendar, 
-  User, 
-  FileText, 
-  Hash, 
-  CheckCircle, 
+import {
+  Package,
+  Calendar,
+  User,
+  FileText,
+  Hash,
+  CheckCircle,
   AlertTriangle,
   Clock,
-  Building
+  Building,
 } from 'lucide-react';
+
+import {
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from '@/components/ui/hover-card';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
 import { apiRequest } from '@/lib/queryClient';
 
 interface OrderSummaryTooltipProps {
@@ -72,7 +77,10 @@ interface Feature {
   options: Array<{ value: string; label: string; price: number }>;
 }
 
-export default function OrderSummaryTooltip({ children, orderId }: OrderSummaryTooltipProps) {
+export default function OrderSummaryTooltip({
+  children,
+  orderId,
+}: OrderSummaryTooltipProps) {
   const [isOpen, setIsOpen] = useState(false);
 
   const { data: order, isLoading } = useQuery<DetailedOrder>({
@@ -94,11 +102,11 @@ export default function OrderSummaryTooltip({ children, orderId }: OrderSummaryT
   // Helper function to get feature display value
   const getFeatureDisplayValue = (featureId: string, value: any): string => {
     if (!value) return '';
-    
+
     const stringValue = String(value);
-    const feature = features.find(f => f.id === featureId);
+    const feature = features.find((f) => f.id === featureId);
     if (feature && feature.options) {
-      const option = feature.options.find(opt => opt.value === stringValue);
+      const option = feature.options.find((opt) => opt.value === stringValue);
       if (option) return option.label;
     }
     return formatBasicValue(value);
@@ -107,24 +115,24 @@ export default function OrderSummaryTooltip({ children, orderId }: OrderSummaryT
   // Helper function for basic value formatting (for non-database features)
   const formatBasicValue = (value: any): string => {
     if (!value) return '';
-    
+
     // Convert to string if not already
     const stringValue = String(value);
-    
+
     // Handle common cases
     if (stringValue === 'right' || stringValue === 'left') {
       return stringValue.charAt(0).toUpperCase() + stringValue.slice(1);
     }
-    
+
     // Convert underscores to spaces and capitalize
     return stringValue
       .replace(/_/g, ' ')
-      .replace(/\b\w/g, l => l.toUpperCase());
+      .replace(/\b\w/g, (l) => l.toUpperCase());
   };
 
   // Get stock model display name
   const getStockModelName = (modelId: string): string => {
-    const model = stockModels.find(m => m.id === modelId);
+    const model = stockModels.find((m) => m.id === modelId);
     return model?.displayName || modelId;
   };
 
@@ -185,14 +193,20 @@ export default function OrderSummaryTooltip({ children, orderId }: OrderSummaryT
                       <div>
                         <span className="font-medium">Handedness:</span>
                         <span className="ml-2 text-gray-600">
-                          {order.handedness === 'right' ? 'Right' : order.handedness === 'left' ? 'Left' : order.handedness}
+                          {order.handedness === 'right'
+                            ? 'Right'
+                            : order.handedness === 'left'
+                              ? 'Left'
+                              : order.handedness}
                         </span>
                       </div>
                     )}
                     {order.shankLength && (
                       <div>
                         <span className="font-medium">Shank Length:</span>
-                        <span className="ml-2 text-gray-600">{order.shankLength}</span>
+                        <span className="ml-2 text-gray-600">
+                          {order.shankLength}
+                        </span>
                       </div>
                     )}
                   </div>
@@ -205,7 +219,10 @@ export default function OrderSummaryTooltip({ children, orderId }: OrderSummaryT
                   <div className="text-sm font-medium mb-2">Features:</div>
                   <div className="text-sm ml-4 space-y-1">
                     {Object.entries(order.features)
-                      .filter(([_, value]) => value && value !== '' && value !== 'none')
+                      .filter(
+                        ([_, value]) =>
+                          value && value !== '' && value !== 'none'
+                      )
                       .map(([key, value]) => (
                         <div key={key} className="flex justify-between">
                           <span className="text-gray-600 capitalize">
@@ -232,8 +249,6 @@ export default function OrderSummaryTooltip({ children, orderId }: OrderSummaryT
                   </div>
                 </div>
               )}
-
-
             </>
           )}
         </div>

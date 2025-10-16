@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { ilike, or } from 'drizzle-orm';
+
 import { db } from '../../db';
 import { orders } from '../../schema';
 
@@ -9,7 +10,7 @@ const router = Router();
 router.get('/search', async (req, res) => {
   try {
     const { query } = req.query;
-    
+
     if (!query || typeof query !== 'string' || query.length < 2) {
       return res.json([]);
     }

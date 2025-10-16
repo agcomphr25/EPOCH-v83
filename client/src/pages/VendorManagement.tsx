@@ -1,33 +1,84 @@
 import { useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import {
+  Plus,
+  Search,
+  ChevronUp,
+  ChevronDown,
+  Edit,
+  Trash2,
+  CheckCircle,
+  XCircle,
+  User,
+} from 'lucide-react';
+import {
+  insertVendorSchema,
+  insertVendorContactSchema,
+  type Vendor,
+  type VendorContact,
+} from '@shared/schema';
+
 import { queryClient, apiRequest } from '@/lib/queryClient';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Plus, Search, ChevronUp, ChevronDown, Edit, Trash2, CheckCircle, XCircle, User } from 'lucide-react';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { insertVendorSchema, insertVendorContactSchema, type Vendor, type VendorContact } from '@shared/schema';
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/ui/form';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import SimpleAddressInput from '@/components/SimpleAddressInput';
 import type { AddressData } from '@/utils/addressUtils';
 
 const vendorFormSchema = insertVendorSchema.extend({
   email: z.string().email('Invalid email').optional().or(z.literal('')),
-  additionalEmail: z.string().email('Invalid email').optional().or(z.literal('')),
+  additionalEmail: z
+    .string()
+    .email('Invalid email')
+    .optional()
+    .or(z.literal('')),
   evaluationDate: z.string().optional(),
 });
 
-const vendorContactFormSchema = insertVendorContactSchema.extend({
-  email: z.string().email('Invalid email').optional().or(z.literal('')),
-}).omit({ vendorId: true });
+const vendorContactFormSchema = insertVendorContactSchema
+  .extend({
+    email: z.string().email('Invalid email').optional().or(z.literal('')),
+  })
+  .omit({ vendorId: true });
 
 type VendorFormData = z.infer<typeof vendorFormSchema>;
 type VendorContactFormData = z.infer<typeof vendorContactFormSchema>;
@@ -49,10 +100,10 @@ export default function VendorManagement() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingVendor, setEditingVendor] = useState<Vendor | null>(null);
   const [deleteVendor, setDeleteVendor] = useState<Vendor | null>(null);
-  
+
   // Pending contacts for new vendors (before vendor is created)
   const [pendingContacts, setPendingContacts] = useState<PendingContact[]>([]);
-  
+
   // Filter and pagination state
   const [search, setSearch] = useState('');
   const [approved, setApproved] = useState<'any' | 'true' | 'false'>('any');
@@ -100,7 +151,17 @@ export default function VendorManagement() {
 
   // Fetch vendors
   const { data: vendorsData, isLoading } = useQuery<VendorsResponse>({
-    queryKey: ['/api/vendors', page, pageSize, search, approved, evaluated, evalFrom, evalTo, sort],
+    queryKey: [
+      '/api/vendors',
+      page,
+      pageSize,
+      search,
+      approved,
+      evaluated,
+      evalFrom,
+      evalTo,
+      sort,
+    ],
     queryFn: async () => {
       const res = await fetch(`/api/vendors?${queryParams}`);
       if (!res.ok) throw new Error('Failed to fetch vendors');
@@ -111,12 +172,15 @@ export default function VendorManagement() {
   // Create vendor mutation
   const createVendorMutation = useMutation({
     mutationFn: async (data: VendorFormData) => {
-      const vendor = await apiRequest('/api/vendors', { method: 'POST', body: data }) as Vendor;
-      
+      const vendor = (await apiRequest('/api/vendors', {
+        method: 'POST',
+        body: data,
+      })) as Vendor;
+
       // Create pending contacts if any
       if (pendingContacts.length > 0) {
         await Promise.all(
-          pendingContacts.map(contact => 
+          pendingContacts.map((contact) =>
             apiRequest(`/api/vendors/${vendor.id}/contacts`, {
               method: 'POST',
               body: {
@@ -126,12 +190,12 @@ export default function VendorManagement() {
                 phone: contact.phone,
                 isPrimary: contact.isPrimary,
                 notes: contact.notes,
-              }
+              },
             })
           )
         );
       }
-      
+
       return vendor;
     },
     onSuccess: () => {
@@ -149,7 +213,10 @@ export default function VendorManagement() {
   // Update vendor mutation
   const updateVendorMutation = useMutation({
     mutationFn: async ({ id, data }: { id: number; data: VendorFormData }) => {
-      return await apiRequest(`/api/vendors/${id}`, { method: 'PUT', body: data });
+      return await apiRequest(`/api/vendors/${id}`, {
+        method: 'PUT',
+        body: data,
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/vendors'] });
@@ -179,12 +246,18 @@ export default function VendorManagement() {
   });
 
   // Contact management state
-  const [editingContact, setEditingContact] = useState<VendorContact | null>(null);
-  const [editingPendingContact, setEditingPendingContact] = useState<PendingContact | null>(null);
-  const [deleteContact, setDeleteContact] = useState<VendorContact | null>(null);
-  const [deletePendingContact, setDeletePendingContact] = useState<PendingContact | null>(null);
+  const [editingContact, setEditingContact] = useState<VendorContact | null>(
+    null
+  );
+  const [editingPendingContact, setEditingPendingContact] =
+    useState<PendingContact | null>(null);
+  const [deleteContact, setDeleteContact] = useState<VendorContact | null>(
+    null
+  );
+  const [deletePendingContact, setDeletePendingContact] =
+    useState<PendingContact | null>(null);
   const [isAddingContact, setIsAddingContact] = useState(false);
-  
+
   const contactForm = useForm<VendorContactFormData>({
     resolver: zodResolver(vendorContactFormSchema),
     defaultValues: {
@@ -198,7 +271,9 @@ export default function VendorManagement() {
   });
 
   // Fetch vendor contacts
-  const { data: contacts = [], isLoading: contactsLoading } = useQuery<VendorContact[]>({
+  const { data: contacts = [], isLoading: contactsLoading } = useQuery<
+    VendorContact[]
+  >({
     queryKey: ['/api/vendors', editingVendor?.id, 'contacts'],
     queryFn: async () => {
       if (!editingVendor?.id) return [];
@@ -214,20 +289,25 @@ export default function VendorManagement() {
     mutationFn: async (data: VendorContactFormData) => {
       if (editingVendor?.id) {
         // Editing existing vendor - create via API
-        return await apiRequest(`/api/vendors/${editingVendor.id}/contacts`, { method: 'POST', body: data });
+        return await apiRequest(`/api/vendors/${editingVendor.id}/contacts`, {
+          method: 'POST',
+          body: data,
+        });
       } else {
         // Creating new vendor - add to pending contacts
         const newContact: PendingContact = {
           ...data,
           tempId: `temp-${Date.now()}-${Math.random()}`,
         };
-        setPendingContacts(prev => [...prev, newContact]);
+        setPendingContacts((prev) => [...prev, newContact]);
         return newContact;
       }
     },
     onSuccess: () => {
       if (editingVendor?.id) {
-        queryClient.invalidateQueries({ queryKey: ['/api/vendors', editingVendor.id, 'contacts'] });
+        queryClient.invalidateQueries({
+          queryKey: ['/api/vendors', editingVendor.id, 'contacts'],
+        });
       }
       toast({ title: 'Contact added successfully' });
       setIsAddingContact(false);
@@ -240,22 +320,35 @@ export default function VendorManagement() {
 
   // Update contact mutation
   const updateContactMutation = useMutation({
-    mutationFn: async ({ id, data, tempId }: { id?: number; data: VendorContactFormData; tempId?: string }) => {
+    mutationFn: async ({
+      id,
+      data,
+      tempId,
+    }: {
+      id?: number;
+      data: VendorContactFormData;
+      tempId?: string;
+    }) => {
       if (tempId) {
         // Update pending contact
-        setPendingContacts(prev => 
-          prev.map(c => c.tempId === tempId ? { ...c, ...data } : c)
+        setPendingContacts((prev) =>
+          prev.map((c) => (c.tempId === tempId ? { ...c, ...data } : c))
         );
         return data;
       } else if (id && editingVendor?.id) {
         // Update existing contact via API
-        return await apiRequest(`/api/vendors/${editingVendor.id}/contacts/${id}`, { method: 'PUT', body: data });
+        return await apiRequest(
+          `/api/vendors/${editingVendor.id}/contacts/${id}`,
+          { method: 'PUT', body: data }
+        );
       }
       throw new Error('No contact identifier provided');
     },
     onSuccess: () => {
       if (editingVendor?.id) {
-        queryClient.invalidateQueries({ queryKey: ['/api/vendors', editingVendor.id, 'contacts'] });
+        queryClient.invalidateQueries({
+          queryKey: ['/api/vendors', editingVendor.id, 'contacts'],
+        });
       }
       toast({ title: 'Contact updated successfully' });
       setEditingContact(null);
@@ -272,17 +365,22 @@ export default function VendorManagement() {
     mutationFn: async ({ id, tempId }: { id?: number; tempId?: string }) => {
       if (tempId) {
         // Delete pending contact
-        setPendingContacts(prev => prev.filter(c => c.tempId !== tempId));
+        setPendingContacts((prev) => prev.filter((c) => c.tempId !== tempId));
         return;
       } else if (id && editingVendor?.id) {
         // Delete existing contact via API
-        return await apiRequest(`/api/vendors/${editingVendor.id}/contacts/${id}`, { method: 'DELETE' });
+        return await apiRequest(
+          `/api/vendors/${editingVendor.id}/contacts/${id}`,
+          { method: 'DELETE' }
+        );
       }
       throw new Error('No contact identifier provided');
     },
     onSuccess: () => {
       if (editingVendor?.id) {
-        queryClient.invalidateQueries({ queryKey: ['/api/vendors', editingVendor.id, 'contacts'] });
+        queryClient.invalidateQueries({
+          queryKey: ['/api/vendors', editingVendor.id, 'contacts'],
+        });
       }
       toast({ title: 'Contact deleted successfully' });
       setDeleteContact(null);
@@ -363,7 +461,10 @@ export default function VendorManagement() {
     };
 
     if (editingVendor) {
-      updateVendorMutation.mutate({ id: editingVendor.id, data: normalizedData });
+      updateVendorMutation.mutate({
+        id: editingVendor.id,
+        data: normalizedData,
+      });
     } else {
       createVendorMutation.mutate(normalizedData);
     }
@@ -381,38 +482,59 @@ export default function VendorManagement() {
   const SortIcon = ({ field }: { field: string }) => {
     const [currentField, currentDir] = sort.split(':');
     if (currentField !== field) return null;
-    return currentDir === 'asc' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />;
+    return currentDir === 'asc' ? (
+      <ChevronUp className="w-4 h-4" />
+    ) : (
+      <ChevronDown className="w-4 h-4" />
+    );
   };
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold" data-testid="text-page-title">Vendor Management</h1>
+        <h1 className="text-3xl font-bold" data-testid="text-page-title">
+          Vendor Management
+        </h1>
         <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
           <DialogTrigger asChild>
-            <Button onClick={() => handleOpenModal()} data-testid="button-create-vendor">
+            <Button
+              onClick={() => handleOpenModal()}
+              data-testid="button-create-vendor"
+            >
               <Plus className="w-4 h-4 mr-2" />
               Add Vendor
             </Button>
           </DialogTrigger>
           <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle data-testid="text-modal-title">{editingVendor ? 'Edit Vendor' : 'New Vendor'}</DialogTitle>
+              <DialogTitle data-testid="text-modal-title">
+                {editingVendor ? 'Edit Vendor' : 'New Vendor'}
+              </DialogTitle>
             </DialogHeader>
-            
+
             <Tabs defaultValue="main" className="w-full">
               <TabsList className="grid w-full grid-cols-3">
-                <TabsTrigger value="main" data-testid="tab-main-info">Main Info</TabsTrigger>
-                <TabsTrigger value="contacts" data-testid="tab-contacts">
-                  Additional Contacts {!editingVendor && pendingContacts.length > 0 && `(${pendingContacts.length})`}
+                <TabsTrigger value="main" data-testid="tab-main-info">
+                  Main Info
                 </TabsTrigger>
-                <TabsTrigger value="evaluation" data-testid="tab-evaluation">Evaluation & Notes</TabsTrigger>
+                <TabsTrigger value="contacts" data-testid="tab-contacts">
+                  Additional Contacts{' '}
+                  {!editingVendor &&
+                    pendingContacts.length > 0 &&
+                    `(${pendingContacts.length})`}
+                </TabsTrigger>
+                <TabsTrigger value="evaluation" data-testid="tab-evaluation">
+                  Evaluation & Notes
+                </TabsTrigger>
               </TabsList>
-              
+
               {/* Tab 1: Main Info */}
               <TabsContent value="main" className="space-y-4 mt-4">
                 <Form {...form}>
-                  <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                  <form
+                    onSubmit={form.handleSubmit(onSubmit)}
+                    className="space-y-4"
+                  >
                     <FormField
                       control={form.control}
                       name="name"
@@ -435,7 +557,10 @@ export default function VendorManagement() {
                           <FormItem>
                             <FormLabel>Primary Contact Person</FormLabel>
                             <FormControl>
-                              <Input {...field} data-testid="input-contact-person" />
+                              <Input
+                                {...field}
+                                data-testid="input-contact-person"
+                              />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -465,7 +590,11 @@ export default function VendorManagement() {
                           <FormItem>
                             <FormLabel>Primary Email</FormLabel>
                             <FormControl>
-                              <Input type="email" {...field} data-testid="input-email" />
+                              <Input
+                                type="email"
+                                {...field}
+                                data-testid="input-email"
+                              />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -479,7 +608,11 @@ export default function VendorManagement() {
                           <FormItem>
                             <FormLabel>Additional Email</FormLabel>
                             <FormControl>
-                              <Input type="email" {...field} data-testid="input-additional-email" />
+                              <Input
+                                type="email"
+                                {...field}
+                                data-testid="input-additional-email"
+                              />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -502,7 +635,12 @@ export default function VendorManagement() {
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>Approved Vendor</FormLabel>
-                          <Select onValueChange={(value) => field.onChange(value === 'true')} value={field.value ? 'true' : 'false'}>
+                          <Select
+                            onValueChange={(value) =>
+                              field.onChange(value === 'true')
+                            }
+                            value={field.value ? 'true' : 'false'}
+                          >
                             <FormControl>
                               <SelectTrigger data-testid="select-approved">
                                 <SelectValue />
@@ -519,59 +657,111 @@ export default function VendorManagement() {
                     />
 
                     <DialogFooter>
-                      <Button type="button" variant="outline" onClick={handleCloseModal} data-testid="button-cancel">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={handleCloseModal}
+                        data-testid="button-cancel"
+                      >
                         Cancel
                       </Button>
-                      <Button type="submit" disabled={createVendorMutation.isPending || updateVendorMutation.isPending} data-testid="button-save">
-                        {(createVendorMutation.isPending || updateVendorMutation.isPending) ? 'Saving...' : 'Save'}
+                      <Button
+                        type="submit"
+                        disabled={
+                          createVendorMutation.isPending ||
+                          updateVendorMutation.isPending
+                        }
+                        data-testid="button-save"
+                      >
+                        {createVendorMutation.isPending ||
+                        updateVendorMutation.isPending
+                          ? 'Saving...'
+                          : 'Save'}
                       </Button>
                     </DialogFooter>
                   </form>
                 </Form>
               </TabsContent>
-              
+
               {/* Tab 2: Additional Contacts */}
               <TabsContent value="contacts" className="space-y-4 mt-4">
                 <div className="flex justify-between items-center">
                   <h3 className="text-lg font-semibold">Contact List</h3>
-                  <Button onClick={() => setIsAddingContact(true)} size="sm" data-testid="button-add-contact">
+                  <Button
+                    onClick={() => setIsAddingContact(true)}
+                    size="sm"
+                    data-testid="button-add-contact"
+                  >
                     <Plus className="w-4 h-4 mr-2" />
                     Add Contact
                   </Button>
                 </div>
-                
-                {!editingVendor && !isAddingContact && pendingContacts.length === 0 && (
-                  <p className="text-center text-gray-500 py-4">No additional contacts added yet. Contacts will be saved when you create the vendor.</p>
-                )}
-                
+
+                {!editingVendor &&
+                  !isAddingContact &&
+                  pendingContacts.length === 0 && (
+                    <p className="text-center text-gray-500 py-4">
+                      No additional contacts added yet. Contacts will be saved
+                      when you create the vendor.
+                    </p>
+                  )}
+
                 {editingVendor && contactsLoading ? (
-                  <p className="text-center text-gray-500 py-4">Loading contacts...</p>
-                ) : editingVendor && contacts.length === 0 && !isAddingContact ? (
-                  <p className="text-center text-gray-500 py-4">No additional contacts added yet.</p>
+                  <p className="text-center text-gray-500 py-4">
+                    Loading contacts...
+                  </p>
+                ) : editingVendor &&
+                  contacts.length === 0 &&
+                  !isAddingContact ? (
+                  <p className="text-center text-gray-500 py-4">
+                    No additional contacts added yet.
+                  </p>
                 ) : null}
-                
+
                 {/* Display pending contacts (for new vendors) */}
                 {!editingVendor && pendingContacts.length > 0 && (
                   <div className="space-y-2">
                     {pendingContacts.map((contact) => (
-                      <div key={contact.tempId} className="border rounded-lg p-3 flex justify-between items-start" data-testid={`contact-card-${contact.tempId}`}>
+                      <div
+                        key={contact.tempId}
+                        className="border rounded-lg p-3 flex justify-between items-start"
+                        data-testid={`contact-card-${contact.tempId}`}
+                      >
                         <div className="flex-1">
                           <div className="flex items-center gap-2">
                             <User className="w-4 h-4 text-gray-400" />
                             <span className="font-medium">{contact.name}</span>
                             {contact.isPrimary && (
-                              <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">Primary</span>
+                              <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">
+                                Primary
+                              </span>
                             )}
                           </div>
-                          {contact.title && <p className="text-sm text-gray-600 mt-1">{contact.title}</p>}
-                          {contact.email && <p className="text-sm text-gray-600">{contact.email}</p>}
-                          {contact.phone && <p className="text-sm text-gray-600">{contact.phone}</p>}
-                          {contact.notes && <p className="text-sm text-gray-500 mt-1 italic">{contact.notes}</p>}
+                          {contact.title && (
+                            <p className="text-sm text-gray-600 mt-1">
+                              {contact.title}
+                            </p>
+                          )}
+                          {contact.email && (
+                            <p className="text-sm text-gray-600">
+                              {contact.email}
+                            </p>
+                          )}
+                          {contact.phone && (
+                            <p className="text-sm text-gray-600">
+                              {contact.phone}
+                            </p>
+                          )}
+                          {contact.notes && (
+                            <p className="text-sm text-gray-500 mt-1 italic">
+                              {contact.notes}
+                            </p>
+                          )}
                         </div>
                         <div className="flex gap-2">
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
+                          <Button
+                            variant="ghost"
+                            size="sm"
                             onClick={() => {
                               setEditingPendingContact(contact);
                               contactForm.reset({
@@ -587,9 +777,9 @@ export default function VendorManagement() {
                           >
                             <Edit className="w-4 h-4" />
                           </Button>
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
+                          <Button
+                            variant="ghost"
+                            size="sm"
                             onClick={() => setDeletePendingContact(contact)}
                             data-testid={`button-delete-contact-${contact.tempId}`}
                           >
@@ -600,29 +790,51 @@ export default function VendorManagement() {
                     ))}
                   </div>
                 )}
-                
+
                 {/* Display API contacts (for existing vendors) */}
                 {editingVendor && contacts.length > 0 && (
                   <div className="space-y-2">
                     {contacts.map((contact) => (
-                      <div key={contact.id} className="border rounded-lg p-3 flex justify-between items-start" data-testid={`contact-card-${contact.id}`}>
+                      <div
+                        key={contact.id}
+                        className="border rounded-lg p-3 flex justify-between items-start"
+                        data-testid={`contact-card-${contact.id}`}
+                      >
                         <div className="flex-1">
                           <div className="flex items-center gap-2">
                             <User className="w-4 h-4 text-gray-400" />
                             <span className="font-medium">{contact.name}</span>
                             {contact.isPrimary && (
-                              <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">Primary</span>
+                              <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">
+                                Primary
+                              </span>
                             )}
                           </div>
-                          {contact.title && <p className="text-sm text-gray-600 mt-1">{contact.title}</p>}
-                          {contact.email && <p className="text-sm text-gray-600">{contact.email}</p>}
-                          {contact.phone && <p className="text-sm text-gray-600">{contact.phone}</p>}
-                          {contact.notes && <p className="text-sm text-gray-500 mt-1 italic">{contact.notes}</p>}
+                          {contact.title && (
+                            <p className="text-sm text-gray-600 mt-1">
+                              {contact.title}
+                            </p>
+                          )}
+                          {contact.email && (
+                            <p className="text-sm text-gray-600">
+                              {contact.email}
+                            </p>
+                          )}
+                          {contact.phone && (
+                            <p className="text-sm text-gray-600">
+                              {contact.phone}
+                            </p>
+                          )}
+                          {contact.notes && (
+                            <p className="text-sm text-gray-500 mt-1 italic">
+                              {contact.notes}
+                            </p>
+                          )}
                         </div>
                         <div className="flex gap-2">
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
+                          <Button
+                            variant="ghost"
+                            size="sm"
                             onClick={() => {
                               setEditingContact(contact);
                               contactForm.reset({
@@ -638,9 +850,9 @@ export default function VendorManagement() {
                           >
                             <Edit className="w-4 h-4" />
                           </Button>
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
+                          <Button
+                            variant="ghost"
+                            size="sm"
                             onClick={() => setDeleteContact(contact)}
                             data-testid={`button-delete-contact-${contact.id}`}
                           >
@@ -651,21 +863,36 @@ export default function VendorManagement() {
                     ))}
                   </div>
                 )}
-                
+
                 {/* Add/Edit Contact Form */}
-                {(isAddingContact || editingContact || editingPendingContact) && (
+                {(isAddingContact ||
+                  editingContact ||
+                  editingPendingContact) && (
                   <div className="border rounded-lg p-4 bg-gray-50 dark:bg-gray-800">
-                    <h4 className="font-semibold mb-3">{(editingContact || editingPendingContact) ? 'Edit Contact' : 'New Contact'}</h4>
+                    <h4 className="font-semibold mb-3">
+                      {editingContact || editingPendingContact
+                        ? 'Edit Contact'
+                        : 'New Contact'}
+                    </h4>
                     <Form {...contactForm}>
-                      <form onSubmit={contactForm.handleSubmit((data) => {
-                        if (editingContact) {
-                          updateContactMutation.mutate({ id: editingContact.id, data });
-                        } else if (editingPendingContact) {
-                          updateContactMutation.mutate({ tempId: editingPendingContact.tempId, data });
-                        } else {
-                          createContactMutation.mutate(data);
-                        }
-                      })} className="space-y-3">
+                      <form
+                        onSubmit={contactForm.handleSubmit((data) => {
+                          if (editingContact) {
+                            updateContactMutation.mutate({
+                              id: editingContact.id,
+                              data,
+                            });
+                          } else if (editingPendingContact) {
+                            updateContactMutation.mutate({
+                              tempId: editingPendingContact.tempId,
+                              data,
+                            });
+                          } else {
+                            createContactMutation.mutate(data);
+                          }
+                        })}
+                        className="space-y-3"
+                      >
                         <FormField
                           control={contactForm.control}
                           name="name"
@@ -673,13 +900,16 @@ export default function VendorManagement() {
                             <FormItem>
                               <FormLabel>Name *</FormLabel>
                               <FormControl>
-                                <Input {...field} data-testid="input-contact-name" />
+                                <Input
+                                  {...field}
+                                  data-testid="input-contact-name"
+                                />
                               </FormControl>
                               <FormMessage />
                             </FormItem>
                           )}
                         />
-                        
+
                         <div className="grid grid-cols-2 gap-3">
                           <FormField
                             control={contactForm.control}
@@ -688,13 +918,16 @@ export default function VendorManagement() {
                               <FormItem>
                                 <FormLabel>Title</FormLabel>
                                 <FormControl>
-                                  <Input {...field} data-testid="input-contact-title" />
+                                  <Input
+                                    {...field}
+                                    data-testid="input-contact-title"
+                                  />
                                 </FormControl>
                                 <FormMessage />
                               </FormItem>
                             )}
                           />
-                          
+
                           <FormField
                             control={contactForm.control}
                             name="phone"
@@ -702,14 +935,17 @@ export default function VendorManagement() {
                               <FormItem>
                                 <FormLabel>Phone</FormLabel>
                                 <FormControl>
-                                  <Input {...field} data-testid="input-contact-phone" />
+                                  <Input
+                                    {...field}
+                                    data-testid="input-contact-phone"
+                                  />
                                 </FormControl>
                                 <FormMessage />
                               </FormItem>
                             )}
                           />
                         </div>
-                        
+
                         <FormField
                           control={contactForm.control}
                           name="email"
@@ -717,20 +953,29 @@ export default function VendorManagement() {
                             <FormItem>
                               <FormLabel>Email</FormLabel>
                               <FormControl>
-                                <Input type="email" {...field} data-testid="input-contact-email" />
+                                <Input
+                                  type="email"
+                                  {...field}
+                                  data-testid="input-contact-email"
+                                />
                               </FormControl>
                               <FormMessage />
                             </FormItem>
                           )}
                         />
-                        
+
                         <FormField
                           control={contactForm.control}
                           name="isPrimary"
                           render={({ field }) => (
                             <FormItem>
                               <FormLabel>Primary Contact</FormLabel>
-                              <Select onValueChange={(value) => field.onChange(value === 'true')} value={field.value ? 'true' : 'false'}>
+                              <Select
+                                onValueChange={(value) =>
+                                  field.onChange(value === 'true')
+                                }
+                                value={field.value ? 'true' : 'false'}
+                              >
                                 <FormControl>
                                   <SelectTrigger data-testid="select-contact-primary">
                                     <SelectValue />
@@ -745,7 +990,7 @@ export default function VendorManagement() {
                             </FormItem>
                           )}
                         />
-                        
+
                         <FormField
                           control={contactForm.control}
                           name="notes"
@@ -753,17 +998,21 @@ export default function VendorManagement() {
                             <FormItem>
                               <FormLabel>Notes</FormLabel>
                               <FormControl>
-                                <Textarea {...field} rows={2} data-testid="input-contact-notes" />
+                                <Textarea
+                                  {...field}
+                                  rows={2}
+                                  data-testid="input-contact-notes"
+                                />
                               </FormControl>
                               <FormMessage />
                             </FormItem>
                           )}
                         />
-                        
+
                         <div className="flex gap-2 justify-end">
-                          <Button 
-                            type="button" 
-                            variant="outline" 
+                          <Button
+                            type="button"
+                            variant="outline"
                             onClick={() => {
                               setIsAddingContact(false);
                               setEditingContact(null);
@@ -774,12 +1023,18 @@ export default function VendorManagement() {
                           >
                             Cancel
                           </Button>
-                          <Button 
-                            type="submit" 
-                            disabled={createContactMutation.isPending || updateContactMutation.isPending}
+                          <Button
+                            type="submit"
+                            disabled={
+                              createContactMutation.isPending ||
+                              updateContactMutation.isPending
+                            }
                             data-testid="button-save-contact"
                           >
-                            {(createContactMutation.isPending || updateContactMutation.isPending) ? 'Saving...' : 'Save Contact'}
+                            {createContactMutation.isPending ||
+                            updateContactMutation.isPending
+                              ? 'Saving...'
+                              : 'Save Contact'}
                           </Button>
                         </div>
                       </form>
@@ -787,18 +1042,26 @@ export default function VendorManagement() {
                   </div>
                 )}
               </TabsContent>
-              
+
               {/* Tab 3: Evaluation & Notes */}
               <TabsContent value="evaluation" className="space-y-4 mt-4">
                 <Form {...form}>
-                  <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                  <form
+                    onSubmit={form.handleSubmit(onSubmit)}
+                    className="space-y-4"
+                  >
                     <FormField
                       control={form.control}
                       name="evaluated"
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>Evaluation Status</FormLabel>
-                          <Select onValueChange={(value) => field.onChange(value === 'true')} value={field.value ? 'true' : 'false'}>
+                          <Select
+                            onValueChange={(value) =>
+                              field.onChange(value === 'true')
+                            }
+                            value={field.value ? 'true' : 'false'}
+                          >
                             <FormControl>
                               <SelectTrigger data-testid="select-eval-status">
                                 <SelectValue />
@@ -806,7 +1069,9 @@ export default function VendorManagement() {
                             </FormControl>
                             <SelectContent>
                               <SelectItem value="true">Evaluated</SelectItem>
-                              <SelectItem value="false">Not Evaluated</SelectItem>
+                              <SelectItem value="false">
+                                Not Evaluated
+                              </SelectItem>
                             </SelectContent>
                           </Select>
                           <FormMessage />
@@ -821,7 +1086,11 @@ export default function VendorManagement() {
                         <FormItem>
                           <FormLabel>Evaluation Date</FormLabel>
                           <FormControl>
-                            <Input type="date" {...field} data-testid="input-eval-date" />
+                            <Input
+                              type="date"
+                              {...field}
+                              data-testid="input-eval-date"
+                            />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -835,7 +1104,12 @@ export default function VendorManagement() {
                         <FormItem>
                           <FormLabel>Evaluation Notes</FormLabel>
                           <FormControl>
-                            <Textarea {...field} rows={6} data-testid="input-eval-notes" placeholder="Add evaluation notes, feedback, or any relevant information about this vendor..." />
+                            <Textarea
+                              {...field}
+                              rows={6}
+                              data-testid="input-eval-notes"
+                              placeholder="Add evaluation notes, feedback, or any relevant information about this vendor..."
+                            />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -843,11 +1117,26 @@ export default function VendorManagement() {
                     />
 
                     <DialogFooter>
-                      <Button type="button" variant="outline" onClick={handleCloseModal} data-testid="button-eval-cancel">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={handleCloseModal}
+                        data-testid="button-eval-cancel"
+                      >
                         Cancel
                       </Button>
-                      <Button type="submit" disabled={createVendorMutation.isPending || updateVendorMutation.isPending} data-testid="button-eval-save">
-                        {(createVendorMutation.isPending || updateVendorMutation.isPending) ? 'Saving...' : 'Save'}
+                      <Button
+                        type="submit"
+                        disabled={
+                          createVendorMutation.isPending ||
+                          updateVendorMutation.isPending
+                        }
+                        data-testid="button-eval-save"
+                      >
+                        {createVendorMutation.isPending ||
+                        updateVendorMutation.isPending
+                          ? 'Saving...'
+                          : 'Save'}
                       </Button>
                     </DialogFooter>
                   </form>
@@ -881,8 +1170,17 @@ export default function VendorManagement() {
 
           <div>
             <Label htmlFor="approved-filter">Approved</Label>
-            <Select value={approved} onValueChange={(value: any) => { setApproved(value); setPage(1); }}>
-              <SelectTrigger id="approved-filter" data-testid="select-filter-approved">
+            <Select
+              value={approved}
+              onValueChange={(value: any) => {
+                setApproved(value);
+                setPage(1);
+              }}
+            >
+              <SelectTrigger
+                id="approved-filter"
+                data-testid="select-filter-approved"
+              >
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -895,8 +1193,17 @@ export default function VendorManagement() {
 
           <div>
             <Label htmlFor="evaluated-filter">Evaluated</Label>
-            <Select value={evaluated} onValueChange={(value: any) => { setEvaluated(value); setPage(1); }}>
-              <SelectTrigger id="evaluated-filter" data-testid="select-filter-evaluated">
+            <Select
+              value={evaluated}
+              onValueChange={(value: any) => {
+                setEvaluated(value);
+                setPage(1);
+              }}
+            >
+              <SelectTrigger
+                id="evaluated-filter"
+                data-testid="select-filter-evaluated"
+              >
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -913,7 +1220,10 @@ export default function VendorManagement() {
               id="eval-from"
               type="date"
               value={evalFrom}
-              onChange={(e) => { setEvalFrom(e.target.value); setPage(1); }}
+              onChange={(e) => {
+                setEvalFrom(e.target.value);
+                setPage(1);
+              }}
               data-testid="input-eval-from"
             />
           </div>
@@ -924,7 +1234,10 @@ export default function VendorManagement() {
               id="eval-to"
               type="date"
               value={evalTo}
-              onChange={(e) => { setEvalTo(e.target.value); setPage(1); }}
+              onChange={(e) => {
+                setEvalTo(e.target.value);
+                setPage(1);
+              }}
               data-testid="input-eval-to"
             />
           </div>
@@ -934,7 +1247,11 @@ export default function VendorManagement() {
           <div className="flex items-center gap-2">
             <Label htmlFor="sort">Sort By</Label>
             <Select value={sort} onValueChange={setSort}>
-              <SelectTrigger id="sort" className="w-48" data-testid="select-sort">
+              <SelectTrigger
+                id="sort"
+                className="w-48"
+                data-testid="select-sort"
+              >
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -947,7 +1264,10 @@ export default function VendorManagement() {
               </SelectContent>
             </Select>
           </div>
-          <div className="text-sm text-gray-600 dark:text-gray-400" data-testid="text-total-vendors">
+          <div
+            className="text-sm text-gray-600 dark:text-gray-400"
+            data-testid="text-total-vendors"
+          >
             {vendorsData?.meta.total || 0} vendors found
           </div>
         </div>
@@ -1012,20 +1332,33 @@ export default function VendorManagement() {
             <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
               {isLoading ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
+                  <td
+                    colSpan={8}
+                    className="px-4 py-8 text-center text-gray-500 dark:text-gray-400"
+                  >
                     Loading vendors...
                   </td>
                 </tr>
               ) : vendorsData?.data.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
+                  <td
+                    colSpan={8}
+                    className="px-4 py-8 text-center text-gray-500 dark:text-gray-400"
+                  >
                     No vendors found
                   </td>
                 </tr>
               ) : (
                 vendorsData?.data.map((vendor) => (
-                  <tr key={vendor.id} className="hover:bg-gray-50 dark:hover:bg-gray-800" data-testid={`row-vendor-${vendor.id}`}>
-                    <td className="px-4 py-3 whitespace-nowrap font-medium text-gray-900 dark:text-gray-100" data-testid={`text-vendor-name-${vendor.id}`}>
+                  <tr
+                    key={vendor.id}
+                    className="hover:bg-gray-50 dark:hover:bg-gray-800"
+                    data-testid={`row-vendor-${vendor.id}`}
+                  >
+                    <td
+                      className="px-4 py-3 whitespace-nowrap font-medium text-gray-900 dark:text-gray-100"
+                      data-testid={`text-vendor-name-${vendor.id}`}
+                    >
                       {vendor.name}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
@@ -1064,7 +1397,9 @@ export default function VendorManagement() {
                       )}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
-                      {vendor.evaluationDate ? new Date(vendor.evaluationDate).toLocaleDateString() : '—'}
+                      {vendor.evaluationDate
+                        ? new Date(vendor.evaluationDate).toLocaleDateString()
+                        : '—'}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-right text-sm font-medium">
                       <div className="flex justify-end gap-2">
@@ -1122,18 +1457,26 @@ export default function VendorManagement() {
       )}
 
       {/* Delete Vendor Confirmation Dialog */}
-      <AlertDialog open={!!deleteVendor} onOpenChange={() => setDeleteVendor(null)}>
+      <AlertDialog
+        open={!!deleteVendor}
+        onOpenChange={() => setDeleteVendor(null)}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Vendor</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete "{deleteVendor?.name}"? This action cannot be undone.
+              Are you sure you want to delete "{deleteVendor?.name}"? This
+              action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel data-testid="button-cancel-delete">Cancel</AlertDialogCancel>
+            <AlertDialogCancel data-testid="button-cancel-delete">
+              Cancel
+            </AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => deleteVendor && deleteVendorMutation.mutate(deleteVendor.id)}
+              onClick={() =>
+                deleteVendor && deleteVendorMutation.mutate(deleteVendor.id)
+              }
               className="bg-red-600 hover:bg-red-700"
               data-testid="button-confirm-delete"
             >
@@ -1144,18 +1487,27 @@ export default function VendorManagement() {
       </AlertDialog>
 
       {/* Delete Contact Confirmation Dialog */}
-      <AlertDialog open={!!deleteContact} onOpenChange={() => setDeleteContact(null)}>
+      <AlertDialog
+        open={!!deleteContact}
+        onOpenChange={() => setDeleteContact(null)}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Contact</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete "{deleteContact?.name}"? This action cannot be undone.
+              Are you sure you want to delete "{deleteContact?.name}"? This
+              action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel data-testid="button-cancel-delete-contact">Cancel</AlertDialogCancel>
+            <AlertDialogCancel data-testid="button-cancel-delete-contact">
+              Cancel
+            </AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => deleteContact && deleteContactMutation.mutate({ id: deleteContact.id })}
+              onClick={() =>
+                deleteContact &&
+                deleteContactMutation.mutate({ id: deleteContact.id })
+              }
               className="bg-red-600 hover:bg-red-700"
               data-testid="button-confirm-delete-contact"
             >
@@ -1164,20 +1516,31 @@ export default function VendorManagement() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-      
+
       {/* Delete Pending Contact Confirmation Dialog */}
-      <AlertDialog open={!!deletePendingContact} onOpenChange={() => setDeletePendingContact(null)}>
+      <AlertDialog
+        open={!!deletePendingContact}
+        onOpenChange={() => setDeletePendingContact(null)}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Contact</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to remove "{deletePendingContact?.name}" from the contact list?
+              Are you sure you want to remove "{deletePendingContact?.name}"
+              from the contact list?
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel data-testid="button-cancel-delete-pending-contact">Cancel</AlertDialogCancel>
+            <AlertDialogCancel data-testid="button-cancel-delete-pending-contact">
+              Cancel
+            </AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => deletePendingContact && deleteContactMutation.mutate({ tempId: deletePendingContact.tempId })}
+              onClick={() =>
+                deletePendingContact &&
+                deleteContactMutation.mutate({
+                  tempId: deletePendingContact.tempId,
+                })
+              }
               className="bg-red-600 hover:bg-red-700"
               data-testid="button-confirm-delete-pending-contact"
             >

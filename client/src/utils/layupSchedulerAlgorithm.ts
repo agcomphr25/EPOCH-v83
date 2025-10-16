@@ -54,11 +54,13 @@ export interface StockModelGroup {
 /**
  * Categorizes orders by stock model with priority analytics
  */
-export function categorizeOrdersByStockModel(orders: SchedulerOrder[]): StockModelGroup[] {
+export function categorizeOrdersByStockModel(
+  orders: SchedulerOrder[]
+): StockModelGroup[] {
   const stockModelGroups = new Map<string, SchedulerOrder[]>();
-  
+
   // Group orders by stock model
-  orders.forEach(order => {
+  orders.forEach((order) => {
     const stockModelId = order.stockModelId || 'unknown';
     if (!stockModelGroups.has(stockModelId)) {
       stockModelGroups.set(stockModelId, []);
@@ -69,22 +71,25 @@ export function categorizeOrdersByStockModel(orders: SchedulerOrder[]): StockMod
   // Convert to structured groups with analytics
   const groups: StockModelGroup[] = [];
   const currentDate = new Date();
-  const urgentThreshold = new Date(currentDate.getTime() + 7 * 24 * 60 * 60 * 1000); // 7 days from now
+  const urgentThreshold = new Date(
+    currentDate.getTime() + 7 * 24 * 60 * 60 * 1000
+  ); // 7 days from now
 
   for (const [stockModelId, orderList] of stockModelGroups) {
-    const urgentOrders = orderList.filter(order => 
-      new Date(order.dueDate) <= urgentThreshold
+    const urgentOrders = orderList.filter(
+      (order) => new Date(order.dueDate) <= urgentThreshold
     ).length;
 
-    const averagePriority = orderList.reduce((sum, order) => 
-      sum + (order.priorityScore || 1), 0
-    ) / orderList.length;
+    const averagePriority =
+      orderList.reduce((sum, order) => sum + (order.priorityScore || 1), 0) /
+      orderList.length;
 
     groups.push({
       stockModelId,
       orders: orderList.sort((a, b) => {
         // Sort by due date first, then priority score
-        const dueDateDiff = new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+        const dueDateDiff =
+          new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
         if (dueDateDiff === 0) {
           return (a.priorityScore || 1) - (b.priorityScore || 1);
         }
@@ -92,7 +97,7 @@ export function categorizeOrdersByStockModel(orders: SchedulerOrder[]): StockMod
       }),
       totalOrders: orderList.length,
       urgentOrders,
-      averagePriority
+      averagePriority,
     });
   }
 
@@ -111,12 +116,12 @@ export function categorizeOrdersByStockModel(orders: SchedulerOrder[]): StockMod
  * Calculates daily capacity for the scheduling period
  */
 export function calculateDailyCapacity(
-  molds: MoldCapacity[], 
+  molds: MoldCapacity[],
   employees: EmployeeCapacity[]
 ): number {
-  const activeMolds = molds.filter(m => m.enabled);
-  const activeEmployees = employees.filter(e => e.isActive);
-  
+  const activeMolds = molds.filter((m) => m.enabled);
+  const activeEmployees = employees.filter((e) => e.isActive);
+
   if (activeMolds.length === 0 || activeEmployees.length === 0) {
     return 0;
   }
@@ -127,13 +132,16 @@ export function calculateDailyCapacity(
     // emp.rate is orders per day for each employee
     return sum + emp.rate;
   }, 0);
-  
+
   console.log(`👥 DAILY CAPACITY CALCULATION:`, {
-    activeEmployees: activeEmployees.map(e => ({ id: e.employeeId, rate: e.rate })),
+    activeEmployees: activeEmployees.map((e) => ({
+      id: e.employeeId,
+      rate: e.rate,
+    })),
     totalEmployeeDailyCapacity,
-    activeMolds: activeMolds.length
+    activeMolds: activeMolds.length,
   });
-  
+
   // For now, use employee capacity as the limiting factor
   // Molds are generally not the constraint in layup operations
   return Math.floor(totalEmployeeDailyCapacity);
@@ -142,38 +150,43 @@ export function calculateDailyCapacity(
 /**
  * Gets compatible molds for a stock model
  */
-export function getCompatibleMolds(stockModelId: string, molds: MoldCapacity[]): MoldCapacity[] {
+export function getCompatibleMolds(
+  stockModelId: string,
+  molds: MoldCapacity[]
+): MoldCapacity[] {
   if (!stockModelId) {
     return [];
   }
 
-  return molds.filter(mold => {
+  return molds.filter((mold) => {
     if (!mold.enabled) {
       return false;
     }
-    
+
     // If mold has no stock model restrictions, it's universal
     if (!mold.stockModels || mold.stockModels.length === 0) {
       return true;
     }
-    
+
     // Check exact match first
     if (mold.stockModels.includes(stockModelId)) {
       return true;
     }
-    
+
     // Check for universal compatibility
     if (mold.stockModels.includes('universal')) {
       return true;
     }
-    
+
     // Special handling for common stock model variations
-    const normalizedStockModel = stockModelId.toLowerCase().replace(/[_-]/g, '');
-    const moldSupports = mold.stockModels.some(supported => {
+    const normalizedStockModel = stockModelId
+      .toLowerCase()
+      .replace(/[_-]/g, '');
+    const moldSupports = mold.stockModels.some((supported) => {
       const normalizedSupported = supported.toLowerCase().replace(/[_-]/g, '');
       return normalizedSupported === normalizedStockModel;
     });
-    
+
     return moldSupports;
   });
 }
@@ -184,28 +197,30 @@ export function getCompatibleMolds(stockModelId: string, molds: MoldCapacity[]):
 export function generateWorkDates(startDate: Date, dayCount: number): Date[] {
   const dates: Date[] = [];
   let currentDate = new Date(startDate);
-  
+
   // Ensure we start on a Monday
-  while (currentDate.getDay() !== 1) { // 1 = Monday
+  while (currentDate.getDay() !== 1) {
+    // 1 = Monday
     currentDate = new Date(currentDate.getTime() + 24 * 60 * 60 * 1000);
   }
-  
+
   while (dates.length < dayCount) {
     const dayOfWeek = currentDate.getDay();
-    
+
     // Only add Monday (1) through Thursday (4)
     if (dayOfWeek >= 1 && dayOfWeek <= 4) {
       dates.push(new Date(currentDate));
     }
-    
+
     currentDate = new Date(currentDate.getTime() + 24 * 60 * 60 * 1000);
-    
+
     // Skip to next Monday after Thursday
-    if (dayOfWeek === 4) { // Thursday
+    if (dayOfWeek === 4) {
+      // Thursday
       currentDate = new Date(currentDate.getTime() + 4 * 24 * 60 * 60 * 1000); // Skip to Monday
     }
   }
-  
+
   return dates;
 }
 
@@ -219,78 +234,88 @@ export function generateScheduleAllocations(
   targetScheduleDays: number = 20 // 4 weeks of Mon-Thu
 ): ScheduleAllocation[] {
   console.log('🔄 Starting algorithmic schedule generation...');
-  console.log(`📊 Input: ${orders.length} orders, ${molds.length} molds, ${employees.length} employees`);
-  
+  console.log(
+    `📊 Input: ${orders.length} orders, ${molds.length} molds, ${employees.length} employees`
+  );
+
   const allocations: ScheduleAllocation[] = [];
   const stockModelGroups = categorizeOrdersByStockModel(orders);
   const dailyCapacity = calculateDailyCapacity(molds, employees);
   const workDates = generateWorkDates(new Date(), targetScheduleDays);
-  
+
   console.log(`📊 Daily capacity: ${dailyCapacity} orders`);
   console.log(`📊 Stock model groups: ${stockModelGroups.length}`);
   console.log(`📊 Work dates: ${workDates.length} days`);
-  
+
   // Track daily allocations to respect capacity limits
   const dailyAllocations = new Map<string, number>();
-  workDates.forEach(date => {
+  workDates.forEach((date) => {
     dailyAllocations.set(date.toISOString().split('T')[0], 0);
   });
-  
+
   // Track mold usage per day to distribute load
   const moldDailyUsage = new Map<string, Map<string, number>>();
-  molds.forEach(mold => {
+  molds.forEach((mold) => {
     moldDailyUsage.set(mold.moldId, new Map());
-    workDates.forEach(date => {
+    workDates.forEach((date) => {
       moldDailyUsage.get(mold.moldId)!.set(date.toISOString().split('T')[0], 0);
     });
   });
-  
+
   // Process each stock model group in priority order
   for (const group of stockModelGroups) {
-    console.log(`🔄 Processing ${group.stockModelId}: ${group.totalOrders} orders (${group.urgentOrders} urgent)`);
-    
+    console.log(
+      `🔄 Processing ${group.stockModelId}: ${group.totalOrders} orders (${group.urgentOrders} urgent)`
+    );
+
     const compatibleMolds = getCompatibleMolds(group.stockModelId, molds);
     if (compatibleMolds.length === 0) {
       console.log(`⚠️ No compatible molds found for ${group.stockModelId}`);
       continue;
     }
-    
+
     // Allocate orders from this group
     for (const order of group.orders) {
       let allocated = false;
-      
+
       // Try to schedule on the earliest available date that respects capacity
       for (const workDate of workDates) {
         const dateKey = workDate.toISOString().split('T')[0];
         const currentDayAllocations = dailyAllocations.get(dateKey) || 0;
-        
+
         if (currentDayAllocations >= dailyCapacity) {
           continue; // This day is at capacity
         }
-        
+
         // Find the best mold for this day (least used compatible mold)
         const bestMold = compatibleMolds
-          .filter(mold => mold.enabled)
+          .filter((mold) => mold.enabled)
           .sort((a, b) => {
             const usageA = moldDailyUsage.get(a.moldId)?.get(dateKey) || 0;
             const usageB = moldDailyUsage.get(b.moldId)?.get(dateKey) || 0;
             return usageA - usageB;
           })[0];
-        
+
         // Validate mold assignment
         if (bestMold) {
-          console.log(`🔧 Assigning order ${order.orderId} (${group.stockModelId}) to mold ${bestMold.moldId} (${bestMold.modelName})`);
-          
+          console.log(
+            `🔧 Assigning order ${order.orderId} (${group.stockModelId}) to mold ${bestMold.moldId} (${bestMold.modelName})`
+          );
+
           // Double-check compatibility
-          const isCompatible = !bestMold.stockModels || bestMold.stockModels.length === 0 || 
-                              bestMold.stockModels.includes(group.stockModelId) ||
-                              bestMold.stockModels.includes('universal');
-          
+          const isCompatible =
+            !bestMold.stockModels ||
+            bestMold.stockModels.length === 0 ||
+            bestMold.stockModels.includes(group.stockModelId) ||
+            bestMold.stockModels.includes('universal');
+
           if (!isCompatible) {
-            console.warn(`⚠️ MOLD COMPATIBILITY WARNING: Order ${order.orderId} (${group.stockModelId}) assigned to incompatible mold ${bestMold.moldId} (supports: ${bestMold.stockModels?.join(', ') || 'universal'})`);
+            console.warn(
+              `⚠️ MOLD COMPATIBILITY WARNING: Order ${order.orderId} (${group.stockModelId}) assigned to incompatible mold ${bestMold.moldId} (supports: ${bestMold.stockModels?.join(', ') || 'universal'})`
+            );
           }
         }
-        
+
         if (bestMold) {
           // Allocate this order
           allocations.push({
@@ -298,29 +323,32 @@ export function generateScheduleAllocations(
             moldId: bestMold.moldId,
             scheduledDate: workDate.toISOString(),
             priorityScore: order.priorityScore || 1,
-            allocationReason: `Stock model: ${group.stockModelId}, Priority: ${order.priorityScore}, Due: ${order.dueDate}`
+            allocationReason: `Stock model: ${group.stockModelId}, Priority: ${order.priorityScore}, Due: ${order.dueDate}`,
           });
-          
+
           // Update tracking
           dailyAllocations.set(dateKey, currentDayAllocations + 1);
           const moldUsage = moldDailyUsage.get(bestMold.moldId)!;
           moldUsage.set(dateKey, (moldUsage.get(dateKey) || 0) + 1);
-          
+
           allocated = true;
           break;
         }
       }
-      
+
       if (!allocated) {
-        console.log(`⚠️ Could not allocate order ${order.orderId} within schedule window`);
+        console.log(
+          `⚠️ Could not allocate order ${order.orderId} within schedule window`
+        );
       }
     }
   }
-  
+
   console.log(`✅ Algorithm complete: ${allocations.length} orders allocated`);
-  
-  return allocations.sort((a, b) => 
-    new Date(a.scheduledDate).getTime() - new Date(b.scheduledDate).getTime()
+
+  return allocations.sort(
+    (a, b) =>
+      new Date(a.scheduledDate).getTime() - new Date(b.scheduledDate).getTime()
   );
 }
 
@@ -338,48 +366,56 @@ export function analyzeScheduleEfficiency(
 } {
   const totalOrders = orders.length;
   const scheduledOrders = allocations.length;
-  const efficiency = totalOrders > 0 ? (scheduledOrders / totalOrders) * 100 : 0;
-  
+  const efficiency =
+    totalOrders > 0 ? (scheduledOrders / totalOrders) * 100 : 0;
+
   // Calculate mold utilization
   const moldUtilization: { [moldId: string]: number } = {};
   const moldUsageCounts: { [moldId: string]: number } = {};
-  
-  molds.forEach(mold => {
+
+  molds.forEach((mold) => {
     moldUsageCounts[mold.moldId] = 0;
   });
-  
-  allocations.forEach(allocation => {
-    moldUsageCounts[allocation.moldId] = (moldUsageCounts[allocation.moldId] || 0) + 1;
+
+  allocations.forEach((allocation) => {
+    moldUsageCounts[allocation.moldId] =
+      (moldUsageCounts[allocation.moldId] || 0) + 1;
   });
-  
-  const maxPossibleUsage = allocations.length / molds.filter(m => m.enabled).length;
-  molds.forEach(mold => {
+
+  const maxPossibleUsage =
+    allocations.length / molds.filter((m) => m.enabled).length;
+  molds.forEach((mold) => {
     const usage = moldUsageCounts[mold.moldId] || 0;
-    moldUtilization[mold.moldId] = maxPossibleUsage > 0 ? (usage / maxPossibleUsage) * 100 : 0;
+    moldUtilization[mold.moldId] =
+      maxPossibleUsage > 0 ? (usage / maxPossibleUsage) * 100 : 0;
   });
-  
+
   // Generate recommendations
   const recommendations: string[] = [];
-  
+
   if (efficiency < 80) {
-    recommendations.push('Consider increasing daily capacity or extending schedule window');
+    recommendations.push(
+      'Consider increasing daily capacity or extending schedule window'
+    );
   }
-  
+
   const underutilizedMolds = Object.entries(moldUtilization)
     .filter(([_, utilization]) => utilization < 50)
     .map(([moldId]) => moldId);
-  
+
   if (underutilizedMolds.length > 0) {
-    recommendations.push(`Underutilized molds: ${underutilizedMolds.join(', ')}`);
+    recommendations.push(
+      `Underutilized molds: ${underutilizedMolds.join(', ')}`
+    );
   }
-  
+
   if (recommendations.length === 0) {
     recommendations.push('Schedule is well-optimized');
   }
-  
+
   return {
     efficiency,
     moldUtilization,
-    recommendations
+    recommendations,
   };
 }

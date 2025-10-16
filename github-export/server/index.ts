@@ -1,14 +1,14 @@
-import express, { type Request, Response, NextFunction } from "express";
-import path from "path";
-import { registerRoutes } from "./src/routes";
-import { setupVite, serveStatic, log } from "./vite";
+import path from 'path';
+
+import express, { type Request, Response, NextFunction } from 'express';
+
+import { registerRoutes } from './src/routes';
+import { setupVite, serveStatic, log } from './vite';
 
 // Validate required environment variables
-const requiredEnvVars = [
-  'DATABASE_URL'
-];
+const requiredEnvVars = ['DATABASE_URL'];
 
-const missingEnvVars = requiredEnvVars.filter(envVar => !process.env[envVar]);
+const missingEnvVars = requiredEnvVars.filter((envVar) => !process.env[envVar]);
 if (missingEnvVars.length > 0) {
   console.error('Missing required environment variables:', missingEnvVars);
 }
@@ -17,7 +17,7 @@ if (missingEnvVars.length > 0) {
 console.log('Environment check:', {
   DATABASE_URL: process.env.DATABASE_URL ? 'Set' : 'Missing',
   NODE_ENV: process.env.NODE_ENV || 'Not set',
-  PORT: process.env.PORT || 'Not set (defaulting to 5000)'
+  PORT: process.env.PORT || 'Not set (defaulting to 5000)',
 });
 
 const app = express();
@@ -35,16 +35,16 @@ app.use((req, res, next) => {
     return originalResJson.apply(res, [bodyJson, ...args]);
   };
 
-  res.on("finish", () => {
+  res.on('finish', () => {
     const duration = Date.now() - start;
-    if (path.startsWith("/api")) {
+    if (path.startsWith('/api')) {
       let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
       if (capturedJsonResponse) {
         logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
       }
 
       if (logLine.length > 80) {
-        logLine = logLine.slice(0, 79) + "…";
+        logLine = logLine.slice(0, 79) + '…';
       }
 
       log(logLine);
@@ -57,18 +57,20 @@ app.use((req, res, next) => {
 (async () => {
   try {
     // Test database connection first
-    const { testDatabaseConnection } = await import("./db");
+    const { testDatabaseConnection } = await import('./db');
     const dbConnected = await testDatabaseConnection();
-    
+
     if (!dbConnected) {
-      console.error("Failed to connect to database. Server may not function properly.");
+      console.error(
+        'Failed to connect to database. Server may not function properly.'
+      );
     }
-    
+
     const server = await registerRoutes(app);
 
     app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
       const status = err.status || err.statusCode || 500;
-      const message = err.message || "Internal Server Error";
+      const message = err.message || 'Internal Server Error';
 
       // Enhanced error logging
       console.error('=== SERVER ERROR ===');
@@ -80,16 +82,16 @@ app.use((req, res, next) => {
       console.error('===================');
 
       log(`Error ${status}: ${message}`);
-      res.status(status).json({ 
+      res.status(status).json({
         message,
-        ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
+        ...(process.env.NODE_ENV === 'development' && { stack: err.stack }),
       });
     });
 
     // importantly only setup vite in development and after
     // setting up all the other routes so the catch-all route
     // doesn't interfere with the other routes
-    if (app.get("env") === "development") {
+    if (app.get('env') === 'development') {
       await setupVite(app, server);
     } else {
       serveStatic(app);
@@ -105,19 +107,22 @@ app.use((req, res, next) => {
     // this serves both the API and the client.
     // It is the only port that is not firewalled.
     const port = parseInt(process.env.PORT || '5000', 10);
-    server.listen({
-      port,
-      host: "0.0.0.0",
-      reusePort: true,
-    }, () => {
-      console.log(`Server started successfully`);
-      console.log(`- Port: ${port}`);
-      console.log(`- Host: 0.0.0.0`);
-      console.log(`- Environment: ${process.env.NODE_ENV || 'development'}`);
-      log(`serving on port ${port}`);
-    });
+    server.listen(
+      {
+        port,
+        host: '0.0.0.0',
+        reusePort: true,
+      },
+      () => {
+        console.log(`Server started successfully`);
+        console.log(`- Port: ${port}`);
+        console.log(`- Host: 0.0.0.0`);
+        console.log(`- Environment: ${process.env.NODE_ENV || 'development'}`);
+        log(`serving on port ${port}`);
+      }
+    );
   } catch (error) {
-    console.error("Failed to start server:", error);
+    console.error('Failed to start server:', error);
     process.exit(1);
   }
 })();

@@ -1,4 +1,5 @@
 import React from 'react';
+
 import InventoryScanner from '../components/InventoryScanner';
 
 export default function InventoryScannerPage() {

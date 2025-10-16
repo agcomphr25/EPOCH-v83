@@ -13,10 +13,14 @@ export interface DatabaseColumn {
   nullable: boolean;
 }
 
-export const getTables = async (params?: { category?: number }): Promise<{ tables: DatabaseTable[] }> => {
+export const getTables = async (params?: {
+  category?: number;
+}): Promise<{ tables: DatabaseTable[] }> => {
   return apiRequest('/api/enhanced-forms/schema', { params });
 };
 
-export const getColumns = async (tableName: string): Promise<{ columns: DatabaseColumn[] }> => {
+export const getColumns = async (
+  tableName: string
+): Promise<{ columns: DatabaseColumn[] }> => {
   return apiRequest(`/api/enhanced-forms/schema/${tableName}/columns`);
 };

@@ -1,12 +1,18 @@
 import React, { useState } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Mail, MessageSquare, Send, X } from 'lucide-react';
+
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Mail, MessageSquare, Send, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
 
@@ -23,21 +29,21 @@ interface CommunicationComposeProps {
   orderId?: string;
 }
 
-export default function CommunicationCompose({ 
-  isOpen, 
-  onClose, 
-  customer, 
-  orderId 
+export default function CommunicationCompose({
+  isOpen,
+  onClose,
+  customer,
+  orderId,
 }: CommunicationComposeProps) {
   const [activeTab, setActiveTab] = useState('email');
   const [emailData, setEmailData] = useState({
     to: customer?.email || '',
     subject: orderId ? `Regarding Order ${orderId}` : 'Order Update',
-    message: ''
+    message: '',
   });
   const [smsData, setSmsData] = useState({
     to: customer?.phone || '',
-    message: ''
+    message: '',
   });
   const [sending, setSending] = useState(false);
   const { toast } = useToast();
@@ -47,7 +53,7 @@ export default function CommunicationCompose({
       toast({
         title: 'Missing Information',
         description: 'Please fill in all email fields',
-        variant: 'destructive'
+        variant: 'destructive',
       });
       return;
     }
@@ -61,26 +67,26 @@ export default function CommunicationCompose({
           subject: emailData.subject,
           message: emailData.message,
           customerId: customer.id,
-          orderId: orderId || null
-        }
+          orderId: orderId || null,
+        },
       });
 
       toast({
         title: 'Email Sent',
-        description: `Email sent successfully to ${customer.name}`
+        description: `Email sent successfully to ${customer.name}`,
       });
 
       // Reset form
       setEmailData({
         to: customer?.email || '',
         subject: orderId ? `Regarding Order ${orderId}` : 'Order Update',
-        message: ''
+        message: '',
       });
       onClose();
     } catch (error: any) {
       console.error('Email send error:', error);
       let errorMessage = 'Failed to send email';
-      
+
       if (error.response?.data?.details) {
         errorMessage = `SendGrid error: ${JSON.stringify(error.response.data.details)}`;
       } else if (error.response?.data?.error) {
@@ -88,11 +94,11 @@ export default function CommunicationCompose({
       } else if (error.message) {
         errorMessage = error.message;
       }
-      
+
       toast({
         title: 'Email Failed',
         description: errorMessage,
-        variant: 'destructive'
+        variant: 'destructive',
       });
     } finally {
       setSending(false);
@@ -104,7 +110,7 @@ export default function CommunicationCompose({
       toast({
         title: 'Missing Information',
         description: 'Please fill in phone number and message',
-        variant: 'destructive'
+        variant: 'destructive',
       });
       return;
     }
@@ -117,25 +123,25 @@ export default function CommunicationCompose({
           to: smsData.to,
           message: smsData.message,
           customerId: customer.id,
-          orderId: orderId || null
-        }
+          orderId: orderId || null,
+        },
       });
 
       toast({
         title: 'SMS Sent',
-        description: `SMS sent successfully to ${customer.name}`
+        description: `SMS sent successfully to ${customer.name}`,
       });
 
       // Reset form
       setSmsData({
         to: customer?.phone || '',
-        message: ''
+        message: '',
       });
       onClose();
     } catch (error: any) {
       console.error('SMS send error:', error);
       let errorMessage = 'Failed to send SMS';
-      
+
       if (error.response?.data?.details) {
         errorMessage = `Twilio error: ${JSON.stringify(error.response.data.details)}`;
       } else if (error.response?.data?.error) {
@@ -143,11 +149,11 @@ export default function CommunicationCompose({
       } else if (error.message) {
         errorMessage = error.message;
       }
-      
+
       toast({
         title: 'SMS Failed',
         description: errorMessage,
-        variant: 'destructive'
+        variant: 'destructive',
       });
     } finally {
       setSending(false);
@@ -161,7 +167,9 @@ export default function CommunicationCompose({
           <DialogTitle className="flex items-center gap-2">
             <MessageSquare className="h-5 w-5" />
             Compose Message - {customer?.name}
-            {orderId && <span className="text-sm text-gray-500">({orderId})</span>}
+            {orderId && (
+              <span className="text-sm text-gray-500">({orderId})</span>
+            )}
           </DialogTitle>
         </DialogHeader>
 
@@ -180,7 +188,9 @@ export default function CommunicationCompose({
           <TabsContent value="email" className="space-y-4">
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg">Send Email via SendGrid</CardTitle>
+                <CardTitle className="text-lg">
+                  Send Email via SendGrid
+                </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div>
@@ -189,7 +199,9 @@ export default function CommunicationCompose({
                     id="email-to"
                     type="email"
                     value={emailData.to}
-                    onChange={(e) => setEmailData(prev => ({ ...prev, to: e.target.value }))}
+                    onChange={(e) =>
+                      setEmailData((prev) => ({ ...prev, to: e.target.value }))
+                    }
                     placeholder="customer@example.com"
                   />
                 </div>
@@ -199,7 +211,12 @@ export default function CommunicationCompose({
                   <Input
                     id="email-subject"
                     value={emailData.subject}
-                    onChange={(e) => setEmailData(prev => ({ ...prev, subject: e.target.value }))}
+                    onChange={(e) =>
+                      setEmailData((prev) => ({
+                        ...prev,
+                        subject: e.target.value,
+                      }))
+                    }
                     placeholder="Email subject"
                   />
                 </div>
@@ -210,7 +227,12 @@ export default function CommunicationCompose({
                     id="email-message"
                     rows={6}
                     value={emailData.message}
-                    onChange={(e) => setEmailData(prev => ({ ...prev, message: e.target.value }))}
+                    onChange={(e) =>
+                      setEmailData((prev) => ({
+                        ...prev,
+                        message: e.target.value,
+                      }))
+                    }
                     placeholder="Enter your email message here..."
                   />
                 </div>
@@ -241,7 +263,9 @@ export default function CommunicationCompose({
                     id="sms-to"
                     type="tel"
                     value={smsData.to}
-                    onChange={(e) => setSmsData(prev => ({ ...prev, to: e.target.value }))}
+                    onChange={(e) =>
+                      setSmsData((prev) => ({ ...prev, to: e.target.value }))
+                    }
                     placeholder="+1234567890"
                   />
                 </div>
@@ -253,7 +277,12 @@ export default function CommunicationCompose({
                     rows={4}
                     maxLength={160}
                     value={smsData.message}
-                    onChange={(e) => setSmsData(prev => ({ ...prev, message: e.target.value }))}
+                    onChange={(e) =>
+                      setSmsData((prev) => ({
+                        ...prev,
+                        message: e.target.value,
+                      }))
+                    }
                     placeholder="Enter your SMS message here... (160 characters max)"
                   />
                   <div className="text-sm text-gray-500 mt-1">

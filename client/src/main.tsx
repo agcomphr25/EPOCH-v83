@@ -1,13 +1,14 @@
 // Import React refresh fix FIRST before any other imports
-import "./react-refresh-fix";
+import './react-refresh-fix';
 
-import React from "react";
-import { createRoot } from "react-dom/client";
-import { BrowserRouter } from "react-router-dom";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Toaster } from "react-hot-toast";
-import App from "./App.tsx";
-import "./index.css";
+import React from 'react';
+import { createRoot } from 'react-dom/client';
+import { BrowserRouter } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { Toaster } from 'react-hot-toast';
+
+import App from './App.tsx';
+import './index.css';
 
 // Ensure React is globally available before any components load
 (window as any).React = React;
@@ -21,13 +22,17 @@ import "./index.css";
 (window as any).useContext = React.useContext;
 
 // Enhanced error tracking for deployment debugging
-let globalErrors: Array<{timestamp: string, message: string, type: string}> = [];
+const globalErrors: Array<{
+  timestamp: string;
+  message: string;
+  type: string;
+}> = [];
 const originalConsoleError = console.error;
-console.error = function(...args) {
+console.error = function (...args) {
   globalErrors.push({
     timestamp: new Date().toISOString(),
     message: args.join(' '),
-    type: 'console.error'
+    type: 'console.error',
   });
   originalConsoleError.apply(console, args);
 };
@@ -44,9 +49,9 @@ const queryClient = new QueryClient({
   },
 });
 
-const rootElement = document.getElementById("root");
+const rootElement = document.getElementById('root');
 if (!rootElement) {
-  throw new Error("Root element not found");
+  throw new Error('Root element not found');
 }
 
 const root = createRoot(rootElement);
@@ -61,5 +66,8 @@ root.render(
   </React.StrictMode>
 );
 
-console.log("React initialized:", React);
-console.log("React hooks:", { useState: React.useState, useEffect: React.useEffect });
+console.log('React initialized:', React);
+console.log('React hooks:', {
+  useState: React.useState,
+  useEffect: React.useEffect,
+});

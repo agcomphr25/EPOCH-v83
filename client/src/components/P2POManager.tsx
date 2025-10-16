@@ -1,32 +1,66 @@
-import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
-import { useToast } from "@/hooks/use-toast";
-import { Pencil, Trash2, Plus, FileText, Package, Calendar } from "lucide-react";
-import { apiRequest } from "@/lib/queryClient";
-import { format } from "date-fns";
+import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import {
+  Pencil,
+  Trash2,
+  Plus,
+  FileText,
+  Package,
+  Calendar,
+} from 'lucide-react';
+import { format } from 'date-fns';
+
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/ui/form';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
+import { Badge } from '@/components/ui/badge';
+import { useToast } from '@/hooks/use-toast';
+import { apiRequest } from '@/lib/queryClient';
 
 const p2PurchaseOrderSchema = z.object({
-  poNumber: z.string().min(1, "PO Number is required"),
-  customerId: z.string().min(1, "Customer is required"),
-  customerName: z.string().min(1, "Customer Name is required"),
+  poNumber: z.string().min(1, 'PO Number is required'),
+  customerId: z.string().min(1, 'Customer is required'),
+  customerName: z.string().min(1, 'Customer Name is required'),
   poDate: z.string().refine((date) => !isNaN(Date.parse(date)), {
-    message: "Valid PO date is required",
+    message: 'Valid PO date is required',
   }),
   expectedDelivery: z.string().refine((date) => !isNaN(Date.parse(date)), {
-    message: "Valid expected delivery date is required",
+    message: 'Valid expected delivery date is required',
   }),
-  status: z.enum(["OPEN", "CLOSED", "CANCELED"]).default("OPEN"),
+  status: z.enum(['OPEN', 'CLOSED', 'CANCELED']).default('OPEN'),
   notes: z.string().optional(),
 });
 
@@ -39,7 +73,8 @@ interface P2Customer {
   status: string;
 }
 
-interface P2PurchaseOrder extends Omit<P2PurchaseOrderForm, 'poDate' | 'expectedDelivery'> {
+interface P2PurchaseOrder
+  extends Omit<P2PurchaseOrderForm, 'poDate' | 'expectedDelivery'> {
   id: number;
   poDate: string;
   expectedDelivery: string;
@@ -58,68 +93,105 @@ export function P2POManager({ onManageItems }: P2POManagerProps) {
   const queryClient = useQueryClient();
 
   const { data: purchaseOrders = [], isLoading } = useQuery<P2PurchaseOrder[]>({
-    queryKey: ["/api/p2-purchase-orders-bypass"],
+    queryKey: ['/api/p2-purchase-orders-bypass'],
   });
 
   const { data: customers = [] } = useQuery<P2Customer[]>({
-    queryKey: ["/api/p2-customers-bypass"],
+    queryKey: ['/api/p2-customers-bypass'],
   });
 
   const form = useForm<P2PurchaseOrderForm>({
     resolver: zodResolver(p2PurchaseOrderSchema),
     defaultValues: {
-      poNumber: "",
-      customerId: "",
-      customerName: "",
+      poNumber: '',
+      customerId: '',
+      customerName: '',
       poDate: new Date().toISOString().split('T')[0],
-      expectedDelivery: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-      status: "OPEN",
-      notes: "",
+      expectedDelivery: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+        .toISOString()
+        .split('T')[0],
+      status: 'OPEN',
+      notes: '',
     },
   });
 
   const createMutation = useMutation({
-    mutationFn: (data: P2PurchaseOrderForm) => apiRequest("/api/p2-purchase-orders-bypass", {
-      method: "POST",
-      body: data,
-    }),
+    mutationFn: (data: P2PurchaseOrderForm) =>
+      apiRequest('/api/p2-purchase-orders-bypass', {
+        method: 'POST',
+        body: data,
+      }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/p2-purchase-orders-bypass"] });
-      toast({ title: "Success", description: "P2 Purchase Order created successfully" });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/p2-purchase-orders-bypass'],
+      });
+      toast({
+        title: 'Success',
+        description: 'P2 Purchase Order created successfully',
+      });
       setDialogOpen(false);
       form.reset();
     },
     onError: (error: any) => {
-      toast({ title: "Error", description: error.message || "Failed to create P2 purchase order", variant: "destructive" });
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to create P2 purchase order',
+        variant: 'destructive',
+      });
     },
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: number; data: Partial<P2PurchaseOrderForm> }) =>
+    mutationFn: ({
+      id,
+      data,
+    }: {
+      id: number;
+      data: Partial<P2PurchaseOrderForm>;
+    }) =>
       apiRequest(`/api/p2-purchase-orders-bypass/${id}`, {
-        method: "PUT",
+        method: 'PUT',
         body: data,
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/p2-purchase-orders-bypass"] });
-      toast({ title: "Success", description: "P2 Purchase Order updated successfully" });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/p2-purchase-orders-bypass'],
+      });
+      toast({
+        title: 'Success',
+        description: 'P2 Purchase Order updated successfully',
+      });
       setDialogOpen(false);
       setSelectedPO(null);
       form.reset();
     },
     onError: (error: any) => {
-      toast({ title: "Error", description: error.message || "Failed to update P2 purchase order", variant: "destructive" });
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to update P2 purchase order',
+        variant: 'destructive',
+      });
     },
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: number) => apiRequest(`/api/p2-purchase-orders-bypass/${id}`, { method: "DELETE" }),
+    mutationFn: (id: number) =>
+      apiRequest(`/api/p2-purchase-orders-bypass/${id}`, { method: 'DELETE' }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/p2-purchase-orders-bypass"] });
-      toast({ title: "Success", description: "P2 Purchase Order deleted successfully" });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/p2-purchase-orders-bypass'],
+      });
+      toast({
+        title: 'Success',
+        description: 'P2 Purchase Order deleted successfully',
+      });
     },
     onError: (error: any) => {
-      toast({ title: "Error", description: error.message || "Failed to delete P2 purchase order", variant: "destructive" });
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to delete P2 purchase order',
+        variant: 'destructive',
+      });
     },
   });
 
@@ -132,10 +204,10 @@ export function P2POManager({ onManageItems }: P2POManagerProps) {
   };
 
   const handleCustomerChange = (customerId: string) => {
-    const customer = customers.find(c => c.customerId === customerId);
+    const customer = customers.find((c) => c.customerId === customerId);
     if (customer) {
-      form.setValue("customerId", customer.customerId);
-      form.setValue("customerName", customer.customerName);
+      form.setValue('customerId', customer.customerId);
+      form.setValue('customerName', customer.customerName);
     }
   };
 
@@ -148,7 +220,7 @@ export function P2POManager({ onManageItems }: P2POManagerProps) {
       poDate: po.poDate,
       expectedDelivery: po.expectedDelivery,
       status: po.status,
-      notes: po.notes || "",
+      notes: po.notes || '',
     });
     setDialogOpen(true);
   };
@@ -156,27 +228,29 @@ export function P2POManager({ onManageItems }: P2POManagerProps) {
   const openCreateDialog = () => {
     setSelectedPO(null);
     form.reset({
-      poNumber: "",
-      customerId: "",
-      customerName: "",
+      poNumber: '',
+      customerId: '',
+      customerName: '',
       poDate: new Date().toISOString().split('T')[0],
-      expectedDelivery: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-      status: "OPEN",
-      notes: "",
+      expectedDelivery: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+        .toISOString()
+        .split('T')[0],
+      status: 'OPEN',
+      notes: '',
     });
     setDialogOpen(true);
   };
 
   const getStatusBadgeVariant = (status: string) => {
     switch (status) {
-      case "OPEN":
-        return "default";
-      case "CLOSED":
-        return "secondary";
-      case "CANCELED":
-        return "destructive";
+      case 'OPEN':
+        return 'default';
+      case 'CLOSED':
+        return 'secondary';
+      case 'CANCELED':
+        return 'destructive';
       default:
-        return "outline";
+        return 'outline';
     }
   };
 
@@ -188,8 +262,12 @@ export function P2POManager({ onManageItems }: P2POManagerProps) {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight">P2 Purchase Orders</h2>
-          <p className="text-muted-foreground">Manage P2 purchase orders and line items</p>
+          <h2 className="text-2xl font-bold tracking-tight">
+            P2 Purchase Orders
+          </h2>
+          <p className="text-muted-foreground">
+            Manage P2 purchase orders and line items
+          </p>
         </div>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
@@ -201,14 +279,21 @@ export function P2POManager({ onManageItems }: P2POManagerProps) {
           <DialogContent className="max-w-2xl">
             <DialogHeader>
               <DialogTitle>
-                {selectedPO ? "Edit P2 Purchase Order" : "Add P2 Purchase Order"}
+                {selectedPO
+                  ? 'Edit P2 Purchase Order'
+                  : 'Add P2 Purchase Order'}
               </DialogTitle>
               <DialogDescription>
-                {selectedPO ? "Update purchase order information" : "Create a new P2 purchase order"}
+                {selectedPO
+                  ? 'Update purchase order information'
+                  : 'Create a new P2 purchase order'}
               </DialogDescription>
             </DialogHeader>
             <Form {...form}>
-              <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
+              <form
+                onSubmit={form.handleSubmit(handleSubmit)}
+                className="space-y-4"
+              >
                 <div className="grid grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
@@ -229,10 +314,13 @@ export function P2POManager({ onManageItems }: P2POManagerProps) {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Customer</FormLabel>
-                        <Select onValueChange={(value) => {
-                          field.onChange(value);
-                          handleCustomerChange(value);
-                        }} value={field.value}>
+                        <Select
+                          onValueChange={(value) => {
+                            field.onChange(value);
+                            handleCustomerChange(value);
+                          }}
+                          value={field.value}
+                        >
                           <FormControl>
                             <SelectTrigger>
                               <SelectValue placeholder="Select customer" />
@@ -240,7 +328,10 @@ export function P2POManager({ onManageItems }: P2POManagerProps) {
                           </FormControl>
                           <SelectContent>
                             {customers.map((customer) => (
-                              <SelectItem key={customer.id} value={customer.customerId}>
+                              <SelectItem
+                                key={customer.id}
+                                value={customer.customerId}
+                              >
                                 {customer.customerName} ({customer.customerId})
                               </SelectItem>
                             ))}
@@ -285,7 +376,10 @@ export function P2POManager({ onManageItems }: P2POManagerProps) {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Status</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <Select
+                        onValueChange={field.onChange}
+                        defaultValue={field.value}
+                      >
                         <FormControl>
                           <SelectTrigger>
                             <SelectValue placeholder="Select status" />
@@ -308,18 +402,30 @@ export function P2POManager({ onManageItems }: P2POManagerProps) {
                     <FormItem>
                       <FormLabel>Notes</FormLabel>
                       <FormControl>
-                        <Textarea placeholder="Additional notes..." {...field} />
+                        <Textarea
+                          placeholder="Additional notes..."
+                          {...field}
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
                 <div className="flex justify-end space-x-2">
-                  <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setDialogOpen(false)}
+                  >
                     Cancel
                   </Button>
-                  <Button type="submit" disabled={createMutation.isPending || updateMutation.isPending}>
-                    {selectedPO ? "Update" : "Create"} Purchase Order
+                  <Button
+                    type="submit"
+                    disabled={
+                      createMutation.isPending || updateMutation.isPending
+                    }
+                  >
+                    {selectedPO ? 'Update' : 'Create'} Purchase Order
                   </Button>
                 </div>
               </form>
@@ -333,7 +439,9 @@ export function P2POManager({ onManageItems }: P2POManagerProps) {
           <Card>
             <CardContent className="flex flex-col items-center justify-center py-12">
               <FileText className="h-12 w-12 text-muted-foreground mb-4" />
-              <h3 className="text-lg font-semibold mb-2">No P2 Purchase Orders</h3>
+              <h3 className="text-lg font-semibold mb-2">
+                No P2 Purchase Orders
+              </h3>
               <p className="text-muted-foreground text-center mb-4">
                 Get started by creating your first P2 purchase order
               </p>
@@ -354,7 +462,8 @@ export function P2POManager({ onManageItems }: P2POManagerProps) {
                       {po.poNumber}
                     </CardTitle>
                     <CardDescription>
-                      Customer: {po.customerName} • Created: {format(new Date(po.createdAt), 'MMM d, yyyy')}
+                      Customer: {po.customerName} • Created:{' '}
+                      {format(new Date(po.createdAt), 'MMM d, yyyy')}
                     </CardDescription>
                   </div>
                   <div className="flex gap-2">
@@ -368,11 +477,16 @@ export function P2POManager({ onManageItems }: P2POManagerProps) {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm mb-4">
                   <div className="flex items-center gap-2">
                     <Calendar className="h-4 w-4 text-muted-foreground" />
-                    <span>PO Date: {format(new Date(po.poDate), 'MMM d, yyyy')}</span>
+                    <span>
+                      PO Date: {format(new Date(po.poDate), 'MMM d, yyyy')}
+                    </span>
                   </div>
                   <div className="flex items-center gap-2">
                     <Calendar className="h-4 w-4 text-muted-foreground" />
-                    <span>Expected: {format(new Date(po.expectedDelivery), 'MMM d, yyyy')}</span>
+                    <span>
+                      Expected:{' '}
+                      {format(new Date(po.expectedDelivery), 'MMM d, yyyy')}
+                    </span>
                   </div>
                   <div className="flex items-center gap-2">
                     <Package className="h-4 w-4 text-muted-foreground" />
@@ -380,22 +494,28 @@ export function P2POManager({ onManageItems }: P2POManagerProps) {
                   </div>
                 </div>
                 {po.notes && (
-                  <p className="text-sm text-muted-foreground mb-4">{po.notes}</p>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    {po.notes}
+                  </p>
                 )}
                 <div className="flex gap-2">
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
+                  <Button
+                    variant="outline"
+                    size="sm"
                     onClick={() => onManageItems?.(po.id, po.poNumber)}
                   >
                     Manage Items
                   </Button>
-                  <Button variant="outline" size="sm" onClick={() => openEditDialog(po)}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => openEditDialog(po)}
+                  >
                     <Pencil className="h-4 w-4" />
                   </Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
+                  <Button
+                    variant="outline"
+                    size="sm"
                     onClick={() => deleteMutation.mutate(po.id)}
                     disabled={deleteMutation.isPending}
                   >

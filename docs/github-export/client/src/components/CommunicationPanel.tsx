@@ -1,10 +1,34 @@
 import React, { useState } from 'react';
+import {
+  Mail,
+  MessageSquare,
+  Send,
+  CheckCircle,
+  AlertTriangle,
+} from 'lucide-react';
+
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Mail, MessageSquare, Send, CheckCircle, AlertTriangle } from 'lucide-react';
-import { sendOrderConfirmation, sendShippingNotification, sendQualityControlAlert, type CommunicationMethod } from '@/utils/communicationUtils';
+import {
+  sendOrderConfirmation,
+  sendShippingNotification,
+  sendQualityControlAlert,
+  type CommunicationMethod,
+} from '@/utils/communicationUtils';
 import { useToast } from '@/hooks/use-toast';
 
 interface CustomerPreferences {
@@ -19,12 +43,20 @@ interface CommunicationPanelProps {
   className?: string;
 }
 
-export default function CommunicationPanel({ orderId, customerPreferences, className }: CommunicationPanelProps) {
-  const [selectedMethod, setSelectedMethod] = useState<CommunicationMethod>(customerPreferences.preferredMethod);
+export default function CommunicationPanel({
+  orderId,
+  customerPreferences,
+  className,
+}: CommunicationPanelProps) {
+  const [selectedMethod, setSelectedMethod] = useState<CommunicationMethod>(
+    customerPreferences.preferredMethod
+  );
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
 
-  const handleSendCommunication = async (type: 'confirmation' | 'shipping' | 'quality') => {
+  const handleSendCommunication = async (
+    type: 'confirmation' | 'shipping' | 'quality'
+  ) => {
     setIsLoading(true);
     try {
       switch (type) {
@@ -35,10 +67,14 @@ export default function CommunicationPanel({ orderId, customerPreferences, class
           await sendShippingNotification(orderId, selectedMethod);
           break;
         case 'quality':
-          await sendQualityControlAlert(orderId, selectedMethod, 'Quality control alert for your order');
+          await sendQualityControlAlert(
+            orderId,
+            selectedMethod,
+            'Quality control alert for your order'
+          );
           break;
       }
-      
+
       toast({
         title: 'Message sent successfully',
         description: `${type.charAt(0).toUpperCase() + type.slice(1)} notification sent via ${selectedMethod.toUpperCase()}`,
@@ -56,7 +92,11 @@ export default function CommunicationPanel({ orderId, customerPreferences, class
   };
 
   const getMethodIcon = (method: CommunicationMethod) => {
-    return method === 'email' ? <Mail className="h-4 w-4" /> : <MessageSquare className="h-4 w-4" />;
+    return method === 'email' ? (
+      <Mail className="h-4 w-4" />
+    ) : (
+      <MessageSquare className="h-4 w-4" />
+    );
   };
 
   return (
@@ -74,7 +114,12 @@ export default function CommunicationPanel({ orderId, customerPreferences, class
         {/* Method Selection */}
         <div className="space-y-2">
           <label className="text-sm font-medium">Communication Method</label>
-          <Select value={selectedMethod} onValueChange={(value: CommunicationMethod) => setSelectedMethod(value)}>
+          <Select
+            value={selectedMethod}
+            onValueChange={(value: CommunicationMethod) =>
+              setSelectedMethod(value)
+            }
+          >
             <SelectTrigger>
               <SelectValue placeholder="Select method" />
             </SelectTrigger>
@@ -97,7 +142,9 @@ export default function CommunicationPanel({ orderId, customerPreferences, class
 
         {/* Customer Preferences */}
         <div className="flex items-center gap-2">
-          <span className="text-sm text-muted-foreground">Preferred method:</span>
+          <span className="text-sm text-muted-foreground">
+            Preferred method:
+          </span>
           <Badge variant="secondary" className="flex items-center gap-1">
             {getMethodIcon(customerPreferences.preferredMethod)}
             {customerPreferences.preferredMethod.toUpperCase()}
@@ -115,7 +162,7 @@ export default function CommunicationPanel({ orderId, customerPreferences, class
               <CheckCircle className="h-4 w-4" />
               Send Order Confirmation
             </Button>
-            
+
             <Button
               onClick={() => handleSendCommunication('shipping')}
               disabled={isLoading}
@@ -125,7 +172,7 @@ export default function CommunicationPanel({ orderId, customerPreferences, class
               Send Shipping Notice
             </Button>
           </div>
-          
+
           <Button
             onClick={() => handleSendCommunication('quality')}
             disabled={isLoading}

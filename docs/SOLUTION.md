@@ -36,7 +36,7 @@ The RefreshRuntime.register error is resolved. The red overlay is a separate iss
 ## Available ERP Modules (All Working)
 
 - Order Management
-- Order Entry  
+- Order Entry
 - Inventory Manager
 - Employee Portal
 - Discount Management

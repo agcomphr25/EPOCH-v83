@@ -1,14 +1,25 @@
 import React, { useState } from 'react';
 import { Link } from 'wouter';
+import {
+  CheckCircle,
+  XCircle,
+  Clock,
+  DollarSign,
+  User,
+  Calendar,
+  FileText,
+  AlertCircle,
+  ExternalLink,
+} from 'lucide-react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { CheckCircle, XCircle, Clock, DollarSign, User, Calendar, FileText, AlertCircle, ExternalLink } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import {
   Dialog,
@@ -45,13 +56,19 @@ type ActionType = 'approve' | 'reject';
 export default function RefundQueue() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [selectedRequest, setSelectedRequest] = useState<RefundRequest | null>(null);
+  const [selectedRequest, setSelectedRequest] = useState<RefundRequest | null>(
+    null
+  );
   const [actionType, setActionType] = useState<ActionType>('approve');
   const [rejectionReason, setRejectionReason] = useState('');
   const [showActionDialog, setShowActionDialog] = useState(false);
 
   // Fetch refund requests
-  const { data: refundRequests = [], isLoading, error } = useQuery({
+  const {
+    data: refundRequests = [],
+    isLoading,
+    error,
+  } = useQuery({
     queryKey: ['/api/refund-requests'],
     queryFn: async () => {
       const response = await apiRequest('/api/refund-requests');
@@ -61,7 +78,15 @@ export default function RefundQueue() {
 
   // Update refund request status mutation
   const updateRefundRequestMutation = useMutation({
-    mutationFn: async ({ id, action, rejectionReason }: { id: number; action: ActionType; rejectionReason?: string }) => {
+    mutationFn: async ({
+      id,
+      action,
+      rejectionReason,
+    }: {
+      id: number;
+      action: ActionType;
+      rejectionReason?: string;
+    }) => {
       return await apiRequest(`/api/refund-requests/${id}/${action}`, {
         method: 'POST',
         body: JSON.stringify({ rejectionReason }),
@@ -69,10 +94,14 @@ export default function RefundQueue() {
     },
     onSuccess: (_, variables) => {
       toast({
-        title: variables.action === 'approve' ? 'Request Approved' : 'Request Rejected',
-        description: variables.action === 'approve' 
-          ? 'The refund request has been approved and processed.'
-          : 'The refund request has been rejected.',
+        title:
+          variables.action === 'approve'
+            ? 'Request Approved'
+            : 'Request Rejected',
+        description:
+          variables.action === 'approve'
+            ? 'The refund request has been approved and processed.'
+            : 'The refund request has been rejected.',
       });
       queryClient.invalidateQueries({ queryKey: ['/api/refund-requests'] });
       setShowActionDialog(false);
@@ -109,7 +138,8 @@ export default function RefundQueue() {
     updateRefundRequestMutation.mutate({
       id: selectedRequest.id,
       action: actionType,
-      rejectionReason: actionType === 'reject' ? rejectionReason.trim() : undefined,
+      rejectionReason:
+        actionType === 'reject' ? rejectionReason.trim() : undefined,
     });
   };
 
@@ -133,24 +163,51 @@ export default function RefundQueue() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'PENDING':
-        return <Badge variant="secondary" className="bg-yellow-100 text-yellow-800"><Clock className="h-3 w-3 mr-1" />Pending</Badge>;
+        return (
+          <Badge variant="secondary" className="bg-yellow-100 text-yellow-800">
+            <Clock className="h-3 w-3 mr-1" />
+            Pending
+          </Badge>
+        );
       case 'APPROVED':
-        return <Badge variant="default" className="bg-green-100 text-green-800"><CheckCircle className="h-3 w-3 mr-1" />Approved</Badge>;
+        return (
+          <Badge variant="default" className="bg-green-100 text-green-800">
+            <CheckCircle className="h-3 w-3 mr-1" />
+            Approved
+          </Badge>
+        );
       case 'REJECTED':
-        return <Badge variant="destructive"><XCircle className="h-3 w-3 mr-1" />Rejected</Badge>;
+        return (
+          <Badge variant="destructive">
+            <XCircle className="h-3 w-3 mr-1" />
+            Rejected
+          </Badge>
+        );
       case 'PROCESSED':
-        return <Badge variant="default" className="bg-blue-100 text-blue-800"><CheckCircle className="h-3 w-3 mr-1" />Processed</Badge>;
+        return (
+          <Badge variant="default" className="bg-blue-100 text-blue-800">
+            <CheckCircle className="h-3 w-3 mr-1" />
+            Processed
+          </Badge>
+        );
       default:
         return <Badge variant="outline">{status}</Badge>;
     }
   };
 
-  const pendingRequests = refundRequests.filter(req => req.status === 'PENDING');
-  const processedRequests = refundRequests.filter(req => req.status !== 'PENDING');
+  const pendingRequests = refundRequests.filter(
+    (req) => req.status === 'PENDING'
+  );
+  const processedRequests = refundRequests.filter(
+    (req) => req.status !== 'PENDING'
+  );
 
   if (isLoading) {
     return (
-      <div className="container mx-auto p-6 max-w-6xl" data-testid="loading-container">
+      <div
+        className="container mx-auto p-6 max-w-6xl"
+        data-testid="loading-container"
+      >
         <div className="text-center py-12" data-testid="loading-message">
           <Clock className="h-8 w-8 mx-auto mb-4 text-gray-400" />
           <p className="text-gray-600">Loading refund requests...</p>
@@ -161,7 +218,10 @@ export default function RefundQueue() {
 
   if (error) {
     return (
-      <div className="container mx-auto p-6 max-w-6xl" data-testid="error-container">
+      <div
+        className="container mx-auto p-6 max-w-6xl"
+        data-testid="error-container"
+      >
         <Alert variant="destructive" data-testid="error-alert">
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>
@@ -173,24 +233,44 @@ export default function RefundQueue() {
   }
 
   return (
-    <div className="container mx-auto p-6 max-w-6xl" data-testid="refund-queue-page">
+    <div
+      className="container mx-auto p-6 max-w-6xl"
+      data-testid="refund-queue-page"
+    >
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2" data-testid="page-title">
+        <h1
+          className="text-3xl font-bold text-gray-900 mb-2"
+          data-testid="page-title"
+        >
           Refund Request Queue
         </h1>
         <p className="text-gray-600" data-testid="page-description">
-          Review and approve or reject refund requests from customer service representatives.
+          Review and approve or reject refund requests from customer service
+          representatives.
         </p>
       </div>
 
       {/* Summary Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8" data-testid="summary-stats">
+      <div
+        className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8"
+        data-testid="summary-stats"
+      >
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600" data-testid="pending-count-label">Pending Requests</p>
-                <p className="text-2xl font-bold text-yellow-600" data-testid="pending-count">{pendingRequests.length}</p>
+                <p
+                  className="text-sm font-medium text-gray-600"
+                  data-testid="pending-count-label"
+                >
+                  Pending Requests
+                </p>
+                <p
+                  className="text-2xl font-bold text-yellow-600"
+                  data-testid="pending-count"
+                >
+                  {pendingRequests.length}
+                </p>
               </div>
               <Clock className="h-8 w-8 text-yellow-600" />
             </div>
@@ -200,8 +280,18 @@ export default function RefundQueue() {
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600" data-testid="total-count-label">Total Requests</p>
-                <p className="text-2xl font-bold text-gray-900" data-testid="total-count">{refundRequests.length}</p>
+                <p
+                  className="text-sm font-medium text-gray-600"
+                  data-testid="total-count-label"
+                >
+                  Total Requests
+                </p>
+                <p
+                  className="text-2xl font-bold text-gray-900"
+                  data-testid="total-count"
+                >
+                  {refundRequests.length}
+                </p>
               </div>
               <FileText className="h-8 w-8 text-gray-600" />
             </div>
@@ -211,9 +301,22 @@ export default function RefundQueue() {
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600" data-testid="pending-amount-label">Pending Amount</p>
-                <p className="text-2xl font-bold text-green-600" data-testid="pending-amount">
-                  {formatCurrency(pendingRequests.reduce((sum, req) => sum + req.refundAmount, 0))}
+                <p
+                  className="text-sm font-medium text-gray-600"
+                  data-testid="pending-amount-label"
+                >
+                  Pending Amount
+                </p>
+                <p
+                  className="text-2xl font-bold text-green-600"
+                  data-testid="pending-amount"
+                >
+                  {formatCurrency(
+                    pendingRequests.reduce(
+                      (sum, req) => sum + req.refundAmount,
+                      0
+                    )
+                  )}
                 </p>
               </div>
               <DollarSign className="h-8 w-8 text-green-600" />
@@ -242,7 +345,7 @@ export default function RefundQueue() {
                   <div className="flex justify-between items-start mb-3">
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
-                        <Link 
+                        <Link
                           href={`/orders?search=${request.orderId}`}
                           className="font-medium text-lg text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1"
                           data-testid={`request-order-${request.id}`}
@@ -253,11 +356,17 @@ export default function RefundQueue() {
                         {getStatusBadge(request.status)}
                       </div>
                       <div className="text-sm text-gray-600 space-y-1">
-                        <div className="flex items-center gap-1" data-testid={`request-customer-${request.id}`}>
+                        <div
+                          className="flex items-center gap-1"
+                          data-testid={`request-customer-${request.id}`}
+                        >
                           <User className="h-3 w-3" />
                           Customer: {request.customerName || request.customerId}
                         </div>
-                        <div className="flex items-center gap-1" data-testid={`request-date-${request.id}`}>
+                        <div
+                          className="flex items-center gap-1"
+                          data-testid={`request-date-${request.id}`}
+                        >
                           <Calendar className="h-3 w-3" />
                           Requested: {formatDate(request.createdAt)}
                         </div>
@@ -267,7 +376,10 @@ export default function RefundQueue() {
                       </div>
                     </div>
                     <div className="text-right">
-                      <div className="text-2xl font-bold text-green-600 mb-2" data-testid={`request-amount-${request.id}`}>
+                      <div
+                        className="text-2xl font-bold text-green-600 mb-2"
+                        data-testid={`request-amount-${request.id}`}
+                      >
                         {formatCurrency(request.refundAmount)}
                       </div>
                       <div className="flex gap-2">
@@ -294,15 +406,25 @@ export default function RefundQueue() {
                   </div>
                   <div className="border-t pt-3 space-y-2">
                     <div>
-                      <span className="text-sm font-medium text-gray-700">Reason: </span>
-                      <span className="text-sm text-gray-600" data-testid={`request-reason-${request.id}`}>
+                      <span className="text-sm font-medium text-gray-700">
+                        Reason:{' '}
+                      </span>
+                      <span
+                        className="text-sm text-gray-600"
+                        data-testid={`request-reason-${request.id}`}
+                      >
                         {request.reason}
                       </span>
                     </div>
                     {request.notes && (
                       <div>
-                        <span className="text-sm font-medium text-gray-700">Notes: </span>
-                        <span className="text-sm text-gray-600" data-testid={`request-notes-${request.id}`}>
+                        <span className="text-sm font-medium text-gray-700">
+                          Notes:{' '}
+                        </span>
+                        <span
+                          className="text-sm text-gray-600"
+                          data-testid={`request-notes-${request.id}`}
+                        >
                           {request.notes}
                         </span>
                       </div>
@@ -334,7 +456,7 @@ export default function RefundQueue() {
                 >
                   <div className="flex justify-between items-center">
                     <div className="flex items-center gap-3">
-                      <Link 
+                      <Link
                         href={`/orders?search=${request.orderId}`}
                         className="font-medium text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1"
                         data-testid={`processed-order-${request.id}`}
@@ -343,17 +465,29 @@ export default function RefundQueue() {
                         <ExternalLink className="h-3 w-3" />
                       </Link>
                       {getStatusBadge(request.status)}
-                      <span className="text-sm text-gray-600" data-testid={`processed-amount-${request.id}`}>
+                      <span
+                        className="text-sm text-gray-600"
+                        data-testid={`processed-amount-${request.id}`}
+                      >
                         {formatCurrency(request.refundAmount)}
                       </span>
                     </div>
-                    <div className="text-sm text-gray-500" data-testid={`processed-date-${request.id}`}>
-                      {request.approvedAt ? formatDate(request.approvedAt) : formatDate(request.updatedAt)}
+                    <div
+                      className="text-sm text-gray-500"
+                      data-testid={`processed-date-${request.id}`}
+                    >
+                      {request.approvedAt
+                        ? formatDate(request.approvedAt)
+                        : formatDate(request.updatedAt)}
                     </div>
                   </div>
                   {request.rejectionReason && (
-                    <div className="mt-2 text-sm text-red-600" data-testid={`rejection-reason-${request.id}`}>
-                      <strong>Rejection reason:</strong> {request.rejectionReason}
+                    <div
+                      className="mt-2 text-sm text-red-600"
+                      data-testid={`rejection-reason-${request.id}`}
+                    >
+                      <strong>Rejection reason:</strong>{' '}
+                      {request.rejectionReason}
                     </div>
                   )}
                 </div>
@@ -384,18 +518,20 @@ export default function RefundQueue() {
             <DialogDescription data-testid="dialog-description">
               {selectedRequest && (
                 <>
-                  {actionType === 'approve' 
+                  {actionType === 'approve'
                     ? `Approve a ${formatCurrency(selectedRequest.refundAmount)} refund for order ${selectedRequest.orderId}?`
-                    : `Reject the refund request for order ${selectedRequest.orderId}?`
-                  }
+                    : `Reject the refund request for order ${selectedRequest.orderId}?`}
                 </>
               )}
             </DialogDescription>
           </DialogHeader>
-          
+
           {actionType === 'reject' && (
             <div className="space-y-2">
-              <Label htmlFor="rejection-reason" data-testid="rejection-reason-label">
+              <Label
+                htmlFor="rejection-reason"
+                data-testid="rejection-reason-label"
+              >
                 Reason for Rejection *
               </Label>
               <Textarea
@@ -410,8 +546,8 @@ export default function RefundQueue() {
           )}
 
           <div className="flex justify-end space-x-2 mt-6">
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               onClick={() => setShowActionDialog(false)}
               data-testid="cancel-action-button"
             >
@@ -423,9 +559,11 @@ export default function RefundQueue() {
               variant={actionType === 'approve' ? 'default' : 'destructive'}
               data-testid="confirm-action-button"
             >
-              {updateRefundRequestMutation.isPending ? 'Processing...' : 
-                actionType === 'approve' ? 'Approve Refund' : 'Reject Request'
-              }
+              {updateRefundRequestMutation.isPending
+                ? 'Processing...'
+                : actionType === 'approve'
+                  ? 'Approve Refund'
+                  : 'Reject Request'}
             </Button>
           </div>
         </DialogContent>

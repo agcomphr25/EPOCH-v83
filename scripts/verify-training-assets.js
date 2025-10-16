@@ -10,7 +10,7 @@ const must = [
   'attached_assets/training/README.md',
 ];
 
-const missing = must.filter(p => !fs.existsSync(path.join(rootDir, p)));
+const missing = must.filter((p) => !fs.existsSync(path.join(rootDir, p)));
 
 if (missing.length) {
   console.error('Missing training assets:', missing);

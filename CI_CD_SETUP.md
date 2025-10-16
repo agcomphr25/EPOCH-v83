@@ -7,11 +7,13 @@ This project now has automated code quality checks to prevent incomplete or brok
 **Layer 3 (Branch Protection) is NOT yet enabled!**
 
 To complete the setup and fully protect your main branch:
+
 1. Go to GitHub repo → **Settings** → **Branches**
 2. Add protection rule for `main` branch (see instructions below)
 3. This should be done when co-worker returns from vacation
 
 **Current Status:**
+
 - ✅ Layer 1: Pre-commit hooks (ACTIVE)
 - ✅ Layer 2: GitHub Actions CI/CD (ACTIVE)
 - ⏳ Layer 3: Branch Protection (PENDING - see section below)
@@ -21,9 +23,11 @@ To complete the setup and fully protect your main branch:
 ## 🛡️ Three Layers of Protection
 
 ### 1. **Pre-Commit Hooks (Local Machine)**
+
 **Runs automatically when you commit code**
 
 When you run `git commit`, the following checks happen automatically:
+
 - ✅ **ESLint** - Checks for code quality issues and auto-fixes them
 - ✅ **Prettier** - Formats your code consistently
 - ✅ **TypeScript** - Type checks all files
@@ -31,6 +35,7 @@ When you run `git commit`, the following checks happen automatically:
 **If any check fails, the commit is blocked until you fix the issues.**
 
 #### Bypass (Emergency Only)
+
 ```bash
 # Only use this in emergencies - NOT recommended!
 git commit --no-verify -m "emergency fix"
@@ -39,9 +44,11 @@ git commit --no-verify -m "emergency fix"
 ---
 
 ### 2. **GitHub Actions CI (Pull Requests)**
+
 **Runs automatically on every PR and push to main**
 
 The CI workflow includes:
+
 - ✅ TypeScript type checking
 - ✅ ESLint code quality checks
 - ✅ Prettier formatting validation
@@ -53,6 +60,7 @@ The CI workflow includes:
 ---
 
 ### 3. **Branch Protection (GitHub Settings)**
+
 **Enforces quality gates before merging**
 
 To complete the setup, enable branch protection:
@@ -71,6 +79,7 @@ To complete the setup, enable branch protection:
 ## 🚀 Available Commands
 
 ### Development
+
 ```bash
 npm run dev          # Start development server
 npm run check        # Run TypeScript type checking
@@ -81,6 +90,7 @@ npm run build        # Build for production
 ```
 
 ### Database
+
 ```bash
 npm run db:push      # Push schema changes to database
 ```
@@ -89,7 +99,8 @@ npm run db:push      # Push schema changes to database
 
 ## 📝 What Gets Checked
 
-### TypeScript Files (*.ts, *.tsx)
+### TypeScript Files (_.ts, _.tsx)
+
 1. **ESLint** checks for:
    - Code quality issues
    - Unused variables
@@ -107,7 +118,8 @@ npm run db:push      # Push schema changes to database
    - Missing imports/exports
    - Type definitions
 
-### Other Files (*.js, *.jsx, *.json, *.css, *.md)
+### Other Files (_.js, _.jsx, _.json, _.css, \*.md)
+
 - **Prettier** formatting only
 
 ---
@@ -117,6 +129,7 @@ npm run db:push      # Push schema changes to database
 With this setup, the incomplete GitHub pull would have been caught:
 
 ### Before Your Scenario:
+
 ```
 Developer commits code with missing User type export
   ↓
@@ -125,6 +138,7 @@ Developer commits code with missing User type export
 ```
 
 ### If They Bypassed Pre-commit:
+
 ```
 Developer pushes to PR anyway
   ↓
@@ -142,12 +156,14 @@ Developer must fix before merging
 ## 🔧 Troubleshooting
 
 ### Pre-commit hook not running?
+
 ```bash
 # Reinstall git hooks
 npm run prepare
 ```
 
 ### Too many ESLint errors?
+
 ```bash
 # Auto-fix what's possible
 npm run lint:fix
@@ -157,6 +173,7 @@ npm run lint
 ```
 
 ### TypeScript errors?
+
 ```bash
 # Check what's wrong
 npm run check
@@ -169,6 +186,7 @@ npm run check
 ## 📋 Code Review Checklist
 
 When reviewing PRs, ensure:
+
 - ✅ All CI checks pass (green checkmarks)
 - ✅ No TypeScript errors
 - ✅ No ESLint warnings

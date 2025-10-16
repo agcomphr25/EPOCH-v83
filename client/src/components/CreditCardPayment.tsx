@@ -3,39 +3,56 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import {
+  AlertCircle,
+  CreditCard,
+  CheckCircle,
+  XCircle,
+  Loader2,
+} from 'lucide-react';
+
 import { apiRequest } from '@/lib/queryClient';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from '@/components/ui/form';
-import { AlertCircle, CreditCard, CheckCircle, XCircle, Loader2 } from 'lucide-react';
+import {
+  Form,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormControl,
+  FormMessage,
+} from '@/components/ui/form';
 import { useToast } from '@/hooks/use-toast';
 
 // Credit card payment form schema
 const creditCardSchema = z.object({
-  orderId: z.string().min(1, "Order ID is required"),
-  amount: z.number().min(0.01, "Amount must be greater than 0"),
-  cardNumber: z.string()
-    .min(13, "Card number must be at least 13 digits")
-    .max(19, "Card number must be at most 19 digits")
-    .regex(/^\d+$/, "Card number must contain only digits"),
-  expirationDate: z.string()
-    .regex(/^\d{2}\/\d{2}$/, "Expiration date must be in MM/YY format"),
-  cvv: z.string()
-    .min(3, "CVV must be at least 3 digits")
-    .max(4, "CVV must be at most 4 digits")
-    .regex(/^\d+$/, "CVV must contain only digits"),
+  orderId: z.string().min(1, 'Order ID is required'),
+  amount: z.number().min(0.01, 'Amount must be greater than 0'),
+  cardNumber: z
+    .string()
+    .min(13, 'Card number must be at least 13 digits')
+    .max(19, 'Card number must be at most 19 digits')
+    .regex(/^\d+$/, 'Card number must contain only digits'),
+  expirationDate: z
+    .string()
+    .regex(/^\d{2}\/\d{2}$/, 'Expiration date must be in MM/YY format'),
+  cvv: z
+    .string()
+    .min(3, 'CVV must be at least 3 digits')
+    .max(4, 'CVV must be at most 4 digits')
+    .regex(/^\d+$/, 'CVV must contain only digits'),
   billingAddress: z.object({
-    firstName: z.string().min(1, "First name is required"),
-    lastName: z.string().min(1, "Last name is required"),
-    address: z.string().min(1, "Address is required"),
-    city: z.string().min(1, "City is required"),
-    state: z.string().min(2, "State is required"),
-    zip: z.string().min(5, "ZIP code is required"),
-    country: z.string().default("US"),
+    firstName: z.string().min(1, 'First name is required'),
+    lastName: z.string().min(1, 'Last name is required'),
+    address: z.string().min(1, 'Address is required'),
+    city: z.string().min(1, 'City is required'),
+    state: z.string().min(2, 'State is required'),
+    zip: z.string().min(5, 'ZIP code is required'),
+    country: z.string().default('US'),
   }),
-  customerEmail: z.string().email().optional().or(z.literal("")),
+  customerEmail: z.string().email().optional().or(z.literal('')),
   taxAmount: z.number().min(0).default(0),
   shippingAmount: z.number().min(0).default(0),
 });
@@ -49,11 +66,11 @@ interface CreditCardPaymentProps {
   onCancel?: () => void;
 }
 
-export default function CreditCardPayment({ 
-  orderId, 
-  defaultAmount = 0, 
-  onSuccess, 
-  onCancel 
+export default function CreditCardPayment({
+  orderId,
+  defaultAmount = 0,
+  onSuccess,
+  onCancel,
 }: CreditCardPaymentProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -93,25 +110,26 @@ export default function CreditCardPayment({
       setPaymentResult(result);
       if (result.success) {
         toast({
-          title: "Payment Successful",
+          title: 'Payment Successful',
           description: `Transaction ID: ${result.transactionId}`,
         });
         queryClient.invalidateQueries({ queryKey: ['/api/payments'] });
         onSuccess?.(result);
       } else {
         toast({
-          title: "Payment Failed",
-          description: result.message || "Payment processing failed",
-          variant: "destructive",
+          title: 'Payment Failed',
+          description: result.message || 'Payment processing failed',
+          variant: 'destructive',
         });
       }
     },
     onError: (error: any) => {
       console.error('Payment error:', error);
       toast({
-        title: "Payment Error",
-        description: error.message || "An error occurred while processing payment",
-        variant: "destructive",
+        title: 'Payment Error',
+        description:
+          error.message || 'An error occurred while processing payment',
+        variant: 'destructive',
       });
     },
   });
@@ -124,7 +142,7 @@ export default function CreditCardPayment({
   const formatCardNumber = (value: string) => {
     const v = value.replace(/\s+/g, '').replace(/[^0-9]/gi, '');
     const matches = v.match(/\d{4,16}/g);
-    const match = matches && matches[0] || '';
+    const match = (matches && matches[0]) || '';
     const parts = [];
     for (let i = 0, len = match.length; i < len; i += 4) {
       parts.push(match.substring(i, i + 4));
@@ -165,15 +183,29 @@ export default function CreditCardPayment({
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <p><strong>Order ID:</strong> {orderId}</p>
-            <p><strong>Transaction ID:</strong> {paymentResult.transactionId || 'N/A'}</p>
-            <p><strong>Authorization Code:</strong> {paymentResult.authCode || 'N/A'}</p>
-            <p><strong>Response:</strong> {paymentResult.message}</p>
+            <p>
+              <strong>Order ID:</strong> {orderId}
+            </p>
+            <p>
+              <strong>Transaction ID:</strong>{' '}
+              {paymentResult.transactionId || 'N/A'}
+            </p>
+            <p>
+              <strong>Authorization Code:</strong>{' '}
+              {paymentResult.authCode || 'N/A'}
+            </p>
+            <p>
+              <strong>Response:</strong> {paymentResult.message}
+            </p>
             {paymentResult.avsResult && (
-              <p><strong>Address Verification:</strong> {paymentResult.avsResult}</p>
+              <p>
+                <strong>Address Verification:</strong> {paymentResult.avsResult}
+              </p>
             )}
             {paymentResult.cvvResult && (
-              <p><strong>CVV Verification:</strong> {paymentResult.cvvResult}</p>
+              <p>
+                <strong>CVV Verification:</strong> {paymentResult.cvvResult}
+              </p>
             )}
           </div>
           <div className="flex gap-2">
@@ -229,7 +261,9 @@ export default function CreditCardPayment({
                         step="0.01"
                         min="0"
                         {...field}
-                        onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                        onChange={(e) =>
+                          field.onChange(parseFloat(e.target.value) || 0)
+                        }
                       />
                     </FormControl>
                     <FormMessage />
@@ -252,7 +286,9 @@ export default function CreditCardPayment({
                         step="0.01"
                         min="0"
                         {...field}
-                        onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                        onChange={(e) =>
+                          field.onChange(parseFloat(e.target.value) || 0)
+                        }
                       />
                     </FormControl>
                     <FormMessage />
@@ -271,7 +307,9 @@ export default function CreditCardPayment({
                         step="0.01"
                         min="0"
                         {...field}
-                        onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                        onChange={(e) =>
+                          field.onChange(parseFloat(e.target.value) || 0)
+                        }
                       />
                     </FormControl>
                     <FormMessage />
@@ -282,7 +320,9 @@ export default function CreditCardPayment({
 
             {/* Credit Card Information */}
             <div className="border-t pt-6">
-              <h3 className="text-lg font-semibold mb-4">Credit Card Information</h3>
+              <h3 className="text-lg font-semibold mb-4">
+                Credit Card Information
+              </h3>
               <div className="space-y-4">
                 <FormField
                   control={form.control}
@@ -320,7 +360,9 @@ export default function CreditCardPayment({
                             {...field}
                             placeholder="MM/YY"
                             onChange={(e) => {
-                              const formatted = formatExpirationDate(e.target.value);
+                              const formatted = formatExpirationDate(
+                                e.target.value
+                              );
                               field.onChange(formatted);
                               e.target.value = formatted;
                             }}
@@ -453,7 +495,11 @@ export default function CreditCardPayment({
                     <FormItem>
                       <FormLabel>Customer Email (Optional)</FormLabel>
                       <FormControl>
-                        <Input {...field} type="email" placeholder="customer@example.com" />
+                        <Input
+                          {...field}
+                          type="email"
+                          placeholder="customer@example.com"
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -468,7 +514,11 @@ export default function CreditCardPayment({
                 <AlertCircle className="h-5 w-5 text-blue-600 mt-0.5" />
                 <div className="text-sm text-blue-800">
                   <p className="font-medium">Secure Payment Processing</p>
-                  <p>Your payment information is encrypted and processed securely through Authorize.Net. We do not store your credit card information.</p>
+                  <p>
+                    Your payment information is encrypted and processed securely
+                    through Authorize.Net. We do not store your credit card
+                    information.
+                  </p>
                 </div>
               </div>
             </div>

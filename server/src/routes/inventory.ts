@@ -1,10 +1,11 @@
 import { Router, Request, Response } from 'express';
-import { storage } from '../../storage';
 import {
   insertInventoryItemSchema,
   insertInventoryScanSchema,
-  insertPartsRequestSchema
+  insertPartsRequestSchema,
 } from '@shared/schema';
+
+import { storage } from '../../storage';
 
 const router = Router();
 
@@ -15,7 +16,7 @@ router.get('/enhanced/inventory/items', async (req: Request, res: Response) => {
     res.json(items);
   } catch (error) {
     console.error('Get enhanced inventory items error:', error);
-    res.status(500).json({ error: "Failed to fetch inventory items" });
+    res.status(500).json({ error: 'Failed to fetch inventory items' });
   }
 });
 
@@ -26,7 +27,7 @@ router.get('/', async (req: Request, res: Response) => {
     res.json(items);
   } catch (error) {
     console.error('Get inventory items error:', error);
-    res.status(500).json({ error: "Failed to fetch inventory items" });
+    res.status(500).json({ error: 'Failed to fetch inventory items' });
   }
 });
 
@@ -41,7 +42,7 @@ router.post('/', async (req: Request, res: Response) => {
     if (error instanceof Error) {
       return res.status(400).json({ error: error.message });
     }
-    res.status(500).json({ error: "Failed to create inventory item" });
+    res.status(500).json({ error: 'Failed to create inventory item' });
   }
 });
 
@@ -54,7 +55,7 @@ router.put('/:id', async (req: Request, res: Response) => {
     res.json(updatedItem);
   } catch (error) {
     console.error('Update inventory item error:', error);
-    res.status(500).json({ error: "Failed to update inventory item" });
+    res.status(500).json({ error: 'Failed to update inventory item' });
   }
 });
 
@@ -66,7 +67,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
     res.status(204).end();
   } catch (error) {
     console.error('Delete inventory item error:', error);
-    res.status(500).json({ error: "Failed to delete inventory item" });
+    res.status(500).json({ error: 'Failed to delete inventory item' });
   }
 });
 
@@ -77,7 +78,7 @@ router.get('/items', async (req: Request, res: Response) => {
     res.json(items);
   } catch (error) {
     console.error('Get inventory items error:', error);
-    res.status(500).json({ error: "Failed to fetch inventory items" });
+    res.status(500).json({ error: 'Failed to fetch inventory items' });
   }
 });
 
@@ -85,15 +86,15 @@ router.get('/items/:id', async (req: Request, res: Response) => {
   try {
     const itemId = parseInt(req.params.id);
     const item = await storage.getInventoryItem(itemId);
-    
+
     if (!item) {
-      return res.status(404).json({ error: "Inventory item not found" });
+      return res.status(404).json({ error: 'Inventory item not found' });
     }
-    
+
     res.json(item);
   } catch (error) {
     console.error('Get inventory item error:', error);
-    res.status(500).json({ error: "Failed to fetch inventory item" });
+    res.status(500).json({ error: 'Failed to fetch inventory item' });
   }
 });
 
@@ -107,7 +108,7 @@ router.post('/items', async (req: Request, res: Response) => {
     if (error instanceof Error) {
       return res.status(400).json({ error: error.message });
     }
-    res.status(500).json({ error: "Failed to create inventory item" });
+    res.status(500).json({ error: 'Failed to create inventory item' });
   }
 });
 
@@ -119,7 +120,7 @@ router.put('/items/:id', async (req: Request, res: Response) => {
     res.json(updatedItem);
   } catch (error) {
     console.error('Update inventory item error:', error);
-    res.status(500).json({ error: "Failed to update inventory item" });
+    res.status(500).json({ error: 'Failed to update inventory item' });
   }
 });
 
@@ -130,7 +131,7 @@ router.delete('/items/:id', async (req: Request, res: Response) => {
     res.status(204).end();
   } catch (error) {
     console.error('Delete inventory item error:', error);
-    res.status(500).json({ error: "Failed to delete inventory item" });
+    res.status(500).json({ error: 'Failed to delete inventory item' });
   }
 });
 
@@ -141,7 +142,7 @@ router.get('/scans', async (req: Request, res: Response) => {
     res.json(scans);
   } catch (error) {
     console.error('Get inventory scans error:', error);
-    res.status(500).json({ error: "Failed to fetch inventory scans" });
+    res.status(500).json({ error: 'Failed to fetch inventory scans' });
   }
 });
 
@@ -152,7 +153,7 @@ router.post('/scans', async (req: Request, res: Response) => {
     res.status(201).json(newScan);
   } catch (error) {
     console.error('Create inventory scan error:', error);
-    res.status(500).json({ error: "Failed to create inventory scan" });
+    res.status(500).json({ error: 'Failed to create inventory scan' });
   }
 });
 
@@ -163,7 +164,7 @@ router.get('/parts-requests', async (req: Request, res: Response) => {
     res.json(requests);
   } catch (error) {
     console.error('Get parts requests error:', error);
-    res.status(500).json({ error: "Failed to fetch parts requests" });
+    res.status(500).json({ error: 'Failed to fetch parts requests' });
   }
 });
 
@@ -174,7 +175,7 @@ router.post('/parts-requests', async (req: Request, res: Response) => {
     res.status(201).json(newRequest);
   } catch (error) {
     console.error('Create parts request error:', error);
-    res.status(500).json({ error: "Failed to create parts request" });
+    res.status(500).json({ error: 'Failed to create parts request' });
   }
 });
 
@@ -186,7 +187,7 @@ router.put('/parts-requests/:id', async (req: Request, res: Response) => {
     res.json(updatedRequest);
   } catch (error) {
     console.error('Update parts request error:', error);
-    res.status(500).json({ error: "Failed to update parts request" });
+    res.status(500).json({ error: 'Failed to update parts request' });
   }
 });
 
@@ -194,7 +195,7 @@ router.put('/parts-requests/:id', async (req: Request, res: Response) => {
 router.post('/import/csv', async (req: Request, res: Response) => {
   try {
     const { csvData } = req.body;
-    
+
     if (!csvData) {
       return res.status(400).json({ error: 'CSV data is required' });
     }
@@ -205,16 +206,20 @@ router.post('/import/csv', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'CSV file is empty' });
     }
 
-    const headers = lines[0].split(',').map((h: string) => h.trim().replace(/"/g, ''));
+    const headers = lines[0]
+      .split(',')
+      .map((h: string) => h.trim().replace(/"/g, ''));
     const rows = lines.slice(1);
-    
+
     let importedCount = 0;
     const errors: string[] = [];
 
     for (let i = 0; i < rows.length; i++) {
       try {
-        const values = rows[i].split(',').map((v: string) => v.trim().replace(/"/g, ''));
-        
+        const values = rows[i]
+          .split(',')
+          .map((v: string) => v.trim().replace(/"/g, ''));
+
         if (values.length !== headers.length) {
           errors.push(`Row ${i + 2}: Column count mismatch`);
           continue;
@@ -223,7 +228,7 @@ router.post('/import/csv', async (req: Request, res: Response) => {
         const itemData: any = {};
         headers.forEach((header: string, index: number) => {
           const value = values[index];
-          
+
           switch (header.toLowerCase()) {
             case 'ag part#':
             case 'agpartnumber':
@@ -241,7 +246,8 @@ router.post('/import/csv', async (req: Request, res: Response) => {
               break;
             case 'cost per':
             case 'costper':
-              itemData.costPer = value && !isNaN(parseFloat(value)) ? parseFloat(value) : null;
+              itemData.costPer =
+                value && !isNaN(parseFloat(value)) ? parseFloat(value) : null;
               break;
             case 'order date':
             case 'orderdate':
@@ -263,7 +269,9 @@ router.post('/import/csv', async (req: Request, res: Response) => {
         });
 
         if (!itemData.agPartNumber || !itemData.name) {
-          errors.push(`Row ${i + 2}: Missing required fields (AG Part# and Name)`);
+          errors.push(
+            `Row ${i + 2}: Missing required fields (AG Part# and Name)`
+          );
           continue;
         }
 
@@ -271,14 +279,16 @@ router.post('/import/csv', async (req: Request, res: Response) => {
         await storage.createInventoryItem(validatedData);
         importedCount++;
       } catch (error) {
-        errors.push(`Row ${i + 2}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        errors.push(
+          `Row ${i + 2}: ${error instanceof Error ? error.message : 'Unknown error'}`
+        );
       }
     }
 
     res.json({
       success: true,
       importedCount,
-      errors: errors.length > 0 ? errors : undefined
+      errors: errors.length > 0 ? errors : undefined,
     });
   } catch (error) {
     console.error('CSV import error:', error);

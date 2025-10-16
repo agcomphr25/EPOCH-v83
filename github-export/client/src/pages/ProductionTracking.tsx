@@ -6,7 +6,7 @@ export default function ProductionTracking() {
     <div className="container mx-auto p-6 space-y-6">
       {/* Pipeline Production Overview */}
       <PipelineVisualization />
-      
+
       {/* Production Tracking */}
       <ProductionTracker />
     </div>

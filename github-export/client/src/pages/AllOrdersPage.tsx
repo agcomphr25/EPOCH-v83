@@ -1,4 +1,5 @@
 import React from 'react';
+
 import AllOrdersList from '../components/AllOrdersList';
 
 export default function AllOrdersPage() {
@@ -10,7 +11,7 @@ export default function AllOrdersPage() {
           Order Management & Department Progression
         </div>
       </div>
-      
+
       {/* Orders List with Department Actions */}
       <AllOrdersList />
     </div>

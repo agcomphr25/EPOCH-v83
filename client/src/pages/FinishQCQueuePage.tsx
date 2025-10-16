@@ -1,18 +1,27 @@
 import React, { useMemo, useState } from 'react';
-import { BarcodeScanner } from '@/components/BarcodeScanner';
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
-import { OrderTooltip } from '@/components/OrderTooltip';
-import { Shield, ArrowLeft, ArrowRight, Search, CheckSquare, Square, CheckCircle } from 'lucide-react';
+import {
+  Shield,
+  ArrowLeft,
+  ArrowRight,
+  Search,
+  CheckSquare,
+  Square,
+  CheckCircle,
+} from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
+import { toast } from 'react-hot-toast';
+
+import { BarcodeScanner } from '@/components/BarcodeScanner';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
+import { OrderTooltip } from '@/components/OrderTooltip';
 import { getDisplayOrderId } from '@/lib/orderUtils';
 import { OrderSearchBox } from '@/components/OrderSearchBox';
-import { toast } from 'react-hot-toast';
 import { isOrderInDepartment } from '@/lib/departmentUtils';
 import { apiRequest } from '@/lib/queryClient';
 
@@ -20,7 +29,9 @@ export default function FinishQCQueuePage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
   const [selectAll, setSelectAll] = useState(false);
-  const [highlightedOrderId, setHighlightedOrderId] = useState<string | null>(null);
+  const [highlightedOrderId, setHighlightedOrderId] = useState<string | null>(
+    null
+  );
   const queryClient = useQueryClient();
 
   // Get orders in Finish QC department directly
@@ -36,32 +47,37 @@ export default function FinishQCQueuePage() {
   // Filter orders based on search query
   const filteredOrders = useMemo(() => {
     if (!searchQuery.trim()) return finishQCOrders;
-    
+
     const query = searchQuery.toLowerCase().trim();
     return finishQCOrders.filter((order: any) => {
       const orderId = order.orderId?.toLowerCase() || '';
       const fbNumber = order.fbOrderNumber?.toLowerCase() || '';
-      const displayOrderId = getDisplayOrderId(order.orderId)?.toLowerCase() || '';
-      
-      return orderId.includes(query) || 
-             fbNumber.includes(query) || 
-             displayOrderId.includes(query);
+      const displayOrderId =
+        getDisplayOrderId(order.orderId)?.toLowerCase() || '';
+
+      return (
+        orderId.includes(query) ||
+        fbNumber.includes(query) ||
+        displayOrderId.includes(query)
+      );
     });
   }, [finishQCOrders, searchQuery]);
 
   // Count orders in previous department (CNC)
   const cncCount = useMemo(() => {
-    return (allOrders as any[]).filter((order: any) => 
-      order.currentDepartment === 'CNC' || 
-      (order.department === 'CNC' && order.status === 'IN_PROGRESS')
+    return (allOrders as any[]).filter(
+      (order: any) =>
+        order.currentDepartment === 'CNC' ||
+        (order.department === 'CNC' && order.status === 'IN_PROGRESS')
     ).length;
   }, [allOrders]);
 
   // Count orders in next department (Paint)
   const paintCount = useMemo(() => {
-    return (allOrders as any[]).filter((order: any) => 
-      order.currentDepartment === 'Paint' || 
-      (order.department === 'Paint' && order.status === 'IN_PROGRESS')
+    return (allOrders as any[]).filter(
+      (order: any) =>
+        order.currentDepartment === 'Paint' ||
+        (order.department === 'Paint' && order.status === 'IN_PROGRESS')
     ).length;
   }, [allOrders]);
 
@@ -72,7 +88,9 @@ export default function FinishQCQueuePage() {
 
   // Auto-highlight order when scanned (do not select)
   const handleOrderScanned = (orderId: string) => {
-    const orderExists = finishQCOrders.some((order: any) => order.orderId === orderId);
+    const orderExists = finishQCOrders.some(
+      (order: any) => order.orderId === orderId
+    );
     if (orderExists) {
       setHighlightedOrderId(orderId);
       setTimeout(() => {
@@ -89,7 +107,9 @@ export default function FinishQCQueuePage() {
 
   // Handle order search selection - highlight only (do not select)
   const handleOrderSearchSelect = (order: any) => {
-    const orderExists = finishQCOrders.some((o: any) => o.orderId === order.orderId);
+    const orderExists = finishQCOrders.some(
+      (o: any) => o.orderId === order.orderId
+    );
     if (orderExists) {
       setHighlightedOrderId(order.orderId);
       // Auto-scroll to the highlighted order
@@ -114,7 +134,9 @@ export default function FinishQCQueuePage() {
       newSelected.delete(orderId);
     }
     setSelectedOrders(newSelected);
-    setSelectAll(newSelected.size === filteredOrders.length && filteredOrders.length > 0);
+    setSelectAll(
+      newSelected.size === filteredOrders.length && filteredOrders.length > 0
+    );
   };
 
   // Handle select all toggle
@@ -122,7 +144,9 @@ export default function FinishQCQueuePage() {
     if (selectAll) {
       setSelectedOrders(new Set());
     } else {
-      setSelectedOrders(new Set(filteredOrders.map((order: any) => order.orderId)));
+      setSelectedOrders(
+        new Set(filteredOrders.map((order: any) => order.orderId))
+      );
     }
     setSelectAll(!selectAll);
   };
@@ -130,34 +154,41 @@ export default function FinishQCQueuePage() {
   // Handle search - auto-highlight matching orders (do not select)
   const handleSearchWithSelection = (query: string) => {
     setSearchQuery(query);
-    
+
     if (query.trim()) {
       const searchTerm = query.toLowerCase().trim();
-      
+
       // Find all matching orders
       const matchingOrders = finishQCOrders.filter((order: any) => {
         const orderId = order.orderId?.toLowerCase() || '';
         const fbNumber = order.fbOrderNumber?.toLowerCase() || '';
-        const displayOrderId = getDisplayOrderId(order.orderId)?.toLowerCase() || '';
-        
-        return orderId.includes(searchTerm) || 
-               fbNumber.includes(searchTerm) || 
-               displayOrderId.includes(searchTerm);
+        const displayOrderId =
+          getDisplayOrderId(order.orderId)?.toLowerCase() || '';
+
+        return (
+          orderId.includes(searchTerm) ||
+          fbNumber.includes(searchTerm) ||
+          displayOrderId.includes(searchTerm)
+        );
       });
-      
+
       if (matchingOrders.length > 0) {
         // Highlight first matching order (do not select)
         setHighlightedOrderId(matchingOrders[0].orderId);
-        
+
         // Scroll to first match
         setTimeout(() => {
-          const element = document.getElementById(`order-${matchingOrders[0].orderId}`);
+          const element = document.getElementById(
+            `order-${matchingOrders[0].orderId}`
+          );
           if (element) {
             element.scrollIntoView({ behavior: 'smooth', block: 'center' });
           }
         }, 100);
-        
-        toast.success(`${matchingOrders.length} order(s) found - first one highlighted`);
+
+        toast.success(
+          `${matchingOrders.length} order(s) found - first one highlighted`
+        );
       } else {
         setHighlightedOrderId(null);
         toast.error('No matching orders found');
@@ -169,7 +200,9 @@ export default function FinishQCQueuePage() {
 
   // Update select all state when filtered orders change
   React.useEffect(() => {
-    setSelectAll(selectedOrders.size === filteredOrders.length && filteredOrders.length > 0);
+    setSelectAll(
+      selectedOrders.size === filteredOrders.length && filteredOrders.length > 0
+    );
   }, [selectedOrders.size, filteredOrders.length]);
 
   // Progress to Paint mutation
@@ -177,22 +210,24 @@ export default function FinishQCQueuePage() {
     mutationFn: async (orderIds: string[]) => {
       return await apiRequest('/api/orders/progress-department', {
         method: 'POST',
-        body: JSON.stringify({ 
-          orderIds, 
-          toDepartment: 'Paint' 
-        })
+        body: JSON.stringify({
+          orderIds,
+          toDepartment: 'Paint',
+        }),
       });
     },
     onSuccess: () => {
       toast.success(`Progressed ${selectedOrders.size} order(s) to Paint`);
       setSelectedOrders(new Set());
       setSelectAll(false);
-      queryClient.invalidateQueries({ queryKey: ['/api/orders/department/Finish QC'] });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/orders/department/Finish QC'],
+      });
       queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
     },
     onError: (error: any) => {
       toast.error(error.message || 'Failed to progress orders');
-    }
+    },
   });
 
   const handleProgressToPaint = () => {
@@ -223,7 +258,9 @@ export default function FinishQCQueuePage() {
         </CardHeader>
         <CardContent>
           <div className="space-y-2">
-            <Label htmlFor="search-input">Search by Order ID or FishBowl Number</Label>
+            <Label htmlFor="search-input">
+              Search by Order ID or FishBowl Number
+            </Label>
             <div className="flex gap-2">
               <Input
                 id="search-input"
@@ -237,9 +274,13 @@ export default function FinishQCQueuePage() {
                 variant="outline"
                 onClick={() => {
                   if (searchQuery.trim() && filteredOrders.length > 0) {
-                    const matchingOrderIds = filteredOrders.map((order: any) => order.orderId);
+                    const matchingOrderIds = filteredOrders.map(
+                      (order: any) => order.orderId
+                    );
                     setSelectedOrders(new Set(matchingOrderIds));
-                    toast.success(`${matchingOrderIds.length} matching order(s) selected`);
+                    toast.success(
+                      `${matchingOrderIds.length} matching order(s) selected`
+                    );
                   }
                 }}
                 disabled={!searchQuery.trim() || filteredOrders.length === 0}
@@ -337,7 +378,9 @@ export default function FinishQCQueuePage() {
         <CardContent>
           {filteredOrders.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
-              {searchQuery ? `No orders found matching "${searchQuery}"` : "No orders in Finish QC queue"}
+              {searchQuery
+                ? `No orders found matching "${searchQuery}"`
+                : 'No orders in Finish QC queue'}
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -345,18 +388,18 @@ export default function FinishQCQueuePage() {
                 const isSelected = selectedOrders.has(order.orderId);
                 return (
                   <div key={order.orderId} className="relative">
-                    <div 
+                    <div
                       className={`transition-all duration-200 ${
                         order.orderId === highlightedOrderId
                           ? 'ring-4 ring-yellow-400 bg-yellow-50 dark:bg-yellow-900/20'
-                          : isSelected 
-                          ? 'ring-2 ring-blue-500 ring-offset-2 bg-blue-50 dark:bg-blue-900/20' 
-                          : ''
+                          : isSelected
+                            ? 'ring-2 ring-blue-500 ring-offset-2 bg-blue-50 dark:bg-blue-900/20'
+                            : ''
                       }`}
                     >
-                      <OrderTooltip 
-                        order={order} 
-                        stockModels={stockModels as any[]} 
+                      <OrderTooltip
+                        order={order}
+                        stockModels={stockModels as any[]}
                         showPaintAndTexture={true}
                         showHoverText={false}
                         disableHoverPopup={true}
@@ -369,7 +412,9 @@ export default function FinishQCQueuePage() {
                     <div className="absolute top-2 right-2">
                       <Checkbox
                         checked={isSelected}
-                        onCheckedChange={(checked) => handleOrderSelect(order.orderId, checked as boolean)}
+                        onCheckedChange={(checked) =>
+                          handleOrderSelect(order.orderId, checked as boolean)
+                        }
                         data-testid={`checkbox-order-${order.orderId}`}
                         className="bg-white dark:bg-gray-800 border-2"
                       />
@@ -390,7 +435,8 @@ export default function FinishQCQueuePage() {
               <div className="flex items-center gap-2">
                 <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400" />
                 <span className="font-medium text-green-800 dark:text-green-200">
-                  {selectedOrders.size} order{selectedOrders.size > 1 ? 's' : ''} selected for Paint
+                  {selectedOrders.size} order
+                  {selectedOrders.size > 1 ? 's' : ''} selected for Paint
                 </span>
               </div>
               <div className="flex items-center gap-2">
@@ -406,13 +452,15 @@ export default function FinishQCQueuePage() {
                 </Button>
                 <Button
                   onClick={handleProgressToPaint}
-                  disabled={selectedOrders.size === 0 || progressToPaint.isPending}
+                  disabled={
+                    selectedOrders.size === 0 || progressToPaint.isPending
+                  }
                   className="bg-green-600 hover:bg-green-700 text-white"
                   data-testid="button-progress-to-paint"
                 >
                   <ArrowRight className="h-4 w-4 mr-2" />
-                  {progressToPaint.isPending 
-                    ? 'Progressing...' 
+                  {progressToPaint.isPending
+                    ? 'Progressing...'
                     : `Progress to Paint (${selectedOrders.size})`}
                 </Button>
               </div>

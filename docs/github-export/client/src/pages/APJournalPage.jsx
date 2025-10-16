@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import APJournal from '../components/APJournal';
 import { format, subDays } from 'date-fns';
+
+import APJournal from '../components/APJournal';
 
 export default function APJournalPage() {
   const [range, setRange] = useState(() => {
@@ -8,7 +9,7 @@ export default function APJournalPage() {
     const thirtyDaysAgo = subDays(today, 30);
     return {
       dateFrom: format(thirtyDaysAgo, 'yyyy-MM-dd'),
-      dateTo: format(today, 'yyyy-MM-dd')
+      dateTo: format(today, 'yyyy-MM-dd'),
     };
   });
 

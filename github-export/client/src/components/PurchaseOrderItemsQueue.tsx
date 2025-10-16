@@ -1,9 +1,17 @@
 import { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Package, Eye, Calendar, DollarSign } from 'lucide-react';
+
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 
 interface PurchaseOrderItem {
   id: number;
@@ -33,7 +41,9 @@ interface PurchaseOrder {
 
 export default function PurchaseOrderItemsQueue() {
   const [items, setItems] = useState<PurchaseOrderItem[]>([]);
-  const [purchaseOrders, setPurchaseOrders] = useState<Record<number, PurchaseOrder>>({});
+  const [purchaseOrders, setPurchaseOrders] = useState<
+    Record<number, PurchaseOrder>
+  >({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -51,10 +61,13 @@ export default function PurchaseOrderItemsQueue() {
       const pos = await posResponse.json();
 
       // Create a lookup map for purchase orders
-      const posMap = pos.reduce((acc: Record<number, PurchaseOrder>, po: PurchaseOrder) => {
-        acc[po.id] = po;
-        return acc;
-      }, {});
+      const posMap = pos.reduce(
+        (acc: Record<number, PurchaseOrder>, po: PurchaseOrder) => {
+          acc[po.id] = po;
+          return acc;
+        },
+        {}
+      );
       setPurchaseOrders(posMap);
 
       // Fetch all purchase order items
@@ -81,20 +94,29 @@ export default function PurchaseOrderItemsQueue() {
 
   const getItemTypeColor = (itemType: string) => {
     switch (itemType) {
-      case 'stock_model': return 'bg-blue-100 text-blue-800';
-      case 'custom_model': return 'bg-purple-100 text-purple-800';
-      case 'feature_item': return 'bg-green-100 text-green-800';
-      default: return 'bg-gray-100 text-gray-800';
+      case 'stock_model':
+        return 'bg-blue-100 text-blue-800';
+      case 'custom_model':
+        return 'bg-purple-100 text-purple-800';
+      case 'feature_item':
+        return 'bg-green-100 text-green-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
     }
   };
 
   const getStatusColor = (status: string) => {
     switch (status?.toLowerCase()) {
-      case 'pending': return 'bg-yellow-100 text-yellow-800';
-      case 'approved': return 'bg-green-100 text-green-800';
-      case 'cancelled': return 'bg-red-100 text-red-800';
-      case 'received': return 'bg-blue-100 text-blue-800';
-      default: return 'bg-gray-100 text-gray-800';
+      case 'pending':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'approved':
+        return 'bg-green-100 text-green-800';
+      case 'cancelled':
+        return 'bg-red-100 text-red-800';
+      case 'received':
+        return 'bg-blue-100 text-blue-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
     }
   };
 
@@ -102,7 +124,7 @@ export default function PurchaseOrderItemsQueue() {
     return new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',
-      day: 'numeric'
+      day: 'numeric',
     });
   };
 
@@ -121,7 +143,9 @@ export default function PurchaseOrderItemsQueue() {
     return (
       <div className="flex items-center justify-center p-8">
         <div className="text-red-600">Error: {error}</div>
-        <Button onClick={fetchData} className="ml-4">Retry</Button>
+        <Button onClick={fetchData} className="ml-4">
+          Retry
+        </Button>
       </div>
     );
   }
@@ -145,7 +169,9 @@ export default function PurchaseOrderItemsQueue() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Quantity</CardTitle>
+            <CardTitle className="text-sm font-medium">
+              Total Quantity
+            </CardTitle>
             <Package className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -162,7 +188,9 @@ export default function PurchaseOrderItemsQueue() {
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">${totalQueueValue.toFixed(2)}</div>
+            <div className="text-2xl font-bold">
+              ${totalQueueValue.toFixed(2)}
+            </div>
             <p className="text-xs text-muted-foreground">
               Total value of queued items
             </p>
@@ -175,7 +203,9 @@ export default function PurchaseOrderItemsQueue() {
             <Calendar className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{Object.keys(purchaseOrders).length}</div>
+            <div className="text-2xl font-bold">
+              {Object.keys(purchaseOrders).length}
+            </div>
             <p className="text-xs text-muted-foreground">
               Purchase orders with items
             </p>
@@ -223,7 +253,9 @@ export default function PurchaseOrderItemsQueue() {
                         <TableCell>
                           <div>
                             <div className="font-medium">{item.itemName}</div>
-                            <div className="text-sm text-gray-500">ID: {item.itemId}</div>
+                            <div className="text-sm text-gray-500">
+                              ID: {item.itemId}
+                            </div>
                           </div>
                         </TableCell>
                         <TableCell>
@@ -233,14 +265,22 @@ export default function PurchaseOrderItemsQueue() {
                         </TableCell>
                         <TableCell>{item.quantity}</TableCell>
                         <TableCell>${item.unitPrice.toFixed(2)}</TableCell>
-                        <TableCell className="font-medium">${item.totalPrice.toFixed(2)}</TableCell>
+                        <TableCell className="font-medium">
+                          ${item.totalPrice.toFixed(2)}
+                        </TableCell>
                         <TableCell>
-                          <Badge variant={item.orderCount > 0 ? "default" : "secondary"}>
+                          <Badge
+                            variant={
+                              item.orderCount > 0 ? 'default' : 'secondary'
+                            }
+                          >
                             {item.orderCount} orders
                           </Badge>
                         </TableCell>
                         <TableCell>
-                          <Badge className={getStatusColor(po?.status || 'pending')}>
+                          <Badge
+                            className={getStatusColor(po?.status || 'pending')}
+                          >
                             {po?.status || 'Pending'}
                           </Badge>
                         </TableCell>

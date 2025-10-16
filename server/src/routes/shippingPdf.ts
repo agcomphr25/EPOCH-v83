@@ -1,9 +1,10 @@
-import { Router, Request, Response } from 'express';
-import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
-import fetch from 'node-fetch';
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
+
+import { Router, Request, Response } from 'express';
+import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
+import fetch from 'node-fetch';
 
 const router = Router();
 
@@ -42,35 +43,37 @@ async function embedCompanyLogo(pdfDoc: PDFDocument) {
   }
 }
 
-// UPS API Configuration - Use environment variable or default to test  
+// UPS API Configuration - Use environment variable or default to test
 const UPS_ENV = process.env.UPS_ENV || 'test';
-const UPS_API_BASE_URL = UPS_ENV === 'production'
-  ? 'https://onlinetools.ups.com/api/shipments/v1801/ship'
-  : 'https://wwwcie.ups.com/api/shipments/v1801/ship';
+const UPS_API_BASE_URL =
+  UPS_ENV === 'production'
+    ? 'https://onlinetools.ups.com/api/shipments/v1801/ship'
+    : 'https://wwwcie.ups.com/api/shipments/v1801/ship';
 
-const UPS_OAUTH_URL = UPS_ENV === 'production'
-  ? 'https://onlinetools.ups.com/security/v1/oauth/token'
-  : 'https://wwwcie.ups.com/security/v1/oauth/token';
+const UPS_OAUTH_URL =
+  UPS_ENV === 'production'
+    ? 'https://onlinetools.ups.com/security/v1/oauth/token'
+    : 'https://wwwcie.ups.com/security/v1/oauth/token';
 
 // Convert country names to UPS country codes
 function getCountryCode(country?: string): string {
-  if (!country) return "US";
-  if (country === "United States" || country === "USA") return "US";
-  if (country === "Canada") return "CA";
-  return country.length === 2 ? country : "US";
+  if (!country) return 'US';
+  if (country === 'United States' || country === 'USA') return 'US';
+  if (country === 'Canada') return 'CA';
+  return country.length === 2 ? country : 'US';
 }
 
 // Token caching to reduce API calls
 let cachedToken = {
   token: '',
-  expiresAt: 0
+  expiresAt: 0,
 };
 
 // Function to clear cache
 function clearUPSTokenCache() {
   cachedToken = {
     token: '',
-    expiresAt: 0
+    expiresAt: 0,
   };
   console.log('UPS token cache cleared');
 }
@@ -85,32 +88,36 @@ async function getUPSAccessToken() {
   }
   const credentials = {
     clientId: process.env.UPS_CLIENT_ID,
-    clientSecret: process.env.UPS_CLIENT_SECRET
+    clientSecret: process.env.UPS_CLIENT_SECRET,
   };
 
   // Validate credentials exist
   if (!credentials.clientId || !credentials.clientSecret) {
-    throw new Error('UPS credentials missing: UPS_CLIENT_ID or UPS_CLIENT_SECRET not provided');
+    throw new Error(
+      'UPS credentials missing: UPS_CLIENT_ID or UPS_CLIENT_SECRET not provided'
+    );
   }
 
   console.log('UPS OAuth Request Details:', {
     url: UPS_OAUTH_URL,
     clientId: credentials.clientId ? 'PROVIDED' : 'MISSING',
     clientSecret: credentials.clientSecret ? 'PROVIDED' : 'MISSING',
-    environment: UPS_ENV
+    environment: UPS_ENV,
   });
 
-  console.log('🚨 SWITCHING TO PRODUCTION UPS API - Sandbox token validation issues');
+  console.log(
+    '🚨 SWITCHING TO PRODUCTION UPS API - Sandbox token validation issues'
+  );
 
   const response = await fetch(UPS_OAUTH_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
-      'Authorization': `Basic ${Buffer.from(`${credentials.clientId}:${credentials.clientSecret}`).toString('base64')}`
+      Authorization: `Basic ${Buffer.from(`${credentials.clientId}:${credentials.clientSecret}`).toString('base64')}`,
     },
     body: new URLSearchParams({
-      grant_type: 'client_credentials'
-    })
+      grant_type: 'client_credentials',
+    }),
   });
 
   if (!response.ok) {
@@ -119,23 +126,25 @@ async function getUPSAccessToken() {
       status: response.status,
       statusText: response.statusText,
       response: errorText,
-      headers: Object.fromEntries(response.headers.entries())
+      headers: Object.fromEntries(response.headers.entries()),
     });
     throw new Error(`UPS OAuth failed: ${response.statusText} - ${errorText}`);
   }
 
-  const data = await response.json() as any;
-  
+  const data = (await response.json()) as any;
+
   // Cache the token with expiration
   cachedToken = {
     token: data.access_token,
-    expiresAt: Date.now() + (data.expires_in * 1000) // Convert seconds to milliseconds
+    expiresAt: Date.now() + data.expires_in * 1000, // Convert seconds to milliseconds
   };
-  
+
   console.log('⚡ UPS OAuth Success (cached for 10 min):', {
-    access_token: data.access_token ? `${data.access_token.substring(0, 20)}...` : 'MISSING',
+    access_token: data.access_token
+      ? `${data.access_token.substring(0, 20)}...`
+      : 'MISSING',
     token_type: data.token_type,
-    expires_in: data.expires_in
+    expires_in: data.expires_in,
   });
   return data.access_token;
 }
@@ -149,25 +158,27 @@ async function createUPSShipment(shipmentData: any) {
     url: UPS_API_BASE_URL,
     token: accessToken ? `${accessToken.substring(0, 20)}...` : 'MISSING',
     transId: transId,
-    bodySize: JSON.stringify(shipmentData).length
+    bodySize: JSON.stringify(shipmentData).length,
   });
 
   const response = await fetch(UPS_API_BASE_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${accessToken}`,
-      'x-merchant-id': process.env.UPS_SHIPPER_NUMBER || "",
-      'transId': transId,
-      'transactionSrc': 'AG_Composites_ERP'
+      Authorization: `Bearer ${accessToken}`,
+      'x-merchant-id': process.env.UPS_SHIPPER_NUMBER || '',
+      transId: transId,
+      transactionSrc: 'AG_Composites_ERP',
     },
-    body: JSON.stringify(shipmentData)
+    body: JSON.stringify(shipmentData),
   });
 
   if (!response.ok) {
     const errorText = await response.text();
     console.error('UPS Shipment Error Response:', errorText);
-    throw new Error(`UPS Shipment creation failed: ${response.statusText} - ${errorText}`);
+    throw new Error(
+      `UPS Shipment creation failed: ${response.statusText} - ${errorText}`
+    );
   }
 
   const result = await response.json();
@@ -175,138 +186,147 @@ async function createUPSShipment(shipmentData: any) {
   return result;
 }
 
-function buildUPSShipmentRequest(orderData: any, shippingAddress: any, packageDetails: any, packageValue?: number) {
+function buildUPSShipmentRequest(
+  orderData: any,
+  shippingAddress: any,
+  packageDetails: any,
+  packageValue?: number
+) {
   return {
     ShipmentRequest: {
       Request: {
-        RequestOption: "nonvalidate",
+        RequestOption: 'nonvalidate',
         TransactionReference: {
-          CustomerContext: `Order-${orderData.orderId}`
-        }
+          CustomerContext: `Order-${orderData.orderId}`,
+        },
       },
       Shipment: {
         Description: `AG Composites Order ${orderData.orderId}`,
         Shipper: {
-          Name: process.env.SHIP_FROM_NAME || "AG Composites",
-          AttentionName: process.env.SHIP_FROM_ATTENTION || "Shipping Department",
+          Name: process.env.SHIP_FROM_NAME || 'AG Composites',
+          AttentionName:
+            process.env.SHIP_FROM_ATTENTION || 'Shipping Department',
           Phone: {
-            Number: process.env.SHIP_FROM_PHONE || "2567238381"
+            Number: process.env.SHIP_FROM_PHONE || '2567238381',
           },
-          ShipperNumber: process.env.UPS_SHIPPER_NUMBER?.trim() || "27835W",
+          ShipperNumber: process.env.UPS_SHIPPER_NUMBER?.trim() || '27835W',
           Address: {
-            AddressLine: [process.env.SHIP_FROM_ADDRESS1 || "230 Hamer Rd"],
-            City: process.env.SHIP_FROM_CITY || "Owens Crossroads",
-            StateProvinceCode: process.env.SHIP_FROM_STATE || "AL",
-            PostalCode: process.env.SHIP_FROM_POSTAL || "35763",
-            CountryCode: getCountryCode(process.env.SHIP_FROM_COUNTRY)
-          }
+            AddressLine: [process.env.SHIP_FROM_ADDRESS1 || '230 Hamer Rd'],
+            City: process.env.SHIP_FROM_CITY || 'Owens Crossroads',
+            StateProvinceCode: process.env.SHIP_FROM_STATE || 'AL',
+            PostalCode: process.env.SHIP_FROM_POSTAL || '35763',
+            CountryCode: getCountryCode(process.env.SHIP_FROM_COUNTRY),
+          },
         },
         ShipTo: {
           Name: shippingAddress.name,
           AttentionName: shippingAddress.name,
           Phone: {
-            Number: "5550000000"
+            Number: '5550000000',
           },
           Address: {
             AddressLine: [shippingAddress.street],
             City: shippingAddress.city,
             StateProvinceCode: shippingAddress.state,
             PostalCode: shippingAddress.zip,
-            CountryCode: "US"
-          }
+            CountryCode: 'US',
+          },
         },
         ShipFrom: {
-          Name: process.env.SHIP_FROM_NAME || "AG Composites",
-          AttentionName: process.env.SHIP_FROM_ATTENTION || "Shipping Department",
+          Name: process.env.SHIP_FROM_NAME || 'AG Composites',
+          AttentionName:
+            process.env.SHIP_FROM_ATTENTION || 'Shipping Department',
           Phone: {
-            Number: process.env.SHIP_FROM_PHONE || "2567238381"
+            Number: process.env.SHIP_FROM_PHONE || '2567238381',
           },
           Address: {
-            AddressLine: [process.env.SHIP_FROM_ADDRESS1 || "230 Hamer Rd"],
-            City: process.env.SHIP_FROM_CITY || "Owens Crossroads",
-            StateProvinceCode: process.env.SHIP_FROM_STATE || "AL",
-            PostalCode: process.env.SHIP_FROM_POSTAL || "35763",
-            CountryCode: getCountryCode(process.env.SHIP_FROM_COUNTRY)
-          }
+            AddressLine: [process.env.SHIP_FROM_ADDRESS1 || '230 Hamer Rd'],
+            City: process.env.SHIP_FROM_CITY || 'Owens Crossroads',
+            StateProvinceCode: process.env.SHIP_FROM_STATE || 'AL',
+            PostalCode: process.env.SHIP_FROM_POSTAL || '35763',
+            CountryCode: getCountryCode(process.env.SHIP_FROM_COUNTRY),
+          },
         },
         PaymentInformation: {
           ShipmentCharge: {
-            Type: "01",
+            Type: '01',
             BillShipper: {
-              AccountNumber: process.env.UPS_ACCOUNT_NUMBER?.trim() || "27835W"
-            }
-          }
+              AccountNumber: process.env.UPS_ACCOUNT_NUMBER?.trim() || '27835W',
+            },
+          },
         },
         Service: {
-          Code: "03"
+          Code: '03',
         },
-        Package: Array.isArray(packageDetails.packages) ? packageDetails.packages.map((pkg: any, index: number) => ({
-          Description: `Composite Parts - Order ${orderData.orderId} - Package ${index + 1}`,
-          Packaging: {
-            Code: "02"
-          },
-          Dimensions: {
-            UnitOfMeasurement: {
-              Code: "IN"
+        Package: Array.isArray(packageDetails.packages)
+          ? packageDetails.packages.map((pkg: any, index: number) => ({
+              Description: `Composite Parts - Order ${orderData.orderId} - Package ${index + 1}`,
+              Packaging: {
+                Code: '02',
+              },
+              Dimensions: {
+                UnitOfMeasurement: {
+                  Code: 'IN',
+                },
+                Length: pkg.length || '12',
+                Width: pkg.width || '12',
+                Height: pkg.height || '12',
+              },
+              PackageWeight: {
+                UnitOfMeasurement: {
+                  Code: 'LBS',
+                },
+                Weight: pkg.weight || '10',
+              },
+              InsuredValue: {
+                CurrencyCode: 'USD',
+                MonetaryValue: (pkg.value || packageValue || 0).toFixed(2),
+              },
+              PackageServiceOptions: {
+                DeclaredValue: {
+                  CurrencyCode: 'USD',
+                  MonetaryValue: (pkg.value || packageValue || 0).toFixed(2),
+                },
+              },
+            }))
+          : {
+              Description: `Composite Parts - Order ${orderData.orderId}`,
+              Packaging: {
+                Code: '02',
+              },
+              Dimensions: {
+                UnitOfMeasurement: {
+                  Code: 'IN',
+                },
+                Length: packageDetails.length || '12',
+                Width: packageDetails.width || '12',
+                Height: packageDetails.height || '12',
+              },
+              PackageWeight: {
+                UnitOfMeasurement: {
+                  Code: 'LBS',
+                },
+                Weight: packageDetails.weight || '10',
+              },
+              InsuredValue: {
+                CurrencyCode: 'USD',
+                MonetaryValue: (packageValue || 0).toFixed(2),
+              },
+              PackageServiceOptions: {
+                DeclaredValue: {
+                  CurrencyCode: 'USD',
+                  MonetaryValue: (packageValue || 0).toFixed(2),
+                },
+              },
             },
-            Length: pkg.length || "12",
-            Width: pkg.width || "12",
-            Height: pkg.height || "12"
-          },
-          PackageWeight: {
-            UnitOfMeasurement: {
-              Code: "LBS"
-            },
-            Weight: pkg.weight || "10"
-          },
-          InsuredValue: {
-            CurrencyCode: "USD",
-            MonetaryValue: (pkg.value || packageValue || 0).toFixed(2)
-          },
-          PackageServiceOptions: {
-            DeclaredValue: {
-              CurrencyCode: "USD",
-              MonetaryValue: (pkg.value || packageValue || 0).toFixed(2)
-            }
-          }
-        })) : {
-          Description: `Composite Parts - Order ${orderData.orderId}`,
-          Packaging: {
-            Code: "02"
-          },
-          Dimensions: {
-            UnitOfMeasurement: {
-              Code: "IN"
-            },
-            Length: packageDetails.length || "12",
-            Width: packageDetails.width || "12",
-            Height: packageDetails.height || "12"
-          },
-          PackageWeight: {
-            UnitOfMeasurement: {
-              Code: "LBS"
-            },
-            Weight: packageDetails.weight || "10"
-          },
-          InsuredValue: {
-            CurrencyCode: "USD",
-            MonetaryValue: (packageValue || 0).toFixed(2)
-          },
-          PackageServiceOptions: {
-            DeclaredValue: {
-              CurrencyCode: "USD",
-              MonetaryValue: (packageValue || 0).toFixed(2)
-            }
-          }
-        },
         LabelSpecification: {
           LabelImageFormat: {
-            Code: "GIF"
+            Code: 'GIF',
           },
-          HTTPUserAgent: "Mozilla/4.5"
-        }
-      }
-    }
+          HTTPUserAgent: 'Mozilla/4.5',
+        },
+      },
+    },
   };
 }
 
@@ -317,7 +337,7 @@ router.get('/qc-checklist/:orderId', async (req: Request, res: Response) => {
 
     // Get order data from storage using the proper method
     const { storage } = await import('../../storage');
-    let order = await storage.getOrderById(orderId);
+    const order = await storage.getOrderById(orderId);
 
     if (!order) {
       return res.status(404).json({ error: 'Order not found' });
@@ -330,8 +350,8 @@ router.get('/qc-checklist/:orderId', async (req: Request, res: Response) => {
 
     // Define print-friendly margins
     const margin = 40;
-    const printableWidth = width - (margin * 2);
-    const printableHeight = height - (margin * 2);
+    const printableWidth = width - margin * 2;
+    const printableHeight = height - margin * 2;
 
     // Load fonts
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
@@ -339,21 +359,21 @@ router.get('/qc-checklist/:orderId', async (req: Request, res: Response) => {
 
     // Header with company logo - optimized for printing
     let currentY = height - margin;
-    
+
     // Load and embed company logo
     const logo = await embedCompanyLogo(pdfDoc);
     if (logo) {
       // Scale logo to fit nicely in header
       const logoWidth = 150;
       const logoHeight = logoWidth * (logo.height / logo.width);
-      
+
       page.drawImage(logo, {
         x: margin,
         y: currentY - logoHeight,
         width: logoWidth,
         height: logoHeight,
       });
-      
+
       currentY -= logoHeight + 10;
     } else {
       // Fallback to text if logo fails to load
@@ -462,12 +482,15 @@ router.get('/qc-checklist/:orderId', async (req: Request, res: Response) => {
       font: boldFont,
     });
 
-    page.drawText(`Order Date: ${order.orderDate || new Date().toLocaleDateString()}`, {
-      x: margin + 250,
-      y: currentY,
-      size: 10,
-      font: boldFont,
-    });
+    page.drawText(
+      `Order Date: ${order.orderDate || new Date().toLocaleDateString()}`,
+      {
+        x: margin + 250,
+        y: currentY,
+        size: 10,
+        font: boldFont,
+      }
+    );
 
     // Get additional data needed for order-specific checklist
     const stockModels = await storage.getAllStockModels();
@@ -477,18 +500,24 @@ router.get('/qc-checklist/:orderId', async (req: Request, res: Response) => {
 
     // Helper functions to extract order-specific details
     const getStockModelName = (modelId: string) => {
-      const model = stockModels.find(m => m.id === modelId);
+      const model = stockModels.find((m) => m.id === modelId);
       return model?.displayName || model?.name || modelId || 'Unknown Model';
     };
 
     const getCustomerInfo = (customerId: string) => {
-      const customer = customers.find(c => c.id?.toString() === customerId?.toString());
+      const customer = customers.find(
+        (c) => c.id?.toString() === customerId?.toString()
+      );
       return customer;
     };
 
     const getShippingAddress = (customerId: string) => {
-      const customerAddresses = addresses.filter(a => a.customerId?.toString() === customerId?.toString());
-      const shippingAddr = customerAddresses.find(a => a.type === 'shipping') || customerAddresses[0];
+      const customerAddresses = addresses.filter(
+        (a) => a.customerId?.toString() === customerId?.toString()
+      );
+      const shippingAddr =
+        customerAddresses.find((a) => a.type === 'shipping') ||
+        customerAddresses[0];
       if (shippingAddr) {
         return `${shippingAddr.street}${shippingAddr.street2 ? ', ' + shippingAddr.street2 : ''}, ${shippingAddr.city}, ${shippingAddr.state} ${shippingAddr.zipCode}`;
       }
@@ -499,12 +528,14 @@ router.get('/qc-checklist/:orderId', async (req: Request, res: Response) => {
       const feature = features.find((f: any) => f.id === featureId);
       const featureOptions = (feature as any)?.options || [];
       if (!feature || !featureOptions) return value;
-      
+
       if (Array.isArray(value)) {
-        return value.map(v => {
-          const option = featureOptions.find((opt: any) => opt.value === v);
-          return option?.label || v;
-        }).join(', ');
+        return value
+          .map((v) => {
+            const option = featureOptions.find((opt: any) => opt.value === v);
+            return option?.label || v;
+          })
+          .join(', ');
       } else {
         const option = featureOptions.find((opt: any) => opt.value === value);
         return option?.label || value;
@@ -513,7 +544,7 @@ router.get('/qc-checklist/:orderId', async (req: Request, res: Response) => {
 
     const formatOrderFeatures = (orderFeatures: any) => {
       if (!orderFeatures) return {};
-      
+
       const formatted: any = {};
       Object.entries(orderFeatures).forEach(([key, value]) => {
         formatted[key] = getFeatureValue(key, value);
@@ -531,78 +562,124 @@ router.get('/qc-checklist/:orderId', async (req: Request, res: Response) => {
     currentY -= 40;
     const checklistItems = [
       `1) The proper stock is being shipped:\n    Stock Model: ${stockModelName}`,
-      
+
       `2) Stock is inletted according to the work order:\n    ${[
-        (orderFeatures as any).handedness ? `Handedness: ${(orderFeatures as any).handedness}` : 'Handedness: Not specified',
-        (orderFeatures as any).bottom_metal ? `Bottom Metal: ${(orderFeatures as any).bottom_metal}` : 'Bottom Metal: Standard',
-        (orderFeatures as any).barrel_inlet ? `Barrel Inlet: ${(orderFeatures as any).barrel_inlet}` : 'Barrel Inlet: Standard',
-        (orderFeatures as any).action ? `Action: ${(orderFeatures as any).action}` : 'Action: Standard',
-        (orderFeatures as any).action_length ? `Action Length: ${(orderFeatures as any).action_length}` : 'Action Length: Standard'
+        (orderFeatures as any).handedness
+          ? `Handedness: ${(orderFeatures as any).handedness}`
+          : 'Handedness: Not specified',
+        (orderFeatures as any).bottom_metal
+          ? `Bottom Metal: ${(orderFeatures as any).bottom_metal}`
+          : 'Bottom Metal: Standard',
+        (orderFeatures as any).barrel_inlet
+          ? `Barrel Inlet: ${(orderFeatures as any).barrel_inlet}`
+          : 'Barrel Inlet: Standard',
+        (orderFeatures as any).action
+          ? `Action: ${(orderFeatures as any).action}`
+          : 'Action: Standard',
+        (orderFeatures as any).action_length
+          ? `Action Length: ${(orderFeatures as any).action_length}`
+          : 'Action Length: Standard',
       ].join('\n    ')}`,
-      
+
       `3) Stock color:\n    Paint Option: ${(() => {
         // Use the same logic as sales order PDF for paint display
-        const currentPaint = (order.features as OrderFeatures | undefined)?.metallic_finishes || (order.features as OrderFeatures | undefined)?.paint_options || (order.features as OrderFeatures | undefined)?.paint_options_combined;
-        
+        const currentPaint =
+          (order.features as OrderFeatures | undefined)?.metallic_finishes ||
+          (order.features as OrderFeatures | undefined)?.paint_options ||
+          (order.features as OrderFeatures | undefined)?.paint_options_combined;
+
         if (!currentPaint || currentPaint === 'none') {
           return 'Standard';
         }
-        
+
         // Search through paint-related features to find the display name
-        const paintFeatures = features.filter((f: any) => 
-          f.displayName?.includes('Options') || 
-          f.displayName?.includes('Camo') || 
-          f.displayName?.includes('Cerakote') ||
-          f.displayName?.includes('Terrain') ||
-          f.displayName?.includes('Rogue') ||
-          f.displayName?.includes('Standard') ||
-          f.id === 'metallic_finishes' ||
-          f.id === 'paint_options' ||
-          f.category === 'paint' ||
-          f.subCategory === 'paint'
+        const paintFeatures = features.filter(
+          (f: any) =>
+            f.displayName?.includes('Options') ||
+            f.displayName?.includes('Camo') ||
+            f.displayName?.includes('Cerakote') ||
+            f.displayName?.includes('Terrain') ||
+            f.displayName?.includes('Rogue') ||
+            f.displayName?.includes('Standard') ||
+            f.id === 'metallic_finishes' ||
+            f.id === 'paint_options' ||
+            f.category === 'paint' ||
+            f.subCategory === 'paint'
         );
 
         for (const feature of paintFeatures) {
           const featureOptions = (feature as any).options || [];
           if (featureOptions) {
-            const option = featureOptions.find((opt: any) => opt.value === currentPaint);
+            const option = featureOptions.find(
+              (opt: any) => opt.value === currentPaint
+            );
             if (option) {
               return option.label;
             }
           }
         }
-        
+
         // Fallback to formatted value if no option found
-        return currentPaint.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase());
+        return currentPaint
+          .replace(/_/g, ' ')
+          .replace(/\b\w/g, (l: string) => l.toUpperCase());
       })()}`,
-      
-      `4) Custom options are present and completed:\n    ${Object.entries(orderFeatures)
-        .filter(([key, value]) => {
-          // Exclude basic configuration items that are displayed elsewhere
-          const excludedKeys = ['handedness', 'action', 'action_length', 'bottom_metal', 'barrel_inlet', 'paint_options', 'metallic_finishes', 'paint_options_combined'];
-          return !excludedKeys.includes(key) && value && value !== 'none' && value !== '';
-        })
-        .map(([key, value]) => {
-          const displayKey = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-          return `${displayKey}: ${value}`;
-        }).join('\n    ') || 'No custom options specified'}`,
-      
-      `5) Swivel studs are installed correctly:\n    Swivel Studs: ${orderFeatures.swivel_studs || orderFeatures.studs || 'Standard configuration'}`,
-      
-      `6) Stock is being shipped to the correct address:\n    Customer: ${customer?.name || 'Unknown'}\n    Address: ${shippingAddress}`,
-      
-      '7) Buttpad and overall stock meets QC standards',
-      
-      `8) All accessories are included:\n    ${[
-        orderFeatures.bottom_metal && orderFeatures.bottom_metal !== 'Standard' ? `Bottom Metal: ${orderFeatures.bottom_metal}` : null,
-        orderFeatures.hat ? 'Hat included' : null,
-        orderFeatures.shirt ? 'Shirt included' : null,
-        orderFeatures.touch_up_paint ? 'Touch-up paint included' : null,
+
+      `4) Custom options are present and completed:\n    ${
         Object.entries(orderFeatures)
-          .filter(([key]) => ['accessories', 'extras', 'add_ons'].includes(key))
-          .map(([key, value]) => `${key.replace(/_/g, ' ')}: ${value}`)
-          .join(', ')
-      ].filter(Boolean).join('\n    ') || 'No additional accessories'}`
+          .filter(([key, value]) => {
+            // Exclude basic configuration items that are displayed elsewhere
+            const excludedKeys = [
+              'handedness',
+              'action',
+              'action_length',
+              'bottom_metal',
+              'barrel_inlet',
+              'paint_options',
+              'metallic_finishes',
+              'paint_options_combined',
+            ];
+            return (
+              !excludedKeys.includes(key) &&
+              value &&
+              value !== 'none' &&
+              value !== ''
+            );
+          })
+          .map(([key, value]) => {
+            const displayKey = key
+              .replace(/_/g, ' ')
+              .replace(/\b\w/g, (l) => l.toUpperCase());
+            return `${displayKey}: ${value}`;
+          })
+          .join('\n    ') || 'No custom options specified'
+      }`,
+
+      `5) Swivel studs are installed correctly:\n    Swivel Studs: ${orderFeatures.swivel_studs || orderFeatures.studs || 'Standard configuration'}`,
+
+      `6) Stock is being shipped to the correct address:\n    Customer: ${customer?.name || 'Unknown'}\n    Address: ${shippingAddress}`,
+
+      '7) Buttpad and overall stock meets QC standards',
+
+      `8) All accessories are included:\n    ${
+        [
+          orderFeatures.bottom_metal &&
+          orderFeatures.bottom_metal !== 'Standard'
+            ? `Bottom Metal: ${orderFeatures.bottom_metal}`
+            : null,
+          orderFeatures.hat ? 'Hat included' : null,
+          orderFeatures.shirt ? 'Shirt included' : null,
+          orderFeatures.touch_up_paint ? 'Touch-up paint included' : null,
+          Object.entries(orderFeatures)
+            .filter(([key]) =>
+              ['accessories', 'extras', 'add_ons'].includes(key)
+            )
+            .map(([key, value]) => `${key.replace(/_/g, ' ')}: ${value}`)
+            .join(', '),
+        ]
+          .filter(Boolean)
+          .join('\n    ') || 'No additional accessories'
+      }`,
     ];
 
     checklistItems.forEach((item, index) => {
@@ -632,9 +709,8 @@ router.get('/qc-checklist/:orderId', async (req: Request, res: Response) => {
         lineY -= 12;
       });
 
-      currentY -= (itemLines.length * 12) + 18;
+      currentY -= itemLines.length * 12 + 18;
     });
-
 
     // Clean spacing before signature section
     currentY -= 50;
@@ -709,24 +785,29 @@ router.get('/qc-checklist/:orderId', async (req: Request, res: Response) => {
       font: boldFont,
     });
 
-    page.drawText(`Date: ${new Date().toISOString().split('T')[0]} ${new Date().toLocaleTimeString()}`, {
-      x: margin + 250,
-      y: currentY,
-      size: 10,
-      font: font,
-    });
+    page.drawText(
+      `Date: ${new Date().toISOString().split('T')[0]} ${new Date().toLocaleTimeString()}`,
+      {
+        x: margin + 250,
+        y: currentY,
+        size: 10,
+        font: font,
+      }
+    );
 
     // Generate PDF bytes
     const pdfBytes = await pdfDoc.save();
 
     // Set response headers for PDF inline display (opens in new tab for printing)
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `inline; filename="QC-Checklist-${orderId}.pdf"`);
+    res.setHeader(
+      'Content-Disposition',
+      `inline; filename="QC-Checklist-${orderId}.pdf"`
+    );
     res.setHeader('Content-Length', pdfBytes.length);
 
     // Send PDF
     res.send(Buffer.from(pdfBytes));
-
   } catch (error: unknown) {
     console.error('Error generating QC checklist PDF:', error);
     res.status(500).json({ error: 'Failed to generate QC checklist PDF' });
@@ -734,18 +815,23 @@ router.get('/qc-checklist/:orderId', async (req: Request, res: Response) => {
 });
 
 // Helper function to wrap text within specified width
-function wrapText(text: string, maxWidth: number, fontSize: number, font: any): string[] {
+function wrapText(
+  text: string,
+  maxWidth: number,
+  fontSize: number,
+  font: any
+): string[] {
   const words = text.split(' ');
   const lines: string[] = [];
   let currentLine = '';
-  
+
   // Approximate character width (this is rough, but works for most cases)
   const charWidth = fontSize * 0.6;
   const maxCharsPerLine = Math.floor(maxWidth / charWidth);
-  
+
   for (const word of words) {
     const testLine = currentLine ? `${currentLine} ${word}` : word;
-    
+
     if (testLine.length <= maxCharsPerLine) {
       currentLine = testLine;
     } else {
@@ -759,23 +845,27 @@ function wrapText(text: string, maxWidth: number, fontSize: number, font: any): 
       }
     }
   }
-  
+
   if (currentLine) {
     lines.push(currentLine);
   }
-  
+
   return lines;
 }
 
 // Helper function to truncate text to fit within specified width
-function truncateText(text: string, maxWidth: number, fontSize: number): string {
+function truncateText(
+  text: string,
+  maxWidth: number,
+  fontSize: number
+): string {
   const charWidth = fontSize * 0.6;
   const maxChars = Math.floor(maxWidth / charWidth);
-  
+
   if (text.length <= maxChars) {
     return text;
   }
-  
+
   return text.substring(0, maxChars - 3) + '...';
 }
 
@@ -791,7 +881,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     const customers = await storage.getAllCustomers();
     const features: any[] = await storage.getAllFeatures();
     const addresses = await storage.getAllAddresses();
-    
+
     // Get payment data for payment status calculation
     const payments = await storage.getPaymentsByOrderId(orderId);
 
@@ -800,9 +890,13 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     }
 
     // Get related data
-    const model = stockModels.find(m => m.id === order.modelId);
-    const customer = customers.find(c => c.id?.toString() === (order as any).customerId?.toString());
-    const customerAddresses = addresses.filter(a => a.customerId?.toString() === (order as any).customerId?.toString());
+    const model = stockModels.find((m) => m.id === order.modelId);
+    const customer = customers.find(
+      (c) => c.id?.toString() === (order as any).customerId?.toString()
+    );
+    const customerAddresses = addresses.filter(
+      (a) => a.customerId?.toString() === (order as any).customerId?.toString()
+    );
 
     // Create a new PDF document optimized for sales orders
     const pdfDoc = await PDFDocument.create();
@@ -811,7 +905,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
 
     // Define margins and layout
     const margin = 40;
-    const printableWidth = width - (margin * 2);
+    const printableWidth = width - margin * 2;
 
     // Load fonts
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
@@ -819,23 +913,23 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
 
     // Header section with company logo - Fixed positioning
     let currentY = height - margin - 10; // Reduced top margin for more space
-    
+
     // Load and embed company logo
     const logo = await embedCompanyLogo(pdfDoc);
     if (logo) {
       // Scale logo to fit nicely in header
       const logoWidth = 150;
       const logoHeight = logoWidth * (logo.height / logo.width);
-      
+
       page.drawImage(logo, {
         x: margin,
         y: currentY - logoHeight,
         width: logoWidth,
         height: logoHeight,
       });
-      
+
       currentY -= logoHeight + 15; // Added spacing between logo and contact info
-      
+
       // Company contact information under logo
       page.drawText('230 Hamer Rd, Owens Crossroads, AL 35763', {
         x: margin,
@@ -844,7 +938,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
         font: font,
         color: rgb(0.3, 0.3, 0.3),
       });
-      
+
       currentY -= 12;
       page.drawText('Phone: (256) 723-8381 | Email: sales@agcomposites.com', {
         x: margin,
@@ -853,7 +947,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
         font: font,
         color: rgb(0.3, 0.3, 0.3),
       });
-      
+
       currentY -= 20;
     } else {
       // Fallback to text if logo fails to load
@@ -872,7 +966,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     const orderBoxY = currentY - 10;
     const orderBoxWidth = 220;
     const orderBoxHeight = 75;
-    
+
     // Sales Order title - positioned ABOVE the order info box
     page.drawText('SALES ORDER', {
       x: orderBoxX,
@@ -881,7 +975,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       font: boldFont,
       color: rgb(0, 0, 0),
     });
-    
+
     page.drawRectangle({
       x: orderBoxX,
       y: orderBoxY,
@@ -895,7 +989,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     let boxTextY = orderBoxY + orderBoxHeight - 18; // Start from top of box
     const col1X = orderBoxX + 8;
     const col2X = orderBoxX + 95; // Moved left for better fit
-    
+
     // Row 1: Order Number and Customer PO
     page.drawText('Order Number:', {
       x: col1X,
@@ -927,7 +1021,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     });
 
     boxTextY -= 32;
-    
+
     // Row 2: Order Date and Due Date
     page.drawText('Order Date:', {
       x: col1X,
@@ -950,47 +1044,55 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       font: boldFont,
     });
 
-    page.drawText(order.dueDate ? new Date(order.dueDate).toLocaleDateString() : 'TBD', {
-      x: col2X,
-      y: boxTextY - 12,
-      size: 8,
-      font: font,
-    });
+    page.drawText(
+      order.dueDate ? new Date(order.dueDate).toLocaleDateString() : 'TBD',
+      {
+        x: col2X,
+        y: boxTextY - 12,
+        size: 8,
+        font: font,
+      }
+    );
 
     // Calculate payment status using the same logic as the enhanced calculation
-    const paymentTotal = payments.reduce((sum, payment) => sum + (payment.paymentAmount || 0), 0);
-    
+    const paymentTotal = payments.reduce(
+      (sum, payment) => sum + (payment.paymentAmount || 0),
+      0
+    );
+
     // Calculate order total (same logic as OrderEntry.tsx and enhanced payment calculation)
     const basePriceForPayment = model?.price || 0;
     let featuresCostForPayment = 0;
-    
+
     if (order.features && Object.keys(order.features).length > 0) {
       Object.entries(order.features).forEach(([featureKey, featureValue]) => {
         if (featureValue && featureValue !== false && featureValue !== '') {
-          const featureDetail = features.find(f => f.id === featureKey);
+          const featureDetail = features.find((f) => f.id === featureKey);
           featuresCostForPayment += featureDetail?.price || 0;
         }
       });
     }
-    
+
     const shippingForPayment = order.shipping || 0;
-    const orderTotal = basePriceForPayment + featuresCostForPayment + shippingForPayment;
-    
+    const orderTotal =
+      basePriceForPayment + featuresCostForPayment + shippingForPayment;
+
     // Determine if fully paid (same logic as backend calculation)
-    const isFullyPaid = order.paymentAmount !== null ? 
-      (order.paymentAmount >= orderTotal) :
-      (paymentTotal >= orderTotal);
-    
+    const isFullyPaid =
+      order.paymentAmount !== null
+        ? order.paymentAmount >= orderTotal
+        : paymentTotal >= orderTotal;
+
     const paymentStatus = isFullyPaid ? 'PAID' : 'PENDING';
     const paymentColor = isFullyPaid ? rgb(0, 0.6, 0) : rgb(0.8, 0.4, 0);
 
     // Customer Information Section - Fixed positioning
     currentY -= 130; // Adjusted spacing to add separation below order info box
-    
+
     // Define customer box dimensions and position
     const customerBoxY = currentY;
     const customerBoxHeight = 100; // Increased for more space for contact info
-    
+
     // Create customer info box
     page.drawRectangle({
       x: margin,
@@ -1021,14 +1123,16 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     customerTextY -= 15;
     if (customer) {
       // Customer name and company - positioned INSIDE the box
-      const customerLine = customer.company ? 
-        `${customer.name} - ${customer.company}` : customer.name || 'N/A';
+      const customerLine = customer.company
+        ? `${customer.name} - ${customer.company}`
+        : customer.name || 'N/A';
       const wrappedCustomerLine = wrapText(customerLine, 250, 10, font);
       wrappedCustomerLine.forEach((line, index) => {
-        if (customerTextY - (index * 13) > customerBoxY + 8) { // Keep text inside box
+        if (customerTextY - index * 13 > customerBoxY + 8) {
+          // Keep text inside box
           page.drawText(line, {
             x: margin + 8,
-            y: customerTextY - (index * 13),
+            y: customerTextY - index * 13,
             size: 10,
             font: font,
           });
@@ -1040,14 +1144,18 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
 
       customerTextY -= 13;
       // Contact person if different from customer name - positioned INSIDE the box
-      if (customer.contact && customer.contact !== customer.name && customerTextY > customerBoxY + 15) {
+      if (
+        customer.contact &&
+        customer.contact !== customer.name &&
+        customerTextY > customerBoxY + 15
+      ) {
         const contactText = `Contact: ${customer.contact}`;
         const wrappedContact = wrapText(contactText, 250, 9, font);
         wrappedContact.forEach((line, index) => {
-          if (customerTextY - (index * 11) > customerBoxY + 8) {
+          if (customerTextY - index * 11 > customerBoxY + 8) {
             page.drawText(line, {
               x: margin + 8,
-              y: customerTextY - (index * 11),
+              y: customerTextY - index * 11,
               size: 8,
               font: font,
             });
@@ -1060,15 +1168,15 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       const contactInfo = [];
       if (customer.email) contactInfo.push(`Email: ${customer.email}`);
       if (customer.phone) contactInfo.push(`Phone: ${customer.phone}`);
-      
+
       if (contactInfo.length > 0 && customerTextY > customerBoxY + 15) {
         const contactInfoText = contactInfo.join(' | ');
         const wrappedContactInfo = wrapText(contactInfoText, 250, 9, font);
         wrappedContactInfo.forEach((line, index) => {
-          if (customerTextY - (index * 11) > customerBoxY + 8) {
+          if (customerTextY - index * 11 > customerBoxY + 8) {
             page.drawText(line, {
               x: margin + 8,
-              y: customerTextY - (index * 11),
+              y: customerTextY - index * 11,
               size: 8,
               font: font,
             });
@@ -1088,7 +1196,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     // Ship to address section (right side) - positioned INSIDE the box
     const shipToX = margin + 280;
     let shipCurrentY = customerBoxY + customerBoxHeight - 20; // Align with CUSTOMER INFORMATION
-    
+
     page.drawText('SHIP TO:', {
       x: shipToX,
       y: shipCurrentY,
@@ -1099,18 +1207,22 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     shipCurrentY -= 15;
 
     // Check if order has alternate shipping address with actual data
-    if ((order as any).hasAltShipTo && (order as any).altShipToAddress && 
-        (order as any).altShipToAddress.street) {
+    if (
+      (order as any).hasAltShipTo &&
+      (order as any).altShipToAddress &&
+      (order as any).altShipToAddress.street
+    ) {
       const altAddress = (order as any).altShipToAddress;
-      
+
       // Use alternate shipping name or fallback to alt_ship_to_name
-      const shipToName = (order as any).altShipToName || customer?.name || 'N/A';
+      const shipToName =
+        (order as any).altShipToName || customer?.name || 'N/A';
       const wrappedShipToName = wrapText(shipToName, 250, 10, font);
       wrappedShipToName.forEach((line, index) => {
-        if (shipCurrentY - (index * 13) > customerBoxY + 8) {
+        if (shipCurrentY - index * 13 > customerBoxY + 8) {
           page.drawText(line, {
             x: shipToX,
-            y: shipCurrentY - (index * 13),
+            y: shipCurrentY - index * 13,
             size: 10,
             font: font,
           });
@@ -1122,10 +1234,10 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       if (altAddress.street && shipCurrentY > customerBoxY + 15) {
         const wrappedStreet = wrapText(altAddress.street, 250, 9, font);
         wrappedStreet.forEach((line, index) => {
-          if (shipCurrentY - (index * 11) > customerBoxY + 8) {
+          if (shipCurrentY - index * 11 > customerBoxY + 8) {
             page.drawText(line, {
               x: shipToX,
-              y: shipCurrentY - (index * 11),
+              y: shipCurrentY - index * 11,
               size: 8,
               font: font,
             });
@@ -1138,10 +1250,10 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       if (altAddress.street2 && shipCurrentY > customerBoxY + 15) {
         const wrappedStreet2 = wrapText(altAddress.street2, 250, 9, font);
         wrappedStreet2.forEach((line, index) => {
-          if (shipCurrentY - (index * 11) > customerBoxY + 8) {
+          if (shipCurrentY - index * 11 > customerBoxY + 8) {
             page.drawText(line, {
               x: shipToX,
-              y: shipCurrentY - (index * 11),
+              y: shipCurrentY - index * 11,
               size: 8,
               font: font,
             });
@@ -1152,7 +1264,8 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
 
       // Alternate city, State, ZIP - ensure it stays within box
       if (shipCurrentY > customerBoxY + 15) {
-        const cityStateZip = `${altAddress.city || ''}, ${altAddress.state || ''} ${altAddress.zipCode || ''}`.trim();
+        const cityStateZip =
+          `${altAddress.city || ''}, ${altAddress.state || ''} ${altAddress.zipCode || ''}`.trim();
         if (cityStateZip !== ', ') {
           page.drawText(cityStateZip, {
             x: shipToX,
@@ -1164,16 +1277,19 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       }
     } else if (customerAddresses.length > 0) {
       // Use regular customer shipping address - find shipping address or default address
-      const shippingAddress = customerAddresses.find(addr => addr.type === 'shipping' || addr.type === 'both') || customerAddresses[0];
-      
+      const shippingAddress =
+        customerAddresses.find(
+          (addr) => addr.type === 'shipping' || addr.type === 'both'
+        ) || customerAddresses[0];
+
       // Ship to name (wrapped) - ensure it stays within box
       const shipToName = customer?.name || 'N/A';
       const wrappedShipToName = wrapText(shipToName, 250, 10, font);
       wrappedShipToName.forEach((line, index) => {
-        if (shipCurrentY - (index * 13) > customerBoxY + 8) {
+        if (shipCurrentY - index * 13 > customerBoxY + 8) {
           page.drawText(line, {
             x: shipToX,
-            y: shipCurrentY - (index * 13),
+            y: shipCurrentY - index * 13,
             size: 10,
             font: font,
           });
@@ -1185,10 +1301,10 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       if (shippingAddress.street && shipCurrentY > customerBoxY + 15) {
         const wrappedStreet = wrapText(shippingAddress.street, 250, 9, font);
         wrappedStreet.forEach((line, index) => {
-          if (shipCurrentY - (index * 11) > customerBoxY + 8) {
+          if (shipCurrentY - index * 11 > customerBoxY + 8) {
             page.drawText(line, {
               x: shipToX,
-              y: shipCurrentY - (index * 11),
+              y: shipCurrentY - index * 11,
               size: 8,
               font: font,
             });
@@ -1201,10 +1317,10 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       if (shippingAddress.street2 && shipCurrentY > customerBoxY + 15) {
         const wrappedStreet2 = wrapText(shippingAddress.street2, 250, 9, font);
         wrappedStreet2.forEach((line, index) => {
-          if (shipCurrentY - (index * 11) > customerBoxY + 8) {
+          if (shipCurrentY - index * 11 > customerBoxY + 8) {
             page.drawText(line, {
               x: shipToX,
-              y: shipCurrentY - (index * 11),
+              y: shipCurrentY - index * 11,
               size: 8,
               font: font,
             });
@@ -1215,7 +1331,8 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
 
       // City, State, ZIP - ensure it stays within box
       if (shipCurrentY > customerBoxY + 15) {
-        const cityStateZip = `${shippingAddress.city || ''}, ${shippingAddress.state || ''} ${shippingAddress.zipCode || ''}`.trim();
+        const cityStateZip =
+          `${shippingAddress.city || ''}, ${shippingAddress.state || ''} ${shippingAddress.zipCode || ''}`.trim();
         if (cityStateZip !== ', ') {
           page.drawText(cityStateZip, {
             x: shipToX,
@@ -1232,10 +1349,10 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
         const shipToName = customer.name || 'N/A';
         const wrappedShipToName = wrapText(shipToName, 250, 10, font);
         wrappedShipToName.forEach((line, index) => {
-          if (shipCurrentY - (index * 13) > customerBoxY + 8) {
+          if (shipCurrentY - index * 13 > customerBoxY + 8) {
             page.drawText(line, {
               x: shipToX,
-              y: shipCurrentY - (index * 13),
+              y: shipCurrentY - index * 13,
               size: 10,
               font: font,
             });
@@ -1247,24 +1364,24 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
         const contactInfo = [];
         if (customer.email) contactInfo.push(customer.email);
         if (customer.phone) contactInfo.push(customer.phone);
-        
+
         if (contactInfo.length > 0 && shipCurrentY > customerBoxY + 15) {
           const contactText = contactInfo.join(' | ');
           const wrappedContact = wrapText(contactText, 250, 9, font);
           wrappedContact.forEach((line, index) => {
-            if (shipCurrentY - (index * 11) > customerBoxY + 8) {
+            if (shipCurrentY - index * 11 > customerBoxY + 8) {
               page.drawText(line, {
                 x: shipToX,
-                y: shipCurrentY - (index * 11),
+                y: shipCurrentY - index * 11,
                 size: 8,
                 font: font,
-                color: rgb(0.5, 0.5, 0.5)
+                color: rgb(0.5, 0.5, 0.5),
               });
             }
           });
           shipCurrentY -= wrappedContact.length * 11;
         }
-        
+
         // Note about missing address
         if (shipCurrentY > customerBoxY + 15) {
           page.drawText('(Address not on file)', {
@@ -1272,7 +1389,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
             y: shipCurrentY,
             size: 8,
             font: font,
-            color: rgb(0.6, 0.6, 0.6)
+            color: rgb(0.6, 0.6, 0.6),
           });
         }
       } else {
@@ -1281,7 +1398,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
           y: shipCurrentY,
           size: 8,
           font: font,
-          color: rgb(0.6, 0.6, 0.6)
+          color: rgb(0.6, 0.6, 0.6),
         });
       }
     }
@@ -1296,7 +1413,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     });
 
     currentY -= 15;
-    
+
     // Create bordered container for features table
     const featuresTableHeight = 240; // Increased height to accommodate all features
     const boxStartY = currentY; // Mark start position for box height calculation
@@ -1340,11 +1457,11 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       size: 8,
       font: boldFont,
     });
-    
+
     let summaryLineY = currentY - 35; // Start content below header
 
     // Initialize all price variables
-    let basePrice = model?.price || 0;
+    const basePrice = model?.price || 0;
     let actionLengthPrice = 0;
     let actionInletPrice = 0;
     let bottomMetalPrice = 0;
@@ -1368,10 +1485,11 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     const modelDisplayName = model?.displayName || model?.name || 'Custom';
     const wrappedModel = wrapText(modelDisplayName, 320, 8, font);
     wrappedModel.forEach((line, index) => {
-      if (summaryLineY - (index * 11) > currentY - featuresTableHeight + 8) { // Keep within table bounds
+      if (summaryLineY - index * 11 > currentY - featuresTableHeight + 8) {
+        // Keep within table bounds
         page.drawText(line, {
           x: margin + 140,
-          y: summaryLineY - (index * 11),
+          y: summaryLineY - index * 11,
           size: 8,
           font: font,
         });
@@ -1398,14 +1516,17 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       });
 
       const features = order.features as OrderFeatures | undefined;
-      const handednessDisplay = features?.handedness ? 
-        (features.handedness === 'right' ? 'Right' : 'Left') : 'Not selected';
+      const handednessDisplay = features?.handedness
+        ? features.handedness === 'right'
+          ? 'Right'
+          : 'Left'
+        : 'Not selected';
       const wrappedHandedness = wrapText(handednessDisplay, 320, 8, font);
       wrappedHandedness.forEach((line, index) => {
-        if (summaryLineY - (index * 11) > currentY - featuresTableHeight + 8) {
+        if (summaryLineY - index * 11 > currentY - featuresTableHeight + 8) {
           page.drawText(line, {
             x: margin + 140,
-            y: summaryLineY - (index * 11),
+            y: summaryLineY - index * 11,
             size: 8,
             font: font,
           });
@@ -1426,8 +1547,12 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     // Action Length
     if (summaryLineY > currentY - featuresTableHeight + 15) {
       const orderFeatures = order.features as OrderFeatures | undefined;
-      const actionLengthFeature = features.find((f: any) => f.id === 'action_length');
-      const actionLengthOption = actionLengthFeature?.options?.find((opt: any) => opt.value === orderFeatures?.action_length);
+      const actionLengthFeature = features.find(
+        (f: any) => f.id === 'action_length'
+      );
+      const actionLengthOption = actionLengthFeature?.options?.find(
+        (opt: any) => opt.value === orderFeatures?.action_length
+      );
       actionLengthPrice = actionLengthOption?.price || 0;
 
       page.drawText('Action Length:', {
@@ -1437,16 +1562,23 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
         font: font,
       });
 
-      const actionLengthValue = typeof orderFeatures?.action_length === 'string' ? orderFeatures.action_length : '';
-      const actionLengthDisplay = actionLengthOption?.label || 
-        (actionLengthValue ? actionLengthValue.charAt(0).toUpperCase() + actionLengthValue.slice(1) : 'Not selected');
-      
+      const actionLengthValue =
+        typeof orderFeatures?.action_length === 'string'
+          ? orderFeatures.action_length
+          : '';
+      const actionLengthDisplay =
+        actionLengthOption?.label ||
+        (actionLengthValue
+          ? actionLengthValue.charAt(0).toUpperCase() +
+            actionLengthValue.slice(1)
+          : 'Not selected');
+
       const wrappedActionLength = wrapText(actionLengthDisplay, 320, 9, font);
       wrappedActionLength.forEach((line, index) => {
-        if (summaryLineY - (index * 11) > currentY - featuresTableHeight + 8) {
+        if (summaryLineY - index * 11 > currentY - featuresTableHeight + 8) {
           page.drawText(line, {
             x: margin + 140,
-            y: summaryLineY - (index * 11),
+            y: summaryLineY - index * 11,
             size: 8,
             font: font,
           });
@@ -1476,10 +1608,10 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       const shankDisplay = order.shankLength || 'Not selected';
       const wrappedShank = wrapText(shankDisplay, 320, 9, font);
       wrappedShank.forEach((line, index) => {
-        if (summaryLineY - (index * 11) > currentY - featuresTableHeight + 8) {
+        if (summaryLineY - index * 11 > currentY - featuresTableHeight + 8) {
           page.drawText(line, {
             x: margin + 140,
-            y: summaryLineY - (index * 11),
+            y: summaryLineY - index * 11,
             size: 8,
             font: font,
           });
@@ -1500,9 +1632,15 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     // Action Inlet
     if (summaryLineY > currentY - featuresTableHeight + 15) {
       // Check for both 'action' and 'action_inlet' fields
-      const actionValue = (order.features as OrderFeatures | undefined)?.action || (order.features as OrderFeatures | undefined)?.action_inlet;
-      const actionInletFeature = features.find(f => f.id === 'action_inlet' || f.id === 'action');
-      const actionInletOption = actionInletFeature?.options?.find((opt: any) => opt.value === actionValue);
+      const actionValue =
+        (order.features as OrderFeatures | undefined)?.action ||
+        (order.features as OrderFeatures | undefined)?.action_inlet;
+      const actionInletFeature = features.find(
+        (f) => f.id === 'action_inlet' || f.id === 'action'
+      );
+      const actionInletOption = actionInletFeature?.options?.find(
+        (opt: any) => opt.value === actionValue
+      );
       actionInletPrice = actionInletOption?.price || 0;
 
       page.drawText('Action Inlet:', {
@@ -1512,13 +1650,14 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
         font: font,
       });
 
-      const actionInletDisplay = actionInletOption?.label || (actionValue || 'Not selected');
+      const actionInletDisplay =
+        actionInletOption?.label || actionValue || 'Not selected';
       const wrappedActionInlet = wrapText(actionInletDisplay, 320, 9, font);
       wrappedActionInlet.forEach((line, index) => {
-        if (summaryLineY - (index * 11) > currentY - featuresTableHeight + 8) {
+        if (summaryLineY - index * 11 > currentY - featuresTableHeight + 8) {
           page.drawText(line, {
             x: margin + 140,
-            y: summaryLineY - (index * 11),
+            y: summaryLineY - index * 11,
             size: 8,
             font: font,
           });
@@ -1538,8 +1677,12 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
 
     // Bottom Metal
     if (summaryLineY > currentY - featuresTableHeight + 15) {
-      const bottomMetalFeature = features.find(f => f.id === 'bottom_metal');
-      const bottomMetalOption = bottomMetalFeature?.options?.find((opt: any) => opt.value === (order.features as OrderFeatures | undefined)?.bottom_metal);
+      const bottomMetalFeature = features.find((f) => f.id === 'bottom_metal');
+      const bottomMetalOption = bottomMetalFeature?.options?.find(
+        (opt: any) =>
+          opt.value ===
+          (order.features as OrderFeatures | undefined)?.bottom_metal
+      );
       bottomMetalPrice = bottomMetalOption?.price || 0;
 
       page.drawText('Bottom Metal:', {
@@ -1552,10 +1695,10 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       const bottomMetalDisplay = bottomMetalOption?.label || 'Not selected';
       const wrappedBottomMetal = wrapText(bottomMetalDisplay, 320, 9, font);
       wrappedBottomMetal.forEach((line, index) => {
-        if (summaryLineY - (index * 11) > currentY - featuresTableHeight + 8) {
+        if (summaryLineY - index * 11 > currentY - featuresTableHeight + 8) {
           page.drawText(line, {
             x: margin + 140,
-            y: summaryLineY - (index * 11),
+            y: summaryLineY - index * 11,
             size: 8,
             font: font,
           });
@@ -1574,8 +1717,12 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     }
 
     // Barrel Inlet
-    const barrelInletFeature = features.find(f => f.id === 'barrel_inlet');
-    const barrelInletOption = barrelInletFeature?.options?.find((opt: any) => opt.value === (order.features as OrderFeatures | undefined)?.barrel_inlet);
+    const barrelInletFeature = features.find((f) => f.id === 'barrel_inlet');
+    const barrelInletOption = barrelInletFeature?.options?.find(
+      (opt: any) =>
+        opt.value ===
+        (order.features as OrderFeatures | undefined)?.barrel_inlet
+    );
     barrelInletPrice = barrelInletOption?.price || 0;
 
     page.drawText('Barrel Inlet:', {
@@ -1590,7 +1737,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     wrappedBarrelInlet.forEach((line, index) => {
       page.drawText(line, {
         x: margin + 140,
-        y: summaryLineY - (index * 11),
+        y: summaryLineY - index * 11,
         size: 8,
         font: font,
       });
@@ -1610,8 +1757,12 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     summaryLineY -= 12;
 
     // QDs (Quick Detach Cups)
-    const qdFeature = features.find(f => f.id === 'qd_accessory');
-    const qdOption = qdFeature?.options?.find((opt: any) => opt.value === (order.features as OrderFeatures | undefined)?.qd_accessory);
+    const qdFeature = features.find((f) => f.id === 'qd_accessory');
+    const qdOption = qdFeature?.options?.find(
+      (opt: any) =>
+        opt.value ===
+        (order.features as OrderFeatures | undefined)?.qd_accessory
+    );
     qdPrice = qdOption?.price || 0;
 
     page.drawText('QDs (Quick Detach Cups):', {
@@ -1626,7 +1777,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     wrappedQD.forEach((line, index) => {
       page.drawText(line, {
         x: margin + 140,
-        y: summaryLineY - (index * 11),
+        y: summaryLineY - index * 11,
         size: 8,
         font: font,
       });
@@ -1646,8 +1797,12 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     summaryLineY -= 12;
 
     // Length of Pull (LOP)
-    const lopFeature = features.find(f => f.id === 'length_of_pull');
-    const lopOption = lopFeature?.options?.find((opt: any) => opt.value === (order.features as OrderFeatures | undefined)?.length_of_pull);
+    const lopFeature = features.find((f) => f.id === 'length_of_pull');
+    const lopOption = lopFeature?.options?.find(
+      (opt: any) =>
+        opt.value ===
+        (order.features as OrderFeatures | undefined)?.length_of_pull
+    );
     lopPrice = lopOption?.price || 0;
 
     page.drawText('LOP (Length of Pull):', {
@@ -1657,15 +1812,21 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       font: font,
     });
 
-    const lopDisplay = lopOption?.label || 
-      ((order.features as OrderFeatures | undefined)?.length_of_pull && (order.features as OrderFeatures | undefined)?.length_of_pull !== 'no_lop_change' ? 
-        (order.features as OrderFeatures | undefined)?.length_of_pull.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : 'Not selected');
-    
+    const lopDisplay =
+      lopOption?.label ||
+      ((order.features as OrderFeatures | undefined)?.length_of_pull &&
+      (order.features as OrderFeatures | undefined)?.length_of_pull !==
+        'no_lop_change'
+        ? (order.features as OrderFeatures | undefined)?.length_of_pull
+            .replace(/_/g, ' ')
+            .replace(/\b\w/g, (l) => l.toUpperCase())
+        : 'Not selected');
+
     const wrappedLOP = wrapText(lopDisplay, 320, 9, font);
     wrappedLOP.forEach((line, index) => {
       page.drawText(line, {
         x: margin + 140,
-        y: summaryLineY - (index * 11),
+        y: summaryLineY - index * 11,
         size: 8,
         font: font,
       });
@@ -1687,17 +1848,34 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     // Rails
     railsPrice = 0;
     let railsDisplay = 'Not selected';
-    
-    if ((order.features as OrderFeatures | undefined)?.rail_accessory && Array.isArray((order.features as OrderFeatures | undefined)?.rail_accessory) && (order.features as OrderFeatures | undefined)?.rail_accessory.length > 0) {
-      const railFeature = features.find(f => f.id === 'rail_accessory');
-      const selectedRails = (order.features as OrderFeatures | undefined)?.rail_accessory.filter(rail => rail !== 'no_rail');
-      
+
+    if (
+      (order.features as OrderFeatures | undefined)?.rail_accessory &&
+      Array.isArray(
+        (order.features as OrderFeatures | undefined)?.rail_accessory
+      ) &&
+      (order.features as OrderFeatures | undefined)?.rail_accessory.length > 0
+    ) {
+      const railFeature = features.find((f) => f.id === 'rail_accessory');
+      const selectedRails = (
+        order.features as OrderFeatures | undefined
+      )?.rail_accessory.filter((rail) => rail !== 'no_rail');
+
       if (selectedRails.length > 0) {
-        railsDisplay = selectedRails.map((railValue: any) => {
-          const option = railFeature?.options?.find((opt: any) => opt.value === railValue);
-          railsPrice += option?.price || 0;
-          return option?.label || railValue.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-        }).join(', ');
+        railsDisplay = selectedRails
+          .map((railValue: any) => {
+            const option = railFeature?.options?.find(
+              (opt: any) => opt.value === railValue
+            );
+            railsPrice += option?.price || 0;
+            return (
+              option?.label ||
+              railValue
+                .replace(/_/g, ' ')
+                .replace(/\b\w/g, (l) => l.toUpperCase())
+            );
+          })
+          .join(', ');
       }
     }
 
@@ -1712,7 +1890,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     wrappedRails.forEach((line, index) => {
       page.drawText(line, {
         x: margin + 140,
-        y: summaryLineY - (index * 11),
+        y: summaryLineY - index * 11,
         size: 8,
         font: font,
       });
@@ -1732,8 +1910,12 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     summaryLineY -= 12;
 
     // Texture
-    const textureFeature = features.find(f => f.id === 'texture_options');
-    const textureOption = textureFeature?.options?.find((opt: any) => opt.value === (order.features as OrderFeatures | undefined)?.texture_options);
+    const textureFeature = features.find((f) => f.id === 'texture_options');
+    const textureOption = textureFeature?.options?.find(
+      (opt: any) =>
+        opt.value ===
+        (order.features as OrderFeatures | undefined)?.texture_options
+    );
     texturePrice = textureOption?.price || 0;
 
     page.drawText('Texture:', {
@@ -1743,14 +1925,19 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       font: font,
     });
 
-    const textureDisplay = textureOption?.label || 
-      ((order.features as OrderFeatures | undefined)?.texture_options ? (order.features as OrderFeatures | undefined)?.texture_options.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : 'Not selected');
-    
+    const textureDisplay =
+      textureOption?.label ||
+      ((order.features as OrderFeatures | undefined)?.texture_options
+        ? (order.features as OrderFeatures | undefined)?.texture_options
+            .replace(/_/g, ' ')
+            .replace(/\b\w/g, (l) => l.toUpperCase())
+        : 'Not selected');
+
     const wrappedTexture = wrapText(textureDisplay, 320, 9, font);
     wrappedTexture.forEach((line, index) => {
       page.drawText(line, {
         x: margin + 140,
-        y: summaryLineY - (index * 11),
+        y: summaryLineY - index * 11,
         size: 8,
         font: font,
       });
@@ -1770,8 +1957,12 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     summaryLineY -= 12;
 
     // Swivel Studs
-    const swivelFeature = features.find(f => f.id === 'swivel_studs');
-    const swivelOption = swivelFeature?.options?.find((opt: any) => opt.value === (order.features as OrderFeatures | undefined)?.swivel_studs);
+    const swivelFeature = features.find((f) => f.id === 'swivel_studs');
+    const swivelOption = swivelFeature?.options?.find(
+      (opt: any) =>
+        opt.value ===
+        (order.features as OrderFeatures | undefined)?.swivel_studs
+    );
     swivelPrice = swivelOption?.price || 0;
 
     page.drawText('Swivel Studs:', {
@@ -1786,7 +1977,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     wrappedSwivel.forEach((line, index) => {
       page.drawText(line, {
         x: margin + 140,
-        y: summaryLineY - (index * 11),
+        y: summaryLineY - index * 11,
         size: 8,
         font: font,
       });
@@ -1808,18 +1999,37 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     // Other Options
     otherOptionsPrice = 0;
     let otherOptionsDisplay = 'Not selected';
-    
-    if ((order.features as OrderFeatures | undefined)?.other_options && Array.isArray((order.features as OrderFeatures | undefined)?.other_options) && (order.features as OrderFeatures | undefined)?.other_options.length > 0) {
-      const otherFeature = features.find(f => f.id === 'other_options');
-      
+
+    if (
+      (order.features as OrderFeatures | undefined)?.other_options &&
+      Array.isArray(
+        (order.features as OrderFeatures | undefined)?.other_options
+      ) &&
+      (order.features as OrderFeatures | undefined)?.other_options.length > 0
+    ) {
+      const otherFeature = features.find((f) => f.id === 'other_options');
+
       if (otherFeature?.options) {
-        otherOptionsDisplay = (order.features as OrderFeatures | undefined)?.other_options.map((optionValue: string) => {
-          const option = otherFeature.options!.find((opt: any) => opt.value === optionValue);
-          otherOptionsPrice += option?.price || 0;
-          return option?.label || optionValue.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-        }).join(', ');
+        otherOptionsDisplay = (
+          order.features as OrderFeatures | undefined
+        )?.other_options
+          .map((optionValue: string) => {
+            const option = otherFeature.options!.find(
+              (opt: any) => opt.value === optionValue
+            );
+            otherOptionsPrice += option?.price || 0;
+            return (
+              option?.label ||
+              optionValue
+                .replace(/_/g, ' ')
+                .replace(/\b\w/g, (l) => l.toUpperCase())
+            );
+          })
+          .join(', ');
       } else {
-        otherOptionsDisplay = (order.features as OrderFeatures | undefined)?.other_options.join(', ');
+        otherOptionsDisplay = (
+          order.features as OrderFeatures | undefined
+        )?.other_options.join(', ');
       }
     }
 
@@ -1835,7 +2045,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     wrappedOtherOptions.forEach((line, index) => {
       page.drawText(line, {
         x: margin + 140,
-        y: summaryLineY - (index * 11),
+        y: summaryLineY - index * 11,
         size: 8,
         font: font,
       });
@@ -1858,28 +2068,34 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     // Paint Options
     paintPrice = 0;
     let paintDisplay = 'Not selected';
-    
+
     // Handle multiple paint option fields
-    const currentPaint = (order.features as OrderFeatures | undefined)?.metallic_finishes || (order.features as OrderFeatures | undefined)?.paint_options || (order.features as OrderFeatures | undefined)?.paint_options_combined;
-    
+    const currentPaint =
+      (order.features as OrderFeatures | undefined)?.metallic_finishes ||
+      (order.features as OrderFeatures | undefined)?.paint_options ||
+      (order.features as OrderFeatures | undefined)?.paint_options_combined;
+
     if (currentPaint && currentPaint !== 'none') {
       // Search through paint-related features
-      const paintFeatures = features.filter(f => 
-        f.displayName?.includes('Options') || 
-        f.displayName?.includes('Camo') || 
-        f.displayName?.includes('Cerakote') ||
-        f.displayName?.includes('Terrain') ||
-        f.displayName?.includes('Rogue') ||
-        f.displayName?.includes('Standard') ||
-        f.id === 'metallic_finishes' ||
-        f.id === 'paint_options' ||
-        f.category === 'paint' ||
-        f.subCategory === 'paint'
+      const paintFeatures = features.filter(
+        (f) =>
+          f.displayName?.includes('Options') ||
+          f.displayName?.includes('Camo') ||
+          f.displayName?.includes('Cerakote') ||
+          f.displayName?.includes('Terrain') ||
+          f.displayName?.includes('Rogue') ||
+          f.displayName?.includes('Standard') ||
+          f.id === 'metallic_finishes' ||
+          f.id === 'paint_options' ||
+          f.category === 'paint' ||
+          f.subCategory === 'paint'
       );
 
       for (const feature of paintFeatures) {
         if (feature.options) {
-          const option = feature.options.find((opt: any) => opt.value === currentPaint);
+          const option = feature.options.find(
+            (opt: any) => opt.value === currentPaint
+          );
           if (option) {
             paintDisplay = option.label;
             paintPrice = option.price || 0;
@@ -1887,10 +2103,12 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
           }
         }
       }
-      
+
       // Fallback to formatted value if no option found
       if (paintDisplay === 'Not selected') {
-        paintDisplay = currentPaint.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        paintDisplay = currentPaint
+          .replace(/_/g, ' ')
+          .replace(/\b\w/g, (l) => l.toUpperCase());
       }
     }
 
@@ -1906,7 +2124,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     wrappedPaintDisplay.forEach((line, index) => {
       page.drawText(line, {
         x: margin + 140,
-        y: summaryLineY - (index * 11),
+        y: summaryLineY - index * 11,
         size: 8,
         font: font,
       });
@@ -1937,7 +2155,19 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     summaryLineY -= 18; // Reduced white space below separator
 
     // Subtotal
-    const calculatedSubtotal = basePrice + actionLengthPrice + actionInletPrice + bottomMetalPrice + barrelInletPrice + qdPrice + lopPrice + railsPrice + texturePrice + swivelPrice + otherOptionsPrice + paintPrice;
+    const calculatedSubtotal =
+      basePrice +
+      actionLengthPrice +
+      actionInletPrice +
+      bottomMetalPrice +
+      barrelInletPrice +
+      qdPrice +
+      lopPrice +
+      railsPrice +
+      texturePrice +
+      swivelPrice +
+      otherOptionsPrice +
+      paintPrice;
     page.drawText('Subtotal:', {
       x: margin + 8,
       y: summaryLineY,
@@ -1976,54 +2206,76 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     // Calculate discounts - check custom, order-level, and customer type discounts
     let discountAmount = 0;
     let discountLabel = 'Discount';
-    
+
     // First check for custom discount
-    if ((order as any).showCustomDiscount && (order as any).customDiscountValue) {
+    if (
+      (order as any).showCustomDiscount &&
+      (order as any).customDiscountValue
+    ) {
       const discountValue = (order as any).customDiscountValue;
       const discountType = (order as any).customDiscountType || 'percent';
-      
+
       if (discountType === 'percent') {
         discountAmount = calculatedSubtotal * (discountValue / 100);
       } else if (discountType === 'fixed') {
         discountAmount = discountValue;
       }
       discountLabel = 'Custom Discount';
-    } 
+    }
     // Check for order's discountCode (persistent_X format)
-    else if (order.discountCode && order.discountCode !== 'none' && order.discountCode.startsWith('persistent_')) {
-      const discountId = parseInt(order.discountCode.replace('persistent_', ''));
+    else if (
+      order.discountCode &&
+      order.discountCode !== 'none' &&
+      order.discountCode.startsWith('persistent_')
+    ) {
+      const discountId = parseInt(
+        order.discountCode.replace('persistent_', '')
+      );
       const persistentDiscounts = await storage.getAllPersistentDiscounts();
-      const applicableDiscount = persistentDiscounts.find((d: any) => d.id === discountId && d.isActive);
-      
+      const applicableDiscount = persistentDiscounts.find(
+        (d: any) => d.id === discountId && d.isActive
+      );
+
       if (applicableDiscount) {
         // Check appliesTo field to determine discount base
-        const discountBase = applicableDiscount.appliesTo === 'stock_model' ? basePrice : calculatedSubtotal;
-        
+        const discountBase =
+          applicableDiscount.appliesTo === 'stock_model'
+            ? basePrice
+            : calculatedSubtotal;
+
         if (applicableDiscount.percent) {
           discountAmount = discountBase * (applicableDiscount.percent / 100);
         } else if (applicableDiscount.fixedAmount) {
           discountAmount = applicableDiscount.fixedAmount;
         }
-        discountLabel = applicableDiscount.name ? `Discount - ${applicableDiscount.name}` : 'Discount';
+        discountLabel = applicableDiscount.name
+          ? `Discount - ${applicableDiscount.name}`
+          : 'Discount';
       }
     }
     // If no custom or order discount, check for persistent discount based on customer type
     else if (customer && (customer as any).customerTypeId) {
       const persistentDiscounts = await storage.getAllPersistentDiscounts();
       const applicableDiscount = persistentDiscounts.find(
-        (d: any) => d.customerTypeId === (customer as any).customerTypeId && d.isActive
+        (d: any) =>
+          d.customerTypeId === (customer as any).customerTypeId && d.isActive
       );
-      
+
       if (applicableDiscount) {
         // Check appliesTo field to determine discount base
-        const discountBase = applicableDiscount.appliesTo === 'stock_model' ? basePrice : calculatedSubtotal;
-        
+        const discountBase =
+          applicableDiscount.appliesTo === 'stock_model'
+            ? basePrice
+            : calculatedSubtotal;
+
         if (applicableDiscount.percent) {
           discountAmount = discountBase * (applicableDiscount.percent / 100);
         } else if (applicableDiscount.fixedAmount) {
           discountAmount = applicableDiscount.fixedAmount;
         }
-        discountLabel = applicableDiscount.name ? `Discount - ${applicableDiscount.name}` : 'Discount';
+        discountLabel = applicableDiscount.name
+          ? `Discount - ${applicableDiscount.name}`
+          : 'Discount';
       }
     }
 
@@ -2058,7 +2310,8 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     summaryLineY -= 25;
 
     // Total
-    const finalTotal = calculatedSubtotal + (order.shipping || 0) - discountAmount;
+    const finalTotal =
+      calculatedSubtotal + (order.shipping || 0) - discountAmount;
     page.drawText('TOTAL:', {
       x: margin + 8,
       y: summaryLineY,
@@ -2078,15 +2331,18 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
 
     // Payment Status - positioned on the right side near dollar amounts
     const paymentStatusWidth = boldFont.widthOfTextAtSize(paymentStatus, 10);
-    const paymentLabelWidth = boldFont.widthOfTextAtSize('Payment Status: ', 10);
-    
+    const paymentLabelWidth = boldFont.widthOfTextAtSize(
+      'Payment Status: ',
+      10
+    );
+
     page.drawText('Payment Status: ', {
       x: margin + printableWidth - 70 - paymentStatusWidth - paymentLabelWidth,
       y: summaryLineY,
       size: 10,
       font: boldFont,
     });
-    
+
     page.drawText(paymentStatus, {
       x: margin + printableWidth - 70 - paymentStatusWidth,
       y: summaryLineY,
@@ -2127,7 +2383,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       let currentLine = '';
       const maxLineLength = 70;
 
-      noteWords.forEach(word => {
+      noteWords.forEach((word) => {
         if ((currentLine + ' ' + word).length > maxLineLength) {
           page.drawText(currentLine, {
             x: margin + 5,
@@ -2153,18 +2409,16 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       }
     }
 
-
-
     // PAGE 2 - Terms and Conditions
     const page2 = pdfDoc.addPage([612, 792]);
     let page2Y = height - margin - 10;
-    
+
     // Repeat order info box at top right of page 2
     const page2OrderBoxX = width - margin - 220;
     const page2OrderBoxY = page2Y - 85;
     const page2OrderBoxWidth = 220;
     const page2OrderBoxHeight = 75;
-    
+
     page2.drawRectangle({
       x: page2OrderBoxX,
       y: page2OrderBoxY,
@@ -2178,7 +2432,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     let page2BoxTextY = page2OrderBoxY + page2OrderBoxHeight - 18;
     const page2Col1X = page2OrderBoxX + 8;
     const page2Col2X = page2OrderBoxX + 95;
-    
+
     // Row 1: Order Number and Customer PO
     page2.drawText('Order Number:', {
       x: page2Col1X,
@@ -2209,7 +2463,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     });
 
     page2BoxTextY -= 32;
-    
+
     // Row 2: Order Date and Estimated Completion Date
     page2.drawText('Order Date:', {
       x: page2Col1X,
@@ -2232,13 +2486,16 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       font: boldFont,
     });
 
-    page2.drawText(order.dueDate ? new Date(order.dueDate).toLocaleDateString() : 'TBD', {
-      x: page2Col2X,
-      y: page2BoxTextY - 12,
-      size: 8,
-      font: font,
-    });
-    
+    page2.drawText(
+      order.dueDate ? new Date(order.dueDate).toLocaleDateString() : 'TBD',
+      {
+        x: page2Col2X,
+        y: page2BoxTextY - 12,
+        size: 8,
+        font: font,
+      }
+    );
+
     // Terms and Conditions Section on Page 2
     page2Y -= 120;
     page2.drawText('TERMS AND CONDITIONS', {
@@ -2254,10 +2511,10 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       '• Lead Time: Custom manufacturing typically 4-6 weeks from deposit',
       '• Custom items are non-returnable unless defective',
       '• Shipping costs additional - calculated at time of shipment',
-      '• Prices valid for 30 days from quote date'
+      '• Prices valid for 30 days from quote date',
     ];
 
-    terms.forEach(term => {
+    terms.forEach((term) => {
       page2.drawText(term, {
         x: margin,
         y: page2Y,
@@ -2335,12 +2592,14 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
 
     // Set response headers for PDF inline display (opens in new tab for printing)
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `inline; filename="Sales-Order-${orderId}.pdf"`);
+    res.setHeader(
+      'Content-Disposition',
+      `inline; filename="Sales-Order-${orderId}.pdf"`
+    );
     res.setHeader('Content-Length', pdfBytes.length);
 
     // Send PDF
     res.send(Buffer.from(pdfBytes));
-
   } catch (error: unknown) {
     console.error('Error generating sales order PDF:', error);
     res.status(500).json({ error: 'Failed to generate sales order PDF' });
@@ -2348,849 +2607,1056 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
 });
 
 // POST route for UPS Shipping Label with custom package details - REAL UPS API INTEGRATION
-router.post('/ups-shipping-label/:orderId', async (req: Request, res: Response) => {
-  try {
-    const { orderId } = req.params;
-    const { shippingAddress: customShippingAddress, packageDetails: customPackageDetails } = req.body;
-    
-    console.log(`Creating REAL UPS shipping label for order: ${orderId} with custom details`);
-    console.log('Custom shipping address:', customShippingAddress);
-    console.log('Custom package details:', customPackageDetails);
-    
-    // Get order data from storage
-    const { storage } = await import('../../storage');
-    let order = null;
-    
-    // Try to find the order in either finalized or draft orders
+router.post(
+  '/ups-shipping-label/:orderId',
+  async (req: Request, res: Response) => {
     try {
-      order = await storage.getFinalizedOrderById(orderId);
-      console.log(`Found finalized order: ${orderId}`);
-    } catch (error: unknown) {
+      const { orderId } = req.params;
+      const {
+        shippingAddress: customShippingAddress,
+        packageDetails: customPackageDetails,
+      } = req.body;
+
+      console.log(
+        `Creating REAL UPS shipping label for order: ${orderId} with custom details`
+      );
+      console.log('Custom shipping address:', customShippingAddress);
+      console.log('Custom package details:', customPackageDetails);
+
+      // Get order data from storage
+      const { storage } = await import('../../storage');
+      let order = null;
+
+      // Try to find the order in either finalized or draft orders
       try {
-        order = await storage.getOrderDraft(orderId);
-        console.log(`Found draft order: ${orderId}`);
-      } catch (draftError) {
-        console.log(`Order ${orderId} not found in either table`);
-        return res.status(404).json({ error: `Order ${orderId} not found` });
-      }
-    }
-
-    if (!order) {
-      return res.status(404).json({ error: `Order ${orderId} not found` });
-    }
-
-    // Get customer and shipping information (for fallback if no custom address provided)
-    let customerInfo = null;
-    let customerAddress = null;
-    
-    if ((order as any).customerId) {
-      try {
-        customerInfo = await storage.getCustomerById((order as any).customerId);
-        if (customerInfo) {
-          const addresses = await storage.getCustomerAddresses((order as any).customerId);
-          customerAddress = addresses.find(addr => addr.type === 'shipping' && addr.isDefault) || 
-                          addresses.find(addr => addr.type === 'both' && addr.isDefault) ||
-                          addresses[0];
-        }
-      } catch (e) {
-        console.log(`Error finding customer info for order ${orderId}:`, e);
-      }
-    }
-
-    // Use custom shipping address if provided, otherwise fall back to customer data
-    const shippingAddress = customShippingAddress && customShippingAddress.name && customShippingAddress.street ? 
-      customShippingAddress : 
-      {
-        name: customerInfo?.name || "Customer Name",
-        street: customerAddress?.street || "123 Main St", 
-        city: customerAddress?.city || "Birmingham",
-        state: customerAddress?.state || "AL",
-        zip: customerAddress?.zipCode || "35203"
-      };
-
-    // Use custom package details if provided, otherwise use defaults
-    const packageDetails = customPackageDetails && customPackageDetails.weight ? 
-      customPackageDetails : 
-      {
-        weight: "10",
-        length: "12",
-        width: "12", 
-        height: "12"
-      };
-
-    console.log(`Creating UPS shipment for ${orderId} to:`, shippingAddress);
-    console.log(`Package details:`, packageDetails);
-
-    // Create UPS shipment using real API with custom details
-    const shipmentRequest = buildUPSShipmentRequest(order, shippingAddress, packageDetails);
-    const upsResponse = await createUPSShipment(shipmentRequest);
-    
-    if (upsResponse && (upsResponse as any).ShipmentResponse?.ShipmentResults) {
-      const trackingNumber = (upsResponse as any).ShipmentResponse.ShipmentResults.ShipmentIdentificationNumber;
-      const labelUrl = `/api/shipping-pdf/ups-shipping-label/${orderId}`;
-      
-      // Update order with tracking number and move to Shipping Management
-      const orderUpdateData = {
-        trackingNumber: trackingNumber,
-        currentDepartment: 'Shipping',
-        shippingLabelGenerated: true,
-        shippedDate: new Date(),
-        shippingCarrier: 'UPS',
-        shippingMethod: 'Ground',
-        status: 'Shipped'
-      };
-
-      try {
-        // Try to update finalized order first
-        await storage.updateFinalizedOrder(orderId, orderUpdateData);
-        console.log(`Updated finalized order ${orderId} with tracking ${trackingNumber}`);
+        order = await storage.getFinalizedOrderById(orderId);
+        console.log(`Found finalized order: ${orderId}`);
       } catch (error: unknown) {
         try {
-          // If not found, try draft orders
-          await storage.updateOrderDraft(orderId, orderUpdateData);
-          console.log(`Updated draft order ${orderId} with tracking ${trackingNumber}`);
+          order = await storage.getOrderDraft(orderId);
+          console.log(`Found draft order: ${orderId}`);
         } catch (draftError) {
-          console.error(`Failed to update order ${orderId} with tracking information:`, error, draftError);
+          console.log(`Order ${orderId} not found in either table`);
+          return res.status(404).json({ error: `Order ${orderId} not found` });
         }
       }
-      
-      return res.json({
-        success: true,
-        trackingNumber: trackingNumber,
-        labelUrl: labelUrl,
-        shippingAddress: shippingAddress,
-        packageDetails: packageDetails,
-        orderUpdated: true
-      });
-    } else {
-      return res.status(500).json({ 
-        error: 'Failed to create UPS shipment', 
-        details: 'Invalid UPS API response'
-      });
-    }
-    
-  } catch (error: unknown) {
-    console.error('Error creating UPS shipping label with custom details:', error);
-    return res.status(500).json({ 
-      error: 'Failed to create UPS shipping label', 
-      details: error instanceof Error ? (error as Error).message : 'Unknown error'
-    });
-  }
-});
 
-// GET route for UPS Shipping Label - REAL UPS API INTEGRATION
-router.get('/ups-shipping-label/:orderId', async (req: Request, res: Response) => {
-  try {
-    const { orderId } = req.params;
-    console.log(`Creating REAL UPS shipping label for order: ${orderId}`);
-    
-    // Get order data from storage
-    const { storage } = await import('../../storage');
-    let order = null;
-    
-    // Try to find the order in either finalized or draft orders
-    try {
-      order = await storage.getFinalizedOrderById(orderId);
-      console.log(`Found finalized order: ${orderId}`);
-    } catch (error: unknown) {
-      try {
-        order = await storage.getOrderDraft(orderId);
-        console.log(`Found draft order: ${orderId}`);
-      } catch (draftError) {
-        console.log(`Order ${orderId} not found in either table`);
+      if (!order) {
         return res.status(404).json({ error: `Order ${orderId} not found` });
       }
-    }
 
-    if (!order) {
-      return res.status(404).json({ error: `Order ${orderId} not found` });
-    }
+      // Get customer and shipping information (for fallback if no custom address provided)
+      let customerInfo = null;
+      let customerAddress = null;
 
-    // Get customer and shipping information
-    let customerInfo = null;
-    let customerAddress = null;
-    
-    if ((order as any).customerId) {
-      try {
-        customerInfo = await storage.getCustomerById((order as any).customerId);
-        if (customerInfo) {
-          const addresses = await storage.getCustomerAddresses((order as any).customerId);
-          customerAddress = addresses.find(addr => addr.type === 'shipping' && addr.isDefault) || 
-                          addresses.find(addr => addr.type === 'both' && addr.isDefault) ||
-                          addresses[0];
-        }
-      } catch (e) {
-        console.log(`Error finding customer info for order ${orderId}:`, e);
-      }
-    }
-
-    // Build shipping address from customer data
-    const shippingAddress = {
-      name: customerInfo?.name || "Customer Name",
-      street: customerAddress?.street || "123 Main St", 
-      city: customerAddress?.city || "Birmingham",
-      state: customerAddress?.state || "AL",
-      zip: customerAddress?.zipCode || "35203"
-    };
-
-    // Default package details
-    const packageDetails = {
-      weight: "10",
-      length: "12",
-      width: "12", 
-      height: "12"
-    };
-
-    console.log(`Creating UPS shipment for ${orderId} to:`, shippingAddress);
-
-    // Create UPS shipment using real API
-    const shipmentRequest = buildUPSShipmentRequest(order, shippingAddress, packageDetails);
-    const upsResponse = await createUPSShipment(shipmentRequest);
-    
-    console.log(`UPS Response Structure Debug for ${orderId}:`, {
-      hasResponse: !!upsResponse,
-      hasShipmentResponse: !!(upsResponse as any)?.ShipmentResponse,
-      hasShipmentResults: !!(upsResponse as any)?.ShipmentResponse?.ShipmentResults,
-      responseKeys: upsResponse ? Object.keys(upsResponse as any) : 'none'
-    });
-    
-    if (upsResponse && (upsResponse as any).ShipmentResponse && (upsResponse as any).ShipmentResponse.ShipmentResults) {
-      const shipmentResults = (upsResponse as any).ShipmentResponse.ShipmentResults;
-      const trackingNumber = shipmentResults.ShipmentIdentificationNumber;
-      
-      // DEBUG: Print the full structure to understand the data
-      console.log(`Full shipmentResults structure for ${orderId}:`, JSON.stringify(shipmentResults, null, 2).substring(0, 1000));
-      
-      // Try to find the label image at various locations in the UPS response
-      let labelImage = null;
-      let firstPackage = null;
-      
-      // Option 1: Standard PackageResults array
-      if (shipmentResults.PackageResults && Array.isArray(shipmentResults.PackageResults)) {
-        firstPackage = shipmentResults.PackageResults[0];
-        labelImage = firstPackage?.ShippingLabel?.GraphicImage || firstPackage?.ShippingLabel?.HTMLImage;
-      }
-      
-      // Option 2: PackageResults as single object
-      if (!labelImage && shipmentResults.PackageResults && !Array.isArray(shipmentResults.PackageResults)) {
-        firstPackage = shipmentResults.PackageResults;
-        labelImage = firstPackage?.ShippingLabel?.GraphicImage || firstPackage?.ShippingLabel?.HTMLImage;
-      }
-      
-      // Option 3: Direct in ShipmentResults (some UPS responses have this structure)
-      if (!labelImage && shipmentResults.ShippingLabel) {
-        labelImage = shipmentResults.ShippingLabel.GraphicImage || shipmentResults.ShippingLabel.HTMLImage;
-        firstPackage = { ShippingLabel: shipmentResults.ShippingLabel };
-      }
-      
-      // Option 4: Alternative paths based on UPS documentation
-      if (!labelImage && shipmentResults.LabelImage) {
-        labelImage = shipmentResults.LabelImage.GraphicImage || shipmentResults.LabelImage.HTMLImage;
-      }
-      
-      console.log(`Label Image Detection for ${orderId}:`, {
-        foundLabelImage: !!labelImage,
-        labelImageLength: labelImage ? labelImage.length : 0,
-        detectionMethod: labelImage ? 'success' : 'failed'
-      });
-
-      console.log(`UPS label created for ${orderId}: ${trackingNumber}`);
-      // Skip the old debug logging since we have better detection now
-
-      // Update order with tracking number and move to Shipping Management
-      const orderUpdateData = {
-        trackingNumber: trackingNumber,
-        currentDepartment: 'Shipping',
-        shippingLabelGenerated: true,
-        shippedDate: new Date(),
-        shippingCarrier: 'UPS',
-        shippingMethod: 'Ground',
-        status: 'Shipped'
-      };
-
-      try {
-        // Try to update finalized order first
-        await storage.updateFinalizedOrder(orderId, orderUpdateData);
-        console.log(`Updated finalized order ${orderId} with tracking ${trackingNumber}`);
-      } catch (error: unknown) {
+      if ((order as any).customerId) {
         try {
-          // If not found, try draft orders
-          await storage.updateOrderDraft(orderId, orderUpdateData);
-          console.log(`Updated draft order ${orderId} with tracking ${trackingNumber}`);
-        } catch (draftError) {
-          console.error(`Failed to update order ${orderId} with tracking information:`, error, draftError);
+          customerInfo = await storage.getCustomerById(
+            (order as any).customerId
+          );
+          if (customerInfo) {
+            const addresses = await storage.getCustomerAddresses(
+              (order as any).customerId
+            );
+            customerAddress =
+              addresses.find(
+                (addr) => addr.type === 'shipping' && addr.isDefault
+              ) ||
+              addresses.find(
+                (addr) => addr.type === 'both' && addr.isDefault
+              ) ||
+              addresses[0];
+          }
+        } catch (e) {
+          console.log(`Error finding customer info for order ${orderId}:`, e);
         }
       }
 
-      console.log(`UPS label created successfully for ${orderId}, tracking: ${trackingNumber}`);
+      // Use custom shipping address if provided, otherwise fall back to customer data
+      const shippingAddress =
+        customShippingAddress &&
+        customShippingAddress.name &&
+        customShippingAddress.street
+          ? customShippingAddress
+          : {
+              name: customerInfo?.name || 'Customer Name',
+              street: customerAddress?.street || '123 Main St',
+              city: customerAddress?.city || 'Birmingham',
+              state: customerAddress?.state || 'AL',
+              zip: customerAddress?.zipCode || '35203',
+            };
 
-      // Convert base64 label image to PDF and return it
-      if (labelImage) {
-        try {
-          console.log(`Processing label image for ${orderId}, format type: ${labelImage === firstPackage?.ShippingLabel?.HTMLImage ? 'HTML' : 'Direct'}`);
-          
-          // If this is the HTML format, return it as HTML for printing
-          if (labelImage === firstPackage?.ShippingLabel?.HTMLImage) {
-            const htmlContent = Buffer.from(labelImage, 'base64').toString('utf8');
-            
-            // Set response headers for HTML inline display (opens in new tab for printing)
-            res.setHeader('Content-Type', 'text/html');
-            res.setHeader('Content-Disposition', `inline; filename="UPS-Shipping-Label-${orderId}-${trackingNumber}.html"`);
-            
-            // Send the UPS label HTML (which contains the embedded GIF image)
-            return res.send(htmlContent);
-          } else {
-            // Handle direct image format (GIF from UPS)
-            const labelBytes = Buffer.from(labelImage, 'base64');
-            
-            // Set response headers for GIF image inline display (opens in new tab for printing)
-            res.setHeader('Content-Type', 'image/gif');
-            res.setHeader('Content-Disposition', `inline; filename="UPS-Shipping-Label-${orderId}-${trackingNumber}.gif"`);
-            res.setHeader('Content-Length', labelBytes.length);
+      // Use custom package details if provided, otherwise use defaults
+      const packageDetails =
+        customPackageDetails && customPackageDetails.weight
+          ? customPackageDetails
+          : {
+              weight: '10',
+              length: '12',
+              width: '12',
+              height: '12',
+            };
 
-            // Send the UPS label GIF image
-            return res.send(labelBytes);
-          }
-        } catch (pdfError: unknown) {
-          console.error(`Error processing label for ${orderId}:`, pdfError);
-          return res.status(500).json({ 
-            error: 'Failed to process UPS label', 
-            details: (pdfError as Error).message,
-            trackingNumber: trackingNumber
-          });
-        }
-      }
-      
-      // UPS API worked but no label image was returned - this shouldn't happen but handle gracefully
-      return res.status(200).json({
-        success: true,
-        message: 'UPS shipping label created successfully',
-        trackingNumber: trackingNumber,
-        note: 'Label image not available in response'
-      });
-    }
+      console.log(`Creating UPS shipment for ${orderId} to:`, shippingAddress);
+      console.log(`Package details:`, packageDetails);
 
-    // UPS API didn't return expected structure - return success anyway since we know UPS is working
-    console.log(`UPS API appears to be working but response structure is unexpected for ${orderId}`);
-    console.log('UPS Response Structure Issue (but functioning):', JSON.stringify(upsResponse, null, 2));
-    
-    return res.status(200).json({
-      success: true,
-      message: 'UPS integration is working correctly',
-      note: 'Label processing completed successfully despite structural differences',
-      orderId: orderId
-    });
-
-  } catch (error: unknown) {
-    console.error('Error creating real UPS shipping label:', error);
-    
-    // Check if this is just the structural error we're trying to fix
-    if ((error as Error).message && (error as Error).message.includes('UPS API returned')) {
-      return res.status(200).json({
-        success: true,
-        message: 'UPS shipping label created successfully',
-        note: 'UPS API is functioning correctly - error handling updated'
-      });
-    }
-    
-    res.status(500).json({ 
-      error: 'Failed to create UPS shipping label',
-      details: (error as Error).message
-    });
-  }
-});
-
-// Generate UPS Shipping Label with real UPS API integration
-router.post('/ups-shipping-label/:orderId', async (req: Request, res: Response) => {
-  try {
-    const { orderId } = req.params;
-    const { packageDetails, shippingAddress: providedShippingAddress, packageValue } = req.body;
-
-    // Get order, customer, and address data directly from database
-    const { db } = await import('../../db');
-    const { eq } = await import('drizzle-orm');
-    const { orderDrafts, customers, customerAddresses } = await import('../../schema');
-
-    // First get the order
-    const orders = await db.select()
-      .from(orderDrafts)
-      .where(eq(orderDrafts.orderId, orderId));
-
-    if (!orders || orders.length === 0) {
-      return res.status(404).json({ error: 'Order not found' });
-    }
-
-    const order = orders[0];
-
-    // Then get customer and address information using the order's customer_id
-    const orderResult = await db.select({
-      customer: customers,
-      address: customerAddresses
-    })
-    .from(customers)
-    .leftJoin(customerAddresses, eq(customerAddresses.customerId, customers.id))
-    .where(eq(customers.id, parseInt((order as any).customerId || '0')));
-
-    if (!orderResult || orderResult.length === 0) {
-      return res.status(404).json({ error: 'Customer not found for this order' });
-    }
-
-    const customer = orderResult[0].customer;
-
-    if (!customer) {
-      return res.status(404).json({ error: 'Customer not found for this order' });
-    }
-
-    // Find the default address or use the first available address
-    const customerAddress = orderResult.find(r => r.address?.isDefault)?.address ||
-                           orderResult.find(r => r.address)?.address;
-
-    // Auto-populate shipping address from customer data, allow override from request
-    const shippingAddress = providedShippingAddress || (customerAddress ? {
-      name: customer.name,
-      street: customerAddress.street,
-      city: customerAddress.city,
-      state: customerAddress.state,
-      zip: customerAddress.zipCode // Database field is zip_code, mapped to zipCode
-    } : {
-      name: customer.name,
-      street: '',
-      city: '',
-      state: '',
-      zip: ''
-    });
-
-    // Validate required fields
-    if (!shippingAddress || !shippingAddress.name || !shippingAddress.street || !shippingAddress.city || !shippingAddress.state || !shippingAddress.zip) {
-      return res.status(400).json({
-        error: 'Complete shipping address is required. Please provide shipping address in the request body.',
-        customerInfo: {
-          name: customer.name,
-          email: customer.email,
-          phone: customer.phone
-        },
-        requiredFields: ['name', 'street', 'city', 'state', 'zip'],
-        example: {
-          shippingAddress: {
-            name: customer.name,
-            street: "123 Main St",
-            city: "Huntsville",
-            state: "AL",
-            zip: "35801"
-          }
-        }
-      });
-    }
-
-    if (!packageDetails || !packageDetails.weight) {
-      return res.status(400).json({ error: 'Package weight is required' });
-    }
-
-    // Calculate package value from order if not provided
-    const calculatedPackageValue = packageValue || (order.priceOverride || 0);
-
-    try {
-      // Create UPS shipment using real API
-      const shipmentRequest = buildUPSShipmentRequest(order, shippingAddress, packageDetails, calculatedPackageValue);
+      // Create UPS shipment using real API with custom details
+      const shipmentRequest = buildUPSShipmentRequest(
+        order,
+        shippingAddress,
+        packageDetails
+      );
       const upsResponse = await createUPSShipment(shipmentRequest);
 
-      // Extract tracking number and label from UPS response
-      const upsData = upsResponse as any;
-      const trackingNumber = upsData.ShipmentResponse?.ShipmentResults?.PackageResults?.TrackingNumber;
-      const labelImage = upsData.ShipmentResponse?.ShipmentResults?.PackageResults?.ShippingLabel?.GraphicImage;
+      if (
+        upsResponse &&
+        (upsResponse as any).ShipmentResponse?.ShipmentResults
+      ) {
+        const trackingNumber = (upsResponse as any).ShipmentResponse
+          .ShipmentResults.ShipmentIdentificationNumber;
+        const labelUrl = `/api/shipping-pdf/ups-shipping-label/${orderId}`;
 
-      if (!trackingNumber || !labelImage) {
-        throw new Error('UPS API response missing tracking number or label image');
-      }
+        // Update order with tracking number and move to Shipping Management
+        const orderUpdateData = {
+          trackingNumber: trackingNumber,
+          currentDepartment: 'Shipping',
+          shippingLabelGenerated: true,
+          shippedDate: new Date(),
+          shippingCarrier: 'UPS',
+          shippingMethod: 'Ground',
+          status: 'Shipped',
+        };
 
-      // Save tracking information to database and update order status
-      const { updateTrackingInfo, sendCustomerNotification } = await import('../../utils/notifications');
-      await updateTrackingInfo(orderId, {
-        trackingNumber,
-        carrier: 'UPS',
-        shippedDate: new Date(),
-        estimatedDelivery: undefined // UPS response may include this
-      });
-
-      // Update order status and move to Fulfilled
-      try {
-        console.log(`Moving order ${orderId} to Fulfilled after individual label creation`);
-        
-        const { db } = await import('../../db');
-        const { eq } = await import('drizzle-orm');
-        const { orderDrafts, allOrders } = await import('../../schema');
-        
         try {
-          // Try updating finalized orders table first  
-          await db.update(allOrders)
-            .set({
-              trackingNumber: trackingNumber,
-              shippingCarrier: 'UPS',
-              shippingMethod: 'UPS Ground',
-              currentDepartment: 'Fulfilled',
-              shippedDate: new Date(),
-              shippingLabelGenerated: true,
-              status: 'COMPLETED',
-              updatedAt: new Date()
-            })
-            .where(eq(allOrders.orderId, orderId));
-          
-          console.log(`Updated finalized order ${orderId} status to Fulfilled`);
-        } catch (finalizedError) {
-          // If finalized update fails, try draft orders table
-          await db.update(orderDrafts)
-            .set({
-              trackingNumber: trackingNumber,
-              shippingCarrier: 'UPS',
-              shippingMethod: 'UPS Ground',
-              currentDepartment: 'Fulfilled',
-              shippedDate: new Date(),
-              shippingLabelGenerated: true,
-              status: 'COMPLETED',
-              updatedAt: new Date()
-            })
-            .where(eq(orderDrafts.orderId, orderId));
-          
-          console.log(`Updated draft order ${orderId} status to Fulfilled`);
+          // Try to update finalized order first
+          await storage.updateFinalizedOrder(orderId, orderUpdateData);
+          console.log(
+            `Updated finalized order ${orderId} with tracking ${trackingNumber}`
+          );
+        } catch (error: unknown) {
+          try {
+            // If not found, try draft orders
+            await storage.updateOrderDraft(orderId, orderUpdateData);
+            console.log(
+              `Updated draft order ${orderId} with tracking ${trackingNumber}`
+            );
+          } catch (draftError) {
+            console.error(
+              `Failed to update order ${orderId} with tracking information:`,
+              error,
+              draftError
+            );
+          }
         }
-      } catch (updateError) {
-        console.error(`Failed to update order ${orderId} status:`, updateError);
-        // Continue processing even if status update fails
-      }
 
-      // Send customer notification
-      try {
-        await sendCustomerNotification({
-          orderId,
-          trackingNumber,
-          carrier: 'UPS'
-        });
-        console.log(`Customer notification sent for order ${orderId}`);
-      } catch (notificationError) {
-        console.error('Failed to send customer notification:', notificationError);
-        // Don't fail the entire request if notification fails
-      }
-
-      // Convert base64 label image to PDF
-      const labelBuffer = Buffer.from(labelImage, 'base64');
-
-      // Create PDF document with the UPS label
-      const pdfDoc = await PDFDocument.create();
-      const page = pdfDoc.addPage([432, 648]); // 6x9 inch shipping label
-
-      // Embed the UPS label image
-      const labelImageObj = await pdfDoc.embedPng(labelBuffer);
-      const { width, height } = page.getSize();
-
-      // Scale image to fit page
-      const imgDims = labelImageObj.scale(1);
-      const scaleFactor = Math.min(width / imgDims.width, height / imgDims.height);
-
-      page.drawImage(labelImageObj, {
-        x: (width - imgDims.width * scaleFactor) / 2,
-        y: (height - imgDims.height * scaleFactor) / 2,
-        width: imgDims.width * scaleFactor,
-        height: imgDims.height * scaleFactor,
-      });
-
-      // Generate PDF bytes
-      const pdfBytes = await pdfDoc.save();
-
-      // Set response headers for PDF inline display (opens in new tab for printing)
-      res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader('Content-Disposition', `inline; filename="UPS-Label-${orderId}-${trackingNumber}.pdf"`);
-      res.setHeader('Content-Length', pdfBytes.length);
-
-      // Send PDF
-      res.send(Buffer.from(pdfBytes));
-
-    } catch (upsError) {
-      console.error('UPS API Error:', upsError);
-
-      // Fallback to placeholder label if UPS API fails
-      console.log('Falling back to placeholder label due to UPS API error');
-
-      // Create a placeholder shipping label PDF with error information
-      const placeholderPdfDoc = await PDFDocument.create();
-      const placeholderPage = placeholderPdfDoc.addPage([432, 648]); // 6x9 inch shipping label
-      const { width: placeholderWidth, height: placeholderHeight } = placeholderPage.getSize();
-
-      // Load fonts
-      const placeholderFont = await placeholderPdfDoc.embedFont(StandardFonts.Helvetica);
-      const placeholderBoldFont = await placeholderPdfDoc.embedFont(StandardFonts.HelveticaBold);
-
-      // Header
-      let currentY = placeholderHeight - 40;
-      placeholderPage.drawText('UPS SHIPPING LABEL (FALLBACK)', {
-        x: 50,
-        y: currentY,
-        size: 16,
-        font: placeholderBoldFont,
-        color: rgb(0, 0, 0),
-      });
-
-      // UPS API Error message
-      currentY -= 30;
-      placeholderPage.drawText('UPS API Error - Using Placeholder Label', {
-        x: 50,
-        y: currentY,
-        size: 10,
-        font: placeholderBoldFont,
-        color: rgb(0.8, 0, 0),
-      });
-
-      // Generate placeholder tracking number
-      const placeholderTrackingNumber = `PH${orderId}-${Date.now().toString().slice(-6)}`;
-
-      // Save placeholder tracking information to database and update order status
-      const { updateTrackingInfo } = await import('../../utils/notifications');
-      await updateTrackingInfo(orderId, {
-        trackingNumber: placeholderTrackingNumber,
-        carrier: 'UPS (Placeholder)',
-        shippedDate: new Date(),
-        estimatedDelivery: undefined
-      });
-
-      // Update order status and move to Fulfilled even for placeholder labels
-      try {
-        console.log(`Moving order ${orderId} to Fulfilled after placeholder label creation`);
-        
-        const { db } = await import('../../db');
-        const { eq } = await import('drizzle-orm');
-        const { orderDrafts, allOrders } = await import('../../schema');
-        
-        try {
-          // Try updating finalized orders table first  
-          await db.update(allOrders)
-            .set({
-              trackingNumber: placeholderTrackingNumber,
-              shippingCarrier: 'UPS (Placeholder)',
-              shippingMethod: 'UPS Ground',
-              currentDepartment: 'Fulfilled',
-              shippedDate: new Date(),
-              shippingLabelGenerated: true,
-              status: 'COMPLETED',
-              updatedAt: new Date()
-            })
-            .where(eq(allOrders.orderId, orderId));
-          
-          console.log(`Updated finalized order ${orderId} status to Fulfilled`);
-        } catch (finalizedError) {
-          // If finalized update fails, try draft orders table
-          await db.update(orderDrafts)
-            .set({
-              trackingNumber: placeholderTrackingNumber,
-              shippingCarrier: 'UPS (Placeholder)',
-              shippingMethod: 'UPS Ground',
-              currentDepartment: 'Fulfilled',
-              shippedDate: new Date(),
-              shippingLabelGenerated: true,
-              status: 'COMPLETED',
-              updatedAt: new Date()
-            })
-            .where(eq(orderDrafts.orderId, orderId));
-          
-          console.log(`Updated draft order ${orderId} status to Fulfilled`);
-        }
-      } catch (updateError) {
-        console.error(`Failed to update order ${orderId} status:`, updateError);
-        // Continue processing even if status update fails
-      }
-
-      // Tracking number placeholder
-      currentY -= 30;
-      placeholderPage.drawText(`Tracking #: ${placeholderTrackingNumber}`, {
-        x: 50,
-        y: currentY,
-        size: 12,
-        font: placeholderBoldFont,
-      });
-
-      // From address
-      currentY -= 40;
-      placeholderPage.drawText('FROM:', {
-        x: 50,
-        y: currentY,
-        size: 10,
-        font: placeholderBoldFont,
-      });
-
-      currentY -= 20;
-      placeholderPage.drawText('AG Composites', {
-        x: 50,
-        y: currentY,
-        size: 10,
-        font: placeholderFont,
-      });
-
-      currentY -= 15;
-      placeholderPage.drawText('123 Manufacturing Way', {
-        x: 50,
-        y: currentY,
-        size: 10,
-        font: placeholderFont,
-      });
-
-      currentY -= 15;
-      placeholderPage.drawText('Industrial City, ST 12345', {
-        x: 50,
-        y: currentY,
-        size: 10,
-        font: placeholderFont,
-      });
-
-      // To address
-      currentY -= 40;
-      placeholderPage.drawText('TO:', {
-        x: 50,
-        y: currentY,
-        size: 10,
-        font: placeholderBoldFont,
-      });
-
-      if (shippingAddress) {
-        currentY -= 20;
-        placeholderPage.drawText(shippingAddress.name || 'Customer Name', {
-          x: 50,
-          y: currentY,
-          size: 10,
-          font: placeholderFont,
-        });
-
-        currentY -= 15;
-        placeholderPage.drawText(shippingAddress.street || 'Customer Address', {
-          x: 50,
-          y: currentY,
-          size: 10,
-          font: placeholderFont,
-        });
-
-        currentY -= 15;
-        placeholderPage.drawText(`${shippingAddress.city || 'City'}, ${shippingAddress.state || 'ST'} ${shippingAddress.zip || '12345'}`, {
-          x: 50,
-          y: currentY,
-          size: 10,
-          font: placeholderFont,
+        return res.json({
+          success: true,
+          trackingNumber: trackingNumber,
+          labelUrl: labelUrl,
+          shippingAddress: shippingAddress,
+          packageDetails: packageDetails,
+          orderUpdated: true,
         });
       } else {
-        currentY -= 20;
-        placeholderPage.drawText('Customer Address Required', {
-          x: 50,
-          y: currentY,
-          size: 10,
-          font: placeholderFont,
+        return res.status(500).json({
+          error: 'Failed to create UPS shipment',
+          details: 'Invalid UPS API response',
         });
       }
-
-      // Service info
-      currentY -= 40;
-      placeholderPage.drawText('Service: UPS Ground', {
-        x: 50,
-        y: currentY,
-        size: 10,
-        font: placeholderFont,
+    } catch (error: unknown) {
+      console.error(
+        'Error creating UPS shipping label with custom details:',
+        error
+      );
+      return res.status(500).json({
+        error: 'Failed to create UPS shipping label',
+        details:
+          error instanceof Error ? (error as Error).message : 'Unknown error',
       });
-
-      currentY -= 15;
-      placeholderPage.drawText(`Order: ${orderId}`, {
-        x: 50,
-        y: currentY,
-        size: 10,
-        font: placeholderFont,
-      });
-
-      if (packageDetails) {
-        currentY -= 15;
-        placeholderPage.drawText(`Weight: ${packageDetails.weight || 'N/A'} lbs`, {
-          x: 50,
-          y: currentY,
-          size: 10,
-          font: placeholderFont,
-        });
-
-        currentY -= 15;
-        placeholderPage.drawText(`Dimensions: ${packageDetails.length || 'N/A'}" x ${packageDetails.width || 'N/A'}" x ${packageDetails.height || 'N/A'}"`, {
-          x: 50,
-          y: currentY,
-          size: 10,
-          font: placeholderFont,
-        });
-      }
-
-      // Package value information
-      currentY -= 20;
-      placeholderPage.drawText(`Declared Value: $${calculatedPackageValue?.toFixed(2) || '0.00'}`, {
-        x: 50,
-        y: currentY,
-        size: 10,
-        font: placeholderBoldFont,
-      });
-
-      // Note about UPS API integration
-      currentY -= 40;
-      placeholderPage.drawText('Note: UPS API credentials may need verification.', {
-        x: 50,
-        y: currentY,
-        size: 8,
-        font: placeholderFont,
-        color: rgb(0.5, 0.5, 0.5),
-      });
-
-      currentY -= 12;
-      placeholderPage.drawText('Contact administrator to configure UPS integration.', {
-        x: 50,
-        y: currentY,
-        size: 8,
-        font: placeholderFont,
-        color: rgb(0.5, 0.5, 0.5),
-      });
-
-      // Generate PDF bytes
-      const fallbackPdfBytes = await placeholderPdfDoc.save();
-
-      // Set response headers for PDF inline display (opens in new tab for printing)
-      res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader('Content-Disposition', `inline; filename="Shipping-Label-Fallback-${orderId}.pdf"`);
-      res.setHeader('Content-Length', fallbackPdfBytes.length);
-
-      // Send PDF
-      res.send(Buffer.from(fallbackPdfBytes));
     }
-
-  } catch (error: unknown) {
-    console.error('Error generating shipping label PDF:', error);
-    res.status(500).json({ error: 'Failed to generate shipping label PDF' });
   }
-});
+);
+
+// GET route for UPS Shipping Label - REAL UPS API INTEGRATION
+router.get(
+  '/ups-shipping-label/:orderId',
+  async (req: Request, res: Response) => {
+    try {
+      const { orderId } = req.params;
+      console.log(`Creating REAL UPS shipping label for order: ${orderId}`);
+
+      // Get order data from storage
+      const { storage } = await import('../../storage');
+      let order = null;
+
+      // Try to find the order in either finalized or draft orders
+      try {
+        order = await storage.getFinalizedOrderById(orderId);
+        console.log(`Found finalized order: ${orderId}`);
+      } catch (error: unknown) {
+        try {
+          order = await storage.getOrderDraft(orderId);
+          console.log(`Found draft order: ${orderId}`);
+        } catch (draftError) {
+          console.log(`Order ${orderId} not found in either table`);
+          return res.status(404).json({ error: `Order ${orderId} not found` });
+        }
+      }
+
+      if (!order) {
+        return res.status(404).json({ error: `Order ${orderId} not found` });
+      }
+
+      // Get customer and shipping information
+      let customerInfo = null;
+      let customerAddress = null;
+
+      if ((order as any).customerId) {
+        try {
+          customerInfo = await storage.getCustomerById(
+            (order as any).customerId
+          );
+          if (customerInfo) {
+            const addresses = await storage.getCustomerAddresses(
+              (order as any).customerId
+            );
+            customerAddress =
+              addresses.find(
+                (addr) => addr.type === 'shipping' && addr.isDefault
+              ) ||
+              addresses.find(
+                (addr) => addr.type === 'both' && addr.isDefault
+              ) ||
+              addresses[0];
+          }
+        } catch (e) {
+          console.log(`Error finding customer info for order ${orderId}:`, e);
+        }
+      }
+
+      // Build shipping address from customer data
+      const shippingAddress = {
+        name: customerInfo?.name || 'Customer Name',
+        street: customerAddress?.street || '123 Main St',
+        city: customerAddress?.city || 'Birmingham',
+        state: customerAddress?.state || 'AL',
+        zip: customerAddress?.zipCode || '35203',
+      };
+
+      // Default package details
+      const packageDetails = {
+        weight: '10',
+        length: '12',
+        width: '12',
+        height: '12',
+      };
+
+      console.log(`Creating UPS shipment for ${orderId} to:`, shippingAddress);
+
+      // Create UPS shipment using real API
+      const shipmentRequest = buildUPSShipmentRequest(
+        order,
+        shippingAddress,
+        packageDetails
+      );
+      const upsResponse = await createUPSShipment(shipmentRequest);
+
+      console.log(`UPS Response Structure Debug for ${orderId}:`, {
+        hasResponse: !!upsResponse,
+        hasShipmentResponse: !!(upsResponse as any)?.ShipmentResponse,
+        hasShipmentResults: !!(upsResponse as any)?.ShipmentResponse
+          ?.ShipmentResults,
+        responseKeys: upsResponse ? Object.keys(upsResponse as any) : 'none',
+      });
+
+      if (
+        upsResponse &&
+        (upsResponse as any).ShipmentResponse &&
+        (upsResponse as any).ShipmentResponse.ShipmentResults
+      ) {
+        const shipmentResults = (upsResponse as any).ShipmentResponse
+          .ShipmentResults;
+        const trackingNumber = shipmentResults.ShipmentIdentificationNumber;
+
+        // DEBUG: Print the full structure to understand the data
+        console.log(
+          `Full shipmentResults structure for ${orderId}:`,
+          JSON.stringify(shipmentResults, null, 2).substring(0, 1000)
+        );
+
+        // Try to find the label image at various locations in the UPS response
+        let labelImage = null;
+        let firstPackage = null;
+
+        // Option 1: Standard PackageResults array
+        if (
+          shipmentResults.PackageResults &&
+          Array.isArray(shipmentResults.PackageResults)
+        ) {
+          firstPackage = shipmentResults.PackageResults[0];
+          labelImage =
+            firstPackage?.ShippingLabel?.GraphicImage ||
+            firstPackage?.ShippingLabel?.HTMLImage;
+        }
+
+        // Option 2: PackageResults as single object
+        if (
+          !labelImage &&
+          shipmentResults.PackageResults &&
+          !Array.isArray(shipmentResults.PackageResults)
+        ) {
+          firstPackage = shipmentResults.PackageResults;
+          labelImage =
+            firstPackage?.ShippingLabel?.GraphicImage ||
+            firstPackage?.ShippingLabel?.HTMLImage;
+        }
+
+        // Option 3: Direct in ShipmentResults (some UPS responses have this structure)
+        if (!labelImage && shipmentResults.ShippingLabel) {
+          labelImage =
+            shipmentResults.ShippingLabel.GraphicImage ||
+            shipmentResults.ShippingLabel.HTMLImage;
+          firstPackage = { ShippingLabel: shipmentResults.ShippingLabel };
+        }
+
+        // Option 4: Alternative paths based on UPS documentation
+        if (!labelImage && shipmentResults.LabelImage) {
+          labelImage =
+            shipmentResults.LabelImage.GraphicImage ||
+            shipmentResults.LabelImage.HTMLImage;
+        }
+
+        console.log(`Label Image Detection for ${orderId}:`, {
+          foundLabelImage: !!labelImage,
+          labelImageLength: labelImage ? labelImage.length : 0,
+          detectionMethod: labelImage ? 'success' : 'failed',
+        });
+
+        console.log(`UPS label created for ${orderId}: ${trackingNumber}`);
+        // Skip the old debug logging since we have better detection now
+
+        // Update order with tracking number and move to Shipping Management
+        const orderUpdateData = {
+          trackingNumber: trackingNumber,
+          currentDepartment: 'Shipping',
+          shippingLabelGenerated: true,
+          shippedDate: new Date(),
+          shippingCarrier: 'UPS',
+          shippingMethod: 'Ground',
+          status: 'Shipped',
+        };
+
+        try {
+          // Try to update finalized order first
+          await storage.updateFinalizedOrder(orderId, orderUpdateData);
+          console.log(
+            `Updated finalized order ${orderId} with tracking ${trackingNumber}`
+          );
+        } catch (error: unknown) {
+          try {
+            // If not found, try draft orders
+            await storage.updateOrderDraft(orderId, orderUpdateData);
+            console.log(
+              `Updated draft order ${orderId} with tracking ${trackingNumber}`
+            );
+          } catch (draftError) {
+            console.error(
+              `Failed to update order ${orderId} with tracking information:`,
+              error,
+              draftError
+            );
+          }
+        }
+
+        console.log(
+          `UPS label created successfully for ${orderId}, tracking: ${trackingNumber}`
+        );
+
+        // Convert base64 label image to PDF and return it
+        if (labelImage) {
+          try {
+            console.log(
+              `Processing label image for ${orderId}, format type: ${labelImage === firstPackage?.ShippingLabel?.HTMLImage ? 'HTML' : 'Direct'}`
+            );
+
+            // If this is the HTML format, return it as HTML for printing
+            if (labelImage === firstPackage?.ShippingLabel?.HTMLImage) {
+              const htmlContent = Buffer.from(labelImage, 'base64').toString(
+                'utf8'
+              );
+
+              // Set response headers for HTML inline display (opens in new tab for printing)
+              res.setHeader('Content-Type', 'text/html');
+              res.setHeader(
+                'Content-Disposition',
+                `inline; filename="UPS-Shipping-Label-${orderId}-${trackingNumber}.html"`
+              );
+
+              // Send the UPS label HTML (which contains the embedded GIF image)
+              return res.send(htmlContent);
+            } else {
+              // Handle direct image format (GIF from UPS)
+              const labelBytes = Buffer.from(labelImage, 'base64');
+
+              // Set response headers for GIF image inline display (opens in new tab for printing)
+              res.setHeader('Content-Type', 'image/gif');
+              res.setHeader(
+                'Content-Disposition',
+                `inline; filename="UPS-Shipping-Label-${orderId}-${trackingNumber}.gif"`
+              );
+              res.setHeader('Content-Length', labelBytes.length);
+
+              // Send the UPS label GIF image
+              return res.send(labelBytes);
+            }
+          } catch (pdfError: unknown) {
+            console.error(`Error processing label for ${orderId}:`, pdfError);
+            return res.status(500).json({
+              error: 'Failed to process UPS label',
+              details: (pdfError as Error).message,
+              trackingNumber: trackingNumber,
+            });
+          }
+        }
+
+        // UPS API worked but no label image was returned - this shouldn't happen but handle gracefully
+        return res.status(200).json({
+          success: true,
+          message: 'UPS shipping label created successfully',
+          trackingNumber: trackingNumber,
+          note: 'Label image not available in response',
+        });
+      }
+
+      // UPS API didn't return expected structure - return success anyway since we know UPS is working
+      console.log(
+        `UPS API appears to be working but response structure is unexpected for ${orderId}`
+      );
+      console.log(
+        'UPS Response Structure Issue (but functioning):',
+        JSON.stringify(upsResponse, null, 2)
+      );
+
+      return res.status(200).json({
+        success: true,
+        message: 'UPS integration is working correctly',
+        note: 'Label processing completed successfully despite structural differences',
+        orderId: orderId,
+      });
+    } catch (error: unknown) {
+      console.error('Error creating real UPS shipping label:', error);
+
+      // Check if this is just the structural error we're trying to fix
+      if (
+        (error as Error).message &&
+        (error as Error).message.includes('UPS API returned')
+      ) {
+        return res.status(200).json({
+          success: true,
+          message: 'UPS shipping label created successfully',
+          note: 'UPS API is functioning correctly - error handling updated',
+        });
+      }
+
+      res.status(500).json({
+        error: 'Failed to create UPS shipping label',
+        details: (error as Error).message,
+      });
+    }
+  }
+);
+
+// Generate UPS Shipping Label with real UPS API integration
+router.post(
+  '/ups-shipping-label/:orderId',
+  async (req: Request, res: Response) => {
+    try {
+      const { orderId } = req.params;
+      const {
+        packageDetails,
+        shippingAddress: providedShippingAddress,
+        packageValue,
+      } = req.body;
+
+      // Get order, customer, and address data directly from database
+      const { db } = await import('../../db');
+      const { eq } = await import('drizzle-orm');
+      const { orderDrafts, customers, customerAddresses } = await import(
+        '../../schema'
+      );
+
+      // First get the order
+      const orders = await db
+        .select()
+        .from(orderDrafts)
+        .where(eq(orderDrafts.orderId, orderId));
+
+      if (!orders || orders.length === 0) {
+        return res.status(404).json({ error: 'Order not found' });
+      }
+
+      const order = orders[0];
+
+      // Then get customer and address information using the order's customer_id
+      const orderResult = await db
+        .select({
+          customer: customers,
+          address: customerAddresses,
+        })
+        .from(customers)
+        .leftJoin(
+          customerAddresses,
+          eq(customerAddresses.customerId, customers.id)
+        )
+        .where(eq(customers.id, parseInt((order as any).customerId || '0')));
+
+      if (!orderResult || orderResult.length === 0) {
+        return res
+          .status(404)
+          .json({ error: 'Customer not found for this order' });
+      }
+
+      const customer = orderResult[0].customer;
+
+      if (!customer) {
+        return res
+          .status(404)
+          .json({ error: 'Customer not found for this order' });
+      }
+
+      // Find the default address or use the first available address
+      const customerAddress =
+        orderResult.find((r) => r.address?.isDefault)?.address ||
+        orderResult.find((r) => r.address)?.address;
+
+      // Auto-populate shipping address from customer data, allow override from request
+      const shippingAddress =
+        providedShippingAddress ||
+        (customerAddress
+          ? {
+              name: customer.name,
+              street: customerAddress.street,
+              city: customerAddress.city,
+              state: customerAddress.state,
+              zip: customerAddress.zipCode, // Database field is zip_code, mapped to zipCode
+            }
+          : {
+              name: customer.name,
+              street: '',
+              city: '',
+              state: '',
+              zip: '',
+            });
+
+      // Validate required fields
+      if (
+        !shippingAddress ||
+        !shippingAddress.name ||
+        !shippingAddress.street ||
+        !shippingAddress.city ||
+        !shippingAddress.state ||
+        !shippingAddress.zip
+      ) {
+        return res.status(400).json({
+          error:
+            'Complete shipping address is required. Please provide shipping address in the request body.',
+          customerInfo: {
+            name: customer.name,
+            email: customer.email,
+            phone: customer.phone,
+          },
+          requiredFields: ['name', 'street', 'city', 'state', 'zip'],
+          example: {
+            shippingAddress: {
+              name: customer.name,
+              street: '123 Main St',
+              city: 'Huntsville',
+              state: 'AL',
+              zip: '35801',
+            },
+          },
+        });
+      }
+
+      if (!packageDetails || !packageDetails.weight) {
+        return res.status(400).json({ error: 'Package weight is required' });
+      }
+
+      // Calculate package value from order if not provided
+      const calculatedPackageValue = packageValue || order.priceOverride || 0;
+
+      try {
+        // Create UPS shipment using real API
+        const shipmentRequest = buildUPSShipmentRequest(
+          order,
+          shippingAddress,
+          packageDetails,
+          calculatedPackageValue
+        );
+        const upsResponse = await createUPSShipment(shipmentRequest);
+
+        // Extract tracking number and label from UPS response
+        const upsData = upsResponse as any;
+        const trackingNumber =
+          upsData.ShipmentResponse?.ShipmentResults?.PackageResults
+            ?.TrackingNumber;
+        const labelImage =
+          upsData.ShipmentResponse?.ShipmentResults?.PackageResults
+            ?.ShippingLabel?.GraphicImage;
+
+        if (!trackingNumber || !labelImage) {
+          throw new Error(
+            'UPS API response missing tracking number or label image'
+          );
+        }
+
+        // Save tracking information to database and update order status
+        const { updateTrackingInfo, sendCustomerNotification } = await import(
+          '../../utils/notifications'
+        );
+        await updateTrackingInfo(orderId, {
+          trackingNumber,
+          carrier: 'UPS',
+          shippedDate: new Date(),
+          estimatedDelivery: undefined, // UPS response may include this
+        });
+
+        // Update order status and move to Fulfilled
+        try {
+          console.log(
+            `Moving order ${orderId} to Fulfilled after individual label creation`
+          );
+
+          const { db } = await import('../../db');
+          const { eq } = await import('drizzle-orm');
+          const { orderDrafts, allOrders } = await import('../../schema');
+
+          try {
+            // Try updating finalized orders table first
+            await db
+              .update(allOrders)
+              .set({
+                trackingNumber: trackingNumber,
+                shippingCarrier: 'UPS',
+                shippingMethod: 'UPS Ground',
+                currentDepartment: 'Fulfilled',
+                shippedDate: new Date(),
+                shippingLabelGenerated: true,
+                status: 'COMPLETED',
+                updatedAt: new Date(),
+              })
+              .where(eq(allOrders.orderId, orderId));
+
+            console.log(
+              `Updated finalized order ${orderId} status to Fulfilled`
+            );
+          } catch (finalizedError) {
+            // If finalized update fails, try draft orders table
+            await db
+              .update(orderDrafts)
+              .set({
+                trackingNumber: trackingNumber,
+                shippingCarrier: 'UPS',
+                shippingMethod: 'UPS Ground',
+                currentDepartment: 'Fulfilled',
+                shippedDate: new Date(),
+                shippingLabelGenerated: true,
+                status: 'COMPLETED',
+                updatedAt: new Date(),
+              })
+              .where(eq(orderDrafts.orderId, orderId));
+
+            console.log(`Updated draft order ${orderId} status to Fulfilled`);
+          }
+        } catch (updateError) {
+          console.error(
+            `Failed to update order ${orderId} status:`,
+            updateError
+          );
+          // Continue processing even if status update fails
+        }
+
+        // Send customer notification
+        try {
+          await sendCustomerNotification({
+            orderId,
+            trackingNumber,
+            carrier: 'UPS',
+          });
+          console.log(`Customer notification sent for order ${orderId}`);
+        } catch (notificationError) {
+          console.error(
+            'Failed to send customer notification:',
+            notificationError
+          );
+          // Don't fail the entire request if notification fails
+        }
+
+        // Convert base64 label image to PDF
+        const labelBuffer = Buffer.from(labelImage, 'base64');
+
+        // Create PDF document with the UPS label
+        const pdfDoc = await PDFDocument.create();
+        const page = pdfDoc.addPage([432, 648]); // 6x9 inch shipping label
+
+        // Embed the UPS label image
+        const labelImageObj = await pdfDoc.embedPng(labelBuffer);
+        const { width, height } = page.getSize();
+
+        // Scale image to fit page
+        const imgDims = labelImageObj.scale(1);
+        const scaleFactor = Math.min(
+          width / imgDims.width,
+          height / imgDims.height
+        );
+
+        page.drawImage(labelImageObj, {
+          x: (width - imgDims.width * scaleFactor) / 2,
+          y: (height - imgDims.height * scaleFactor) / 2,
+          width: imgDims.width * scaleFactor,
+          height: imgDims.height * scaleFactor,
+        });
+
+        // Generate PDF bytes
+        const pdfBytes = await pdfDoc.save();
+
+        // Set response headers for PDF inline display (opens in new tab for printing)
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader(
+          'Content-Disposition',
+          `inline; filename="UPS-Label-${orderId}-${trackingNumber}.pdf"`
+        );
+        res.setHeader('Content-Length', pdfBytes.length);
+
+        // Send PDF
+        res.send(Buffer.from(pdfBytes));
+      } catch (upsError) {
+        console.error('UPS API Error:', upsError);
+
+        // Fallback to placeholder label if UPS API fails
+        console.log('Falling back to placeholder label due to UPS API error');
+
+        // Create a placeholder shipping label PDF with error information
+        const placeholderPdfDoc = await PDFDocument.create();
+        const placeholderPage = placeholderPdfDoc.addPage([432, 648]); // 6x9 inch shipping label
+        const { width: placeholderWidth, height: placeholderHeight } =
+          placeholderPage.getSize();
+
+        // Load fonts
+        const placeholderFont = await placeholderPdfDoc.embedFont(
+          StandardFonts.Helvetica
+        );
+        const placeholderBoldFont = await placeholderPdfDoc.embedFont(
+          StandardFonts.HelveticaBold
+        );
+
+        // Header
+        let currentY = placeholderHeight - 40;
+        placeholderPage.drawText('UPS SHIPPING LABEL (FALLBACK)', {
+          x: 50,
+          y: currentY,
+          size: 16,
+          font: placeholderBoldFont,
+          color: rgb(0, 0, 0),
+        });
+
+        // UPS API Error message
+        currentY -= 30;
+        placeholderPage.drawText('UPS API Error - Using Placeholder Label', {
+          x: 50,
+          y: currentY,
+          size: 10,
+          font: placeholderBoldFont,
+          color: rgb(0.8, 0, 0),
+        });
+
+        // Generate placeholder tracking number
+        const placeholderTrackingNumber = `PH${orderId}-${Date.now().toString().slice(-6)}`;
+
+        // Save placeholder tracking information to database and update order status
+        const { updateTrackingInfo } = await import(
+          '../../utils/notifications'
+        );
+        await updateTrackingInfo(orderId, {
+          trackingNumber: placeholderTrackingNumber,
+          carrier: 'UPS (Placeholder)',
+          shippedDate: new Date(),
+          estimatedDelivery: undefined,
+        });
+
+        // Update order status and move to Fulfilled even for placeholder labels
+        try {
+          console.log(
+            `Moving order ${orderId} to Fulfilled after placeholder label creation`
+          );
+
+          const { db } = await import('../../db');
+          const { eq } = await import('drizzle-orm');
+          const { orderDrafts, allOrders } = await import('../../schema');
+
+          try {
+            // Try updating finalized orders table first
+            await db
+              .update(allOrders)
+              .set({
+                trackingNumber: placeholderTrackingNumber,
+                shippingCarrier: 'UPS (Placeholder)',
+                shippingMethod: 'UPS Ground',
+                currentDepartment: 'Fulfilled',
+                shippedDate: new Date(),
+                shippingLabelGenerated: true,
+                status: 'COMPLETED',
+                updatedAt: new Date(),
+              })
+              .where(eq(allOrders.orderId, orderId));
+
+            console.log(
+              `Updated finalized order ${orderId} status to Fulfilled`
+            );
+          } catch (finalizedError) {
+            // If finalized update fails, try draft orders table
+            await db
+              .update(orderDrafts)
+              .set({
+                trackingNumber: placeholderTrackingNumber,
+                shippingCarrier: 'UPS (Placeholder)',
+                shippingMethod: 'UPS Ground',
+                currentDepartment: 'Fulfilled',
+                shippedDate: new Date(),
+                shippingLabelGenerated: true,
+                status: 'COMPLETED',
+                updatedAt: new Date(),
+              })
+              .where(eq(orderDrafts.orderId, orderId));
+
+            console.log(`Updated draft order ${orderId} status to Fulfilled`);
+          }
+        } catch (updateError) {
+          console.error(
+            `Failed to update order ${orderId} status:`,
+            updateError
+          );
+          // Continue processing even if status update fails
+        }
+
+        // Tracking number placeholder
+        currentY -= 30;
+        placeholderPage.drawText(`Tracking #: ${placeholderTrackingNumber}`, {
+          x: 50,
+          y: currentY,
+          size: 12,
+          font: placeholderBoldFont,
+        });
+
+        // From address
+        currentY -= 40;
+        placeholderPage.drawText('FROM:', {
+          x: 50,
+          y: currentY,
+          size: 10,
+          font: placeholderBoldFont,
+        });
+
+        currentY -= 20;
+        placeholderPage.drawText('AG Composites', {
+          x: 50,
+          y: currentY,
+          size: 10,
+          font: placeholderFont,
+        });
+
+        currentY -= 15;
+        placeholderPage.drawText('123 Manufacturing Way', {
+          x: 50,
+          y: currentY,
+          size: 10,
+          font: placeholderFont,
+        });
+
+        currentY -= 15;
+        placeholderPage.drawText('Industrial City, ST 12345', {
+          x: 50,
+          y: currentY,
+          size: 10,
+          font: placeholderFont,
+        });
+
+        // To address
+        currentY -= 40;
+        placeholderPage.drawText('TO:', {
+          x: 50,
+          y: currentY,
+          size: 10,
+          font: placeholderBoldFont,
+        });
+
+        if (shippingAddress) {
+          currentY -= 20;
+          placeholderPage.drawText(shippingAddress.name || 'Customer Name', {
+            x: 50,
+            y: currentY,
+            size: 10,
+            font: placeholderFont,
+          });
+
+          currentY -= 15;
+          placeholderPage.drawText(
+            shippingAddress.street || 'Customer Address',
+            {
+              x: 50,
+              y: currentY,
+              size: 10,
+              font: placeholderFont,
+            }
+          );
+
+          currentY -= 15;
+          placeholderPage.drawText(
+            `${shippingAddress.city || 'City'}, ${shippingAddress.state || 'ST'} ${shippingAddress.zip || '12345'}`,
+            {
+              x: 50,
+              y: currentY,
+              size: 10,
+              font: placeholderFont,
+            }
+          );
+        } else {
+          currentY -= 20;
+          placeholderPage.drawText('Customer Address Required', {
+            x: 50,
+            y: currentY,
+            size: 10,
+            font: placeholderFont,
+          });
+        }
+
+        // Service info
+        currentY -= 40;
+        placeholderPage.drawText('Service: UPS Ground', {
+          x: 50,
+          y: currentY,
+          size: 10,
+          font: placeholderFont,
+        });
+
+        currentY -= 15;
+        placeholderPage.drawText(`Order: ${orderId}`, {
+          x: 50,
+          y: currentY,
+          size: 10,
+          font: placeholderFont,
+        });
+
+        if (packageDetails) {
+          currentY -= 15;
+          placeholderPage.drawText(
+            `Weight: ${packageDetails.weight || 'N/A'} lbs`,
+            {
+              x: 50,
+              y: currentY,
+              size: 10,
+              font: placeholderFont,
+            }
+          );
+
+          currentY -= 15;
+          placeholderPage.drawText(
+            `Dimensions: ${packageDetails.length || 'N/A'}" x ${packageDetails.width || 'N/A'}" x ${packageDetails.height || 'N/A'}"`,
+            {
+              x: 50,
+              y: currentY,
+              size: 10,
+              font: placeholderFont,
+            }
+          );
+        }
+
+        // Package value information
+        currentY -= 20;
+        placeholderPage.drawText(
+          `Declared Value: $${calculatedPackageValue?.toFixed(2) || '0.00'}`,
+          {
+            x: 50,
+            y: currentY,
+            size: 10,
+            font: placeholderBoldFont,
+          }
+        );
+
+        // Note about UPS API integration
+        currentY -= 40;
+        placeholderPage.drawText(
+          'Note: UPS API credentials may need verification.',
+          {
+            x: 50,
+            y: currentY,
+            size: 8,
+            font: placeholderFont,
+            color: rgb(0.5, 0.5, 0.5),
+          }
+        );
+
+        currentY -= 12;
+        placeholderPage.drawText(
+          'Contact administrator to configure UPS integration.',
+          {
+            x: 50,
+            y: currentY,
+            size: 8,
+            font: placeholderFont,
+            color: rgb(0.5, 0.5, 0.5),
+          }
+        );
+
+        // Generate PDF bytes
+        const fallbackPdfBytes = await placeholderPdfDoc.save();
+
+        // Set response headers for PDF inline display (opens in new tab for printing)
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader(
+          'Content-Disposition',
+          `inline; filename="Shipping-Label-Fallback-${orderId}.pdf"`
+        );
+        res.setHeader('Content-Length', fallbackPdfBytes.length);
+
+        // Send PDF
+        res.send(Buffer.from(fallbackPdfBytes));
+      }
+    } catch (error: unknown) {
+      console.error('Error generating shipping label PDF:', error);
+      res.status(500).json({ error: 'Failed to generate shipping label PDF' });
+    }
+  }
+);
 
 // Replace the old bulk endpoint that has routing conflicts - REAL UPS API INTEGRATION
 router.post('/bulk-shipping-labels', async (req: Request, res: Response) => {
   console.log('REAL UPS BULK SHIPPING LABELS ENDPOINT CALLED');
   try {
     const { orderIds, packageDetails, serviceCode, shippingAddress } = req.body;
-    
+
     if (!orderIds || !Array.isArray(orderIds) || orderIds.length === 0) {
       return res.status(400).json({ error: 'Order IDs array is required' });
     }
 
     // Default package details if not provided
     const defaultPackageDetails = {
-      weight: "10",
-      length: "12", 
-      width: "12",
-      height: "12"
+      weight: '10',
+      length: '12',
+      width: '12',
+      height: '12',
     };
     const finalPackageDetails = { ...defaultPackageDetails, ...packageDetails };
 
     // Default shipping address if not provided (use customer info from order)
-    const defaultServiceCode = serviceCode || "03"; // UPS Ground
+    const defaultServiceCode = serviceCode || '03'; // UPS Ground
 
     // Get order data from storage using the unified approach that works
     const { storage } = await import('../../storage');
     const selectedOrders = [];
-    
+
     console.log(`Looking for orders: ${orderIds.join(', ')}`);
-    
+
     // For each order ID, try to find it in either draft or finalized orders
     for (const orderId of orderIds) {
       // First try finalized orders (most orders are here like AG812)
@@ -3215,13 +3681,15 @@ router.post('/bulk-shipping-labels', async (req: Request, res: Response) => {
       }
     }
 
-    console.log(`Found ${selectedOrders.length} out of ${orderIds.length} requested orders`);
-    
+    console.log(
+      `Found ${selectedOrders.length} out of ${orderIds.length} requested orders`
+    );
+
     if (selectedOrders.length === 0) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         error: `No orders found for: ${orderIds.join(', ')}`,
         searched: orderIds.length,
-        found: 0
+        found: 0,
       });
     }
 
@@ -3236,85 +3704,123 @@ router.post('/bulk-shipping-labels', async (req: Request, res: Response) => {
         console.log(`=== PROCESSING ORDER ${order.orderId} ===`);
         console.log(`Order object keys:`, Object.keys(order));
         console.log(`Order customerId field:`, (order as any).customerId);
-        
+
         // Get customer and address information
         let customerInfo = null;
         let customerAddress = null;
-        
-        console.log(`Looking up customer info for order ${order.orderId}, customerId: ${(order as any).customerId}`);
-        
+
+        console.log(
+          `Looking up customer info for order ${order.orderId}, customerId: ${(order as any).customerId}`
+        );
+
         if ((order as any).customerId) {
           try {
-            console.log(`Calling getCustomerById with ID: "${(order as any).customerId}" (type: ${typeof (order as any).customerId})`);
-            customerInfo = await storage.getCustomerById((order as any).customerId);
+            console.log(
+              `Calling getCustomerById with ID: "${(order as any).customerId}" (type: ${typeof (order as any).customerId})`
+            );
+            customerInfo = await storage.getCustomerById(
+              (order as any).customerId
+            );
             console.log(`Customer lookup result:`, customerInfo);
             if (customerInfo) {
               console.log(`Found customer for ${order.orderId}:`, {
                 id: customerInfo.id,
                 name: customerInfo.name,
-                email: customerInfo.email
+                email: customerInfo.email,
               });
             } else {
-              console.log(`No customer found for ID: ${(order as any).customerId}`);
+              console.log(
+                `No customer found for ID: ${(order as any).customerId}`
+              );
             }
-            
+
             if (customerInfo) {
               // Get customer's default shipping address
-              const addresses = await storage.getCustomerAddresses((order as any).customerId);
-              console.log(`Found ${addresses.length} addresses for customer ${(order as any).customerId}`);
-              customerAddress = addresses.find(addr => addr.type === 'shipping' && addr.isDefault) || 
-                              addresses.find(addr => addr.type === 'both' && addr.isDefault) ||
-                              addresses[0]; // fallback to first address
+              const addresses = await storage.getCustomerAddresses(
+                (order as any).customerId
+              );
+              console.log(
+                `Found ${addresses.length} addresses for customer ${(order as any).customerId}`
+              );
+              customerAddress =
+                addresses.find(
+                  (addr) => addr.type === 'shipping' && addr.isDefault
+                ) ||
+                addresses.find(
+                  (addr) => addr.type === 'both' && addr.isDefault
+                ) ||
+                addresses[0]; // fallback to first address
               console.log(`Selected address for ${order.orderId}:`, {
                 street: customerAddress?.street,
                 city: customerAddress?.city,
                 state: customerAddress?.state,
                 zipCode: customerAddress?.zipCode,
                 type: customerAddress?.type,
-                isDefault: customerAddress?.isDefault
+                isDefault: customerAddress?.isDefault,
               });
             }
           } catch (e) {
-            console.log(`Error finding customer info for order ${order.orderId}:`, e);
+            console.log(
+              `Error finding customer info for order ${order.orderId}:`,
+              e
+            );
           }
         } else {
           console.log(`No customerId found for order ${order.orderId}`);
         }
-        
+
         // Build shipping address from customer data or use provided address
         const orderShippingAddress = shippingAddress || {
-          name: customerInfo?.name || "Customer Name",
-          street: customerAddress?.street || "Address Line 1", 
-          city: customerAddress?.city || "City",
-          state: customerAddress?.state || "State",
-          zip: customerAddress?.zipCode || "00000"
+          name: customerInfo?.name || 'Customer Name',
+          street: customerAddress?.street || 'Address Line 1',
+          city: customerAddress?.city || 'City',
+          state: customerAddress?.state || 'State',
+          zip: customerAddress?.zipCode || '00000',
         };
 
         // Use the existing UPS API functions from this file
         console.log(`Creating UPS shipment for order ${order.orderId}`);
-        
+
         // Create UPS shipment request using existing function
-        const shipmentRequest = buildUPSShipmentRequest(order, orderShippingAddress, finalPackageDetails);
-        console.log(`UPS shipment request for ${order.orderId}:`, JSON.stringify(shipmentRequest, null, 2));
+        const shipmentRequest = buildUPSShipmentRequest(
+          order,
+          orderShippingAddress,
+          finalPackageDetails
+        );
+        console.log(
+          `UPS shipment request for ${order.orderId}:`,
+          JSON.stringify(shipmentRequest, null, 2)
+        );
 
         // Call UPS API to create shipment and get label
         const upsResponse = await createUPSShipment(shipmentRequest);
-        
-        if (upsResponse && (upsResponse as any).ShipmentResponse && (upsResponse as any).ShipmentResponse.ShipmentResults) {
-          const shipmentResults = (upsResponse as any).ShipmentResponse.ShipmentResults;
+
+        if (
+          upsResponse &&
+          (upsResponse as any).ShipmentResponse &&
+          (upsResponse as any).ShipmentResponse.ShipmentResults
+        ) {
+          const shipmentResults = (upsResponse as any).ShipmentResponse
+            .ShipmentResults;
           const trackingNumber = shipmentResults.ShipmentIdentificationNumber;
           // Fix PackageResults access for bulk shipping - use correct UPS response structure
           const packageResults = shipmentResults.PackageResults;
-          const firstPackage = Array.isArray(packageResults) ? packageResults[0] : packageResults;
+          const firstPackage = Array.isArray(packageResults)
+            ? packageResults[0]
+            : packageResults;
           const labelImage = firstPackage?.ShippingLabel?.GraphicImage;
 
-          console.log(`UPS label created for ${order.orderId}: ${trackingNumber}`);
+          console.log(
+            `UPS label created for ${order.orderId}: ${trackingNumber}`
+          );
           trackingNumbers.push({ orderId: order.orderId, trackingNumber });
 
           // Update order status and move to Fulfilled
           try {
-            console.log(`Moving order ${order.orderId} to Fulfilled after label creation`);
-            
+            console.log(
+              `Moving order ${order.orderId} to Fulfilled after label creation`
+            );
+
             // Update tracking information and order status
             const updateData = {
               trackingNumber: trackingNumber,
@@ -3323,43 +3829,52 @@ router.post('/bulk-shipping-labels', async (req: Request, res: Response) => {
               shippedDate: new Date(),
               shippingLabelGenerated: true,
               currentDepartment: 'Fulfilled',
-              status: 'COMPLETED'
+              status: 'COMPLETED',
             };
 
             // Update the order with tracking information using direct database calls
             const { db } = await import('../../db');
             const { eq } = await import('drizzle-orm');
             const { orderDrafts, allOrders } = await import('../../schema');
-            
+
             try {
-              // Try updating finalized orders table first  
-              await db.update(allOrders)
+              // Try updating finalized orders table first
+              await db
+                .update(allOrders)
                 .set({
                   trackingNumber: trackingNumber,
                   shippingCarrier: 'UPS',
                   currentDepartment: 'Fulfilled',
                   shippedDate: new Date(),
-                  updatedAt: new Date()
+                  updatedAt: new Date(),
                 })
                 .where(eq(allOrders.orderId, order.orderId));
-              
-              console.log(`Updated finalized order ${order.orderId} with tracking info`);
+
+              console.log(
+                `Updated finalized order ${order.orderId} with tracking info`
+              );
             } catch (finalizedError) {
               // If finalized update fails, try draft orders table
-              await db.update(orderDrafts)
+              await db
+                .update(orderDrafts)
                 .set({
                   trackingNumber: trackingNumber,
-                  shippingCarrier: 'UPS', 
+                  shippingCarrier: 'UPS',
                   currentDepartment: 'Fulfilled',
                   shippedDate: new Date(),
-                  updatedAt: new Date()
+                  updatedAt: new Date(),
                 })
                 .where(eq(orderDrafts.orderId, order.orderId));
-              
-              console.log(`Updated draft order ${order.orderId} with tracking info`);
+
+              console.log(
+                `Updated draft order ${order.orderId} with tracking info`
+              );
             }
           } catch (updateError) {
-            console.error(`Failed to update order ${order.orderId} status:`, updateError);
+            console.error(
+              `Failed to update order ${order.orderId} status:`,
+              updateError
+            );
             // Continue processing even if status update fails
           }
 
@@ -3368,61 +3883,87 @@ router.post('/bulk-shipping-labels', async (req: Request, res: Response) => {
             try {
               // Validate the base64 data before attempting to parse as PDF
               const labelBytes = Buffer.from(labelImage, 'base64');
-              
+
               // Check if it's actually a PDF by looking for PDF header
               const pdfHeader = labelBytes.toString('ascii', 0, 4);
               if (pdfHeader !== '%PDF') {
-                console.log(`Label data for ${order.orderId} is not a PDF format, using fallback`);
+                console.log(
+                  `Label data for ${order.orderId} is not a PDF format, using fallback`
+                );
                 throw new Error('Label data is not PDF format');
               }
-              
+
               const labelPdf = await PDFDocument.load(labelBytes);
               const [labelPage] = await bulkPdfDoc.copyPages(labelPdf, [0]);
               bulkPdfDoc.addPage(labelPage);
-              
+
               // Also add a summary page with customer information for easy reference
-              await addAuthenticLabelPage(bulkPdfDoc, order, trackingNumber, customerInfo, customerAddress, labelImage);
-              
-              upsLabels.push({
-                orderId: order.orderId,
-                trackingNumber: trackingNumber,
-                success: true
-              });
-            } catch (pdfError: unknown) {
-              console.error(`Error processing PDF label for ${order.orderId}:`, pdfError);
-              // Add a fallback text page for this order
-              await addAuthenticLabelPage(bulkPdfDoc, order, trackingNumber, customerInfo, customerAddress);
+              await addAuthenticLabelPage(
+                bulkPdfDoc,
+                order,
+                trackingNumber,
+                customerInfo,
+                customerAddress,
+                labelImage
+              );
+
               upsLabels.push({
                 orderId: order.orderId,
                 trackingNumber: trackingNumber,
                 success: true,
-                fallback: true
+              });
+            } catch (pdfError: unknown) {
+              console.error(
+                `Error processing PDF label for ${order.orderId}:`,
+                pdfError
+              );
+              // Add a fallback text page for this order
+              await addAuthenticLabelPage(
+                bulkPdfDoc,
+                order,
+                trackingNumber,
+                customerInfo,
+                customerAddress
+              );
+              upsLabels.push({
+                orderId: order.orderId,
+                trackingNumber: trackingNumber,
+                success: true,
+                fallback: true,
               });
             }
           } else {
             // No label image received, add text-based page
-            await addAuthenticLabelPage(bulkPdfDoc, order, trackingNumber, customerInfo, customerAddress);
+            await addAuthenticLabelPage(
+              bulkPdfDoc,
+              order,
+              trackingNumber,
+              customerInfo,
+              customerAddress
+            );
             upsLabels.push({
               orderId: order.orderId,
               trackingNumber: trackingNumber,
               success: true,
-              fallback: true
+              fallback: true,
             });
           }
         } else {
           console.error(`No valid UPS response for order ${order.orderId}`);
-          throw new Error(`UPS API returned invalid response for ${order.orderId}`);
+          throw new Error(
+            `UPS API returned invalid response for ${order.orderId}`
+          );
         }
-
       } catch (orderError) {
-        const errorMessage = orderError instanceof Error ? orderError.message : String(orderError);
+        const errorMessage =
+          orderError instanceof Error ? orderError.message : String(orderError);
         console.error(`Error processing order ${order.orderId}:`, orderError);
         // Add error page to PDF
         await addErrorLabelPage(bulkPdfDoc, order, errorMessage);
         upsLabels.push({
           orderId: order.orderId,
           error: errorMessage,
-          success: false
+          success: false,
         });
       }
     }
@@ -3437,133 +3978,230 @@ router.post('/bulk-shipping-labels', async (req: Request, res: Response) => {
 
     // Set response headers for PDF inline display (opens in new tab for printing)
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `inline; filename="UPS-Bulk-Labels-${new Date().toISOString().split('T')[0]}.pdf"`);
+    res.setHeader(
+      'Content-Disposition',
+      `inline; filename="UPS-Bulk-Labels-${new Date().toISOString().split('T')[0]}.pdf"`
+    );
     res.setHeader('Content-Length', pdfBytes.length);
 
     // Send PDF
     res.send(Buffer.from(pdfBytes));
-    
-    console.log(`Successfully generated UPS bulk shipping labels for ${upsLabels.length} orders`);
-    console.log('Tracking numbers:', trackingNumbers);
 
+    console.log(
+      `Successfully generated UPS bulk shipping labels for ${upsLabels.length} orders`
+    );
+    console.log('Tracking numbers:', trackingNumbers);
   } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? (error as Error).message : String(error);
+    const errorMessage =
+      error instanceof Error ? (error as Error).message : String(error);
     console.error('UPS bulk shipping labels error:', error);
-    return res.status(500).json({ error: `Failed to generate UPS bulk shipping labels: ${errorMessage}` });
+    return res.status(500).json({
+      error: `Failed to generate UPS bulk shipping labels: ${errorMessage}`,
+    });
   }
 });
 
 // Helper functions for bulk shipping
-async function addAuthenticLabelPage(pdfDoc: any, order: any, trackingNumber: string, customerInfo?: any, customerAddress?: any, labelData?: string) {
+async function addAuthenticLabelPage(
+  pdfDoc: any,
+  order: any,
+  trackingNumber: string,
+  customerInfo?: any,
+  customerAddress?: any,
+  labelData?: string
+) {
   const page = pdfDoc.addPage([432, 648]);
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-  
+
   let currentY = 600;
-  
+
   page.drawText('AUTHENTIC UPS SHIPPING LABEL', {
-    x: 50, y: currentY, size: 16, font: boldFont, color: rgb(0, 0.5, 0)
+    x: 50,
+    y: currentY,
+    size: 16,
+    font: boldFont,
+    color: rgb(0, 0.5, 0),
   });
-  
+
   currentY -= 30;
   page.drawText(`Order: ${order.orderId}`, {
-    x: 50, y: currentY, size: 12, font: boldFont
+    x: 50,
+    y: currentY,
+    size: 12,
+    font: boldFont,
   });
-  
+
   currentY -= 20;
   page.drawText(`Tracking: ${trackingNumber}`, {
-    x: 50, y: currentY, size: 12, font: boldFont, color: rgb(0, 0, 0.8)
+    x: 50,
+    y: currentY,
+    size: 12,
+    font: boldFont,
+    color: rgb(0, 0, 0.8),
   });
-  
+
   // Add customer info
   if (customerInfo) {
     currentY -= 30;
     page.drawText('SHIP TO:', { x: 50, y: currentY, size: 10, font: boldFont });
     currentY -= 15;
-    page.drawText(customerInfo.name || 'Customer', { x: 50, y: currentY, size: 10, font: font });
-    
+    page.drawText(customerInfo.name || 'Customer', {
+      x: 50,
+      y: currentY,
+      size: 10,
+      font: font,
+    });
+
     if (customerAddress) {
       currentY -= 15;
-      page.drawText(customerAddress.street || '', { x: 50, y: currentY, size: 10, font: font });
+      page.drawText(customerAddress.street || '', {
+        x: 50,
+        y: currentY,
+        size: 10,
+        font: font,
+      });
       currentY -= 15;
-      page.drawText(`${customerAddress.city || ''}, ${customerAddress.state || ''} ${customerAddress.zipCode || ''}`, { x: 50, y: currentY, size: 10, font: font });
+      page.drawText(
+        `${customerAddress.city || ''}, ${customerAddress.state || ''} ${customerAddress.zipCode || ''}`,
+        { x: 50, y: currentY, size: 10, font: font }
+      );
     }
   }
-  
+
   // Add note about authentic UPS integration
   currentY -= 40;
-  page.drawText('This label was generated using authentic UPS API with production credentials.', {
-    x: 50, y: currentY, size: 9, font: font, color: rgb(0, 0.5, 0)
-  });
-  
+  page.drawText(
+    'This label was generated using authentic UPS API with production credentials.',
+    {
+      x: 50,
+      y: currentY,
+      size: 9,
+      font: font,
+      color: rgb(0, 0.5, 0),
+    }
+  );
+
   currentY -= 15;
-  page.drawText('Use this tracking number for official UPS pickup and tracking.', {
-    x: 50, y: currentY, size: 9, font: font, color: rgb(0, 0.5, 0)
-  });
+  page.drawText(
+    'Use this tracking number for official UPS pickup and tracking.',
+    {
+      x: 50,
+      y: currentY,
+      size: 9,
+      font: font,
+      color: rgb(0, 0.5, 0),
+    }
+  );
 }
 
-async function addErrorLabelPage(pdfDoc: any, order: any, errorMessage: string) {
+async function addErrorLabelPage(
+  pdfDoc: any,
+  order: any,
+  errorMessage: string
+) {
   const page = pdfDoc.addPage([432, 648]);
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-  
+
   let currentY = 600;
-  
+
   page.drawText('UPS SHIPPING ERROR', {
-    x: 50, y: currentY, size: 16, font: boldFont, color: rgb(0.8, 0, 0)
+    x: 50,
+    y: currentY,
+    size: 16,
+    font: boldFont,
+    color: rgb(0.8, 0, 0),
   });
-  
+
   currentY -= 30;
   page.drawText(`Order: ${order.orderId}`, {
-    x: 50, y: currentY, size: 12, font: boldFont
+    x: 50,
+    y: currentY,
+    size: 12,
+    font: boldFont,
   });
-  
+
   currentY -= 20;
   page.drawText('Error:', {
-    x: 50, y: currentY, size: 10, font: boldFont
+    x: 50,
+    y: currentY,
+    size: 10,
+    font: boldFont,
   });
-  
+
   currentY -= 15;
   page.drawText(errorMessage.substring(0, 100), {
-    x: 50, y: currentY, size: 9, font: font, color: rgb(0.8, 0, 0)
+    x: 50,
+    y: currentY,
+    size: 9,
+    font: font,
+    color: rgb(0.8, 0, 0),
   });
 }
 
-async function addFallbackLabelPage(pdfDoc: any, order: any, trackingNumber: string, customerInfo?: any, customerAddress?: any) {
+async function addFallbackLabelPage(
+  pdfDoc: any,
+  order: any,
+  trackingNumber: string,
+  customerInfo?: any,
+  customerAddress?: any
+) {
   const page = pdfDoc.addPage([432, 648]);
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-  
+
   let currentY = 600;
-  
+
   page.drawText('UPS SHIPPING LABEL', {
-    x: 50, y: currentY, size: 16, font: boldFont
+    x: 50,
+    y: currentY,
+    size: 16,
+    font: boldFont,
   });
-  
+
   currentY -= 30;
   page.drawText(`Order: ${order.orderId}`, {
-    x: 50, y: currentY, size: 12, font: boldFont
+    x: 50,
+    y: currentY,
+    size: 12,
+    font: boldFont,
   });
-  
+
   currentY -= 20;
   page.drawText(`Tracking: ${trackingNumber}`, {
-    x: 50, y: currentY, size: 12, font: boldFont
+    x: 50,
+    y: currentY,
+    size: 12,
+    font: boldFont,
   });
-  
+
   currentY -= 20;
   page.drawText(`Customer: ${customerInfo?.name || 'N/A'}`, {
-    x: 50, y: currentY, size: 10, font: font
+    x: 50,
+    y: currentY,
+    size: 10,
+    font: font,
   });
-  
+
   currentY -= 15;
   page.drawText(`Ship To: ${customerAddress?.street || 'N/A'}`, {
-    x: 50, y: currentY, size: 10, font: font
+    x: 50,
+    y: currentY,
+    size: 10,
+    font: font,
   });
-  
+
   currentY -= 15;
-  page.drawText(`${customerAddress?.city || 'N/A'}, ${customerAddress?.state || 'N/A'} ${customerAddress?.zipCode || 'N/A'}`, {
-    x: 50, y: currentY, size: 10, font: font
-  });
+  page.drawText(
+    `${customerAddress?.city || 'N/A'}, ${customerAddress?.state || 'N/A'} ${customerAddress?.zipCode || 'N/A'}`,
+    {
+      x: 50,
+      y: currentY,
+      size: 10,
+      font: font,
+    }
+  );
 }
 
 // Cleaned up broken function structure
@@ -3582,29 +4220,43 @@ router.post('/ups-shipping-label/bulk', async (req: Request, res: Response) => {
 
     // Get order data from storage - use the same approach as All Orders page
     const { storage } = await import('../../storage');
-    
+
     console.log(`Bulk endpoint: Looking for orders ${orderIds.join(', ')}`);
-    
+
     // Get all orders (finalized orders) and filter by orderIds
     const allOrders = await storage.getAllOrders();
-    const selectedOrders = allOrders.filter(order => orderIds.includes(order.orderId));
-    
-    console.log(`Found ${selectedOrders.length} orders out of ${orderIds.length} requested`);
-    
+    const selectedOrders = allOrders.filter((order) =>
+      orderIds.includes(order.orderId)
+    );
+
+    console.log(
+      `Found ${selectedOrders.length} orders out of ${orderIds.length} requested`
+    );
+
     // If no finalized orders found, try draft orders
     if (selectedOrders.length < orderIds.length) {
-      console.log('Some orders not found in finalized table, checking drafts...');
+      console.log(
+        'Some orders not found in finalized table, checking drafts...'
+      );
       const drafts = await storage.getAllOrderDrafts();
-      const missingOrderIds = orderIds.filter(id => !selectedOrders.some(o => o.orderId === id));
-      const draftOrders = drafts.filter(draft => missingOrderIds.includes(draft.orderId));
+      const missingOrderIds = orderIds.filter(
+        (id) => !selectedOrders.some((o) => o.orderId === id)
+      );
+      const draftOrders = drafts.filter((draft) =>
+        missingOrderIds.includes(draft.orderId)
+      );
       selectedOrders.push(...draftOrders);
-      console.log(`Added ${draftOrders.length} draft orders, total: ${selectedOrders.length}`);
+      console.log(
+        `Added ${draftOrders.length} draft orders, total: ${selectedOrders.length}`
+      );
     }
 
     console.log(`Final check: ${selectedOrders.length} orders found`);
     if (selectedOrders.length === 0) {
       console.log('ERROR: No orders found, returning 404');
-      return res.status(404).json({ error: `Orders not found: ${orderIds.join(', ')}` });
+      return res
+        .status(404)
+        .json({ error: `Orders not found: ${orderIds.join(', ')}` });
     }
 
     // Create a new PDF document
@@ -3746,13 +4398,17 @@ router.post('/ups-shipping-label/bulk', async (req: Request, res: Response) => {
 
     currentY -= 15;
     selectedOrders.forEach((order, index) => {
-      if (currentY > 100) { // Only show if there's space
-        page.drawText(`${order.orderId} - ${(order as any).customerId || 'Customer'}`, {
-          x: 50,
-          y: currentY,
-          size: 8,
-          font: font,
-        });
+      if (currentY > 100) {
+        // Only show if there's space
+        page.drawText(
+          `${order.orderId} - ${(order as any).customerId || 'Customer'}`,
+          {
+            x: 50,
+            y: currentY,
+            size: 8,
+            font: font,
+          }
+        );
         currentY -= 12;
       }
     });
@@ -3780,15 +4436,19 @@ router.post('/ups-shipping-label/bulk', async (req: Request, res: Response) => {
 
     // Set response headers for PDF inline display (opens in new tab for printing)
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `inline; filename="Bulk-Shipping-Label-BULK.pdf"`);
+    res.setHeader(
+      'Content-Disposition',
+      `inline; filename="Bulk-Shipping-Label-BULK.pdf"`
+    );
     res.setHeader('Content-Length', pdfBytes.length);
 
     // Send PDF
     res.send(Buffer.from(pdfBytes));
-
   } catch (error: unknown) {
     console.error('Error generating bulk shipping label PDF:', error);
-    res.status(500).json({ error: 'Failed to generate bulk shipping label PDF' });
+    res
+      .status(500)
+      .json({ error: 'Failed to generate bulk shipping label PDF' });
   }
 });
 
@@ -3801,63 +4461,73 @@ router.get('/test-ups-credentials', async (req: Request, res: Response) => {
     res.json({
       success: true,
       message: 'UPS credentials are valid',
-      hasAccessToken: !!accessToken
+      hasAccessToken: !!accessToken,
     });
   } catch (error: unknown) {
     console.error('UPS credential test failed:', error);
     res.status(400).json({
       success: false,
-      error: error instanceof Error ? (error as Error).message : 'Unknown error',
-      details: 'Check UPS developer portal to verify credentials are activated'
+      error:
+        error instanceof Error ? (error as Error).message : 'Unknown error',
+      details: 'Check UPS developer portal to verify credentials are activated',
     });
   }
 });
 
 // API route to update tracking information manually
-router.post('/update-tracking/:orderId', async (req: Request, res: Response) => {
-  try {
-    const { orderId } = req.params;
-    const { trackingNumber, carrier, estimatedDelivery, sendNotification } = req.body;
+router.post(
+  '/update-tracking/:orderId',
+  async (req: Request, res: Response) => {
+    try {
+      const { orderId } = req.params;
+      const { trackingNumber, carrier, estimatedDelivery, sendNotification } =
+        req.body;
 
-    if (!trackingNumber) {
-      return res.status(400).json({ error: 'Tracking number is required' });
-    }
-
-    // Update tracking information
-    const { updateTrackingInfo, sendCustomerNotification } = await import('../../utils/notifications');
-    await updateTrackingInfo(orderId, {
-      trackingNumber,
-      carrier: carrier || 'UPS',
-      shippedDate: new Date(),
-      estimatedDelivery: estimatedDelivery ? new Date(estimatedDelivery) : undefined
-    });
-
-    // Send customer notification if requested
-    let notificationResult = null;
-    if (sendNotification) {
-      try {
-        notificationResult = await sendCustomerNotification({
-          orderId,
-          trackingNumber,
-          carrier: carrier || 'UPS',
-          estimatedDelivery: estimatedDelivery ? new Date(estimatedDelivery) : undefined
-        });
-      } catch (error: unknown) {
-        console.error('Notification error:', error);
+      if (!trackingNumber) {
+        return res.status(400).json({ error: 'Tracking number is required' });
       }
+
+      // Update tracking information
+      const { updateTrackingInfo, sendCustomerNotification } = await import(
+        '../../utils/notifications'
+      );
+      await updateTrackingInfo(orderId, {
+        trackingNumber,
+        carrier: carrier || 'UPS',
+        shippedDate: new Date(),
+        estimatedDelivery: estimatedDelivery
+          ? new Date(estimatedDelivery)
+          : undefined,
+      });
+
+      // Send customer notification if requested
+      let notificationResult = null;
+      if (sendNotification) {
+        try {
+          notificationResult = await sendCustomerNotification({
+            orderId,
+            trackingNumber,
+            carrier: carrier || 'UPS',
+            estimatedDelivery: estimatedDelivery
+              ? new Date(estimatedDelivery)
+              : undefined,
+          });
+        } catch (error: unknown) {
+          console.error('Notification error:', error);
+        }
+      }
+
+      res.json({
+        success: true,
+        message: 'Tracking information updated successfully',
+        notification: notificationResult,
+      });
+    } catch (error: unknown) {
+      console.error('Error updating tracking:', error);
+      res.status(500).json({ error: 'Failed to update tracking information' });
     }
-
-    res.json({
-      success: true,
-      message: 'Tracking information updated successfully',
-      notification: notificationResult
-    });
-
-  } catch (error: unknown) {
-    console.error('Error updating tracking:', error);
-    res.status(500).json({ error: 'Failed to update tracking information' });
   }
-});
+);
 
 // API route to get tracking information for an order
 router.get('/tracking/:orderId', async (req: Request, res: Response) => {
@@ -3866,7 +4536,7 @@ router.get('/tracking/:orderId', async (req: Request, res: Response) => {
 
     const { storage } = await import('../../storage');
     const orders = await storage.getAllOrderDrafts();
-    const order = orders.find(o => o.orderId === orderId);
+    const order = orders.find((o) => o.orderId === orderId);
 
     if (!order) {
       return res.status(404).json({ error: 'Order not found' });
@@ -3883,30 +4553,30 @@ router.get('/tracking/:orderId', async (req: Request, res: Response) => {
       notificationMethod: order.notificationMethod,
       notificationSentAt: order.notificationSentAt,
       deliveryConfirmed: order.deliveryConfirmed,
-      deliveryConfirmedAt: order.deliveryConfirmedAt
+      deliveryConfirmedAt: order.deliveryConfirmedAt,
     });
-
   } catch (error: unknown) {
     console.error('Error getting tracking info:', error);
     res.status(500).json({ error: 'Failed to get tracking information' });
   }
 });
 
-
 // Debug endpoint for UPS troubleshooting
 router.post('/debug-ups-auth', async (req: Request, res: Response) => {
   try {
     console.log('🔍 UPS DEBUG: Starting authentication troubleshooting...');
-    
+
     // Step 1: Check credentials
     const hasClientId = !!process.env.UPS_CLIENT_ID;
     const hasClientSecret = !!process.env.UPS_CLIENT_SECRET;
-    
+
     console.log('🔍 UPS DEBUG - Credentials Check:', {
       hasClientId,
       hasClientSecret,
       clientIdLength: hasClientId ? process.env.UPS_CLIENT_ID!.length : 0,
-      clientSecretLength: hasClientSecret ? process.env.UPS_CLIENT_SECRET!.length : 0
+      clientSecretLength: hasClientSecret
+        ? process.env.UPS_CLIENT_SECRET!.length
+        : 0,
     });
 
     if (!hasClientId || !hasClientSecret) {
@@ -3914,7 +4584,7 @@ router.post('/debug-ups-auth', async (req: Request, res: Response) => {
         success: false,
         step: 'credentials',
         error: 'Missing UPS credentials',
-        details: { hasClientId, hasClientSecret }
+        details: { hasClientId, hasClientSecret },
       });
     }
 
@@ -3926,7 +4596,7 @@ router.post('/debug-ups-auth', async (req: Request, res: Response) => {
       console.log('🔍 UPS DEBUG - OAuth Success:', {
         tokenReceived: !!accessToken,
         tokenLength: accessToken ? accessToken.length : 0,
-        tokenStart: accessToken ? accessToken.substring(0, 10) : 'N/A'
+        tokenStart: accessToken ? accessToken.substring(0, 10) : 'N/A',
       });
     } catch (oauthError: any) {
       console.error('🔍 UPS DEBUG - OAuth Failed:', oauthError.message);
@@ -3934,7 +4604,7 @@ router.post('/debug-ups-auth', async (req: Request, res: Response) => {
         success: false,
         step: 'oauth',
         error: oauthError.message,
-        details: oauthError
+        details: oauthError,
       });
     }
 
@@ -3947,13 +4617,13 @@ router.post('/debug-ups-auth', async (req: Request, res: Response) => {
         street: '123 Main St',
         city: 'Birmingham',
         state: 'AL',
-        zip: '35203'
+        zip: '35203',
       },
       {
         weight: '5',
         length: '10',
         width: '10',
-        height: '6'
+        height: '6',
       }
     );
 
@@ -3964,7 +4634,8 @@ router.post('/debug-ups-auth', async (req: Request, res: Response) => {
         success: true,
         step: 'shipment',
         message: 'UPS API working correctly',
-        trackingNumber: (shipmentResult as any)?.ShipmentResponse?.ShipmentResults?.ShipmentIdentificationNumber
+        trackingNumber: (shipmentResult as any)?.ShipmentResponse
+          ?.ShipmentResults?.ShipmentIdentificationNumber,
       });
     } catch (shipmentError: any) {
       console.error('🔍 UPS DEBUG - Shipment Failed:', shipmentError.message);
@@ -3973,16 +4644,15 @@ router.post('/debug-ups-auth', async (req: Request, res: Response) => {
         step: 'shipment',
         error: shipmentError.message,
         authWorking: true,
-        tokenReceived: !!accessToken
+        tokenReceived: !!accessToken,
       });
     }
-
   } catch (error: any) {
     console.error('🔍 UPS DEBUG - General Error:', error);
     res.status(500).json({
       success: false,
       step: 'general',
-      error: (error as Error).message
+      error: (error as Error).message,
     });
   }
 });
@@ -3991,111 +4661,139 @@ async function addSummaryPage(pdfDoc: any, upsLabels: any[]) {
   const page = pdfDoc.addPage([432, 648]);
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-  
+
   let currentY = 600;
-  
+
   page.drawText('SHIPPING LABELS SUMMARY', {
-    x: 50, y: currentY, size: 16, font: boldFont
+    x: 50,
+    y: currentY,
+    size: 16,
+    font: boldFont,
   });
-  
+
   currentY -= 40;
-  
+
   if (upsLabels.length === 0) {
     page.drawText('No shipping labels were generated.', {
-      x: 50, y: currentY, size: 12, font: font
+      x: 50,
+      y: currentY,
+      size: 12,
+      font: font,
     });
   } else {
     upsLabels.forEach((label, index) => {
       page.drawText(`${index + 1}. Order ${label.orderId}`, {
-        x: 50, y: currentY, size: 10, font: boldFont
+        x: 50,
+        y: currentY,
+        size: 10,
+        font: boldFont,
       });
-      
+
       currentY -= 15;
       if (label.success) {
-        page.drawText(`✓ Success - Tracking: ${label.trackingNumber || 'N/A'}`, {
-          x: 70, y: currentY, size: 9, font: font, color: rgb(0, 0.6, 0)
-        });
+        page.drawText(
+          `✓ Success - Tracking: ${label.trackingNumber || 'N/A'}`,
+          {
+            x: 70,
+            y: currentY,
+            size: 9,
+            font: font,
+            color: rgb(0, 0.6, 0),
+          }
+        );
       } else {
         page.drawText(`✗ Error: ${label.error || 'Unknown error'}`, {
-          x: 70, y: currentY, size: 9, font: font, color: rgb(0.8, 0, 0)
+          x: 70,
+          y: currentY,
+          size: 9,
+          font: font,
+          color: rgb(0.8, 0, 0),
         });
       }
-      
+
       currentY -= 25;
     });
   }
 }
 
 // UPS Tracking API endpoint
-router.get('/track-ups/:trackingNumber', async (req: Request, res: Response) => {
-  try {
-    const { trackingNumber } = req.params;
-    console.log(`🔍 UPS TRACKING: Fetching tracking info for ${trackingNumber}`);
-    
-    // Get UPS access token
-    const accessToken = await getUPSAccessToken();
-    
-    // UPS Tracking API endpoint
-    const trackingUrl = UPS_ENV === 'production' 
-      ? `https://onlinetools.ups.com/api/track/v1/details/${trackingNumber}`
-      : `https://wwwcie.ups.com/api/track/v1/details/${trackingNumber}`;
-    
-    console.log(`🔍 UPS TRACKING: Calling ${trackingUrl}`);
-    
-    const response = await fetch(trackingUrl, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-        'transId': Math.random().toString(36).substring(7),
-        'transactionSrc': 'AG_Composites_ERP'
-      }
-    });
+router.get(
+  '/track-ups/:trackingNumber',
+  async (req: Request, res: Response) => {
+    try {
+      const { trackingNumber } = req.params;
+      console.log(
+        `🔍 UPS TRACKING: Fetching tracking info for ${trackingNumber}`
+      );
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('UPS Tracking Error:', {
-        status: response.status,
-        statusText: response.statusText,
-        response: errorText
+      // Get UPS access token
+      const accessToken = await getUPSAccessToken();
+
+      // UPS Tracking API endpoint
+      const trackingUrl =
+        UPS_ENV === 'production'
+          ? `https://onlinetools.ups.com/api/track/v1/details/${trackingNumber}`
+          : `https://wwwcie.ups.com/api/track/v1/details/${trackingNumber}`;
+
+      console.log(`🔍 UPS TRACKING: Calling ${trackingUrl}`);
+
+      const response = await fetch(trackingUrl, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+          transId: Math.random().toString(36).substring(7),
+          transactionSrc: 'AG_Composites_ERP',
+        },
       });
-      throw new Error(`UPS Tracking failed: ${response.statusText}`);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('UPS Tracking Error:', {
+          status: response.status,
+          statusText: response.statusText,
+          response: errorText,
+        });
+        throw new Error(`UPS Tracking failed: ${response.statusText}`);
+      }
+
+      const trackingData = await response.json();
+      console.log(
+        `🔍 UPS TRACKING SUCCESS for ${trackingNumber}:`,
+        JSON.stringify(trackingData, null, 2)
+      );
+
+      // Return tracking data
+      return res.json({
+        success: true,
+        trackingNumber,
+        trackingData,
+        upsTrackingUrl: `https://www.ups.com/track?tracknum=${trackingNumber}`,
+      });
+    } catch (error: unknown) {
+      console.error('UPS tracking error:', error);
+      res.status(500).json({
+        error: 'Failed to fetch UPS tracking information',
+        details: (error as Error).message,
+        // Provide fallback UPS tracking URL
+        fallbackUrl: `https://www.ups.com/track?tracknum=${req.params.trackingNumber}`,
+      });
     }
-
-    const trackingData = await response.json();
-    console.log(`🔍 UPS TRACKING SUCCESS for ${trackingNumber}:`, JSON.stringify(trackingData, null, 2));
-    
-    // Return tracking data
-    return res.json({
-      success: true,
-      trackingNumber,
-      trackingData,
-      upsTrackingUrl: `https://www.ups.com/track?tracknum=${trackingNumber}`
-    });
-
-  } catch (error: unknown) {
-    console.error('UPS tracking error:', error);
-    res.status(500).json({ 
-      error: 'Failed to fetch UPS tracking information',
-      details: (error as Error).message,
-      // Provide fallback UPS tracking URL
-      fallbackUrl: `https://www.ups.com/track?tracknum=${req.params.trackingNumber}`
-    });
   }
-});
+);
 
 // Clear UPS token cache endpoint
 router.post('/clear-cache', (req: Request, res: Response) => {
   try {
     clearUPSTokenCache();
-    res.json({ 
-      success: true, 
-      message: 'UPS token cache cleared successfully' 
+    res.json({
+      success: true,
+      message: 'UPS token cache cleared successfully',
     });
   } catch (error: unknown) {
     console.error('Error clearing cache:', error);
-    res.status(500).json({ 
-      error: 'Failed to clear cache' 
+    res.status(500).json({
+      error: 'Failed to clear cache',
     });
   }
 });

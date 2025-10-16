@@ -1,15 +1,32 @@
-import React, { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Plus, Edit, Trash2, Package, Search, GitBranch, Layers } from "lucide-react";
-import { toast } from "react-hot-toast";
-import { apiRequest } from "@/lib/queryClient";
-import { BOMItemForm } from "./BOMItemForm";
-import { SubAssemblyDialog } from "./SubAssemblyDialog";
+import React, { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import {
+  ArrowLeft,
+  Plus,
+  Edit,
+  Trash2,
+  Package,
+  Search,
+  GitBranch,
+  Layers,
+} from 'lucide-react';
+import { toast } from 'react-hot-toast';
 import type { InventoryItem } from '@shared/schema';
+
+import { BOMItemForm } from './BOMItemForm';
+import { SubAssemblyDialog } from './SubAssemblyDialog';
+
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { apiRequest } from '@/lib/queryClient';
 import {
   Dialog,
   DialogContent,
@@ -17,7 +34,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "@/components/ui/dialog";
+} from '@/components/ui/dialog';
 import {
   Table,
   TableBody,
@@ -25,7 +42,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
+} from '@/components/ui/table';
 
 interface BomItem {
   id: number;
@@ -69,11 +86,13 @@ interface BOMDetailsProps {
 }
 
 export function BOMDetails({ bomId, onBack }: BOMDetailsProps) {
-  const [searchTerm, setSearchTerm] = useState("");
+  const [searchTerm, setSearchTerm] = useState('');
   const [isNewItemOpen, setIsNewItemOpen] = useState(false);
   const [isSubAssemblyOpen, setIsSubAssemblyOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<BomItem | null>(null);
-  const [viewMode, setViewMode] = useState<'flat' | 'hierarchical'>('hierarchical');
+  const [viewMode, setViewMode] = useState<'flat' | 'hierarchical'>(
+    'hierarchical'
+  );
   const queryClient = useQueryClient();
 
   // Fetch BOM details with items
@@ -82,54 +101,68 @@ export function BOMDetails({ bomId, onBack }: BOMDetailsProps) {
   });
 
   // Also fetch hierarchical structure
-  const { data: hierarchyData } = useQuery<{ hierarchicalItems: HierarchicalBomItem[] }>({
+  const { data: hierarchyData } = useQuery<{
+    hierarchicalItems: HierarchicalBomItem[];
+  }>({
     queryKey: [`/api/boms/${bomId}/hierarchy`],
     enabled: viewMode === 'hierarchical',
   });
 
   // Fetch inventory items to get part numbers
   const { data: inventoryItems = [] } = useQuery<InventoryItem[]>({
-    queryKey: ["/api/inventory"],
+    queryKey: ['/api/inventory'],
   });
 
   // Delete item mutation
   const deleteItemMutation = useMutation({
     mutationFn: async (itemId: number) => {
       await apiRequest(`/api/boms/${bomId}/items/${itemId}`, {
-        method: "DELETE",
+        method: 'DELETE',
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/boms", bomId] });
-      toast.success("Item deleted successfully");
+      queryClient.invalidateQueries({ queryKey: ['/api/boms', bomId] });
+      toast.success('Item deleted successfully');
     },
     onError: () => {
-      toast.error("Failed to delete item");
+      toast.error('Failed to delete item');
     },
   });
 
   // Helper function to get AG Part Number for a BOM item
   const getPartNumber = (partName: string) => {
-    const inventoryItem = inventoryItems.find(item => item.name === partName);
-    return inventoryItem?.agPartNumber || "N/A";
+    const inventoryItem = inventoryItems.find((item) => item.name === partName);
+    return inventoryItem?.agPartNumber || 'N/A';
   };
 
   // Filter items based on search term and view mode
-  const filteredItems = bom?.items?.filter(item => 
-    item.partName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    item.firstDept.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    getPartNumber(item.partName).toLowerCase().includes(searchTerm.toLowerCase())
-  ) || [];
+  const filteredItems =
+    bom?.items?.filter(
+      (item) =>
+        item.partName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        item.firstDept.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        getPartNumber(item.partName)
+          .toLowerCase()
+          .includes(searchTerm.toLowerCase())
+    ) || [];
 
   // Filter hierarchical items based on search term
-  const filteredHierarchicalItems = hierarchyData?.hierarchicalItems?.filter((item) => 
-    item.partName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    item.firstDept.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    getPartNumber(item.partName).toLowerCase().includes(searchTerm.toLowerCase())
-  ) || [];
+  const filteredHierarchicalItems =
+    hierarchyData?.hierarchicalItems?.filter(
+      (item) =>
+        item.partName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        item.firstDept.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        getPartNumber(item.partName)
+          .toLowerCase()
+          .includes(searchTerm.toLowerCase())
+    ) || [];
 
   const handleDeleteItem = (itemId: number) => {
-    if (confirm("Are you sure you want to delete this item? This action cannot be undone.")) {
+    if (
+      confirm(
+        'Are you sure you want to delete this item? This action cannot be undone.'
+      )
+    ) {
       deleteItemMutation.mutate(itemId);
     }
   };
@@ -137,34 +170,41 @@ export function BOMDetails({ bomId, onBack }: BOMDetailsProps) {
   const handleItemCreated = () => {
     setIsNewItemOpen(false);
     queryClient.invalidateQueries({ queryKey: [`/api/boms/${bomId}/details`] });
-    toast.success("Item added successfully");
+    toast.success('Item added successfully');
   };
 
   const handleItemUpdated = () => {
     setEditingItem(null);
     queryClient.invalidateQueries({ queryKey: [`/api/boms/${bomId}/details`] });
-    toast.success("Item updated successfully");
+    toast.success('Item updated successfully');
   };
 
   const handleSubAssemblyCreated = () => {
     queryClient.invalidateQueries({ queryKey: [`/api/boms/${bomId}/details`] });
-    queryClient.invalidateQueries({ queryKey: [`/api/boms/${bomId}/hierarchy`] });
-    toast.success("Sub-assembly created successfully");
+    queryClient.invalidateQueries({
+      queryKey: [`/api/boms/${bomId}/hierarchy`],
+    });
+    toast.success('Sub-assembly created successfully');
   };
 
   // Calculate total quantity based on view mode
-  const totalQuantity = viewMode === 'hierarchical' 
-    ? filteredHierarchicalItems.reduce((sum: number, item: any) => sum + item.quantity, 0)
-    : filteredItems.reduce((sum, item) => sum + item.quantity, 0);
+  const totalQuantity =
+    viewMode === 'hierarchical'
+      ? filteredHierarchicalItems.reduce(
+          (sum: number, item: any) => sum + item.quantity,
+          0
+        )
+      : filteredItems.reduce((sum, item) => sum + item.quantity, 0);
 
   // Get items to display based on view mode
-  const itemsToDisplay = viewMode === 'hierarchical' ? filteredHierarchicalItems : filteredItems;
+  const itemsToDisplay =
+    viewMode === 'hierarchical' ? filteredHierarchicalItems : filteredItems;
 
   // Hierarchical item rendering component
   const renderHierarchicalItem = (item: any, level: number = 0) => {
     const indentStyle = level > 0 ? { paddingLeft: `${level * 1.5}rem` } : {};
     const isSubAssembly = !!item.subAssembly;
-    
+
     return (
       <React.Fragment key={`${item.id}-${level}`}>
         <TableRow className="hover:bg-gray-50 dark:hover:bg-gray-800">
@@ -175,7 +215,9 @@ export function BOMDetails({ bomId, onBack }: BOMDetailsProps) {
           <TableCell className="font-medium">
             <div className="flex items-center" style={indentStyle}>
               {level > 0 && <span className="text-gray-400 mr-2">└─</span>}
-              {isSubAssembly && <GitBranch className="w-4 h-4 mr-2 text-blue-600" />}
+              {isSubAssembly && (
+                <GitBranch className="w-4 h-4 mr-2 text-blue-600" />
+              )}
               {item.partName}
               {isSubAssembly && (
                 <Badge variant="outline" className="ml-2 text-xs">
@@ -188,7 +230,8 @@ export function BOMDetails({ bomId, onBack }: BOMDetailsProps) {
             {item.quantity}
             {isSubAssembly && item.subAssembly?.calculatedQuantity && (
               <span className="text-gray-500 text-sm ml-2">
-                (× {item.subAssembly.calculatedQuantity} = {item.quantity * item.subAssembly.calculatedQuantity})
+                (× {item.subAssembly.calculatedQuantity} ={' '}
+                {item.quantity * item.subAssembly.calculatedQuantity})
               </span>
             )}
           </TableCell>
@@ -196,13 +239,17 @@ export function BOMDetails({ bomId, onBack }: BOMDetailsProps) {
             <Badge variant="outline">{item.firstDept}</Badge>
           </TableCell>
           <TableCell>
-            <Badge variant={item.itemType === 'manufactured' ? "default" : "secondary"}>
-              {item.itemType === 'manufactured' ? "Manufactured" : "Material"}
+            <Badge
+              variant={
+                item.itemType === 'manufactured' ? 'default' : 'secondary'
+              }
+            >
+              {item.itemType === 'manufactured' ? 'Manufactured' : 'Material'}
             </Badge>
           </TableCell>
           <TableCell>
-            <Badge variant={item.isActive ? "default" : "secondary"}>
-              {item.isActive ? "Active" : "Inactive"}
+            <Badge variant={item.isActive ? 'default' : 'secondary'}>
+              {item.isActive ? 'Active' : 'Inactive'}
             </Badge>
           </TableCell>
           <TableCell className="text-right">
@@ -226,9 +273,10 @@ export function BOMDetails({ bomId, onBack }: BOMDetailsProps) {
           </TableCell>
         </TableRow>
         {/* Render sub-assembly items recursively */}
-        {isSubAssembly && item.subAssembly?.bomDefinition?.items?.map((subItem: any) => 
-          renderHierarchicalItem(subItem, level + 1)
-        )}
+        {isSubAssembly &&
+          item.subAssembly?.bomDefinition?.items?.map((subItem: any) =>
+            renderHierarchicalItem(subItem, level + 1)
+          )}
       </React.Fragment>
     );
   };
@@ -244,7 +292,9 @@ export function BOMDetails({ bomId, onBack }: BOMDetailsProps) {
   if (!bom) {
     return (
       <div className="flex flex-col items-center justify-center h-screen">
-        <h2 className="text-xl font-semibold text-gray-600 mb-4">BOM Not Found</h2>
+        <h2 className="text-xl font-semibold text-gray-600 mb-4">
+          BOM Not Found
+        </h2>
         <Button onClick={onBack} variant="outline">
           <ArrowLeft className="w-4 h-4 mr-2" />
           Back to BOMs
@@ -268,21 +318,21 @@ export function BOMDetails({ bomId, onBack }: BOMDetailsProps) {
                 {bom.modelName} - {bom.revision}
               </h1>
               <p className="text-gray-600 dark:text-gray-400">
-                {bom.description || "No description available"}
+                {bom.description || 'No description available'}
               </p>
             </div>
-            <Badge variant={bom.isActive ? "default" : "secondary"}>
-              {bom.isActive ? "Active" : "Inactive"}
+            <Badge variant={bom.isActive ? 'default' : 'secondary'}>
+              {bom.isActive ? 'Active' : 'Inactive'}
             </Badge>
           </div>
           <div className="flex items-center space-x-2">
-            <Button 
+            <Button
               variant="outline"
               onClick={() => setIsSubAssemblyOpen(true)}
               className="border-green-600 text-green-600 hover:bg-green-50"
             >
               <GitBranch className="w-4 h-4 mr-2" />
-              Add Sub-Assembly  
+              Add Sub-Assembly
             </Button>
             <Dialog open={isNewItemOpen} onOpenChange={setIsNewItemOpen}>
               <DialogTrigger asChild>
@@ -298,7 +348,7 @@ export function BOMDetails({ bomId, onBack }: BOMDetailsProps) {
                     Add a new component to this Bill of Materials
                   </DialogDescription>
                 </DialogHeader>
-                <BOMItemForm 
+                <BOMItemForm
                   bomId={bomId}
                   onSuccess={handleItemCreated}
                   onCancel={() => setIsNewItemOpen(false)}
@@ -314,15 +364,21 @@ export function BOMDetails({ bomId, onBack }: BOMDetailsProps) {
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-6">
             <div>
-              <span className="text-sm text-gray-600 dark:text-gray-400">Total Items:</span>
+              <span className="text-sm text-gray-600 dark:text-gray-400">
+                Total Items:
+              </span>
               <span className="ml-2 font-semibold">{filteredItems.length}</span>
             </div>
             <div>
-              <span className="text-sm text-gray-600 dark:text-gray-400">Total Quantity:</span>
+              <span className="text-sm text-gray-600 dark:text-gray-400">
+                Total Quantity:
+              </span>
               <span className="ml-2 font-semibold">{totalQuantity}</span>
             </div>
             <div>
-              <span className="text-sm text-gray-600 dark:text-gray-400">Last Updated:</span>
+              <span className="text-sm text-gray-600 dark:text-gray-400">
+                Last Updated:
+              </span>
               <span className="ml-2 font-semibold">
                 {new Date(bom.updatedAt).toLocaleDateString()}
               </span>
@@ -377,7 +433,9 @@ export function BOMDetails({ bomId, onBack }: BOMDetailsProps) {
                 <Package className="w-12 h-12 mx-auto text-gray-400 mb-4" />
                 <CardTitle className="text-gray-600">No Items Found</CardTitle>
                 <CardDescription>
-                  {searchTerm ? "No items match your search criteria." : "This BOM doesn't have any items yet. Add the first component to get started."}
+                  {searchTerm
+                    ? 'No items match your search criteria.'
+                    : "This BOM doesn't have any items yet. Add the first component to get started."}
                 </CardDescription>
               </CardHeader>
             </Card>
@@ -411,24 +469,45 @@ export function BOMDetails({ bomId, onBack }: BOMDetailsProps) {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {viewMode === 'hierarchical' 
-                      ? itemsToDisplay.map((item) => renderHierarchicalItem(item, 0))
+                    {viewMode === 'hierarchical'
+                      ? itemsToDisplay.map((item) =>
+                          renderHierarchicalItem(item, 0)
+                        )
                       : itemsToDisplay.map((item) => (
-                          <TableRow key={item.id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                            <TableCell className="font-mono text-sm">{getPartNumber(item.partName)}</TableCell>
-                            <TableCell className="font-medium">{item.partName}</TableCell>
+                          <TableRow
+                            key={item.id}
+                            className="hover:bg-gray-50 dark:hover:bg-gray-800"
+                          >
+                            <TableCell className="font-mono text-sm">
+                              {getPartNumber(item.partName)}
+                            </TableCell>
+                            <TableCell className="font-medium">
+                              {item.partName}
+                            </TableCell>
                             <TableCell>{item.quantity}</TableCell>
                             <TableCell>
                               <Badge variant="outline">{item.firstDept}</Badge>
                             </TableCell>
                             <TableCell>
-                              <Badge variant={item.itemType === 'manufactured' ? "default" : "secondary"}>
-                                {item.itemType === 'manufactured' ? "Manufactured" : "Material"}
+                              <Badge
+                                variant={
+                                  item.itemType === 'manufactured'
+                                    ? 'default'
+                                    : 'secondary'
+                                }
+                              >
+                                {item.itemType === 'manufactured'
+                                  ? 'Manufactured'
+                                  : 'Material'}
                               </Badge>
                             </TableCell>
                             <TableCell>
-                              <Badge variant={item.isActive ? "default" : "secondary"}>
-                                {item.isActive ? "Active" : "Inactive"}
+                              <Badge
+                                variant={
+                                  item.isActive ? 'default' : 'secondary'
+                                }
+                              >
+                                {item.isActive ? 'Active' : 'Inactive'}
                               </Badge>
                             </TableCell>
                             <TableCell className="text-right">
@@ -451,8 +530,7 @@ export function BOMDetails({ bomId, onBack }: BOMDetailsProps) {
                               </div>
                             </TableCell>
                           </TableRow>
-                        ))
-                    }
+                        ))}
                   </TableBody>
                 </Table>
               </CardContent>
@@ -466,12 +544,10 @@ export function BOMDetails({ bomId, onBack }: BOMDetailsProps) {
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Edit BOM Item</DialogTitle>
-            <DialogDescription>
-              Update the component details
-            </DialogDescription>
+            <DialogDescription>Update the component details</DialogDescription>
           </DialogHeader>
           {editingItem && (
-            <BOMItemForm 
+            <BOMItemForm
               bomId={bomId}
               item={editingItem}
               onSuccess={handleItemUpdated}
@@ -482,7 +558,7 @@ export function BOMDetails({ bomId, onBack }: BOMDetailsProps) {
       </Dialog>
 
       {/* Sub-Assembly Dialog */}
-      <SubAssemblyDialog 
+      <SubAssemblyDialog
         open={isSubAssemblyOpen}
         onOpenChange={setIsSubAssemblyOpen}
         parentBomId={bomId}

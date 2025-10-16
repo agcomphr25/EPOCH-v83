@@ -1,11 +1,13 @@
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
-import { useMutation } from "@tanstack/react-query";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Switch } from "@/components/ui/switch";
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { useMutation } from '@tanstack/react-query';
+import { toast } from 'react-hot-toast';
+
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Switch } from '@/components/ui/switch';
 import {
   Form,
   FormControl,
@@ -14,14 +16,13 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-} from "@/components/ui/form";
-import { apiRequest } from "@/lib/queryClient";
-import { toast } from "react-hot-toast";
+} from '@/components/ui/form';
+import { apiRequest } from '@/lib/queryClient';
 
 const bomDefinitionSchema = z.object({
   sku: z.string().optional(),
-  modelName: z.string().min(1, "Model name is required"),
-  revision: z.string().min(1, "Revision is required"),
+  modelName: z.string().min(1, 'Model name is required'),
+  revision: z.string().min(1, 'Revision is required'),
   description: z.string().optional(),
   notes: z.string().optional(),
   isActive: z.boolean().default(true),
@@ -47,17 +48,21 @@ interface BOMDefinitionFormProps {
   onCancel: () => void;
 }
 
-export function BOMDefinitionForm({ bom, onSuccess, onCancel }: BOMDefinitionFormProps) {
+export function BOMDefinitionForm({
+  bom,
+  onSuccess,
+  onCancel,
+}: BOMDefinitionFormProps) {
   const isEditing = !!bom;
 
   const form = useForm<BomDefinitionFormData>({
     resolver: zodResolver(bomDefinitionSchema),
     defaultValues: {
-      sku: bom?.sku || "",
-      modelName: bom?.modelName || "",
-      revision: bom?.revision || "",
-      description: bom?.description || "",
-      notes: bom?.notes || "",
+      sku: bom?.sku || '',
+      modelName: bom?.modelName || '',
+      revision: bom?.revision || '',
+      description: bom?.description || '',
+      notes: bom?.notes || '',
       isActive: bom?.isActive ?? true,
     },
   });
@@ -66,12 +71,12 @@ export function BOMDefinitionForm({ bom, onSuccess, onCancel }: BOMDefinitionFor
     mutationFn: async (data: BomDefinitionFormData) => {
       if (isEditing) {
         return apiRequest(`/api/boms/${bom.id}`, {
-          method: "PUT",
+          method: 'PUT',
           body: data,
         });
       } else {
-        return apiRequest("/api/boms", {
-          method: "POST",
+        return apiRequest('/api/boms', {
+          method: 'POST',
           body: data,
         });
       }
@@ -80,8 +85,8 @@ export function BOMDefinitionForm({ bom, onSuccess, onCancel }: BOMDefinitionFor
       onSuccess();
     },
     onError: (error: any) => {
-      console.error("BOM operation error:", error);
-      toast.error(isEditing ? "Failed to update BOM" : "Failed to create BOM");
+      console.error('BOM operation error:', error);
+      toast.error(isEditing ? 'Failed to update BOM' : 'Failed to create BOM');
     },
   });
 
@@ -99,14 +104,9 @@ export function BOMDefinitionForm({ bom, onSuccess, onCancel }: BOMDefinitionFor
             <FormItem>
               <FormLabel>SKU</FormLabel>
               <FormControl>
-                <Input 
-                  placeholder="e.g., P2-001, SKU-ABC123" 
-                  {...field} 
-                />
+                <Input placeholder="e.g., P2-001, SKU-ABC123" {...field} />
               </FormControl>
-              <FormDescription>
-                Stock Keeping Unit identifier
-              </FormDescription>
+              <FormDescription>Stock Keeping Unit identifier</FormDescription>
               <FormMessage />
             </FormItem>
           )}
@@ -120,10 +120,7 @@ export function BOMDefinitionForm({ bom, onSuccess, onCancel }: BOMDefinitionFor
               <FormItem>
                 <FormLabel>Model Name</FormLabel>
                 <FormControl>
-                  <Input 
-                    placeholder="e.g., P2-Chassis-v1" 
-                    {...field} 
-                  />
+                  <Input placeholder="e.g., P2-Chassis-v1" {...field} />
                 </FormControl>
                 <FormDescription>
                   Unique identifier for the product model
@@ -140,14 +137,9 @@ export function BOMDefinitionForm({ bom, onSuccess, onCancel }: BOMDefinitionFor
               <FormItem>
                 <FormLabel>Revision</FormLabel>
                 <FormControl>
-                  <Input 
-                    placeholder="e.g., Rev A, v1.0, etc." 
-                    {...field} 
-                  />
+                  <Input placeholder="e.g., Rev A, v1.0, etc." {...field} />
                 </FormControl>
-                <FormDescription>
-                  Version or revision number
-                </FormDescription>
+                <FormDescription>Version or revision number</FormDescription>
                 <FormMessage />
               </FormItem>
             )}
@@ -161,9 +153,9 @@ export function BOMDefinitionForm({ bom, onSuccess, onCancel }: BOMDefinitionFor
             <FormItem>
               <FormLabel>Description</FormLabel>
               <FormControl>
-                <Input 
-                  placeholder="Brief description of the product model" 
-                  {...field} 
+                <Input
+                  placeholder="Brief description of the product model"
+                  {...field}
                 />
               </FormControl>
               <FormDescription>
@@ -181,10 +173,10 @@ export function BOMDefinitionForm({ bom, onSuccess, onCancel }: BOMDefinitionFor
             <FormItem>
               <FormLabel>Notes</FormLabel>
               <FormControl>
-                <Textarea 
+                <Textarea
                   placeholder="Additional notes, specifications, or requirements..."
                   className="min-h-[100px]"
-                  {...field} 
+                  {...field}
                 />
               </FormControl>
               <FormDescription>
@@ -203,7 +195,8 @@ export function BOMDefinitionForm({ bom, onSuccess, onCancel }: BOMDefinitionFor
               <div className="space-y-0.5">
                 <FormLabel className="text-base">Active Status</FormLabel>
                 <FormDescription>
-                  When inactive, this BOM will not be available for new operations
+                  When inactive, this BOM will not be available for new
+                  operations
                 </FormDescription>
               </div>
               <FormControl>
@@ -220,18 +213,20 @@ export function BOMDefinitionForm({ bom, onSuccess, onCancel }: BOMDefinitionFor
           <Button type="button" variant="outline" onClick={onCancel}>
             Cancel
           </Button>
-          <Button 
-            type="submit" 
+          <Button
+            type="submit"
             disabled={mutation.isPending}
             className="bg-blue-600 hover:bg-blue-700"
           >
             {mutation.isPending ? (
               <>
                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
-                {isEditing ? "Updating..." : "Creating..."}
+                {isEditing ? 'Updating...' : 'Creating...'}
               </>
+            ) : isEditing ? (
+              'Update BOM'
             ) : (
-              isEditing ? "Update BOM" : "Create BOM"
+              'Create BOM'
             )}
           </Button>
         </div>

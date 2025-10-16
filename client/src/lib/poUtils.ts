@@ -1,4 +1,4 @@
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest } from '@/lib/queryClient';
 
 // PO Types
 export interface PurchaseOrder {
@@ -82,30 +82,38 @@ export async function fetchPOs(): Promise<PurchaseOrder[]> {
 }
 
 // Fetch single PO (optionally with items/order count)
-export async function fetchPO(id: number, options?: { includeItems?: boolean; includeOrderCount?: boolean }): Promise<PurchaseOrder> {
+export async function fetchPO(
+  id: number,
+  options?: { includeItems?: boolean; includeOrderCount?: boolean }
+): Promise<PurchaseOrder> {
   const params = new URLSearchParams();
   if (options?.includeItems) params.append('includeItems', 'true');
   if (options?.includeOrderCount) params.append('includeOrderCount', 'true');
-  
+
   const response = await apiRequest(`/api/pos/${id}?${params.toString()}`);
   return response;
 }
 
 // Create PO
-export async function createPO(data: CreatePurchaseOrderData): Promise<PurchaseOrder> {
+export async function createPO(
+  data: CreatePurchaseOrderData
+): Promise<PurchaseOrder> {
   console.log('createPO called with data:', data);
   const response = await apiRequest('/api/pos', {
     method: 'POST',
-    body: JSON.stringify(data)
+    body: JSON.stringify(data),
   });
   return response;
 }
 
 // Update PO
-export async function updatePO(id: number, data: Partial<CreatePurchaseOrderData>): Promise<PurchaseOrder> {
+export async function updatePO(
+  id: number,
+  data: Partial<CreatePurchaseOrderData>
+): Promise<PurchaseOrder> {
   const response = await apiRequest(`/api/pos/${id}`, {
     method: 'PUT',
-    body: JSON.stringify(data)
+    body: JSON.stringify(data),
   });
   return response;
 }
@@ -113,7 +121,7 @@ export async function updatePO(id: number, data: Partial<CreatePurchaseOrderData
 // Delete PO
 export async function deletePO(id: number): Promise<void> {
   await apiRequest(`/api/pos/${id}`, {
-    method: 'DELETE'
+    method: 'DELETE',
   });
 }
 
@@ -124,31 +132,39 @@ export async function fetchPOItems(poId: number): Promise<PurchaseOrderItem[]> {
 }
 
 // Create PO item
-export async function createPOItem(poId: number, data: CreatePurchaseOrderItemData): Promise<PurchaseOrderItem> {
+export async function createPOItem(
+  poId: number,
+  data: CreatePurchaseOrderItemData
+): Promise<PurchaseOrderItem> {
   const response = await apiRequest(`/api/pos/${poId}/items`, {
     method: 'POST',
-    body: JSON.stringify(data)
+    body: JSON.stringify(data),
   });
   return response;
 }
 
 // Update PO item
-export async function updatePOItem(poId: number, itemId: number, data: Partial<CreatePurchaseOrderItemData>): Promise<PurchaseOrderItem> {
+export async function updatePOItem(
+  poId: number,
+  itemId: number,
+  data: Partial<CreatePurchaseOrderItemData>
+): Promise<PurchaseOrderItem> {
   const response = await apiRequest(`/api/pos/${poId}/items/${itemId}`, {
     method: 'PUT',
-    body: JSON.stringify(data)
+    body: JSON.stringify(data),
   });
   return response;
 }
 
 // Delete PO item
-export async function deletePOItem(poId: number, itemId: number): Promise<void> {
+export async function deletePOItem(
+  poId: number,
+  itemId: number
+): Promise<void> {
   await apiRequest(`/api/pos/${poId}/items/${itemId}`, {
-    method: 'DELETE'
+    method: 'DELETE',
   });
 }
-
-
 
 // Fetch stock models for PO items
 export async function fetchStockModels(): Promise<StockModel[]> {
@@ -164,7 +180,10 @@ export async function fetchFeatures(): Promise<Feature[]> {
 
 // CSV Import functionality would go here
 // For now, we'll create a placeholder
-export async function importPOsFromCsv(file: File, onProgress?: (progress: { done: number; total: number }) => void): Promise<void> {
+export async function importPOsFromCsv(
+  file: File,
+  onProgress?: (progress: { done: number; total: number }) => void
+): Promise<void> {
   // TODO: Implement CSV import functionality
   console.log('CSV import not yet implemented', file, onProgress);
 }

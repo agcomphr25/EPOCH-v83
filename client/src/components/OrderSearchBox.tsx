@@ -1,8 +1,9 @@
 import React, { useState, useMemo } from 'react';
+import { Search, X } from 'lucide-react';
+
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Search, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 interface Order {
@@ -21,19 +22,27 @@ interface OrderSearchBoxProps {
   onOrderSelect?: (order: Order) => void;
 }
 
-export function OrderSearchBox({ orders, placeholder = "Search by Order ID or FB Number...", onOrderSelect }: OrderSearchBoxProps) {
+export function OrderSearchBox({
+  orders,
+  placeholder = 'Search by Order ID or FB Number...',
+  onOrderSelect,
+}: OrderSearchBoxProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [isOpen, setIsOpen] = useState(false);
 
   // Filter orders based on search term
   const filteredOrders = useMemo(() => {
     if (!searchTerm.trim()) return [];
-    
+
     const term = searchTerm.toLowerCase().trim();
-    return orders.filter(order => 
-      order.orderId.toLowerCase().includes(term) ||
-      (order.fbOrderNumber && order.fbOrderNumber.toLowerCase().includes(term))
-    ).slice(0, 10); // Limit to 10 results for performance
+    return orders
+      .filter(
+        (order) =>
+          order.orderId.toLowerCase().includes(term) ||
+          (order.fbOrderNumber &&
+            order.fbOrderNumber.toLowerCase().includes(term))
+      )
+      .slice(0, 10); // Limit to 10 results for performance
   }, [orders, searchTerm]);
 
   const handleOrderClick = (order: Order) => {
@@ -89,7 +98,9 @@ export function OrderSearchBox({ orders, placeholder = "Search by Order ID or FB
                     <div className="flex flex-col space-y-1">
                       <div className="flex items-center gap-2">
                         <span className="font-medium text-sm">
-                          {order.fbOrderNumber ? order.fbOrderNumber : order.orderId}
+                          {order.fbOrderNumber
+                            ? order.fbOrderNumber
+                            : order.orderId}
                         </span>
                         {order.fbOrderNumber && (
                           <Badge variant="outline" className="text-xs">

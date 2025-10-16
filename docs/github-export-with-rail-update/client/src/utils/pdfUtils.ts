@@ -6,7 +6,10 @@ import axios from 'axios';
  * @param orderId - Order ID for PDF generation
  * @returns PDF blob
  */
-export async function fetchPdf(endpoint: string, orderId: string): Promise<Blob> {
+export async function fetchPdf(
+  endpoint: string,
+  orderId: string
+): Promise<Blob> {
   const response = await axios.get(endpoint, {
     params: { orderId },
     responseType: 'blob', // ensure we get binary data

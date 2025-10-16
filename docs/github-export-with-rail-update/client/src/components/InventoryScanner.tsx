@@ -1,19 +1,27 @@
 import React, { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { apiRequest } from '@/lib/queryClient';
+import toast from 'react-hot-toast';
+import type { Employee } from '@shared/schema';
+
 import useScanner from '../hooks/useScanner';
+
+import { apiRequest } from '@/lib/queryClient';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import toast from 'react-hot-toast';
-import type { Employee } from '@shared/schema';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 export default function InventoryScanner() {
   const scannedCode = useScanner();
   const queryClient = useQueryClient();
-  
+
   const [formData, setFormData] = useState({
     itemCode: '',
     quantity: '1',
@@ -33,16 +41,17 @@ export default function InventoryScanner() {
   // Auto-fill code on scan
   useEffect(() => {
     if (scannedCode) {
-      setFormData(fd => ({ ...fd, itemCode: scannedCode }));
+      setFormData((fd) => ({ ...fd, itemCode: scannedCode }));
       toast.success(`Scanned: ${scannedCode}`);
     }
   }, [scannedCode]);
 
   const scanMutation = useMutation({
-    mutationFn: (data: any) => apiRequest('/api/inventory/scan', {
-      method: 'POST',
-      body: data
-    }),
+    mutationFn: (data: any) =>
+      apiRequest('/api/inventory/scan', {
+        method: 'POST',
+        body: data,
+      }),
     onSuccess: () => {
       toast.success('Scan recorded ✔️');
       setFormData({
@@ -62,7 +71,7 @@ export default function InventoryScanner() {
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
     const { name, value } = e.target;
-    setFormData(fd => ({ ...fd, [name]: value }));
+    setFormData((fd) => ({ ...fd, [name]: value }));
   }
 
   function handleSubmit(e: React.FormEvent) {
@@ -71,12 +80,12 @@ export default function InventoryScanner() {
       toast.error('Item code is required');
       return;
     }
-    
+
     const submitData = {
       ...formData,
-      quantity: parseInt(formData.quantity) || 1
+      quantity: parseInt(formData.quantity) || 1,
     };
-    
+
     scanMutation.mutate(submitData);
   }
 
@@ -115,7 +124,7 @@ export default function InventoryScanner() {
               />
             </div>
           </div>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <Label htmlFor="expirationDate">Expiration Date</Label>
@@ -158,17 +167,20 @@ export default function InventoryScanner() {
               />
             </div>
           </div>
-          
+
           <div>
             <Label htmlFor="technicianId">Technician</Label>
-            <Select value={formData.technicianId} onValueChange={(value) => 
-              setFormData(fd => ({ ...fd, technicianId: value }))
-            }>
+            <Select
+              value={formData.technicianId}
+              onValueChange={(value) =>
+                setFormData((fd) => ({ ...fd, technicianId: value }))
+              }
+            >
               <SelectTrigger>
                 <SelectValue placeholder="Select Technician" />
               </SelectTrigger>
               <SelectContent>
-                {technicians.map(t => (
+                {technicians.map((t) => (
                   <SelectItem key={t.id} value={t.id.toString()}>
                     {t.name}
                   </SelectItem>
@@ -177,8 +189,8 @@ export default function InventoryScanner() {
             </Select>
           </div>
 
-          <Button 
-            type="submit" 
+          <Button
+            type="submit"
             className="w-full"
             disabled={scanMutation.isPending}
           >

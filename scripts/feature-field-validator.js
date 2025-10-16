@@ -2,10 +2,10 @@
 
 /**
  * Feature Field Validation Script
- * 
+ *
  * This script enforces consistent usage of the features object as the single source of truth
  * for all feature-related data, supporting the "Golden Rule" of the EPOCH v8 system.
- * 
+ *
  * It identifies violations where direct field names are used instead of features.fieldName
  */
 
@@ -20,7 +20,7 @@ const __dirname = path.dirname(__filename);
 const FEATURES_OBJECT_FIELDS = [
   // Core features stored in features object
   'action_inlet',
-  'barrel_inlet', 
+  'barrel_inlet',
   'qd_accessory',
   'length_of_pull',
   'texture_options',
@@ -29,58 +29,58 @@ const FEATURES_OBJECT_FIELDS = [
   'barrel_length',
   'heavy_fill',
   'other_options',
-  
+
   // Paint-related features
   'metallic_finishes',
-  'camo_patterns', 
+  'camo_patterns',
   'protective_coatings',
   'custom_graphics',
   'base_colors',
   'special_effects',
   'paint_options',
   'paint_options_combined',
-  
+
   // Additional features from codebase scan
   'bottom_metal',
   'rail_accessory',
   'stock_model',
-  'model_id'
+  'model_id',
 ];
 
 // State variables that are legitimately separate (not in features object)
 const LEGITIMATE_STATE_VARS = [
-  'paintOptions',    // Paint options state variable
-  'bottomMetal',     // Bottom metal state variable  
-  'railAccessory',   // Rail accessory state variable
-  'otherOptions',    // Other options state variable
-  'actionLength',    // Action length state variable
-  'stockModel',      // Stock model state variable
-  'modelId'          // Model ID state variable
+  'paintOptions', // Paint options state variable
+  'bottomMetal', // Bottom metal state variable
+  'railAccessory', // Rail accessory state variable
+  'otherOptions', // Other options state variable
+  'actionLength', // Action length state variable
+  'stockModel', // Stock model state variable
+  'modelId', // Model ID state variable
 ];
 
 // Files to scan for violations
 const SCAN_DIRECTORIES = [
   'client/src/components',
-  'client/src/pages', 
+  'client/src/pages',
   'client/src/hooks',
   'client/src/utils',
-  'shared'
+  'shared',
 ];
 
 // Patterns that should be ignored (legitimate uses)
 const IGNORE_PATTERNS = [
-  /const \[.*\]/,           // React useState declarations
-  /set[A-Z].*/,             // setState functions
-  /interface.*{/,           // Interface definitions
-  /type.*=/,                // Type definitions
-  /\/\//,                   // Comments
-  /\/\*/,                   // Block comments
-  /'[^']*'|"[^"]*"/,        // String literals
-  /import.*from/,           // Import statements
-  /export.*{/,              // Export statements
-  /\.includes\(/,           // String includes calls
-  /\[.*\]/,                 // Array access
-  /console\./,              // Console statements
+  /const \[.*\]/, // React useState declarations
+  /set[A-Z].*/, // setState functions
+  /interface.*{/, // Interface definitions
+  /type.*=/, // Type definitions
+  /\/\//, // Comments
+  /\/\*/, // Block comments
+  /'[^']*'|"[^"]*"/, // String literals
+  /import.*from/, // Import statements
+  /export.*{/, // Export statements
+  /\.includes\(/, // String includes calls
+  /\[.*\]/, // Array access
+  /console\./, // Console statements
 ];
 
 class FeatureFieldValidator {
@@ -88,7 +88,7 @@ class FeatureFieldValidator {
     this.violations = [];
     this.stats = {
       filesScanned: 0,
-      violationsFound: 0
+      violationsFound: 0,
     };
   }
 
@@ -97,7 +97,9 @@ class FeatureFieldValidator {
    */
   validate() {
     console.log('🔍 Feature Field Validation Starting...\n');
-    console.log(`📋 Checking ${FEATURES_OBJECT_FIELDS.length} feature fields for consistent usage\n`);
+    console.log(
+      `📋 Checking ${FEATURES_OBJECT_FIELDS.length} feature fields for consistent usage\n`
+    );
 
     for (const dir of SCAN_DIRECTORIES) {
       if (fs.existsSync(dir)) {
@@ -135,9 +137,11 @@ class FeatureFieldValidator {
    * Check if file should be scanned
    */
   isRelevantFile(filename) {
-    return /\.(ts|tsx|js|jsx)$/.test(filename) && 
-           !filename.includes('.test.') && 
-           !filename.includes('.spec.');
+    return (
+      /\.(ts|tsx|js|jsx)$/.test(filename) &&
+      !filename.includes('.test.') &&
+      !filename.includes('.spec.')
+    );
   }
 
   /**
@@ -147,14 +151,13 @@ class FeatureFieldValidator {
     try {
       const content = fs.readFileSync(filePath, 'utf-8');
       const lines = content.split('\n');
-      
+
       this.stats.filesScanned++;
 
       lines.forEach((line, index) => {
         const lineNum = index + 1;
         this.checkLine(line, lineNum, filePath);
       });
-
     } catch (error) {
       console.log(`⚠️  Error reading file ${filePath}: ${error.message}`);
     }
@@ -165,23 +168,23 @@ class FeatureFieldValidator {
    */
   checkLine(line, lineNum, filePath) {
     // Skip lines that match ignore patterns
-    if (IGNORE_PATTERNS.some(pattern => pattern.test(line))) {
+    if (IGNORE_PATTERNS.some((pattern) => pattern.test(line))) {
       return;
     }
 
     // Check each feature field for improper usage
-    FEATURES_OBJECT_FIELDS.forEach(field => {
+    FEATURES_OBJECT_FIELDS.forEach((field) => {
       // Convert snake_case to camelCase for state variable detection
       const camelCaseField = this.snakeToCamel(field);
-      
+
       // Look for direct field usage (not prefixed with features.)
       const directUsageRegex = new RegExp(`\\b${field}\\b`);
       const camelUsageRegex = new RegExp(`\\b${camelCaseField}\\b`);
-      
+
       const hasDirectUsage = directUsageRegex.test(line);
       const hasCamelUsage = camelUsageRegex.test(line);
       const hasFeaturesPrefix = line.includes(`features.${field}`);
-      
+
       // Check for violations - using field name without features. prefix
       if ((hasDirectUsage || hasCamelUsage) && !hasFeaturesPrefix) {
         // Allow legitimate state variables
@@ -197,7 +200,7 @@ class FeatureFieldValidator {
             field: field,
             actualUsage: line.trim(),
             expectedUsage: `features.${field}`,
-            severity: this.getSeverity(line, field)
+            severity: this.getSeverity(line, field),
           });
           this.stats.violationsFound++;
         }
@@ -210,7 +213,11 @@ class FeatureFieldValidator {
    */
   isViolation(line, field, camelCaseField) {
     // Skip if it's in a comment
-    if (line.trim().startsWith('//') || line.includes('/*') || line.includes('*/')) {
+    if (
+      line.trim().startsWith('//') ||
+      line.includes('/*') ||
+      line.includes('*/')
+    ) {
       return false;
     }
 
@@ -247,12 +254,12 @@ class FeatureFieldValidator {
     if (line.includes('useState') || line.includes('setState')) {
       return 'HIGH';
     }
-    
+
     // Medium severity for component props/rendering
     if (line.includes('value=') || line.includes('defaultValue=')) {
       return 'MEDIUM';
     }
-    
+
     return 'LOW';
   }
 
@@ -266,7 +273,9 @@ class FeatureFieldValidator {
     console.log(`Violations found: ${this.stats.violationsFound}\n`);
 
     if (this.violations.length === 0) {
-      console.log('✅ No feature field violations found! Great job maintaining consistency.\n');
+      console.log(
+        '✅ No feature field violations found! Great job maintaining consistency.\n'
+      );
       return;
     }
 
@@ -280,15 +289,21 @@ class FeatureFieldValidator {
     }, {});
 
     // Display violations by file
-    Object.keys(violationsByFile).forEach(file => {
+    Object.keys(violationsByFile).forEach((file) => {
       console.log(`\n📄 ${file}`);
       console.log('─'.repeat(file.length + 3));
-      
-      violationsByFile[file].forEach(violation => {
-        const severityIcon = violation.severity === 'HIGH' ? '🔴' : 
-                            violation.severity === 'MEDIUM' ? '🟡' : '🟢';
-        
-        console.log(`  ${severityIcon} Line ${violation.line}: Using '${violation.field}' instead of '${violation.expectedUsage}'`);
+
+      violationsByFile[file].forEach((violation) => {
+        const severityIcon =
+          violation.severity === 'HIGH'
+            ? '🔴'
+            : violation.severity === 'MEDIUM'
+              ? '🟡'
+              : '🟢';
+
+        console.log(
+          `  ${severityIcon} Line ${violation.line}: Using '${violation.field}' instead of '${violation.expectedUsage}'`
+        );
         console.log(`     Code: ${violation.actualUsage}`);
         console.log('');
       });
@@ -296,8 +311,12 @@ class FeatureFieldValidator {
 
     console.log('\n💡 How to fix these violations:');
     console.log('  1. Replace direct field usage with features.fieldName');
-    console.log('  2. Ensure the features object is the single source of truth');
-    console.log('  3. Update any state management to sync with features object\n');
+    console.log(
+      '  2. Ensure the features object is the single source of truth'
+    );
+    console.log(
+      '  3. Update any state management to sync with features object\n'
+    );
 
     // Exit with error code if violations found
     process.exit(this.violations.length > 0 ? 1 : 0);

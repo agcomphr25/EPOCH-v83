@@ -1,7 +1,8 @@
 import { Router } from 'express';
+import { z } from 'zod';
+
 import { storage } from '../../storage';
 import { insertMetalAccessorySchema } from '../../schema';
-import { z } from 'zod';
 
 const validCategories = ['Bottom Metals', 'Rails', 'Other'] as const;
 

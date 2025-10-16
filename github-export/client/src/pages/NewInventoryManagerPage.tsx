@@ -1,5 +1,13 @@
 import React, { useState } from 'react';
 import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import {
   Package,
   FileText,
   ShoppingCart,
@@ -7,20 +15,10 @@ import {
   Import,
   Download,
 } from 'lucide-react';
-
 import InventoryItemsCard from '../components/inventory/InventoryItemsCard';
 import PartsRequestsCard from '../components/inventory/PartsRequestsCard';
 import OutstandingOrdersCard from '../components/inventory/OutstandingOrdersCard';
 import OrderPlacementCard from '../components/inventory/OrderPlacementCard';
-
-import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
 
 export default function NewInventoryManagerPage() {
   const [activeCard, setActiveCard] = useState<string | null>(null);

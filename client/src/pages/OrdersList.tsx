@@ -1,33 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { Link, useLocation } from 'wouter';
-import {
-  Edit,
-  Eye,
-  Package,
-  CalendarDays,
-  User,
-  FileText,
-  Download,
-  QrCode,
-  ArrowRight,
-  Search,
-  TrendingDown,
-  Plus,
-  CalendarIcon,
-  Mail,
-  MessageSquare,
-  MoreHorizontal,
-  XCircle,
-  AlertTriangle,
-} from 'lucide-react';
-import { format } from 'date-fns';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
-import { insertKickbackSchema } from '@shared/schema';
-import toast from 'react-hot-toast';
-
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -87,13 +60,39 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
+import {
+  Edit,
+  Eye,
+  Package,
+  CalendarDays,
+  User,
+  FileText,
+  Download,
+  QrCode,
+  ArrowRight,
+  Search,
+  TrendingDown,
+  Plus,
+  CalendarIcon,
+  Mail,
+  MessageSquare,
+  MoreHorizontal,
+  XCircle,
+  AlertTriangle,
+} from 'lucide-react';
+import { format } from 'date-fns';
 import CustomerDetailsTooltip from '@/components/CustomerDetailsTooltip';
 import OrderSummaryTooltip from '@/components/OrderSummaryTooltip';
 import { BarcodeDisplay } from '@/components/BarcodeDisplay';
 import { queryClient, apiRequest } from '@/lib/queryClient';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { insertKickbackSchema } from '@shared/schema';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { getDisplayOrderId } from '@/lib/orderUtils';
+import toast from 'react-hot-toast';
 import CommunicationCompose from '@/components/CommunicationCompose';
 
 // Form validation schema for kickback creation

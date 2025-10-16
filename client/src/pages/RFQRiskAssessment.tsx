@@ -1,7 +1,4 @@
 import { useState, useRef, useEffect } from 'react';
-import { Save, Printer, Download } from 'lucide-react';
-import SignatureCanvas from 'react-signature-canvas';
-
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,6 +6,8 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Separator } from '@/components/ui/separator';
+import { Save, Printer, Download } from 'lucide-react';
+import SignatureCanvas from 'react-signature-canvas';
 
 export default function RFQRiskAssessment() {
   // Signature canvas reference

@@ -1,9 +1,4 @@
 import { useEffect, useState, useRef } from 'react';
-import { FileText, CheckCircle, Signature } from 'lucide-react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import SignatureCanvas from 'react-signature-canvas';
-import type { OnboardingDoc } from '@shared/schema';
-
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -19,7 +14,11 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
+import { FileText, CheckCircle, Signature } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import SignatureCanvas from 'react-signature-canvas';
+import type { OnboardingDoc } from '@shared/schema';
 
 interface OnboardingDocsProps {
   employeeId: string;

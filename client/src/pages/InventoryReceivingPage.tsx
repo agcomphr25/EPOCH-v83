@@ -1,18 +1,5 @@
 import { useState } from 'react';
 import {
-  Package,
-  Scan,
-  Plus,
-  Check,
-  Clock,
-  AlertCircle,
-  Search,
-  QrCode,
-} from 'lucide-react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { toast } from 'react-hot-toast';
-
-import {
   Card,
   CardContent,
   CardDescription,
@@ -25,6 +12,18 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  Package,
+  Scan,
+  Plus,
+  Check,
+  Clock,
+  AlertCircle,
+  Search,
+  QrCode,
+} from 'lucide-react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'react-hot-toast';
 import P2ReceivingDialog from '@/components/inventory/P2ReceivingDialog';
 
 interface ReceivingItem {

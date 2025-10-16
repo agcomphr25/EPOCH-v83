@@ -1,8 +1,7 @@
 import { useRef, useEffect } from 'react';
-import { Camera, CameraOff, Zap, AlertCircle } from 'lucide-react';
-
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Camera, CameraOff, Zap, AlertCircle } from 'lucide-react';
 import { useCameraScanner } from '@/hooks/useCameraScanner';
 
 interface CameraScannerProps {

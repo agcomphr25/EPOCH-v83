@@ -1,19 +1,5 @@
 import { useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import {
-  FileUp,
-  Plus,
-  Edit,
-  Trash2,
-  BookOpen,
-  FileText,
-  Users,
-  Upload,
-  CheckCircle,
-  Clock,
-  XCircle,
-} from 'lucide-react';
-
 import { queryClient, apiRequest } from '@/lib/queryClient';
 import { Button } from '@/components/ui/button';
 import {
@@ -44,6 +30,19 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
+import {
+  FileUp,
+  Plus,
+  Edit,
+  Trash2,
+  BookOpen,
+  FileText,
+  Users,
+  Upload,
+  CheckCircle,
+  Clock,
+  XCircle,
+} from 'lucide-react';
 
 interface TrainingModule {
   id: number;

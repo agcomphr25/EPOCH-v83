@@ -1,8 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Save, Printer, Download, FileText } from 'lucide-react';
-import SignatureCanvas from 'react-signature-canvas';
-
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,6 +15,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
+import { Save, Printer, Download, FileText } from 'lucide-react';
+import SignatureCanvas from 'react-signature-canvas';
 
 // SmartyStreets address autocomplete hook
 const useSmartyStreetsAutocomplete = (query: string) => {

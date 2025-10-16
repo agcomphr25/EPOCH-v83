@@ -30,11 +30,9 @@ import {
   CheckSquare,
   Truck,
 } from 'lucide-react';
-
-import InstallPWAButton from './InstallPWAButton';
-
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import InstallPWAButton from './InstallPWAButton';
 
 export default function Navigation() {
   const [location] = useLocation();

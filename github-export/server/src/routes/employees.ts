@@ -1,16 +1,4 @@
 import { Router, Request, Response } from 'express';
-import {
-  insertEmployeeSchema,
-  insertCertificationSchema,
-  insertEmployeeCertificationSchema,
-  insertEvaluationSchema,
-  insertEmployeeDocumentSchema,
-  insertTimeClockEntrySchema,
-  insertChecklistItemSchema,
-  insertOnboardingDocSchema,
-  insertEmployeeLayupSettingsSchema,
-} from '@shared/schema';
-
 import { storage } from '../../storage';
 import {
   authenticateToken,
@@ -24,6 +12,17 @@ import {
   validateEmployeeDocumentAccess,
   getDocumentType,
 } from '../../utils/fileUpload';
+import {
+  insertEmployeeSchema,
+  insertCertificationSchema,
+  insertEmployeeCertificationSchema,
+  insertEvaluationSchema,
+  insertEmployeeDocumentSchema,
+  insertTimeClockEntrySchema,
+  insertChecklistItemSchema,
+  insertOnboardingDocSchema,
+  insertEmployeeLayupSettingsSchema,
+} from '@shared/schema';
 
 const router = Router();
 

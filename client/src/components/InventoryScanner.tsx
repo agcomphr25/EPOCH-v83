@@ -1,12 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Camera, Scan } from 'lucide-react';
-import toast from 'react-hot-toast';
-import type { Employee } from '@shared/schema';
-
-import useScanner from '../hooks/useScanner';
-
 import { apiRequest } from '@/lib/queryClient';
+import useScanner from '../hooks/useScanner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -18,6 +13,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Camera, Scan } from 'lucide-react';
+import toast from 'react-hot-toast';
+import type { Employee } from '@shared/schema';
 import { useDeviceDetection } from '@/hooks/useDeviceDetection';
 import { useBarcodeInput } from '@/hooks/useBarcodeInput';
 import { CameraScanner } from '@/components/CameraScanner';

@@ -1,7 +1,5 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { AlertTriangle, Calendar, Package } from 'lucide-react';
-
 import { apiRequest } from '@/lib/queryClient';
 import {
   Card,
@@ -11,6 +9,7 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { AlertTriangle, Calendar, Package } from 'lucide-react';
 
 export default function MRPShortagesCard() {
   const { data: shortages = [], isLoading } = useQuery({

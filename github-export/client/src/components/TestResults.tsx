@@ -1,6 +1,5 @@
-import { CheckCircle, FlaskConical } from 'lucide-react';
-
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { CheckCircle, FlaskConical } from 'lucide-react';
 
 export function TestResults() {
   const p1Tests = [

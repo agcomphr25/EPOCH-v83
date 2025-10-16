@@ -1,4 +1,14 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import { generateLayupSchedule } from '../utils/schedulerUtils';
+import {
+  scheduleLOPAdjustments,
+  identifyLOPOrders,
+  getLOPStatus,
+} from '../utils/lopScheduler';
+import useMoldSettings from '../hooks/useMoldSettings';
+import useEmployeeSettings from '../hooks/useEmployeeSettings';
+import { useP2LayupOrders } from '../hooks/useP2LayupOrders';
+import { apiRequest } from '@/lib/queryClient';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   DndContext,
@@ -20,30 +30,6 @@ import {
   endOfMonth,
   eachDayOfInterval,
 } from 'date-fns';
-import {
-  ChevronLeft,
-  ChevronRight,
-  Calendar,
-  Grid3X3,
-  Calendar1,
-  Settings,
-  Users,
-  Plus,
-  Zap,
-  Printer,
-} from 'lucide-react';
-
-import { generateLayupSchedule } from '../utils/schedulerUtils';
-import {
-  scheduleLOPAdjustments,
-  identifyLOPOrders,
-  getLOPStatus,
-} from '../utils/lopScheduler';
-import useMoldSettings from '../hooks/useMoldSettings';
-import useEmployeeSettings from '../hooks/useEmployeeSettings';
-import { useP2LayupOrders } from '../hooks/useP2LayupOrders';
-
-import { apiRequest } from '@/lib/queryClient';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -56,6 +42,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  ChevronLeft,
+  ChevronRight,
+  Calendar,
+  Grid3X3,
+  Calendar1,
+  Settings,
+  Users,
+  Plus,
+  Zap,
+  Printer,
+} from 'lucide-react';
 import {
   Dialog,
   DialogContent,

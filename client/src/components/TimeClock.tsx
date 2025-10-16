@@ -1,6 +1,4 @@
 import React from 'react';
-import { Clock, LogIn, LogOut } from 'lucide-react';
-
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -9,6 +7,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
+import { Clock, LogIn, LogOut } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import useTimeClock from '@/hooks/useTimeClock';
 

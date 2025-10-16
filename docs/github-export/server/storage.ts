@@ -90,9 +90,8 @@ import {
   type EnhancedFormSubmission,
   type InsertEnhancedFormSubmission,
 } from '@shared/schema';
-import { eq, desc, and, or, ilike } from 'drizzle-orm';
-
 import { db } from './db';
+import { eq, desc, and, or, ilike } from 'drizzle-orm';
 
 // modify the interface with any CRUD methods
 // you might need
@@ -274,7 +273,9 @@ export interface IStorage {
   deleteMaintenanceLog(id: number): Promise<void>;
 
   // Time Clock CRUD
-  getTimeClockStatus(employeeId: string): Promise<{
+  getTimeClockStatus(
+    employeeId: string
+  ): Promise<{
     status: 'IN' | 'OUT';
     clockIn: string | null;
     clockOut: string | null;
@@ -1201,7 +1202,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Time Clock CRUD
-  async getTimeClockStatus(employeeId: string): Promise<{
+  async getTimeClockStatus(
+    employeeId: string
+  ): Promise<{
     status: 'IN' | 'OUT';
     clockIn: string | null;
     clockOut: string | null;
@@ -1453,7 +1456,7 @@ export class DatabaseStorage implements IStorage {
 
   // Onboarding Docs CRUD
   async getOnboardingDocs(employeeId: string): Promise<OnboardingDoc[]> {
-    const docs = await db
+    let docs = await db
       .select()
       .from(onboardingDocs)
       .where(eq(onboardingDocs.employeeId, employeeId))

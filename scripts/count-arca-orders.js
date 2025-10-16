@@ -8,7 +8,7 @@ async function countArcaOrders() {
     console.log(`Total orders: ${orders.length}`);
 
     let ordersWithArca = 0;
-    const ordersWithArcaData = [];
+    let ordersWithArcaData = [];
 
     orders.forEach((order) => {
       let hasArca = false;

@@ -1,6 +1,12 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from '@/components/ui/hover-card';
+import { Badge } from '@/components/ui/badge';
+import {
   User,
   Building2,
   Mail,
@@ -9,16 +15,8 @@ import {
   FileText,
   MessageSquare,
 } from 'lucide-react';
-
-import CommunicationCompose from './CommunicationCompose';
-
-import {
-  HoverCard,
-  HoverCardContent,
-  HoverCardTrigger,
-} from '@/components/ui/hover-card';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import CommunicationCompose from './CommunicationCompose';
 
 interface Customer {
   id: number;

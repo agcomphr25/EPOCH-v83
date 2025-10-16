@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Download, Smartphone, X } from 'lucide-react';
-
 import { Button } from '@/components/ui/button';
+import { Download, Smartphone, X } from 'lucide-react';
 import {
   Card,
   CardContent,

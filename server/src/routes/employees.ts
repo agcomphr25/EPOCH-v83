@@ -1,4 +1,13 @@
 import { Router, Request, Response } from 'express';
+import { storage } from '../../storage';
+import { pool } from '../../db';
+import {
+  uploadMiddleware,
+  getFileInfo,
+  getFileUrl,
+  validateEmployeeDocumentAccess,
+  getDocumentType,
+} from '../../utils/fileUpload';
 import {
   insertEmployeeSchema,
   insertCertificationSchema,
@@ -11,27 +20,15 @@ import {
   insertEmployeeLayupSettingsSchema,
 } from '@shared/schema';
 
-import { storage } from '../../storage';
-import { pool } from '../../db';
-import {
-  uploadMiddleware,
-  getFileInfo,
-  getFileUrl,
-  validateEmployeeDocumentAccess,
-  getDocumentType,
-} from '../../utils/fileUpload';
-
 const router = Router();
 
 // Employee Management Routes
 router.get('/', async (req: Request, res: Response) => {
   try {
-    console.log('🔧 EMPLOYEES ROUTE CALLED (development mode - no auth)');
     const employees = await storage.getAllEmployees();
-    console.log('🔧 Found employees:', employees.length);
     res.json(employees);
   } catch (error) {
-    console.error('Get employees error:', error);
+    console.error('Error fetching employees:', error);
     res.status(500).json({ error: 'Failed to fetch employees' });
   }
 });
@@ -129,19 +126,20 @@ router.get('/certifications-matrix', async (req: Request, res: Response) => {
         e.department as "department",
         c.id as "certificationId",
         c.name as "certificationName",
-        ec.id as "certificationRecordId",
-        ec.date_obtained as "dateEarned",
+        ec.id as "id",
+        ec.date_obtained as "dateObtained",
         ec.expiry_date as "expiryDate",
-        ec.status,
+        COALESCE(ec.is_active, false) as "isActive",
         ec.notes
       FROM employees e
       CROSS JOIN certifications c
       LEFT JOIN employee_certifications ec 
         ON e.id = ec.employee_id AND c.id = ec.certification_id
-      WHERE e.is_active = true AND c.is_active = true
+      WHERE c.is_active = true AND c.category = 'DEPARTMENT'
       ORDER BY e.name, c.name
     `;
 
+    console.log('Certifications matrix result:', result.length, 'rows');
     res.json(result || []);
   } catch (error) {
     console.error('Get certifications matrix error:', error);
@@ -171,7 +169,6 @@ router.get('/evaluations', async (req: Request, res: Response) => {
         ev.status
       FROM employees e
       LEFT JOIN evaluations ev ON e.id = ev.employee_id
-      WHERE e.is_active = true
       ORDER BY e.name, ev.evaluation_period_end DESC
     `;
 
@@ -203,7 +200,7 @@ router.post('/evaluations', async (req: Request, res: Response) => {
     // Calculate period start/end based on evaluation type
     const now = new Date();
     const periodEnd = now;
-    const periodStart = new Date(now);
+    let periodStart = new Date(now);
 
     switch (evaluationType) {
       case 'BIANNUAL':
@@ -285,6 +282,253 @@ router.post('/evaluations', async (req: Request, res: Response) => {
   }
 });
 
+// Employee Layup Settings CRUD (migrated from monolithic routes.ts)
+// Note: These routes don't require authentication for use in Layup Scheduler
+// MUST be before /:id to avoid route collision
+router.get('/layup-settings', async (req: Request, res: Response) => {
+  try {
+    const settings = await storage.getAllEmployeeLayupSettings();
+    res.json(settings);
+  } catch (error) {
+    console.error('Employee layup settings fetch error:', error);
+    res.status(500).json({ error: 'Failed to fetch employee layup settings' });
+  }
+});
+
+router.get(
+  '/layup-settings/:employeeId',
+  async (req: Request, res: Response) => {
+    try {
+      const settings = await storage.getEmployeeLayupSettings(
+        req.params.employeeId
+      );
+      if (settings) {
+        res.json(settings);
+      } else {
+        res.status(404).json({ error: 'Employee layup settings not found' });
+      }
+    } catch (error) {
+      console.error('Employee layup settings fetch error:', error);
+      res
+        .status(500)
+        .json({ error: 'Failed to fetch employee layup settings' });
+    }
+  }
+);
+
+router.post('/layup-settings', async (req: Request, res: Response) => {
+  try {
+    const result = insertEmployeeLayupSettingsSchema.parse(req.body);
+    const settings = await storage.createEmployeeLayupSettings(result);
+    res.json(settings);
+  } catch (error) {
+    console.error('Employee layup settings creation error:', error);
+    res.status(400).json({ error: 'Invalid employee layup settings data' });
+  }
+});
+
+router.put(
+  '/layup-settings/:employeeId',
+  async (req: Request, res: Response) => {
+    try {
+      // Decode URL-encoded employee ID
+      const employeeId = decodeURIComponent(req.params.employeeId);
+      console.log(
+        `💾 API: Updating employee layup settings for: "${employeeId}"`
+      );
+      console.log(`📝 API: Update data:`, req.body);
+
+      // Validate the data (but be flexible with required fields for updates)
+      const updateData = {
+        rate: req.body.rate ? parseFloat(req.body.rate) : undefined,
+        hours: req.body.hours ? parseFloat(req.body.hours) : undefined,
+        department: req.body.department || undefined,
+        isActive:
+          req.body.isActive !== undefined ? req.body.isActive : undefined,
+        updatedAt: new Date(),
+      };
+
+      // Remove undefined values
+      const cleanData = Object.fromEntries(
+        Object.entries(updateData).filter(([_, value]) => value !== undefined)
+      );
+
+      console.log(`🧹 API: Clean update data:`, cleanData);
+
+      const settings = await storage.updateEmployeeLayupSettings(
+        employeeId,
+        cleanData
+      );
+      console.log(
+        `✅ API: Successfully updated employee layup settings for: "${employeeId}"`
+      );
+      res.json(settings);
+    } catch (error) {
+      console.error('❌ API: Employee layup settings update error:', error);
+      console.error('❌ API: Error details:', (error as any)?.message);
+      res.status(500).json({
+        error: 'Failed to update employee layup settings',
+        details: (error as any)?.message || 'Unknown error',
+        employeeId: decodeURIComponent(req.params.employeeId),
+      });
+    }
+  }
+);
+
+router.delete(
+  '/layup-settings/:employeeId',
+  async (req: Request, res: Response) => {
+    try {
+      await storage.deleteEmployeeLayupSettings(req.params.employeeId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Employee layup settings deletion error:', error);
+      res
+        .status(500)
+        .json({ error: 'Failed to delete employee layup settings' });
+    }
+  }
+);
+
+// Get all employee certifications (MUST be before /:id to avoid route collision)
+router.get('/certifications', async (req: Request, res: Response) => {
+  try {
+    const result = await pool.query`
+      SELECT 
+        ec.id,
+        ec.employee_id as "employeeId",
+        ec.certification_id as "certificationId",
+        ec.date_obtained as "dateObtained",
+        ec.expiry_date as "expiryDate",
+        ec.is_active as "isActive",
+        ec.notes,
+        e.name as "employeeName",
+        c.name as "certificationName"
+      FROM employee_certifications ec
+      JOIN employees e ON ec.employee_id = e.id
+      JOIN certifications c ON ec.certification_id = c.id
+      ORDER BY e.name, c.name
+    `;
+    res.json(result);
+  } catch (error) {
+    console.error('Get employee certifications error:', error);
+    res.status(500).json({ error: 'Failed to fetch employee certifications' });
+  }
+});
+
+// Create or update employee certification (MUST be before /:id to avoid route collision)
+router.post('/certifications', async (req: Request, res: Response) => {
+  try {
+    const { employeeId, certificationId, dateObtained, expiryDate, notes } = req.body;
+
+    if (!employeeId || !certificationId) {
+      return res.status(400).json({ error: 'Employee ID and Certification ID are required' });
+    }
+
+    // Check if certification already exists
+    const existing = await pool.query`
+      SELECT id FROM employee_certifications 
+      WHERE employee_id = ${employeeId} 
+      AND certification_id = ${certificationId}
+    `;
+
+    if (existing.length > 0) {
+      // Update existing
+      await pool.query`
+        UPDATE employee_certifications 
+        SET date_obtained = ${dateObtained || null},
+            expiry_date = ${expiryDate || null},
+            notes = ${notes || null},
+            is_active = ${!!dateObtained},
+            updated_at = NOW()
+        WHERE employee_id = ${employeeId} 
+        AND certification_id = ${certificationId}
+      `;
+      
+      const updated = await pool.query`
+        SELECT * FROM employee_certifications 
+        WHERE employee_id = ${employeeId} 
+        AND certification_id = ${certificationId}
+      `;
+      
+      return res.json(updated[0]);
+    }
+
+    // Create new
+    const result = await pool.query`
+      INSERT INTO employee_certifications (
+        employee_id, 
+        certification_id, 
+        date_obtained,
+        expiry_date,
+        notes,
+        is_active
+      ) VALUES (
+        ${employeeId}, 
+        ${certificationId}, 
+        ${dateObtained || null},
+        ${expiryDate || null},
+        ${notes || null},
+        ${!!dateObtained}
+      )
+      RETURNING *
+    `;
+
+    res.json(result[0]);
+  } catch (error) {
+    console.error('Create certification error:', error);
+    res.status(500).json({ error: 'Failed to create certification' });
+  }
+});
+
+// Update employee certification (MUST be before /:id)
+router.patch('/certifications/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { dateObtained, expiryDate, notes, isActive } = req.body;
+
+    await pool.query`
+      UPDATE employee_certifications 
+      SET date_obtained = ${dateObtained !== undefined ? dateObtained : null},
+          expiry_date = ${expiryDate !== undefined ? expiryDate : null},
+          notes = ${notes !== undefined ? notes : null},
+          is_active = ${isActive !== undefined ? isActive : !!dateObtained},
+          updated_at = NOW()
+      WHERE id = ${id}
+    `;
+
+    const updated = await pool.query`
+      SELECT * FROM employee_certifications WHERE id = ${id}
+    `;
+
+    if (updated.length === 0) {
+      return res.status(404).json({ error: 'Certification not found' });
+    }
+
+    res.json(updated[0]);
+  } catch (error) {
+    console.error('Update certification error:', error);
+    res.status(500).json({ error: 'Failed to update certification' });
+  }
+});
+
+// Delete employee certification (MUST be before /:id)
+router.delete('/certifications/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    await pool.query`
+      DELETE FROM employee_certifications WHERE id = ${id}
+    `;
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Delete certification error:', error);
+    res.status(500).json({ error: 'Failed to delete certification' });
+  }
+});
+
+// Parametric routes MUST come after all specific routes
 router.get('/:id', async (req: Request, res: Response) => {
   try {
     const employee = await storage.getEmployee(parseInt(req.params.id));
@@ -503,114 +747,7 @@ router.post('/:id/checklist', async (req: Request, res: Response) => {
   }
 });
 
-// Employee Layup Settings CRUD (migrated from monolithic routes.ts)
-// Note: These routes don't require authentication for use in Layup Scheduler
-router.get('/layup-settings', async (req: Request, res: Response) => {
-  try {
-    const settings = await storage.getAllEmployeeLayupSettings();
-    res.json(settings);
-  } catch (error) {
-    console.error('Employee layup settings fetch error:', error);
-    res.status(500).json({ error: 'Failed to fetch employee layup settings' });
-  }
-});
-
-router.get(
-  '/layup-settings/:employeeId',
-  async (req: Request, res: Response) => {
-    try {
-      const settings = await storage.getEmployeeLayupSettings(
-        req.params.employeeId
-      );
-      if (settings) {
-        res.json(settings);
-      } else {
-        res.status(404).json({ error: 'Employee layup settings not found' });
-      }
-    } catch (error) {
-      console.error('Employee layup settings fetch error:', error);
-      res
-        .status(500)
-        .json({ error: 'Failed to fetch employee layup settings' });
-    }
-  }
-);
-
-router.post('/layup-settings', async (req: Request, res: Response) => {
-  try {
-    const result = insertEmployeeLayupSettingsSchema.parse(req.body);
-    const settings = await storage.createEmployeeLayupSettings(result);
-    res.json(settings);
-  } catch (error) {
-    console.error('Employee layup settings creation error:', error);
-    res.status(400).json({ error: 'Invalid employee layup settings data' });
-  }
-});
-
-router.put(
-  '/layup-settings/:employeeId',
-  async (req: Request, res: Response) => {
-    try {
-      // Decode URL-encoded employee ID
-      const employeeId = decodeURIComponent(req.params.employeeId);
-      console.log(
-        `💾 API: Updating employee layup settings for: "${employeeId}"`
-      );
-      console.log(`📝 API: Update data:`, req.body);
-
-      // Validate the data (but be flexible with required fields for updates)
-      const updateData = {
-        rate: req.body.rate ? parseFloat(req.body.rate) : undefined,
-        hours: req.body.hours ? parseFloat(req.body.hours) : undefined,
-        department: req.body.department || undefined,
-        isActive:
-          req.body.isActive !== undefined ? req.body.isActive : undefined,
-        updatedAt: new Date(),
-      };
-
-      // Remove undefined values
-      const cleanData = Object.fromEntries(
-        Object.entries(updateData).filter(([_, value]) => value !== undefined)
-      );
-
-      console.log(`🧹 API: Clean update data:`, cleanData);
-
-      const settings = await storage.updateEmployeeLayupSettings(
-        employeeId,
-        cleanData
-      );
-      console.log(
-        `✅ API: Successfully updated employee layup settings for: "${employeeId}"`
-      );
-      res.json(settings);
-    } catch (error) {
-      console.error('❌ API: Employee layup settings update error:', error);
-      console.error('❌ API: Error details:', (error as any)?.message);
-      res.status(500).json({
-        error: 'Failed to update employee layup settings',
-        details: (error as any)?.message || 'Unknown error',
-        employeeId: decodeURIComponent(req.params.employeeId),
-      });
-    }
-  }
-);
-
-router.delete(
-  '/layup-settings/:employeeId',
-  async (req: Request, res: Response) => {
-    try {
-      await storage.deleteEmployeeLayupSettings(req.params.employeeId);
-      res.json({ success: true });
-    } catch (error) {
-      console.error('Employee layup settings deletion error:', error);
-      res
-        .status(500)
-        .json({ error: 'Failed to delete employee layup settings' });
-    }
-  }
-);
-
-// Employee Capability Assignment Routes (MUST be after /capabilities but before /:id/*)
+// Employee Capability Assignment Routes (moved here to avoid conflicts)
 router.get('/:id/capabilities', async (req: Request, res: Response) => {
   try {
     const employeeId = parseInt(req.params.id);
@@ -638,5 +775,320 @@ router.post('/:id/capabilities', async (req: Request, res: Response) => {
     res.status(500).json({ error: 'Failed to grant capability' });
   }
 });
+
+// Import Certifications from PDF using Azure Document Intelligence
+router.post(
+  '/import-certifications-pdf',
+  uploadMiddleware.single('file'),
+  async (req: Request, res: Response) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: 'No file uploaded' });
+      }
+
+      console.log('📄 Extracting certification data from PDF...');
+      
+      try {
+        // Import the Azure Document Intelligence function
+        const { extractTrainingMatrixData } = await import('../lib/azureDocumentIntelligence');
+        
+        // Extract data from PDF
+        const extractedData = await extractTrainingMatrixData(req.file.buffer);
+        console.log(`✅ Extracted ${extractedData.entries.length} certification entries from PDF`);
+
+        // Get all employees and certifications for mapping
+        const [employees, certifications] = await Promise.all([
+          pool.query`SELECT id, name FROM employees WHERE is_active = true`,
+          pool.query`SELECT id, name FROM certifications WHERE category = 'DEPARTMENT'`
+        ]);
+
+        // Create mapping helpers
+        const employeeNameToId = new Map<string, number>();
+        employees.forEach((emp: any) => {
+          const normalizedName = emp.name.toLowerCase().trim();
+          employeeNameToId.set(normalizedName, emp.id);
+        });
+
+        const certNameToId = new Map<string, number>();
+        certifications.forEach((cert: any) => {
+          const normalizedName = cert.name.toLowerCase().trim();
+          certNameToId.set(normalizedName, cert.id);
+        });
+
+        // Process extracted entries
+        const importResults = {
+          total: extractedData.entries.length,
+          imported: 0,
+          skipped: 0,
+          errors: [] as string[],
+          details: [] as any[]
+        };
+
+        for (const entry of extractedData.entries) {
+          try {
+            const employeeName = entry.employeeName?.toLowerCase().trim();
+            const employeeId = employeeName ? employeeNameToId.get(employeeName) : null;
+
+            if (!employeeId) {
+              importResults.skipped++;
+              importResults.errors.push(`Employee not found: ${entry.employeeName}`);
+              continue;
+            }
+
+            const certName = entry.trainingName?.toLowerCase().trim();
+            const certificationId = certName ? certNameToId.get(certName) : null;
+
+            if (!certificationId) {
+              importResults.skipped++;
+              importResults.errors.push(`Certification not found: ${entry.trainingName}`);
+              continue;
+            }
+
+            const existingCert = await pool.query`
+              SELECT id FROM employee_certifications 
+              WHERE employee_id = ${employeeId} 
+              AND certification_id = ${certificationId}
+            `;
+
+            if (existingCert.length > 0) {
+              await pool.query`
+                UPDATE employee_certifications 
+                SET date_obtained = ${entry.lastCompleted},
+                    is_active = true,
+                    updated_at = NOW()
+                WHERE employee_id = ${employeeId} 
+                AND certification_id = ${certificationId}
+              `;
+              importResults.details.push({
+                employee: entry.employeeName,
+                certification: entry.trainingName,
+                action: 'updated',
+                date: entry.lastCompleted
+              });
+            } else {
+              await pool.query`
+                INSERT INTO employee_certifications (
+                  employee_id, 
+                  certification_id, 
+                  date_obtained, 
+                  is_active
+                ) VALUES (
+                  ${employeeId}, 
+                  ${certificationId}, 
+                  ${entry.lastCompleted}, 
+                  true
+                )
+              `;
+              importResults.details.push({
+                employee: entry.employeeName,
+                certification: entry.trainingName,
+                action: 'created',
+                date: entry.lastCompleted
+              });
+            }
+
+            importResults.imported++;
+          } catch (error) {
+            importResults.skipped++;
+            importResults.errors.push(
+              `Error processing ${entry.employeeName} - ${entry.trainingName}: ${(error as Error).message}`
+            );
+          }
+        }
+
+        console.log(`✅ PDF Import complete: ${importResults.imported} imported, ${importResults.skipped} skipped`);
+        return res.json(importResults);
+      } catch (azureError: any) {
+        // Handle Azure Document Intelligence specific errors
+        if (azureError.code === 'InvalidRequest' || azureError.code === 'InvalidContent') {
+          return res.status(422).json({
+            error: 'PDF format not supported',
+            details: 'This PDF format cannot be processed by Azure Document Intelligence. Please export your training matrix as a CSV file instead.',
+            suggestion: 'Use CSV format with columns: Employee, Certification, Date'
+          });
+        }
+        throw azureError;
+      }
+    } catch (error) {
+      console.error('Import certifications PDF error:', error);
+      res.status(500).json({ 
+        error: 'Failed to import certifications from PDF',
+        details: (error as Error).message 
+      });
+    }
+  }
+);
+
+// Import Certifications from CSV
+router.post(
+  '/import-certifications-csv',
+  uploadMiddleware.single('file'),
+  async (req: Request, res: Response) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: 'No file uploaded' });
+      }
+
+      console.log('📄 Parsing CSV certification data...');
+      
+      const Papa = await import('papaparse');
+      const csvText = req.file.buffer.toString('utf-8');
+      
+      const parseResult = Papa.parse(csvText, {
+        header: true,
+        skipEmptyLines: true,
+        transformHeader: (header: string) => header.trim().toLowerCase()
+      });
+
+      if (parseResult.errors.length > 0) {
+        console.error('CSV parsing errors:', parseResult.errors);
+        return res.status(422).json({
+          error: 'CSV parsing failed',
+          details: parseResult.errors.map((e: any) => e.message).join(', ')
+        });
+      }
+
+      console.log(`✅ Parsed ${parseResult.data.length} rows from CSV`);
+
+      // Get all employees and certifications for mapping
+      const [employees, certifications] = await Promise.all([
+        pool.query`SELECT id, name FROM employees WHERE is_active = true`,
+        pool.query`SELECT id, name FROM certifications WHERE category = 'DEPARTMENT'`
+      ]);
+
+      // Create mapping helpers
+      const employeeNameToId = new Map<string, number>();
+      employees.forEach((emp: any) => {
+        const normalizedName = emp.name.toLowerCase().trim();
+        employeeNameToId.set(normalizedName, emp.id);
+      });
+
+      const certNameToId = new Map<string, number>();
+      certifications.forEach((cert: any) => {
+        const normalizedName = cert.name.toLowerCase().trim();
+        certNameToId.set(normalizedName, cert.id);
+      });
+
+      // Process CSV entries
+      const importResults = {
+        total: parseResult.data.length,
+        imported: 0,
+        skipped: 0,
+        errors: [] as string[],
+        details: [] as any[]
+      };
+
+      for (const row of parseResult.data as any[]) {
+        try {
+          // Expected columns: employee, certification, date
+          const employeeName = row.employee || row['employee name'] || row.name;
+          const certName = row.certification || row['certification name'] || row.training;
+          const dateStr = row.date || row['date obtained'] || row.completed;
+
+          if (!employeeName || !certName) {
+            importResults.skipped++;
+            importResults.errors.push(`Missing employee or certification name in row`);
+            continue;
+          }
+
+          // Map employee name to ID
+          const normalizedEmpName = employeeName.toLowerCase().trim();
+          const employeeId = employeeNameToId.get(normalizedEmpName);
+
+          if (!employeeId) {
+            importResults.skipped++;
+            importResults.errors.push(`Employee not found: ${employeeName}`);
+            continue;
+          }
+
+          // Map certification name to ID
+          const normalizedCertName = certName.toLowerCase().trim();
+          const certificationId = certNameToId.get(normalizedCertName);
+
+          if (!certificationId) {
+            importResults.skipped++;
+            importResults.errors.push(`Certification not found: ${certName}`);
+            continue;
+          }
+
+          // Parse date
+          let dateObtained: Date | null = null;
+          if (dateStr) {
+            try {
+              dateObtained = new Date(dateStr);
+              if (isNaN(dateObtained.getTime())) {
+                dateObtained = null;
+              }
+            } catch (e) {
+              dateObtained = null;
+            }
+          }
+
+          // Check if certification already exists
+          const existingCert = await pool.query`
+            SELECT id FROM employee_certifications 
+            WHERE employee_id = ${employeeId} 
+            AND certification_id = ${certificationId}
+          `;
+
+          if (existingCert.rows.length > 0) {
+            // Update existing certification
+            await pool.query`
+              UPDATE employee_certifications 
+              SET date_obtained = ${dateObtained},
+                  is_active = true,
+                  updated_at = NOW()
+              WHERE employee_id = ${employeeId} 
+              AND certification_id = ${certificationId}
+            `;
+            importResults.details.push({
+              employee: employeeName,
+              certification: certName,
+              action: 'updated',
+              date: dateObtained
+            });
+          } else {
+            // Insert new certification
+            await pool.query`
+              INSERT INTO employee_certifications (
+                employee_id, 
+                certification_id, 
+                date_obtained, 
+                is_active
+              ) VALUES (
+                ${employeeId}, 
+                ${certificationId}, 
+                ${dateObtained}, 
+                true
+              )
+            `;
+            importResults.details.push({
+              employee: employeeName,
+              certification: certName,
+              action: 'created',
+              date: dateObtained
+            });
+          }
+
+          importResults.imported++;
+        } catch (error) {
+          importResults.skipped++;
+          importResults.errors.push(
+            `Error processing row: ${(error as Error).message}`
+          );
+        }
+      }
+
+      console.log(`✅ CSV Import complete: ${importResults.imported} imported, ${importResults.skipped} skipped`);
+      res.json(importResults);
+    } catch (error) {
+      console.error('Import certifications CSV error:', error);
+      res.status(500).json({ 
+        error: 'Failed to import certifications from CSV',
+        details: (error as Error).message 
+      });
+    }
+  }
+);
 
 export default router;

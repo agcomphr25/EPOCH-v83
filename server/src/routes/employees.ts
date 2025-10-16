@@ -100,23 +100,26 @@ router.patch("/employee-capabilities/:id/toggle", async (req: Request, res: Resp
 // Employee Certifications Matrix - Get all employees with their certifications (MUST be before /:id)
 router.get("/certifications-matrix", async (req: Request, res: Response) => {
   try {
+    // Get all active certifications and all active employees in a CROSS JOIN
+    // Then LEFT JOIN to employee_certifications to show which ones they have
     const result = await pool.query`
       SELECT 
         e.id as "employeeId",
         e.name as "employeeName",
         e.job_title as "jobTitle",
         e.department as "department",
-        ec.id as "certificationRecordId",
-        ec.certification_id as "certificationId",
+        c.id as "certificationId",
         c.name as "certificationName",
+        ec.id as "certificationRecordId",
         ec.date_obtained as "dateEarned",
         ec.expiry_date as "expiryDate",
-        ec.status,
+        ec.is_active as "status",
         ec.notes
       FROM employees e
-      LEFT JOIN employee_certifications ec ON e.id = ec.employee_id
-      LEFT JOIN certifications c ON ec.certification_id = c.id
-      WHERE e.is_active = true
+      CROSS JOIN certifications c
+      LEFT JOIN employee_certifications ec 
+        ON e.id = ec.employee_id AND c.id = ec.certification_id
+      WHERE e.is_active = true AND c.is_active = true
       ORDER BY e.name, c.name
     `;
     

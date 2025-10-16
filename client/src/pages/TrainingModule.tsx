@@ -3500,7 +3500,7 @@ export default function TrainingModule() {
   const { toast } = useToast();
 
   const [employeeId, setEmployeeId] = useState('');
-  const [employeeName, setEmployeeName] = useState('');
+  const [password, setPassword] = useState('');
   const [answers, setAnswers] = useState<Record<number, string>>({});
   const [showResults, setShowResults] = useState(false);
   const [results, setResults] = useState<any>(null);
@@ -3513,7 +3513,7 @@ export default function TrainingModule() {
   const submitMutation = useMutation({
     mutationFn: async (data: {
       employeeId: string;
-      employeeName: string;
+      password: string;
       answers: Record<number, string>;
     }) => {
       return apiRequest(`/api/training/modules/${moduleId}/complete`, {
@@ -3551,10 +3551,10 @@ export default function TrainingModule() {
   });
 
   const handleSubmit = () => {
-    if (!employeeId || !employeeName) {
+    if (!employeeId || !password) {
       toast({
         title: 'Missing Information',
-        description: 'Please enter your Employee ID and Name',
+        description: 'Please enter your Employee ID and Password',
         variant: 'destructive',
       });
       return;
@@ -3575,7 +3575,7 @@ export default function TrainingModule() {
 
     submitMutation.mutate({
       employeeId,
-      employeeName,
+      password,
       answers,
     });
   };
@@ -3706,13 +3706,14 @@ export default function TrainingModule() {
                 />
               </div>
               <div>
-                <Label htmlFor="employeeName">Full Name *</Label>
+                <Label htmlFor="password">Password *</Label>
                 <Input
-                  id="employeeName"
-                  value={employeeName}
-                  onChange={(e) => setEmployeeName(e.target.value)}
-                  placeholder="Enter your full name"
-                  data-testid="input-employee-name"
+                  id="password"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Enter your password"
+                  data-testid="input-password"
                 />
               </div>
             </div>
@@ -3826,7 +3827,7 @@ export default function TrainingModule() {
                   </h2>
                   <Award className="h-16 w-16 text-green-600 mx-auto mb-4" />
                   <p className="text-xl mb-2">This certifies that</p>
-                  <p className="text-2xl font-bold mb-4">{employeeName}</p>
+                  <p className="text-2xl font-bold mb-4">{results.employeeName}</p>
                   <p className="text-lg mb-2">has successfully completed</p>
                   <p className="text-xl font-semibold mb-4">
                     {results.moduleTitle || moduleData.title}

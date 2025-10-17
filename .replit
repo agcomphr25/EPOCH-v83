@@ -124,5 +124,5 @@ localPort = 46637
 externalPort = 3000
 
 [agent]
-integrations = ["javascript_mem_db:1.0.0", "google-calendar:1.0.0", "google-sheet:1.0.0", "sendgrid:1.0.0"]
+integrations = ["javascript_mem_db:1.0.0", "google-calendar:1.0.0", "google-sheet:1.0.0", "sendgrid:1.0.0", "google-drive:1.0.0"]
 expertMode = true

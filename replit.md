@@ -73,5 +73,25 @@ The application utilizes a monorepo structure with a full-stack TypeScript appro
 -   SendGrid (Email, Magic Link delivery)
 -   Twilio (SMS)
 -   Google Calendar (Event Integration)
+-   Google Drive (File Access and PDF Processing)
 -   Google APIs (`googleapis` package)
 -   Azure Document Intelligence (AI-powered document analysis)
+
+## Recent Changes
+
+### October 17, 2025 - Google Drive + Azure Document Intelligence Integration
+
+- **Google Drive Connected**: Successfully integrated Google Drive API for file access
+- **Azure Document Intelligence**: Added secure Azure credentials for PDF processing
+- **New Features**:
+  - Browse and select PDF files directly from Google Drive
+  - Process Google Drive PDFs with Azure AI for certification extraction
+  - Automatic file download and analysis pipeline
+  - Better error handling for unsupported PDF formats with user-friendly messages
+- **New API Endpoints**:
+  - `GET /api/certifications/google-drive/pdfs` - List PDF files from Google Drive
+  - `POST /api/certifications/create-from-google-drive` - Create certification from Google Drive file
+- **Integration Files**:
+  - `server/src/lib/googleDrive.ts` - Google Drive helper functions with auto-refreshing OAuth
+  - `server/src/lib/azureDocumentIntelligence.ts` - Azure AI document processing
+- **Status**: ✅ Fully functional - can process PDFs from Google Drive or direct upload

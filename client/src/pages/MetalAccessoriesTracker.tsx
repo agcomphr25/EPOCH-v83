@@ -311,7 +311,7 @@ export default function MetalAccessoriesTracker() {
                       </AccordionTrigger>
                       <AccordionContent>
                         <div className="space-y-3 pt-2">
-                          <div className="grid grid-cols-2 gap-4">
+                          <div className="grid grid-cols-3 gap-4">
                             <div>
                               <p className="text-sm text-muted-foreground">
                                 Category
@@ -324,6 +324,14 @@ export default function MetalAccessoriesTracker() {
                               </p>
                               <p className="font-medium">
                                 {demand.totalDemandNext4}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-sm text-muted-foreground">
+                                Minimum Threshold
+                              </p>
+                              <p className="font-medium">
+                                {demand.minimumThreshold}
                               </p>
                             </div>
                           </div>

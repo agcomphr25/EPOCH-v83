@@ -2838,6 +2838,18 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // Get All Production Orders
+  app.get('/api/production-orders', async (req, res) => {
+    try {
+      const { storage } = await import('../../storage');
+      const productionOrders = await storage.getAllProductionOrders();
+      res.json(productionOrders);
+    } catch (_error) {
+      console._error('🔧 Get all production orders _error:', _error);
+      res.status(500).json({ _error: 'Failed to fetch production orders' });
+    }
+  });
+
   // Get Production Orders by PO ID
   app.get('/api/production-orders/by-po/:poId', async (req, res) => {
     try {

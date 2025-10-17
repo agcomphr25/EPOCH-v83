@@ -147,7 +147,12 @@ The application utilizes a monorepo structure with a full-stack TypeScript appro
   - Added debug logging to show exact date ranges being processed
   - Cleared 163 stale locked entries from database
   - Department Manager now correctly shows empty when no weeks are locked
-- **Status**: ✅ Fully functional - week locking integrated with production workflow, order cards visually matched, Add Regular Orders button optimized for speed, Clear All functionality implemented, P1 PO scheduling fixed, P1 orders consolidated to OEM Priority Settings, legacy P1 PO UI completely removed, lock/unlock timezone bug fixed
+- **Bug Fix - Missing API Endpoint**: Added `/api/production-orders` endpoint
+  - OEM Priority Settings dialog was calling non-existent `/api/production-orders` endpoint
+  - Added `GET /api/production-orders` that fetches all production orders from production_orders table
+  - This allows OEM Priority Settings to filter out POs that have already been scheduled
+  - Purchase orders now load correctly in OEM Priority Settings dialog
+- **Status**: ✅ Fully functional - week locking integrated with production workflow, order cards visually matched, Add Regular Orders button optimized for speed, Clear All functionality implemented, P1 PO scheduling fixed, P1 orders consolidated to OEM Priority Settings, legacy P1 PO UI completely removed, lock/unlock timezone bug fixed, production orders API endpoint added
 
 ### October 17, 2025 - Google Drive + Azure Document Intelligence Integration
 

@@ -564,16 +564,16 @@ export function BarcodeScanner({ onOrderScanned }: BarcodeScannerProps = {}) {
                               return (
                                 <div
                                   key={index}
-                                  className="flex justify-between items-center text-sm p-2 bg-gray-50 rounded"
+                                  className="flex justify-between items-start text-sm p-2 bg-gray-50 dark:bg-gray-800 rounded gap-2"
                                 >
-                                  <span className="font-medium">
+                                  <span className="font-medium flex-shrink-0">
                                     {displayKey}:
                                   </span>
-                                  <Badge variant="outline" className="ml-2">
+                                  <span className="text-right break-words">
                                     {typeof displayValue === 'string'
                                       ? displayValue
                                       : JSON.stringify(displayValue)}
-                                  </Badge>
+                                  </span>
                                 </div>
                               );
                             })}
@@ -604,16 +604,16 @@ export function BarcodeScanner({ onOrderScanned }: BarcodeScannerProps = {}) {
                               return (
                                 <div
                                   key={index}
-                                  className="flex justify-between items-center text-sm p-2 bg-blue-50 rounded"
+                                  className="flex justify-between items-start text-sm p-2 bg-blue-50 dark:bg-blue-900/20 rounded gap-2"
                                 >
-                                  <span className="font-medium">
+                                  <span className="font-medium flex-shrink-0">
                                     {displayKey}:
                                   </span>
-                                  <Badge variant="outline" className="ml-2">
+                                  <span className="text-right break-words">
                                     {typeof displayValue === 'string'
                                       ? displayValue
                                       : JSON.stringify(displayValue)}
-                                  </Badge>
+                                  </span>
                                 </div>
                               );
                             })}

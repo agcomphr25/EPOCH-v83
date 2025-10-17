@@ -24,6 +24,10 @@ import { useDeviceDetection } from '@/hooks/useDeviceDetection';
 import { useBarcodeInput } from '@/hooks/useBarcodeInput';
 import { CameraScanner } from '@/components/CameraScanner';
 import { MobileCameraDiagnostic } from '@/components/MobileCameraDiagnostic';
+import { 
+  getFeatureOptionDisplay,
+  findFeature 
+} from '@/utils/featureMapping';
 
 interface LineItem {
   type: string;
@@ -46,6 +50,14 @@ interface OrderFeature {
   name: string;
   value: string;
   type: string;
+}
+
+interface Feature {
+  id: string;
+  name: string;
+  displayName: string;
+  options?: { value: string; label: string; price?: number }[];
+  category?: string;
 }
 
 interface OrderSummary {
@@ -132,6 +144,11 @@ export function BarcodeScanner({ onOrderScanned }: BarcodeScannerProps = {}) {
   // Get stock models for display names
   const { data: stockModels = [] } = useQuery({
     queryKey: ['/api/stock-models'],
+  });
+
+  // Get features for proper display names and option labels
+  const { data: features = [] } = useQuery<Feature[]>({
+    queryKey: ['/api/features'],
   });
 
   const {
@@ -549,16 +566,24 @@ export function BarcodeScanner({ onOrderScanned }: BarcodeScannerProps = {}) {
                           {Object.entries(orderSummary.features)
                             .filter(([key]) => key !== 'action_length') // Exclude action_length since it's shown prominently at top
                             .map(([key, value], index) => {
-                              // Format the display name for the key
-                              const displayKey = key
-                                .replace(/_/g, ' ')
-                                .replace(/\b\w/g, (l) => l.toUpperCase());
-                              // Format the display value
+                              // Find the feature definition to get proper display name
+                              const feature = findFeature(features, key);
+                              const displayKey = feature?.displayName || 
+                                key.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
+                              
+                              // Get proper display value using feature options
                               let displayValue = value;
                               if (typeof value === 'string') {
+                                const optionDisplay = getFeatureOptionDisplay(features, key, value);
+                                displayValue = optionDisplay.label;
+                              } else if (Array.isArray(value)) {
+                                // Handle array values (like other_options, rail_accessory)
                                 displayValue = value
-                                  .replace(/_/g, ' ')
-                                  .replace(/\b\w/g, (l) => l.toUpperCase());
+                                  .map(v => {
+                                    const optionDisplay = getFeatureOptionDisplay(features, key, v);
+                                    return optionDisplay.label;
+                                  })
+                                  .join(', ');
                               }
 
                               return (
@@ -589,16 +614,24 @@ export function BarcodeScanner({ onOrderScanned }: BarcodeScannerProps = {}) {
                           {Object.entries(orderSummary.specifications)
                             .filter(([key]) => key !== 'action_length') // Exclude action_length since it's shown prominently at top
                             .map(([key, value], index) => {
-                              // Format the display name for the key
-                              const displayKey = key
-                                .replace(/_/g, ' ')
-                                .replace(/\b\w/g, (l) => l.toUpperCase());
-                              // Format the display value
+                              // Find the feature definition to get proper display name
+                              const feature = findFeature(features, key);
+                              const displayKey = feature?.displayName || 
+                                key.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
+                              
+                              // Get proper display value using feature options
                               let displayValue = value;
                               if (typeof value === 'string') {
+                                const optionDisplay = getFeatureOptionDisplay(features, key, value);
+                                displayValue = optionDisplay.label;
+                              } else if (Array.isArray(value)) {
+                                // Handle array values
                                 displayValue = value
-                                  .replace(/_/g, ' ')
-                                  .replace(/\b\w/g, (l) => l.toUpperCase());
+                                  .map(v => {
+                                    const optionDisplay = getFeatureOptionDisplay(features, key, v);
+                                    return optionDisplay.label;
+                                  })
+                                  .join(', ');
                               }
 
                               return (

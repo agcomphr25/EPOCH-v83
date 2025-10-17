@@ -45,7 +45,7 @@ interface QueueOrderItemProps {
   handleSalesOrderDownload?: (orderId: string) => void;
 }
 
-// Queue Order Item Component - simplified version of DraggableOrderItem for display only
+// Queue Order Item Component - EXACT MATCH to DraggableOrderItem from LayupScheduler
 function QueueOrderItem({
   order,
   getModelDisplayName,
@@ -55,61 +55,113 @@ function QueueOrderItem({
   handleKickbackClick,
   handleSalesOrderDownload,
 }: QueueOrderItemProps) {
-  // Determine material type for styling
+  // Determine material type for styling - EXACTLY SAME AS LayupScheduler
   const getMaterialType = (modelId: string) => {
+    // Direct CF prefixes
     if (modelId.startsWith('cf_')) return 'CF';
+    // Direct FG prefixes
     if (modelId.startsWith('fg_')) return 'FG';
+    // Exact FG match
+    if (modelId === 'fg') return 'FG';
+    // Material keywords
     if (modelId.includes('carbon')) return 'CF';
     if (modelId.includes('fiberglass')) return 'FG';
+    // FG suffix patterns
+    if (modelId.endsWith('_fg')) return 'FG';
+    // Default patterns for common models
+    if (modelId.includes('alpine_hunter_tikka') && !modelId.endsWith('_fg'))
+      return 'CF';
+    if (modelId.includes('privateer-tikka') && !modelId.endsWith('_fg'))
+      return 'CF';
+    if (modelId.includes('apr_hunter')) return 'CF';
     return null;
   };
 
   const modelId = order.stockModelId || order.modelId;
   const materialType = getMaterialType(modelId || '');
 
-  // Determine card styling based on source and material
+  // Determine card styling based on material type - EXACTLY SAME AS LayupScheduler
   const getCardStyling = () => {
-    if (order.source === 'p1_purchase_order') {
+    const isPurchaseOrder = !!(order.poId || order.productionOrderId);
+
+    if (materialType === 'CF') {
+      // CF cards: Light orange background with green border for POs
       return {
-        bg: 'bg-green-100 dark:bg-green-800/50 hover:bg-green-200 dark:hover:bg-green-800/70 border-2 border-green-300 dark:border-green-600',
-        text: 'text-green-800 dark:text-green-200',
-      };
-    } else if (order.source === 'production_order') {
-      return {
-        bg: 'bg-orange-100 dark:bg-orange-800/50 hover:bg-orange-200 dark:hover:bg-orange-800/70 border-2 border-orange-300 dark:border-orange-600',
+        bg: `bg-orange-200 dark:bg-orange-800/50 hover:bg-orange-300 dark:hover:bg-orange-800/70 border-2 ${isPurchaseOrder ? 'border-green-500 dark:border-green-400' : 'border-orange-300 dark:border-orange-600'}`,
         text: 'text-orange-800 dark:text-orange-200',
       };
     } else if (materialType === 'FG') {
+      // FG cards: Dark orange background with green border for POs
       return {
-        bg: 'bg-blue-600 dark:bg-blue-900/70 hover:bg-blue-700 dark:hover:bg-blue-900/90 border-2 border-blue-700 dark:border-blue-800',
-        text: 'text-white dark:text-blue-100',
+        bg: `bg-orange-600 dark:bg-orange-700/80 hover:bg-orange-700 dark:hover:bg-orange-800/90 border-2 ${isPurchaseOrder ? 'border-green-500 dark:border-green-400' : 'border-orange-700 dark:border-orange-800'}`,
+        text: 'text-white dark:text-orange-100',
       };
     } else {
+      // Unknown material - RED for attention/needs review with green border for POs
       return {
-        bg: 'bg-blue-100 dark:bg-blue-800/50 hover:bg-blue-200 dark:hover:bg-blue-800/70 border-2 border-blue-300 dark:border-blue-600',
-        text: 'text-blue-800 dark:text-blue-200',
+        bg: `bg-red-100 dark:bg-red-900/50 hover:bg-red-200 dark:hover:bg-red-900/70 border-2 ${isPurchaseOrder ? 'border-green-500 dark:border-green-400' : 'border-red-400 dark:border-red-600'}`,
+        text: 'text-red-800 dark:text-red-200',
       };
     }
   };
 
   const cardStyling = getCardStyling();
 
+  // Responsive sizing based on number of orders - EXACTLY SAME AS LayupScheduler
+  const getCardSizing = (orderCount: number) => {
+    if (orderCount <= 2) {
+      return {
+        padding: 'p-3',
+        margin: 'mb-2',
+        textSize: 'text-base font-bold',
+        height: 'min-h-[3rem]',
+      };
+    } else if (orderCount <= 5) {
+      return {
+        padding: 'p-2',
+        margin: 'mb-1.5',
+        textSize: 'text-sm font-bold',
+        height: 'min-h-[2.5rem]',
+      };
+    } else if (orderCount <= 8) {
+      return {
+        padding: 'p-2',
+        margin: 'mb-1',
+        textSize: 'text-sm font-semibold',
+        height: 'min-h-[2rem]',
+      };
+    } else {
+      // Many orders - ultra compact
+      return {
+        padding: 'p-1.5',
+        margin: 'mb-0.5',
+        textSize: 'text-xs font-semibold',
+        height: 'min-h-[1.5rem]',
+      };
+    }
+  };
+
+  const sizing = getCardSizing(1); // Default to 1 order per cell in queue view
+  
+  // These are locked orders (finalized production schedules), so show locked state
+  const isLocked = true;
+
   return (
     <div
-      className={`p-3 mb-2 min-h-[3rem] ${cardStyling.bg} rounded-lg shadow-md transition-all duration-200`}
+      className={`group relative ${sizing.padding} ${sizing.margin} ${sizing.height} ${cardStyling.bg} rounded-lg shadow-md transition-all duration-200 touch-manipulation select-none ${
+        isLocked
+          ? 'cursor-default opacity-75 border-dashed'
+          : 'cursor-grab active:cursor-grabbing'
+      }`}
     >
       <div
-        className={`${cardStyling.text} text-base font-bold text-center flex flex-col items-center justify-center h-full`}
+        className={`${cardStyling.text} ${sizing.textSize} text-center flex flex-col items-center justify-center h-full`}
       >
         <div className="flex items-center font-bold">
           {getDisplayOrderId(order) || 'No ID'}
-          {order.source === 'p1_purchase_order' && (
-            <span className="text-xs ml-1 bg-green-200 dark:bg-green-700 px-1 rounded">
-              P1
-            </span>
-          )}
-          {order.source === 'production_order' && (
-            <span className="text-xs ml-1 bg-orange-200 dark:bg-orange-700 px-1 rounded">
+
+          {(order.poId || order.productionOrderId) && (
+            <span className="text-xs ml-1 bg-green-200 dark:bg-green-700 px-1 rounded font-semibold">
               PO
             </span>
           )}
@@ -261,7 +313,83 @@ function QueueOrderItem({
           ) : null;
         })()}
 
-        {/* Show LOP Adjustment Status */}
+        {/* Show Mold Name with Action Length prefix - ADDED TO MATCH LayupScheduler */}
+        {order.moldId && (
+          <div className="text-xs font-semibold opacity-80 mt-0.5">
+            {(() => {
+              // Get action length prefix
+              const getActionPrefix = (orderFeatures: any) => {
+                if (!orderFeatures) return '';
+
+                const actionLengthValue = orderFeatures.action_length;
+                if (!actionLengthValue || actionLengthValue === 'none')
+                  return '';
+
+                // Fallback to abbreviations
+                const displayMap: { [key: string]: string } = {
+                  Long: 'LA',
+                  Medium: 'MA',
+                  Short: 'SA',
+                  long: 'LA',
+                  medium: 'MA',
+                  short: 'SA',
+                };
+                return displayMap[actionLengthValue] || actionLengthValue;
+              };
+
+              const actionPrefix = getActionPrefix(order.features);
+              const moldName = order.moldId;
+
+              return actionPrefix
+                ? `${actionPrefix} ${moldName}`
+                : `${moldName}`;
+            })()}
+          </div>
+        )}
+
+        {/* Show LOP (Length of Pull) only if there's an extra length specified - ADDED TO MATCH LayupScheduler */}
+        {(() => {
+          const getLOPDisplay = (orderFeatures: any) => {
+            if (!orderFeatures) return null;
+
+            // Look for length_of_pull field (NOT action_length)
+            const lopValue = orderFeatures.length_of_pull;
+
+            // Don't show if empty, none, standard, std, or any variation indicating no extra length
+            if (
+              !lopValue ||
+              lopValue === 'none' ||
+              lopValue === 'standard' ||
+              lopValue === 'std' ||
+              lopValue === 'std_length' ||
+              lopValue === 'standard_length' ||
+              lopValue === 'no_extra_length' ||
+              lopValue === 'std_no_extra_length' ||
+              lopValue === 'no_lop_change' ||
+              lopValue === '' ||
+              lopValue === '0' ||
+              lopValue === 'normal' ||
+              lopValue.toLowerCase().includes('std') ||
+              lopValue.toLowerCase().includes('standard') ||
+              lopValue.toLowerCase().includes('no extra')
+            ) {
+              return null;
+            }
+
+            // Return raw value as fallback only if it indicates extra length
+            return lopValue;
+          };
+
+          const lopDisplay = getLOPDisplay(order.features);
+
+          return lopDisplay ? (
+            <div className="text-xs opacity-80 mt-0.5 font-medium">
+              LOP: {lopDisplay}
+            </div>
+          ) : null;
+        })()}
+
+        {/* Show LOP Adjustment Status - FIXED COLORS TO MATCH LayupScheduler */}
         {(() => {
           const lopOrder =
             processedOrders?.find((o) => o.orderId === order.orderId) ||
@@ -275,10 +403,10 @@ function QueueOrderItem({
               <span
                 className={`px-1.5 py-0.5 rounded text-xs font-medium ${
                   lopStatus.status === 'scheduled'
-                    ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800'
-                    : lopStatus.status === 'scheduled'
-                      ? 'bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300 border border-orange-200 dark:border-orange-800'
-                      : 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300 border border-yellow-200 dark:border-yellow-800'
+                    ? 'bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300 border border-orange-200 dark:border-orange-800'
+                    : lopStatus.status === 'deferred'
+                      ? 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300 border border-yellow-200 dark:border-yellow-800'
+                      : 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800'
                 }`}
               >
                 {lopStatus.status === 'scheduled' && '📅 '}
@@ -287,6 +415,34 @@ function QueueOrderItem({
               </span>
             </div>
           );
+        })()}
+
+        {/* Show Bottom Metal if ADL - ADDED TO MATCH LayupScheduler */}
+        {(() => {
+          const getBottomMetalDisplay = (orderFeatures: any) => {
+            if (!orderFeatures) return null;
+
+            const bottomMetal = orderFeatures.bottom_metal;
+
+            // Show bottom metal if it contains "adl" (case insensitive)
+            if (bottomMetal && bottomMetal.toLowerCase().includes('adl')) {
+              // Format the display value - convert underscores to spaces and capitalize
+              const displayValue = bottomMetal
+                .replace(/_/g, ' ')
+                .toUpperCase();
+              return displayValue;
+            }
+
+            return null;
+          };
+
+          const bottomMetalDisplay = getBottomMetalDisplay(order.features);
+
+          return bottomMetalDisplay ? (
+            <div className="text-xs opacity-90 mt-0.5 font-bold bg-blue-100 dark:bg-blue-900/50 px-1.5 py-0.5 rounded">
+              {bottomMetalDisplay}
+            </div>
+          ) : null;
         })()}
 
         {/* Show Heavy Fill if selected */}
@@ -437,7 +593,7 @@ export default function LayupPluggingQueuePage() {
     };
   }, [currentWeekOffset]);
 
-  // Get layup schedule assignments filtered by selected week
+  // Get layup schedule assignments filtered by selected week - ONLY LOCKED WEEKS
   const { data: currentSchedule = [], isLoading: scheduleLoading } = useQuery({
     queryKey: ['layup-schedule', currentWeekOffset],
     queryFn: async () => {
@@ -447,7 +603,14 @@ export default function LayupPluggingQueuePage() {
       if (!response.ok) {
         throw new Error('Failed to fetch layup schedule');
       }
-      return response.json();
+      const allSchedule = await response.json();
+      
+      // FILTER: Only show locked schedule entries
+      const lockedSchedule = allSchedule.filter((entry: any) => entry.weekLocked === true);
+      
+      console.log(`🔒 Layup/Plugging Department Manager: Filtered ${allSchedule.length} total entries → ${lockedSchedule.length} locked entries`);
+      
+      return lockedSchedule;
     },
     refetchInterval: 30000, // Refresh every 30 seconds
   });
@@ -929,6 +1092,9 @@ export default function LayupPluggingQueuePage() {
         <h1 className="text-3xl font-bold">
           Layup/Plugging Department Manager
         </h1>
+        <Badge variant="secondary" className="ml-2 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300">
+          🔒 Locked Weeks Only
+        </Badge>
       </div>
 
       {/* Barcode Scanner at top */}
@@ -956,7 +1122,7 @@ export default function LayupPluggingQueuePage() {
               Orders scheduled for {weekInfo.dateRange}
             </p>
             <div className="text-xs text-blue-500 mt-2">
-              Generated from Layup Scheduler
+              🔒 Showing only locked weeks from Layup Scheduler
             </div>
           </CardContent>
         </Card>

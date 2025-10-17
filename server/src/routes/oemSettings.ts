@@ -108,6 +108,26 @@ router.delete('/priority-settings/:id', async (req, res) => {
   }
 });
 
+// Clear all OEM priority settings
+router.delete('/priority-settings', async (req, res) => {
+  try {
+    const settings = await storage.getActivePrioritySettings();
+    
+    for (const setting of settings as any[]) {
+      await storage.deleteOemPrioritySettings(setting.id);
+    }
+    
+    res.json({
+      success: true,
+      message: 'All OEM priority settings cleared successfully',
+      count: settings.length,
+    });
+  } catch (error) {
+    console.error('❌ Error clearing OEM priority settings:', error);
+    res.status(500).json({ error: 'Failed to clear OEM priority settings' });
+  }
+});
+
 // Consolidated endpoint: Get vendor→PO→stock items with current overrides for layup scheduler
 router.get('/layup-scheduler/oem-priority/:vendorId', async (req, res) => {
   try {

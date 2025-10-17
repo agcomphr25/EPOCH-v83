@@ -2045,6 +2045,7 @@ export const layupSchedule = pgTable('layup_schedule', {
     .references(() => molds.moldId)
     .notNull(),
   employeeAssignments: jsonb('employee_assignments').notNull().default('[]'), // Array of {employeeId, workload}
+  weekLocked: boolean('week_locked').default(false), // Indicates if this week has been locked
   isOverride: boolean('is_override').default(false), // Manual override flag
   overriddenAt: timestamp('overridden_at'),
   overriddenBy: text('overridden_by'),
@@ -2127,6 +2128,7 @@ export const insertLayupScheduleSchema = createInsertSchema(layupSchedule)
         })
       )
       .default([]),
+    weekLocked: z.boolean().default(false),
     isOverride: z.boolean().default(false),
     overriddenBy: z.string().optional().nullable(),
   });

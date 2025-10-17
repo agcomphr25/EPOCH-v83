@@ -943,6 +943,8 @@ export interface IStorage {
   ): Promise<LayupSchedule>;
   deleteLayupScheduleByOrder(orderId: string): Promise<void>;
   clearLayupSchedule(): Promise<void>;
+  lockWeekSchedule(weekKey: string): Promise<{ success: boolean; count: number }>;
+  unlockWeekSchedule(weekKey: string): Promise<{ success: boolean; count: number }>;
 
   // Employee layup settings
   getLayupEmployeeSettings(): Promise<any[]>;
@@ -6288,6 +6290,60 @@ export class DatabaseStorage implements IStorage {
 
   async clearLayupSchedule(): Promise<void> {
     await db.delete(layupSchedule);
+  }
+
+  async lockWeekSchedule(weekKey: string): Promise<{ success: boolean; count: number }> {
+    try {
+      // Parse the week key (format: "YYYY-MM-DD" for Monday of the week)
+      const weekStart = new Date(weekKey);
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekEnd.getDate() + 4); // Friday
+
+      // Update all schedule entries for this week to locked
+      const result = await db
+        .update(layupSchedule)
+        .set({ weekLocked: true, updatedAt: new Date() })
+        .where(
+          and(
+            gte(layupSchedule.scheduledDate, weekStart),
+            lte(layupSchedule.scheduledDate, weekEnd)
+          )
+        )
+        .returning();
+
+      console.log(`🔒 Locked week ${weekKey}: ${result.length} schedule entries updated`);
+      return { success: true, count: result.length };
+    } catch (error) {
+      console.error('Error locking week schedule:', error);
+      return { success: false, count: 0 };
+    }
+  }
+
+  async unlockWeekSchedule(weekKey: string): Promise<{ success: boolean; count: number }> {
+    try {
+      // Parse the week key (format: "YYYY-MM-DD" for Monday of the week)
+      const weekStart = new Date(weekKey);
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekEnd.getDate() + 4); // Friday
+
+      // Update all schedule entries for this week to unlocked
+      const result = await db
+        .update(layupSchedule)
+        .set({ weekLocked: false, updatedAt: new Date() })
+        .where(
+          and(
+            gte(layupSchedule.scheduledDate, weekStart),
+            lte(layupSchedule.scheduledDate, weekEnd)
+          )
+        )
+        .returning();
+
+      console.log(`🔓 Unlocked week ${weekKey}: ${result.length} schedule entries updated`);
+      return { success: true, count: result.length };
+    } catch (error) {
+      console.error('Error unlocking week schedule:', error);
+      return { success: false, count: 0 };
+    }
   }
 
   async getLayupEmployeeSettings(): Promise<any[]> {

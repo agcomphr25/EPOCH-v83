@@ -51,6 +51,22 @@ router.post('/add-regular-orders', async (req, res) => {
         }
       }
 
+      // ALWAYS exclude Mesa Universal orders from "Add Regular Orders"
+      // Mesa Universal should only be scheduled through OEM Priority Settings
+      const stockModelId = order.stockModelId || order.modelId || '';
+      const isMesaUniversal =
+        stockModelId.toLowerCase().includes('mesa_universal') ||
+        stockModelId.toLowerCase().includes('mesa universal') ||
+        stockModelId.toLowerCase().includes('mesauniversal');
+      
+      if (isMesaUniversal) {
+        oemFilteredCount++;
+        console.log(
+          `📋 FILTERED OUT MESA: ${order.orderId} (model: ${stockModelId}) - Mesa Universal should use OEM Priority Settings`
+        );
+        return false;
+      }
+
       // Must need scheduling (not already scheduled)
       const needsScheduling =
         !order.currentDepartment ||
@@ -90,6 +106,20 @@ router.post('/add-regular-orders', async (req, res) => {
       const dueDateB = new Date(b.dueDate || b.orderDate).getTime();
       return dueDateA - dueDateB;
     });
+
+    // OPTIMIZATION: Calculate weekly capacity and limit orders to schedule
+    // This prevents trying to schedule more orders than can realistically fit
+    const numWorkDays = workDays ? workDays.length : 5;
+    const weeklyCapacity = Math.floor(maxOrdersPerDay * numWorkDays * 1.2); // 20% buffer for flexibility
+    
+    console.log(`⚡ OPTIMIZATION: Weekly capacity = ${maxOrdersPerDay} orders/day × ${numWorkDays} work days = ~${weeklyCapacity} orders max`);
+    
+    if (regularOrdersToSchedule.length > weeklyCapacity) {
+      console.log(`⚡ OPTIMIZATION: Limiting from ${regularOrdersToSchedule.length} to ${weeklyCapacity} orders (top priority only)`);
+      regularOrdersToSchedule.splice(weeklyCapacity); // Keep only top priority orders
+    } else {
+      console.log(`⚡ OPTIMIZATION: ${regularOrdersToSchedule.length} orders fits within ${weeklyCapacity} capacity - no limiting needed`);
+    }
 
     // Get active molds
     const activeMolds = await pool.query(`

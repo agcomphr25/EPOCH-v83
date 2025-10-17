@@ -31,6 +31,7 @@ import {
   Package,
   PlayCircle,
   CheckCircle,
+  Trash2,
 } from 'lucide-react';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
@@ -135,8 +136,25 @@ export default function OemPrioritySettingsDialog({
       if (!posResponse.ok) throw new Error('Failed to fetch purchase orders');
       const allPOs = await posResponse.json();
 
-      // Filter POs for this vendor
-      const vendorPOs = allPOs.filter((po: any) => po.customerId === vendorId);
+      // 2. Fetch scheduled production orders to filter out already-scheduled POs
+      const scheduledPOsResponse = await fetch('/api/production-orders');
+      const scheduledProductionOrders = scheduledPOsResponse.ok 
+        ? await scheduledPOsResponse.json() 
+        : [];
+      
+      // Get unique PO IDs that are already scheduled (have production orders generated)
+      const scheduledPOIds = new Set(
+        scheduledProductionOrders
+          .filter((order: any) => order.poId)
+          .map((order: any) => order.poId)
+      );
+      
+      console.log(`🔍 OEM Priority Settings: Found ${scheduledPOIds.size} already-scheduled POs to filter out`);
+
+      // Filter POs for this vendor AND exclude already-scheduled POs
+      const vendorPOs = allPOs.filter(
+        (po: any) => po.customerId === vendorId && !scheduledPOIds.has(po.id)
+      );
 
       // 2. Fetch PO Products for product type filtering
       let poProducts: any[] = [];
@@ -400,6 +418,46 @@ export default function OemPrioritySettingsDialog({
         });
         console.error('Generation error:', error);
       }
+    },
+  });
+
+  // Clear all priority settings mutation
+  const clearAllPriorityMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest('/api/oem-settings/priority-settings', {
+        method: 'DELETE',
+      });
+    },
+    onSuccess: () => {
+      // Invalidate priority settings query
+      queryClient.invalidateQueries({
+        queryKey: ['/api/oem-settings/priority-settings'],
+      });
+      // Invalidate all vendor-specific OEM priority queries using predicate
+      queryClient.invalidateQueries({
+        predicate: (query) => {
+          const key = query.queryKey[0];
+          return typeof key === 'string' && key.startsWith('/api/oem-settings/layup-scheduler/oem-priority');
+        },
+      });
+      // Invalidate p1 layup queue to refresh scheduler
+      queryClient.invalidateQueries({
+        queryKey: ['/api/p1-layup-queue'],
+      });
+      // Clear local vendor PO cache
+      setVendorPODataCache({});
+      toast({
+        title: 'Priority Settings Cleared',
+        description: 'All OEM priority settings have been cleared successfully',
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: 'Clear Failed',
+        description: 'Failed to clear OEM priority settings',
+        variant: 'destructive',
+      });
+      console.error('Clear error:', error);
     },
   });
 
@@ -821,7 +879,26 @@ export default function OemPrioritySettingsDialog({
           {/* Priorities Tab - Summary View */}
           <TabsContent value="priorities" className="space-y-4 mt-4">
             <div className="bg-gray-50 dark:bg-gray-900 p-4 rounded-lg">
-              <h3 className="font-semibold mb-4">Priority Summary</h3>
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="font-semibold">Priority Summary</h3>
+                {!prioritySettingsLoading && savedPrioritySettings.length > 0 && (
+                  <Button
+                    onClick={() => {
+                      if (confirm('Are you sure you want to clear all priority settings?')) {
+                        clearAllPriorityMutation.mutate();
+                      }
+                    }}
+                    disabled={clearAllPriorityMutation.isPending}
+                    variant="outline"
+                    size="sm"
+                    className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950"
+                    data-testid="button-clear-all-priorities"
+                  >
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    Clear All
+                  </Button>
+                )}
+              </div>
               {prioritySettingsLoading ? (
                 <div className="text-center py-8 text-gray-500">
                   Loading saved settings...

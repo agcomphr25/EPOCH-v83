@@ -1549,6 +1549,7 @@ export default function LayupScheduler() {
 
   // Save functionality
   const [isSaving, setIsSaving] = useState(false);
+  const [isAddingOrders, setIsAddingOrders] = useState(false);
   const [hasUnsavedScheduleChanges, setHasUnsavedScheduleChanges] =
     useState(false);
 
@@ -1913,10 +1914,10 @@ export default function LayupScheduler() {
       return orders;
     },
     retry: 3,
-    staleTime: 1000 * 60 * 5, // Consider data fresh for 5 minutes
+    staleTime: 0, // Always consider data stale - fetch fresh data on mount
     gcTime: 1000 * 60 * 10, // Keep data in cache for 10 minutes
     refetchOnWindowFocus: false,
-    refetchOnMount: true,
+    refetchOnMount: 'always', // Always refetch on mount
     refetchInterval: false,
   });
 
@@ -1974,9 +1975,11 @@ export default function LayupScheduler() {
     return allOrders || [];
   }, [allOrders]); // FIXED: Removed ordersLoading to prevent React Query instability
 
-  // Extract P1 purchase orders from the unified orders data
+  // Extract P1 purchase orders and production orders from the unified orders data
   const p1PurchaseOrders = useMemo(() => {
-    return orders.filter((order) => order.source === 'p1_purchase_order');
+    return orders.filter((order) => 
+      order.source === 'p1_purchase_order' || order.source === 'production_order'
+    );
   }, [orders]);
 
   // Auto-run LOP scheduler when orders are loaded to ensure proper scheduling
@@ -2004,7 +2007,7 @@ export default function LayupScheduler() {
       (order) => order.source === 'main_orders'
     );
     const p1Orders = orders.filter(
-      (order) => order.source === 'p1_purchase_order'
+      (order) => order.source === 'p1_purchase_order' || order.source === 'production_order'
     );
     console.log('🏭 LayupScheduler: Total orders from API:', allOrders.length);
     console.log(
@@ -2012,7 +2015,7 @@ export default function LayupScheduler() {
       regularOrders.length
     );
     console.log(
-      '🏭 LayupScheduler: P1 PO orders for scheduling:',
+      '🏭 LayupScheduler: P1 PO + Production orders for scheduling:',
       p1Orders.length
     );
     if (regularOrders.length > 0) {
@@ -2660,10 +2663,16 @@ export default function LayupScheduler() {
   const addRegularOrders = useCallback(async () => {
     if (!orders.length || !molds.length || !employees.length) {
       console.log('❌ Cannot add regular orders: missing data');
+      toast({
+        title: 'Missing Data',
+        description: 'Orders, molds, or employee data not loaded yet. Please wait and try again.',
+        variant: 'destructive',
+      });
       return;
     }
 
     console.log('📋 Adding regular orders manually...');
+    setIsAddingOrders(true);
 
     try {
       console.log(
@@ -2794,6 +2803,8 @@ export default function LayupScheduler() {
           'Failed to add regular orders to schedule. Please try again.',
         variant: 'destructive',
       });
+    } finally {
+      setIsAddingOrders(false);
     }
   }, [orders, molds, employees, currentDate, selectedWorkDays]);
 
@@ -5633,6 +5644,7 @@ export default function LayupScheduler() {
                         <Button
                           onClick={addRegularOrders}
                           disabled={
+                            isAddingOrders ||
                             processedOrders.filter(
                               (o) =>
                                 !orderAssignments[o.orderId] &&
@@ -5642,18 +5654,28 @@ export default function LayupScheduler() {
                           }
                           className="bg-green-600 hover:bg-green-700"
                           size="sm"
+                          data-testid="button-add-regular-orders"
                         >
-                          <Plus className="w-4 h-4 mr-1" />
-                          Add Regular Orders (
-                          {
-                            processedOrders.filter(
-                              (o) =>
-                                !orderAssignments[o.orderId] &&
-                                o.source !== 'production_order' &&
-                                o.source !== 'p1_purchase_order'
-                            ).length
-                          }{' '}
-                          orders)
+                          {isAddingOrders ? (
+                            <>
+                              <div className="animate-spin w-4 h-4 mr-1 border-2 border-white border-t-transparent rounded-full" />
+                              Scheduling...
+                            </>
+                          ) : (
+                            <>
+                              <Plus className="w-4 h-4 mr-1" />
+                              Add Regular Orders (
+                              {
+                                processedOrders.filter(
+                                  (o) =>
+                                    !orderAssignments[o.orderId] &&
+                                    o.source !== 'production_order' &&
+                                    o.source !== 'p1_purchase_order'
+                                ).length
+                              }{' '}
+                              orders)
+                            </>
+                          )}
                         </Button>
                         <Button
                           onClick={clearSchedule}
@@ -5672,15 +5694,42 @@ export default function LayupScheduler() {
 
                                 if (currentWeekLocked) {
                                   // Unlock current week
-                                  setLockedWeeks((prev) => {
-                                    const updated = { ...prev };
-                                    delete updated[weekKey];
-                                    return updated;
-                                  });
-                                  toast({
-                                    title: 'Week Unlocked',
-                                    description: `Week of ${format(currentDate, 'MM/dd')} unlocked for editing`,
-                                  });
+                                  try {
+                                    const unlockResponse = await fetch(
+                                      '/api/layup-schedule/unlock-week',
+                                      {
+                                        method: 'POST',
+                                        headers: {
+                                          'Content-Type': 'application/json',
+                                        },
+                                        body: JSON.stringify({ weekKey }),
+                                      }
+                                    );
+                                    const unlockResult = await unlockResponse.json();
+                                    
+                                    if (unlockResult.success) {
+                                      setLockedWeeks((prev) => {
+                                        const updated = { ...prev };
+                                        delete updated[weekKey];
+                                        return updated;
+                                      });
+                                      
+                                      // Invalidate layup schedule cache so Department Manager updates immediately
+                                      queryClient.invalidateQueries({ queryKey: ['/api/layup-schedule'] });
+                                      
+                                      toast({
+                                        title: 'Week Unlocked',
+                                        description: `Week of ${format(currentDate, 'MM/dd')} unlocked for editing (${unlockResult.count} entries updated)`,
+                                      });
+                                    }
+                                  } catch (error) {
+                                    console.error('❌ Error unlocking week:', error);
+                                    toast({
+                                      title: 'Error',
+                                      description: 'Failed to unlock week',
+                                      variant: 'destructive',
+                                    });
+                                  }
                                 } else {
                                   // Save and lock current week
                                   try {
@@ -5721,21 +5770,44 @@ export default function LayupScheduler() {
 
                                     if (result.success) {
                                       console.log(
-                                        '✅ Weekly schedule saved successfully'
+                                        '✅ Weekly schedule saved successfully, now locking...'
                                       );
-                                      setLockedWeeks((prev) => ({
-                                        ...prev,
-                                        [weekKey]: true,
-                                      }));
+                                      
+                                      // Lock the week in the database
+                                      const lockResponse = await fetch(
+                                        '/api/layup-schedule/lock-week',
+                                        {
+                                          method: 'POST',
+                                          headers: {
+                                            'Content-Type': 'application/json',
+                                          },
+                                          body: JSON.stringify({ weekKey }),
+                                        }
+                                      );
+                                      const lockResult = await lockResponse.json();
+                                      
+                                      if (lockResult.success) {
+                                        setLockedWeeks((prev) => ({
+                                          ...prev,
+                                          [weekKey]: true,
+                                        }));
 
-                                      // Show success feedback
-                                      toast({
-                                        title: 'Week Locked',
-                                        description: `Week of ${format(currentDate, 'MM/dd')} locked with ${scheduleEntries.length} assignments.`,
-                                      });
+                                        // Show success feedback
+                                        toast({
+                                          title: 'Week Locked',
+                                          description: `Week of ${format(currentDate, 'MM/dd')} locked with ${scheduleEntries.length} assignments.`,
+                                        });
 
-                                      // Keep the schedule visible (don't clear orderAssignments)
-                                      // This allows viewing the saved schedule and making adjustments
+                                        // Keep the schedule visible (don't clear orderAssignments)
+                                        // This allows viewing the saved schedule and making adjustments
+                                      } else {
+                                        console.error('❌ Failed to lock week:', lockResult);
+                                        toast({
+                                          title: 'Warning',
+                                          description: 'Schedule saved but failed to lock week',
+                                          variant: 'destructive',
+                                        });
+                                      }
                                     } else {
                                       console.error(
                                         '❌ Failed to save schedule:',

@@ -385,65 +385,6 @@ export function registerRoutes(app: Express): Server {
         ...formattedActiveOrders,
       ];
 
-      // Fetch P1 PO orders from all_orders table (orders created from P1 PO week selection)
-      // ONLY include orders in P1 Production Queue - orders should NOT appear in queue until scheduled
-      console.log('🔍 Fetching P1 PO orders from all_orders table...');
-      const p1POOrdersResult = await pool.query(`
-        SELECT 
-          order_id as "orderId",
-          customer_id as "customerId",
-          model_id as "stockModelId",
-          due_date as "dueDate",
-          current_department as "currentDepartment",
-          status,
-          features,
-          created_at as "createdAt",
-          'p1_purchase_order' as source
-        FROM all_orders 
-        WHERE order_id LIKE 'PO%'
-          AND current_department = 'P1 Production Queue'
-        ORDER BY due_date ASC
-      `);
-
-      // Format the P1 PO orders
-      const p1POOrdersRows = Array.isArray(p1POOrdersResult)
-        ? p1POOrdersResult
-        : [];
-      console.log(
-        `🔍 Found ${p1POOrdersRows.length} P1 PO orders in all_orders table`
-      );
-
-      const p1POOrders = p1POOrdersRows.map((po: any) => {
-        // Apply OEM priority boost if this P1 PO is selected in OEM mode
-        let priorityScore = po.priorityScore || 1500;
-        if (oemMode && selectedPOOrders.includes(po.orderId)) {
-          priorityScore = 1; // Highest priority for selected P1 PO orders in OEM mode
-          console.log(
-            `🚀 OEM PRIORITY BOOST: Order ${po.orderId} priority boosted to ${priorityScore}`
-          );
-        }
-
-        return {
-          id: po.orderId,
-          orderId: po.orderId,
-          orderDate: po.createdAt,
-          dueDate: po.dueDate,
-          currentDepartment: po.currentDepartment,
-          customerId: po.customerId,
-          features: po.features || {},
-          modelId: po.stockModelId,
-          stockModelId: po.stockModelId,
-          product: po.stockModelId,
-          status: po.status,
-          source: po.source, // This will be 'p1_purchase_order'
-          priorityScore: priorityScore,
-        };
-      });
-
-      console.log(
-        `🏭 Found ${p1POOrders.length} P1 PO orders from week selection`
-      );
-
       // Fetch production orders from production_orders table (OEM orders)
       // IMPORTANT: Only fetch production orders that match ACTIVE OEM priority settings
       console.log(
@@ -553,14 +494,12 @@ export function registerRoutes(app: Express): Server {
 
       // Combine all order types into unified production queue with enhanced stock model inference
       console.log(
-        `📦 Processing ${combinedUnscheduledOrders.length} total main orders + ${p1POOrders.length} P1 PO orders + ${productionOrders.length} production orders for P1 layup queue`
+        `📦 Processing ${combinedUnscheduledOrders.length} total main orders + ${productionOrders.length} production orders (OEM Priority Settings) for P1 layup queue`
       );
 
       const combinedQueue = [
         // Add the production orders first (highest priority for OEM)
         ...productionOrders,
-        // Add the P1 PO orders second (high priority)
-        ...p1POOrders,
         ...combinedUnscheduledOrders.map((order) => {
           // Determine correct source type based on order characteristics
           // Only treat as production_order if it has poId or productionOrderId
@@ -880,6 +819,38 @@ export function registerRoutes(app: Express): Server {
       res
         .status(500)
         .json({ _error: 'Failed to delete layup schedule entries' });
+    }
+  });
+
+  // Lock week schedule
+  app.post('/api/layup-schedule/lock-week', async (req, res) => {
+    try {
+      const { weekKey } = req.body;
+      if (!weekKey) {
+        return res.status(400).json({ error: 'weekKey is required' });
+      }
+      const { storage } = await import('../../storage');
+      const result = await storage.lockWeekSchedule(weekKey);
+      res.json(result);
+    } catch (_error) {
+      console.error('❌ Lock week schedule error:', _error);
+      res.status(500).json({ error: 'Failed to lock week schedule' });
+    }
+  });
+
+  // Unlock week schedule
+  app.post('/api/layup-schedule/unlock-week', async (req, res) => {
+    try {
+      const { weekKey } = req.body;
+      if (!weekKey) {
+        return res.status(400).json({ error: 'weekKey is required' });
+      }
+      const { storage } = await import('../../storage');
+      const result = await storage.unlockWeekSchedule(weekKey);
+      res.json(result);
+    } catch (_error) {
+      console.error('❌ Unlock week schedule error:', _error);
+      res.status(500).json({ error: 'Failed to unlock week schedule' });
     }
   });
 

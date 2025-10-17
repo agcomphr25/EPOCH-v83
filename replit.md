@@ -136,9 +136,11 @@ The application utilizes a monorepo structure with a full-stack TypeScript appro
   - Scheduled POs are automatically filtered from OEM Priority Settings dialog
 - **P1 PO Order Management**: Consolidated to OEM Priority Settings ONLY
   - Removed legacy P1 PO fetching from all_orders table
+  - Removed P1 Purchase Order Queue section from Production Queue Manager
   - ALL P1 purchase orders must now be managed through OEM Priority Settings feature
   - Production orders (source='production_order') are the only P1 type in the system
   - Simplifies workflow: OEM Priority Settings → Schedule → Lock → Department Manager
+  - UI Cleanup: Removed POItem interface, POHierarchicalSelector component, and all related mutations
 - **Status**: ✅ Fully functional - week locking integrated with production workflow, order cards visually matched, Add Regular Orders button optimized for speed, Clear All functionality implemented, P1 PO scheduling fixed, P1 orders consolidated to OEM Priority Settings
 
 ### October 17, 2025 - Google Drive + Azure Document Intelligence Integration

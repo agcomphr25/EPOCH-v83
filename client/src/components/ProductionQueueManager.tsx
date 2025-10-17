@@ -82,30 +82,8 @@ interface Kickback {
   resolutionNotes?: string;
 }
 
-interface WeekSchedule {
-  week: number;
-  dueDate: string;
-  itemsToComplete: number;
-  cumulativeItems: number;
-}
-
-interface ProductionSchedule {
-  success: boolean;
-  poNumber: string;
-  finalDueDate: string;
-  availableWeeks: number;
-  totalItemsNeeded: number;
-  totalItemsPerWeekRequired: number;
-  overallFeasible: boolean;
-  itemSchedules: {
-    itemId: number;
-    itemName: string;
-    totalQuantity: number;
-    itemsPerWeek: number;
-    weeksNeeded: number;
-    weeklySchedule: WeekSchedule[];
-  }[];
-}
+// Removed: WeekSchedule and ProductionSchedule interfaces
+// P1 PO week selection functionality now managed via OEM Priority Settings
 
 
 export default function ProductionQueueManager() {
@@ -113,12 +91,7 @@ export default function ProductionQueueManager() {
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
 
-  // State for week selection dialog
-  // Removed: selectedPOItem state - P1 POs now managed via OEM Priority Settings
-  const [productionSchedule, setProductionSchedule] =
-    useState<ProductionSchedule | null>(null);
-  const [selectedWeeks, setSelectedWeeks] = useState<number[]>([]);
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  // Removed: P1 PO week selection dialog state - now managed via OEM Priority Settings
 
   // State for P1 Production Queue order selection
   const [selectedQueueOrders, setSelectedQueueOrders] = useState<Set<string>>(
@@ -269,39 +242,8 @@ export default function ProductionQueueManager() {
     }
   };
 
-  const handleOpenWeekSelection = async (poItem: POItem) => {
-    setSelectedPOItem(poItem);
-    setIsDialogOpen(true);
-    setSelectedWeeks([]);
-    // Fetch production schedule for this PO
-    await fetchProductionScheduleMutation.mutateAsync(poItem.poid);
-  };
-
-  const handleWeekToggle = (weekNumber: number) => {
-    setSelectedWeeks((prev) =>
-      prev.includes(weekNumber)
-        ? prev.filter((w) => w !== weekNumber)
-        : [...prev, weekNumber].sort((a, b) => a - b)
-    );
-  };
-
-  const handleMoveSelectedWeeks = () => {
-    if (selectedPOItem && selectedWeeks.length > 0) {
-      moveWeeksToLayupMutation.mutate({
-        poItem: selectedPOItem,
-        weeks: selectedWeeks,
-      });
-    }
-  };
-
-  // Function removed - P1 PO items now managed via OEM Priority Settings
-  const handleMoveSelectedItemsToLayup_REMOVED = (
-    selectedItems: any[]
-  ) => {
-    if (selectedItems.length > 0) {
-      moveSelectedItemsToLayupMutation.mutate(selectedItems);
-    }
-  };
+  // Removed: handleOpenWeekSelection, handleWeekToggle, handleMoveSelectedWeeks
+  // All P1 PO week selection functionality now managed via OEM Priority Settings
 
   const movePriority = (index: number, direction: 'up' | 'down') => {
     const newQueue = [...productionQueue];
@@ -760,140 +702,7 @@ export default function ProductionQueueManager() {
         </AccordionItem>
       </Accordion>
 
-      {/* Week Selection Dialog */}
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Select Weeks for Production Schedule</DialogTitle>
-          </DialogHeader>
-
-          {selectedPOItem && (
-            <div className="space-y-4">
-              <div className="bg-gray-50 p-4 rounded-lg">
-                <h4 className="font-semibold text-lg">
-                  {selectedPOItem.itemname}
-                </h4>
-                <p className="text-sm text-gray-600">
-                  PO #{selectedPOItem.ponumber} - {selectedPOItem.quantity}{' '}
-                  units
-                </p>
-                <p className="text-sm text-gray-600">
-                  Customer: {selectedPOItem.customername}
-                </p>
-              </div>
-
-              {fetchProductionScheduleMutation.isPending && (
-                <div className="text-center py-4">
-                  <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2" />
-                  <p>Calculating production schedule...</p>
-                </div>
-              )}
-
-              {productionSchedule &&
-                productionSchedule.itemSchedules.length > 0 && (
-                  <div className="space-y-4">
-                    <div className="text-sm text-gray-600">
-                      <p>
-                        Total weeks needed:{' '}
-                        {productionSchedule.itemSchedules[0].weeksNeeded}
-                      </p>
-                      <p>
-                        Items per week:{' '}
-                        {productionSchedule.itemSchedules[0].itemsPerWeek}
-                      </p>
-                    </div>
-
-                    <div className="space-y-2">
-                      <h5 className="font-medium">
-                        Select weeks to move to layup scheduler:
-                      </h5>
-                      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 max-h-60 overflow-y-auto">
-                        {productionSchedule.itemSchedules[0].weeklySchedule.map(
-                          (week) => (
-                            <div
-                              key={week.week}
-                              className="flex items-center space-x-2 p-2 border rounded-lg hover:bg-gray-50"
-                            >
-                              <Checkbox
-                                id={`week-${week.week}`}
-                                checked={selectedWeeks.includes(week.week)}
-                                onCheckedChange={() =>
-                                  handleWeekToggle(week.week)
-                                }
-                              />
-                              <label
-                                htmlFor={`week-${week.week}`}
-                                className="text-sm cursor-pointer flex-1"
-                              >
-                                <div className="font-medium">
-                                  Week {week.week}
-                                </div>
-                                <div className="text-xs text-gray-500">
-                                  {new Date(week.dueDate).toLocaleDateString()}
-                                </div>
-                                <div className="text-xs text-blue-600">
-                                  {week.itemsToComplete} units
-                                </div>
-                              </label>
-                            </div>
-                          )
-                        )}
-                      </div>
-                    </div>
-
-                    {selectedWeeks.length > 0 && (
-                      <div className="bg-blue-50 p-3 rounded-lg">
-                        <p className="text-sm font-medium text-blue-800">
-                          Selected: {selectedWeeks.length} weeks
-                        </p>
-                        <p className="text-xs text-blue-600">
-                          Total units:{' '}
-                          {selectedWeeks.reduce((total, weekNum) => {
-                            const week =
-                              productionSchedule.itemSchedules[0].weeklySchedule.find(
-                                (w) => w.week === weekNum
-                              );
-                            return total + (week?.itemsToComplete || 0);
-                          }, 0)}
-                        </p>
-                      </div>
-                    )}
-
-                    <div className="flex gap-2 pt-4">
-                      <Button
-                        onClick={handleMoveSelectedWeeks}
-                        disabled={
-                          selectedWeeks.length === 0 ||
-                          moveWeeksToLayupMutation.isPending
-                        }
-                        className="bg-blue-600 hover:bg-blue-700 text-white"
-                      >
-                        {moveWeeksToLayupMutation.isPending ? (
-                          <>
-                            <RefreshCw className="w-4 h-4 animate-spin mr-2" />
-                            Moving...
-                          </>
-                        ) : (
-                          <>
-                            <ArrowRight className="w-4 h-4 mr-2" />
-                            Move Selected to Layup
-                          </>
-                        )}
-                      </Button>
-                      <Button
-                        variant="outline"
-                        onClick={() => setIsDialogOpen(false)}
-                        disabled={moveWeeksToLayupMutation.isPending}
-                      >
-                        Cancel
-                      </Button>
-                    </div>
-                  </div>
-                )}
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+      {/* Week Selection Dialog removed - P1 PO functionality now managed via OEM Priority Settings */}
     </div>
   );
 }

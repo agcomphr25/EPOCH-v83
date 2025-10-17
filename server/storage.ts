@@ -9020,10 +9020,7 @@ export class DatabaseStorage implements IStorage {
       .from(allOrders)
       .where(
         and(
-          or(
-            eq(allOrders.status, 'IN_PROGRESS'),
-            eq(allOrders.status, 'FINALIZED')
-          ),
+          eq(allOrders.status, 'IN_PROGRESS'),
           eq(allOrders.isCancelled, false)
         )
       );

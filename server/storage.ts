@@ -6299,6 +6299,12 @@ export class DatabaseStorage implements IStorage {
       const weekEnd = new Date(weekStart);
       weekEnd.setDate(weekEnd.getDate() + 4); // Friday
 
+      // Normalize to midnight UTC to avoid timezone issues
+      weekStart.setUTCHours(0, 0, 0, 0);
+      weekEnd.setUTCHours(23, 59, 59, 999);
+
+      console.log(`🔒 Locking week ${weekKey}: ${weekStart.toISOString()} to ${weekEnd.toISOString()}`);
+
       // Update all schedule entries for this week to locked
       const result = await db
         .update(layupSchedule)
@@ -6325,6 +6331,12 @@ export class DatabaseStorage implements IStorage {
       const weekStart = new Date(weekKey);
       const weekEnd = new Date(weekStart);
       weekEnd.setDate(weekEnd.getDate() + 4); // Friday
+
+      // Normalize to midnight UTC to avoid timezone issues
+      weekStart.setUTCHours(0, 0, 0, 0);
+      weekEnd.setUTCHours(23, 59, 59, 999);
+
+      console.log(`🔓 Unlocking week ${weekKey}: ${weekStart.toISOString()} to ${weekEnd.toISOString()}`);
 
       // Update all schedule entries for this week to unlocked
       const result = await db

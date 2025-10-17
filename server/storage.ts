@@ -9026,7 +9026,7 @@ export class DatabaseStorage implements IStorage {
       );
 
     console.log(
-      '🔍 Metal Accessories Demands - Total orders:',
+      '🔍 Metal Accessories Demands - Total IN_PROGRESS orders:',
       ordersInProgress.length
     );
 

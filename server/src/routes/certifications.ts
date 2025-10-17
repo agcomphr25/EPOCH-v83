@@ -60,7 +60,7 @@ router.post(
         created_at,
         updated_at
       ) VALUES (
-        ${extractedData.certificationName || 'Unnamed Certification'},
+        ${extractedData.name || 'Unnamed Certification'},
         ${extractedData.description || ''},
         ${'DEPARTMENT'},
         ${extractedData.requirements || ''},
@@ -82,8 +82,22 @@ router.post(
         },
         extractedData,
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Create certification from PDF error:', error);
+      
+      // Handle Azure Document Intelligence specific errors
+      if (error.code === 'InvalidRequest' || error.code === 'InvalidContent') {
+        return res.status(400).json({ 
+          error: 'PDF Format Not Supported',
+          details: 'This PDF cannot be processed. Common reasons:\n' +
+                   '• PDF is password-protected or encrypted\n' +
+                   '• PDF format is not supported by Azure\n' +
+                   '• File may be corrupted\n\n' +
+                   'Try: Open the PDF in a PDF editor, save as a new file, and upload again.',
+          suggestion: 'Consider manually entering the certification details instead.'
+        });
+      }
+      
       if (error instanceof Error) {
         return res.status(500).json({ error: error.message });
       }

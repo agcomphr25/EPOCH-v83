@@ -141,7 +141,7 @@ The application utilizes a monorepo structure with a full-stack TypeScript appro
   - Production orders (source='production_order') are the only P1 type in the system
   - Simplifies workflow: OEM Priority Settings → Schedule → Lock → Department Manager
   - UI Cleanup: Removed POItem interface, POHierarchicalSelector component, and all related mutations
-- **Status**: ✅ Fully functional - week locking integrated with production workflow, order cards visually matched, Add Regular Orders button optimized for speed, Clear All functionality implemented, P1 PO scheduling fixed, P1 orders consolidated to OEM Priority Settings
+- **Status**: ✅ Fully functional - week locking integrated with production workflow, order cards visually matched, Add Regular Orders button optimized for speed, Clear All functionality implemented, P1 PO scheduling fixed, P1 orders consolidated to OEM Priority Settings, legacy P1 PO UI completely removed
 
 ### October 17, 2025 - Google Drive + Azure Document Intelligence Integration
 

@@ -269,10 +269,8 @@ export default function AGTestDashboard() {
             </p>
           </CardContent>
         </Card>
-      </div>
 
-      {/* Shipping Tracker Widget */}
-      <div className="mt-6">
+        {/* Shipping Tracker Widget */}
         <ShippingTrackerWidget />
       </div>
 

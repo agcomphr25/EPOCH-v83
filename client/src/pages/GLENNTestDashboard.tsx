@@ -321,10 +321,8 @@ export default function ADMINTestDashboard() {
           'text-indigo-600',
           FormInput
         )}
-      </div>
 
-      {/* Shipping Tracker Widget */}
-      <div className="mt-6">
+        {/* Shipping Tracker Widget */}
         <ShippingTrackerWidget />
       </div>
 

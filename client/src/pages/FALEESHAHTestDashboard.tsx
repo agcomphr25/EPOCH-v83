@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { Link } from 'wouter';
 import PipelineVisualization from '@/components/PipelineVisualization';
-import ShippingTrackerWidget from '@/components/ShippingTrackerWidget';
+import WeeklyShippingWidget from '@/components/WeeklyShippingWidget';
 
 export default function FALEESHAHTestDashboard() {
   return (
@@ -164,8 +164,8 @@ export default function FALEESHAHTestDashboard() {
           </Card>
         </Link>
 
-        {/* Shipping Tracker Widget */}
-        <ShippingTrackerWidget />
+        {/* Weekly Shipping Widget */}
+        <WeeklyShippingWidget />
       </div>
 
       {/* Production Pipeline Overview */}

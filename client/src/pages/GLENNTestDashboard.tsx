@@ -27,7 +27,7 @@ import {
   User,
   Settings,
 } from 'lucide-react';
-import ShippingTrackerWidget from '@/components/ShippingTrackerWidget';
+import WeeklyShippingWidget from '@/components/WeeklyShippingWidget';
 
 export default function ADMINTestDashboard() {
   const orderManagementItems = [
@@ -322,8 +322,8 @@ export default function ADMINTestDashboard() {
           FormInput
         )}
 
-        {/* Shipping Tracker Widget */}
-        <ShippingTrackerWidget />
+        {/* Weekly Shipping Widget */}
+        <WeeklyShippingWidget />
       </div>
 
       {/* Additional Navigation Items */}

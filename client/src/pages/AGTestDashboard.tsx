@@ -28,7 +28,7 @@ import PipelineVisualization from '@/components/PipelineVisualization';
 import LayupScheduler from '@/components/LayupScheduler';
 import { getDisplayOrderId } from '@/lib/orderUtils';
 import { useLocation } from 'wouter';
-import ShippingTrackerWidget from '@/components/ShippingTrackerWidget';
+import WeeklyShippingWidget from '@/components/WeeklyShippingWidget';
 
 export default function AGTestDashboard() {
   const [expandedSection, setExpandedSection] = useState<string | null>(null);
@@ -270,8 +270,8 @@ export default function AGTestDashboard() {
           </CardContent>
         </Card>
 
-        {/* Shipping Tracker Widget */}
-        <ShippingTrackerWidget />
+        {/* Weekly Shipping Widget */}
+        <WeeklyShippingWidget />
       </div>
 
       {/* Dashboard Layout */}

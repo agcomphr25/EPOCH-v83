@@ -2,9 +2,10 @@ import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent } from '@/components/ui/card';
 import { Truck } from 'lucide-react';
 import { Link } from 'wouter';
+import type { AllOrder } from '@shared/schema';
 
 export default function ShippingTrackerWidget() {
-  const { data: orders, isLoading } = useQuery<any[]>({
+  const { data: orders, isLoading } = useQuery<AllOrder[]>({
     queryKey: ['/api/orders/with-payment-status'],
     staleTime: 30000, // Refresh every 30 seconds
   });
@@ -26,15 +27,15 @@ export default function ShippingTrackerWidget() {
 
   // Filter for orders shipped this week
   const { startOfWeek, endOfWeek } = getCurrentWeekRange();
-  const shippedThisWeek = orders?.filter((order: any) => {
+  const shippedThisWeek = (orders ?? []).filter((order) => {
     if (!order.shippedDate) return false;
     const shippedDate = new Date(order.shippedDate);
     return shippedDate >= startOfWeek && shippedDate <= endOfWeek;
-  }).length || 0;
+  }).length;
 
   if (isLoading) {
     return (
-      <Link href="/department-queue/shipping">
+      <Link href="/department-queue/shipping" data-testid="link-shipping-tracker">
         <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-blue-200">
           <CardContent className="p-4 text-center">
             <Truck className="w-8 h-8 text-blue-600 mx-auto mb-3 animate-pulse" />
@@ -51,7 +52,7 @@ export default function ShippingTrackerWidget() {
   }
 
   return (
-    <Link href="/department-queue/shipping">
+    <Link href="/department-queue/shipping" data-testid="link-shipping-tracker">
       <Card 
         className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-blue-200"
         data-testid="card-shipping-tracker"

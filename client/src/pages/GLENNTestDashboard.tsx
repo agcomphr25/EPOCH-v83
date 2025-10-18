@@ -27,6 +27,7 @@ import {
   User,
   Settings,
 } from 'lucide-react';
+import ShippingTrackerWidget from '@/components/ShippingTrackerWidget';
 
 export default function ADMINTestDashboard() {
   const orderManagementItems = [
@@ -320,6 +321,11 @@ export default function ADMINTestDashboard() {
           'text-indigo-600',
           FormInput
         )}
+      </div>
+
+      {/* Shipping Tracker Widget */}
+      <div className="mt-6">
+        <ShippingTrackerWidget />
       </div>
 
       {/* Additional Navigation Items */}

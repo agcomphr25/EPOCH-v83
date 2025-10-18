@@ -2190,12 +2190,29 @@ export function registerRoutes(app: Express): Server {
     try {
       const { storage } = await import('../../storage');
       const purchaseOrders = await storage.getAllPurchaseOrders();
+      
+      // Fetch scheduled production orders to filter out already-scheduled POs
+      const scheduledProductionOrders = await storage.getAllProductionOrders();
+      
+      // Get unique PO IDs that are already scheduled (have production orders generated)
+      const scheduledPOIds = new Set(
+        scheduledProductionOrders
+          .filter((order) => order.poId)
+          .map((order) => order.poId)
+      );
+      
+      console.log(`🔍 PO Vendors: Found ${scheduledPOIds.size} already-scheduled POs to filter out`);
+      
+      // Filter out already-scheduled POs
+      const openPurchaseOrders = purchaseOrders.filter(
+        (po) => !scheduledPOIds.has(po.id)
+      );
 
       // Group by customer to get unique vendors with counts
       const vendorMap = new Map();
 
       await Promise.all(
-        purchaseOrders.map(async (po) => {
+        openPurchaseOrders.map(async (po) => {
           const customerId = po.customerId;
           const customerName = po.customerName;
 

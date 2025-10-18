@@ -40,10 +40,10 @@ export default function ShippingTrackerWidget() {
           <CardContent className="p-4 text-center">
             <Truck className="w-8 h-8 text-blue-600 mx-auto mb-3 animate-pulse" />
             <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-              Shipped This Week
+              Stocks Shipped This Week (...)
             </h3>
-            <p className="text-2xl font-bold text-blue-600 mt-2">
-              ...
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              Click to view all shipments
             </p>
           </CardContent>
         </Card>
@@ -59,15 +59,12 @@ export default function ShippingTrackerWidget() {
       >
         <CardContent className="p-4 text-center">
           <Truck className="w-8 h-8 text-blue-600 mx-auto mb-3" />
-          <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-            Shipped This Week
-          </h3>
-          <p 
-            className="text-2xl font-bold text-blue-600 mt-2"
+          <h3 
+            className="text-sm font-semibold text-gray-900 dark:text-gray-100"
             data-testid="text-shipped-count"
           >
-            {shippedThisWeek}
-          </p>
+            Stocks Shipped This Week ({shippedThisWeek})
+          </h3>
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
             Click to view all shipments
           </p>

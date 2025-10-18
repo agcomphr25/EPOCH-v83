@@ -163,10 +163,8 @@ export default function FALEESHAHTestDashboard() {
             </CardContent>
           </Card>
         </Link>
-      </div>
 
-      {/* Shipping Tracker Widget */}
-      <div className="mt-6">
+        {/* Shipping Tracker Widget */}
         <ShippingTrackerWidget />
       </div>
 

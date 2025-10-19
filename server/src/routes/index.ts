@@ -2808,22 +2808,28 @@ export function registerRoutes(app: Express): Server {
           createdOrders.push(_createdOrder);
 
           // Also create entry in main orders table for layup scheduler
-          const _mainOrderData = {
-            orderId: _createdOrder.orderId,
-            customer: purchaseOrder.customerName,
-            product: item.itemId,
-            quantity: 1,
-            status: 'Active',
-            date: new Date(),
-            currentDepartment: 'P1 Production Queue',
-            isOnSchedule: true,
-            priorityScore: 50,
-            poId: purchaseOrder.poNumber,
-            dueDate: _createdOrder.dueDate,
-            createdAt: new Date(),
-          };
-
-          // await storage.createOrder(_mainOrderData); // Method may not exist, commenting out
+          const { pool } = await import('../../db');
+          try {
+            await pool.query(
+              `INSERT INTO orders (order_id, customer, product, quantity, status, date, current_department, due_date)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+              [
+                _createdOrder.orderId,
+                purchaseOrder.customerName,
+                item.itemId,
+                1,
+                'Active',
+                new Date(),
+                'P1 Production Queue',
+                _createdOrder.dueDate,
+              ]
+            );
+          } catch (err) {
+            // Ignore duplicate key errors (order already exists in orders table)
+            if (!(err as any).message?.includes('duplicate key')) {
+              throw err;
+            }
+          }
           console.log(
             `🏭 Created main order entry: ${productionOrderData.orderId} for layup scheduler`
           );
@@ -4191,6 +4197,81 @@ export function registerRoutes(app: Express): Server {
       res.status(500).json({ _error: 'Failed to progress orders' });
     }
   });
+
+  // Migration endpoint: Sync existing production orders to main orders table for layup scheduler
+  app.post('/api/migrate-production-orders-to-layup', async (req, res) => {
+    try {
+      console.log('🔄 Starting migration: Syncing production orders to main orders table...');
+      const { storage } = await import('../../storage');
+      const { pool } = await import('../../db');
+      
+      // Get all production orders
+      const productionOrders = await storage.getAllProductionOrders();
+      console.log(`📦 Found ${productionOrders.length} production orders`);
+      
+      let syncedCount = 0;
+      let skippedCount = 0;
+      
+      for (const prodOrder of productionOrders) {
+        try {
+          // Get the associated PO to get customer name
+          const po = await storage.getPurchaseOrder(prodOrder.poId);
+          
+          if (!po) {
+            console.log(`⚠️ Skipping ${prodOrder.orderId}: PO not found`);
+            skippedCount++;
+            continue;
+          }
+          
+          // Insert into main orders table
+          try {
+            await pool.query(
+              `INSERT INTO orders (order_id, customer, product, quantity, status, date, current_department, due_date)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+              [
+                prodOrder.orderId,
+                po.customerName,
+                prodOrder.itemId,
+                1,
+                'Active',
+                prodOrder.orderDate || new Date(),
+                'P1 Production Queue',
+                prodOrder.dueDate,
+              ]
+            );
+          } catch (err) {
+            // Ignore duplicate key errors (order already exists in orders table)
+            if (!(err as any).message?.includes('duplicate key')) {
+              throw err;
+            }
+          }
+          
+          syncedCount++;
+          
+          if (syncedCount % 50 === 0) {
+            console.log(`✅ Synced ${syncedCount} orders so far...`);
+          }
+        } catch (error) {
+          console.error(`❌ Error syncing order ${prodOrder.orderId}:`, error);
+          skippedCount++;
+        }
+      }
+      
+      console.log(`✅ Migration complete: ${syncedCount} synced, ${skippedCount} skipped`);
+      
+      res.json({
+        success: true,
+        message: `Synced ${syncedCount} production orders to layup scheduler`,
+        syncedCount,
+        skippedCount,
+        totalProcessed: productionOrders.length,
+      });
+    } catch (error) {
+      console.error('🔄 Migration error:', error);
+      res.status(500).json({ error: 'Failed to migrate production orders' });
+    }
+  });
+
   // Create and return HTTP server
   return createServer(app);
 }

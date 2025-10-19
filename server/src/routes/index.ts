@@ -181,7 +181,7 @@ export function registerRoutes(app: Express): Server {
         tokenLength: token.length,
       });
     } catch (_error: any) {
-      console._error('❌ UPS authentication failed:', _error.message);
+      console.error('❌ UPS authentication failed:', _error.message);
       res.status(500).json({
         success: false,
         _error: _error.message,
@@ -225,7 +225,7 @@ export function registerRoutes(app: Express): Server {
       );
       res.json(result);
     } catch (_error) {
-      console._error(
+      console.error(
         '❌ LAYUP SCHEDULER FLOW: Algorithmic schedule _error:',
         _error
       );
@@ -572,7 +572,7 @@ export function registerRoutes(app: Express): Server {
 
       res.json(combinedQueue);
     } catch (_error) {
-      console._error('❌ P1 layup queue fetch _error:', _error);
+      console.error('❌ P1 layup queue fetch _error:', _error);
       res.status(500).json({ _error: 'Failed to fetch P1 layup queue' });
     }
   });
@@ -651,7 +651,7 @@ export function registerRoutes(app: Express): Server {
             `✅ Successfully moved order ${order.orderId} to Shipping QC`
           );
         } catch (_error) {
-          console._error(`❌ Failed to move order ${order.orderId}:`, _error);
+          console.error(`❌ Failed to move order ${order.orderId}:`, _error);
         }
       }
 
@@ -708,7 +708,7 @@ export function registerRoutes(app: Express): Server {
             );
           }
         } catch (_error) {
-          console._error(
+          console.error(
             `❌ Failed to create kickback for order ${order.orderId}:`,
             _error
           );
@@ -724,7 +724,7 @@ export function registerRoutes(app: Express): Server {
         );
       }
     } catch (_error) {
-      console._error('❌ Error in autoMoveInvalidStockModelOrders:', _error);
+      console.error('❌ Error in autoMoveInvalidStockModelOrders:', _error);
     }
   }
 
@@ -753,7 +753,7 @@ export function registerRoutes(app: Express): Server {
         console.log('✅ CLEANUP: No orphaned layup schedule entries found');
       }
     } catch (_error) {
-      console._error('❌ CLEANUP ERROR:', _error);
+      console.error('❌ CLEANUP ERROR:', _error);
       // Don't throw - let the main API continue working even if cleanup fails
     }
   }
@@ -780,7 +780,7 @@ export function registerRoutes(app: Express): Server {
         res.json(scheduleData);
       }
     } catch (_error) {
-      console._error('❌ Layup schedule fetch _error:', _error);
+      console.error('❌ Layup schedule fetch _error:', _error);
       res.status(500).json({ _error: 'Failed to fetch layup schedule' });
     }
   });
@@ -800,7 +800,7 @@ export function registerRoutes(app: Express): Server {
       console.log('🔧 Created layup schedule entry:', result);
       res.json(result);
     } catch (_error) {
-      console._error('❌ Layup schedule create _error:', _error);
+      console.error('❌ Layup schedule create _error:', _error);
       res.status(500).json({ _error: 'Failed to create layup schedule entry' });
     }
   });
@@ -815,7 +815,7 @@ export function registerRoutes(app: Express): Server {
       await storage.deleteLayupScheduleByOrder(req.params.orderId);
       res.json({ success: true });
     } catch (_error) {
-      console._error('❌ Layup schedule delete _error:', _error);
+      console.error('❌ Layup schedule delete _error:', _error);
       res
         .status(500)
         .json({ _error: 'Failed to delete layup schedule entries' });
@@ -1014,7 +1014,7 @@ export function registerRoutes(app: Express): Server {
         schedule: createdEntries,
       });
     } catch (_error) {
-      console._error('❌ Error generating layup schedule:', _error);
+      console.error('❌ Error generating layup schedule:', _error);
       res.status(500).json({ _error: 'Failed to generate layup schedule' });
     }
   });
@@ -1028,7 +1028,7 @@ export function registerRoutes(app: Express): Server {
       console.log('🔧 Found P2 customers:', p2Customers.length);
       res.json(p2Customers);
     } catch (_error) {
-      console._error('Get P2 customers _error:', _error);
+      console.error('Get P2 customers _error:', _error);
       res.status(500).json({ _error: 'Failed to fetch P2 customers' });
     }
   });
@@ -1042,7 +1042,7 @@ export function registerRoutes(app: Express): Server {
       console.log('🔧 Found P2 purchase orders:', pos.length);
       res.json(pos);
     } catch (_error) {
-      console._error('🔧 P2 purchase orders bypass _error:', _error);
+      console.error('🔧 P2 purchase orders bypass _error:', _error);
       res
         .status(500)
         .json({
@@ -1087,7 +1087,7 @@ export function registerRoutes(app: Express): Server {
 
           throw new Error(`Order ${orderId} not found`);
         } catch (_error) {
-          console._error(`Failed to update order ${orderId}:`, _error);
+          console.error(`Failed to update order ${orderId}:`, _error);
           return null;
         }
       });
@@ -1102,7 +1102,7 @@ export function registerRoutes(app: Express): Server {
         totalProcessed: orderIds.length,
       });
     } catch (_error) {
-      console._error('❌ Push to layup/plugging _error:', _error);
+      console.error('❌ Push to layup/plugging _error:', _error);
       res
         .status(500)
         .json({ _error: 'Failed to push orders to layup/plugging department' });
@@ -1160,7 +1160,7 @@ export function registerRoutes(app: Express): Server {
           'JavaScript-based scheduler completed (Python integration can be added later)',
       });
     } catch (_error) {
-      console._error('❌ Python scheduler _error:', _error);
+      console.error('❌ Python scheduler _error:', _error);
       res.status(500).json({ _error: 'Failed to run scheduler' });
     }
   });
@@ -1174,7 +1174,7 @@ export function registerRoutes(app: Express): Server {
       console.log('🔧 Created P2 purchase order:', po.id);
       res.status(201).json(po);
     } catch (_error) {
-      console._error('🔧 P2 purchase order create bypass _error:', _error);
+      console.error('🔧 P2 purchase order create bypass _error:', _error);
       res
         .status(500)
         .json({
@@ -1193,7 +1193,7 @@ export function registerRoutes(app: Express): Server {
       console.log('🔧 Updated P2 purchase order:', po.id);
       res.json(po);
     } catch (_error) {
-      console._error('🔧 P2 purchase order update bypass _error:', _error);
+      console.error('🔧 P2 purchase order update bypass _error:', _error);
       res
         .status(500)
         .json({
@@ -1211,7 +1211,7 @@ export function registerRoutes(app: Express): Server {
       console.log('🔧 Deleted P2 purchase order:', id);
       res.json({ success: true });
     } catch (_error) {
-      console._error('🔧 P2 purchase order delete bypass _error:', _error);
+      console.error('🔧 P2 purchase order delete bypass _error:', _error);
       res
         .status(500)
         .json({
@@ -1257,7 +1257,7 @@ export function registerRoutes(app: Express): Server {
 
       res.json(transformedModels);
     } catch (_error) {
-      console._error('🚨 Error retrieving stock models:', _error);
+      console.error('🚨 Error retrieving stock models:', _error);
       res.status(500).json({ _error: 'Failed to retrieve stock models' });
     }
   });
@@ -1271,7 +1271,7 @@ export function registerRoutes(app: Express): Server {
       console.log('🔧 Created stock model:', stockModel.id);
       res.status(201).json(stockModel);
     } catch (_error) {
-      console._error('🔧 Stock model create _error:', _error);
+      console.error('🔧 Stock model create _error:', _error);
       res.status(500).json({ _error: 'Failed to create stock model' });
     }
   });
@@ -1287,7 +1287,7 @@ export function registerRoutes(app: Express): Server {
       console.log('🔧 Updated stock model:', stockModel.id);
       res.json(stockModel);
     } catch (_error) {
-      console._error('🔧 Stock model update _error:', _error);
+      console.error('🔧 Stock model update _error:', _error);
       res.status(500).json({ _error: 'Failed to update stock model' });
     }
   });
@@ -1301,7 +1301,7 @@ export function registerRoutes(app: Express): Server {
       console.log('🔧 Deleted stock model:', id);
       res.json({ success: true });
     } catch (_error) {
-      console._error('🔧 Stock model delete _error:', _error);
+      console.error('🔧 Stock model delete _error:', _error);
       res.status(500).json({ _error: 'Failed to delete stock model' });
     }
   });
@@ -1313,7 +1313,7 @@ export function registerRoutes(app: Express): Server {
       const features = await storage.getAllFeatures();
       res.json(features);
     } catch (_error) {
-      console._error('🎯 Features API Error:', _error);
+      console.error('🎯 Features API Error:', _error);
       res.status(500).json({ _error: 'Failed to retrieve features' });
     }
   });
@@ -1327,7 +1327,7 @@ export function registerRoutes(app: Express): Server {
       console.log('🔧 Created feature:', feature.id);
       res.status(201).json(feature);
     } catch (_error) {
-      console._error('🔧 Feature create _error:', _error);
+      console.error('🔧 Feature create _error:', _error);
       res.status(500).json({ _error: 'Failed to create feature' });
     }
   });
@@ -1343,7 +1343,7 @@ export function registerRoutes(app: Express): Server {
       console.log('🔧 Updated feature:', feature.id);
       res.json(feature);
     } catch (_error) {
-      console._error('🔧 Feature update _error:', _error);
+      console.error('🔧 Feature update _error:', _error);
       res.status(500).json({ _error: 'Failed to update feature' });
     }
   });
@@ -1357,7 +1357,7 @@ export function registerRoutes(app: Express): Server {
       console.log('🔧 Deleted feature:', id);
       res.json({ success: true });
     } catch (_error) {
-      console._error('🔧 Feature delete _error:', _error);
+      console.error('🔧 Feature delete _error:', _error);
       res.status(500).json({ _error: 'Failed to delete feature' });
     }
   });
@@ -1368,7 +1368,7 @@ export function registerRoutes(app: Express): Server {
       const categories = await storage.getAllFeatureCategories();
       res.json(categories);
     } catch (_error) {
-      console._error('Get feature categories _error:', _error);
+      console.error('Get feature categories _error:', _error);
       res.status(500).json({ _error: 'Failed to get feature categories' });
     }
   });
@@ -1379,7 +1379,7 @@ export function registerRoutes(app: Express): Server {
       const subCategories = await storage.getAllFeatureSubCategories();
       res.json(subCategories);
     } catch (_error) {
-      console._error('Get feature sub-categories _error:', _error);
+      console.error('Get feature sub-categories _error:', _error);
       res.status(500).json({ _error: 'Failed to get feature sub-categories' });
     }
   });
@@ -1394,7 +1394,7 @@ export function registerRoutes(app: Express): Server {
       res.setHeader('Content-Type', 'application/json');
       res.json(settings);
     } catch (_error) {
-      console._error('🚀 Employee data fetch _error:', _error);
+      console.error('🚀 Employee data fetch _error:', _error);
       res.status(500).json({ _error: 'Failed to fetch employee data' });
     }
   });
@@ -1417,7 +1417,7 @@ export function registerRoutes(app: Express): Server {
       res.json(settings);
       console.log('🔧 JSON response sent successfully');
     } catch (_error) {
-      console._error('🔧 Employee layup settings fetch _error:', _error);
+      console.error('🔧 Employee layup settings fetch _error:', _error);
       res
         .status(500)
         .json({ _error: 'Failed to fetch employee layup settings' });
@@ -1439,7 +1439,7 @@ export function registerRoutes(app: Express): Server {
       const employee = _employees.find((emp) => emp.id === parseInt(id));
 
       if (!employee) {
-        console._error(`❌ Employee with ID ${id} not found`);
+        console.error(`❌ Employee with ID ${id} not found`);
         return res.status(404).json({ _error: 'Employee not found' });
       }
 
@@ -1465,7 +1465,7 @@ export function registerRoutes(app: Express): Server {
       console.log('🔧 Updated employee:', updatedEmployee);
       res.json(updatedEmployee);
     } catch (_error) {
-      console._error('🔧 Employee update _error:', _error);
+      console.error('🔧 Employee update _error:', _error);
       res.status(500).json({ _error: 'Failed to update employee settings' });
     }
   });
@@ -1477,7 +1477,7 @@ export function registerRoutes(app: Express): Server {
       const addresses = await storage.getAllAddresses();
       res.json(addresses);
     } catch (_error) {
-      console._error('Get all addresses _error:', _error);
+      console.error('Get all addresses _error:', _error);
       res.status(500).json({ _error: 'Failed to fetch addresses' });
     }
   });
@@ -1492,7 +1492,7 @@ export function registerRoutes(app: Express): Server {
       console.log('🔧 Created address:', address.id);
       res.status(201).json(address);
     } catch (_error) {
-      console._error('🔧 Address create _error:', _error);
+      console.error('🔧 Address create _error:', _error);
       res.status(500).json({ _error: 'Failed to create address' });
     }
   });
@@ -1510,7 +1510,7 @@ export function registerRoutes(app: Express): Server {
       console.log('🔧 Updated address:', address.id);
       res.json(address);
     } catch (_error) {
-      console._error('🔧 Address update _error:', _error);
+      console.error('🔧 Address update _error:', _error);
       res.status(500).json({ _error: 'Failed to update address' });
     }
   });
@@ -1524,7 +1524,7 @@ export function registerRoutes(app: Express): Server {
       console.log('🔧 Deleted address:', id);
       res.json({ success: true });
     } catch (_error) {
-      console._error('🔧 Address delete _error:', _error);
+      console.error('🔧 Address delete _error:', _error);
       res.status(500).json({ _error: 'Failed to get all addresses' });
     }
   });
@@ -1541,7 +1541,7 @@ export function registerRoutes(app: Express): Server {
       );
       res.json(addresses);
     } catch (_error) {
-      console._error('Get customer addresses _error:', _error);
+      console.error('Get customer addresses _error:', _error);
       res.status(500).json({ _error: 'Failed to get customer addresses' });
     }
   });
@@ -1646,7 +1646,7 @@ export function registerRoutes(app: Express): Server {
 
       res.json(combinedOrders);
     } catch (_error) {
-      console._error('P1 production queue _error:', _error);
+      console.error('P1 production queue _error:', _error);
       res.status(500).json({ _error: 'Failed to fetch P1 production queue' });
     }
   });
@@ -1703,7 +1703,7 @@ export function registerRoutes(app: Express): Server {
 
       res.json(p2LayupOrders);
     } catch (_error) {
-      console._error('P2 production queue _error:', _error);
+      console.error('P2 production queue _error:', _error);
       res.status(500).json({ _error: 'Failed to fetch P2 production queue' });
     }
   });
@@ -1717,7 +1717,7 @@ export function registerRoutes(app: Express): Server {
       console.log('🏭 P1 sync result:', result);
       res.json(result);
     } catch (_error) {
-      console._error('🏭 P1 sync _error:', _error);
+      console.error('🏭 P1 sync _error:', _error);
       res
         .status(500)
         .json({ _error: 'Failed to sync P1 orders to production queue' });
@@ -1765,7 +1765,7 @@ export function registerRoutes(app: Express): Server {
             );
           }
         } catch (orderError) {
-          console._error(
+          console.error(
             `❌ PRODUCTION FLOW: Error updating order ${orderId}:`,
             orderError
           );
@@ -1783,7 +1783,7 @@ export function registerRoutes(app: Express): Server {
       console.log('🏭 PRODUCTION FLOW: Department push result:', result);
       res.json(result);
     } catch (_error) {
-      console._error(
+      console.error(
         '❌ PRODUCTION FLOW: Push to Layup/Plugging _error:',
         _error
       );
@@ -1802,7 +1802,7 @@ export function registerRoutes(app: Express): Server {
       console.log('🏭 Unified queue count:', unifiedQueue.length);
       res.json(unifiedQueue);
     } catch (_error) {
-      console._error('🏭 Unified queue _error:', _error);
+      console.error('🏭 Unified queue _error:', _error);
       res
         .status(500)
         .json({ _error: 'Failed to fetch unified production queue' });
@@ -1823,7 +1823,7 @@ export function registerRoutes(app: Express): Server {
 
       res.json(scheduleEntries);
     } catch (_error) {
-      console._error('P2 layup schedule _error:', _error);
+      console.error('P2 layup schedule _error:', _error);
       res.status(500).json({ _error: 'Failed to fetch P2 layup schedule' });
     }
   });
@@ -1839,7 +1839,7 @@ export function registerRoutes(app: Express): Server {
       console.log('🔧 P2 Schedule entry created:', result);
       res.json(result);
     } catch (_error) {
-      console._error('P2 layup schedule create _error:', _error);
+      console.error('P2 layup schedule create _error:', _error);
       res
         .status(500)
         .json({ _error: 'Failed to create P2 layup schedule entry' });
@@ -1857,7 +1857,7 @@ export function registerRoutes(app: Express): Server {
       console.log('🔧 P2 Schedule entries deleted for order:', orderId);
       res.json({ success: true });
     } catch (_error) {
-      console._error('P2 layup schedule delete _error:', _error);
+      console.error('P2 layup schedule delete _error:', _error);
       res
         .status(500)
         .json({ _error: 'Failed to delete P2 layup schedule entries' });
@@ -1936,7 +1936,7 @@ export function registerRoutes(app: Express): Server {
 
       pythonProcess.on('close', (code: number | null) => {
         if (code !== 0) {
-          console._error('Python scheduler _error:', errorOutput);
+          console.error('Python scheduler _error:', errorOutput);
           return res
             .status(500)
             .json({ _error: 'Python scheduler failed', details: errorOutput });
@@ -1959,7 +1959,7 @@ export function registerRoutes(app: Express): Server {
 
           res.json(result);
         } catch (parseError) {
-          console._error(
+          console.error(
             'Failed to parse Python scheduler output:',
             parseError
           );
@@ -1976,7 +1976,7 @@ export function registerRoutes(app: Express): Server {
       pythonProcess.stdin.write(JSON.stringify(schedulerInput));
       pythonProcess.stdin.end();
     } catch (_error) {
-      console._error('Python scheduler integration _error:', _error);
+      console.error('Python scheduler integration _error:', _error);
       res.status(500).json({ _error: 'Failed to run Python scheduler' });
     }
   });
@@ -2032,7 +2032,7 @@ export function registerRoutes(app: Express): Server {
         updatedOrders,
       });
     } catch (_error) {
-      console._error('Push to layup/plugging _error:', _error);
+      console.error('Push to layup/plugging _error:', _error);
       res
         .status(500)
         .json({ _error: 'Failed to push orders to layup/plugging queue' });
@@ -2132,7 +2132,7 @@ export function registerRoutes(app: Express): Server {
 
       res.json(combinedOrders);
     } catch (_error) {
-      console._error('Legacy production queue _error:', _error);
+      console.error('Legacy production queue _error:', _error);
       res.status(500).json({ _error: 'Failed to fetch production queue' });
     }
   });
@@ -2180,7 +2180,7 @@ export function registerRoutes(app: Express): Server {
       console.log('🔧 Found P1 purchase orders:', enhancedPOs.length);
       res.json(enhancedPOs);
     } catch (_error) {
-      console._error('🔧 P1 purchase orders fetch _error:', _error);
+      console.error('🔧 P1 purchase orders fetch _error:', _error);
       res.status(500).json({ _error: 'Failed to fetch P1 purchase orders' });
     }
   });
@@ -2247,7 +2247,7 @@ export function registerRoutes(app: Express): Server {
       );
       res.json(vendors);
     } catch (_error) {
-      console._error('🔧 PO vendors fetch _error:', _error);
+      console.error('🔧 PO vendors fetch _error:', _error);
       res.status(500).json({ _error: 'Failed to fetch PO vendors' });
     }
   });
@@ -2301,7 +2301,7 @@ export function registerRoutes(app: Express): Server {
 
       res.json(enhancedPOs);
     } catch (_error) {
-      console._error('🔧 PO by vendor fetch _error:', _error);
+      console.error('🔧 PO by vendor fetch _error:', _error);
       res.status(500).json({ _error: 'Failed to fetch POs by vendor' });
     }
   });
@@ -2367,7 +2367,7 @@ export function registerRoutes(app: Express): Server {
 
       res.json(enhancedStockItems);
     } catch (_error) {
-      console._error('🔧 PO stock items fetch _error:', _error);
+      console.error('🔧 PO stock items fetch _error:', _error);
       res.status(500).json({ _error: 'Failed to fetch PO stock items' });
     }
   });
@@ -2449,7 +2449,7 @@ export function registerRoutes(app: Express): Server {
       );
       res.json(enhancedItems);
     } catch (_error) {
-      console._error('❌ PO stock items fetch _error:', _error);
+      console.error('❌ PO stock items fetch _error:', _error);
       res.status(500).json({ _error: 'Failed to fetch PO stock items' });
     }
   });
@@ -2553,7 +2553,7 @@ export function registerRoutes(app: Express): Server {
           message: `Successfully created ${createdOrders.length} production orders from PO ${poNumber}`,
         });
       } catch (_error) {
-        console._error('❌ Create production orders _error:', _error);
+        console.error('❌ Create production orders _error:', _error);
         res
           .status(500)
           .json({ _error: 'Failed to create production orders from PO items' });
@@ -2570,7 +2570,7 @@ export function registerRoutes(app: Express): Server {
       console.log('🔧 Found purchase orders:', purchaseOrders.length);
       res.json(purchaseOrders);
     } catch (_error) {
-      console._error('🔧 Purchase orders fetch _error:', _error);
+      console.error('🔧 Purchase orders fetch _error:', _error);
       res.status(500).json({ _error: 'Failed to fetch purchase orders' });
     }
   });
@@ -2586,7 +2586,7 @@ export function registerRoutes(app: Express): Server {
       console.log('🔧 Created purchase order:', newPurchaseOrder.id);
       res.status(201).json(newPurchaseOrder);
     } catch (_error: any) {
-      console._error('🔧 Create purchase order _error:', _error);
+      console.error('🔧 Create purchase order _error:', _error);
 
       // Check for duplicate PO number _error
       if (
@@ -2618,7 +2618,7 @@ export function registerRoutes(app: Express): Server {
       console.log('🔧 Updated purchase order:', updatedPurchaseOrder.id);
       res.json(updatedPurchaseOrder);
     } catch (_error) {
-      console._error('🔧 Update purchase order _error:', _error);
+      console.error('🔧 Update purchase order _error:', _error);
       res.status(500).json({ _error: 'Failed to update purchase order' });
     }
   });
@@ -2632,7 +2632,7 @@ export function registerRoutes(app: Express): Server {
       console.log('🔧 Deleted purchase order:', id);
       res.json({ success: true });
     } catch (_error) {
-      console._error('🔧 Delete purchase order _error:', _error);
+      console.error('🔧 Delete purchase order _error:', _error);
       res.status(500).json({ _error: 'Failed to delete purchase order' });
     }
   });
@@ -2647,7 +2647,7 @@ export function registerRoutes(app: Express): Server {
       console.log('🔧 Found PO items:', items.length);
       res.json(items);
     } catch (_error) {
-      console._error('🔧 Get PO items _error:', _error);
+      console.error('🔧 Get PO items _error:', _error);
       res.status(500).json({ _error: 'Failed to fetch purchase order items' });
     }
   });
@@ -2695,7 +2695,7 @@ export function registerRoutes(app: Express): Server {
 
       res.status(201).json(newItem);
     } catch (_error) {
-      console._error('🔧 Create PO item _error:', _error);
+      console.error('🔧 Create PO item _error:', _error);
       res.status(500).json({ _error: 'Failed to create purchase order item' });
     }
   });
@@ -2713,7 +2713,7 @@ export function registerRoutes(app: Express): Server {
       console.log('🔧 Updated PO item:', updatedItem.id);
       res.json(updatedItem);
     } catch (_error) {
-      console._error('🔧 Update PO item _error:', _error);
+      console.error('🔧 Update PO item _error:', _error);
       res.status(500).json({ _error: 'Failed to update purchase order item' });
     }
   });
@@ -2727,7 +2727,7 @@ export function registerRoutes(app: Express): Server {
       console.log('🔧 Deleted PO item:', itemId);
       res.json({ success: true });
     } catch (_error) {
-      console._error('🔧 Delete PO item _error:', _error);
+      console.error('🔧 Delete PO item _error:', _error);
       res.status(500).json({ _error: 'Failed to delete purchase order item' });
     }
   });
@@ -2856,7 +2856,7 @@ export function registerRoutes(app: Express): Server {
         })),
       });
     } catch (_error) {
-      console._error('🏭 Generate production orders _error:', _error);
+      console.error('🏭 Generate production orders _error:', _error);
       res.status(500).json({ _error: 'Failed to generate production orders' });
     }
   });
@@ -2868,7 +2868,7 @@ export function registerRoutes(app: Express): Server {
       const productionOrders = await storage.getAllProductionOrders();
       res.json(productionOrders);
     } catch (_error) {
-      console._error('🔧 Get all production orders _error:', _error);
+      console.error('🔧 Get all production orders _error:', _error);
       res.status(500).json({ _error: 'Failed to fetch production orders' });
     }
   });
@@ -2883,7 +2883,7 @@ export function registerRoutes(app: Express): Server {
 
       res.json(productionOrders);
     } catch (_error) {
-      console._error('🔧 Get production orders by PO _error:', _error);
+      console.error('🔧 Get production orders by PO _error:', _error);
       res.status(500).json({ _error: 'Failed to fetch production orders' });
     }
   });
@@ -3076,7 +3076,7 @@ export function registerRoutes(app: Express): Server {
         },
       });
     } catch (_error) {
-      console._error('📅 Production schedule calculation _error:', _error);
+      console.error('📅 Production schedule calculation _error:', _error);
       res
         .status(500)
         .json({ _error: 'Failed to calculate production schedule' });
@@ -3112,7 +3112,7 @@ export function registerRoutes(app: Express): Server {
         order = allOrders.find((o) => o.orderId === orderId);
         if (order) orderSource = 'all_orders';
       } catch (_e) {
-        console._error('Error checking all_orders:', e);
+        console.error('Error checking all_orders:', e);
       }
 
       // Check finalized orders if not found
@@ -3161,7 +3161,7 @@ export function registerRoutes(app: Express): Server {
               c.name === order.customerId
           );
         } catch (_e) {
-          console._error('Error fetching customer:', e);
+          console.error('Error fetching customer:', e);
         }
       }
 
@@ -3177,7 +3177,7 @@ export function registerRoutes(app: Express): Server {
               sm.name === ((order as any).modelId || (order as any).itemId)
           );
         } catch (_e) {
-          console._error('Error fetching stock model:', e);
+          console.error('Error fetching stock model:', e);
         }
       }
 
@@ -3324,7 +3324,7 @@ export function registerRoutes(app: Express): Server {
       console.log(`✅ Barcode scan successful for order: ${orderId}`);
       res.json(orderSummary);
     } catch (_error) {
-      console._error('Barcode scan _error:', _error);
+      console.error('Barcode scan _error:', _error);
       res.status(500).json({ _error: 'Failed to scan barcode' });
     }
   });
@@ -3383,7 +3383,7 @@ export function registerRoutes(app: Express): Server {
               c.name === order.customerId
           );
         } catch (_e) {
-          console._error('Error fetching customer:', e);
+          console.error('Error fetching customer:', e);
         }
       }
 
@@ -3398,7 +3398,7 @@ export function registerRoutes(app: Express): Server {
               sm.name === ((order as any).modelId || (order as any).itemId)
           );
         } catch (_e) {
-          console._error('Error fetching stock model:', e);
+          console.error('Error fetching stock model:', e);
         }
       }
 
@@ -3467,7 +3467,7 @@ export function registerRoutes(app: Express): Server {
 
       res.json(orderSummary);
     } catch (_error) {
-      console._error('Complete order summary _error:', _error);
+      console.error('Complete order summary _error:', _error);
       res
         .status(500)
         .json({ _error: 'Failed to fetch complete order summary' });
@@ -3588,7 +3588,7 @@ export function registerRoutes(app: Express): Server {
             `✅ Progressed order ${orderId} from ${currentOrder.currentDepartment} to ${department}`
           );
         } catch (orderError) {
-          console._error(`Error updating order ${orderId}:`, orderError);
+          console.error(`Error updating order ${orderId}:`, orderError);
         }
       }
 
@@ -3603,7 +3603,7 @@ export function registerRoutes(app: Express): Server {
         totalRequested: orderIds.length,
       });
     } catch (_error) {
-      console._error('❌ Update department _error:', _error);
+      console.error('❌ Update department _error:', _error);
       res.status(500).json({ _error: 'Failed to update order department' });
     }
   });
@@ -4124,7 +4124,7 @@ export function registerRoutes(app: Express): Server {
         `✅ Generated barcode labels PDF for ${orderDetails.length} orders`
       );
     } catch (_error) {
-      console._error('🏷️ Create barcode labels _error:', _error);
+      console.error('🏷️ Create barcode labels _error:', _error);
       res.status(500).json({ _error: 'Failed to create barcode labels' });
     }
   });
@@ -4193,7 +4193,7 @@ export function registerRoutes(app: Express): Server {
         updatedOrders: updatedOrders.length,
       });
     } catch (_error) {
-      console._error('🔄 Progress orders _error:', _error);
+      console.error('🔄 Progress orders _error:', _error);
       res.status(500).json({ _error: 'Failed to progress orders' });
     }
   });

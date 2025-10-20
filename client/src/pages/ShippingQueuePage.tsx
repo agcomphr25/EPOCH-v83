@@ -1366,6 +1366,10 @@ export default function ShippingQueuePage() {
                   <ShippingActions
                     orderId={selectedCard || ''}
                     orderData={getSelectedOrder()}
+                    onCreateLabel={() => {
+                      setSelectedOrderId(selectedCard);
+                      setShowLabelCreator(true);
+                    }}
                   />
                 </div>
               ) : (

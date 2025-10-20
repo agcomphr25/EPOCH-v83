@@ -21,6 +21,12 @@ import {
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '@/components/ui/accordion';
 import { useToast } from '@/hooks/use-toast';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -1116,146 +1122,250 @@ export default function VendorManagement() {
                     onSubmit={form.handleSubmit(onSubmit)}
                     className="space-y-6"
                   >
-                    {/* Quality Evaluation */}
-                    <div className="border rounded-lg p-4 bg-gray-50">
-                      <h4 className="font-semibold text-lg mb-3">1. Quality Rating</h4>
-                      <p className="text-sm text-gray-600 mb-4">
-                        Rate the supplier's quality management system and certification status:
-                      </p>
-                      
-                      <FormField
-                        control={form.control}
-                        name="notes"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Quality Score *</FormLabel>
-                            <Select
-                              onValueChange={(value) => {
-                                // Store in notes temporarily until we add proper evaluation storage
-                                field.onChange(`Quality: ${value}\n${field.value || ''}`);
-                              }}
-                            >
-                              <FormControl>
-                                <SelectTrigger data-testid="select-quality-score">
-                                  <SelectValue placeholder="Select quality rating..." />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent className="max-h-[400px]">
-                                <SelectItem value="1">
-                                  1 - Manufacturer with certified QMS, active certificate on file, provides CofC
-                                </SelectItem>
-                                <SelectItem value="2">
-                                  2 - Distributor with certified QMS process, active certificate on file, provides manufacturer CofC
-                                </SelectItem>
-                                <SelectItem value="3">
-                                  3 - Manufacturer with internal QMS, can provide CofC
-                                </SelectItem>
-                                <SelectItem value="4">
-                                  4 - Distributor with internal QMS, can provide manufacturer CofC
-                                </SelectItem>
-                                <SelectItem value="5">
-                                  5 - Supplier with positive quality history/relationship; grandfathered in
-                                </SelectItem>
-                                <SelectItem value="6">
-                                  6 - Distributor with no known QMS, but can provide manufacturer's CofC
-                                </SelectItem>
-                                <SelectItem value="7">
-                                  7 - Distributor with no known QMS, but will provide CofC
-                                </SelectItem>
-                                <SelectItem value="8">
-                                  8 - Distributor with no known QMS, cannot provide CofC
-                                </SelectItem>
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </div>
+                    <Accordion type="multiple" className="w-full space-y-2">
+                      {/* Quality Evaluation */}
+                      <AccordionItem value="quality" className="border rounded-lg px-4 bg-gray-50">
+                        <AccordionTrigger className="hover:no-underline">
+                          <div className="flex items-center gap-2">
+                            <Package className="h-5 w-5 text-blue-600" />
+                            <span className="font-semibold text-lg">1. Quality Rating</span>
+                          </div>
+                        </AccordionTrigger>
+                        <AccordionContent className="pt-2 pb-4">
+                          <p className="text-sm text-gray-600 mb-4">
+                            Rate the supplier's quality management system and certification status:
+                          </p>
+                          
+                          <FormField
+                            control={form.control}
+                            name="notes"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Quality Score *</FormLabel>
+                                <Select
+                                  onValueChange={(value) => {
+                                    // Store in notes temporarily until we add proper evaluation storage
+                                    field.onChange(`Quality: ${value}\n${field.value || ''}`);
+                                  }}
+                                >
+                                  <FormControl>
+                                    <SelectTrigger data-testid="select-quality-score">
+                                      <SelectValue placeholder="Select quality rating..." />
+                                    </SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent className="max-h-[400px]">
+                                    <SelectItem value="1">
+                                      1 - Manufacturer with certified QMS, active certificate on file, provides CofC
+                                    </SelectItem>
+                                    <SelectItem value="2">
+                                      2 - Distributor with certified QMS process, active certificate on file, provides manufacturer CofC
+                                    </SelectItem>
+                                    <SelectItem value="3">
+                                      3 - Manufacturer with internal QMS, can provide CofC
+                                    </SelectItem>
+                                    <SelectItem value="4">
+                                      4 - Distributor with internal QMS, can provide manufacturer CofC
+                                    </SelectItem>
+                                    <SelectItem value="5">
+                                      5 - Supplier with positive quality history/relationship; grandfathered in
+                                    </SelectItem>
+                                    <SelectItem value="6">
+                                      6 - Distributor with no known QMS, but can provide manufacturer's CofC
+                                    </SelectItem>
+                                    <SelectItem value="7">
+                                      7 - Distributor with no known QMS, but will provide CofC
+                                    </SelectItem>
+                                    <SelectItem value="8">
+                                      8 - Distributor with no known QMS, cannot provide CofC
+                                    </SelectItem>
+                                  </SelectContent>
+                                </Select>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </AccordionContent>
+                      </AccordionItem>
 
-                    {/* Delivery Evaluation */}
-                    <div className="border rounded-lg p-4 bg-gray-50">
-                      <h4 className="font-semibold text-lg mb-3">2. Delivery Performance</h4>
-                      <p className="text-sm text-gray-600 mb-4">
-                        Evaluate the supplier's delivery timeliness and order frequency:
-                      </p>
-                      
-                      <div className="space-y-4">
-                        {/* Delivery Rating */}
-                        <FormField
-                          control={form.control}
-                          name="notes"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Delivery Rating *</FormLabel>
-                              <Select
-                                onValueChange={(value) => {
-                                  field.onChange(`Delivery Rating: ${value}\n${field.value || ''}`);
-                                }}
-                              >
-                                <FormControl>
-                                  <SelectTrigger data-testid="select-delivery-rating">
-                                    <SelectValue placeholder="Select delivery performance..." />
-                                  </SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-                                  <SelectItem value="1">
-                                    1 - On-time delivery (+/- 2 days)
-                                  </SelectItem>
-                                  <SelectItem value="2">
-                                    2 - Slightly late (3-4 days past promised date)
-                                  </SelectItem>
-                                  <SelectItem value="3">
-                                    3 - Significantly late (5+ days past promised date)
-                                  </SelectItem>
-                                </SelectContent>
-                              </Select>
-                              <FormMessage />
-                              <p className="text-xs text-gray-500 mt-1">
-                                Rating may be adjusted after 3 months of consistent improvement
-                              </p>
-                            </FormItem>
-                          )}
-                        />
+                      {/* Delivery Evaluation */}
+                      <AccordionItem value="delivery" className="border rounded-lg px-4 bg-gray-50">
+                        <AccordionTrigger className="hover:no-underline">
+                          <div className="flex items-center gap-2">
+                            <Package className="h-5 w-5 text-green-600" />
+                            <span className="font-semibold text-lg">2. Delivery Performance</span>
+                          </div>
+                        </AccordionTrigger>
+                        <AccordionContent className="pt-2 pb-4">
+                          <p className="text-sm text-gray-600 mb-4">
+                            Evaluate the supplier's delivery timeliness and order frequency:
+                          </p>
+                          
+                          <div className="space-y-4">
+                            {/* Delivery Rating */}
+                            <FormField
+                              control={form.control}
+                              name="notes"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Delivery Rating *</FormLabel>
+                                  <Select
+                                    onValueChange={(value) => {
+                                      field.onChange(`Delivery Rating: ${value}\n${field.value || ''}`);
+                                    }}
+                                  >
+                                    <FormControl>
+                                      <SelectTrigger data-testid="select-delivery-rating">
+                                        <SelectValue placeholder="Select delivery performance..." />
+                                      </SelectTrigger>
+                                    </FormControl>
+                                    <SelectContent>
+                                      <SelectItem value="1">
+                                        1 - On-time delivery (+/- 2 days)
+                                      </SelectItem>
+                                      <SelectItem value="2">
+                                        2 - Slightly late (3-4 days past promised date)
+                                      </SelectItem>
+                                      <SelectItem value="3">
+                                        3 - Significantly late (5+ days past promised date)
+                                      </SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                  <FormMessage />
+                                  <p className="text-xs text-gray-500 mt-1">
+                                    Rating may be adjusted after 3 months of consistent improvement
+                                  </p>
+                                </FormItem>
+                              )}
+                            />
 
-                        {/* Delivery Occurrence */}
-                        <FormField
-                          control={form.control}
-                          name="notes"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Order Frequency *</FormLabel>
-                              <Select
-                                onValueChange={(value) => {
-                                  field.onChange(`Order Frequency: ${value}\n${field.value || ''}`);
-                                }}
-                              >
-                                <FormControl>
-                                  <SelectTrigger data-testid="select-delivery-occurrence">
-                                    <SelectValue placeholder="Select order frequency..." />
-                                  </SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-                                  <SelectItem value="1">
-                                    1 - Infrequent orders (every 7+ months)
-                                  </SelectItem>
-                                  <SelectItem value="2">
-                                    2 - Occasional orders (2-6 months)
-                                  </SelectItem>
-                                  <SelectItem value="3">
-                                    3 - Frequent orders (1 week - 1 month)
-                                  </SelectItem>
-                                </SelectContent>
-                              </Select>
-                              <FormMessage />
-                              <p className="text-xs text-gray-500 mt-1">
-                                How often do we order from this supplier?
-                              </p>
-                            </FormItem>
-                          )}
-                        />
-                      </div>
-                    </div>
+                            {/* Delivery Occurrence */}
+                            <FormField
+                              control={form.control}
+                              name="notes"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Order Frequency *</FormLabel>
+                                  <Select
+                                    onValueChange={(value) => {
+                                      field.onChange(`Order Frequency: ${value}\n${field.value || ''}`);
+                                    }}
+                                  >
+                                    <FormControl>
+                                      <SelectTrigger data-testid="select-delivery-occurrence">
+                                        <SelectValue placeholder="Select order frequency..." />
+                                      </SelectTrigger>
+                                    </FormControl>
+                                    <SelectContent>
+                                      <SelectItem value="1">
+                                        1 - Infrequent orders (every 7+ months)
+                                      </SelectItem>
+                                      <SelectItem value="2">
+                                        2 - Occasional orders (2-6 months)
+                                      </SelectItem>
+                                      <SelectItem value="3">
+                                        3 - Frequent orders (1 week - 1 month)
+                                      </SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                  <FormMessage />
+                                  <p className="text-xs text-gray-500 mt-1">
+                                    How often do we order from this supplier?
+                                  </p>
+                                </FormItem>
+                              )}
+                            />
+                          </div>
+                        </AccordionContent>
+                      </AccordionItem>
+
+                      {/* Cost Evaluation */}
+                      <AccordionItem value="cost" className="border rounded-lg px-4 bg-gray-50">
+                        <AccordionTrigger className="hover:no-underline">
+                          <div className="flex items-center gap-2">
+                            <Package className="h-5 w-5 text-amber-600" />
+                            <span className="font-semibold text-lg">3. Cost</span>
+                          </div>
+                        </AccordionTrigger>
+                        <AccordionContent className="pt-2 pb-4">
+                          <p className="text-sm text-gray-600 mb-4">
+                            Rate the supplier's cost competitiveness and value:
+                          </p>
+                          
+                          <FormField
+                            control={form.control}
+                            name="notes"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Cost Score *</FormLabel>
+                                <Select
+                                  onValueChange={(value) => {
+                                    field.onChange(`Cost: ${value}\n${field.value || ''}`);
+                                  }}
+                                >
+                                  <FormControl>
+                                    <SelectTrigger data-testid="select-cost-score">
+                                      <SelectValue placeholder="Select cost rating..." />
+                                    </SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent>
+                                    <SelectItem value="1">1 - Poor (significantly overpriced)</SelectItem>
+                                    <SelectItem value="2">2 - Below average</SelectItem>
+                                    <SelectItem value="3">3 - Average (market rate)</SelectItem>
+                                    <SelectItem value="4">4 - Above average (good value)</SelectItem>
+                                    <SelectItem value="5">5 - Excellent (best pricing)</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </AccordionContent>
+                      </AccordionItem>
+
+                      {/* Communication Evaluation */}
+                      <AccordionItem value="communication" className="border rounded-lg px-4 bg-gray-50">
+                        <AccordionTrigger className="hover:no-underline">
+                          <div className="flex items-center gap-2">
+                            <Package className="h-5 w-5 text-purple-600" />
+                            <span className="font-semibold text-lg">4. Communication</span>
+                          </div>
+                        </AccordionTrigger>
+                        <AccordionContent className="pt-2 pb-4">
+                          <p className="text-sm text-gray-600 mb-4">
+                            Rate the supplier's responsiveness and communication quality:
+                          </p>
+                          
+                          <FormField
+                            control={form.control}
+                            name="notes"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Communication Score *</FormLabel>
+                                <Select
+                                  onValueChange={(value) => {
+                                    field.onChange(`Communication: ${value}\n${field.value || ''}`);
+                                  }}
+                                >
+                                  <FormControl>
+                                    <SelectTrigger data-testid="select-communication-score">
+                                      <SelectValue placeholder="Select communication rating..." />
+                                    </SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent>
+                                    <SelectItem value="1">1 - Poor (unresponsive, unclear)</SelectItem>
+                                    <SelectItem value="2">2 - Below average</SelectItem>
+                                    <SelectItem value="3">3 - Average (adequate response)</SelectItem>
+                                    <SelectItem value="4">4 - Above average (responsive)</SelectItem>
+                                    <SelectItem value="5">5 - Excellent (proactive, clear)</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </AccordionContent>
+                      </AccordionItem>
+                    </Accordion>
 
                     <FormField
                       control={form.control}

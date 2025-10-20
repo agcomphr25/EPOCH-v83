@@ -2191,42 +2191,27 @@ export function registerRoutes(app: Express): Server {
       const { storage } = await import('../../storage');
       const purchaseOrders = await storage.getAllPurchaseOrders();
       
-      // Fetch scheduled production orders to filter out already-scheduled POs
+      // Fetch scheduled production orders to track quantities
       const scheduledProductionOrders = await storage.getAllProductionOrders();
       
-      // Get unique PO IDs that are already scheduled (have production orders generated)
-      const scheduledPOIds = new Set(
-        scheduledProductionOrders
-          .filter((order) => order.poId)
-          .map((order) => order.poId)
-      );
+      // Map of PO Item ID -> count of production orders created
+      const scheduledItemCounts = new Map<number, number>();
+      scheduledProductionOrders.forEach((order) => {
+        if (order.poItemId) {
+          const currentCount = scheduledItemCounts.get(order.poItemId) || 0;
+          scheduledItemCounts.set(order.poItemId, currentCount + 1);
+        }
+      });
       
-      console.log(`🔍 PO Vendors: Found ${scheduledPOIds.size} already-scheduled POs to filter out`);
-      
-      // Filter out already-scheduled POs
-      const openPurchaseOrders = purchaseOrders.filter(
-        (po) => !scheduledPOIds.has(po.id)
-      );
+      console.log(`🔍 PO Vendors: Tracking ${scheduledItemCounts.size} PO items with production orders`);
 
       // Group by customer to get unique vendors with counts
       const vendorMap = new Map();
 
       await Promise.all(
-        openPurchaseOrders.map(async (po) => {
+        purchaseOrders.map(async (po) => {
           const customerId = po.customerId;
           const customerName = po.customerName;
-
-          if (!vendorMap.has(customerId)) {
-            vendorMap.set(customerId, {
-              id: customerId,
-              name: customerName,
-              poCount: 0,
-              totalStockItems: 0,
-            });
-          }
-
-          const vendor = vendorMap.get(customerId);
-          vendor.poCount++;
 
           // Count stock items for this PO
           const items = await storage.getPurchaseOrderItems(po.id);
@@ -2238,13 +2223,45 @@ export function registerRoutes(app: Express): Server {
                 (item.itemName.includes('AG-') ||
                   item.itemName.includes('stock')))
           );
-          vendor.totalStockItems += stockItems.length;
+
+          // Calculate remaining quantities for this PO
+          let totalQuantity = 0;
+          let scheduledQuantity = 0;
+          
+          stockItems.forEach((item) => {
+            const itemQty = item.quantity || 0;
+            totalQuantity += itemQty;
+            
+            // Check how many production orders exist for this item
+            const scheduled = scheduledItemCounts.get(item.id) || 0;
+            scheduledQuantity += scheduled;
+          });
+
+          const remainingQuantity = totalQuantity - scheduledQuantity;
+
+          // Only include POs that have remaining items to schedule
+          if (remainingQuantity > 0) {
+            if (!vendorMap.has(customerId)) {
+              vendorMap.set(customerId, {
+                id: customerId,
+                name: customerName,
+                poCount: 0,
+                totalStockItems: 0,
+              });
+            }
+
+            const vendor = vendorMap.get(customerId);
+            vendor.poCount++;
+            vendor.totalStockItems += remainingQuantity;
+          }
         })
       );
 
       const vendors = Array.from(vendorMap.values()).sort((a, b) =>
         a.name.localeCompare(b.name)
       );
+      
+      console.log(`🔍 PO Vendors: Showing ${vendors.length} vendors with remaining items`);
       res.json(vendors);
     } catch (_error) {
       console.error('🔧 PO vendors fetch _error:', _error);
@@ -2264,7 +2281,19 @@ export function registerRoutes(app: Express): Server {
         (po) => po.customerId === vendorId
       );
 
-      // Enhance with stock counts
+      // Fetch scheduled production orders to track what's been scheduled
+      const scheduledProductionOrders = await storage.getAllProductionOrders();
+      
+      // Map of PO Item ID -> count of production orders created
+      const scheduledItemCounts = new Map<number, number>();
+      scheduledProductionOrders.forEach((order) => {
+        if (order.poItemId) {
+          const currentCount = scheduledItemCounts.get(order.poItemId) || 0;
+          scheduledItemCounts.set(order.poItemId, currentCount + 1);
+        }
+      });
+
+      // Enhance with stock counts and remaining quantities
       const enhancedPOs = await Promise.all(
         vendorPOs.map(async (po) => {
           const items = await storage.getPurchaseOrderItems(po.id);
@@ -2277,11 +2306,20 @@ export function registerRoutes(app: Express): Server {
                   item.itemName.includes('stock')))
           );
 
-          // Calculate total quantity across all stock items
-          const totalStockQuantity = stockItems.reduce(
-            (sum, item) => sum + (item.quantity || 0),
-            0
-          );
+          // Calculate total and remaining quantities
+          let totalStockQuantity = 0;
+          let scheduledQuantity = 0;
+          
+          stockItems.forEach((item) => {
+            const itemQty = item.quantity || 0;
+            totalStockQuantity += itemQty;
+            
+            // Check how many production orders exist for this item
+            const scheduled = scheduledItemCounts.get(item.id) || 0;
+            scheduledQuantity += scheduled;
+          });
+
+          const remainingQuantity = totalStockQuantity - scheduledQuantity;
 
           return {
             id: po.id,
@@ -2290,7 +2328,9 @@ export function registerRoutes(app: Express): Server {
             customerId: po.customerId,
             dueDate: po.expectedDelivery,
             status: po.status,
-            stockCount: totalStockQuantity, // Total quantity, not just count of items
+            stockCount: totalStockQuantity, // Total quantity
+            remainingCount: remainingQuantity, // Remaining to be scheduled
+            scheduledCount: scheduledQuantity, // Already scheduled
             distinctStockItems: stockItems.length, // Number of distinct stock item types
             itemCount: items.length,
             poDate: po.poDate,
@@ -2299,7 +2339,10 @@ export function registerRoutes(app: Express): Server {
         })
       );
 
-      res.json(enhancedPOs);
+      // Only return POs with remaining items
+      const posWithRemaining = enhancedPOs.filter(po => po.remainingCount > 0);
+
+      res.json(posWithRemaining);
     } catch (_error) {
       console.error('🔧 PO by vendor fetch _error:', _error);
       res.status(500).json({ _error: 'Failed to fetch POs by vendor' });

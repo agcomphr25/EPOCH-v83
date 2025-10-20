@@ -1267,6 +1267,219 @@ router.post('/add-tracking/:orderId', async (req: Request, res: Response) => {
   }
 });
 
+// Consolidated Bulk Shipping - Create ONE label for multiple orders
+router.post('/bulk/create-consolidated-label', async (req: Request, res: Response) => {
+  try {
+    const {
+      orderIds,
+      packageDetails,
+      serviceCode,
+      billingOption,
+      receiverAccount,
+      declaredValue,
+    } = req.body;
+
+    if (!orderIds || !Array.isArray(orderIds) || orderIds.length === 0) {
+      return res.status(400).json({ error: 'orderIds array is required' });
+    }
+
+    console.log(`⚡ Creating consolidated label for ${orderIds.length} orders:`, orderIds.join(', '));
+
+    // Validate UPS credentials
+    const upsClientId = process.env.UPS_CLIENT_ID?.trim();
+    const upsClientSecret = process.env.UPS_CLIENT_SECRET?.trim();
+    const upsShipperNumber = process.env.UPS_SHIPPER_NUMBER?.trim();
+
+    if (!upsClientId || !upsClientSecret || !upsShipperNumber) {
+      return res.status(500).json({
+        error: 'UPS API credentials not configured.',
+      });
+    }
+
+    // Fetch all orders and validate same shipping address
+    const orders = [];
+    for (const orderId of orderIds) {
+      let order = await storage.getFinalizedOrderById(orderId);
+      if (!order) {
+        order = await storage.getOrderDraft(orderId);
+      }
+      if (order) {
+        orders.push(order);
+      }
+    }
+
+    if (orders.length === 0) {
+      return res.status(400).json({ error: 'No valid orders found' });
+    }
+
+    // Get shipping addresses and validate they match
+    const addresses = [];
+    for (const order of orders) {
+      let shippingAddress = null;
+      if (order.customerId) {
+        const customerAddresses = await storage.getCustomerAddresses(order.customerId);
+        if (order.hasAltShipTo && order.altShipToAddress) {
+          const altAddr = order.altShipToAddress as any;
+          shippingAddress = {
+            name: order.altShipToName || '',
+            company: order.altShipToCompany || '',
+            street: altAddr?.street || '',
+            city: altAddr?.city || '',
+            state: altAddr?.state || '',
+            zipCode: altAddr?.zip || altAddr?.zipCode || '',
+            country: altAddr?.country || 'US',
+            phone: altAddr?.phone || '',
+          };
+        } else if (customerAddresses.length > 0) {
+          const customer = await storage.getCustomerById(order.customerId);
+          shippingAddress = {
+            name: customer?.name || '',
+            company: customer?.company || '',
+            street: customerAddresses[0].street || '',
+            city: customerAddresses[0].city || '',
+            state: customerAddresses[0].state || '',
+            zipCode: customerAddresses[0].zipCode || '',
+            country: customerAddresses[0].country || 'US',
+            phone: customerAddresses[0].phone || '',
+          };
+        }
+      }
+      if (shippingAddress) {
+        addresses.push(shippingAddress);
+      }
+    }
+
+    // Validate all addresses are the same
+    const addressKeys = addresses.map(
+      (addr) => `${addr.street}|${addr.city}|${addr.state}|${addr.zipCode}`
+    );
+    const uniqueAddresses = [...new Set(addressKeys)];
+
+    if (uniqueAddresses.length > 1) {
+      return res.status(400).json({
+        error: 'All orders must have the same shipping address for consolidated shipping',
+      });
+    }
+
+    if (addresses.length === 0) {
+      return res.status(400).json({ error: 'No shipping address found for orders' });
+    }
+
+    // Use first order's shipping address
+    const shipToAddress = addresses[0];
+
+    // Get OAuth token
+    let accessToken;
+    try {
+      accessToken = await getUPSOAuthToken(upsClientId, upsClientSecret);
+    } catch (tokenError: any) {
+      return res.status(500).json({
+        error: 'Failed to authenticate with UPS',
+        details: tokenError.message,
+      });
+    }
+
+    // Build shipment payload
+    const shipFromAddress = {
+      name: 'AG Composites',
+      company: 'AG Composites',
+      contact: 'Shipping',
+      street: '230 Hamer Rd.',
+      city: 'Owens Crossroads',
+      state: 'AL',
+      zipCode: '35763',
+      country: 'US',
+      phone: '256-723-8381',
+    };
+
+    const shipmentPayload = buildUPSShipmentPayloadOAuth(
+      {
+        orderId: orderIds.join('+'), // Combine order IDs for reference
+        shipToAddress,
+        shipFromAddress,
+        packageWeight: packageDetails.weight || 5,
+        packageDimensions: {
+          length: packageDetails.length || 12,
+          width: packageDetails.width || 12,
+          height: packageDetails.height || 12,
+        },
+        billingOption: billingOption || 'sender',
+        receiverAccount: billingOption === 'receiver' ? receiverAccount : undefined,
+        serviceType: serviceCode || '03',
+        reference1: `Orders: ${orderIds.join(', ')}`,
+        reference2: `${orderIds.length} orders consolidated`,
+      },
+      upsShipperNumber
+    );
+
+    // Call UPS Ship API
+    console.log('⚡ Calling UPS Ship API for consolidated shipment...');
+    const upsEndpoint = 'https://onlinetools.ups.com/api/shipments/v1/ship';
+    const shipResponse = await axios.post(upsEndpoint, shipmentPayload, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      timeout: 30000,
+    });
+
+    const shipmentResults = shipResponse.data?.ShipmentResponse?.ShipmentResults;
+    const labelBase64 = shipmentResults?.PackageResults?.[0]?.ShippingLabel?.GraphicImage;
+    const trackingNumber = shipmentResults?.ShipmentIdentificationNumber;
+    const shipmentCost = shipmentResults?.ShipmentCharges?.TotalCharges?.MonetaryValue;
+
+    if (labelBase64 && trackingNumber) {
+      console.log(`✅ Consolidated label created with tracking: ${trackingNumber}`);
+      console.log(`📦 Updating ${orderIds.length} orders with tracking number...`);
+
+      // Update ALL orders with the same tracking number
+      const updateData = {
+        trackingNumber,
+        shippingCarrier: 'UPS',
+        shippingMethod: getServiceName(serviceCode || '03'),
+        shippingCost: shipmentCost ? parseFloat(shipmentCost) : null,
+        shippedDate: new Date(),
+        shippingLabelGenerated: true,
+        labelGeneratedAt: new Date(),
+      };
+
+      for (const orderId of orderIds) {
+        try {
+          try {
+            await storage.updateFinalizedOrder(orderId, updateData);
+            console.log(`  ✓ Updated finalized order ${orderId}`);
+          } catch {
+            await storage.updateOrderDraft(orderId, updateData);
+            console.log(`  ✓ Updated draft order ${orderId}`);
+          }
+        } catch (updateError) {
+          console.error(`  ✗ Failed to update order ${orderId}:`, updateError);
+        }
+      }
+
+      res.json({
+        success: true,
+        trackingNumber,
+        labelImage: labelBase64,
+        orderIds,
+        message: `Consolidated label created for ${orderIds.length} orders`,
+      });
+    } else {
+      res.status(500).json({
+        success: false,
+        error: 'No label or tracking number returned from UPS',
+      });
+    }
+  } catch (error: any) {
+    console.error('Error creating consolidated label:', error);
+    res.status(500).json({
+      success: false,
+      error: error.response?.data?.response?.errors?.[0]?.message || error.message || 'Failed to create consolidated shipping label',
+    });
+  }
+});
+
 // Bulk Shipping - Get rates for multiple orders
 router.post('/bulk/rates', async (req: Request, res: Response) => {
   try {

@@ -11,10 +11,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Truck, Package, X, ChevronLeft, ChevronRight, DollarSign } from 'lucide-react';
+import { Truck, Package, X, ChevronLeft, ChevronRight, DollarSign, AlertCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useQuery } from '@tanstack/react-query';
 import axios from 'axios';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 interface BulkShippingActionsProps {
   selectedOrders: string[];
@@ -22,7 +23,7 @@ interface BulkShippingActionsProps {
   shippingOrders: any[];
 }
 
-interface PackageDefaults {
+interface PackageDetails {
   weight: number;
   length: number;
   width: number;
@@ -35,14 +36,6 @@ interface ReceiverAccount {
   zipCode: string;
 }
 
-interface ShipmentPreference {
-  orderId: string;
-  serviceCode: string;
-  billingOption: 'sender' | 'receiver';
-  receiverAccount?: ReceiverAccount;
-  declaredValue: number;
-}
-
 export function BulkShippingActions({
   selectedOrders,
   onClearSelection,
@@ -53,9 +46,10 @@ export function BulkShippingActions({
   const [currentStep, setCurrentStep] = useState(1);
   const [isProcessing, setIsProcessing] = useState(false);
   const [loadingRates, setLoadingRates] = useState(false);
+  const [addressValidation, setAddressValidation] = useState<{ valid: boolean; message: string } | null>(null);
 
-  // Step 1: Package Defaults
-  const [packageDefaults, setPackageDefaults] = useState<PackageDefaults>({
+  // Package details for consolidated shipment
+  const [packageDetails, setPackageDetails] = useState<PackageDetails>({
     weight: 5,
     length: 12,
     width: 12,
@@ -63,13 +57,11 @@ export function BulkShippingActions({
     declaredValue: 100,
   });
 
-  // Step 2: Service Selection
-  const [applyServiceToAll, setApplyServiceToAll] = useState(true);
-  const [selectedService, setSelectedService] = useState('03'); // UPS Ground default
-  const [ordersWithRates, setOrdersWithRates] = useState<any[]>([]);
-  const [perOrderServices, setPerOrderServices] = useState<Record<string, string>>({});
+  // Service Selection
+  const [selectedService, setSelectedService] = useState('03');
+  const [availableRates, setAvailableRates] = useState<any[]>([]);
 
-  // Step 3: Billing Options
+  // Billing Options
   const [billingOption, setBillingOption] = useState<'sender' | 'receiver'>('sender');
   const [receiverAccount, setReceiverAccount] = useState<ReceiverAccount>({
     accountNumber: '',
@@ -80,21 +72,49 @@ export function BulkShippingActions({
     selectedOrders.includes(order.orderId)
   );
 
+  // Validate all orders have same shipping address
+  useEffect(() => {
+    if (dialogOpen && selectedOrders.length > 0) {
+      const addresses = selectedOrdersData.map(order => {
+        const addr = order.shippingAddress || order.customer?.addresses?.[0];
+        return addr ? `${addr.street}|${addr.city}|${addr.state}|${addr.zipCode}` : null;
+      });
+
+      const uniqueAddresses = [...new Set(addresses.filter(Boolean))];
+      
+      let newValidation;
+      if (uniqueAddresses.length === 0) {
+        newValidation = { valid: false, message: 'No shipping addresses found for selected orders' };
+      } else if (uniqueAddresses.length > 1) {
+        newValidation = { valid: false, message: 'Selected orders have different shipping addresses. Bulk shipping requires all orders to go to the same address.' };
+      } else {
+        newValidation = { valid: true, message: `All ${selectedOrders.length} orders shipping to same address` };
+      }
+      
+      // Only update if validation result actually changed
+      setAddressValidation(prev => {
+        if (!prev || prev.valid !== newValidation.valid || prev.message !== newValidation.message) {
+          return newValidation;
+        }
+        return prev;
+      });
+    }
+  }, [dialogOpen, selectedOrders.length]);
+
   const resetForm = () => {
     setCurrentStep(1);
-    setPackageDefaults({
+    setPackageDetails({
       weight: 5,
       length: 12,
       width: 12,
       height: 12,
       declaredValue: 100,
     });
-    setApplyServiceToAll(true);
     setSelectedService('03');
-    setOrdersWithRates([]);
-    setPerOrderServices({});
+    setAvailableRates([]);
     setBillingOption('sender');
     setReceiverAccount({ accountNumber: '', zipCode: '' });
+    setAddressValidation(null);
   };
 
   const handleDialogClose = (open: boolean) => {
@@ -105,25 +125,42 @@ export function BulkShippingActions({
   };
 
   const handleGetRates = async () => {
+    if (!addressValidation?.valid) {
+      toast({
+        title: 'Address Validation Failed',
+        description: addressValidation?.message || 'Please verify addresses match',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setLoadingRates(true);
     try {
-      const response = await axios.post('/api/shipping/bulk/rates', {
-        orderIds: selectedOrders,
-        packageDefaults,
+      // Use first order's address for rate request
+      const firstOrder = selectedOrdersData[0];
+      const shippingAddress = firstOrder.shippingAddress || firstOrder.customer?.addresses?.[0];
+
+      const response = await axios.post('/api/shipping/get-rates', {
+        shipToAddress: {
+          street: shippingAddress.street,
+          city: shippingAddress.city,
+          state: shippingAddress.state,
+          zipCode: shippingAddress.zipCode,
+          country: shippingAddress.country || 'US',
+        },
+        packageWeight: packageDetails.weight,
+        packageDimensions: {
+          length: packageDetails.length,
+          width: packageDetails.width,
+          height: packageDetails.height,
+        },
       });
 
-      setOrdersWithRates(response.data.orders || []);
+      setAvailableRates(response.data.rates || []);
       
-      // Initialize per-order services to Ground
-      const initialServices: Record<string, string> = {};
-      selectedOrders.forEach(orderId => {
-        initialServices[orderId] = '03';
-      });
-      setPerOrderServices(initialServices);
-
       toast({
         title: 'Rates Retrieved',
-        description: `Fetched rates for ${selectedOrders.length} orders`,
+        description: `Found ${response.data.rates?.length || 0} shipping options`,
       });
     } catch (error: any) {
       console.error('Error fetching rates:', error);
@@ -137,74 +174,74 @@ export function BulkShippingActions({
     }
   };
 
-  const handleCreateBulkLabels = async () => {
+  const handleCreateConsolidatedLabel = async () => {
+    if (!addressValidation?.valid) {
+      toast({
+        title: 'Cannot Create Label',
+        description: 'All orders must have the same shipping address',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (billingOption === 'receiver') {
+      if (!receiverAccount.accountNumber || !receiverAccount.zipCode) {
+        toast({
+          title: 'Validation Error',
+          description: 'Please enter receiver UPS account number and ZIP code',
+          variant: 'destructive',
+        });
+        return;
+      }
+    }
+
     setIsProcessing(true);
     try {
-      // Validate receiver billing if needed
-      if (billingOption === 'receiver') {
-        if (!receiverAccount.accountNumber || !receiverAccount.zipCode) {
-          toast({
-            title: 'Validation Error',
-            description: 'Please enter receiver UPS account number and ZIP code',
-            variant: 'destructive',
-          });
-          setIsProcessing(false);
-          return;
-        }
-      }
-
-      // Build shipments array
-      const shipments: ShipmentPreference[] = selectedOrders.map(orderId => ({
-        orderId,
-        serviceCode: applyServiceToAll ? selectedService : (perOrderServices[orderId] || '03'),
+      const response = await axios.post('/api/shipping/bulk/create-consolidated-label', {
+        orderIds: selectedOrders,
+        packageDetails: {
+          weight: packageDetails.weight,
+          length: packageDetails.length,
+          width: packageDetails.width,
+          height: packageDetails.height,
+        },
+        serviceCode: selectedService,
         billingOption,
         receiverAccount: billingOption === 'receiver' ? receiverAccount : undefined,
-        declaredValue: packageDefaults.declaredValue,
-      }));
-
-      const response = await axios.post('/api/shipping/bulk/create-labels', {
-        shipments,
-        packageDefaults: {
-          weight: packageDefaults.weight,
-          length: packageDefaults.length,
-          width: packageDefaults.width,
-          height: packageDefaults.height,
-        },
+        declaredValue: packageDetails.declaredValue,
       });
 
-      const { summary, results } = response.data;
+      const { success, trackingNumber, labelImage } = response.data;
 
-      // Show success/failure summary
-      if (summary.successful > 0) {
+      if (success && trackingNumber) {
         toast({
-          title: 'Bulk Shipping Complete',
-          description: `Successfully created ${summary.successful} labels. ${summary.failed > 0 ? `${summary.failed} failed.` : ''}`,
+          title: 'Bulk Shipping Label Created',
+          description: `Tracking #${trackingNumber} applied to all ${selectedOrders.length} orders`,
         });
 
-        // Download labels as needed
-        results.forEach((result: any) => {
-          if (result.success && result.labelImage) {
-            // You can implement label download here if needed
-            console.log(`Label created for ${result.orderId}: ${result.trackingNumber}`);
-          }
-        });
+        // Download label
+        if (labelImage) {
+          const link = document.createElement('a');
+          link.href = `data:image/png;base64,${labelImage}`;
+          link.download = `bulk-label-${selectedOrders.join('-')}.png`;
+          link.click();
+        }
+
+        setDialogOpen(false);
+        onClearSelection();
+        resetForm();
       } else {
         toast({
-          title: 'All Labels Failed',
-          description: 'No shipping labels were created. Please check order details.',
+          title: 'Label Creation Failed',
+          description: response.data.error || 'Failed to create shipping label',
           variant: 'destructive',
         });
       }
-
-      // Close dialog and clear selection
-      setDialogOpen(false);
-      onClearSelection();
-      resetForm();
     } catch (error: any) {
-      console.error('Error creating bulk labels:', error);
+      console.error('Error creating consolidated label:', error);
       toast({
         title: 'Error',
-        description: error.response?.data?.error || 'Failed to create shipping labels',
+        description: error.response?.data?.error || 'Failed to create shipping label',
         variant: 'destructive',
       });
     } finally {
@@ -231,8 +268,8 @@ export function BulkShippingActions({
         <CardTitle className="text-blue-700 dark:text-blue-300 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Package className="h-5 w-5" />
-            Bulk Shipping Actions
-            <Badge variant="secondary" data-testid="badge-selected-count">{selectedOrders.length} selected</Badge>
+            Consolidated Shipping
+            <Badge variant="secondary" data-testid="badge-selected-count">{selectedOrders.length} orders</Badge>
           </div>
           <Button
             variant="ghost"
@@ -249,7 +286,10 @@ export function BulkShippingActions({
         <div className="space-y-3">
           {/* Selected Orders Summary */}
           <div className="text-sm text-blue-600 dark:text-blue-400">
-            <strong>Selected Orders:</strong> {selectedOrders.join(', ')}
+            <strong>Orders:</strong> {selectedOrders.join(', ')}
+          </div>
+          <div className="text-xs text-gray-600 dark:text-gray-400">
+            📦 All orders will be packed in one box with one tracking number
           </div>
 
           {/* Action Buttons */}
@@ -258,13 +298,13 @@ export function BulkShippingActions({
               <DialogTrigger asChild>
                 <Button className="flex-1" data-testid="button-create-bulk-labels">
                   <Truck className="h-4 w-4 mr-2" />
-                  Create Bulk Shipping Labels
+                  Create Consolidated Shipping Label
                 </Button>
               </DialogTrigger>
               <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>
-                    Bulk Shipping Wizard - Step {currentStep} of 3
+                    Consolidated Shipping - Step {currentStep} of 3
                   </DialogTitle>
                   <div className="flex items-center justify-center gap-2 mt-2">
                     <div className={`h-2 w-16 rounded ${currentStep >= 1 ? 'bg-blue-600' : 'bg-gray-300'}`} />
@@ -274,22 +314,31 @@ export function BulkShippingActions({
                 </DialogHeader>
 
                 <div className="space-y-4 mt-4">
-                  {/* Step 1: Package Defaults */}
+                  {/* Step 1: Address Validation & Package Details */}
                   {currentStep === 1 && (
                     <div className="space-y-4">
-                      <h3 className="font-semibold text-lg">Package Defaults</h3>
+                      <h3 className="font-semibold text-lg">Package Details</h3>
+
+                      {/* Address Validation Alert */}
+                      {addressValidation && (
+                        <Alert variant={addressValidation.valid ? 'default' : 'destructive'}>
+                          <AlertCircle className="h-4 w-4" />
+                          <AlertDescription>{addressValidation.message}</AlertDescription>
+                        </Alert>
+                      )}
+
                       <p className="text-sm text-gray-600 dark:text-gray-400">
-                        Set default package dimensions and insurance value for all {selectedOrders.length} orders
+                        Enter total package weight and dimensions for the consolidated shipment containing all {selectedOrders.length} orders
                       </p>
 
                       <div className="grid grid-cols-2 gap-4">
                         <div>
-                          <Label htmlFor="weight">Weight (lbs)</Label>
+                          <Label htmlFor="weight">Total Weight (lbs)</Label>
                           <Input
                             id="weight"
                             type="number"
-                            value={packageDefaults.weight}
-                            onChange={(e) => setPackageDefaults({ ...packageDefaults, weight: parseFloat(e.target.value) || 0 })}
+                            value={packageDetails.weight}
+                            onChange={(e) => setPackageDetails({ ...packageDetails, weight: parseFloat(e.target.value) || 0 })}
                             data-testid="input-weight"
                           />
                         </div>
@@ -298,8 +347,8 @@ export function BulkShippingActions({
                           <Input
                             id="declaredValue"
                             type="number"
-                            value={packageDefaults.declaredValue}
-                            onChange={(e) => setPackageDefaults({ ...packageDefaults, declaredValue: parseFloat(e.target.value) || 0 })}
+                            value={packageDetails.declaredValue}
+                            onChange={(e) => setPackageDetails({ ...packageDetails, declaredValue: parseFloat(e.target.value) || 0 })}
                             data-testid="input-declared-value"
                           />
                         </div>
@@ -311,8 +360,8 @@ export function BulkShippingActions({
                           <Input
                             id="length"
                             type="number"
-                            value={packageDefaults.length}
-                            onChange={(e) => setPackageDefaults({ ...packageDefaults, length: parseFloat(e.target.value) || 0 })}
+                            value={packageDetails.length}
+                            onChange={(e) => setPackageDetails({ ...packageDetails, length: parseFloat(e.target.value) || 0 })}
                             data-testid="input-length"
                           />
                         </div>
@@ -321,8 +370,8 @@ export function BulkShippingActions({
                           <Input
                             id="width"
                             type="number"
-                            value={packageDefaults.width}
-                            onChange={(e) => setPackageDefaults({ ...packageDefaults, width: parseFloat(e.target.value) || 0 })}
+                            value={packageDetails.width}
+                            onChange={(e) => setPackageDetails({ ...packageDetails, width: parseFloat(e.target.value) || 0 })}
                             data-testid="input-width"
                           />
                         </div>
@@ -331,15 +380,18 @@ export function BulkShippingActions({
                           <Input
                             id="height"
                             type="number"
-                            value={packageDefaults.height}
-                            onChange={(e) => setPackageDefaults({ ...packageDefaults, height: parseFloat(e.target.value) || 0 })}
+                            value={packageDetails.height}
+                            onChange={(e) => setPackageDetails({ ...packageDetails, height: parseFloat(e.target.value) || 0 })}
                             data-testid="input-height"
                           />
                         </div>
                       </div>
 
-                      <div className="bg-blue-50 dark:bg-blue-950 p-3 rounded text-sm">
-                        <strong>Note:</strong> These defaults will be used for all selected orders. You'll be able to choose different shipping services in the next step.
+                      <div className="bg-blue-50 dark:bg-blue-950 p-3 rounded text-sm space-y-1">
+                        <div><strong>📦 Consolidated Shipping:</strong></div>
+                        <div>• ONE box containing all {selectedOrders.length} orders</div>
+                        <div>• ONE tracking number applied to all orders</div>
+                        <div>• All orders must ship to the same address</div>
                       </div>
                     </div>
                   )}
@@ -348,115 +400,70 @@ export function BulkShippingActions({
                   {currentStep === 2 && (
                     <div className="space-y-4">
                       <div className="flex items-center justify-between">
-                        <h3 className="font-semibold text-lg">Shipping Service Selection</h3>
+                        <h3 className="font-semibold text-lg">Select Shipping Service</h3>
                         <Button
                           onClick={handleGetRates}
-                          disabled={loadingRates}
+                          disabled={loadingRates || !addressValidation?.valid}
                           variant="outline"
                           size="sm"
                           data-testid="button-get-rates"
                         >
-                          {loadingRates ? 'Loading Rates...' : 'Refresh Rates'}
+                          {loadingRates ? 'Loading...' : 'Refresh Rates'}
                         </Button>
                       </div>
 
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          id="applyToAll"
-                          checked={applyServiceToAll}
-                          onChange={(e) => setApplyServiceToAll(e.target.checked)}
-                          className="rounded"
-                          data-testid="checkbox-apply-to-all"
-                        />
-                        <Label htmlFor="applyToAll" className="cursor-pointer">
-                          Apply same service to all orders
-                        </Label>
-                      </div>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                        Compare UPS shipping rates for the consolidated package:
+                      </p>
 
-                      {applyServiceToAll ? (
-                        <div className="space-y-2">
-                          <p className="text-sm text-gray-600 dark:text-gray-400">
-                            Select one service for all {selectedOrders.length} orders:
-                          </p>
-                          {ordersWithRates.length > 0 && ordersWithRates[0].rates?.length > 0 ? (
-                            ordersWithRates[0].rates.map((rate: any) => (
-                              <div
-                                key={rate.serviceCode}
-                                onClick={() => setSelectedService(rate.serviceCode)}
-                                className={`p-3 border rounded-lg cursor-pointer transition-all ${
-                                  selectedService === rate.serviceCode
-                                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-950'
-                                    : 'border-gray-200 hover:border-gray-300 dark:border-gray-700'
-                                }`}
-                                data-testid={`service-option-${rate.serviceCode}`}
-                              >
-                                <div className="flex justify-between items-center">
-                                  <div className="flex items-center gap-3">
-                                    <div
-                                      className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
-                                        selectedService === rate.serviceCode
-                                          ? 'border-blue-500'
-                                          : 'border-gray-300'
-                                      }`}
-                                    >
-                                      {selectedService === rate.serviceCode && (
-                                        <div className="w-2 h-2 rounded-full bg-blue-500" />
-                                      )}
-                                    </div>
-                                    <div>
-                                      <div className="font-semibold">{rate.serviceName}</div>
-                                      {rate.guaranteedDaysToDelivery && (
-                                        <div className="text-xs text-gray-500">
-                                          {rate.guaranteedDaysToDelivery} business day{rate.guaranteedDaysToDelivery !== '1' ? 's' : ''}
-                                        </div>
-                                      )}
-                                    </div>
-                                  </div>
-                                  <div className="text-lg font-bold text-green-600 dark:text-green-400">
-                                    ${rate.totalCharges.toFixed(2)} each
-                                  </div>
-                                </div>
-                              </div>
-                            ))
-                          ) : (
-                            <div className="text-center py-8 text-gray-500">
-                              Click "Refresh Rates" to see shipping options
-                            </div>
-                          )}
-                        </div>
-                      ) : (
-                        <div className="space-y-3 max-h-96 overflow-y-auto">
-                          <p className="text-sm text-gray-600 dark:text-gray-400">
-                            Select shipping service for each order individually:
-                          </p>
-                          {ordersWithRates.map((orderData: any) => (
-                            <Card key={orderData.orderId}>
-                              <CardHeader className="pb-2">
-                                <CardTitle className="text-sm">{orderData.orderId}</CardTitle>
-                              </CardHeader>
-                              <CardContent className="space-y-2">
-                                {orderData.rates?.map((rate: any) => (
+                      <div className="space-y-2">
+                        {availableRates.length > 0 ? (
+                          availableRates.map((rate: any) => (
+                            <div
+                              key={rate.serviceCode}
+                              onClick={() => setSelectedService(rate.serviceCode)}
+                              className={`p-3 border rounded-lg cursor-pointer transition-all ${
+                                selectedService === rate.serviceCode
+                                  ? 'border-blue-500 bg-blue-50 dark:bg-blue-950'
+                                  : 'border-gray-200 hover:border-gray-300 dark:border-gray-700'
+                              }`}
+                              data-testid={`service-option-${rate.serviceCode}`}
+                            >
+                              <div className="flex justify-between items-center">
+                                <div className="flex items-center gap-3">
                                   <div
-                                    key={rate.serviceCode}
-                                    onClick={() => setPerOrderServices({ ...perOrderServices, [orderData.orderId]: rate.serviceCode })}
-                                    className={`p-2 border rounded cursor-pointer text-sm ${
-                                      perOrderServices[orderData.orderId] === rate.serviceCode
-                                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-950'
-                                        : 'border-gray-200'
+                                    className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                                      selectedService === rate.serviceCode
+                                        ? 'border-blue-500'
+                                        : 'border-gray-300'
                                     }`}
                                   >
-                                    <div className="flex justify-between">
-                                      <span>{rate.serviceName}</span>
-                                      <span className="font-semibold text-green-600">${rate.totalCharges.toFixed(2)}</span>
-                                    </div>
+                                    {selectedService === rate.serviceCode && (
+                                      <div className="w-2 h-2 rounded-full bg-blue-500" />
+                                    )}
                                   </div>
-                                ))}
-                              </CardContent>
-                            </Card>
-                          ))}
-                        </div>
-                      )}
+                                  <div>
+                                    <div className="font-semibold">{rate.serviceName}</div>
+                                    {rate.guaranteedDaysToDelivery && (
+                                      <div className="text-xs text-gray-500">
+                                        {rate.guaranteedDaysToDelivery} business day{rate.guaranteedDaysToDelivery !== '1' ? 's' : ''}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="text-lg font-bold text-green-600 dark:text-green-400">
+                                  ${rate.totalCharges.toFixed(2)}
+                                </div>
+                              </div>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="text-center py-8 text-gray-500 bg-gray-50 dark:bg-gray-900 rounded-lg">
+                            <Package className="h-12 w-12 mx-auto mb-2 opacity-30" />
+                            <p>Click "Refresh Rates" to see shipping options</p>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )}
 
@@ -520,12 +527,13 @@ export function BulkShippingActions({
 
                       {/* Summary */}
                       <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg space-y-2">
-                        <h4 className="font-semibold">Summary</h4>
+                        <h4 className="font-semibold">Consolidated Shipment Summary</h4>
                         <div className="text-sm space-y-1">
-                          <div>Orders: <strong>{selectedOrders.length}</strong></div>
-                          <div>Service: <strong>{getServiceName(selectedService)}</strong></div>
-                          <div>Declared Value: <strong>${packageDefaults.declaredValue}</strong> each</div>
-                          <div>Billing: <strong>{billingOption === 'sender' ? 'Our Account' : 'Receiver Account'}</strong></div>
+                          <div>📦 Orders in Package: <strong>{selectedOrders.join(', ')}</strong></div>
+                          <div>📊 Total Weight: <strong>{packageDetails.weight} lbs</strong></div>
+                          <div>🚚 Service: <strong>{getServiceName(selectedService)}</strong></div>
+                          <div>💰 Declared Value: <strong>${packageDetails.declaredValue}</strong></div>
+                          <div>💳 Billing: <strong>{billingOption === 'sender' ? 'Our Account' : 'Receiver Account'}</strong></div>
                         </div>
                       </div>
                     </div>
@@ -547,15 +555,17 @@ export function BulkShippingActions({
                     {currentStep < 3 && (
                       <Button
                         onClick={() => {
-                          if (currentStep === 1) {
-                            // Moving to step 2, fetch rates
-                            handleGetRates();
-                            setCurrentStep(2);
-                          } else {
-                            setCurrentStep(currentStep + 1);
+                          if (currentStep === 1 && !addressValidation?.valid) {
+                            toast({
+                              title: 'Address Validation Required',
+                              description: addressValidation?.message || 'All orders must have the same shipping address',
+                              variant: 'destructive',
+                            });
+                            return;
                           }
+                          setCurrentStep(currentStep + 1);
                         }}
-                        disabled={currentStep === 2 && loadingRates}
+                        disabled={!addressValidation?.valid}
                         data-testid="button-next"
                       >
                         Next
@@ -564,13 +574,13 @@ export function BulkShippingActions({
                     )}
                     {currentStep === 3 && (
                       <Button
-                        onClick={handleCreateBulkLabels}
-                        disabled={isProcessing || (billingOption === 'receiver' && (!receiverAccount.accountNumber || !receiverAccount.zipCode))}
+                        onClick={handleCreateConsolidatedLabel}
+                        disabled={isProcessing || !addressValidation?.valid || (billingOption === 'receiver' && (!receiverAccount.accountNumber || !receiverAccount.zipCode))}
                         className="bg-green-600 hover:bg-green-700"
                         data-testid="button-create-labels"
                       >
-                        <DollarSign className="h-4 w-4 mr-2" />
-                        {isProcessing ? 'Creating Labels...' : `Create ${selectedOrders.length} Labels`}
+                        <Package className="h-4 w-4 mr-2" />
+                        {isProcessing ? 'Creating Label...' : 'Create Consolidated Label'}
                       </Button>
                     )}
                   </div>

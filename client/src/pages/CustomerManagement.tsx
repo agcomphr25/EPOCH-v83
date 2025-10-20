@@ -121,7 +121,7 @@ const initialFormData: CustomerFormData = {
   email: '',
   phone: '',
   contact: '',
-  customerType: 'standard',
+  customerType: 'AGR',
   preferredCommunicationMethod: [],
   notes: '',
   isActive: true,
@@ -235,10 +235,10 @@ const CustomerFormFields = ({
               <SelectValue placeholder="Select customer type" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="standard">Standard</SelectItem>
-              <SelectItem value="premium">Premium</SelectItem>
-              <SelectItem value="wholesale">Wholesale</SelectItem>
-              <SelectItem value="retail">Retail</SelectItem>
+              <SelectItem value="AGR">AGR</SelectItem>
+              <SelectItem value="Gunbuilder">Gunbuilder</SelectItem>
+              <SelectItem value="Distributor">Distributor</SelectItem>
+              <SelectItem value="OEM">OEM</SelectItem>
             </SelectContent>
           </Select>
         </div>

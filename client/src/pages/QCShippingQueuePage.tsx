@@ -648,7 +648,14 @@ export default function QCShippingQueuePage() {
   }) => (
     <Card
       key={order.orderId}
-      className={`border-l-4 ${borderColor} ${selectedOrders.has(order.orderId) ? 'ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-900/20' : ''}`}
+      id={`order-${order.orderId}`}
+      className={`border-l-4 ${borderColor} ${
+        highlightedOrderId === order.orderId
+          ? 'ring-4 ring-yellow-400 bg-yellow-50 dark:bg-yellow-900/20 border-l-yellow-500 shadow-lg'
+          : selectedOrders.has(order.orderId)
+            ? 'ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-900/20'
+            : ''
+      }`}
     >
       <CardHeader className="pb-2">
         <CardTitle className="text-sm flex items-center justify-between">

@@ -539,7 +539,18 @@ export default function CNCQueuePage() {
                   (o: any) => o.orderId === order.orderId
                 );
                 if (orderExists) {
-                  // Select the order card and show order summary modal
+                  // Highlight the order
+                  setHighlightedOrderId(order.orderId);
+                  
+                  // Auto-scroll to the highlighted order
+                  setTimeout(() => {
+                    const element = document.getElementById(`order-${order.orderId}`);
+                    if (element) {
+                      element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                  }, 100);
+                  
+                  // Select the order card and show order summary modal (original functionality)
                   const orderInQueue = cncOrders.find(
                     (o: any) => o.orderId === order.orderId
                   );
@@ -556,7 +567,7 @@ export default function CNCQueuePage() {
 
                   toast({
                     title: 'Order found',
-                    description: `Order ${order.orderId} selected and details displayed`,
+                    description: `Order ${order.orderId} highlighted and details displayed`,
                   });
                 } else {
                   toast({
@@ -720,16 +731,19 @@ export default function CNCQueuePage() {
                 return (
                   <div
                     key={order.orderId}
+                    id={`order-${order.orderId}`}
                     className={`p-2 border-l-4 rounded cursor-pointer transition-all duration-200 ${
-                      isOverdue
-                        ? 'border-l-red-500 bg-red-50 dark:bg-red-900/20'
-                        : isSelected
-                          ? isGunsmith
-                            ? 'border-l-purple-500 bg-purple-50 dark:bg-purple-900/20'
-                            : 'border-l-green-500 bg-green-50 dark:bg-green-900/20'
-                          : isGunsmith
-                            ? 'border-l-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/10'
-                            : 'border-l-green-400 hover:bg-green-50 dark:hover:bg-green-900/10'
+                      highlightedOrderId === order.orderId
+                        ? 'border-yellow-400 bg-yellow-50 dark:border-yellow-600 dark:bg-yellow-900/20 ring-2 ring-yellow-300 shadow-lg'
+                        : isOverdue
+                          ? 'border-l-red-500 bg-red-50 dark:bg-red-900/20'
+                          : isSelected
+                            ? isGunsmith
+                              ? 'border-l-purple-500 bg-purple-50 dark:bg-purple-900/20'
+                              : 'border-l-green-500 bg-green-50 dark:bg-green-900/20'
+                            : isGunsmith
+                              ? 'border-l-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/10'
+                              : 'border-l-green-400 hover:bg-green-50 dark:hover:bg-green-900/10'
                     }`}
                     onClick={() =>
                       toggleOrderSelection(order.orderId, order.departmentType)

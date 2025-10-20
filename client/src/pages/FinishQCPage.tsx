@@ -480,12 +480,15 @@ export default function FinishQCPage() {
                       return (
                         <div
                           key={order.orderId}
+                          id={`order-${order.orderId}`}
                           className={`p-2 border rounded cursor-pointer transition-all duration-200 ${
-                            isOverdue
-                              ? 'border-red-300 bg-red-50 dark:border-red-700 dark:bg-red-900/20'
-                              : isSelected
-                                ? 'border-blue-300 bg-blue-50 dark:border-blue-700 dark:bg-blue-900/20'
-                                : 'border-gray-200 hover:border-gray-300 dark:border-gray-700 dark:hover:border-gray-600'
+                            highlightedOrderId === order.orderId
+                              ? 'border-yellow-400 bg-yellow-50 dark:border-yellow-600 dark:bg-yellow-900/20 ring-2 ring-yellow-300 shadow-lg'
+                              : isOverdue
+                                ? 'border-red-300 bg-red-50 dark:border-red-700 dark:bg-red-900/20'
+                                : isSelected
+                                  ? 'border-blue-300 bg-blue-50 dark:border-blue-700 dark:bg-blue-900/20'
+                                  : 'border-gray-200 hover:border-gray-300 dark:border-gray-700 dark:hover:border-gray-600'
                           }`}
                         >
                           <div className="flex items-start justify-between gap-2">

@@ -631,10 +631,13 @@ export default function FinishQueuePage() {
                           />
                         </div>
                         <Card
+                          id={`order-${order.orderId}`}
                           className={`${
-                            selectedOrders.has(order.orderId)
-                              ? 'bg-red-100 dark:bg-red-800/40 border-red-400 dark:border-red-600 ring-2 ring-red-300 dark:ring-red-700'
-                              : 'bg-red-50 dark:bg-red-900/20 border-red-300 dark:border-red-700'
+                            highlightedOrderId === order.orderId
+                              ? 'border-yellow-400 bg-yellow-50 dark:border-yellow-600 dark:bg-yellow-900/20 ring-2 ring-yellow-300 shadow-lg'
+                              : selectedOrders.has(order.orderId)
+                                ? 'bg-red-100 dark:bg-red-800/40 border-red-400 dark:border-red-600 ring-2 ring-red-300 dark:ring-red-700'
+                                : 'bg-red-50 dark:bg-red-900/20 border-red-300 dark:border-red-700'
                           } pl-8`}
                         >
                           <CardContent className="p-3">
@@ -736,10 +739,13 @@ export default function FinishQueuePage() {
                           />
                         </div>
                         <Card
+                          id={`order-${order.orderId}`}
                           className={`${
-                            selectedOrders.has(order.orderId)
-                              ? 'bg-orange-100 dark:bg-orange-800/40 border-orange-400 dark:border-orange-600 ring-2 ring-orange-300 dark:ring-orange-700'
-                              : 'bg-orange-50 dark:bg-orange-900/20 border-orange-300 dark:border-orange-700'
+                            highlightedOrderId === order.orderId
+                              ? 'border-yellow-400 bg-yellow-50 dark:border-yellow-600 dark:bg-yellow-900/20 ring-2 ring-yellow-300 shadow-lg'
+                              : selectedOrders.has(order.orderId)
+                                ? 'bg-orange-100 dark:bg-orange-800/40 border-orange-400 dark:border-orange-600 ring-2 ring-orange-300 dark:ring-orange-700'
+                                : 'bg-orange-50 dark:bg-orange-900/20 border-orange-300 dark:border-orange-700'
                           } pl-8`}
                         >
                           <CardContent className="p-3">
@@ -841,10 +847,13 @@ export default function FinishQueuePage() {
                           />
                         </div>
                         <Card
+                          id={`order-${order.orderId}`}
                           className={`${
-                            selectedOrders.has(order.orderId)
-                              ? 'bg-yellow-100 dark:bg-yellow-800/40 border-yellow-400 dark:border-yellow-600 ring-2 ring-yellow-300 dark:ring-yellow-700'
-                              : 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-300 dark:border-yellow-700'
+                            highlightedOrderId === order.orderId
+                              ? 'border-yellow-400 bg-yellow-50 dark:border-yellow-600 dark:bg-yellow-900/20 ring-2 ring-yellow-300 shadow-lg'
+                              : selectedOrders.has(order.orderId)
+                                ? 'bg-yellow-100 dark:bg-yellow-800/40 border-yellow-400 dark:border-yellow-600 ring-2 ring-yellow-300 dark:ring-yellow-700'
+                                : 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-300 dark:border-yellow-700'
                           } pl-8`}
                         >
                           <CardContent className="p-3">
@@ -943,10 +952,13 @@ export default function FinishQueuePage() {
                           />
                         </div>
                         <Card
+                          id={`order-${order.orderId}`}
                           className={`${
-                            selectedOrders.has(order.orderId)
-                              ? 'bg-blue-100 dark:bg-blue-800/40 border-blue-400 dark:border-blue-600 ring-2 ring-blue-300 dark:ring-blue-700'
-                              : 'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-700'
+                            highlightedOrderId === order.orderId
+                              ? 'border-yellow-400 bg-yellow-50 dark:border-yellow-600 dark:bg-yellow-900/20 ring-2 ring-yellow-300 shadow-lg'
+                              : selectedOrders.has(order.orderId)
+                                ? 'bg-blue-100 dark:bg-blue-800/40 border-blue-400 dark:border-blue-600 ring-2 ring-blue-300 dark:ring-blue-700'
+                                : 'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-700'
                           } pl-8`}
                         >
                           <CardContent className="p-3">
@@ -1045,10 +1057,13 @@ export default function FinishQueuePage() {
                           />
                         </div>
                         <Card
+                          id={`order-${order.orderId}`}
                           className={`${
-                            selectedOrders.has(order.orderId)
-                              ? 'bg-green-100 dark:bg-green-800/40 border-green-400 dark:border-green-600 ring-2 ring-green-300 dark:ring-green-700'
-                              : 'bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700'
+                            highlightedOrderId === order.orderId
+                              ? 'border-yellow-400 bg-yellow-50 dark:border-yellow-600 dark:bg-yellow-900/20 ring-2 ring-yellow-300 shadow-lg'
+                              : selectedOrders.has(order.orderId)
+                                ? 'bg-green-100 dark:bg-green-800/40 border-green-400 dark:border-green-600 ring-2 ring-green-300 dark:ring-green-700'
+                                : 'bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700'
                           } pl-8`}
                         >
                           <CardContent className="p-3">
@@ -1147,10 +1162,13 @@ export default function FinishQueuePage() {
                           />
                         </div>
                         <Card
+                          id={`order-${order.orderId}`}
                           className={`${
-                            selectedOrders.has(order.orderId)
-                              ? 'bg-gray-100 dark:bg-gray-800/40 border-gray-400 dark:border-gray-600 ring-2 ring-gray-300 dark:ring-gray-700'
-                              : 'bg-gray-50 dark:bg-gray-900/20 border-gray-300 dark:border-gray-700'
+                            highlightedOrderId === order.orderId
+                              ? 'border-yellow-400 bg-yellow-50 dark:border-yellow-600 dark:bg-yellow-900/20 ring-2 ring-yellow-300 shadow-lg'
+                              : selectedOrders.has(order.orderId)
+                                ? 'bg-gray-100 dark:bg-gray-800/40 border-gray-400 dark:border-gray-600 ring-2 ring-gray-300 dark:ring-gray-700'
+                                : 'bg-gray-50 dark:bg-gray-900/20 border-gray-300 dark:border-gray-700'
                           } pl-8`}
                         >
                           <CardContent className="p-3">
@@ -1249,10 +1267,13 @@ export default function FinishQueuePage() {
                           />
                         </div>
                         <Card
+                          id={`order-${order.orderId}`}
                           className={`${
-                            selectedOrders.has(order.orderId)
-                              ? 'bg-gray-100 dark:bg-gray-800/40 border-gray-400 dark:border-gray-600 ring-2 ring-gray-300 dark:ring-gray-700'
-                              : 'bg-gray-50 dark:bg-gray-900/20 border-gray-300 dark:border-gray-700'
+                            highlightedOrderId === order.orderId
+                              ? 'border-yellow-400 bg-yellow-50 dark:border-yellow-600 dark:bg-yellow-900/20 ring-2 ring-yellow-300 shadow-lg'
+                              : selectedOrders.has(order.orderId)
+                                ? 'bg-gray-100 dark:bg-gray-800/40 border-gray-400 dark:border-gray-600 ring-2 ring-gray-300 dark:ring-gray-700'
+                                : 'bg-gray-50 dark:bg-gray-900/20 border-gray-300 dark:border-gray-700'
                           } pl-8`}
                         >
                           <CardContent className="p-3">

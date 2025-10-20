@@ -979,12 +979,15 @@ export default function ShippingQueuePage() {
     return (
       <Card
         key={order.orderId}
+        id={`order-${order.orderId}`}
         className={`hover:shadow-md transition-all cursor-pointer ${
-          isSelected
-            ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 shadow-md'
-            : specialShippingText
-              ? 'border-yellow-400 bg-yellow-50 hover:border-yellow-500 hover:bg-yellow-100 dark:bg-yellow-900/20 dark:border-yellow-600'
-              : 'border-gray-200 hover:border-gray-300'
+          highlightedOrderId === order.orderId
+            ? 'border-yellow-400 bg-yellow-50 dark:border-yellow-600 dark:bg-yellow-900/20 ring-2 ring-yellow-300 shadow-lg'
+            : isSelected
+              ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 shadow-md'
+              : specialShippingText
+                ? 'border-yellow-400 bg-yellow-50 hover:border-yellow-500 hover:bg-yellow-100 dark:bg-yellow-900/20 dark:border-yellow-600'
+                : 'border-gray-200 hover:border-gray-300'
         }`}
         onClick={() => handleCardSelection(order.orderId)}
       >

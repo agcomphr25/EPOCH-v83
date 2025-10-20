@@ -139,16 +139,23 @@ export function BulkShippingActions({
 
     setLoadingRates(true);
     try {
-      // Use first order's address for rate request
+      // Use first order's enriched shipping address
       const firstOrder = selectedOrdersData[0];
-      const shippingAddress = firstOrder.shippingAddress || firstOrder.customer?.addresses?.[0];
+      if (!firstOrder) {
+        throw new Error('No orders selected');
+      }
+
+      const shippingAddress = firstOrder.shippingAddress;
+      if (!shippingAddress) {
+        throw new Error('No shipping address found for selected orders');
+      }
 
       const response = await axios.post('/api/shipping/get-rates', {
         shipToAddress: {
-          street: shippingAddress.street,
-          city: shippingAddress.city,
-          state: shippingAddress.state,
-          zipCode: shippingAddress.zipCode,
+          street: shippingAddress.street || '',
+          city: shippingAddress.city || '',
+          state: shippingAddress.state || '',
+          zipCode: shippingAddress.zipCode || '',
           country: shippingAddress.country || 'US',
         },
         packageWeight: packageDetails.weight,
@@ -169,7 +176,7 @@ export function BulkShippingActions({
       console.error('Error fetching rates:', error);
       toast({
         title: 'Error',
-        description: error.response?.data?.error || 'Failed to fetch shipping rates',
+        description: error.response?.data?.error || error.message || 'Failed to fetch shipping rates',
         variant: 'destructive',
       });
     } finally {

@@ -219,6 +219,15 @@ export default function ShippingQueuePage() {
     });
   }, [allOrders]);
 
+  // Enrich shipping orders with computed shipping addresses for bulk shipping
+  const enrichedShippingOrders = useMemo(() => {
+    return shippingOrders.map(order => ({
+      ...order,
+      shippingAddress: getOrderShippingAddress(order),
+      shippingCustomerInfo: getOrderShippingCustomerInfo(order)
+    }));
+  }, [shippingOrders]);
+
   // Categorize orders by due date
   const categorizedOrders = useMemo(() => {
     const today = new Date();
@@ -765,11 +774,7 @@ export default function ShippingQueuePage() {
         <BulkShippingActions
           selectedOrders={selectedOrders}
           onClearSelection={clearSelection}
-          shippingOrders={shippingOrders.map(order => ({
-            ...order,
-            shippingAddress: getOrderShippingAddress(order),
-            shippingCustomerInfo: getOrderShippingCustomerInfo(order)
-          }))}
+          shippingOrders={enrichedShippingOrders}
         />
       )}
 
@@ -1167,11 +1172,7 @@ export default function ShippingQueuePage() {
               <BulkShippingActions
                 selectedOrders={selectedOrders}
                 onClearSelection={() => setSelectedOrders([])}
-                shippingOrders={shippingOrders.map(order => ({
-                  ...order,
-                  shippingAddress: getOrderShippingAddress(order),
-                  shippingCustomerInfo: getOrderShippingCustomerInfo(order)
-                }))}
+                shippingOrders={enrichedShippingOrders}
               />
             </div>
           </div>

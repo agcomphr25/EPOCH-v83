@@ -46,7 +46,17 @@ export default function GlobalSearch({ open, onOpenChange }: GlobalSearchProps) 
 
   // Fetch search results
   const { data, isLoading } = useQuery<{ results: SearchResult[]; totalCount: number; query: string }>({
-    queryKey: ['/api/global-search', { q: debouncedSearch }],
+    queryKey: ['/api/global-search', debouncedSearch],
+    queryFn: async () => {
+      const params = new URLSearchParams({ q: debouncedSearch });
+      const response = await fetch(`/api/global-search?${params.toString()}`, {
+        credentials: 'include',
+      });
+      if (!response.ok) {
+        throw new Error('Search failed');
+      }
+      return response.json();
+    },
     enabled: debouncedSearch.length >= 2,
   });
 

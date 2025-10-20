@@ -167,6 +167,13 @@ export function BulkShippingActions({
           zipCode: shippingAddress.zipCode || '',
           country: shippingAddress.country || 'US',
         },
+        shipFromAddress: {
+          street: '230 Hamer Rd.',
+          city: 'Owens Crossroads',
+          state: 'AL',
+          zipCode: '35763',
+          country: 'US',
+        },
         packageWeight: packageDetails.weight,
         packageDimensions: {
           length: packageDetails.length,

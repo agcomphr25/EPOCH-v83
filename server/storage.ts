@@ -2420,7 +2420,7 @@ export class DatabaseStorage implements IStorage {
               const discountAmount =
                 discount.percent !== null && discount.percent > 0
                   ? (basePrice * discount.percent) / 100
-                  : Number(discount.fixedAmount || 0);
+                  : Number(discount.fixedAmount || 0) / 100;
               total -= discountAmount;
             }
           }
@@ -2429,7 +2429,7 @@ export class DatabaseStorage implements IStorage {
           const discountAmount =
             discount.percent !== null && discount.percent > 0
               ? (total * discount.percent) / 100
-              : Number(discount.fixedAmount || 0);
+              : Number(discount.fixedAmount || 0) / 100;
           total -= discountAmount;
         }
       }
@@ -2589,7 +2589,7 @@ export class DatabaseStorage implements IStorage {
               const discountAmount =
                 discount.percent !== null && discount.percent > 0
                   ? (basePrice * discount.percent) / 100
-                  : Number(discount.fixedAmount || 0);
+                  : Number(discount.fixedAmount || 0) / 100;
               totalPrice -= discountAmount;
             }
           }
@@ -2598,7 +2598,7 @@ export class DatabaseStorage implements IStorage {
           const discountAmount =
             discount.percent !== null && discount.percent > 0
               ? (subtotal * discount.percent) / 100
-              : Number(discount.fixedAmount || 0);
+              : Number(discount.fixedAmount || 0) / 100;
           totalPrice -= discountAmount;
         }
       }

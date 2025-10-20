@@ -35,6 +35,11 @@ export default function ShippingLabelPage() {
     },
   });
 
+  const [selectedService, setSelectedService] = useState('03'); // UPS Ground default
+  const [showRates, setShowRates] = useState(false);
+  const [rates, setRates] = useState<any[]>([]);
+  const [loadingRates, setLoadingRates] = useState(false);
+
   // Get order details with customer data in single request for better performance
   const { data: orderDetails, isLoading: orderLoading } = useQuery({
     queryKey: [`/api/shipping/order/${orderId}`],
@@ -83,6 +88,73 @@ export default function ShippingLabelPage() {
     }
   }, [shippingAddress, customerAddress, customerInfo]);
 
+  const handleGetRates = async () => {
+    if (!shippingDetails.address.name || !shippingDetails.address.street || !shippingDetails.address.zip) {
+      toast({
+        title: 'Missing Address',
+        description: 'Please fill in the complete shipping address first',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setLoadingRates(true);
+    try {
+      const response = await fetch('/api/shipping/get-rates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          shipToAddress: {
+            name: shippingDetails.address.name,
+            street: shippingDetails.address.street,
+            city: shippingDetails.address.city,
+            state: shippingDetails.address.state,
+            zipCode: shippingDetails.address.zip,
+            country: shippingDetails.address.country,
+          },
+          shipFromAddress: {
+            street: '230 Hamer Rd.',
+            city: 'Owens Crossroads',
+            state: 'AL',
+            zipCode: '35763',
+            country: 'US',
+          },
+          packageWeight: parseFloat(shippingDetails.weight),
+          packageDimensions: {
+            length: parseFloat(shippingDetails.length),
+            width: parseFloat(shippingDetails.width),
+            height: parseFloat(shippingDetails.height),
+          },
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setRates(data.rates || []);
+        setShowRates(true);
+        toast({
+          title: 'Rates Retrieved',
+          description: `Found ${data.rates?.length || 0} shipping options`,
+        });
+      } else {
+        const error = await response.json();
+        toast({
+          title: 'Error Getting Rates',
+          description: error.error || 'Failed to get shipping rates',
+          variant: 'destructive',
+        });
+      }
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to get shipping rates',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoadingRates(false);
+    }
+  };
+
   const generateShippingLabel = async () => {
     if (!orderId) return;
 
@@ -118,6 +190,7 @@ export default function ShippingLabelPage() {
             shippingDetails.billingOption === 'receiver'
               ? shippingDetails.receiverAccount
               : undefined,
+          serviceType: selectedService, // Send selected shipping service
         }),
         signal: controller.signal,
       });
@@ -589,6 +662,82 @@ export default function ShippingLabelPage() {
                     </div>
                   )}
                 </div>
+              </div>
+
+              {/* Shipping Service Selection */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-medium">Shipping Service</h4>
+                  <Button
+                    onClick={handleGetRates}
+                    disabled={loadingRates}
+                    variant="outline"
+                    size="sm"
+                    className="flex items-center gap-2"
+                  >
+                    {loadingRates ? 'Loading...' : 'Get Shipping Rates'}
+                  </Button>
+                </div>
+
+                {/* Current Selection Display */}
+                <div className="p-3 bg-blue-50 dark:bg-blue-900 rounded-md">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium">Selected Service:</span>
+                    <span className="text-sm font-bold text-blue-600 dark:text-blue-400">
+                      {rates.find(r => r.serviceCode === selectedService)?.serviceName || 'UPS Ground (Default)'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Rates Display */}
+                {showRates && rates.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      Click any option to select it:
+                    </p>
+                    {rates.map((rate: any) => (
+                      <div
+                        key={rate.serviceCode}
+                        onClick={() => setSelectedService(rate.serviceCode)}
+                        className={`p-3 border rounded-lg cursor-pointer transition-all ${
+                          selectedService === rate.serviceCode
+                            ? 'border-blue-500 bg-blue-50 dark:bg-blue-950'
+                            : 'border-gray-200 hover:border-gray-300 dark:border-gray-700'
+                        }`}
+                      >
+                        <div className="flex justify-between items-center">
+                          <div className="flex items-center gap-3">
+                            <div
+                              className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                                selectedService === rate.serviceCode
+                                  ? 'border-blue-500'
+                                  : 'border-gray-300'
+                              }`}
+                            >
+                              {selectedService === rate.serviceCode && (
+                                <div className="w-2 h-2 rounded-full bg-blue-500" />
+                              )}
+                            </div>
+                            <div>
+                              <div className="font-semibold text-gray-900 dark:text-gray-100">
+                                {rate.serviceName}
+                              </div>
+                              {rate.guaranteedDaysToDelivery && (
+                                <div className="text-xs text-gray-500 dark:text-gray-400">
+                                  Delivery in {rate.guaranteedDaysToDelivery} business day
+                                  {rate.guaranteedDaysToDelivery !== '1' ? 's' : ''}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          <div className="text-lg font-bold text-green-600 dark:text-green-400">
+                            ${rate.totalCharges.toFixed(2)}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Billing Options */}

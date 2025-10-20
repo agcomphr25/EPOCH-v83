@@ -2216,6 +2216,19 @@ export const vendorContacts = pgTable('vendor_contacts', {
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
 
+export const vendorScope = pgTable('vendor_scope', {
+  id: serial('id').primaryKey(),
+  vendorId: integer('vendor_id')
+    .references(() => vendors.id)
+    .notNull(),
+  materialType: text('material_type').notNull(), // CF, FG, Hybrid, etc.
+  productType: text('product_type'), // Stock type or material category
+  description: text('description'),
+  isActive: boolean('is_active').default(true),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
 export const communicationLogs = pgTable('communication_logs', {
   id: serial('id').primaryKey(),
   orderId: text('order_id'), // Made nullable for general communications
@@ -2354,6 +2367,20 @@ export const insertVendorContactSchema = createInsertSchema(vendorContacts)
     phone: z.string().optional(),
     isPrimary: z.boolean().default(false),
     notes: z.string().optional(),
+    isActive: z.boolean().default(true),
+  });
+
+export const insertVendorScopeSchema = createInsertSchema(vendorScope)
+  .omit({
+    id: true,
+    createdAt: true,
+    updatedAt: true,
+  })
+  .extend({
+    vendorId: z.number().int(),
+    materialType: z.string().min(1, 'Material type is required'),
+    productType: z.string().optional(),
+    description: z.string().optional(),
     isActive: z.boolean().default(true),
   });
 
@@ -2499,6 +2526,8 @@ export type InsertVendor = z.infer<typeof insertVendorSchema>;
 export type Vendor = typeof vendors.$inferSelect;
 export type InsertVendorContact = z.infer<typeof insertVendorContactSchema>;
 export type VendorContact = typeof vendorContacts.$inferSelect;
+export type InsertVendorScope = z.infer<typeof insertVendorScopeSchema>;
+export type VendorScope = typeof vendorScope.$inferSelect;
 
 // Types for Module 17 - Nonconformance
 export type InsertNonconformanceRecord = z.infer<

@@ -43,6 +43,7 @@ import {
   CheckCircle,
   XCircle,
   User,
+  Package,
 } from 'lucide-react';
 import {
   AlertDialog,
@@ -521,7 +522,7 @@ export default function VendorManagement() {
             </DialogHeader>
 
             <Tabs defaultValue="main" className="w-full">
-              <TabsList className="grid w-full grid-cols-3">
+              <TabsList className="grid w-full grid-cols-4">
                 <TabsTrigger value="main" data-testid="tab-main-info">
                   Main Info
                 </TabsTrigger>
@@ -530,6 +531,9 @@ export default function VendorManagement() {
                   {!editingVendor &&
                     pendingContacts.length > 0 &&
                     `(${pendingContacts.length})`}
+                </TabsTrigger>
+                <TabsTrigger value="scope" data-testid="tab-scope">
+                  Scope
                 </TabsTrigger>
                 <TabsTrigger value="evaluation" data-testid="tab-evaluation">
                   Evaluation & Notes
@@ -1053,7 +1057,29 @@ export default function VendorManagement() {
                 )}
               </TabsContent>
 
-              {/* Tab 3: Evaluation & Notes */}
+              {/* Tab 3: Scope - Approved Materials */}
+              <TabsContent value="scope" className="space-y-4 mt-4">
+                <div className="text-center py-8 text-gray-500">
+                  <div className="mb-4">
+                    <Package className="w-12 h-12 mx-auto text-gray-400" />
+                  </div>
+                  <h3 className="text-lg font-semibold mb-2">Vendor Scope Management</h3>
+                  <p className="text-sm mb-4">
+                    Define which materials and products this vendor is approved to supply.
+                  </p>
+                  <p className="text-xs text-gray-400">
+                    Scope tracking feature - Coming soon!
+                  </p>
+                  <p className="text-xs text-gray-400 mt-2">
+                    This will allow you to specify approved materials (CF, FG, Hybrid) and product types for this vendor.
+                  </p>
+                  <p className="text-xs text-gray-400 mt-2">
+                    Purchase orders will show "not approved" status if materials aren't in the vendor's scope.
+                  </p>
+                </div>
+              </TabsContent>
+
+              {/* Tab 4: Evaluation & Notes */}
               <TabsContent value="evaluation" className="space-y-4 mt-4">
                 <Form {...form}>
                   <form

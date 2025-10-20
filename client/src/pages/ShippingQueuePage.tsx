@@ -967,6 +967,20 @@ export default function ShippingQueuePage() {
     return null;
   }
 
+  // Function to get other in-progress orders for the same customer
+  function getCustomerOtherOrders(customerId: string | null, currentOrderId: string) {
+    if (!customerId) return [];
+    
+    const orders = allOrders as any[];
+    return orders.filter(
+      (order: any) =>
+        order.customerId === customerId &&
+        order.orderId !== currentOrderId &&
+        order.status === 'IN_PROGRESS' &&
+        order.currentDepartment !== 'Shipping'
+    );
+  }
+
   // Function to render individual order cards
   function renderOrderCard(order: any) {
     const isSelected = selectedCard === order.orderId;
@@ -975,6 +989,7 @@ export default function ShippingQueuePage() {
     const customerInfo = getOrderShippingCustomerInfo(order);
     const customerAddress = getOrderShippingAddress(order);
     const specialShippingText = getSpecialShippingText(order);
+    const otherOrders = getCustomerOtherOrders(order.customerId, order.orderId);
 
     return (
       <Card
@@ -1092,6 +1107,27 @@ export default function ShippingQueuePage() {
               )}
             </div>
           </div>
+
+          {/* Show other customer orders in progress */}
+          {otherOrders.length > 0 && (
+            <div className="mt-3 pt-3 border-t border-gray-200">
+              <div className="text-xs font-semibold text-gray-700 mb-2">
+                Other orders for this customer:
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {otherOrders.map((otherOrder: any) => (
+                  <Badge
+                    key={otherOrder.orderId}
+                    variant="outline"
+                    className="text-xs bg-blue-50 border-blue-200 text-blue-700 dark:bg-blue-900/20 dark:border-blue-800 dark:text-blue-300"
+                    data-testid={`badge-other-order-${otherOrder.orderId}`}
+                  >
+                    {otherOrder.orderId} - {otherOrder.currentDepartment || otherOrder.department}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Show Kickback Badge if order has kickbacks */}
           {hasKickbacks(order.orderId) && (

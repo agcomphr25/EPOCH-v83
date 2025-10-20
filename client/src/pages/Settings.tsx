@@ -66,6 +66,37 @@ export default function Settings() {
     queryKey: ['/api/user-integrations'],
   });
 
+  const connectMutation = useMutation({
+    mutationFn: async (integrationType: string) => {
+      return apiRequest('/api/user-integrations', {
+        method: 'POST',
+        body: JSON.stringify({
+          integrationType,
+          isConnected: true,
+          accountEmail: 'user@example.com',
+          accountName: 'Example User',
+        }),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/user-integrations'] });
+      toast({
+        title: 'Success',
+        description: 'Integration connected successfully (OAuth flow to be implemented)',
+      });
+    },
+    onError: () => {
+      toast({
+        title: 'Error',
+        description: 'Failed to connect integration',
+        variant: 'destructive',
+      });
+    },
+  });
+
   const disconnectMutation = useMutation({
     mutationFn: async (integrationType: string) => {
       return apiRequest(`/api/user-integrations/${integrationType}`, {
@@ -98,10 +129,7 @@ export default function Settings() {
   };
 
   const handleConnect = (type: string) => {
-    toast({
-      title: 'Coming Soon',
-      description: 'OAuth connection flow will be implemented here',
-    });
+    connectMutation.mutate(type);
   };
 
   const handleDisconnect = (type: string) => {
@@ -206,10 +234,11 @@ export default function Settings() {
                         ) : (
                           <Button
                             onClick={() => handleConnect(config.type)}
+                            disabled={connectMutation.isPending}
                             className="w-full"
                             data-testid={`button-connect-${config.type}`}
                           >
-                            Connect {config.name}
+                            {connectMutation.isPending ? 'Connecting...' : `Connect ${config.name}`}
                           </Button>
                         )}
                       </CardContent>

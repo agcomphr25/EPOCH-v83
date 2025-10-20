@@ -933,6 +933,7 @@ router.post('/get-rates', async (req: Request, res: Response) => {
     const upsEndpoint = 'https://onlinetools.ups.com/api/rating/v1/Shop';
 
     console.log('⚡ Calling UPS Rating API:', upsEndpoint);
+    console.log('⚡ Request payload:', JSON.stringify(ratePayload, null, 2));
 
     const response = await axios.post(upsEndpoint, ratePayload, {
       headers: {

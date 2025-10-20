@@ -93,7 +93,7 @@ export function BulkShippingActions({
       console.log('🔍 Raw addresses:', addresses);
       const validAddresses = addresses.filter(addr => addr && addr !== '|||');
       console.log('🔍 Valid addresses:', validAddresses);
-      const uniqueAddresses = [...new Set(validAddresses)];
+      const uniqueAddresses = Array.from(new Set(validAddresses));
       console.log('🔍 Unique addresses:', uniqueAddresses);
       
       let newValidation;

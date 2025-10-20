@@ -1201,12 +1201,24 @@ function buildUPSShipmentPayloadOAuth(
           },
         },
         PaymentInformation: {
-          ShipmentCharge: {
-            Type: '01',
-            BillShipper: {
-              AccountNumber: shipperNumber,
-            },
-          },
+          ShipmentCharge:
+            shipmentDetails.billingOption === 'receiver'
+              ? {
+                  Type: '01',
+                  BillReceiver: {
+                    AccountNumber: shipmentDetails.receiverAccount?.accountNumber,
+                    Address: {
+                      PostalCode: shipmentDetails.receiverAccount?.zipCode,
+                      CountryCode: shipmentDetails.shipToAddress.country || 'US',
+                    },
+                  },
+                }
+              : {
+                  Type: '01',
+                  BillShipper: {
+                    AccountNumber: shipperNumber,
+                  },
+                },
         },
         ShipmentRatingOptions: {
           NegotiatedRatesIndicator: '',
@@ -1377,7 +1389,7 @@ router.post('/bulk/create-consolidated-label', async (req: Request, res: Respons
             state: customerAddresses[0].state || '',
             zipCode: customerAddresses[0].zipCode || '',
             country: customerAddresses[0].country || 'US',
-            phone: customerAddresses[0].phone || '',
+            phone: customer?.phone || '',
           };
         }
       }
@@ -1390,7 +1402,7 @@ router.post('/bulk/create-consolidated-label', async (req: Request, res: Respons
     const addressKeys = addresses.map(
       (addr) => `${addr.street}|${addr.city}|${addr.state}|${addr.zipCode}`
     );
-    const uniqueAddresses = [...new Set(addressKeys)];
+    const uniqueAddresses = Array.from(new Set(addressKeys));
 
     if (uniqueAddresses.length > 1) {
       return res.status(400).json({

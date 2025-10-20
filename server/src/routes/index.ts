@@ -42,6 +42,7 @@ import documentIntelligenceRoutes from './documentIntelligence';
 import trainingRoutes from './training';
 import magicLinkRoutes from './magicLink';
 import certificationsRoutes from './certifications';
+import globalSearchRoutes from './globalSearch';
 import { getAccessToken } from '../utils/upsShipping';
 
 export function registerRoutes(app: Express): Server {
@@ -168,6 +169,9 @@ export function registerRoutes(app: Express): Server {
 
   // Certifications management routes
   app.use('/api/certifications', certificationsRoutes);
+
+  // Global search routes
+  app.use('/api', globalSearchRoutes);
 
   // UPS Test endpoint
   app.post('/api/test-ups-auth', async (req, res) => {

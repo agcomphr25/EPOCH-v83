@@ -44,11 +44,13 @@ import {
   GraduationCap,
   Home,
   FileSpreadsheet,
+  Search,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import InstallPWAButton from './InstallPWAButton';
+import GlobalSearch from './GlobalSearch';
 import { useQuery } from '@tanstack/react-query';
 import { hasFullAccess, hasRouteAccess } from '@/config/userPermissions';
 import { getDashboardRoute } from '@/config/dashboardMapping';
@@ -65,6 +67,7 @@ import {
 
 export default function Navigation() {
   const [location, setLocation] = useLocation();
+  const [searchOpen, setSearchOpen] = useState(false);
 
   // Check if we're in deployment environment to show logout button
   const isDeploymentEnvironment = () => {
@@ -117,6 +120,19 @@ export default function Navigation() {
     staleTime: 5 * 60 * 1000, // 5 minutes
     retry: false,
   });
+
+  // Global keyboard shortcut for search (Cmd/Ctrl+K)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setSearchOpen(true);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   // Logout function
   const handleLogout = async () => {
@@ -1420,6 +1436,19 @@ export default function Navigation() {
           </nav>
 
           <div className="flex flex-wrap items-center gap-2 lg:gap-4">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setSearchOpen(true)}
+              className="gap-2"
+              data-testid="button-open-search"
+            >
+              <Search className="h-4 w-4" />
+              <span className="hidden md:inline">Search</span>
+              <kbd className="hidden md:inline px-2 py-0.5 text-xs border rounded bg-gray-50">
+                {navigator.platform.includes('Mac') ? '⌘K' : 'Ctrl+K'}
+              </kbd>
+            </Button>
             <InstallPWAButton />
             <span className="text-sm text-gray-600">
               Manufacturing ERP System
@@ -1450,6 +1479,8 @@ export default function Navigation() {
           </div>
         </div>
       </div>
+      
+      <GlobalSearch open={searchOpen} onOpenChange={setSearchOpen} />
     </header>
   );
 }

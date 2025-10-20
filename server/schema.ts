@@ -3996,4 +3996,46 @@ export const insertMagicLinkTokenSchema = createInsertSchema(
 export type MagicLinkToken = typeof magicLinkTokens.$inferSelect;
 export type InsertMagicLinkToken = z.infer<typeof insertMagicLinkTokenSchema>;
 
+// Bulk Shipping Schemas - For API requests/responses (not stored in DB)
+export const receiverAccountSchema = z.object({
+  accountNumber: z.string().min(1, 'Account number is required'),
+  zipCode: z.string().min(5, 'ZIP code is required'),
+});
+
+export const bulkShipmentPreferenceSchema = z.object({
+  orderId: z.string(),
+  serviceCode: z.string().default('03'), // UPS Ground default
+  billingOption: z.enum(['sender', 'receiver']).default('sender'),
+  receiverAccount: receiverAccountSchema.optional(),
+  declaredValue: z.number().default(100), // Insurance amount in dollars
+});
+
+export const bulkRatesRequestSchema = z.object({
+  orderIds: z.array(z.string()).min(1, 'At least one order required'),
+  packageDefaults: z.object({
+    weight: z.number().min(0.1).default(5),
+    length: z.number().min(1).default(12),
+    width: z.number().min(1).default(12),
+    height: z.number().min(1).default(12),
+    declaredValue: z.number().min(0).default(100),
+  }),
+  applyServiceToAll: z.boolean().default(true), // If true, use same service for all orders
+});
+
+export const bulkLabelRequestSchema = z.object({
+  shipments: z.array(bulkShipmentPreferenceSchema).min(1),
+  packageDefaults: z.object({
+    weight: z.number().min(0.1),
+    length: z.number().min(1),
+    width: z.number().min(1),
+    height: z.number().min(1),
+  }),
+});
+
+// Types for bulk shipping
+export type ReceiverAccount = z.infer<typeof receiverAccountSchema>;
+export type BulkShipmentPreference = z.infer<typeof bulkShipmentPreferenceSchema>;
+export type BulkRatesRequest = z.infer<typeof bulkRatesRequestSchema>;
+export type BulkLabelRequest = z.infer<typeof bulkLabelRequestSchema>;
+
 export * from './calendar.schema';

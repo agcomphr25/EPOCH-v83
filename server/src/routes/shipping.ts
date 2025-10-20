@@ -1267,4 +1267,231 @@ router.post('/add-tracking/:orderId', async (req: Request, res: Response) => {
   }
 });
 
+// Bulk Shipping - Get rates for multiple orders
+router.post('/bulk/rates', async (req: Request, res: Response) => {
+  try {
+    const { orderIds, packageDefaults } = req.body;
+
+    if (!orderIds || !Array.isArray(orderIds) || orderIds.length === 0) {
+      return res.status(400).json({ error: 'orderIds array is required' });
+    }
+
+    // Fetch all orders with their shipping addresses
+    const ordersWithRates = [];
+
+    for (const orderId of orderIds) {
+      try {
+        // Get order data
+        let order = await storage.getFinalizedOrderById(orderId);
+        if (!order) {
+          order = await storage.getOrderDraft(orderId);
+        }
+
+        if (!order) {
+          ordersWithRates.push({
+            orderId,
+            error: 'Order not found',
+            rates: [],
+          });
+          continue;
+        }
+
+        // Get shipping address
+        let shippingAddress: any = null;
+        if (order.customerId) {
+          const addresses = await storage.getCustomerAddresses(order.customerId);
+          if (order.hasAltShipTo && order.altShipToAddress) {
+            const altAddr = order.altShipToAddress as any;
+            shippingAddress = {
+              city: altAddr?.city || '',
+              state: altAddr?.state || '',
+              zipCode: altAddr?.zip || altAddr?.zipCode || '',
+              country: altAddr?.country || 'US',
+            };
+          } else if (addresses.length > 0) {
+            shippingAddress = {
+              city: addresses[0].city || '',
+              state: addresses[0].state || '',
+              zipCode: addresses[0].zipCode || '',
+              country: addresses[0].country || 'US',
+            };
+          }
+        }
+
+        if (!shippingAddress || !shippingAddress.zipCode) {
+          ordersWithRates.push({
+            orderId,
+            error: 'No shipping address found',
+            rates: [],
+          });
+          continue;
+        }
+
+        // Fetch UPS rates
+        const ratesResponse = await axios.post('/api/shipping/get-rates-oauth', {
+          shipTo: shippingAddress,
+          packageWeight: packageDefaults.weight || 5,
+          packageDimensions: {
+            length: packageDefaults.length || 12,
+            width: packageDefaults.width || 12,
+            height: packageDefaults.height || 12,
+          },
+          declaredValue: packageDefaults.declaredValue || 100,
+        });
+
+        ordersWithRates.push({
+          orderId,
+          customer: order.customerId,
+          shippingAddress,
+          rates: ratesResponse.data.rates || [],
+        });
+      } catch (orderError: any) {
+        console.error(`Error fetching rates for order ${orderId}:`, orderError);
+        ordersWithRates.push({
+          orderId,
+          error: orderError.message || 'Failed to fetch rates',
+          rates: [],
+        });
+      }
+    }
+
+    res.json({ orders: ordersWithRates });
+  } catch (error) {
+    console.error('Error in bulk rates:', error);
+    res.status(500).json({ error: 'Failed to fetch bulk rates' });
+  }
+});
+
+// Bulk Shipping - Create labels for multiple orders
+router.post('/bulk/create-labels', async (req: Request, res: Response) => {
+  try {
+    const { shipments, packageDefaults } = req.body;
+
+    if (!shipments || !Array.isArray(shipments) || shipments.length === 0) {
+      return res.status(400).json({ error: 'shipments array is required' });
+    }
+
+    const results = [];
+
+    for (const shipment of shipments) {
+      try {
+        const { orderId, serviceCode, billingOption, receiverAccount, declaredValue } = shipment;
+
+        // Get order data
+        let order = await storage.getFinalizedOrderById(orderId);
+        if (!order) {
+          order = await storage.getOrderDraft(orderId);
+        }
+
+        if (!order) {
+          results.push({
+            orderId,
+            success: false,
+            error: 'Order not found',
+          });
+          continue;
+        }
+
+        // Validate receiver billing if required
+        if (billingOption === 'receiver') {
+          if (!receiverAccount || !receiverAccount.accountNumber || !receiverAccount.zipCode) {
+            results.push({
+              orderId,
+              success: false,
+              error: 'Receiver account number and ZIP code are required for bill-to-receiver',
+            });
+            continue;
+          }
+        }
+
+        // Get shipping address
+        let shippingAddress: any = null;
+        let customer: any = null;
+        if (order.customerId) {
+          customer = await storage.getCustomer(parseInt(order.customerId));
+          const addresses = await storage.getCustomerAddresses(order.customerId);
+          
+          if (order.hasAltShipTo && order.altShipToAddress) {
+            const altAddr = order.altShipToAddress as any;
+            shippingAddress = {
+              name: order.altShipToName || customer?.name || '',
+              company: order.altShipToCompany || '',
+              street: altAddr?.street || '',
+              city: altAddr?.city || '',
+              state: altAddr?.state || '',
+              zipCode: altAddr?.zip || altAddr?.zipCode || '',
+              country: altAddr?.country || 'US',
+            };
+          } else if (addresses.length > 0) {
+            shippingAddress = {
+              name: customer?.name || '',
+              company: customer?.company || '',
+              street: addresses[0].street || '',
+              city: addresses[0].city || '',
+              state: addresses[0].state || '',
+              zipCode: addresses[0].zipCode || '',
+              country: addresses[0].country || 'US',
+            };
+          }
+        }
+
+        if (!shippingAddress || !shippingAddress.zipCode) {
+          results.push({
+            orderId,
+            success: false,
+            error: 'No shipping address found',
+          });
+          continue;
+        }
+
+        // Create label using existing endpoint
+        const labelResponse = await axios.post('/api/shipping/create-label', {
+          orderId,
+          shipTo: shippingAddress,
+          packageWeight: packageDefaults.weight || 5,
+          packageDimensions: {
+            length: packageDefaults.length || 12,
+            width: packageDefaults.width || 12,
+            height: packageDefaults.height || 12,
+          },
+          declaredValue: declaredValue || packageDefaults.declaredValue || 100,
+          serviceType: serviceCode || '03',
+          billingOption: billingOption || 'sender',
+          receiverAccount: billingOption === 'receiver' ? receiverAccount : undefined,
+        });
+
+        results.push({
+          orderId,
+          success: true,
+          trackingNumber: labelResponse.data.trackingNumber,
+          labelImage: labelResponse.data.labelImage,
+        });
+      } catch (shipmentError: any) {
+        console.error(`Error creating label for order ${shipment.orderId}:`, shipmentError);
+        results.push({
+          orderId: shipment.orderId,
+          success: false,
+          error: shipmentError.response?.data?.error || shipmentError.message || 'Failed to create label',
+        });
+      }
+    }
+
+    // Count successes and failures
+    const successful = results.filter(r => r.success).length;
+    const failed = results.filter(r => !r.success).length;
+
+    res.json({
+      summary: {
+        total: results.length,
+        successful,
+        failed,
+      },
+      results,
+    });
+  } catch (error) {
+    console.error('Error in bulk label creation:', error);
+    res.status(500).json({ error: 'Failed to create bulk labels' });
+  }
+});
+
 export default router;

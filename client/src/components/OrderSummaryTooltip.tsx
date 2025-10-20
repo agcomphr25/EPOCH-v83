@@ -243,7 +243,7 @@ export default function OrderSummaryTooltip({
                     <FileText className="h-4 w-4 text-gray-500" />
                     <span>Notes</span>
                   </div>
-                  <div className="text-sm text-gray-600 ml-6 bg-gray-50 p-2 rounded">
+                  <div className="text-sm text-gray-600 ml-6 bg-yellow-50 p-2 rounded">
                     {order.notes}
                   </div>
                 </div>

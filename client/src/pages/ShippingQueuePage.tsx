@@ -219,15 +219,6 @@ export default function ShippingQueuePage() {
     });
   }, [allOrders]);
 
-  // Enrich shipping orders with computed shipping addresses for bulk shipping
-  const enrichedShippingOrders = useMemo(() => {
-    return shippingOrders.map(order => ({
-      ...order,
-      shippingAddress: getOrderShippingAddress(order),
-      shippingCustomerInfo: getOrderShippingCustomerInfo(order)
-    }));
-  }, [shippingOrders]);
-
   // Categorize orders by due date
   const categorizedOrders = useMemo(() => {
     const today = new Date();
@@ -446,6 +437,15 @@ export default function ShippingQueuePage() {
     // Fallback to original customer info
     return getCustomerInfo(order.customerId);
   };
+
+  // Enrich shipping orders with computed shipping addresses for bulk shipping
+  const enrichedShippingOrders = useMemo(() => {
+    return shippingOrders.map(order => ({
+      ...order,
+      shippingAddress: getOrderShippingAddress(order),
+      shippingCustomerInfo: getOrderShippingCustomerInfo(order)
+    }));
+  }, [shippingOrders]);
 
   const handleOrderSelection = (orderId: string, checked: boolean) => {
     if (checked) {

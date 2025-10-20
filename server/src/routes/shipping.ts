@@ -499,43 +499,68 @@ function buildUPSShipmentPayload(details: any) {
 // Create shipping label using UPS API
 router.post('/create-label', async (req: Request, res: Response) => {
   try {
-    const { orderId, shipTo, packageDetails, billingOption, receiverAccount } =
-      req.body;
+    const { 
+      orderId, 
+      shipTo, 
+      shipToAddress,
+      shipFromAddress,
+      packageDetails, 
+      packageWeight,
+      packageDimensions,
+      billingOption, 
+      receiverAccount, 
+      serviceType,
+      reference1,
+      reference2
+    } = req.body;
 
     console.log(
       '⚡ Creating UPS label for:',
       orderId,
       'billing:',
-      billingOption
+      billingOption,
+      'service:',
+      serviceType || '03'
     );
+
+    // Support both old and new request formats
+    const finalShipToAddress = shipToAddress || (shipTo ? {
+      name: shipTo.name,
+      street: shipTo.street,
+      city: shipTo.city,
+      state: shipTo.state,
+      zipCode: shipTo.zip,
+      country: shipTo.country || 'US',
+      phone: shipTo.phone || '',
+    } : null);
+
+    const finalShipFromAddress = shipFromAddress || {
+      name: process.env.SHIP_FROM_NAME || 'AG Composites',
+      company: process.env.SHIP_FROM_NAME || 'AG Composites',
+      contact: process.env.SHIP_FROM_ATTENTION || 'Shipping',
+      street: process.env.SHIP_FROM_ADDRESS1 || '230 Hamer Rd.',
+      city: process.env.SHIP_FROM_CITY || 'Owens Crossroads',
+      state: process.env.SHIP_FROM_STATE || 'AL',
+      zipCode: process.env.SHIP_FROM_POSTAL || '35763',
+      country: 'US',
+      phone: process.env.SHIP_FROM_PHONE || '256-723-8381',
+    };
+
+    const finalPackageWeight = packageWeight || packageDetails?.weight;
+    const finalPackageDimensions = packageDimensions || packageDetails?.dimensions;
 
     // Build shipment details from request body
     const shipmentDetails = {
       orderId,
-      shipToAddress: {
-        name: shipTo.name,
-        street: shipTo.street,
-        city: shipTo.city,
-        state: shipTo.state,
-        zipCode: shipTo.zip,
-        country: shipTo.country || 'US',
-        phone: shipTo.phone || '',
-      },
-      shipFromAddress: {
-        name: process.env.SHIP_FROM_NAME || 'AG Composites',
-        company: process.env.SHIP_FROM_NAME || 'AG Composites',
-        contact: process.env.SHIP_FROM_ATTENTION || 'Shipping',
-        street: process.env.SHIP_FROM_ADDRESS1 || '230 Hamer Rd.',
-        city: process.env.SHIP_FROM_CITY || 'Owens Crossroads',
-        state: process.env.SHIP_FROM_STATE || 'AL',
-        zipCode: process.env.SHIP_FROM_POSTAL || '35763',
-        country: 'US',
-        phone: process.env.SHIP_FROM_PHONE || '256-723-8381',
-      },
-      packageWeight: packageDetails.weight,
-      packageDimensions: packageDetails.dimensions,
+      shipToAddress: finalShipToAddress,
+      shipFromAddress: finalShipFromAddress,
+      packageWeight: finalPackageWeight,
+      packageDimensions: finalPackageDimensions,
       billingOption,
       receiverAccount,
+      serviceType: serviceType || '03', // Use selected service or default to UPS Ground
+      reference1,
+      reference2,
     };
 
     // Validate required UPS OAuth credentials (2024+ API)
@@ -642,7 +667,7 @@ router.post('/create-label', async (req: Request, res: Response) => {
           const updateData = {
             trackingNumber,
             shippingCarrier: 'UPS',
-            shippingMethod: getServiceName('03'),
+            shippingMethod: getServiceName(serviceType || '03'),
             shippingCost: shipmentCost ? parseFloat(shipmentCost) : null,
             labelGenerated: true,
             labelGeneratedAt: new Date(),
@@ -1150,7 +1175,7 @@ function buildUPSShipmentPayloadOAuth(
           },
         },
         Service: {
-          Code: '03', // UPS Ground
+          Code: shipmentDetails.serviceType || '03', // Use selected service or default to UPS Ground
         },
         Package: {
           Description: `Order ${shipmentDetails.orderId}`,
@@ -1171,6 +1196,10 @@ function buildUPSShipmentPayloadOAuth(
             },
             Weight: shipmentDetails.packageWeight.toString(),
           },
+          ReferenceNumber: [
+            shipmentDetails.reference1 ? { Code: '01', Value: shipmentDetails.reference1 } : undefined,
+            shipmentDetails.reference2 ? { Code: '02', Value: shipmentDetails.reference2 } : undefined,
+          ].filter(Boolean),
         },
         LabelSpecification: {
           LabelImageFormat: {

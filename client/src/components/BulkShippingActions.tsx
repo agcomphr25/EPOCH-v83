@@ -68,9 +68,13 @@ export function BulkShippingActions({
     zipCode: '',
   });
 
+  // Filter enriched orders (which include computed shipping addresses)
   const selectedOrdersData = shippingOrders.filter((order) =>
     selectedOrders.includes(order.orderId)
   );
+  
+  console.log('📦 BulkShippingActions received shippingOrders:', shippingOrders.length);
+  console.log('📦 Sample order has shippingAddress?', shippingOrders[0]?.shippingAddress ? 'YES' : 'NO');
 
   // Validate all orders have same shipping address
   useEffect(() => {

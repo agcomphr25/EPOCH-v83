@@ -440,12 +440,17 @@ export default function ShippingQueuePage() {
 
   // Enrich shipping orders with computed shipping addresses for bulk shipping
   const enrichedShippingOrders = useMemo(() => {
+    // Don't enrich if customer addresses aren't loaded yet
+    if (Object.keys(customerAddressesMap).length === 0 && uniqueCustomerIds.length > 0) {
+      return shippingOrders;
+    }
+    
     return shippingOrders.map(order => ({
       ...order,
       shippingAddress: getOrderShippingAddress(order),
       shippingCustomerInfo: getOrderShippingCustomerInfo(order)
     }));
-  }, [shippingOrders]);
+  }, [shippingOrders, customerAddressesMap]);
 
   const handleOrderSelection = (orderId: string, checked: boolean) => {
     if (checked) {

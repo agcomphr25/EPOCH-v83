@@ -1173,6 +1173,90 @@ export default function VendorManagement() {
                       />
                     </div>
 
+                    {/* Delivery Evaluation */}
+                    <div className="border rounded-lg p-4 bg-gray-50">
+                      <h4 className="font-semibold text-lg mb-3">2. Delivery Performance</h4>
+                      <p className="text-sm text-gray-600 mb-4">
+                        Evaluate the supplier's delivery timeliness and order frequency:
+                      </p>
+                      
+                      <div className="space-y-4">
+                        {/* Delivery Rating */}
+                        <FormField
+                          control={form.control}
+                          name="notes"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Delivery Rating *</FormLabel>
+                              <Select
+                                onValueChange={(value) => {
+                                  field.onChange(`Delivery Rating: ${value}\n${field.value || ''}`);
+                                }}
+                              >
+                                <FormControl>
+                                  <SelectTrigger data-testid="select-delivery-rating">
+                                    <SelectValue placeholder="Select delivery performance..." />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  <SelectItem value="1">
+                                    1 - On-time delivery (+/- 2 days)
+                                  </SelectItem>
+                                  <SelectItem value="2">
+                                    2 - Slightly late (3-4 days past promised date)
+                                  </SelectItem>
+                                  <SelectItem value="3">
+                                    3 - Significantly late (5+ days past promised date)
+                                  </SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <FormMessage />
+                              <p className="text-xs text-gray-500 mt-1">
+                                Rating may be adjusted after 3 months of consistent improvement
+                              </p>
+                            </FormItem>
+                          )}
+                        />
+
+                        {/* Delivery Occurrence */}
+                        <FormField
+                          control={form.control}
+                          name="notes"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Order Frequency *</FormLabel>
+                              <Select
+                                onValueChange={(value) => {
+                                  field.onChange(`Order Frequency: ${value}\n${field.value || ''}`);
+                                }}
+                              >
+                                <FormControl>
+                                  <SelectTrigger data-testid="select-delivery-occurrence">
+                                    <SelectValue placeholder="Select order frequency..." />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  <SelectItem value="1">
+                                    1 - Infrequent orders (every 7+ months)
+                                  </SelectItem>
+                                  <SelectItem value="2">
+                                    2 - Occasional orders (2-6 months)
+                                  </SelectItem>
+                                  <SelectItem value="3">
+                                    3 - Frequent orders (1 week - 1 month)
+                                  </SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <FormMessage />
+                              <p className="text-xs text-gray-500 mt-1">
+                                How often do we order from this supplier?
+                              </p>
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                    </div>
+
                     <FormField
                       control={form.control}
                       name="notes"

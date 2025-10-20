@@ -18,6 +18,7 @@ import { useToast } from '@/hooks/use-toast';
 interface ShippingActionsProps {
   orderId: string;
   orderData?: any;
+  onCreateLabel?: () => void;
 }
 
 interface ShippingAddress {
@@ -35,7 +36,7 @@ interface PackageDetails {
   height: string;
 }
 
-export function ShippingActions({ orderId, orderData }: ShippingActionsProps) {
+export function ShippingActions({ orderId, orderData, onCreateLabel }: ShippingActionsProps) {
   const { toast } = useToast();
   const [isGeneratingQC, setIsGeneratingQC] = useState(false);
   const [isGeneratingSO, setIsGeneratingSO] = useState(false);
@@ -206,154 +207,17 @@ export function ShippingActions({ orderId, orderData }: ShippingActionsProps) {
         {isGeneratingSO ? 'Generating...' : 'Sales Order'}
       </Button>
 
-      {/* Shipping Label Button */}
-      <Dialog open={shippingDialogOpen} onOpenChange={setShippingDialogOpen}>
-        <DialogTrigger asChild>
-          <Button size="default" variant="outline" className="flex-1 h-12">
-            <Truck className="h-4 w-4 mr-2" />
-            Shipping Label
-          </Button>
-        </DialogTrigger>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Generate UPS Shipping Label</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label className="text-sm font-medium">Shipping Address</Label>
-              <div className="space-y-2 mt-2">
-                <Input
-                  placeholder="Customer Name"
-                  value={shippingAddress.name}
-                  onChange={(e) =>
-                    setShippingAddress({
-                      ...shippingAddress,
-                      name: e.target.value,
-                    })
-                  }
-                />
-                <Input
-                  placeholder="Street Address"
-                  value={shippingAddress.street}
-                  onChange={(e) =>
-                    setShippingAddress({
-                      ...shippingAddress,
-                      street: e.target.value,
-                    })
-                  }
-                />
-                <div className="grid grid-cols-2 gap-2">
-                  <Input
-                    placeholder="City"
-                    value={shippingAddress.city}
-                    onChange={(e) =>
-                      setShippingAddress({
-                        ...shippingAddress,
-                        city: e.target.value,
-                      })
-                    }
-                  />
-                  <Input
-                    placeholder="State"
-                    value={shippingAddress.state}
-                    onChange={(e) =>
-                      setShippingAddress({
-                        ...shippingAddress,
-                        state: e.target.value,
-                      })
-                    }
-                  />
-                </div>
-                <Input
-                  placeholder="ZIP Code"
-                  value={shippingAddress.zip}
-                  onChange={(e) =>
-                    setShippingAddress({
-                      ...shippingAddress,
-                      zip: e.target.value,
-                    })
-                  }
-                />
-              </div>
-            </div>
-
-            <div>
-              <Label className="text-sm font-medium">Package Details</Label>
-              <div className="space-y-2 mt-2">
-                <Input
-                  placeholder="Weight (lbs)"
-                  value={packageDetails.weight}
-                  onChange={(e) =>
-                    setPackageDetails({
-                      ...packageDetails,
-                      weight: e.target.value,
-                    })
-                  }
-                />
-                <div className="grid grid-cols-3 gap-2">
-                  <Input
-                    placeholder="Length"
-                    value={packageDetails.length}
-                    onChange={(e) =>
-                      setPackageDetails({
-                        ...packageDetails,
-                        length: e.target.value,
-                      })
-                    }
-                  />
-                  <Input
-                    placeholder="Width"
-                    value={packageDetails.width}
-                    onChange={(e) =>
-                      setPackageDetails({
-                        ...packageDetails,
-                        width: e.target.value,
-                      })
-                    }
-                  />
-                  <Input
-                    placeholder="Height"
-                    value={packageDetails.height}
-                    onChange={(e) =>
-                      setPackageDetails({
-                        ...packageDetails,
-                        height: e.target.value,
-                      })
-                    }
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="flex gap-2 pt-4">
-              <Button
-                variant="outline"
-                onClick={() => setShippingDialogOpen(false)}
-                className="flex-1"
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={handleShippingLabel}
-                disabled={
-                  isGeneratingLabel ||
-                  !shippingAddress.name ||
-                  !shippingAddress.street ||
-                  !packageDetails.weight
-                }
-                className="flex-1"
-              >
-                {isGeneratingLabel ? 'Generating...' : 'Generate Label'}
-              </Button>
-            </div>
-
-            <div className="text-xs text-gray-500 bg-green-50 p-2 rounded">
-              <strong>Note:</strong> Adjust weight and dimensions above, then
-              generate real UPS shipping labels with authentic tracking numbers.
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+      {/* UPS Shipping Label Button - Opens New Label Creator */}
+      <Button
+        size="default"
+        variant="outline"
+        onClick={onCreateLabel}
+        className="flex-1 h-12"
+        data-testid="button-create-shipping-label"
+      >
+        <Truck className="h-4 w-4 mr-2" />
+        Create Shipping Label
+      </Button>
     </div>
   );
 }

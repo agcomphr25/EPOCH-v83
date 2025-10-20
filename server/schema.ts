@@ -2191,6 +2191,7 @@ export const vendors = pgTable('vendors', {
   state: text('state'),
   zipCode: text('zip_code'),
   country: text('country').default('United States'),
+  scope: text('scope'), // Materials/products vendor is approved to supply
   approved: boolean('approved').notNull().default(false),
   evaluated: boolean('evaluated').notNull().default(false),
   evaluationDate: date('evaluation_date'),
@@ -2211,19 +2212,6 @@ export const vendorContacts = pgTable('vendor_contacts', {
   phone: text('phone'),
   isPrimary: boolean('is_primary').default(false),
   notes: text('notes'),
-  isActive: boolean('is_active').default(true),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at').defaultNow().notNull(),
-});
-
-export const vendorScope = pgTable('vendor_scope', {
-  id: serial('id').primaryKey(),
-  vendorId: integer('vendor_id')
-    .references(() => vendors.id)
-    .notNull(),
-  materialType: text('material_type').notNull(), // CF, FG, Hybrid, etc.
-  productType: text('product_type'), // Stock type or material category
-  description: text('description'),
   isActive: boolean('is_active').default(true),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
@@ -2339,6 +2327,7 @@ export const insertVendorSchema = createInsertSchema(vendors)
     state: z.string().optional(),
     zipCode: z.string().optional(),
     country: z.string().optional(),
+    scope: z.string().optional(),
     approved: z.boolean().default(false),
     evaluated: z.boolean().default(false),
     evaluationDate: z.string().optional().nullable(),
@@ -2367,20 +2356,6 @@ export const insertVendorContactSchema = createInsertSchema(vendorContacts)
     phone: z.string().optional(),
     isPrimary: z.boolean().default(false),
     notes: z.string().optional(),
-    isActive: z.boolean().default(true),
-  });
-
-export const insertVendorScopeSchema = createInsertSchema(vendorScope)
-  .omit({
-    id: true,
-    createdAt: true,
-    updatedAt: true,
-  })
-  .extend({
-    vendorId: z.number().int(),
-    materialType: z.string().min(1, 'Material type is required'),
-    productType: z.string().optional(),
-    description: z.string().optional(),
     isActive: z.boolean().default(true),
   });
 
@@ -2526,8 +2501,6 @@ export type InsertVendor = z.infer<typeof insertVendorSchema>;
 export type Vendor = typeof vendors.$inferSelect;
 export type InsertVendorContact = z.infer<typeof insertVendorContactSchema>;
 export type VendorContact = typeof vendorContacts.$inferSelect;
-export type InsertVendorScope = z.infer<typeof insertVendorScopeSchema>;
-export type VendorScope = typeof vendorScope.$inferSelect;
 
 // Types for Module 17 - Nonconformance
 export type InsertNonconformanceRecord = z.infer<

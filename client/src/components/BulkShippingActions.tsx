@@ -184,6 +184,7 @@ export function BulkShippingActions({
           width: packageDetails.width,
           height: packageDetails.height,
         },
+        isResidential: !shippingAddress.company,
       });
 
       setAvailableRates(response.data.rates || []);

@@ -511,7 +511,8 @@ router.post('/create-label', async (req: Request, res: Response) => {
       receiverAccount, 
       serviceType,
       reference1,
-      reference2
+      reference2,
+      isResidential
     } = req.body;
 
     console.log(
@@ -520,7 +521,8 @@ router.post('/create-label', async (req: Request, res: Response) => {
       'billing:',
       billingOption,
       'service:',
-      serviceType || '03'
+      serviceType || '03',
+      isResidential ? '(Residential)' : '(Commercial)'
     );
 
     // Support both old and new request formats
@@ -561,6 +563,7 @@ router.post('/create-label', async (req: Request, res: Response) => {
       serviceType: serviceType || '03', // Use selected service or default to UPS Ground
       reference1,
       reference2,
+      isResidential,
     };
 
     // Validate required UPS OAuth credentials (2024+ API)
@@ -823,10 +826,10 @@ function getServiceName(serviceCode: string): string {
 // Get UPS service rates for an address
 router.post('/get-rates', async (req: Request, res: Response) => {
   try {
-    const { shipToAddress, shipFromAddress, packageWeight, packageDimensions } =
+    const { shipToAddress, shipFromAddress, packageWeight, packageDimensions, isResidential } =
       req.body;
 
-    console.log('⚡ Getting UPS rates...');
+    console.log('⚡ Getting UPS rates...', isResidential ? '(Residential)' : '(Commercial)');
 
     // Validate OAuth credentials (2024+ API)
     const upsClientId = process.env.UPS_CLIENT_ID?.trim();
@@ -890,6 +893,7 @@ router.post('/get-rates', async (req: Request, res: Response) => {
               StateProvinceCode: convertStateToAbbreviation(shipToAddress.state),
               PostalCode: (shipToAddress.zipCode || '').replace(/\D/g, ''),
               CountryCode: getCountryCode(shipToAddress.country),
+              ResidentialAddressIndicator: isResidential ? '' : undefined,
             },
           },
           ShipFrom: {
@@ -1193,6 +1197,7 @@ function buildUPSShipmentPayloadOAuth(
               ''
             ),
             CountryCode: shipmentDetails.shipToAddress.country || 'US',
+            ResidentialAddressIndicator: shipmentDetails.isResidential ? '' : undefined,
           },
         },
         PaymentInformation: {

@@ -75,15 +75,22 @@ export function BulkShippingActions({
   // Validate all orders have same shipping address
   useEffect(() => {
     if (dialogOpen && selectedOrders.length > 0) {
+      console.log('🔍 Validating addresses for orders:', selectedOrders);
+      console.log('🔍 Selected orders data:', selectedOrdersData);
+      
       const addresses = selectedOrdersData.map(order => {
         // Use the enriched shippingAddress from parent component
         const addr = order.shippingAddress;
+        console.log(`🔍 Order ${order.orderId} shipping address:`, addr);
         if (!addr) return null;
         return `${addr.street || ''}|${addr.city || ''}|${addr.state || ''}|${addr.zipCode || ''}`;
       });
 
+      console.log('🔍 Raw addresses:', addresses);
       const validAddresses = addresses.filter(addr => addr && addr !== '|||');
+      console.log('🔍 Valid addresses:', validAddresses);
       const uniqueAddresses = [...new Set(validAddresses)];
+      console.log('🔍 Unique addresses:', uniqueAddresses);
       
       let newValidation;
       if (validAddresses.length === 0) {
@@ -93,6 +100,8 @@ export function BulkShippingActions({
       } else {
         newValidation = { valid: true, message: `All ${selectedOrders.length} orders shipping to same address` };
       }
+      
+      console.log('🔍 Validation result:', newValidation);
       
       // Only update if validation result actually changed
       setAddressValidation(prev => {

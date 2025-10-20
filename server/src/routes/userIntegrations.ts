@@ -1,5 +1,5 @@
 import { Router, type Request, type Response } from 'express';
-import { requireAuth } from '../../middleware/auth';
+import { authenticateToken } from '../../middleware/auth';
 import { db } from '../../db';
 import { DatabaseStorage } from '../../storage';
 import { insertUserIntegrationSchema } from '../../schema';
@@ -9,9 +9,9 @@ const router = Router();
 const storage = new DatabaseStorage();
 
 // Get all integrations for the current user
-router.get('/', requireAuth, async (req: Request, res: Response) => {
+router.get('/', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).userId;
+    const userId = req.user!.id;
     const integrations = await storage.getUserIntegrations(userId);
     res.json(integrations);
   } catch (error) {
@@ -21,9 +21,9 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
 });
 
 // Get a specific integration for the current user
-router.get('/:integrationType', requireAuth, async (req: Request, res: Response) => {
+router.get('/:integrationType', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).userId;
+    const userId = req.user!.id;
     const { integrationType } = req.params;
     const integration = await storage.getUserIntegration(userId, integrationType);
     
@@ -39,9 +39,9 @@ router.get('/:integrationType', requireAuth, async (req: Request, res: Response)
 });
 
 // Create or update an integration
-router.post('/', requireAuth, async (req: Request, res: Response) => {
+router.post('/', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).userId;
+    const userId = req.user!.id;
     const data = insertUserIntegrationSchema.parse({
       ...req.body,
       userId,
@@ -59,9 +59,9 @@ router.post('/', requireAuth, async (req: Request, res: Response) => {
 });
 
 // Delete an integration
-router.delete('/:integrationType', requireAuth, async (req: Request, res: Response) => {
+router.delete('/:integrationType', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).userId;
+    const userId = req.user!.id;
     const { integrationType } = req.params;
     
     await storage.deleteUserIntegration(userId, integrationType);

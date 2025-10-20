@@ -657,8 +657,12 @@ router.post('/create-label', async (req: Request, res: Response) => {
       shipmentResults?.PackageResults?.[0]?.ShippingLabel?.GraphicImage ||
       shipmentResults?.PackageResults?.ShippingLabel?.GraphicImage;
     const trackingNumber = shipmentResults?.ShipmentIdentificationNumber;
-    const shipmentCost =
-      shipmentResults?.ShipmentCharges?.TotalCharges?.MonetaryValue;
+    // Use negotiated rate if available, otherwise use retail rate
+    const negotiatedCost = shipmentResults?.NegotiatedRateCharges?.TotalCharge?.MonetaryValue;
+    const retailCost = shipmentResults?.ShipmentCharges?.TotalCharges?.MonetaryValue;
+    const shipmentCost = negotiatedCost || retailCost;
+    
+    console.log(`⚡ Shipment cost - Negotiated: ${negotiatedCost || 'N/A'}, Retail: ${retailCost || 'N/A'}, Using: ${shipmentCost || 'N/A'}`);
 
     if (labelBase64 && trackingNumber) {
       // Update order with tracking information
@@ -897,6 +901,9 @@ router.post('/get-rates', async (req: Request, res: Response) => {
               CountryCode: getCountryCode(shipFromAddress.country),
             },
           },
+          ShipmentRatingOptions: {
+            NegotiatedRatesIndicator: '',
+          },
           Package: {
             PackagingType: {
               Code: '02', // Customer Package
@@ -951,14 +958,24 @@ router.post('/get-rates', async (req: Request, res: Response) => {
       const rates = Array.isArray(ratedShipments)
         ? ratedShipments
         : [ratedShipments];
-      const formattedRates = rates.map((rate: any) => ({
-        serviceCode: rate.Service?.Code,
-        serviceName: getServiceName(rate.Service?.Code),
-        totalCharges: parseFloat(rate.TotalCharges?.MonetaryValue || '0'),
-        currency: rate.TotalCharges?.CurrencyCode || 'USD',
-        guaranteedDaysToDelivery: rate.GuaranteedDaysToDelivery,
-        scheduleDeliveryDate: rate.ScheduledDeliveryDate,
-      }));
+      const formattedRates = rates.map((rate: any) => {
+        // Use negotiated rates if available, otherwise fall back to retail rates
+        const negotiatedRate = rate.NegotiatedRateCharges?.TotalCharge?.MonetaryValue;
+        const retailRate = rate.TotalCharges?.MonetaryValue;
+        const finalRate = negotiatedRate || retailRate || '0';
+
+        console.log(`⚡ Service ${rate.Service?.Code}: Negotiated=${negotiatedRate || 'N/A'}, Retail=${retailRate || 'N/A'}, Using=${finalRate}`);
+
+        return {
+          serviceCode: rate.Service?.Code,
+          serviceName: getServiceName(rate.Service?.Code),
+          totalCharges: parseFloat(finalRate),
+          currency: rate.TotalCharges?.CurrencyCode || 'USD',
+          guaranteedDaysToDelivery: rate.GuaranteedDaysToDelivery,
+          scheduleDeliveryDate: rate.ScheduledDeliveryDate,
+          isNegotiatedRate: !!negotiatedRate,
+        };
+      });
 
       console.log(`⚡ Found ${formattedRates.length} shipping rates`);
 
@@ -1185,6 +1202,9 @@ function buildUPSShipmentPayloadOAuth(
               AccountNumber: shipperNumber,
             },
           },
+        },
+        ShipmentRatingOptions: {
+          NegotiatedRatesIndicator: '',
         },
         Service: {
           Code: shipmentDetails.serviceType || '03', // Use selected service or default to UPS Ground
@@ -1439,7 +1459,12 @@ router.post('/bulk/create-consolidated-label', async (req: Request, res: Respons
     const shipmentResults = shipResponse.data?.ShipmentResponse?.ShipmentResults;
     const labelBase64 = shipmentResults?.PackageResults?.[0]?.ShippingLabel?.GraphicImage;
     const trackingNumber = shipmentResults?.ShipmentIdentificationNumber;
-    const shipmentCost = shipmentResults?.ShipmentCharges?.TotalCharges?.MonetaryValue;
+    // Use negotiated rate if available, otherwise use retail rate
+    const negotiatedCost = shipmentResults?.NegotiatedRateCharges?.TotalCharge?.MonetaryValue;
+    const retailCost = shipmentResults?.ShipmentCharges?.TotalCharges?.MonetaryValue;
+    const shipmentCost = negotiatedCost || retailCost;
+    
+    console.log(`⚡ Consolidated shipment cost - Negotiated: ${negotiatedCost || 'N/A'}, Retail: ${retailCost || 'N/A'}, Using: ${shipmentCost || 'N/A'}`);
 
     if (labelBase64 && trackingNumber) {
       console.log(`✅ Consolidated label created with tracking: ${trackingNumber}`);

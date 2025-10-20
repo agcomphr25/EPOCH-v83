@@ -81,6 +81,25 @@ router.put('/:id', async (req: Request, res: Response) => {
     }
 
     const data = insertVendorSchema.partial().parse(req.body);
+    
+    // Auto-update evaluation status if notes contain evaluation data
+    if (data.notes && typeof data.notes === 'string') {
+      const hasQuality = data.notes.includes('Quality:');
+      const hasDelivery = data.notes.includes('Delivery Rating:');
+      const hasCost = data.notes.includes('Cost:');
+      const hasCommunication = data.notes.includes('Communication:');
+      
+      // If all 4 evaluation criteria are present, mark as evaluated
+      if (hasQuality && hasDelivery && hasCost && hasCommunication) {
+        data.evaluated = true;
+        // Set evaluation date to today if not already set
+        if (!data.evaluationDate) {
+          data.evaluationDate = new Date().toISOString().split('T')[0];
+        }
+        console.log(`✅ Vendor ${id} marked as evaluated (all criteria completed)`);
+      }
+    }
+    
     const vendor = await storage.updateVendor(id, data);
     res.json(vendor);
   } catch (error) {

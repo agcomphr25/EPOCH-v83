@@ -2138,10 +2138,10 @@ export default function CustomerManagement() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="standard">Standard</SelectItem>
-                    <SelectItem value="wholesale">Wholesale</SelectItem>
-                    <SelectItem value="dealer">Dealer</SelectItem>
-                    <SelectItem value="oem">OEM</SelectItem>
+                    <SelectItem value="AGR">AGR</SelectItem>
+                    <SelectItem value="Gunbuilder">Gunbuilder</SelectItem>
+                    <SelectItem value="Distributor">Distributor</SelectItem>
+                    <SelectItem value="OEM">OEM</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

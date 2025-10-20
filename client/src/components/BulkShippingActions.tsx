@@ -76,14 +76,17 @@ export function BulkShippingActions({
   useEffect(() => {
     if (dialogOpen && selectedOrders.length > 0) {
       const addresses = selectedOrdersData.map(order => {
-        const addr = order.shippingAddress || order.customer?.addresses?.[0];
-        return addr ? `${addr.street}|${addr.city}|${addr.state}|${addr.zipCode}` : null;
+        // Use the enriched shippingAddress from parent component
+        const addr = order.shippingAddress;
+        if (!addr) return null;
+        return `${addr.street || ''}|${addr.city || ''}|${addr.state || ''}|${addr.zipCode || ''}`;
       });
 
-      const uniqueAddresses = [...new Set(addresses.filter(Boolean))];
+      const validAddresses = addresses.filter(addr => addr && addr !== '|||');
+      const uniqueAddresses = [...new Set(validAddresses)];
       
       let newValidation;
-      if (uniqueAddresses.length === 0) {
+      if (validAddresses.length === 0) {
         newValidation = { valid: false, message: 'No shipping addresses found for selected orders' };
       } else if (uniqueAddresses.length > 1) {
         newValidation = { valid: false, message: 'Selected orders have different shipping addresses. Bulk shipping requires all orders to go to the same address.' };

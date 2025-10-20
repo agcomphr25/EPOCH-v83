@@ -765,7 +765,11 @@ export default function ShippingQueuePage() {
         <BulkShippingActions
           selectedOrders={selectedOrders}
           onClearSelection={clearSelection}
-          shippingOrders={shippingOrders}
+          shippingOrders={shippingOrders.map(order => ({
+            ...order,
+            shippingAddress: getOrderShippingAddress(order),
+            shippingCustomerInfo: getOrderShippingCustomerInfo(order)
+          }))}
         />
       )}
 
@@ -1163,7 +1167,11 @@ export default function ShippingQueuePage() {
               <BulkShippingActions
                 selectedOrders={selectedOrders}
                 onClearSelection={() => setSelectedOrders([])}
-                shippingOrders={shippingOrders}
+                shippingOrders={shippingOrders.map(order => ({
+                  ...order,
+                  shippingAddress: getOrderShippingAddress(order),
+                  shippingCustomerInfo: getOrderShippingCustomerInfo(order)
+                }))}
               />
             </div>
           </div>

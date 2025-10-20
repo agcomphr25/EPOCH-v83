@@ -35,7 +35,7 @@ The application utilizes a monorepo structure with a full-stack TypeScript appro
 -   **Frontend**: React 18, TypeScript, Vite, ShadCN UI, Tailwind CSS, Framer Motion, Wouter.
 -   **Backend**: Express.js, TypeScript, TanStack Query, Zod, Axios.
 -   **Database**: PostgreSQL (Neon serverless), Drizzle ORM, Drizzle-kit.
--   **Key Features**: Order Management (dynamic configuration, vendor contact), Layup Scheduler, Production Queue Manager, Department Manager, Customer Management (CRM, CSV import, address autocomplete), Inventory Management (BOM integration, vendor management), Metal Accessories Tracker, Barcode System, Employee Management (CRUD, portal, time clock), Quality Control (digital signature, checklists), Reporting, Payment Tracking, Shipping Integration, Communications System (inbox, email, SMS), Personalized Dashboards, Training Management System (modules, quizzes, certifications, matrix, enhanced analytics), AI-Powered Smart Sorting, Calendar Integration, and Magic Link Authentication.
+-   **Key Features**: Order Management (dynamic configuration, vendor contact), Layup Scheduler, Production Queue Manager, Department Manager, Customer Management (CRM, CSV import, address autocomplete), Inventory Management (BOM integration, vendor management), Metal Accessories Tracker, Barcode System, Employee Management (CRUD, portal, time clock), Quality Control (digital signature, checklists), Reporting, Payment Tracking, Shipping Integration, Communications System (inbox, email, SMS), Personalized Dashboards, Training Management System (modules, quizzes, certifications, matrix, enhanced analytics), AI-Powered Smart Sorting, Calendar Integration, Magic Link Authentication, and Global Search (unified search across customers, orders, vendors, employees, and inventory).
 
 ## External Dependencies
 
@@ -68,8 +68,24 @@ The application utilizes a monorepo structure with a full-stack TypeScript appro
 
 ## Recent Changes
 
-### October 20, 2025 - Vendor Evaluation System Complete Implementation
+### October 20, 2025 - Global Search System & Vendor Evaluation Complete
 
+#### Global Search Implementation
+- **Navbar Search Button**: Search button with keyboard shortcut display (Cmd/Ctrl+K) in navigation bar
+- **Keyboard Shortcut**: Global Cmd/Ctrl+K shortcut to open search from anywhere
+- **Multi-Entity Search**: Searches across 5 entity types - Customers, Orders, Vendors, Employees, Inventory Items
+- **Smart Results Display**: Grouped results by type with icons, matched field highlighting, and direct navigation
+- **API Endpoint**: `/api/global-search` with debounced queries (300ms) for performance
+- **Search Capabilities**:
+  - Customers: name, company, email, phone
+  - Orders: order ID, customer PO, FB order number, tracking number
+  - Vendors: name, email, phone, address
+  - Employees: name, email, phone, job title
+  - Inventory: AG part number, name, source, supplier part number
+- **UI Features**: Keyboard navigation (arrow keys), Enter to select, Esc to close, clear button
+- **Components**: GlobalSearch.tsx (dialog UI) integrated into Navigation.tsx
+
+#### Vendor Evaluation System
 - **Question-Based Evaluation Form**: Redesigned vendor evaluation tab with accordion-based UI
 - **4 Evaluation Criteria**: Quality (1-8), Delivery (2 questions), Cost (1-5), Communication (1-5)
 - **Automatic Evaluation Status**: Backend automatically marks vendor as "Evaluated" when all 4 criteria are completed
@@ -78,5 +94,4 @@ The application utilizes a monorepo structure with a full-stack TypeScript appro
 - **Implementation Details**:
   - Evaluation scores stored temporarily in notes field with structured format
   - Backend parses notes to detect completion of all criteria
-  - Console logging for audit trail of evaluation completions
   - Monthly reset ensures compliance with monthly evaluation requirements

@@ -71,6 +71,7 @@ const vendorFormSchema = insertVendorSchema.extend({
     .email('Invalid email')
     .optional()
     .or(z.literal('')),
+  scope: z.string().optional(),
   evaluationDate: z.string().optional(),
 });
 
@@ -130,6 +131,7 @@ export default function VendorManagement() {
       email: '',
       additionalEmail: '',
       phone: '',
+      scope: '',
       approved: false,
       evaluated: false,
       evaluationDate: '',
@@ -407,6 +409,7 @@ export default function VendorManagement() {
         zipCode: vendor.zipCode || '',
         country: vendor.country || 'United States',
 
+        scope: vendor.scope || '',
         approved: vendor.approved,
         evaluated: vendor.evaluated,
         evaluationDate: vendor.evaluationDate || '',
@@ -1059,24 +1062,71 @@ export default function VendorManagement() {
 
               {/* Tab 3: Scope - Approved Materials */}
               <TabsContent value="scope" className="space-y-4 mt-4">
-                <div className="text-center py-8 text-gray-500">
-                  <div className="mb-4">
-                    <Package className="w-12 h-12 mx-auto text-gray-400" />
-                  </div>
-                  <h3 className="text-lg font-semibold mb-2">Vendor Scope Management</h3>
-                  <p className="text-sm mb-4">
-                    Define which materials and products this vendor is approved to supply.
-                  </p>
-                  <p className="text-xs text-gray-400">
-                    Scope tracking feature - Coming soon!
-                  </p>
-                  <p className="text-xs text-gray-400 mt-2">
-                    This will allow you to specify approved materials (CF, FG, Hybrid) and product types for this vendor.
-                  </p>
-                  <p className="text-xs text-gray-400 mt-2">
-                    Purchase orders will show "not approved" status if materials aren't in the vendor's scope.
-                  </p>
-                </div>
+                <Form {...form}>
+                  <form
+                    onSubmit={form.handleSubmit(onSubmit)}
+                    className="space-y-4"
+                  >
+                    <div className="bg-blue-50 border border-blue-200 rounded-md p-4 mb-4">
+                      <div className="flex items-start gap-2">
+                        <Package className="w-5 h-5 text-blue-600 mt-0.5" />
+                        <div>
+                          <h4 className="font-semibold text-blue-900">Vendor Scope</h4>
+                          <p className="text-sm text-blue-700">
+                            Define which materials and products this vendor is approved to supply.
+                            Vendor will only show as "Approved" when scope is filled in.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <FormField
+                      control={form.control}
+                      name="scope"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Approved Materials & Products *</FormLabel>
+                          <FormControl>
+                            <Textarea
+                              {...field}
+                              placeholder="Example: CF stocks, FG stocks, Hybrid materials, etc."
+                              rows={6}
+                              data-testid="input-scope"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                          <p className="text-xs text-gray-500">
+                            List the materials, products, and services this vendor is approved to provide.
+                          </p>
+                        </FormItem>
+                      )}
+                    />
+
+                    <DialogFooter>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={handleCloseModal}
+                        data-testid="button-cancel"
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        type="submit"
+                        disabled={
+                          createVendorMutation.isPending ||
+                          updateVendorMutation.isPending
+                        }
+                        data-testid="button-save"
+                      >
+                        {createVendorMutation.isPending ||
+                        updateVendorMutation.isPending
+                          ? 'Saving...'
+                          : 'Save'}
+                      </Button>
+                    </DialogFooter>
+                  </form>
+                </Form>
               </TabsContent>
 
               {/* Tab 4: Evaluation & Notes */}
@@ -1407,7 +1457,7 @@ export default function VendorManagement() {
                       {vendor.phone || '—'}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">
-                      {vendor.approved ? (
+                      {vendor.scope && vendor.scope.trim().length > 0 ? (
                         <div className="flex items-center gap-1 text-green-600">
                           <CheckCircle className="w-4 h-4" />
                           <span className="text-xs">Yes</span>

@@ -247,7 +247,7 @@ export default function ShippingLabelPage() {
             Invalid Order
           </h1>
           <p className="mb-4">No order ID provided</p>
-          <Button onClick={() => setLocation('/shipping')}>
+          <Button onClick={() => setLocation('/department-queue/shipping')}>
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back to Shipping
           </Button>
@@ -263,7 +263,7 @@ export default function ShippingLabelPage() {
         <div className="flex items-center gap-3 mb-6">
           <Button
             variant="outline"
-            onClick={() => setLocation('/shipping')}
+            onClick={() => setLocation('/department-queue/shipping')}
             className="flex items-center gap-2"
           >
             <ArrowLeft className="h-4 w-4" />

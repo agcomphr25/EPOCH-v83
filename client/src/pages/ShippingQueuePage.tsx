@@ -169,18 +169,29 @@ export default function ShippingQueuePage() {
         body: JSON.stringify({ orderId }),
       });
     },
-    onSuccess: (_, orderId) => {
+    onSuccess: async (_, orderId) => {
       toast({
         title: 'Order Fulfilled',
         description: `Order ${orderId} has been marked as fulfilled and moved to shipping management`,
       });
-      // Invalidate and refetch orders to update the UI
-      queryClient.invalidateQueries({
-        queryKey: ['/api/orders/with-payment-status'],
-      });
-      queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
+      
+      // Clear local state first
       setSelectedCard(null);
       setSelectedOrders([]);
+      
+      // Invalidate and actively refetch to ensure fresh data
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: ['/api/orders/with-payment-status'],
+        }),
+        queryClient.invalidateQueries({ queryKey: ['/api/orders'] }),
+        queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] }),
+      ]);
+      
+      // Force a refetch to update the UI immediately
+      await queryClient.refetchQueries({
+        queryKey: ['/api/orders/with-payment-status'],
+      });
     },
     onError: (error: any) => {
       toast({

@@ -82,17 +82,12 @@ router.put('/:id', async (req: Request, res: Response) => {
 
     const data = insertVendorSchema.partial().parse(req.body);
     
-    // Debug: Log the notes field to see what we're receiving
-    console.log('📝 Vendor update - notes field:', data.notes);
-    
     // Auto-update evaluation status if notes contain evaluation data
     if (data.notes && typeof data.notes === 'string') {
       const hasQuality = data.notes.includes('Quality:');
       const hasDelivery = data.notes.includes('Delivery Rating:');
       const hasCost = data.notes.includes('Cost:');
       const hasCommunication = data.notes.includes('Communication:');
-      
-      console.log('🔍 Evaluation check:', { hasQuality, hasDelivery, hasCost, hasCommunication });
       
       // If all 4 evaluation criteria are present, mark as evaluated
       if (hasQuality && hasDelivery && hasCost && hasCommunication) {
@@ -101,7 +96,6 @@ router.put('/:id', async (req: Request, res: Response) => {
         if (!data.evaluationDate) {
           data.evaluationDate = new Date().toISOString().split('T')[0];
         }
-        console.log(`✅ Vendor ${id} marked as evaluated (all criteria completed)`);
       }
     }
     

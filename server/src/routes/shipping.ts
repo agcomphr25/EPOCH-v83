@@ -33,9 +33,7 @@ router.get('/order/:orderId', async (req: Request, res: Response) => {
     if (order.customerId) {
       try {
         customer = await storage.getCustomer(parseInt(order.customerId));
-        addresses = await storage.getCustomerAddresses(
-          parseInt(order.customerId)
-        );
+        addresses = await storage.getCustomerAddresses(order.customerId);
       } catch (customerError) {
         console.warn('Could not fetch customer data:', customerError);
       }
@@ -66,7 +64,9 @@ router.get('/order/:orderId', async (req: Request, res: Response) => {
       try {
         const altCustomerId = parseInt(order.altShipToCustomerId);
         const altCustomer = await storage.getCustomer(altCustomerId);
-        const altAddresses = await storage.getCustomerAddresses(altCustomerId);
+        const altAddresses = await storage.getCustomerAddresses(
+          order.altShipToCustomerId
+        );
         if (altCustomer && altAddresses.length > 0) {
           shippingAddress = {
             source: 'alternate_customer',
@@ -797,47 +797,68 @@ router.post('/get-rates', async (req: Request, res: Response) => {
     const { shipToAddress, shipFromAddress, packageWeight, packageDimensions } =
       req.body;
 
-    if (
-      !process.env.UPS_USERNAME ||
-      !process.env.UPS_PASSWORD ||
-      !process.env.UPS_ACCESS_KEY
-    ) {
+    console.log('⚡ Getting UPS rates...');
+
+    // Validate OAuth credentials (2024+ API)
+    const upsClientId = process.env.UPS_CLIENT_ID?.trim();
+    const upsClientSecret = process.env.UPS_CLIENT_SECRET?.trim();
+    const upsShipperNumber = process.env.UPS_SHIPPER_NUMBER?.trim();
+
+    if (!upsClientId || !upsClientSecret || !upsShipperNumber) {
+      console.error('UPS OAuth credentials not configured for rating');
       return res.status(500).json({
         error: 'UPS API credentials not configured.',
       });
     }
 
+    // Get OAuth Token
+    let accessToken;
+    try {
+      accessToken = await getUPSOAuthToken(upsClientId, upsClientSecret);
+      console.log('⚡ UPS OAuth token ready for rating');
+    } catch (tokenError: any) {
+      console.error('Failed to get UPS OAuth token for rating:', tokenError.message);
+      return res.status(500).json({
+        error: 'Failed to authenticate with UPS OAuth API',
+        details: tokenError.message,
+      });
+    }
+
+    // Build rate request payload for OAuth REST API
     const ratePayload = {
-      UPSSecurity: {
-        UsernameToken: {
-          Username: process.env.UPS_USERNAME,
-          Password: process.env.UPS_PASSWORD,
-        },
-        ServiceAccessToken: {
-          AccessLicenseNumber: process.env.UPS_ACCESS_KEY,
-        },
-      },
       RateRequest: {
         Request: {
-          RequestOption: 'Rate',
+          TransactionReference: {
+            CustomerContext: 'Rating Request',
+          },
         },
         Shipment: {
           Shipper: {
+            ShipperNumber: upsShipperNumber,
             Address: {
-              AddressLine: [shipFromAddress.street],
-              City: shipFromAddress.city,
-              StateProvinceCode: shipFromAddress.state,
-              PostalCode: shipFromAddress.zipCode,
+              AddressLine: [shipFromAddress.street || '230 Hamer Rd.'].filter(Boolean),
+              City: shipFromAddress.city || 'Owens Crossroads',
+              StateProvinceCode: convertStateToAbbreviation(shipFromAddress.state || 'AL'),
+              PostalCode: (shipFromAddress.zipCode || '35763').replace(/\D/g, ''),
               CountryCode: shipFromAddress.country || 'US',
             },
           },
           ShipTo: {
             Address: {
-              AddressLine: [shipToAddress.street],
+              AddressLine: [shipToAddress.street].filter(Boolean),
               City: shipToAddress.city,
-              StateProvinceCode: shipToAddress.state,
-              PostalCode: shipToAddress.zipCode,
+              StateProvinceCode: convertStateToAbbreviation(shipToAddress.state),
+              PostalCode: (shipToAddress.zipCode || '').replace(/\D/g, ''),
               CountryCode: shipToAddress.country || 'US',
+            },
+          },
+          ShipFrom: {
+            Address: {
+              AddressLine: [shipFromAddress.street || '230 Hamer Rd.'].filter(Boolean),
+              City: shipFromAddress.city || 'Owens Crossroads',
+              StateProvinceCode: convertStateToAbbreviation(shipFromAddress.state || 'AL'),
+              PostalCode: (shipFromAddress.zipCode || '35763').replace(/\D/g, ''),
+              CountryCode: shipFromAddress.country || 'US',
             },
           },
           Package: {
@@ -853,30 +874,40 @@ router.post('/get-rates', async (req: Request, res: Response) => {
                   Width: packageDimensions.width.toString(),
                   Height: packageDimensions.height.toString(),
                 }
-              : undefined,
+              : {
+                  UnitOfMeasurement: {
+                    Code: 'IN',
+                  },
+                  Length: '12',
+                  Width: '12',
+                  Height: '6',
+                },
             PackageWeight: {
               UnitOfMeasurement: {
                 Code: 'LBS',
               },
-              Weight: packageWeight?.toString() || '1',
+              Weight: packageWeight?.toString() || '5',
             },
           },
         },
       },
     };
 
-    const isProduction = process.env.NODE_ENV === 'production';
-    const upsEndpoint = isProduction
-      ? 'https://onlinetools.ups.com/rest/Rate'
-      : 'https://wwwcie.ups.com/rest/Rate';
+    // Use UPS Production REST API endpoint for rating (2024+)
+    const upsEndpoint = 'https://onlinetools.ups.com/api/rating/v1/Shop';
+
+    console.log('⚡ Calling UPS Rating API:', upsEndpoint);
 
     const response = await axios.post(upsEndpoint, ratePayload, {
       headers: {
+        Authorization: `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
         Accept: 'application/json',
       },
       timeout: 30000,
     });
+
+    console.log('⚡ UPS Rating API response received');
 
     const ratedShipments = response.data?.RateResponse?.RatedShipment;
     if (ratedShipments) {
@@ -892,11 +923,14 @@ router.post('/get-rates', async (req: Request, res: Response) => {
         scheduleDeliveryDate: rate.ScheduledDeliveryDate,
       }));
 
+      console.log(`⚡ Found ${formattedRates.length} shipping rates`);
+
       res.json({
         success: true,
         rates: formattedRates,
       });
     } else {
+      console.error('No rates returned from UPS');
       res.status(500).json({
         error: 'No rates returned from UPS',
         details: response.data,

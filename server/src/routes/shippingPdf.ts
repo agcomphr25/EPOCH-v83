@@ -2245,7 +2245,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
         if (applicableDiscount.percent) {
           discountAmount = discountBase * (applicableDiscount.percent / 100);
         } else if (applicableDiscount.fixedAmount) {
-          discountAmount = applicableDiscount.fixedAmount;
+          discountAmount = applicableDiscount.fixedAmount / 100;
         }
         discountLabel = applicableDiscount.name
           ? `Discount - ${applicableDiscount.name}`
@@ -2270,7 +2270,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
         if (applicableDiscount.percent) {
           discountAmount = discountBase * (applicableDiscount.percent / 100);
         } else if (applicableDiscount.fixedAmount) {
-          discountAmount = applicableDiscount.fixedAmount;
+          discountAmount = applicableDiscount.fixedAmount / 100;
         }
         discountLabel = applicableDiscount.name
           ? `Discount - ${applicableDiscount.name}`

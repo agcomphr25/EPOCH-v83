@@ -278,6 +278,7 @@ export default function UPSLabelCreator({
             height: packageInfo.height,
           }
         : undefined,
+      isResidential: shipToAddress.isResidential,
     });
   };
 
@@ -299,6 +300,7 @@ export default function UPSLabelCreator({
       serviceType: selectedService,
       reference1,
       reference2,
+      isResidential: shipToAddress.isResidential,
     });
   };
 
@@ -555,6 +557,25 @@ export default function UPSLabelCreator({
                     }
                   />
                 </div>
+              </div>
+
+              <div className="flex items-center space-x-2 pt-2">
+                <input
+                  type="checkbox"
+                  id="residential-checkbox"
+                  checked={shipToAddress.isResidential || false}
+                  onChange={(e) =>
+                    setShipToAddress((prev) => ({
+                      ...prev,
+                      isResidential: e.target.checked,
+                    }))
+                  }
+                  className="rounded border-gray-300"
+                  data-testid="checkbox-residential"
+                />
+                <Label htmlFor="residential-checkbox" className="font-normal cursor-pointer">
+                  Residential address (UPS charges extra for residential delivery)
+                </Label>
               </div>
             </CardContent>
           </Card>

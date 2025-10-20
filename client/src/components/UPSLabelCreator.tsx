@@ -652,17 +652,35 @@ export default function UPSLabelCreator({
 
         {/* Shipping Rates */}
         <div className="space-y-4">
+          {/* Current Service Selection Display */}
+          <Card className="bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Truck className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Selected Service:
+                  </span>
+                </div>
+                <Badge className="bg-blue-600 text-white">
+                  {rates.find(r => r.serviceCode === selectedService)?.serviceName || 
+                   `UPS Ground (Default)`}
+                </Badge>
+              </div>
+            </CardContent>
+          </Card>
+
           <Button
             onClick={handleGetRates}
             disabled={getRatesMutation.isPending}
             variant="outline"
-            className="flex items-center gap-2"
+            className="flex items-center gap-2 w-full"
             data-testid="button-get-rates"
           >
             <DollarSign className="w-4 h-4" />
             {getRatesMutation.isPending
               ? 'Getting Rates...'
-              : 'Get Shipping Rates'}
+              : 'Get Shipping Rates & Compare Options'}
           </Button>
 
           {showRates && rates.length > 0 && (
@@ -672,6 +690,9 @@ export default function UPSLabelCreator({
                   <Truck className="w-4 h-4" />
                   Available Shipping Options
                 </CardTitle>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
+                  Click on any option below to select it for your shipping label
+                </p>
               </CardHeader>
               <CardContent className="space-y-2">
                 {rates.map((rate) => (

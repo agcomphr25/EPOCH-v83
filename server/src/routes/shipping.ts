@@ -962,7 +962,8 @@ router.post('/get-rates', async (req: Request, res: Response) => {
       });
     }
   } catch (error: any) {
-    console.error('UPS Rate API error:', error.response?.data || error.message);
+    console.error('UPS Rate API error:', JSON.stringify(error.response?.data || error.message, null, 2));
+    console.error('UPS Rate request payload:', JSON.stringify(ratePayload, null, 2));
     res.status(500).json({
       error: 'Failed to get shipping rates',
       details: error.response?.data || error.message,

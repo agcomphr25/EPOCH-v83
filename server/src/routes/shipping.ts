@@ -849,6 +849,17 @@ router.post('/get-rates', async (req: Request, res: Response) => {
       });
     }
 
+    // Convert country name to ISO code for UPS API
+    const getCountryCode = (country: string | undefined): string => {
+      if (!country) return 'US';
+      if (country === 'United States' || country === 'USA') return 'US';
+      if (country === 'Canada') return 'CA';
+      if (country === 'Mexico') return 'MX';
+      // If already a code, return as-is
+      if (country.length === 2) return country.toUpperCase();
+      return 'US'; // Default to US
+    };
+
     // Build rate request payload for OAuth REST API
     const ratePayload = {
       RateRequest: {
@@ -865,7 +876,7 @@ router.post('/get-rates', async (req: Request, res: Response) => {
               City: shipFromAddress.city || 'Owens Crossroads',
               StateProvinceCode: convertStateToAbbreviation(shipFromAddress.state || 'AL'),
               PostalCode: (shipFromAddress.zipCode || '35763').replace(/\D/g, ''),
-              CountryCode: shipFromAddress.country || 'US',
+              CountryCode: getCountryCode(shipFromAddress.country),
             },
           },
           ShipTo: {
@@ -874,7 +885,7 @@ router.post('/get-rates', async (req: Request, res: Response) => {
               City: shipToAddress.city,
               StateProvinceCode: convertStateToAbbreviation(shipToAddress.state),
               PostalCode: (shipToAddress.zipCode || '').replace(/\D/g, ''),
-              CountryCode: shipToAddress.country || 'US',
+              CountryCode: getCountryCode(shipToAddress.country),
             },
           },
           ShipFrom: {
@@ -883,7 +894,7 @@ router.post('/get-rates', async (req: Request, res: Response) => {
               City: shipFromAddress.city || 'Owens Crossroads',
               StateProvinceCode: convertStateToAbbreviation(shipFromAddress.state || 'AL'),
               PostalCode: (shipFromAddress.zipCode || '35763').replace(/\D/g, ''),
-              CountryCode: shipFromAddress.country || 'US',
+              CountryCode: getCountryCode(shipFromAddress.country),
             },
           },
           Package: {
@@ -963,7 +974,6 @@ router.post('/get-rates', async (req: Request, res: Response) => {
     }
   } catch (error: any) {
     console.error('UPS Rate API error:', JSON.stringify(error.response?.data || error.message, null, 2));
-    console.error('UPS Rate request payload:', JSON.stringify(ratePayload, null, 2));
     res.status(500).json({
       error: 'Failed to get shipping rates',
       details: error.response?.data || error.message,

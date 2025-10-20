@@ -65,3 +65,18 @@ The application utilizes a monorepo structure with a full-stack TypeScript appro
 -   Google Drive (File Access and PDF Processing)
 -   Google APIs (`googleapis` package)
 -   Azure Document Intelligence (AI-powered document analysis)
+
+## Recent Changes
+
+### October 20, 2025 - Vendor Evaluation System Complete Implementation
+
+- **Question-Based Evaluation Form**: Redesigned vendor evaluation tab with accordion-based UI
+- **4 Evaluation Criteria**: Quality (1-8), Delivery (2 questions), Cost (1-5), Communication (1-5)
+- **Automatic Evaluation Status**: Backend automatically marks vendor as "Evaluated" when all 4 criteria are completed
+- **Auto-Date Setting**: Evaluation date automatically set to today when evaluation is completed
+- **Monthly Reset System**: Automated cron job resets all vendor evaluations on the 1st of each month at 12:01 AM
+- **Implementation Details**:
+  - Evaluation scores stored temporarily in notes field with structured format
+  - Backend parses notes to detect completion of all criteria
+  - Console logging for audit trail of evaluation completions
+  - Monthly reset ensures compliance with monthly evaluation requirements

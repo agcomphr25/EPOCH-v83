@@ -3,8 +3,10 @@ import cookieParser from 'cookie-parser';
 import cors from 'cors';
 import path from 'path';
 import fs from 'fs';
+import cron from 'node-cron';
 import { registerRoutes } from './src/routes/index';
 import { setupVite, serveStatic, log } from './vite';
+import { db } from './db';
 
 // Validate required environment variables
 const requiredEnvVars = ['DATABASE_URL'];
@@ -144,6 +146,31 @@ app.use((req, res, next) => {
         'Failed to connect to database. Server may not function properly.'
       );
     }
+
+    // Set up monthly vendor evaluation reset
+    // Runs at 00:01 (12:01 AM) on the 1st day of every month
+    cron.schedule('1 0 1 * *', async () => {
+      try {
+        console.log('🔄 Running monthly vendor evaluation reset...');
+        const { vendors } = await import('./schema');
+        const { eq } = await import('drizzle-orm');
+        
+        // Reset all vendor evaluation statuses
+        const result = await db
+          .update(vendors)
+          .set({
+            evaluated: false,
+            evaluationDate: null,
+          })
+          .returning();
+        
+        console.log(`✅ Monthly reset complete. Reset ${result.length} vendors.`);
+      } catch (error) {
+        console.error('❌ Failed to reset vendor evaluations:', error);
+      }
+    });
+    
+    console.log('📅 Monthly vendor evaluation reset scheduled (1st of each month at 12:01 AM)');
 
     const server = await registerRoutes(app);
 

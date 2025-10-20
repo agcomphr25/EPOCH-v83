@@ -646,33 +646,6 @@ export default function VendorManagement() {
                       />
                     </div>
 
-                    <FormField
-                      control={form.control}
-                      name="approved"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Approved Vendor</FormLabel>
-                          <Select
-                            onValueChange={(value) =>
-                              field.onChange(value === 'true')
-                            }
-                            value={field.value ? 'true' : 'false'}
-                          >
-                            <FormControl>
-                              <SelectTrigger data-testid="select-approved">
-                                <SelectValue />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              <SelectItem value="true">Yes</SelectItem>
-                              <SelectItem value="false">No</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
                     <DialogFooter>
                       <Button
                         type="button"

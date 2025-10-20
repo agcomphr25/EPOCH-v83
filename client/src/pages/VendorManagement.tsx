@@ -1104,64 +1104,81 @@ export default function VendorManagement() {
 
               {/* Tab 4: Evaluation & Notes */}
               <TabsContent value="evaluation" className="space-y-4 mt-4">
+                <div className="bg-amber-50 border border-amber-200 rounded-md p-4 mb-4">
+                  <h4 className="font-semibold text-amber-900 mb-2">Supplier Evaluation Criteria</h4>
+                  <p className="text-sm text-amber-700">
+                    Complete the evaluation questions below. The vendor will automatically be marked as "Evaluated" once all criteria are scored.
+                  </p>
+                </div>
+
                 <Form {...form}>
                   <form
                     onSubmit={form.handleSubmit(onSubmit)}
-                    className="space-y-4"
+                    className="space-y-6"
                   >
-                    <FormField
-                      control={form.control}
-                      name="evaluated"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Evaluation Status</FormLabel>
-                          <Select
-                            onValueChange={(value) =>
-                              field.onChange(value === 'true')
-                            }
-                            value={field.value ? 'true' : 'false'}
-                          >
-                            <FormControl>
-                              <SelectTrigger data-testid="select-eval-status">
-                                <SelectValue />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              <SelectItem value="true">Evaluated</SelectItem>
-                              <SelectItem value="false">
-                                Not Evaluated
-                              </SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="evaluationDate"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Evaluation Date</FormLabel>
-                          <FormControl>
-                            <Input
-                              type="date"
-                              {...field}
-                              data-testid="input-eval-date"
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                    {/* Quality Evaluation */}
+                    <div className="border rounded-lg p-4 bg-gray-50">
+                      <h4 className="font-semibold text-lg mb-3">1. Quality Rating</h4>
+                      <p className="text-sm text-gray-600 mb-4">
+                        Rate the supplier's quality management system and certification status:
+                      </p>
+                      
+                      <FormField
+                        control={form.control}
+                        name="notes"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Quality Score *</FormLabel>
+                            <Select
+                              onValueChange={(value) => {
+                                // Store in notes temporarily until we add proper evaluation storage
+                                field.onChange(`Quality: ${value}\n${field.value || ''}`);
+                              }}
+                            >
+                              <FormControl>
+                                <SelectTrigger data-testid="select-quality-score">
+                                  <SelectValue placeholder="Select quality rating..." />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent className="max-h-[400px]">
+                                <SelectItem value="1">
+                                  1 - Manufacturer with certified QMS, active certificate on file, provides CofC
+                                </SelectItem>
+                                <SelectItem value="2">
+                                  2 - Distributor with certified QMS process, active certificate on file, provides manufacturer CofC
+                                </SelectItem>
+                                <SelectItem value="3">
+                                  3 - Manufacturer with internal QMS, can provide CofC
+                                </SelectItem>
+                                <SelectItem value="4">
+                                  4 - Distributor with internal QMS, can provide manufacturer CofC
+                                </SelectItem>
+                                <SelectItem value="5">
+                                  5 - Supplier with positive quality history/relationship; grandfathered in
+                                </SelectItem>
+                                <SelectItem value="6">
+                                  6 - Distributor with no known QMS, but can provide manufacturer's CofC
+                                </SelectItem>
+                                <SelectItem value="7">
+                                  7 - Distributor with no known QMS, but will provide CofC
+                                </SelectItem>
+                                <SelectItem value="8">
+                                  8 - Distributor with no known QMS, cannot provide CofC
+                                </SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
 
                     <FormField
                       control={form.control}
                       name="notes"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Evaluation Notes</FormLabel>
+                          <FormLabel>Additional Evaluation Notes</FormLabel>
                           <FormControl>
                             <Textarea
                               {...field}

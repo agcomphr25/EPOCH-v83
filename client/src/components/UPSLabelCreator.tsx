@@ -651,12 +651,13 @@ export default function UPSLabelCreator({
         </Card>
 
         {/* Shipping Rates */}
-        <div className="flex gap-4">
+        <div className="space-y-4">
           <Button
             onClick={handleGetRates}
             disabled={getRatesMutation.isPending}
             variant="outline"
             className="flex items-center gap-2"
+            data-testid="button-get-rates"
           >
             <DollarSign className="w-4 h-4" />
             {getRatesMutation.isPending
@@ -665,23 +666,58 @@ export default function UPSLabelCreator({
           </Button>
 
           {showRates && rates.length > 0 && (
-            <Select value={selectedService} onValueChange={setSelectedService}>
-              <SelectTrigger className="w-64">
-                <SelectValue placeholder="Select shipping service" />
-              </SelectTrigger>
-              <SelectContent>
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Truck className="w-4 h-4" />
+                  Available Shipping Options
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
                 {rates.map((rate) => (
-                  <SelectItem key={rate.serviceCode} value={rate.serviceCode}>
-                    <div className="flex justify-between w-full">
-                      <span>{rate.serviceName}</span>
-                      <span className="ml-4 font-bold">
+                  <div
+                    key={rate.serviceCode}
+                    onClick={() => setSelectedService(rate.serviceCode)}
+                    className={`p-3 border rounded-lg cursor-pointer transition-all ${
+                      selectedService === rate.serviceCode
+                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-950'
+                        : 'border-gray-200 hover:border-gray-300 dark:border-gray-700 dark:hover:border-gray-600'
+                    }`}
+                    data-testid={`rate-option-${rate.serviceCode}`}
+                  >
+                    <div className="flex justify-between items-center">
+                      <div className="flex items-center gap-3">
+                        <div
+                          className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                            selectedService === rate.serviceCode
+                              ? 'border-blue-500'
+                              : 'border-gray-300'
+                          }`}
+                        >
+                          {selectedService === rate.serviceCode && (
+                            <div className="w-2 h-2 rounded-full bg-blue-500" />
+                          )}
+                        </div>
+                        <div>
+                          <div className="font-semibold text-gray-900 dark:text-gray-100">
+                            {rate.serviceName}
+                          </div>
+                          {rate.guaranteedDaysToDelivery && (
+                            <div className="text-xs text-gray-500 dark:text-gray-400">
+                              Delivery in {rate.guaranteedDaysToDelivery} business day
+                              {rate.guaranteedDaysToDelivery !== '1' ? 's' : ''}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      <div className="text-lg font-bold text-green-600 dark:text-green-400">
                         ${rate.totalCharges.toFixed(2)}
-                      </span>
+                      </div>
                     </div>
-                  </SelectItem>
+                  </div>
                 ))}
-              </SelectContent>
-            </Select>
+              </CardContent>
+            </Card>
           )}
         </div>
 

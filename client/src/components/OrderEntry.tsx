@@ -678,7 +678,7 @@ export default function OrderEntry() {
 
           // Handle fixed amount discounts
           if (discountDetails.fixedAmount) {
-            return discountDetails.fixedAmount; // Already in dollars
+            return discountDetails.fixedAmount / 100; // Convert from cents to dollars
           }
         }
         // If appliesTo is 'total_order', apply to full subtotal (existing behavior)
@@ -690,7 +690,7 @@ export default function OrderEntry() {
 
           // Handle fixed amount discounts on total order
           if (discountDetails.fixedAmount) {
-            return discountDetails.fixedAmount; // Already in dollars
+            return discountDetails.fixedAmount / 100; // Convert from cents to dollars
           }
         }
       }
@@ -1627,7 +1627,7 @@ export default function OrderEntry() {
         .forEach((discount: any) => {
           const displayValue = discount.percent
             ? `${discount.percent}% off`
-            : `$${discount.fixedAmount.toFixed(2)} off`;
+            : `$${(discount.fixedAmount / 100).toFixed(2)} off`;
           const value = `persistent_${discount.id}`;
           discounts.push({
             value,

@@ -173,9 +173,15 @@ export default function LinkOrdersDialog({
   });
 
   const handleCreateGroup = () => {
-    if (requireApproval && !approvalCode.trim()) {
-      toast.error('Please enter an approval code');
-      return;
+    if (requireApproval) {
+      if (!approvalCode.trim()) {
+        toast.error('Please enter a 4-digit code');
+        return;
+      }
+      if (approvalCode.length !== 4 || !/^[A-Z0-9]{4}$/.test(approvalCode)) {
+        toast.error('Code must be exactly 4 letters or numbers');
+        return;
+      }
     }
     createGroupMutation.mutate();
   };
@@ -191,9 +197,15 @@ export default function LinkOrdersDialog({
   };
 
   const handleUnlink = () => {
-    if (linkInfo?.linkGroup?.requiresApprovalToSeparate && !unlinkApprovalCode) {
-      toast.error('Please enter the approval code');
-      return;
+    if (linkInfo?.linkGroup?.requiresApprovalToSeparate) {
+      if (!unlinkApprovalCode.trim()) {
+        toast.error('Please enter the 4-digit code');
+        return;
+      }
+      if (unlinkApprovalCode.length !== 4 || !/^[A-Z0-9]{4}$/.test(unlinkApprovalCode)) {
+        toast.error('Code must be exactly 4 letters or numbers');
+        return;
+      }
     }
     unlinkMutation.mutate();
   };
@@ -283,7 +295,10 @@ export default function LinkOrdersDialog({
                         id="unlink-approval-code"
                         type="text"
                         value={unlinkApprovalCode}
-                        onChange={(e) => setUnlinkApprovalCode(e.target.value.toUpperCase().slice(0, 4))}
+                        onChange={(e) => {
+                          const value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4);
+                          setUnlinkApprovalCode(value);
+                        }}
                         placeholder="Ask the CSR who linked these orders"
                         maxLength={4}
                         className="mt-1"
@@ -407,7 +422,10 @@ export default function LinkOrdersDialog({
                       type="text"
                       placeholder="e.g., 1234 or AB12"
                       value={approvalCode}
-                      onChange={(e) => setApprovalCode(e.target.value.toUpperCase().slice(0, 4))}
+                      onChange={(e) => {
+                        const value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4);
+                        setApprovalCode(value);
+                      }}
                       maxLength={4}
                       data-testid="input-approval-code"
                     />

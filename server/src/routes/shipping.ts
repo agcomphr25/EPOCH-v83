@@ -1246,6 +1246,9 @@ function buildUPSShipmentPayloadOAuth(
         ShipTo: {
           Name: shipmentDetails.shipToAddress.name,
           AttentionName: shipmentDetails.shipToAddress.name,
+          Phone: {
+            Number: shipmentDetails.shipToAddress.phone || '0000000000',
+          },
           Address: {
             AddressLine: [shipmentDetails.shipToAddress.street],
             City: shipmentDetails.shipToAddress.city,

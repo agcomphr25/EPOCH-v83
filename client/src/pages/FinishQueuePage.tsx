@@ -303,33 +303,6 @@ export default function FinishQueuePage() {
     },
   });
 
-  // Move orders directly to Paint (skip Finish QC)
-  const moveToPaintMutation = useMutation({
-    mutationFn: async ({ orderIds }: { orderIds: string[] }) => {
-      const response = await apiRequest('/api/orders/update-department', {
-        method: 'POST',
-        body: JSON.stringify({
-          orderIds: orderIds,
-          department: 'Paint',
-          status: 'IN_PROGRESS',
-        }),
-      });
-      return response;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
-      queryClient.invalidateQueries({
-        queryKey: ['/api/orders/department', 'Paint'],
-      });
-      toast.success(`${selectedOrders.size} orders moved to Paint`);
-      setSelectedOrders(new Set());
-      setSelectAll(false);
-    },
-    onError: () => {
-      toast.error('Failed to move orders to Paint');
-    },
-  });
-
   // Progress mutation for moving orders to next department (Finish QC)
   const progressMutation = useMutation({
     mutationFn: async ({
@@ -380,15 +353,6 @@ export default function FinishQueuePage() {
     });
   };
 
-  const handleMoveToPaint = () => {
-    if (selectedOrders.size === 0) {
-      toast.error('Please select orders to move');
-      return;
-    }
-    moveToPaintMutation.mutate({
-      orderIds: Array.from(selectedOrders),
-    });
-  };
 
   // Handle progress orders function
   const handleProgressOrders = () => {
@@ -583,16 +547,6 @@ export default function FinishQueuePage() {
                           Move to Finish QC ({selectedOrders.size})
                         </Button>
                       )}
-
-                      <Button
-                        onClick={handleMoveToPaint}
-                        disabled={moveToPaintMutation.isPending}
-                        className="bg-purple-600 hover:bg-purple-700"
-                        size="sm"
-                      >
-                        <Paintbrush className="h-4 w-4 mr-1" />
-                        Skip to Paint ({selectedOrders.size})
-                      </Button>
                     </div>
                   )}
                 </div>

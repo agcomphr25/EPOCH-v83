@@ -16,16 +16,28 @@ const REDIRECT_URI = process.env.PRODUCTION_DOMAIN
     ? `https://${process.env.REPLIT_DEV_DOMAIN}/api/auth/microsoft/callback`
     : 'https://agcompepoch.xyz/api/auth/microsoft/callback'; // Production domain
 
-// MSAL configuration
-const msalConfig = {
-  auth: {
-    clientId: MICROSOFT_CLIENT_ID!,
-    authority: 'https://login.microsoftonline.com/common',
-    clientSecret: MICROSOFT_CLIENT_SECRET!,
-  },
-};
+// MSAL configuration - only create client if credentials are available
+let msalClient: ConfidentialClientApplication | null = null;
 
-const msalClient = new ConfidentialClientApplication(msalConfig);
+function getMsalClient(): ConfidentialClientApplication {
+  if (!msalClient) {
+    if (!MICROSOFT_CLIENT_ID || !MICROSOFT_CLIENT_SECRET) {
+      throw new Error('Microsoft OAuth credentials not configured');
+    }
+    
+    const msalConfig = {
+      auth: {
+        clientId: MICROSOFT_CLIENT_ID,
+        authority: 'https://login.microsoftonline.com/common',
+        clientSecret: MICROSOFT_CLIENT_SECRET,
+      },
+    };
+    
+    msalClient = new ConfidentialClientApplication(msalConfig);
+  }
+  
+  return msalClient;
+}
 
 // In-memory state store with expiration (5 minutes)
 interface StateData {
@@ -65,7 +77,7 @@ router.get('/login', async (req: Request, res: Response) => {
       state,
     };
 
-    const authUrl = await msalClient.getAuthCodeUrl(authCodeUrlParameters);
+    const authUrl = await getMsalClient().getAuthCodeUrl(authCodeUrlParameters);
     res.redirect(authUrl);
   } catch (error) {
     console.error('Error initiating Microsoft OAuth:', error);
@@ -150,7 +162,7 @@ router.get('/callback', async (req: Request, res: Response) => {
       redirectUri: REDIRECT_URI,
     };
 
-    const response = await msalClient.acquireTokenByCode(tokenRequest);
+    const response = await getMsalClient().acquireTokenByCode(tokenRequest);
 
     if (!response || !response.account) {
       throw new Error('Failed to acquire token or account information');

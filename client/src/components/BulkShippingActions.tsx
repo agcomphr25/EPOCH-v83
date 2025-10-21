@@ -253,8 +253,8 @@ export function BulkShippingActions({
         // Download label
         if (labelImage) {
           const link = document.createElement('a');
-          link.href = `data:image/png;base64,${labelImage}`;
-          link.download = `bulk-label-${selectedOrders.join('-')}.png`;
+          link.href = `data:image/gif;base64,${labelImage}`;
+          link.download = `bulk-label-${selectedOrders.join('-')}.gif`;
           link.click();
         }
 

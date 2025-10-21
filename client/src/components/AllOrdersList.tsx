@@ -53,6 +53,8 @@ import {
   X,
   Mail,
   MessageSquare,
+  Link2,
+  MoreVertical,
 } from 'lucide-react';
 import { apiRequest } from '@/lib/queryClient';
 import ScrapOrderModal from './ScrapOrderModal';
@@ -62,6 +64,13 @@ import { Link, useLocation } from 'wouter';
 import { getDisplayOrderId } from '@/lib/orderUtils';
 import CustomerDetailsTooltip from './CustomerDetailsTooltip';
 import CommunicationCompose from './CommunicationCompose';
+import LinkOrdersDialog from './LinkOrdersDialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 const departments = [
   'P1 Production Queue',
@@ -88,6 +97,13 @@ export default function AllOrdersList() {
   const [communicationModalOpen, setCommunicationModalOpen] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
   const [, setLocation] = useLocation();
+  const [linkOrdersDialogOpen, setLinkOrdersDialogOpen] = useState(false);
+  const [selectedLinkOrderId, setSelectedLinkOrderId] = useState<string | null>(null);
+
+  // Fetch current user for link orders functionality
+  const { data: currentUser } = useQuery({
+    queryKey: ['/api/auth/me'],
+  });
 
   // Set up global handler for communication buttons in tooltip
   React.useEffect(() => {
@@ -809,11 +825,37 @@ export default function AllOrdersList() {
                             size="sm"
                             variant="outline"
                             className="bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-200"
+                            data-testid={`button-edit-${order.orderId}`}
                           >
                             <Edit className="w-4 h-4 mr-1" />
                             Edit
                           </Button>
                         </Link>
+
+                        {/* More Actions Dropdown */}
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              data-testid={`button-more-actions-${order.orderId}`}
+                            >
+                              <MoreVertical className="w-4 h-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem
+                              onClick={() => {
+                                setSelectedLinkOrderId(order.orderId);
+                                setLinkOrdersDialogOpen(true);
+                              }}
+                              data-testid={`menu-link-orders-${order.orderId}`}
+                            >
+                              <Link2 className="w-4 h-4 mr-2" />
+                              Link Orders
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
 
                         {!isScrapped &&
                           !isComplete &&
@@ -906,6 +948,18 @@ export default function AllOrdersList() {
           customer={selectedCustomer}
           onClose={handleCommunicationClose}
           defaultType={selectedCustomer.preferredCommunication}
+        />
+      )}
+
+      {linkOrdersDialogOpen && selectedLinkOrderId && (
+        <LinkOrdersDialog
+          orderId={selectedLinkOrderId}
+          isOpen={linkOrdersDialogOpen}
+          onClose={() => {
+            setLinkOrdersDialogOpen(false);
+            setSelectedLinkOrderId(null);
+          }}
+          currentUser={(currentUser as any)?.username || (currentUser as any)?.name || 'System'}
         />
       )}
     </>

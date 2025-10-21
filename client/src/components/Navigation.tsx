@@ -476,6 +476,12 @@ export default function Navigation() {
       description: 'Process credit card payments and view transaction history',
     },
     {
+      path: '/finance/bulk-payment',
+      label: 'Bulk Payment',
+      icon: CreditCard,
+      description: 'Record payments for multiple customer orders at once',
+    },
+    {
       path: '/refund-request',
       label: 'Refund Request',
       icon: TrendingDown,

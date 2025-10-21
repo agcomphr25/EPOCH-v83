@@ -4,9 +4,39 @@ import axios from 'axios';
 
 import { storage } from '../../storage';
 import { db } from '../../db';
-import { allOrders, orderDrafts } from '../../schema';
+import { allOrders, orderDrafts, linkedOrders, linkedOrderGroups } from '../../schema';
 
 const router = Router();
+
+// Helper function to check if an order is linked to other orders
+async function checkLinkedOrders(orderId: string) {
+  const linkedOrder = await db
+    .select()
+    .from(linkedOrders)
+    .where(eq(linkedOrders.orderId, orderId))
+    .limit(1);
+
+  if (linkedOrder.length === 0) {
+    return { isLinked: false, linkGroup: null, linkedOrders: [] };
+  }
+
+  const linkGroup = await db
+    .select()
+    .from(linkedOrderGroups)
+    .where(eq(linkedOrderGroups.id, linkedOrder[0].linkGroupId))
+    .limit(1);
+
+  const groupOrders = await db
+    .select()
+    .from(linkedOrders)
+    .where(eq(linkedOrders.linkGroupId, linkedOrder[0].linkGroupId));
+
+  return {
+    isLinked: true,
+    linkGroup: linkGroup[0],
+    linkedOrders: groupOrders.map(lo => lo.orderId),
+  };
+}
 
 // Get order by ID with customer and address data for shipping
 router.get('/order/:orderId', async (req: Request, res: Response) => {
@@ -196,10 +226,40 @@ router.post('/mark-shipped/:orderId', async (req: Request, res: Response) => {
       estimatedDelivery,
       sendNotification = true,
       notificationMethod = 'email',
+      bypassLinkValidation = false,
     } = req.body;
 
     if (!trackingNumber) {
       return res.status(400).json({ error: 'Tracking number is required' });
+    }
+
+    // Check if order is linked to other orders
+    const linkInfo = await checkLinkedOrders(orderId);
+    if (linkInfo.isLinked && linkInfo.linkedOrders.length > 1) {
+      const otherOrders = linkInfo.linkedOrders.filter(id => id !== orderId);
+      
+      // If link group requires approval and bypass is requested, verify approval code
+      if (linkInfo.linkGroup?.requiresApprovalToSeparate && bypassLinkValidation) {
+        const { approvalCode } = req.body;
+        if (!approvalCode || approvalCode !== linkInfo.linkGroup.approvalCode) {
+          return res.status(403).json({
+            error: 'Invalid or missing approval code',
+            linkedOrders: otherOrders,
+            linkGroupName: linkInfo.linkGroup?.name,
+            requiresApproval: true,
+            message: `This order is part of a link group that requires an approval code to ship separately. Please provide the correct approval code.`,
+          });
+        }
+      } else if (!bypassLinkValidation) {
+        // If not bypassing, block the request
+        return res.status(400).json({
+          error: 'This order is linked to other orders',
+          linkedOrders: otherOrders,
+          linkGroupName: linkInfo.linkGroup?.name,
+          requiresApproval: linkInfo.linkGroup?.requiresApprovalToSeparate,
+          message: `This order is part of a link group with ${otherOrders.length} other order(s). All linked orders should ship together. Set bypassLinkValidation=true${linkInfo.linkGroup?.requiresApprovalToSeparate ? ' and provide approvalCode' : ''} to override.`,
+        });
+      }
     }
 
     // Update order with shipping information

@@ -26,6 +26,8 @@ import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
 import { OrderSearchBox } from '@/components/OrderSearchBox';
 import WeeklyShippingWidget from '@/components/WeeklyShippingWidget';
+import { LinkedOrderIndicator } from '@/components/LinkedOrderIndicator';
+import { LinkedOrdersManager } from '@/components/LinkedOrdersManager';
 
 export default function ShippingQueuePage() {
   const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
@@ -61,6 +63,11 @@ export default function ShippingQueuePage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
+
+  // Get current user information
+  const { data: currentUser } = useQuery({
+    queryKey: ['currentUser'],
+  });
 
   // Get all orders from production pipeline with payment status
   const { data: allOrders = [] } = useQuery({
@@ -197,6 +204,54 @@ export default function ShippingQueuePage() {
       toast({
         title: 'Error fulfilling order',
         description: error.message || 'Failed to fulfill order',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  // Bulk fulfill mutation for marking multiple orders as fulfilled at once
+  const bulkFulfillMutation = useMutation({
+    mutationFn: async (orderIds: string[]) => {
+      // Fulfill each order sequentially
+      const results = await Promise.all(
+        orderIds.map(orderId =>
+          apiRequest('/api/orders/fulfill', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ orderId }),
+          })
+        )
+      );
+      return results;
+    },
+    onSuccess: async (_, orderIds) => {
+      toast({
+        title: 'Orders Fulfilled',
+        description: `${orderIds.length} order${orderIds.length > 1 ? 's have' : ' has'} been marked as fulfilled`,
+      });
+      
+      // Clear local state
+      setSelectedCard(null);
+      setSelectedOrders([]);
+      
+      // Invalidate and refetch
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: ['/api/orders/with-payment-status'],
+        }),
+        queryClient.invalidateQueries({ queryKey: ['/api/orders'] }),
+        queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] }),
+      ]);
+      
+      // Force refetch
+      await queryClient.refetchQueries({
+        queryKey: ['/api/orders/with-payment-status'],
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Error fulfilling orders',
+        description: error.message || 'Failed to fulfill some orders',
         variant: 'destructive',
       });
     },
@@ -1030,6 +1085,7 @@ export default function ShippingQueuePage() {
               </div>
             </div>
             <div className="flex items-center gap-2">
+              <LinkedOrderIndicator orderId={order.orderId} variant="compact" />
               {order.isFullyPaid ? (
                 <Badge className="bg-green-500 hover:bg-green-600 text-white text-xs">
                   PAID
@@ -1212,7 +1268,41 @@ export default function ShippingQueuePage() {
         {/* Sticky Bulk Actions */}
         {selectedOrders.length > 0 && (
           <div className="fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 shadow-lg">
-            <div className="container mx-auto p-4">
+            <div className="container mx-auto p-4 space-y-4">
+              {/* Mark as Fulfilled Section */}
+              <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
+                <div className="flex items-center justify-between flex-wrap gap-4">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400" />
+                    <span className="font-medium text-green-800 dark:text-green-200">
+                      {selectedOrders.length} order{selectedOrders.length > 1 ? 's' : ''} selected
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      onClick={() => setSelectedOrders([])}
+                      size="sm"
+                      data-testid="button-clear-selection"
+                    >
+                      Clear Selection
+                    </Button>
+                    <Button
+                      onClick={() => bulkFulfillMutation.mutate(selectedOrders)}
+                      disabled={bulkFulfillMutation.isPending}
+                      className="bg-green-600 hover:bg-green-700 text-white"
+                      data-testid="button-bulk-fulfill"
+                    >
+                      <CheckCircle className="h-4 w-4 mr-2" />
+                      {bulkFulfillMutation.isPending
+                        ? 'Fulfilling...'
+                        : `Mark as Fulfilled (${selectedOrders.length})`}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Bulk Shipping Actions */}
               <BulkShippingActions
                 selectedOrders={selectedOrders}
                 onClearSelection={() => setSelectedOrders([])}
@@ -1424,6 +1514,14 @@ export default function ShippingQueuePage() {
                       setShowLabelCreator(true);
                     }}
                   />
+                  
+                  {/* Linked Orders Management */}
+                  <div className="mt-4">
+                    <LinkedOrdersManager 
+                      orderId={selectedCard || ''} 
+                      currentUser={(currentUser as any)?.username || (currentUser as any)?.name || 'System'}
+                    />
+                  </div>
                 </div>
               ) : (
                 <div className="text-center py-8 text-gray-500">

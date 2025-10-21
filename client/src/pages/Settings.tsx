@@ -66,6 +66,7 @@ export default function Settings() {
     queryKey: ['/api/user-integrations'],
   });
 
+<<<<<<< HEAD
   const connectMutation = useMutation({
     mutationFn: async (integrationType: string) => {
       // Initiate OAuth flow for Google integrations
@@ -130,6 +131,8 @@ export default function Settings() {
     },
   });
 
+=======
+>>>>>>> b2f21458 (Add OAuth integration flow for connecting external services)
   const disconnectMutation = useMutation({
     mutationFn: async (integrationType: string) => {
       return apiRequest(`/api/user-integrations/${integrationType}`, {
@@ -162,7 +165,73 @@ export default function Settings() {
   };
 
   const handleConnect = (type: string) => {
-    connectMutation.mutate(type);
+    // Determine OAuth provider based on integration type
+    let oauthProvider = '';
+    if (type.startsWith('google-')) {
+      oauthProvider = 'google';
+    } else if (type === 'outlook') {
+      oauthProvider = 'microsoft';
+    }
+
+    if (!oauthProvider) {
+      toast({
+        title: 'Error',
+        description: 'Unknown integration type',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Open OAuth popup window
+    const width = 600;
+    const height = 700;
+    const left = window.screen.width / 2 - width / 2;
+    const top = window.screen.height / 2 - height / 2;
+
+    const popup = window.open(
+      `/api/oauth/${oauthProvider}/initiate?type=${type}`,
+      'OAuth Authentication',
+      `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
+    );
+
+    if (!popup) {
+      toast({
+        title: 'Error',
+        description: 'Please allow popups for this site',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Listen for OAuth callback messages
+    const handleMessage = (event: MessageEvent) => {
+      // Verify origin if needed
+      if (event.data.success) {
+        queryClient.invalidateQueries({ queryKey: ['/api/user-integrations'] });
+        toast({
+          title: 'Success',
+          description: `Successfully connected ${event.data.accountEmail}`,
+        });
+        window.removeEventListener('message', handleMessage);
+      } else if (event.data.error) {
+        toast({
+          title: 'Error',
+          description: event.data.error,
+          variant: 'destructive',
+        });
+        window.removeEventListener('message', handleMessage);
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+
+    // Clean up if popup is closed without completing OAuth
+    const checkPopup = setInterval(() => {
+      if (popup.closed) {
+        clearInterval(checkPopup);
+        window.removeEventListener('message', handleMessage);
+      }
+    }, 500);
   };
 
   const handleDisconnect = (type: string) => {
@@ -267,11 +336,10 @@ export default function Settings() {
                         ) : (
                           <Button
                             onClick={() => handleConnect(config.type)}
-                            disabled={connectMutation.isPending}
                             className="w-full"
                             data-testid={`button-connect-${config.type}`}
                           >
-                            {connectMutation.isPending ? 'Connecting...' : `Connect ${config.name}`}
+                            Connect {config.name}
                           </Button>
                         )}
                       </CardContent>

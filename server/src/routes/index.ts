@@ -34,6 +34,7 @@ import moldSyncRoutes from './moldSync';
 import authRoutes from './auth';
 import usersRoutes from './users';
 import userIntegrationsRoutes from './userIntegrations';
+import oauthRoutes from './oauth';
 import reportsRoutes from './reports';
 import oemSettingsRoutes from './oemSettings';
 import metalAccessoriesRoutes from './metalAccessories';
@@ -70,6 +71,9 @@ export function registerRoutes(app: Express): Server {
   
   // Microsoft OAuth routes
   app.use('/api/auth/microsoft', microsoftAuthRoutes);
+
+  // OAuth routes
+  app.use('/api/oauth', oauthRoutes);
 
   // Employee management routes
   app.use('/api/employees', employeesRoutes);

@@ -174,7 +174,7 @@ export default function ProductionQueueManager() {
   // All P1 PO functionality now managed via OEM Priority Settings
 
   // Progress orders to Layup/Plugging mutation
-  const progressToBarcodeMutation = useMutation({
+  const progressToLayupPluggingMutation = useMutation({
     mutationFn: async (orderIds: string[]) => {
       const progressPromises = orderIds.map((orderId) =>
         apiRequest(`/api/orders/${orderId}/progress`, {
@@ -224,9 +224,9 @@ export default function ProductionQueueManager() {
     }
   };
 
-  const handleProgressSelectedToBarcode = () => {
+  const handleProgressSelectedToLayupPlugging = () => {
     if (selectedQueueOrders.size === 0) return;
-    progressToBarcodeMutation.mutate(Array.from(selectedQueueOrders));
+    progressToLayupPluggingMutation.mutate(Array.from(selectedQueueOrders));
   };
 
   const getUrgencyBadgeColor = (urgencyLevel: string) => {
@@ -510,13 +510,13 @@ export default function ProductionQueueManager() {
                     </Button>
                     {selectedQueueOrders.size > 0 && (
                       <Button
-                        onClick={handleProgressSelectedToBarcode}
-                        disabled={progressToBarcodeMutation.isPending}
+                        onClick={handleProgressSelectedToLayupPlugging}
+                        disabled={progressToLayupPluggingMutation.isPending}
                         className="flex items-center gap-2 bg-green-600 hover:bg-green-700"
                         size="sm"
                       >
                         <ArrowRight className="h-4 w-4" />
-                        Progress to Barcode ({selectedQueueOrders.size})
+                        Progress to Layup/Plugging ({selectedQueueOrders.size})
                       </Button>
                     )}
                   </div>

@@ -72,7 +72,7 @@ The application utilizes a monorepo structure with a full-stack TypeScript appro
 
 ## Recent Changes
 
-### October 21, 2025 - Microsoft OAuth Login & Critical Security Fix
+### October 21, 2025 - Microsoft OAuth Login, Security Fix & P1 Queue Bug Fix
 
 #### Microsoft OAuth User Authentication
 - **Production-Ready OAuth 2.0**: Full OAuth implementation for user login with Microsoft accounts
@@ -116,3 +116,11 @@ The application utilizes a monorepo structure with a full-stack TypeScript appro
 - **Impact**: All user sessions now use 64-character hex tokens with 256-bit entropy
 - **Scope**: System-wide security improvement affecting all authentication methods
 - **Verification**: Architect-approved, no remaining Math.random() usage in security-critical code
+
+#### P1 Production Queue Bug Fix
+- **Issue Fixed**: Confusing naming in P1 Production Queue progression button
+  - Button text said "Progress to Barcode" but actually progressed to "Layup/Plugging" (correct flow)
+  - Renamed mutation from `progressToBarcodeMutation` to `progressToLayupPluggingMutation`
+  - Updated button text to accurately show "Progress to Layup/Plugging"
+- **Correct Department Flow Confirmed**: P1 Production Queue → Layup/Plugging → Barcode → CNC
+- **Scope**: UI clarity improvement - routing was already correct, only naming was misleading

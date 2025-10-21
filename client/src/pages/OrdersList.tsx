@@ -79,6 +79,7 @@ import {
   MoreHorizontal,
   XCircle,
   AlertTriangle,
+  Link as LinkIcon,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import CustomerDetailsTooltip from '@/components/CustomerDetailsTooltip';
@@ -94,6 +95,7 @@ import { cn } from '@/lib/utils';
 import { getDisplayOrderId } from '@/lib/orderUtils';
 import toast from 'react-hot-toast';
 import CommunicationCompose from '@/components/CommunicationCompose';
+import LinkOrdersDialog from '@/components/LinkOrdersDialog';
 
 // Form validation schema for kickback creation
 const kickbackFormSchema = insertKickbackSchema.extend({
@@ -204,6 +206,9 @@ export default function OrdersList() {
   // PDF modal state
   const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
   const [currentPdfUrl, setCurrentPdfUrl] = useState<string>('');
+
+  // Link Orders dialog state
+  const [linkOrdersDialogOpen, setLinkOrdersDialogOpen] = useState<string | null>(null);
 
   // Initialize kickback form
   const kickbackForm = useForm<KickbackFormData>({
@@ -587,6 +592,11 @@ export default function OrdersList() {
     const { data: kickbacks } = useQuery<any[]>({
       queryKey: ['/api/kickbacks'],
       refetchInterval: 60000, // Auto-refresh every 60 seconds
+    });
+
+    // Fetch current user for Link Orders functionality
+    const { data: currentUser } = useQuery<any>({
+      queryKey: ['/api/user'],
     });
 
     console.log('Orders data:', orders);
@@ -1413,6 +1423,13 @@ export default function OrdersList() {
                                 <Download className="mr-2 h-4 w-4" />
                                 Download Sales Order
                               </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => setLinkOrdersDialogOpen(order.orderId)}
+                                data-testid={`button-link-orders-${order.orderId}`}
+                              >
+                                <LinkIcon className="mr-2 h-4 w-4" />
+                                Link Orders
+                              </DropdownMenuItem>
                               {order.isCancelled ? (
                                 <DropdownMenuItem
                                   onClick={() =>
@@ -1436,6 +1453,16 @@ export default function OrdersList() {
                               )}
                             </DropdownMenuContent>
                           </DropdownMenu>
+                          
+                          {/* Link Orders Dialog */}
+                          {linkOrdersDialogOpen === order.orderId && (
+                            <LinkOrdersDialog
+                              orderId={order.orderId}
+                              isOpen={true}
+                              onClose={() => setLinkOrdersDialogOpen(null)}
+                              currentUser={currentUser?.name || currentUser?.username || 'System'}
+                            />
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>

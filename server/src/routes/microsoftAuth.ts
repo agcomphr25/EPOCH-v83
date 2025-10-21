@@ -8,9 +8,13 @@ const router = Router();
 
 const MICROSOFT_CLIENT_ID = process.env.MICROSOFT_CLIENT_ID;
 const MICROSOFT_CLIENT_SECRET = process.env.MICROSOFT_CLIENT_SECRET;
-const REDIRECT_URI = process.env.REPLIT_DEV_DOMAIN 
-  ? `https://${process.env.REPLIT_DEV_DOMAIN}/api/auth/microsoft/callback`
-  : 'http://localhost:5000/api/auth/microsoft/callback';
+
+// Redirect URI - use production domain if available, fallback to dev domain
+const REDIRECT_URI = process.env.PRODUCTION_DOMAIN
+  ? `https://${process.env.PRODUCTION_DOMAIN}/api/auth/microsoft/callback`
+  : process.env.REPLIT_DEV_DOMAIN 
+    ? `https://${process.env.REPLIT_DEV_DOMAIN}/api/auth/microsoft/callback`
+    : 'https://agcompepoch.xyz/api/auth/microsoft/callback'; // Production domain
 
 // MSAL configuration
 const msalConfig = {

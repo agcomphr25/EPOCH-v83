@@ -49,10 +49,10 @@ export async function authenticateToken(
   try {
     // Skip authentication in development environment
     if (!isDeploymentEnvironment(req)) {
-      // In development, create a mock user for testing
+      // In development, use a real user (admin with id=2) for testing
       req.user = {
-        id: 999,
-        username: 'dev-user',
+        id: 2,
+        username: 'admin',
         role: 'ADMIN',
         employeeId: null,
         canOverridePrices: true,

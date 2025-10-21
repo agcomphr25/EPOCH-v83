@@ -1,7 +1,9 @@
 import { Router, type Request, type Response } from 'express';
 import { OAuth2Client } from 'google-auth-library';
+import { google } from 'googleapis';
 import { authenticateToken } from '../../middleware/auth';
 import { DatabaseStorage } from '../../storage';
+import crypto from 'crypto';
 
 const router = Router();
 const storage = new DatabaseStorage();
@@ -18,6 +20,26 @@ const oauth2Client = new OAuth2Client(
   GOOGLE_CLIENT_SECRET,
   REDIRECT_URI
 );
+
+// In-memory state store with expiration (5 minutes)
+// In production, consider using Redis or database
+interface StateData {
+  userId: number;
+  integrationType: string;
+  expiresAt: number;
+}
+
+const stateStore = new Map<string, StateData>();
+
+// Cleanup expired states every minute
+setInterval(() => {
+  const now = Date.now();
+  for (const [state, data] of stateStore.entries()) {
+    if (data.expiresAt < now) {
+      stateStore.delete(state);
+    }
+  }
+}, 60000);
 
 // Define scopes based on integration type
 const INTEGRATION_SCOPES: Record<string, string[]> = {
@@ -44,7 +66,8 @@ const getAllGoogleScopes = () => {
   Object.values(INTEGRATION_SCOPES).forEach(scopes => {
     scopes.forEach(scope => allScopes.add(scope));
   });
-  // Add basic profile scope
+  // Add OpenID scope for ID token (CRITICAL FIX)
+  allScopes.add('openid');
   allScopes.add('https://www.googleapis.com/auth/userinfo.email');
   allScopes.add('https://www.googleapis.com/auth/userinfo.profile');
   return Array.from(allScopes);
@@ -56,8 +79,16 @@ router.get('/initiate', authenticateToken, async (req: Request, res: Response) =
     const integrationType = req.query.type as string || 'google-gmail';
     const userId = req.user!.id;
 
-    // Store user ID and integration type in state parameter
-    const state = Buffer.from(JSON.stringify({ userId, integrationType })).toString('base64');
+    // Generate cryptographically random state token (SECURITY FIX)
+    const state = crypto.randomBytes(32).toString('hex');
+    
+    // Store state with user info and expiration (5 minutes)
+    const expiresAt = Date.now() + (5 * 60 * 1000);
+    stateStore.set(state, {
+      userId,
+      integrationType,
+      expiresAt,
+    });
 
     // Get all Google scopes to allow user to connect multiple services at once
     const scopes = getAllGoogleScopes();
@@ -65,7 +96,7 @@ router.get('/initiate', authenticateToken, async (req: Request, res: Response) =
     const authUrl = oauth2Client.generateAuthUrl({
       access_type: 'offline', // Get refresh token
       scope: scopes,
-      state,
+      state, // Use cryptographically random state
       prompt: 'consent', // Force consent screen to get refresh token
     });
 
@@ -85,10 +116,68 @@ router.get('/callback', async (req: Request, res: Response) => {
       return res.status(400).send('Missing code or state parameter');
     }
 
-    // Decode state to get user ID and integration type
-    const { userId, integrationType } = JSON.parse(
-      Buffer.from(state as string, 'base64').toString()
-    );
+    // SECURITY FIX: Validate state token
+    const stateData = stateStore.get(state as string);
+    
+    if (!stateData) {
+      console.error('Invalid or expired state token');
+      return res.status(403).send(`
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>OAuth Error</title>
+            <style>
+              body {
+                font-family: system-ui, -apple-system, sans-serif;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                min-height: 100vh;
+                margin: 0;
+                background: linear-gradient(135deg, #f87171 0%, #dc2626 100%);
+              }
+              .container {
+                background: white;
+                padding: 3rem;
+                border-radius: 1rem;
+                box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+                text-align: center;
+                max-width: 400px;
+              }
+              .error-icon {
+                font-size: 4rem;
+                margin-bottom: 1rem;
+              }
+              h1 {
+                color: #dc2626;
+                margin: 0 0 1rem 0;
+              }
+              p {
+                color: #6b7280;
+              }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <div class="error-icon">⚠️</div>
+              <h1>Security Error</h1>
+              <p>Invalid or expired authentication session. Please try again.</p>
+            </div>
+          </body>
+        </html>
+      `);
+    }
+
+    // Check if state has expired
+    if (stateData.expiresAt < Date.now()) {
+      stateStore.delete(state as string);
+      return res.status(403).send('OAuth state has expired. Please try again.');
+    }
+
+    // Delete state token to prevent reuse (SECURITY FIX)
+    stateStore.delete(state as string);
+
+    const { userId, integrationType } = stateData;
 
     // Exchange code for tokens
     const { tokens } = await oauth2Client.getToken(code as string);
@@ -97,17 +186,47 @@ router.get('/callback', async (req: Request, res: Response) => {
       throw new Error('No access token received');
     }
 
-    // Set credentials to get user info
+    // Set credentials
     oauth2Client.setCredentials(tokens);
 
-    // Get user's email from Google
-    const ticket = await oauth2Client.verifyIdToken({
-      idToken: tokens.id_token!,
-      audience: GOOGLE_CLIENT_ID,
-    });
-    const payload = ticket.getPayload();
-    const accountEmail = payload?.email;
-    const accountName = payload?.name;
+    let accountEmail: string | null = null;
+    let accountName: string | null = null;
+
+    // FUNCTIONALITY FIX: Handle ID token properly with fallback
+    if (tokens.id_token) {
+      try {
+        const ticket = await oauth2Client.verifyIdToken({
+          idToken: tokens.id_token,
+          audience: GOOGLE_CLIENT_ID,
+        });
+        const payload = ticket.getPayload();
+        accountEmail = payload?.email || null;
+        accountName = payload?.name || null;
+      } catch (error) {
+        console.warn('Failed to verify ID token, falling back to People API:', error);
+      }
+    }
+
+    // Fallback: Use Google People API if ID token is not available or failed
+    if (!accountEmail) {
+      try {
+        const people = google.people({ version: 'v1', auth: oauth2Client });
+        const profile = await people.people.get({
+          resourceName: 'people/me',
+          personFields: 'emailAddresses,names',
+        });
+        
+        if (profile.data.emailAddresses && profile.data.emailAddresses.length > 0) {
+          accountEmail = profile.data.emailAddresses[0].value || null;
+        }
+        if (profile.data.names && profile.data.names.length > 0) {
+          accountName = profile.data.names[0].displayName || null;
+        }
+      } catch (peopleError) {
+        console.error('Failed to fetch user info from People API:', peopleError);
+        // Continue without user info rather than failing completely
+      }
+    }
 
     // Calculate token expiry
     const tokenExpiresAt = tokens.expiry_date 
@@ -122,8 +241,8 @@ router.get('/callback', async (req: Request, res: Response) => {
       accessToken: tokens.access_token,
       refreshToken: tokens.refresh_token || null,
       tokenExpiresAt,
-      accountEmail: accountEmail || null,
-      accountName: accountName || null,
+      accountEmail,
+      accountName,
       lastSyncedAt: new Date(),
     });
 

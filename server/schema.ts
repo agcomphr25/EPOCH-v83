@@ -4071,6 +4071,25 @@ export const insertMagicLinkTokenSchema = createInsertSchema(
 export type MagicLinkToken = typeof magicLinkTokens.$inferSelect;
 export type InsertMagicLinkToken = z.infer<typeof insertMagicLinkTokenSchema>;
 
+// OAuth State Tokens - Secure OAuth CSRF protection
+export const oauthStates = pgTable('oauth_states', {
+  id: serial('id').primaryKey(),
+  state: text('state').notNull().unique(), // Cryptographically random state token
+  userId: integer('user_id').references(() => users.id).notNull(),
+  integrationType: text('integration_type').notNull(), // e.g., 'google-gmail', 'google-calendar'
+  expiresAt: timestamp('expires_at').notNull(), // State token expiration (5 minutes)
+  used: boolean('used').default(false), // Prevent state reuse
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+export const insertOAuthStateSchema = createInsertSchema(oauthStates).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type OAuthState = typeof oauthStates.$inferSelect;
+export type InsertOAuthState = z.infer<typeof insertOAuthStateSchema>;
+
 // Bulk Shipping Schemas - For API requests/responses (not stored in DB)
 export const receiverAccountSchema = z.object({
   accountNumber: z.string().min(1, 'Account number is required'),

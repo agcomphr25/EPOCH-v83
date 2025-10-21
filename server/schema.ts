@@ -4085,4 +4085,39 @@ export type BulkShipmentPreference = z.infer<typeof bulkShipmentPreferenceSchema
 export type BulkRatesRequest = z.infer<typeof bulkRatesRequestSchema>;
 export type BulkLabelRequest = z.infer<typeof bulkLabelRequestSchema>;
 
+// Audit Events Table - Comprehensive audit trail for all system changes
+export const auditEvents = pgTable('audit_events', {
+  id: serial('id').primaryKey(),
+  entityType: text('entity_type').notNull(), // 'Order', 'Customer', 'Inventory', 'Employee', 'Vendor', etc.
+  entityId: text('entity_id').notNull(), // The ID of the entity being tracked
+  action: text('action').notNull(), // 'create', 'update', 'delete', 'progress', 'approve', 'sign', etc.
+  actorId: integer('actor_id').references(() => users.id), // User who performed the action
+  actorName: text('actor_name').notNull(), // Denormalized for easy display
+  actorRole: text('actor_role'), // Role at time of action (ADMIN, EMPLOYEE, OWNER)
+  reason: text('reason'), // Optional reason/description for the change
+  fieldsChanged: jsonb('fields_changed'), // { before: {...}, after: {...} }
+  meta: jsonb('meta'), // Additional context (department changes, technician, timestamps, etc.)
+  ipAddress: text('ip_address'), // IP address of the user
+  userAgent: text('user_agent'), // Browser/client info
+  timestamp: timestamp('timestamp').defaultNow().notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+}, (table) => ({
+  // Indexes for efficient querying
+  entityTypeIdx: index('audit_entity_type_idx').on(table.entityType),
+  entityIdIdx: index('audit_entity_id_idx').on(table.entityId),
+  timestampIdx: index('audit_timestamp_idx').on(table.timestamp),
+  actorIdIdx: index('audit_actor_id_idx').on(table.actorId),
+  // Composite index for common query pattern
+  entityCompositeIdx: index('audit_entity_composite_idx').on(table.entityType, table.entityId),
+}));
+
+export const insertAuditEventSchema = createInsertSchema(auditEvents).omit({
+  id: true,
+  timestamp: true,
+  createdAt: true,
+});
+
+export type AuditEvent = typeof auditEvents.$inferSelect;
+export type InsertAuditEvent = z.infer<typeof insertAuditEventSchema>;
+
 export * from './calendar.schema';

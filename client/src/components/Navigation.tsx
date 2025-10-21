@@ -45,12 +45,14 @@ import {
   Home,
   FileSpreadsheet,
   Search,
+  FileSearch,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import InstallPWAButton from './InstallPWAButton';
 import GlobalSearch from './GlobalSearch';
+import { AuditModal } from './AuditModal';
 import { useQuery } from '@tanstack/react-query';
 import { hasFullAccess, hasRouteAccess } from '@/config/userPermissions';
 import { getDashboardRoute } from '@/config/dashboardMapping';
@@ -68,6 +70,7 @@ import {
 export default function Navigation() {
   const [location, setLocation] = useLocation();
   const [searchOpen, setSearchOpen] = useState(false);
+  const [auditOpen, setAuditOpen] = useState(false);
 
   // Check if we're in deployment environment to show logout button
   const isDeploymentEnvironment = () => {
@@ -1449,6 +1452,18 @@ export default function Navigation() {
                 {navigator.platform.includes('Mac') ? '⌘K' : 'Ctrl+K'}
               </kbd>
             </Button>
+            {currentUser?.role === 'ADMIN' && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setAuditOpen(true)}
+                className="gap-2"
+                data-testid="button-open-audit"
+              >
+                <FileSearch className="h-4 w-4" />
+                <span className="hidden md:inline">Audit Trail</span>
+              </Button>
+            )}
             <InstallPWAButton />
             <span className="text-sm text-gray-600">
               Manufacturing ERP System
@@ -1481,6 +1496,7 @@ export default function Navigation() {
       </div>
       
       <GlobalSearch open={searchOpen} onOpenChange={setSearchOpen} />
+      <AuditModal open={auditOpen} onOpenChange={setAuditOpen} />
     </header>
   );
 }

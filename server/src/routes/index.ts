@@ -44,6 +44,7 @@ import magicLinkRoutes from './magicLink';
 import certificationsRoutes from './certifications';
 import globalSearchRoutes from './globalSearch';
 import linkedOrdersRoutes from './linkedOrders';
+import auditRoutes from './audit';
 import { getAccessToken } from '../utils/upsShipping';
 
 export function registerRoutes(app: Express): Server {
@@ -176,6 +177,9 @@ export function registerRoutes(app: Express): Server {
 
   // Linked orders management routes
   app.use('/api/linked-orders', linkedOrdersRoutes);
+
+  // Audit trail routes
+  app.use('/api/audit', auditRoutes);
 
   // UPS Test endpoint
   app.post('/api/test-ups-auth', async (req, res) => {

@@ -68,7 +68,17 @@ The application utilizes a monorepo structure with a full-stack TypeScript appro
 
 ## Recent Changes
 
-### October 21, 2025 - Linked Orders Feature & Department Progression Fix
+### October 21, 2025 - Linked Orders, Department Progression Fix & Bulk Fulfill
+
+#### Bulk Fulfill Functionality
+- **Floating Action Bar**: When orders are selected in Shipping department, a sticky action bar appears at the bottom of the screen
+- **Multi-Select Support**: Users can select multiple orders via checkboxes and mark them all as fulfilled with a single click
+- **Bulk Fulfill Button**: Green-themed "Mark as Fulfilled" button shows count of selected orders
+- **Loading States**: Button displays "Fulfilling..." during the mutation process
+- **Smart UI**: Action bar includes "Clear Selection" button and order count display
+- **Success Feedback**: Toast notifications confirm how many orders were fulfilled
+- **Integration**: Works alongside existing BulkShippingActions for consolidated shipping labels
+- **Implementation**: Uses concurrent API calls via Promise.all for efficient batch processing
 
 #### Department Progression Bug Fix
 - **Issue**: Finish department was incorrectly sending orders to Paint, skipping Finish QC entirely

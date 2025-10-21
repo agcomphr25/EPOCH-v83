@@ -68,6 +68,40 @@ The application utilizes a monorepo structure with a full-stack TypeScript appro
 
 ## Recent Changes
 
+### October 21, 2025 - Comprehensive Audit Trail System
+
+#### Audit Infrastructure
+- **Database Schema**: Created `audit_events` table with indexed fields for high-performance querying
+- **Automatic Tracking**: Utility functions (`logAuditEvent`) for capturing user actions with timestamps, IP addresses, and metadata
+- **API Routes**: RESTful endpoints at `/api/audit/*` for fetching events, entity types, and entities with ADMIN-only access control
+- **Real-time Updates**: 5-second polling interval when audit drawer is open for live event monitoring
+- **Permanent Storage**: All audit events stored indefinitely in PostgreSQL for compliance and historical analysis
+
+#### User Interface Components
+- **Navbar Integration**: Audit button with clipboard icon in main navigation (ADMIN role gated)
+- **AuditModal**: Entity selection dialog with search functionality across all auditable entity types (Orders, Inventory, Customers, etc.)
+- **AuditDrawer**: Comprehensive audit trail viewer with:
+  - Event filtering (All, Field Changes, Department Progress, Sign-offs)
+  - Pagination (10 events per page)
+  - Detailed event cards showing actor, action, timestamp, changed fields (before/after), and metadata
+  - Export to JSON functionality
+  - Error handling with user-friendly messages
+- **Smart Sorting**: Entity types ordered by priority (Orders, Inventory, Customers first, then alphabetical)
+
+#### Integration Points
+- **Ready for Integration**: Utility functions prepared for adding audit tracking to:
+  - Order creation, updates, and department progression
+  - Customer CRUD operations
+  - Inventory changes and stock model updates
+  - Payment tracking and shipping operations
+  - Employee actions and quality control sign-offs
+- **Example Usage**: `await logAuditEvent(db, { entityType: 'Order', entityId: orderId, action: 'STATUS_CHANGE', actorId: userId, ... })`
+
+#### Security & Performance
+- **Access Control**: All audit endpoints protected with `requireAdmin` middleware
+- **Optimized Queries**: Database indexes on `entity_type`, `entity_id`, `actor_id`, and `timestamp` for fast retrieval
+- **Scalable Architecture**: Supports future granular permissions (e.g., AUDIT_VIEW_ORDERS, AUDIT_VIEW_INVENTORY)
+
 ### October 21, 2025 - Linked Orders Feature for CSRs
 
 #### Linked Orders Management in All Orders List

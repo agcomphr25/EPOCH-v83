@@ -37,6 +37,7 @@ import ARJournalPage from './pages/ARJournalPage';
 import COGSReportPage from './pages/COGSReportPage';
 import FinanceDashboardPage from './pages/FinanceDashboardPage';
 import MonthlyFulfilledReport from './pages/MonthlyFulfilledReport';
+import BulkPaymentPage from './pages/BulkPaymentPage';
 import EnhancedFormsPage from './pages/EnhancedFormsPage';
 import EnhancedReportsPage from './pages/EnhancedReportsPage';
 import FormRendererPage from './pages/FormRendererPage';
@@ -393,6 +394,10 @@ function App() {
                   <Route
                     path="/finance/monthly-fulfilled"
                     component={MonthlyFulfilledReport}
+                  />
+                  <Route
+                    path="/finance/bulk-payment"
+                    component={BulkPaymentPage}
                   />
 
                   {/* Payment Processing Routes */}

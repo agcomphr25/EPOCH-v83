@@ -1559,7 +1559,9 @@ router.post('/bulk/create-consolidated-label', async (req: Request, res: Respons
     });
 
     const shipmentResults = shipResponse.data?.ShipmentResponse?.ShipmentResults;
-    const labelBase64 = shipmentResults?.PackageResults?.[0]?.ShippingLabel?.GraphicImage;
+    const labelBase64 =
+      shipmentResults?.PackageResults?.[0]?.ShippingLabel?.GraphicImage ||
+      shipmentResults?.PackageResults?.ShippingLabel?.GraphicImage;
     const trackingNumber = shipmentResults?.ShipmentIdentificationNumber;
     // Use negotiated rate if available, otherwise use retail rate
     const negotiatedCost = shipmentResults?.NegotiatedRateCharges?.TotalCharge?.MonetaryValue;

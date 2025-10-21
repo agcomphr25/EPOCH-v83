@@ -26,6 +26,8 @@ import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
 import { OrderSearchBox } from '@/components/OrderSearchBox';
 import WeeklyShippingWidget from '@/components/WeeklyShippingWidget';
+import { LinkedOrderIndicator } from '@/components/LinkedOrderIndicator';
+import { LinkedOrdersManager } from '@/components/LinkedOrdersManager';
 
 export default function ShippingQueuePage() {
   const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
@@ -61,6 +63,11 @@ export default function ShippingQueuePage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
+
+  // Get current user information
+  const { data: currentUser } = useQuery({
+    queryKey: ['currentUser'],
+  });
 
   // Get all orders from production pipeline with payment status
   const { data: allOrders = [] } = useQuery({
@@ -1030,6 +1037,7 @@ export default function ShippingQueuePage() {
               </div>
             </div>
             <div className="flex items-center gap-2">
+              <LinkedOrderIndicator orderId={order.orderId} variant="compact" />
               {order.isFullyPaid ? (
                 <Badge className="bg-green-500 hover:bg-green-600 text-white text-xs">
                   PAID
@@ -1424,6 +1432,14 @@ export default function ShippingQueuePage() {
                       setShowLabelCreator(true);
                     }}
                   />
+                  
+                  {/* Linked Orders Management */}
+                  <div className="mt-4">
+                    <LinkedOrdersManager 
+                      orderId={selectedCard || ''} 
+                      currentUser={(currentUser as any)?.username || (currentUser as any)?.name || 'System'}
+                    />
+                  </div>
                 </div>
               ) : (
                 <div className="text-center py-8 text-gray-500">

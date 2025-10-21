@@ -193,6 +193,25 @@ export const orders = pgTable('orders', {
   updatedAt: timestamp('updated_at').defaultNow(),
 });
 
+// Linked Orders - Groups of orders that must be processed/shipped together
+export const linkedOrderGroups = pgTable('linked_order_groups', {
+  id: serial('id').primaryKey(),
+  name: text('name'),
+  requiresApprovalToSeparate: boolean('requires_approval_to_separate').default(true),
+  approvalCode: text('approval_code'),
+  notes: text('notes'),
+  createdBy: text('created_by'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+export const linkedOrders = pgTable('linked_orders', {
+  id: serial('id').primaryKey(),
+  linkGroupId: integer('link_group_id').references(() => linkedOrderGroups.id, { onDelete: 'cascade' }).notNull(),
+  orderId: text('order_id').notNull().unique(),
+  addedAt: timestamp('added_at').defaultNow(),
+});
+
 export const csvData = pgTable('csv_data', {
   id: serial('id').primaryKey(),
   fileName: text('file_name').notNull(),
@@ -1211,6 +1230,30 @@ export const insertAllOrderSchema = createInsertSchema(allOrders)
     isVerified: z.boolean().default(false),
   });
 
+export const insertLinkedOrderGroupSchema = createInsertSchema(linkedOrderGroups)
+  .omit({
+    id: true,
+    createdAt: true,
+    updatedAt: true,
+  })
+  .extend({
+    name: z.string().optional().nullable(),
+    requiresApprovalToSeparate: z.boolean().default(true),
+    approvalCode: z.string().optional().nullable(),
+    notes: z.string().optional().nullable(),
+    createdBy: z.string().optional().nullable(),
+  });
+
+export const insertLinkedOrderSchema = createInsertSchema(linkedOrders)
+  .omit({
+    id: true,
+    addedAt: true,
+  })
+  .extend({
+    linkGroupId: z.number().min(1, 'Link group ID is required'),
+    orderId: z.string().min(1, 'Order ID is required'),
+  });
+
 export const insertPaymentSchema = createInsertSchema(payments)
   .omit({
     id: true,
@@ -1803,6 +1846,10 @@ export type InsertOrderDraft = z.infer<typeof insertOrderDraftSchema>;
 export type OrderDraft = typeof orderDrafts.$inferSelect;
 export type InsertAllOrder = z.infer<typeof insertAllOrderSchema>;
 export type AllOrder = typeof allOrders.$inferSelect;
+export type InsertLinkedOrderGroup = z.infer<typeof insertLinkedOrderGroupSchema>;
+export type LinkedOrderGroup = typeof linkedOrderGroups.$inferSelect;
+export type InsertLinkedOrder = z.infer<typeof insertLinkedOrderSchema>;
+export type LinkedOrder = typeof linkedOrders.$inferSelect;
 export type InsertForm = z.infer<typeof insertFormSchema>;
 export type Form = typeof forms.$inferSelect;
 export type InsertFormSubmission = z.infer<typeof insertFormSubmissionSchema>;

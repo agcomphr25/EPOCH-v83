@@ -1,0 +1,290 @@
+Here is your brand new audit drawer system — everything inside a single index.html file, ready to drop into Replit or any browser-based playground:
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Audit Drawer System</title>
+  <style>
+    :root {
+      --b:#111827; --bg:#ffffff; --muted:#6b7280; --br:#e5e7eb; --chip:#f3f4f6;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin:0;
+      font:14px/1.5 system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+      background:#f9fafb;
+      color:var(--b);
+    }
+    .container {
+      max-width:1100px; margin:40px auto; padding:0 16px;
+    }
+    .card {
+      background:#fff; border:1px solid var(--br); border-radius:10px;
+      padding:16px; box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+    }
+    h1 { margin:0 0 10px; font-size:22px; }
+    .row { display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin-top:10px; }
+    .input, .btn {
+      padding:8px 12px; border:1px solid var(--br); border-radius:8px; font-size:14px;
+    }
+    .input { min-width:220px; }
+    .btn { background:#fff; cursor:pointer; }
+    .btn:hover { background:#f3f4f6; }
+    .tag {
+      font-size:12px; padding:4px 8px; background:var(--chip); border-radius:999px;
+      border:1px solid var(--br);
+    }
+    .drawer {
+      position:fixed; top:0; right:-460px; width:440px; height:100vh;
+      background:#fff; border-left:1px solid var(--br);
+      box-shadow:-8px 0 20px rgba(0,0,0,.08); transition:right .25s;
+      display:flex; flex-direction:column; z-index:100;
+    }
+    .drawer.open { right:0; }
+    .backdrop {
+      position:fixed; inset:0; background:rgba(0,0,0,0.4);
+      opacity:0; pointer-events:none; transition:opacity .2s; z-index:99;
+    }
+    .backdrop.open { opacity:1; pointer-events:auto; }
+    .drawer header, .drawer .foot {
+      padding:12px 16px; border-bottom:1px solid var(--br);
+      display:flex; justify-content:space-between; align-items:center;
+    }
+    .drawer .foot { border-top:1px solid var(--br); border-bottom:none; }
+    .filters, .progress-lane, .foot .row {
+      display:flex; gap:8px; flex-wrap:wrap; padding:10px 16px;
+    }
+    .tab {
+      font-size:13px; padding:6px 10px; border:1px solid var(--br);
+      border-radius:8px; background:#fff; cursor:pointer;
+    }
+    .tab.active { background:#eef2ff; border-color:#c7d2fe; }
+    .event {
+      border:1px solid var(--br); border-radius:8px; background:#fff;
+      padding:10px; margin:10px 16px;
+    }
+    .ev-head { display:flex; justify-content:space-between; font-size:14px; }
+    .ev-meta { font-size:12px; color:var(--muted); }
+    .chip {
+      font-size:11px; padding:2px 8px; background:var(--chip);
+      border:1px solid var(--br); border-radius:999px;
+    }
+    .diff {
+      background:#f9fafb; border:1px solid var(--br); border-radius:6px;
+      font-size:12px; padding:6px; margin-top:8px;
+    }
+    .diff-row {
+      display:grid; grid-template-columns:100px 1fr 1fr; gap:8px; padding:2px 0;
+    }
+    .before { text-decoration:line-through; color:var(--muted); }
+    .lane-chip {
+      padding:4px 8px; background:#ecfeff; border:1px solid #cffafe;
+      border-radius:999px; font-size:12px;
+    }
+    .link { color:#2563eb; text-decoration:none; font-size:12px; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <div class="card">
+    <h1>Work Order <span id="wo-id" class="tag">WO-000123</span></h1>
+    <div class="row">
+      <input id="entityType" class="input" value="WorkOrder"/>
+      <input id="entityId" class="input" value="WO-000123"/>
+      <button id="openBtn" class="btn">Open Audit Drawer</button>
+      <button id="progressBtn" class="btn">Simulate Progress</button>
+    </div>
+    <div class="row">
+      <span class="tag">Status: <strong id="status">In-Progress</strong></span>
+      <span class="tag">Area: <strong id="area">Layup</strong></span>
+      <span class="tag">Priority: <strong>High</strong></span>
+    </div>
+  </div>
+</div>
+
+<!-- Drawer -->
+<div id="backdrop" class="backdrop"></div>
+<aside id="drawer" class="drawer" aria-label="Audit Drawer">
+  <header>
+    <div><strong>Audit Trail</strong> <div class="ev-meta" id="titleMeta"></div></div>
+    <button id="closeBtn" class="btn">Close</button>
+  </header>
+
+  <div id="lane" class="progress-lane"></div>
+
+  <div class="filters">
+    <button class="tab active" data-filter="all">All</button>
+    <button class="tab" data-filter="changes">Changes</button>
+    <button class="tab" data-filter="progress">Progress</button>
+    <button class="tab" data-filter="sign">Signatures</button>
+  </div>
+
+  <div id="events" style="flex:1; overflow:auto;"></div>
+
+  <div class="foot">
+    <div class="ev-meta" id="countMeta"></div>
+    <div class="row">
+      <button id="prev" class="btn">Prev</button>
+      <button id="next" class="btn">Next</button>
+      <a id="exportLink" class="link" href="#" download>Export JSON</a>
+    </div>
+  </div>
+</aside>
+
+<script>
+const state = {
+  open:false, page:0, pageSize:5, filter:"all",
+  entityType:"WorkOrder", entityId:"WO-000123",
+};
+
+let MOCK_EVENTS = (() => {
+  const now = Date.now();
+  return [
+    {
+      id: cid(), ts: new Date(now - 4000000).toISOString(), actorName: "Jenny Jarrett", action: "create",
+      reason: "Initial creation", entityType:"WorkOrder", entityId:"WO-000123",
+      fieldsChanged: { before:null, after:{ status:"Open", area:"Layup", qty:4 } }
+    },
+    {
+      id: cid(), ts: new Date(now - 3500000).toISOString(), actorName: "Kara Ko", action: "update",
+      reason: "Update qty", entityType:"WorkOrder", entityId:"WO-000123",
+      fieldsChanged: { before:{ qty:4 }, after:{ qty:6 } }
+    },
+    {
+      id: cid(), ts: new Date(now - 3000000).toISOString(), actorName: "AutoBot", action: "approve",
+      reason: "Auto-approved by rule", entityType:"WorkOrder", entityId:"WO-000123"
+    },
+    {
+      id: cid(), ts: new Date(now - 2000000).toISOString(), actorName: "Steve Nash", action: "progress",
+      reason: "Moved to Plugging", entityType:"WorkOrder", entityId:"WO-000123",
+      meta:{ fromArea:"Layup", toArea:"Plugging" }
+    }
+  ];
+})();
+
+const drawer = document.getElementById('drawer');
+const backdrop = document.getElementById('backdrop');
+const openBtn = document.getElementById('openBtn');
+const closeBtn = document.getElementById('closeBtn');
+const eventsEl = document.getElementById('events');
+const titleMeta = document.getElementById('titleMeta');
+const countMeta = document.getElementById('countMeta');
+const exportLink = document.getElementById('exportLink');
+const tabs = document.querySelectorAll('.tab');
+const prevBtn = document.getElementById('prev');
+const nextBtn = document.getElementById('next');
+const progressBtn = document.getElementById('progressBtn');
+const areaEl = document.getElementById('area');
+const lane = document.getElementById('lane');
+
+openBtn.onclick = () => {
+  state.entityType = document.getElementById('entityType').value;
+  state.entityId = document.getElementById('entityId').value;
+  openDrawer();
+};
+
+closeBtn.onclick = closeDrawer;
+backdrop.onclick = closeDrawer;
+tabs.forEach(tab => tab.onclick = () => {
+  tabs.forEach(t => t.classList.remove('active'));
+  tab.classList.add('active');
+  state.filter = tab.dataset.filter;
+  state.page = 0;
+  render();
+});
+prevBtn.onclick = () => { if(state.page > 0) { state.page--; render(); } };
+nextBtn.onclick = () => {
+  const total = getFiltered().length;
+  if((state.page+1)*state.pageSize < total) { state.page++; render(); }
+};
+
+progressBtn.onclick = () => {
+  const from = areaEl.textContent.trim();
+  const to = from === "Layup" ? "Plugging" : from === "Plugging" ? "CNC" : "Final";
+  areaEl.textContent = to;
+  MOCK_EVENTS.unshift({
+    id: cid(), ts: new Date().toISOString(), actorName: "Glenn G", action: "progress",
+    reason: `Moved to ${to}`, entityType: state.entityType, entityId: state.entityId,
+    meta: { fromArea: from, toArea: to }
+  });
+  render();
+};
+
+function openDrawer() {
+  state.open = true;
+  drawer.classList.add('open');
+  backdrop.classList.add('open');
+  render();
+}
+function closeDrawer() {
+  state.open = false;
+  drawer.classList.remove('open');
+  backdrop.classList.remove('open');
+}
+function getFiltered() {
+  const all = MOCK_EVENTS.filter(e => e.entityType === state.entityType && e.entityId === state.entityId);
+  if (state.filter === "changes") return all.filter(e => e.fieldsChanged);
+  if (state.filter === "progress") return all.filter(e => e.action === "progress");
+  if (state.filter === "sign") return all.filter(e => ["sign","approve"].includes(e.action));
+  return all;
+}
+function renderLane(events){
+  const progs = events.filter(e => e.action === "progress" && e.meta?.toArea);
+  lane.innerHTML = progs.length === 0 ? "<em>No progress yet</em>" :
+    progs.sort((a,b)=>new Date(a.ts)-new Date(b.ts))
+         .map(p => `<span class="lane-chip">${p.meta.toArea} · <span class="ev-meta">${new Date(p.ts).toLocaleString()}</span></span>`)
+         .join("");
+}
+
+function render() {
+  const all = getFiltered();
+  const page = all.slice(state.page * state.pageSize, (state.page+1)*state.pageSize);
+  titleMeta.textContent = `${state.entityType} • ${state.entityId}`;
+  countMeta.textContent = `${all.length} events`;
+  renderLane(all);
+  eventsEl.innerHTML = page.map(renderEvent).join('') || "<div style='padding:1em'>No events.</div>";
+  const blob = new Blob([JSON.stringify(all,null,2)], { type:"application/json" });
+  exportLink.href = URL.createObjectURL(blob);
+  exportLink.download = `${state.entityType}-${state.entityId}-audit.json`;
+  prevBtn.disabled = state.page === 0;
+  nextBtn.disabled = (state.page+1)*state.pageSize >= all.length;
+}
+
+function renderEvent(ev) {
+  const ts = new Date(ev.ts).toLocaleString();
+  const reason = ev.reason ? `<div><strong>Reason:</strong> ${escape(ev.reason)}</div>` : "";
+  const changes = ev.fieldsChanged ? renderDiff(ev.fieldsChanged) : "";
+  return `
+    <div class="event">
+      <div class="ev-head">
+        <span><strong>${escape(ev.actorName)}</strong> <span class="ev-meta">· ${ts}</span></span>
+        <span class="chip">${escape(ev.action)}</span>
+      </div>
+      ${reason}
+      ${changes}
+    </div>
+  `;
+}
+function renderDiff(ch) {
+  return `<div class="diff">
+    ${Object.keys(ch.after || {}).map(k => `
+      <div class="diff-row">
+        <div>${escape(k)}</div>
+        <div class="before">${escape((ch.before||{})[k])}</div>
+        <div class="after"><strong>${escape((ch.after||{})[k])}</strong></div>
+      </div>`).join('')}
+  </div>`;
+}
+function cid() {
+  return "evt_" + Math.random().toString(36).slice(2) + "_" + Date.now().toString(36);
+}
+function escape(s) {
+  return String(s ?? "").replace(/[&<>"']/g, c => ({
+    '&':"&amp;", '<':"&lt;", '>':"&gt;", '"':"&quot;", "'":"&#39;"
+  }[c]));
+}
+</script>
+</body>
+</html>

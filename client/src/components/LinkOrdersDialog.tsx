@@ -277,14 +277,15 @@ export default function LinkOrdersDialog({
                   {linkInfo.linkGroup.requiresApprovalToSeparate && (
                     <div className="mb-3">
                       <Label htmlFor="unlink-approval-code" className="text-xs">
-                        Approval Code *
+                        Enter 4-Digit Code
                       </Label>
                       <Input
                         id="unlink-approval-code"
-                        type="password"
+                        type="text"
                         value={unlinkApprovalCode}
-                        onChange={(e) => setUnlinkApprovalCode(e.target.value)}
-                        placeholder="Enter approval code"
+                        onChange={(e) => setUnlinkApprovalCode(e.target.value.toUpperCase().slice(0, 4))}
+                        placeholder="Ask the CSR who linked these orders"
+                        maxLength={4}
                         className="mt-1"
                         data-testid="input-unlink-approval"
                       />
@@ -390,27 +391,28 @@ export default function LinkOrdersDialog({
                       htmlFor="require-approval"
                       className="text-sm font-medium cursor-pointer"
                     >
-                      Require approval code to unlink or ship separately
+                      Protect with code
                     </Label>
                     <p className="text-xs text-gray-500 mt-1">
-                      Use this for critical links that should not be broken without authorization
+                      Set a 4-digit code to prevent others from unlinking these orders
                     </p>
                   </div>
                 </div>
 
                 {requireApproval && (
                   <div>
-                    <Label htmlFor="approval-code">Approval Code *</Label>
+                    <Label htmlFor="approval-code">Set 4-Digit Code</Label>
                     <Input
                       id="approval-code"
-                      type="password"
-                      placeholder="Enter a secure approval code"
+                      type="text"
+                      placeholder="e.g., 1234 or AB12"
                       value={approvalCode}
-                      onChange={(e) => setApprovalCode(e.target.value)}
+                      onChange={(e) => setApprovalCode(e.target.value.toUpperCase().slice(0, 4))}
+                      maxLength={4}
                       data-testid="input-approval-code"
                     />
-                    <p className="text-xs text-red-600 mt-1">
-                      Important: Save this code securely. It will be required to unlink orders or ship them separately.
+                    <p className="text-xs text-blue-600 mt-1">
+                      Remember this code - you'll need to provide it to anyone who needs to unlink these orders.
                     </p>
                   </div>
                 )}

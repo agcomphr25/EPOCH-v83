@@ -72,15 +72,17 @@ The application utilizes a monorepo structure with a full-stack TypeScript appro
 
 #### Linked Orders Management in All Orders List
 - **CSR-Focused Integration**: Link Orders functionality added to All Orders List Actions dropdown for CSR workflow
+- **Available in ALL Order List Views**: Implemented in both AllOrdersList.tsx (/all-orders) and OrdersList.tsx (/orders-list) components
+- **Main CSR Page**: /orders-list route now has full Link Orders functionality in the dropdown menu
 - **LinkOrdersDialog Component**: Comprehensive dialog for managing linked orders with:
   - View current link status and all orders in group
   - Create new link groups with optional approval code protection
   - Add orders to existing groups
   - Unlink orders with approval code validation when required
   - Support for linking 2+ orders that must ship together or be processed as a group
-- **Actions Dropdown Menu**: Added three-dot menu (⋮) to Actions column in All Orders List
+- **Actions Dropdown Menu**: Added "Link Orders" option with chain link icon (🔗) to three-dot menu (⋮) in Actions column
 - **Security**: Approval codes stored server-side only, never exposed to frontend
-- **User Experience**: CSRs can manage linked orders directly from where they work (All Orders List)
+- **User Experience**: CSRs can manage linked orders directly from where they work (All Orders List pages)
 - **Database Schema**: linked_order_groups and linked_orders tables with approval code protection
 - **API Routes**: Full CRUD operations at `/api/linked-orders/*` with server-side validation
 - **Shipping Integration**: Mark-shipped endpoint validates linked orders ship together or requires approval code

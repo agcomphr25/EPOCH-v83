@@ -99,7 +99,7 @@ export async function createShipment(opts: {
             City: opts.shipTo.city,
             StateProvinceCode: opts.shipTo.state,
             PostalCode: opts.shipTo.postalCode,
-            CountryCode: opts.shipTo.country ?? 'US',
+            CountryCode: getCountryCode(opts.shipTo.country),
           },
         },
         ShipFrom: {

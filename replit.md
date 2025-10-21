@@ -68,3 +68,51 @@ The application utilizes a monorepo structure with a full-stack TypeScript appro
 -   Google Drive (File Access and PDF Processing)
 -   Google APIs (`googleapis` package)
 -   Azure Document Intelligence (AI-powered document analysis)
+-   Microsoft Azure AD / MSAL (`@azure/msal-node` - OAuth authentication)
+
+## Recent Changes
+
+### October 21, 2025 - Microsoft OAuth Login & Critical Security Fix
+
+#### Microsoft OAuth User Authentication
+- **Production-Ready OAuth 2.0**: Full OAuth implementation for user login with Microsoft accounts
+  - Routes: `/api/auth/microsoft/login` (initiate), `/callback` (exchange code for tokens)
+  - Uses `@azure/msal-node` (Microsoft Authentication Library) for OAuth client
+  - Scopes: `user.read`, `openid`, `profile`, `email`
+- **Security**: Cryptographically secure OAuth flow with CSRF protection
+  - Random 64-character hex state tokens using crypto.randomBytes(32)
+  - In-memory state store with 5-minute expiration and automatic cleanup
+  - Single-use tokens that are deleted after validation
+  - State validation in callback prevents token replay attacks
+- **Auto-User Provisioning**: Seamless onboarding for new Microsoft users
+  - Checks if user exists by email address in database
+  - Auto-creates new user accounts on first Microsoft sign-in:
+    - Username derived from email (part before @)
+    - Random secure password (64-character hex, user won't need it)
+    - Default 'EMPLOYEE' role assigned
+    - Account marked as active
+  - Respects `is_active` flag - blocks deactivated accounts
+- **Session Management**: Consistent with existing authentication system
+  - Creates 7-day session in user_sessions table
+  - Sets HTTP-only cookie with production-safe settings
+  - Uses same session infrastructure as username/password login
+- **Frontend Integration**: "Sign in with Microsoft" button on login page
+  - Microsoft logo (4-color Windows icon as inline SVG)
+  - Clean "OR CONTINUE WITH" divider
+  - Full-page redirect to OAuth endpoint
+  - Styled success/error pages for all callback scenarios
+- **UX Flow**: Professional OAuth experience
+  - Redirects to Microsoft login page
+  - User authenticates with Microsoft account
+  - Returns to app with success page and auto-redirect to dashboard
+  - Error pages for: invalid state, expired state, inactive account, generic failures
+- **Architect Reviewed**: Passed security review after critical fix applied
+
+#### Critical Security Fix: Session Token Generation
+- **Vulnerability Fixed**: Replaced insecure Math.random() session tokens with cryptographically secure generation
+  - **Affected Routes**: Both `auth.ts` (username/password) and `microsoftAuth.ts` (OAuth) had this vulnerability
+  - **Old Method**: `Math.random().toString(36) + Date.now().toString(36)` (predictable, low entropy, brute-forceable)
+  - **New Method**: `crypto.randomBytes(32).toString('hex')` (256-bit cryptographically secure)
+- **Impact**: All user sessions now use 64-character hex tokens with 256-bit entropy
+- **Scope**: System-wide security improvement affecting all authentication methods
+- **Verification**: Architect-approved, no remaining Math.random() usage in security-critical code

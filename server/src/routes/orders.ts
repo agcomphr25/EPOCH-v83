@@ -942,6 +942,87 @@ router.delete('/payments/:paymentId', async (req: Request, res: Response) => {
   }
 });
 
+// Bulk payment processing - record payments for multiple orders at once
+router.post('/bulk-payment', async (req: Request, res: Response) => {
+  try {
+    const { payments: paymentItems } = req.body;
+    
+    if (!Array.isArray(paymentItems) || paymentItems.length === 0) {
+      return res.status(400).json({ error: 'Invalid payment data' });
+    }
+
+    console.log(`💳 Processing bulk payment for ${paymentItems.length} orders`);
+
+    const results = [];
+    const errors = [];
+
+    for (const item of paymentItems) {
+      try {
+        const { orderId, paymentType, paymentAmount, paymentDate } = item;
+
+        if (!orderId || !paymentType || !paymentAmount) {
+          throw new Error(`Missing required fields for order ${orderId}`);
+        }
+
+        const paymentData = insertPaymentSchema.parse({
+          orderId,
+          paymentType,
+          paymentAmount: parseFloat(paymentAmount),
+          paymentDate: new Date(paymentDate),
+          notes: item.notes || null,
+        });
+
+        const newPayment = await storage.createPayment(paymentData);
+
+        const allPayments = await storage.getPaymentsByOrderId(orderId);
+        const totalPaid = allPayments.reduce(
+          (sum: number, p: any) => sum + p.paymentAmount,
+          0
+        );
+
+        await db
+          .update(allOrders)
+          .set({
+            isPaid: true,
+            paymentType,
+            paymentAmount: totalPaid,
+            paymentDate: new Date(paymentDate),
+            paymentTimestamp: new Date(),
+          })
+          .where(eq(allOrders.orderId, orderId));
+
+        results.push({
+          orderId,
+          success: true,
+          paymentId: newPayment.id,
+        });
+
+        console.log(`✅ Payment recorded for order ${orderId}`);
+      } catch (error) {
+        console.error(`❌ Error processing payment for order ${item.orderId}:`, error);
+        errors.push({
+          orderId: item.orderId,
+          error: (error as Error).message,
+        });
+      }
+    }
+
+    res.json({
+      success: errors.length === 0,
+      processed: results.length,
+      failed: errors.length,
+      results,
+      errors,
+    });
+  } catch (error) {
+    console.error('Bulk payment error:', error);
+    res.status(500).json({
+      error: 'Failed to process bulk payment',
+      details: (error as Error).message,
+    });
+  }
+});
+
 // Progress order to next department
 router.post('/:orderId/progress', async (req: Request, res: Response) => {
   try {

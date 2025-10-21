@@ -68,6 +68,52 @@ The application utilizes a monorepo structure with a full-stack TypeScript appro
 
 ## Recent Changes
 
+
+
+### October 21, 2025 - Linked Orders, Department Progression Fix & Bulk Fulfill
+
+#### Bulk Fulfill Functionality
+- **Floating Action Bar**: When orders are selected in Shipping department, a sticky action bar appears at the bottom of the screen
+- **Multi-Select Support**: Users can select multiple orders via checkboxes and mark them all as fulfilled with a single click
+- **Bulk Fulfill Button**: Green-themed "Mark as Fulfilled" button shows count of selected orders
+- **Loading States**: Button displays "Fulfilling..." during the mutation process
+- **Smart UI**: Action bar includes "Clear Selection" button and order count display
+- **Success Feedback**: Toast notifications confirm how many orders were fulfilled
+- **Integration**: Works alongside existing BulkShippingActions for consolidated shipping labels
+- **Implementation**: Uses concurrent API calls via Promise.all for efficient batch processing
+
+#### Department Progression Bug Fix
+- **Issue**: Finish department was incorrectly sending orders to Paint, skipping Finish QC entirely
+- **Root Cause**: FinishQueuePage.tsx had `progressMutation` hardcoded to send orders to 'Paint' instead of 'Finish QC'
+- **Fix**: Updated progressMutation to correctly route orders to Finish QC
+- **Correct Flow**: Finish → Finish QC → Paint (with optional "Skip to Paint" button for special cases)
+- **Changes**: Updated button labels to clearly indicate "Progress to Finish QC" vs "Skip to Paint"
+
+#### Linked Orders Management in All Orders List
+- **CSR-Focused Integration**: Link Orders functionality added to All Orders List Actions dropdown for CSR workflow
+- **Available in ALL Order List Views**: Implemented in both AllOrdersList.tsx (/all-orders) and OrdersList.tsx (/orders-list) components
+- **Main CSR Page**: /orders-list route now has full Link Orders functionality in the dropdown menu
+- **LinkOrdersDialog Component**: Comprehensive dialog for managing linked orders with:
+  - View current link status and all orders in group
+  - Create new link groups with optional 4-digit code protection
+  - Add orders to existing groups
+  - Unlink orders with code validation when required
+  - Support for linking 2+ orders that must ship together or be processed as a group
+- **Actions Dropdown Menu**: Added "Link Orders" option with chain link icon (🔗) to three-dot menu (⋮) in Actions column
+- **Approval Code System**: Simple 4-character alphanumeric codes (e.g., "1234", "AB12") for customer service protection
+  - CSR who creates the link sets optional 4-digit code
+  - Code stored as plain text (not hashed) for simplicity
+  - CSR provides code verbally/via message to anyone who needs to unlink
+  - Input validation enforces exactly 4 letters or numbers
+  - Auto-converts to uppercase, filters out special characters
+- **User Experience**: CSRs can manage linked orders directly from where they work (All Orders List pages)
+- **Database Schema**: linked_order_groups and linked_orders tables with approval code protection
+- **API Routes**: Full CRUD operations at `/api/linked-orders/*` with server-side validation
+- **Shipping Integration**: Mark-shipped endpoint validates linked orders ship together or requires approval code
+
+
+
+
 ### October 20, 2025 - User Settings & Integration Management Complete
 
 #### User Integration Settings
@@ -86,6 +132,7 @@ The application utilizes a monorepo structure with a full-stack TypeScript appro
 - **Security**: OAuth tokens stored securely with user-specific access control via authentication middleware
 - **UI Components**: Built with ShadCN UI components including Cards, Tabs, Badges for consistent design
 - **Future Enhancement**: OAuth connection flow to be implemented for actual Google/Outlook authentication
+
 
 ### October 20, 2025 - Global Search System & Vendor Evaluation Complete
 

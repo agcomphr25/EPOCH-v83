@@ -330,7 +330,7 @@ export default function FinishQueuePage() {
     },
   });
 
-  // Progress mutation for moving orders to next department (Paint)
+  // Progress mutation for moving orders to next department (Finish QC)
   const progressMutation = useMutation({
     mutationFn: async ({
       orderIds,
@@ -343,8 +343,8 @@ export default function FinishQueuePage() {
         method: 'POST',
         body: JSON.stringify({
           orderIds: orderIds,
-          department: 'Paint',
-          status: 'Active',
+          department: 'Finish QC',
+          status: 'IN_PROGRESS',
           assignedTechnician: technician,
         }),
       });
@@ -353,11 +353,12 @@ export default function FinishQueuePage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
       queryClient.invalidateQueries({
-        queryKey: ['/api/orders/department', 'Paint'],
+        queryKey: ['/api/orders/department', 'Finish QC'],
       });
-      toast.success(`${selectedOrders.size} orders progressed to Paint`);
+      toast.success(`${selectedOrders.size} orders progressed to Finish QC`);
       setSelectedOrders(new Set());
       setSelectAll(false);
+      setSelectedTechnician('');
     },
     onError: () => {
       toast.error('Failed to progress orders');
@@ -579,7 +580,7 @@ export default function FinishQueuePage() {
                           size="sm"
                         >
                           <ArrowRight className="h-4 w-4 mr-1" />
-                          Move to Paint ({selectedOrders.size})
+                          Move to Finish QC ({selectedOrders.size})
                         </Button>
                       )}
 
@@ -1376,14 +1377,14 @@ export default function FinishQueuePage() {
                 <Button
                   onClick={handleProgressOrders}
                   disabled={
-                    selectedOrders.size === 0 || progressMutation.isPending
+                    selectedOrders.size === 0 || progressMutation.isPending || !selectedTechnician
                   }
                   className="bg-green-600 hover:bg-green-700 text-white"
                 >
                   <ArrowRight className="h-4 w-4 mr-2" />
                   {progressMutation.isPending
                     ? 'Progressing...'
-                    : `Progress to Paint (${selectedOrders.size})`}
+                    : `Progress to Finish QC (${selectedOrders.size})`}
                 </Button>
               </div>
             </div>

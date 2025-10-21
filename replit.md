@@ -72,6 +72,34 @@ The application utilizes a monorepo structure with a full-stack TypeScript appro
 
 ## Recent Changes
 
+### October 21, 2025 - Deployment Crash Loop Fix
+
+#### Critical Fix: MSAL Client Initialization
+- **Issue**: Deployment crashed with error "Client credential must not be empty when creating a confidential client"
+- **Root Cause**: MSAL confidential client was being initialized at module load time without checking for environment variables
+- **Solution**: Implemented lazy initialization pattern
+  - Created `getMsalClient()` function that checks for credentials before creating client
+  - Client is only created when needed (at request time) and credentials are available
+  - Throws clear error message if credentials are missing
+  - Caches single instance for reuse
+- **Impact**: Application can now start successfully even when Microsoft OAuth credentials are not configured
+- **Deployment Ready**: Safe to deploy without crash loops
+
+#### TypeScript Compilation Fix
+- **Issue**: TypeScript error "Type 'MapIterator' can only be iterated through when using '--downlevelIteration' flag"
+- **Solution**: Converted `Map.entries()` to `Array.from(stateStore.entries())` for compatibility
+- **Impact**: Code now compiles without TypeScript configuration changes
+
+#### Communication Logs Schema Fix
+- **Issue**: Database insert errors in communications routes (3 LSP diagnostics)
+- **Root Cause**: Code was inserting non-existent `messageType` field into `communication_logs` table
+- **Solution**: Removed `messageType` field from all inserts and ensured all required fields are populated
+  - Email outbound: Added proper `direction`, `sender`, `recipient`, `sentAt`
+  - SMS outbound: Added proper `direction`, `sender`, `externalId`
+  - Email inbound webhook: Added `direction: 'inbound'`, `sender`, `receivedAt`
+- **Impact**: All communication log inserts now match database schema, preventing runtime errors
+- **Architect Reviewed**: All fixes verified and approved
+
 ### October 21, 2025 - Microsoft OAuth Login, Security Fix, P1 Queue Bug Fix & Customer Notifications
 
 #### Microsoft OAuth User Authentication

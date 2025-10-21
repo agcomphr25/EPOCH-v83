@@ -102,7 +102,6 @@ router.post('/email', async (req, res) => {
         .values({
           customerId: data.customerId,
           orderId: data.orderId || null,
-          messageType: 'email-outbound',
           type: 'shipping-notification',
           method: 'email',
           direction: 'outbound',
@@ -176,7 +175,6 @@ router.post('/sms', async (req, res) => {
       .values({
         customerId: data.customerId,
         orderId: data.orderId || null,
-        messageType: 'sms-outbound',
         type: 'sms-notification',
         method: 'sms',
         direction: 'outbound',
@@ -336,13 +334,15 @@ router.post('/email/webhook', async (req, res) => {
         .values({
           customerId: customer[0].id.toString(),
           orderId: '',
-          messageType: 'email-inbound',
           type: 'customer-inquiry',
           method: 'email',
+          direction: 'inbound',
+          sender: from,
           recipient: to,
           subject: subject,
           message: text || html,
           status: 'received',
+          receivedAt: new Date(),
         })
         .returning();
 

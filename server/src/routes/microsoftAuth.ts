@@ -16,15 +16,15 @@ const REDIRECT_URI = process.env.PRODUCTION_DOMAIN
     ? `https://${process.env.REPLIT_DEV_DOMAIN}/api/auth/microsoft/callback`
     : 'https://agcompepoch.xyz/api/auth/microsoft/callback'; // Production domain
 
-// MSAL configuration - only create client if credentials are available
+// Lazy initialize MSAL client only when needed and credentials are available
 let msalClient: ConfidentialClientApplication | null = null;
 
 function getMsalClient(): ConfidentialClientApplication {
+  if (!MICROSOFT_CLIENT_ID || !MICROSOFT_CLIENT_SECRET) {
+    throw new Error('Microsoft OAuth credentials are not configured. Please set MICROSOFT_CLIENT_ID and MICROSOFT_CLIENT_SECRET environment variables.');
+  }
+
   if (!msalClient) {
-    if (!MICROSOFT_CLIENT_ID || !MICROSOFT_CLIENT_SECRET) {
-      throw new Error('Microsoft OAuth credentials not configured');
-    }
-    
     const msalConfig = {
       auth: {
         clientId: MICROSOFT_CLIENT_ID,
@@ -32,10 +32,9 @@ function getMsalClient(): ConfidentialClientApplication {
         clientSecret: MICROSOFT_CLIENT_SECRET,
       },
     };
-    
     msalClient = new ConfidentialClientApplication(msalConfig);
   }
-  
+
   return msalClient;
 }
 
@@ -49,7 +48,8 @@ const stateStore = new Map<string, StateData>();
 // Cleanup expired states every minute
 setInterval(() => {
   const now = Date.now();
-  for (const [state, data] of stateStore.entries()) {
+  const entries = Array.from(stateStore.entries());
+  for (const [state, data] of entries) {
     if (data.expiresAt < now) {
       stateStore.delete(state);
     }
@@ -64,6 +64,8 @@ function generateSessionToken(): string {
 // Initiate Microsoft OAuth flow
 router.get('/login', async (req: Request, res: Response) => {
   try {
+    const client = getMsalClient();
+    
     // Generate cryptographically random state token
     const state = crypto.randomBytes(32).toString('hex');
     
@@ -77,7 +79,7 @@ router.get('/login', async (req: Request, res: Response) => {
       state,
     };
 
-    const authUrl = await getMsalClient().getAuthCodeUrl(authCodeUrlParameters);
+    const authUrl = await client.getAuthCodeUrl(authCodeUrlParameters);
     res.redirect(authUrl);
   } catch (error) {
     console.error('Error initiating Microsoft OAuth:', error);
@@ -162,7 +164,8 @@ router.get('/callback', async (req: Request, res: Response) => {
       redirectUri: REDIRECT_URI,
     };
 
-    const response = await getMsalClient().acquireTokenByCode(tokenRequest);
+    const client = getMsalClient();
+    const response = await client.acquireTokenByCode(tokenRequest);
 
     if (!response || !response.account) {
       throw new Error('Failed to acquire token or account information');

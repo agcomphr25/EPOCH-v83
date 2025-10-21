@@ -68,32 +68,65 @@ export default function Settings() {
 
   const connectMutation = useMutation({
     mutationFn: async (integrationType: string) => {
-      return apiRequest('/api/user-integrations', {
-        method: 'POST',
-        body: JSON.stringify({
-          integrationType,
-          isConnected: true,
-          accountEmail: 'user@example.com',
-          accountName: 'Example User',
-        }),
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
+      // Initiate OAuth flow for Google integrations
+      if (integrationType.startsWith('google-')) {
+        const response = await fetch(`/api/oauth/google/initiate?type=${integrationType}`, {
+          credentials: 'include',
+        });
+        
+        if (!response.ok) {
+          throw new Error('Failed to initiate OAuth');
+        }
+        
+        const data = await response.json();
+        return { authUrl: data.authUrl, integrationType };
+      } else if (integrationType === 'outlook') {
+        // Outlook OAuth flow to be implemented
+        toast({
+          title: 'Coming Soon',
+          description: 'Outlook integration is not yet available',
+        });
+        throw new Error('Outlook not implemented');
+      }
+      
+      throw new Error('Unsupported integration type');
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/user-integrations'] });
-      toast({
-        title: 'Success',
-        description: 'Integration connected successfully (OAuth flow to be implemented)',
-      });
+    onSuccess: (data) => {
+      if (data && data.authUrl) {
+        // Open OAuth URL in a popup window
+        const width = 600;
+        const height = 700;
+        const left = window.screen.width / 2 - width / 2;
+        const top = window.screen.height / 2 - height / 2;
+        
+        const popup = window.open(
+          data.authUrl,
+          'OAuth',
+          `width=${width},height=${height},left=${left},top=${top},toolbar=no,menubar=no`
+        );
+        
+        // Poll for popup closure and refresh integrations
+        const pollTimer = setInterval(() => {
+          if (popup && popup.closed) {
+            clearInterval(pollTimer);
+            // Refresh integrations list
+            queryClient.invalidateQueries({ queryKey: ['/api/user-integrations'] });
+            toast({
+              title: 'Success',
+              description: 'Please check if your integration was connected successfully',
+            });
+          }
+        }, 500);
+      }
     },
-    onError: () => {
-      toast({
-        title: 'Error',
-        description: 'Failed to connect integration',
-        variant: 'destructive',
-      });
+    onError: (error: any) => {
+      if (error.message !== 'Outlook not implemented') {
+        toast({
+          title: 'Error',
+          description: 'Failed to initiate connection. Please try again.',
+          variant: 'destructive',
+        });
+      }
     },
   });
 

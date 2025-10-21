@@ -68,7 +68,14 @@ The application utilizes a monorepo structure with a full-stack TypeScript appro
 
 ## Recent Changes
 
-### October 21, 2025 - Linked Orders Feature for CSRs
+### October 21, 2025 - Linked Orders Feature & Department Progression Fix
+
+#### Department Progression Bug Fix
+- **Issue**: Finish department was incorrectly sending orders to Paint, skipping Finish QC entirely
+- **Root Cause**: FinishQueuePage.tsx had `progressMutation` hardcoded to send orders to 'Paint' instead of 'Finish QC'
+- **Fix**: Updated progressMutation to correctly route orders to Finish QC
+- **Correct Flow**: Finish → Finish QC → Paint (with optional "Skip to Paint" button for special cases)
+- **Changes**: Updated button labels to clearly indicate "Progress to Finish QC" vs "Skip to Paint"
 
 #### Linked Orders Management in All Orders List
 - **CSR-Focused Integration**: Link Orders functionality added to All Orders List Actions dropdown for CSR workflow

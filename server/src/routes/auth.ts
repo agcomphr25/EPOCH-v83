@@ -183,9 +183,10 @@ const USERS = new Map([
   ],
 ]);
 
-// Generate simple session token
+// Generate cryptographically secure session token
 function generateSessionToken(): string {
-  return Math.random().toString(36).substring(2) + Date.now().toString(36);
+  const crypto = require('crypto');
+  return crypto.randomBytes(32).toString('hex');
 }
 
 // Login endpoint

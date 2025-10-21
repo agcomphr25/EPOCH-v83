@@ -146,6 +146,34 @@ export default function LoginPage() {
             >
               {isLoading ? 'Logging in...' : 'Login'}
             </Button>
+
+            <div className="relative my-6">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t border-gray-300 dark:border-gray-600" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-white dark:bg-gray-800 px-2 text-gray-500 dark:text-gray-400">
+                  Or continue with
+                </span>
+              </div>
+            </div>
+
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              onClick={() => window.location.href = '/api/auth/microsoft/login'}
+              disabled={isLoading}
+              data-testid="button-microsoft-login"
+            >
+              <svg className="w-4 h-4 mr-2" viewBox="0 0 23 23" fill="currentColor">
+                <path d="M0 0h11v11H0z" fill="#f35325" />
+                <path d="M12 0h11v11H12z" fill="#81bc06" />
+                <path d="M0 12h11v11H0z" fill="#05a6f0" />
+                <path d="M12 12h11v11H12z" fill="#ffba08" />
+              </svg>
+              Sign in with Microsoft
+            </Button>
           </form>
         </CardContent>
       </Card>

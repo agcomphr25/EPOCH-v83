@@ -8,6 +8,17 @@ import { allOrders, orderDrafts, linkedOrders, linkedOrderGroups } from '../../s
 
 const router = Router();
 
+// Helper function to normalize country names to ISO country codes for UPS API
+function getCountryCode(country: string | undefined): string {
+  if (!country) return 'US';
+  if (country === 'United States' || country === 'USA') return 'US';
+  if (country === 'Canada') return 'CA';
+  if (country === 'Mexico') return 'MX';
+  // If already a 2-letter code, return as-is
+  if (country.length === 2) return country.toUpperCase();
+  return 'US'; // Default to US
+}
+
 // Helper function to check if an order is linked to other orders
 async function checkLinkedOrders(orderId: string) {
   const linkedOrder = await db
@@ -1265,7 +1276,7 @@ function buildUPSShipmentPayloadOAuth(
               /\D/g,
               ''
             ),
-            CountryCode: shipmentDetails.shipToAddress.country || 'US',
+            CountryCode: getCountryCode(shipmentDetails.shipToAddress.country),
             ResidentialAddressIndicator: shipmentDetails.isResidential ? '' : undefined,
           },
         },
@@ -1278,7 +1289,7 @@ function buildUPSShipmentPayloadOAuth(
                     AccountNumber: shipmentDetails.receiverAccount?.accountNumber,
                     Address: {
                       PostalCode: shipmentDetails.receiverAccount?.zipCode,
-                      CountryCode: shipmentDetails.shipToAddress.country || 'US',
+                      CountryCode: getCountryCode(shipmentDetails.shipToAddress.country),
                     },
                   },
                 }

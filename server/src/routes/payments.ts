@@ -9,7 +9,7 @@ import {
   insertPaymentSchema,
   insertCreditCardTransactionSchema,
 } from '../../schema';
-import { eq, desc } from 'drizzle-orm';
+import { eq, desc, inArray } from 'drizzle-orm';
 // @ts-ignore - AuthorizeNet doesn't have proper TypeScript definitions
 import AuthorizeNet from 'authorizenet';
 
@@ -602,13 +602,12 @@ router.post('/batch', async (req, res) => {
     const existingOrders = await db
       .select()
       .from(allOrders)
-      .where(
-        orderIds
-          .map((id) => eq(allOrders.orderId, id))
-          .reduce((acc, condition) => acc || condition)
-      );
+      .where(inArray(allOrders.orderId, orderIds));
 
     if (existingOrders.length !== orderIds.length) {
+      console.log(`❌ Found ${existingOrders.length} orders out of ${orderIds.length} requested`);
+      console.log('Requested order IDs:', orderIds);
+      console.log('Found order IDs:', existingOrders.map(o => o.orderId));
       return res.status(400).json({
         error: 'One or more orders not found',
       });

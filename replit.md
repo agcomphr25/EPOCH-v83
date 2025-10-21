@@ -68,7 +68,26 @@ The application utilizes a monorepo structure with a full-stack TypeScript appro
 
 ## Recent Changes
 
+### October 21, 2025 - Database Migration & UI Debugging
 
+#### all_orders Table Migration
+- **Data Migration**: Successfully transferred all production data to development database
+- **Process**: 
+  - Created backups of both production and development all_orders tables
+  - Truncated development all_orders table (1,225 records removed)
+  - Restored production data to development (1,233 records transferred)
+  - Verified data integrity via record counts and sample comparisons
+- **Statistics**: Final count matches (1,233 records), ID range 1-2008
+- **Safety**: Backups stored at /tmp/db_backups/ for rollback capability
+- **Optimization**: Ran ANALYZE to update table statistics post-migration
+
+#### Shipping Department UI Debugging
+- **Issue Investigation**: "Progress to Fulfilled" floating action bar not appearing when orders selected
+- **Debug Logging**: Added comprehensive console logging to track:
+  - Checkbox selection events (🔘)
+  - Selected orders state updates (✅/❌)
+  - Rendering conditional checks (🎯)
+- **Purpose**: Identify why bulk fulfill button visibility logic fails
 
 ### October 21, 2025 - Linked Orders, Department Progression Fix & Bulk Fulfill
 

@@ -1395,6 +1395,11 @@ router.post('/bulk/create-consolidated-label', async (req: Request, res: Respons
       return res.status(400).json({ error: 'orderIds array is required' });
     }
 
+    // Validate service code
+    if (!serviceCode || serviceCode.trim() === '') {
+      return res.status(400).json({ error: 'Missing or invalid shipping service code. Please select a shipping service.' });
+    }
+
     console.log(`⚡ Creating consolidated label for ${orderIds.length} orders:`, orderIds.join(', '));
 
     // Validate UPS credentials

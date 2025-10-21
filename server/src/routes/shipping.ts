@@ -766,23 +766,29 @@ router.post('/create-label', async (req: Request, res: Response) => {
               }
             }
 
-            if (customer && customer.phone) {
-              // Send SMS notification automatically when label is created
+            if (customer && (customer.email || customer.phone)) {
+              // Send notification via both email and SMS if available
               const { sendCustomerNotification } = await import(
                 '../../utils/notifications'
               );
+              
+              // Build notification methods based on what's available
+              const preferredMethods = [];
+              if (customer.email) preferredMethods.push('email');
+              if (customer.phone) preferredMethods.push('sms');
+              
               const notificationResult = await sendCustomerNotification({
                 orderId,
                 trackingNumber,
                 carrier: 'UPS',
-                customerPhone: customer.phone,
+                customerPhone: customer.phone || undefined,
                 customerEmail: customer.email || undefined,
-                preferredMethods: ['sms'], // Force SMS for shipping notifications
+                preferredMethods,
               });
 
               if (notificationResult.success) {
                 console.log(
-                  `✅ Automated shipping notification sent via ${notificationResult.methods.join(', ')} for order ${orderId}`
+                  `✅ Shipping notification sent via ${notificationResult.methods.join(', ')} for order ${orderId}`
                 );
               } else {
                 console.log(
@@ -792,7 +798,7 @@ router.post('/create-label', async (req: Request, res: Response) => {
               }
             } else {
               console.log(
-                `📱 No customer phone number available for automated shipping notification (Order: ${orderId})`
+                `📧 No customer contact information available for shipping notification (Order: ${orderId})`
               );
             }
           } catch (notificationError) {

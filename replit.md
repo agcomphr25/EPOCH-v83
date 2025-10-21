@@ -72,7 +72,7 @@ The application utilizes a monorepo structure with a full-stack TypeScript appro
 
 ## Recent Changes
 
-### October 21, 2025 - Microsoft OAuth Login, Security Fix & P1 Queue Bug Fix
+### October 21, 2025 - Microsoft OAuth Login, Security Fix, P1 Queue Bug Fix & Customer Notifications
 
 #### Microsoft OAuth User Authentication
 - **Production-Ready OAuth 2.0**: Full OAuth implementation for user login with Microsoft accounts
@@ -134,3 +134,15 @@ The application utilizes a monorepo structure with a full-stack TypeScript appro
   - Provides clear error message: "Missing or invalid shipping service code. Please select a shipping service."
 - **Impact**: Shipping label creation and consolidated shipping now work correctly with UPS API
 - **Scope**: Production bug fixes for shipping functionality
+
+#### Customer Shipping Notification Fix
+- **Issue Fixed**: Customers were not being notified when orders shipped
+  - System was only attempting SMS notifications (not email)
+  - No notification sent at all if customer had no phone number
+- **Solution**: Enhanced notification system to send both email AND SMS
+  - Sends email notification if customer email available
+  - Sends SMS notification if customer phone available
+  - Sends both if both are available
+  - Updated to use intelligent fallback (send whatever is available)
+- **Impact**: Customers now receive shipping notifications via all available contact methods
+- **Scope**: Critical communication bug fix

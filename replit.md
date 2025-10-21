@@ -128,6 +128,6 @@ The application utilizes a monorepo structure with a full-stack TypeScript appro
 #### UPS Shipping Label API Fix
 - **Issue Fixed**: 500 error when creating shipping labels via UPS API
   - Missing required phone number in ShipTo (recipient) section of UPS shipment payload
-  - Added Phone field to ShipTo object with customer phone or fallback '0000000000'
+  - Added Phone field to ShipTo object with customer phone or fallback to company phone (256-723-8381)
 - **Impact**: Shipping label creation now works correctly with UPS API
 - **Scope**: Production bug fix for shipping functionality

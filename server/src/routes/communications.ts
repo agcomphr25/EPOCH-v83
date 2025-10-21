@@ -9,8 +9,12 @@ import {
   customers,
 } from '../../schema';
 import { eq, desc, and, sql } from 'drizzle-orm';
+import { sendEmailViaGraphAPI } from '../../utils/microsoftGraph';
 
 const router = Router();
+
+// Email provider type
+type EmailProvider = 'sendgrid' | 'microsoft';
 
 // Email schema
 const emailSchema = z.object({
@@ -24,6 +28,7 @@ const emailSchema = z.object({
     .optional()
     .nullable(),
   orderId: z.string().optional().nullable(),
+  provider: z.enum(['sendgrid', 'microsoft']).optional(), // Optional provider selection
 });
 
 // SMS schema
@@ -34,33 +39,65 @@ const smsSchema = z.object({
   orderId: z.string().optional().nullable(),
 });
 
-// Send email via SendGrid
+// Send email via SendGrid or Microsoft Graph
 router.post('/email', async (req, res) => {
   try {
     const data = emailSchema.parse(req.body);
 
-    // Initialize SendGrid
-    const apiKey = process.env.SENDGRID_API_KEY;
+    // Determine email provider (default to SendGrid, but can use Microsoft if specified or configured)
+    const defaultProvider: EmailProvider = (process.env.EMAIL_PROVIDER as EmailProvider) || 'sendgrid';
+    const provider: EmailProvider = data.provider || defaultProvider;
 
-    if (!apiKey) {
-      return res.status(500).json({ error: 'SendGrid API key not configured' });
+    let externalId: string | undefined;
+    let senderEmail = 'stacisales@agcomposites.com';
+
+    console.log(`📧 Sending email via ${provider.toUpperCase()} to ${data.to}`);
+
+    // Send email based on provider
+    if (provider === 'microsoft') {
+      // Send via Microsoft Graph API
+      const result = await sendEmailViaGraphAPI({
+        to: data.to,
+        subject: data.subject,
+        text: data.message,
+        html: data.html || data.message.replace(/\n/g, '<br>'),
+      });
+
+      if (!result.success) {
+        return res.status(500).json({
+          error: 'Microsoft Graph email failed',
+          details: result.error,
+        });
+      }
+
+      externalId = result.messageId;
+      senderEmail = process.env.MICROSOFT_SENDER_EMAIL || senderEmail;
+    } else {
+      // Send via SendGrid (default)
+      const apiKey = process.env.SENDGRID_API_KEY;
+
+      if (!apiKey) {
+        return res.status(500).json({ error: 'SendGrid API key not configured' });
+      }
+
+      sgMail.setApiKey(apiKey);
+
+      const msg = {
+        to: data.to,
+        from: senderEmail,
+        subject: data.subject,
+        text: data.message,
+        html: data.html || data.message.replace(/\n/g, '<br>'),
+      };
+
+      const emailResult = await sgMail.send(msg);
+      externalId = emailResult[0].headers['x-message-id'] as string;
     }
 
-    sgMail.setApiKey(apiKey);
-
-    const msg = {
-      to: data.to,
-      from: 'stacisales@agcomposites.com',
-      subject: data.subject,
-      text: data.message,
-      html: data.html || data.message.replace(/\n/g, '<br>'),
-    };
-
-    const emailResult = await sgMail.send(msg);
-
     // Store in database with new columns (only if customerId is provided)
+    let communicationLog: any;
     if (data.customerId) {
-      const [communicationLog] = await db
+      [communicationLog] = await db
         .insert(communicationLogs)
         .values({
           customerId: data.customerId,
@@ -69,34 +106,35 @@ router.post('/email', async (req, res) => {
           type: 'shipping-notification',
           method: 'email',
           direction: 'outbound',
-          sender: 'stacisales@agcomposites.com',
+          sender: senderEmail,
           recipient: data.to,
           subject: data.subject,
           message: data.message,
           status: 'sent',
           isRead: false,
-          externalId: emailResult[0].headers['x-message-id'],
+          externalId,
           sentAt: new Date(),
         })
         .returning();
     }
 
     console.log(
-      `Email sent to ${data.to} for customer ${data.customerId}${data.orderId ? ` (Order: ${data.orderId})` : ''}`
+      `✅ Email sent via ${provider.toUpperCase()} to ${data.to}${data.customerId ? ` for customer ${data.customerId}` : ''}${data.orderId ? ` (Order: ${data.orderId})` : ''}`
     );
 
     res.json({
       success: true,
-      message: 'Email sent successfully',
-      messageId: communicationLog.id,
-      externalId: emailResult[0].headers['x-message-id'],
+      message: `Email sent successfully via ${provider}`,
+      messageId: communicationLog?.id,
+      externalId,
+      provider,
     });
   } catch (error: any) {
-    console.error('SendGrid email error:', error);
+    console.error('Email error:', error);
 
     if (error.response?.body?.errors) {
       return res.status(400).json({
-        error: 'SendGrid error',
+        error: 'Email service error',
         details: error.response.body.errors,
       });
     }

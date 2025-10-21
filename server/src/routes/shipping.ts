@@ -1234,16 +1234,22 @@ function buildUPSShipmentPayloadOAuth(
   shipmentDetails: any,
   shipperNumber: string
 ): any {
+  // Detect consolidated shipments and use shorter description (UPS limit: 50 chars)
+  const isConsolidated = shipmentDetails.orderId.includes('+');
+  const description = isConsolidated 
+    ? 'Consolidated Manufacturing Shipment' // 36 chars - safe
+    : `Order ${shipmentDetails.orderId} - Manufacturing Product`.substring(0, 50);
+  
   return {
     ShipmentRequest: {
       Request: {
         RequestOption: 'nonvalidate',
         TransactionReference: {
-          CustomerContext: `Order ${shipmentDetails.orderId}`,
+          CustomerContext: `Order ${shipmentDetails.orderId}`.substring(0, 50),
         },
       },
       Shipment: {
-        Description: `Order ${shipmentDetails.orderId} - Manufacturing Product`,
+        Description: description,
         Shipper: {
           Name: process.env.SHIP_FROM_NAME || 'AG Composites',
           AttentionName: process.env.SHIP_FROM_ATTENTION || 'Shipping',
@@ -1307,7 +1313,9 @@ function buildUPSShipmentPayloadOAuth(
           Code: shipmentDetails.serviceType || '03', // Use selected service or default to UPS Ground
         },
         Package: {
-          Description: `Order ${shipmentDetails.orderId}`,
+          Description: isConsolidated 
+            ? `Consolidated (${shipmentDetails.reference2 || 'Multiple Orders'})`.substring(0, 35)
+            : `Order ${shipmentDetails.orderId}`.substring(0, 35),
           Packaging: {
             Code: '02', // Customer Supplied Package
           },

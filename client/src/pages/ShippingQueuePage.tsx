@@ -508,10 +508,19 @@ export default function ShippingQueuePage() {
   }, [shippingOrders, customerAddressesMap]);
 
   const handleOrderSelection = (orderId: string, checked: boolean) => {
+    console.log('🔘 Checkbox clicked:', orderId, 'checked:', checked);
     if (checked) {
-      setSelectedOrders((prev) => [...prev, orderId]);
+      setSelectedOrders((prev) => {
+        const newSelection = [...prev, orderId];
+        console.log('✅ Selected orders updated:', newSelection);
+        return newSelection;
+      });
     } else {
-      setSelectedOrders((prev) => prev.filter((id) => id !== orderId));
+      setSelectedOrders((prev) => {
+        const newSelection = prev.filter((id) => id !== orderId);
+        console.log('❌ Selected orders updated:', newSelection);
+        return newSelection;
+      });
     }
   };
 
@@ -1266,6 +1275,7 @@ export default function ShippingQueuePage() {
         </div>
 
         {/* Sticky Bulk Actions */}
+        {console.log('🎯 Rendering check - selectedOrders.length:', selectedOrders.length)}
         {selectedOrders.length > 0 && (
           <div className="fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 shadow-lg">
             <div className="container mx-auto p-4 space-y-4">

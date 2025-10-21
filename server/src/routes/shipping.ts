@@ -1548,8 +1548,8 @@ router.post('/bulk/create-consolidated-label', async (req: Request, res: Respons
         billingOption: billingOption || 'sender',
         receiverAccount: billingOption === 'receiver' ? receiverAccount : undefined,
         serviceType: serviceCode || '03',
-        reference1: `Orders: ${orderIds.join(', ')}`,
-        reference2: `${orderIds.length} orders consolidated`,
+        reference1: `${orderIds.length} orders: ${orderIds[0]}${orderIds.length > 1 ? '+' : ''}`.substring(0, 35),
+        reference2: `Consolidated shipment`.substring(0, 35),
       },
       upsShipperNumber
     );

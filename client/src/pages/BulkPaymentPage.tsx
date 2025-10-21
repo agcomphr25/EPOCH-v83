@@ -29,12 +29,13 @@ interface UnpaidOrder {
 interface SelectedPayment {
   orderId: string;
   amount: number;
+  orderTotal: number;
 }
 
 export default function BulkPaymentPage() {
   const { toast } = useToast();
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
-  const [selectedOrders, setSelectedOrders] = useState<Map<string, number>>(new Map());
+  const [selectedOrders, setSelectedOrders] = useState<Map<string, { amount: number; total: number }>>(new Map());
   const [paymentType, setPaymentType] = useState<string>('');
   const [paymentDate, setPaymentDate] = useState<string>(
     new Date().toISOString().split('T')[0]
@@ -87,21 +88,22 @@ export default function BulkPaymentPage() {
     setSelectedOrders(new Map());
   };
 
-  const handleOrderToggle = (orderId: string, balanceDue: number) => {
+  const handleOrderToggle = (orderId: string, balanceDue: number, orderTotal: number) => {
     const newSelected = new Map(selectedOrders);
     if (newSelected.has(orderId)) {
       newSelected.delete(orderId);
     } else {
-      newSelected.set(orderId, balanceDue);
+      newSelected.set(orderId, { amount: balanceDue, total: orderTotal });
     }
     setSelectedOrders(newSelected);
   };
 
-  const handleAmountChange = (orderId: string, amount: string) => {
+  const handleAmountChange = (orderId: string, amount: string, orderTotal: number) => {
     const newSelected = new Map(selectedOrders);
     const parsedAmount = parseFloat(amount);
     if (!isNaN(parsedAmount) && parsedAmount >= 0) {
-      newSelected.set(orderId, parsedAmount);
+      const existing = newSelected.get(orderId);
+      newSelected.set(orderId, { amount: parsedAmount, total: existing?.total || orderTotal });
       setSelectedOrders(newSelected);
     }
   };
@@ -126,11 +128,12 @@ export default function BulkPaymentPage() {
     }
 
     const paymentItems = Array.from(selectedOrders.entries()).map(
-      ([orderId, amount]) => ({
+      ([orderId, { amount, total }]) => ({
         orderId,
         paymentType,
         paymentAmount: amount,
         paymentDate,
+        orderTotal: total,
       })
     );
 
@@ -147,7 +150,7 @@ export default function BulkPaymentPage() {
   };
 
   const totalSelectedAmount = Array.from(selectedOrders.values()).reduce(
-    (sum, amount) => sum + amount,
+    (sum, { amount }) => sum + amount,
     0
   );
 
@@ -232,7 +235,7 @@ export default function BulkPaymentPage() {
                       <tbody>
                         {unpaidOrders.map((order: UnpaidOrder) => {
                           const isSelected = selectedOrders.has(order.orderId);
-                          const paymentAmount = selectedOrders.get(order.orderId) || 0;
+                          const paymentAmount = selectedOrders.get(order.orderId)?.amount || 0;
 
                           return (
                             <tr
@@ -244,7 +247,7 @@ export default function BulkPaymentPage() {
                                 <Checkbox
                                   checked={isSelected}
                                   onCheckedChange={() =>
-                                    handleOrderToggle(order.orderId, order.balanceDue)
+                                    handleOrderToggle(order.orderId, order.balanceDue, order.totalAmount)
                                   }
                                   data-testid={`checkbox-${order.orderId}`}
                                 />
@@ -271,7 +274,7 @@ export default function BulkPaymentPage() {
                                     min="0"
                                     value={paymentAmount}
                                     onChange={(e) =>
-                                      handleAmountChange(order.orderId, e.target.value)
+                                      handleAmountChange(order.orderId, e.target.value, order.totalAmount)
                                     }
                                     className="w-32 ml-auto"
                                     data-testid={`input-amount-${order.orderId}`}

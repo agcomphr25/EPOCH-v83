@@ -20,19 +20,48 @@ setInterval(() => {
   }
 }, 60 * 1000);
 
+// Helper to get base URL
+function getBaseUrl(): string {
+  const replitDomain = process.env.REPLIT_DEV_DOMAIN;
+  if (replitDomain) {
+    return `https://${replitDomain}`;
+  }
+  return `http://localhost:${process.env.PORT || 5000}`;
+}
+
 // Google OAuth configuration
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
-const GOOGLE_REDIRECT_URI = `${process.env.REPLIT_DEV_DOMAIN || 'http://localhost:5000'}/api/oauth/google/callback`;
+const GOOGLE_REDIRECT_URI = `${getBaseUrl()}/api/oauth/google/callback`;
 
 // Microsoft OAuth configuration
 const MICROSOFT_CLIENT_ID = process.env.MICROSOFT_CLIENT_ID;
 const MICROSOFT_CLIENT_SECRET = process.env.MICROSOFT_CLIENT_SECRET;
-const MICROSOFT_REDIRECT_URI = `${process.env.REPLIT_DEV_DOMAIN || 'http://localhost:5000'}/api/oauth/microsoft/callback`;
+const MICROSOFT_REDIRECT_URI = `${getBaseUrl()}/api/oauth/microsoft/callback`;
 
 // Initiate Google OAuth flow
 router.get('/google/initiate', authenticateToken, async (req: Request, res: Response) => {
   try {
+    // Check if OAuth credentials are configured
+    if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
+      return res.send(`
+        <html>
+          <body style="font-family: Arial, sans-serif; padding: 40px; text-align: center;">
+            <h2 style="color: #e74c3c;">OAuth Credentials Not Configured</h2>
+            <p>Google OAuth credentials (GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET) are not set up.</p>
+            <p>Please see <strong>OAUTH_SETUP.md</strong> for setup instructions.</p>
+            <button onclick="window.close()" style="margin-top: 20px; padding: 10px 20px; background: #3498db; color: white; border: none; border-radius: 5px; cursor: pointer;">Close</button>
+            <script>
+              setTimeout(() => {
+                window.opener?.postMessage({ error: 'OAuth credentials not configured. Please see OAUTH_SETUP.md for setup instructions.' }, '*');
+                window.close();
+              }, 3000);
+            </script>
+          </body>
+        </html>
+      `);
+    }
+
     const userId = req.user!.id;
     const integrationType = (req.query.type as string) || 'google-gmail';
     
@@ -152,6 +181,26 @@ router.get('/google/callback', async (req: Request, res: Response) => {
 // Initiate Microsoft OAuth flow
 router.get('/microsoft/initiate', authenticateToken, async (req: Request, res: Response) => {
   try {
+    // Check if OAuth credentials are configured
+    if (!MICROSOFT_CLIENT_ID || !MICROSOFT_CLIENT_SECRET) {
+      return res.send(`
+        <html>
+          <body style="font-family: Arial, sans-serif; padding: 40px; text-align: center;">
+            <h2 style="color: #e74c3c;">OAuth Credentials Not Configured</h2>
+            <p>Microsoft OAuth credentials (MICROSOFT_CLIENT_ID and MICROSOFT_CLIENT_SECRET) are not set up.</p>
+            <p>Please see <strong>OAUTH_SETUP.md</strong> for setup instructions.</p>
+            <button onclick="window.close()" style="margin-top: 20px; padding: 10px 20px; background: #3498db; color: white; border: none; border-radius: 5px; cursor: pointer;">Close</button>
+            <script>
+              setTimeout(() => {
+                window.opener?.postMessage({ error: 'OAuth credentials not configured. Please see OAUTH_SETUP.md for setup instructions.' }, '*');
+                window.close();
+              }, 3000);
+            </script>
+          </body>
+        </html>
+      `);
+    }
+
     const userId = req.user!.id;
     const integrationType = 'outlook';
     

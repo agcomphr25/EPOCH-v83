@@ -125,9 +125,12 @@ The application utilizes a monorepo structure with a full-stack TypeScript appro
 - **Correct Department Flow Confirmed**: P1 Production Queue → Layup/Plugging → Barcode → CNC
 - **Scope**: UI clarity improvement - routing was already correct, only naming was misleading
 
-#### UPS Shipping Label API Fix
+#### UPS Shipping Label API Fixes
 - **Issue Fixed**: 500 error when creating shipping labels via UPS API
   - Missing required phone number in ShipTo (recipient) section of UPS shipment payload
   - Added Phone field to ShipTo object with customer phone or fallback to company phone (256-723-8381)
-- **Impact**: Shipping label creation now works correctly with UPS API
-- **Scope**: Production bug fix for shipping functionality
+- **Consolidated Shipping Fix**: Missing service code validation
+  - Added validation to ensure service code is provided before creating consolidated shipping labels
+  - Provides clear error message: "Missing or invalid shipping service code. Please select a shipping service."
+- **Impact**: Shipping label creation and consolidated shipping now work correctly with UPS API
+- **Scope**: Production bug fixes for shipping functionality

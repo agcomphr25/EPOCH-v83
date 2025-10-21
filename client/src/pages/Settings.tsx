@@ -205,7 +205,13 @@ export default function Settings() {
 
     // Listen for OAuth callback messages
     const handleMessage = (event: MessageEvent) => {
-      // Verify origin if needed
+      // Verify origin for security
+      const allowedOrigin = window.location.origin;
+      if (event.origin !== allowedOrigin) {
+        console.warn('Received message from unauthorized origin:', event.origin);
+        return;
+      }
+
       if (event.data.success) {
         queryClient.invalidateQueries({ queryKey: ['/api/user-integrations'] });
         toast({

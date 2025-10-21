@@ -70,6 +70,7 @@ import EmployeeDashboard from './pages/EmployeeDashboard';
 import EmployeeDetail from './pages/EmployeeDetail';
 import EmployeePortal from './pages/EmployeePortal';
 import UserManagement from './pages/UserManagement';
+import Settings from './pages/Settings';
 import LoginPage from './pages/LoginPage';
 import P2Forms from '@/pages/P2Forms';
 import WasteManagementForm from '@/pages/WasteManagementForm';
@@ -304,6 +305,7 @@ function App() {
                   {/* Employee Routes */}
                   <Route path="/employee" component={EmployeeDashboard} />
                   <Route path="/user-management" component={UserManagement} />
+                  <Route path="/settings" component={Settings} />
                   <Route
                     path="/employee-portal"
                     component={EmployeePortalPage}

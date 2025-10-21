@@ -70,6 +70,7 @@ import {
   // User authentication tables
   users,
   userSessions,
+  userIntegrations,
   // allOrders table as the finalized orders table
   allOrders,
   // Order reference tables
@@ -132,6 +133,8 @@ import {
   type InsertUser,
   type UserSession,
   type InsertUserSession,
+  type UserIntegration,
+  type InsertUserIntegration,
   // New employee management types
   type Certification,
   type InsertCertification,
@@ -309,6 +312,12 @@ export interface IStorage {
   validatePortalToken(
     token: string
   ): Promise<{ employeeId: number; isValid: boolean }>;
+
+  // User integrations methods
+  getUserIntegrations(userId: number): Promise<UserIntegration[]>;
+  getUserIntegration(userId: number, integrationType: string): Promise<UserIntegration | undefined>;
+  createOrUpdateUserIntegration(data: InsertUserIntegration): Promise<UserIntegration>;
+  deleteUserIntegration(userId: number, integrationType: string): Promise<void>;
 
   // Time clock methods for portal
   getTimeClockEntry(
@@ -7604,6 +7613,65 @@ export class DatabaseStorage implements IStorage {
       console.error('Portal token validation error:', error);
       return { employeeId: 0, isValid: false };
     }
+  }
+
+  // User integrations methods
+  async getUserIntegrations(userId: number): Promise<UserIntegration[]> {
+    return await db
+      .select()
+      .from(userIntegrations)
+      .where(eq(userIntegrations.userId, userId))
+      .orderBy(userIntegrations.integrationType);
+  }
+
+  async getUserIntegration(userId: number, integrationType: string): Promise<UserIntegration | undefined> {
+    const [integration] = await db
+      .select()
+      .from(userIntegrations)
+      .where(
+        and(
+          eq(userIntegrations.userId, userId),
+          eq(userIntegrations.integrationType, integrationType)
+        )
+      );
+    return integration || undefined;
+  }
+
+  async createOrUpdateUserIntegration(data: InsertUserIntegration): Promise<UserIntegration> {
+    const existing = await this.getUserIntegration(data.userId, data.integrationType);
+    
+    if (existing) {
+      // Update existing integration
+      const [updated] = await db
+        .update(userIntegrations)
+        .set({ ...data, updatedAt: new Date() })
+        .where(
+          and(
+            eq(userIntegrations.userId, data.userId),
+            eq(userIntegrations.integrationType, data.integrationType)
+          )
+        )
+        .returning();
+      return updated;
+    } else {
+      // Create new integration
+      const [created] = await db
+        .insert(userIntegrations)
+        .values(data)
+        .returning();
+      return created;
+    }
+  }
+
+  async deleteUserIntegration(userId: number, integrationType: string): Promise<void> {
+    await db
+      .delete(userIntegrations)
+      .where(
+        and(
+          eq(userIntegrations.userId, userId),
+          eq(userIntegrations.integrationType, integrationType)
+        )
+      );
   }
 
   // Time clock methods for portal

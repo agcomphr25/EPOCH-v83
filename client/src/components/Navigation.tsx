@@ -1476,6 +1476,20 @@ export default function Navigation() {
                 {currentUser.firstName || currentUser.username}
               </span>
             )}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                closeAllDropdowns();
+                setLocation('/settings');
+              }}
+              className="gap-2"
+              data-testid="button-settings"
+              title="Settings"
+            >
+              <Cog className="h-4 w-4" />
+              <span className="hidden lg:inline">Settings</span>
+            </Button>
             {isDeploymentEnvironment() && (
               <Button
                 variant="outline"

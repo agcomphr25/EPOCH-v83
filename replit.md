@@ -68,6 +68,23 @@ The application utilizes a monorepo structure with a full-stack TypeScript appro
 
 ## Recent Changes
 
+### October 21, 2025 - Linked Orders Feature for CSRs
+
+#### Linked Orders Management in All Orders List
+- **CSR-Focused Integration**: Link Orders functionality added to All Orders List Actions dropdown for CSR workflow
+- **LinkOrdersDialog Component**: Comprehensive dialog for managing linked orders with:
+  - View current link status and all orders in group
+  - Create new link groups with optional approval code protection
+  - Add orders to existing groups
+  - Unlink orders with approval code validation when required
+  - Support for linking 2+ orders that must ship together or be processed as a group
+- **Actions Dropdown Menu**: Added three-dot menu (⋮) to Actions column in All Orders List
+- **Security**: Approval codes stored server-side only, never exposed to frontend
+- **User Experience**: CSRs can manage linked orders directly from where they work (All Orders List)
+- **Database Schema**: linked_order_groups and linked_orders tables with approval code protection
+- **API Routes**: Full CRUD operations at `/api/linked-orders/*` with server-side validation
+- **Shipping Integration**: Mark-shipped endpoint validates linked orders ship together or requires approval code
+
 ### October 20, 2025 - Global Search System & Vendor Evaluation Complete
 
 #### Global Search Implementation

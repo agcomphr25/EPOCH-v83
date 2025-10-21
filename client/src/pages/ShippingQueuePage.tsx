@@ -1269,7 +1269,7 @@ export default function ShippingQueuePage() {
         {selectedOrders.length > 0 && (
           <div className="fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 shadow-lg">
             <div className="container mx-auto p-4 space-y-4">
-              {/* Mark as Fulfilled Section */}
+              {/* Progress to Fulfilled Section */}
               <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
                 <div className="flex items-center justify-between flex-wrap gap-4">
                   <div className="flex items-center gap-2">
@@ -1295,8 +1295,8 @@ export default function ShippingQueuePage() {
                     >
                       <CheckCircle className="h-4 w-4 mr-2" />
                       {bulkFulfillMutation.isPending
-                        ? 'Fulfilling...'
-                        : `Mark as Fulfilled (${selectedOrders.length})`}
+                        ? 'Progressing...'
+                        : `Progress to Fulfilled (${selectedOrders.length})`}
                     </Button>
                   </div>
                 </div>

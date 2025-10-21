@@ -124,3 +124,10 @@ The application utilizes a monorepo structure with a full-stack TypeScript appro
   - Updated button text to accurately show "Progress to Layup/Plugging"
 - **Correct Department Flow Confirmed**: P1 Production Queue → Layup/Plugging → Barcode → CNC
 - **Scope**: UI clarity improvement - routing was already correct, only naming was misleading
+
+#### UPS Shipping Label API Fix
+- **Issue Fixed**: 500 error when creating shipping labels via UPS API
+  - Missing required phone number in ShipTo (recipient) section of UPS shipment payload
+  - Added Phone field to ShipTo object with customer phone or fallback '0000000000'
+- **Impact**: Shipping label creation now works correctly with UPS API
+- **Scope**: Production bug fix for shipping functionality

@@ -68,17 +68,28 @@ The application utilizes a monorepo structure with a full-stack TypeScript appro
 
 ## Recent Changes
 
-### October 21, 2025 - Comprehensive Audit Trail System
+### October 21, 2025 - Fully Automatic Audit Trail System
 
-#### Audit Infrastructure
+#### Automatic Audit Infrastructure (ZERO Manual Configuration Required)
 - **Database Schema**: Created `audit_events` table with indexed fields for high-performance querying
-- **Automatic Tracking**: Utility functions (`logAuditEvent`) for capturing user actions with timestamps, IP addresses, and metadata
+- **100% Automatic Tracking**: Global middleware automatically captures ALL state-changing operations (POST/PUT/PATCH/DELETE)
+  - No manual logging calls required
+  - No configuration needed for new routes
+  - Completely transparent to developers
+  - Automatically extracts entity types from URL paths
+  - Automatically extracts entity IDs from route params and response bodies
+- **Comprehensive Coverage**: Automatically tracks:
+  - All order operations (create, update, delete, department progression, transfers, finalization, etc.)
+  - All customer operations (create, update, delete, addresses, communications)
+  - All inventory operations (create, update, delete, stock changes)
+  - All employee operations
+  - All payment, vendor, BOM, training, and other entity operations
 - **API Routes**: RESTful endpoints at `/api/audit/*` for fetching events, entity types, and entities with ADMIN-only access control
 - **Real-time Updates**: 5-second polling interval when audit drawer is open for live event monitoring
 - **Permanent Storage**: All audit events stored indefinitely in PostgreSQL for compliance and historical analysis
 
 #### User Interface Components
-- **Navbar Integration**: Audit button with clipboard icon in main navigation (ADMIN role gated)
+- **Navbar Integration**: Audit button with search icon in main navigation (ADMIN role gated)
 - **AuditModal**: Entity selection dialog with search functionality across all auditable entity types (Orders, Inventory, Customers, etc.)
 - **AuditDrawer**: Comprehensive audit trail viewer with:
   - Event filtering (All, Field Changes, Department Progress, Sign-offs)
@@ -88,18 +99,17 @@ The application utilizes a monorepo structure with a full-stack TypeScript appro
   - Error handling with user-friendly messages
 - **Smart Sorting**: Entity types ordered by priority (Orders, Inventory, Customers first, then alphabetical)
 
-#### Integration Points
-- **Ready for Integration**: Utility functions prepared for adding audit tracking to:
-  - Order creation, updates, and department progression
-  - Customer CRUD operations
-  - Inventory changes and stock model updates
-  - Payment tracking and shipping operations
-  - Employee actions and quality control sign-offs
-- **Example Usage**: `await logAuditEvent(db, { entityType: 'Order', entityId: orderId, action: 'STATUS_CHANGE', actorId: userId, ... })`
+#### How It Works
+- **Global Middleware**: Applied to all API routes before any route handlers
+- **Pattern Matching**: Automatically determines entity type from URL (e.g., `/api/orders/*` → Order)
+- **Action Detection**: Automatically determines action from HTTP method and path keywords
+- **ID Extraction**: Intelligently extracts entity IDs from route parameters or response data
+- **Metadata Capture**: Automatically captures user info, timestamps, IP addresses, request/response data
 
 #### Security & Performance
 - **Access Control**: All audit endpoints protected with `requireAdmin` middleware
 - **Optimized Queries**: Database indexes on `entity_type`, `entity_id`, `actor_id`, and `timestamp` for fast retrieval
+- **Non-Blocking**: Audit logging failures never affect actual operations
 - **Scalable Architecture**: Supports future granular permissions (e.g., AUDIT_VIEW_ORDERS, AUDIT_VIEW_INVENTORY)
 
 ### October 21, 2025 - Linked Orders Feature for CSRs

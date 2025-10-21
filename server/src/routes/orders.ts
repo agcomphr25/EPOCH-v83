@@ -376,6 +376,7 @@ router.post('/finalized', async (req: Request, res: Response) => {
       orderData,
       req.body.finalizedBy
     );
+
     res.status(201).json(finalizedOrder);
   } catch (error) {
     console.error('Create finalized order error:', error);
@@ -400,6 +401,7 @@ router.post('/draft', async (req: Request, res: Response) => {
         orderData,
         req.body.finalizedBy
       );
+  
       return res.status(201).json(finalizedOrder);
     }
 

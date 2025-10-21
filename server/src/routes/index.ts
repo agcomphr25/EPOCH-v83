@@ -46,8 +46,14 @@ import globalSearchRoutes from './globalSearch';
 import linkedOrdersRoutes from './linkedOrders';
 import auditRoutes from './audit';
 import { getAccessToken } from '../utils/upsShipping';
+import { globalAuditMiddleware } from '../middleware/globalAuditMiddleware';
 
 export function registerRoutes(app: Express): Server {
+  // ✅ AUTOMATIC AUDIT TRACKING - Applies to ALL state-changing operations
+  // This middleware automatically captures all POST/PUT/PATCH/DELETE requests
+  // No manual configuration needed - completely transparent tracking
+  app.use(globalAuditMiddleware);
+  
   // Authentication routes
   app.use('/api/auth', authRoutes);
 

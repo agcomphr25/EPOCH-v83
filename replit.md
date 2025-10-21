@@ -68,6 +68,7 @@ The application utilizes a monorepo structure with a full-stack TypeScript appro
 
 ## Recent Changes
 
+
 ### October 21, 2025 - Linked Orders, Department Progression Fix & Bulk Fulfill
 
 #### Bulk Fulfill Functionality
@@ -108,6 +109,26 @@ The application utilizes a monorepo structure with a full-stack TypeScript appro
 - **Database Schema**: linked_order_groups and linked_orders tables with approval code protection
 - **API Routes**: Full CRUD operations at `/api/linked-orders/*` with server-side validation
 - **Shipping Integration**: Mark-shipped endpoint validates linked orders ship together or requires approval code
+
+### October 20, 2025 - User Settings & Integration Management Complete
+
+#### User Integration Settings
+- **Settings Page**: New `/settings` route with tabbed interface for user preferences and integrations
+- **Per-User OAuth Integrations**: Each user can connect their own Google and Outlook accounts independently
+- **Supported Integrations**:
+  - Google Gmail: Connect Gmail for email management
+  - Google Calendar: Sync calendar events
+  - Google Drive: Access files and documents
+  - Google Sheets: Manage spreadsheets
+  - Outlook: Connect Outlook email and calendar
+- **Connection Status Indicators**: Visual badges showing connection status for each integration
+- **Account Display**: Shows connected account email and last sync timestamp
+- **Database Schema**: New `userIntegrations` table stores OAuth tokens, refresh tokens, and connection metadata per user
+- **API Endpoints**: RESTful API at `/api/user-integrations` for CRUD operations on user integrations
+- **Security**: OAuth tokens stored securely with user-specific access control via authentication middleware
+- **UI Components**: Built with ShadCN UI components including Cards, Tabs, Badges for consistent design
+- **Future Enhancement**: OAuth connection flow to be implemented for actual Google/Outlook authentication
+
 
 ### October 20, 2025 - Global Search System & Vendor Evaluation Complete
 

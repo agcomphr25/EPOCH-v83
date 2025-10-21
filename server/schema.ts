@@ -843,6 +843,25 @@ export const userSessions = pgTable('user_sessions', {
   createdAt: timestamp('created_at').defaultNow(),
 });
 
+// User Integrations Table - OAuth connections for Google and Outlook
+export const userIntegrations = pgTable('user_integrations', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id')
+    .references(() => users.id)
+    .notNull(),
+  integrationType: text('integration_type').notNull(), // 'google-drive', 'google-gmail', 'google-calendar', 'google-sheets', 'outlook'
+  isConnected: boolean('is_connected').default(false),
+  accessToken: text('access_token'),
+  refreshToken: text('refresh_token'),
+  tokenExpiresAt: timestamp('token_expires_at'),
+  accountEmail: text('account_email'), // The email address of the connected account
+  accountName: text('account_name'), // Display name of the connected account
+  lastSyncedAt: timestamp('last_synced_at'),
+  metadata: jsonb('metadata'), // Additional integration-specific metadata
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
 // Capability-Based Permission System
 export const capabilities = pgTable('capabilities', {
   id: serial('id').primaryKey(),
@@ -1882,6 +1901,15 @@ export const insertUserSessionSchema = createInsertSchema(userSessions).omit({
 });
 export type InsertUserSession = z.infer<typeof insertUserSessionSchema>;
 export type UserSession = typeof userSessions.$inferSelect;
+
+// User integrations types
+export const insertUserIntegrationSchema = createInsertSchema(userIntegrations).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertUserIntegration = z.infer<typeof insertUserIntegrationSchema>;
+export type UserIntegration = typeof userIntegrations.$inferSelect;
 
 // New employee-related types
 export type InsertCertification = z.infer<typeof insertCertificationSchema>;

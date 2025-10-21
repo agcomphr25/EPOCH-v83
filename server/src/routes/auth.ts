@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 
 import { pool } from '../../db';
 
@@ -185,7 +186,6 @@ const USERS = new Map([
 
 // Generate cryptographically secure session token
 function generateSessionToken(): string {
-  const crypto = require('crypto');
   return crypto.randomBytes(32).toString('hex');
 }
 

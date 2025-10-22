@@ -181,9 +181,8 @@ Phone: 256-723-8381
 
   // Use the actual email API endpoint
   try {
-    const baseUrl =
-      process.env.NODE_ENV === 'production' ? '' : 'http://localhost:5000';
-    const response = await fetch(`${baseUrl}/api/communications/email`, {
+    // In Replit, use relative path since we're making internal server-to-server call
+    const response = await fetch(`http://127.0.0.1:5000/api/communications/email`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -198,11 +197,11 @@ Phone: 256-723-8381
     });
 
     if (!response.ok) {
-      const errorData = await response.json();
+      const errorData = await response.json() as any;
       throw new Error(errorData.error || 'Email API request failed');
     }
 
-    const result = await response.json();
+    const result = await response.json() as any;
     console.log(
       'Email shipping notification sent successfully:',
       result.externalId
@@ -233,9 +232,8 @@ async function sendSMSNotification(
 
   // Use the actual SMS API endpoint
   try {
-    const baseUrl =
-      process.env.NODE_ENV === 'production' ? '' : 'http://localhost:5000';
-    const response = await fetch(`${baseUrl}/api/communications/sms`, {
+    // In Replit, use relative path since we're making internal server-to-server call
+    const response = await fetch(`http://127.0.0.1:5000/api/communications/sms`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -249,11 +247,11 @@ async function sendSMSNotification(
     });
 
     if (!response.ok) {
-      const errorData = await response.json();
+      const errorData = await response.json() as any;
       throw new Error(errorData.error || 'SMS API request failed');
     }
 
-    const result = await response.json();
+    const result = await response.json() as any;
     console.log(
       'SMS shipping notification sent successfully:',
       result.externalId

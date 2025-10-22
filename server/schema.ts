@@ -212,6 +212,18 @@ export const linkedOrders = pgTable('linked_orders', {
   addedAt: timestamp('added_at').defaultNow(),
 });
 
+// Order Filter Presets - Save custom filter combinations for reporting
+export const orderFilterPresets = pgTable('order_filter_presets', {
+  id: serial('id').primaryKey(),
+  name: text('name').notNull(),
+  description: text('description'),
+  filters: jsonb('filters').notNull(), // Stores filter criteria
+  createdBy: text('created_by').notNull(),
+  isShared: boolean('is_shared').default(false), // Whether preset is available to all users
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
 export const csvData = pgTable('csv_data', {
   id: serial('id').primaryKey(),
   fileName: text('file_name').notNull(),
@@ -1273,6 +1285,20 @@ export const insertLinkedOrderSchema = createInsertSchema(linkedOrders)
     orderId: z.string().min(1, 'Order ID is required'),
   });
 
+export const insertOrderFilterPresetSchema = createInsertSchema(orderFilterPresets)
+  .omit({
+    id: true,
+    createdAt: true,
+    updatedAt: true,
+  })
+  .extend({
+    name: z.string().min(1, 'Preset name is required'),
+    description: z.string().optional().nullable(),
+    filters: z.record(z.any()),
+    createdBy: z.string().min(1, 'Created by is required'),
+    isShared: z.boolean().default(false),
+  });
+
 export const insertPaymentSchema = createInsertSchema(payments)
   .omit({
     id: true,
@@ -1869,6 +1895,8 @@ export type InsertLinkedOrderGroup = z.infer<typeof insertLinkedOrderGroupSchema
 export type LinkedOrderGroup = typeof linkedOrderGroups.$inferSelect;
 export type InsertLinkedOrder = z.infer<typeof insertLinkedOrderSchema>;
 export type LinkedOrder = typeof linkedOrders.$inferSelect;
+export type InsertOrderFilterPreset = z.infer<typeof insertOrderFilterPresetSchema>;
+export type OrderFilterPreset = typeof orderFilterPresets.$inferSelect;
 export type InsertForm = z.infer<typeof insertFormSchema>;
 export type Form = typeof forms.$inferSelect;
 export type InsertFormSubmission = z.infer<typeof insertFormSubmissionSchema>;

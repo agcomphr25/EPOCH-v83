@@ -69,7 +69,9 @@ export default function BulkPaymentPage() {
         title: 'Payments Recorded',
         description: `Successfully processed ${response.processed} payment(s)${response.failed > 0 ? `, ${response.failed} failed` : ''}.`,
       });
+      // Invalidate ALL order-related caches to ensure payment status updates everywhere
       queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
       refetchUnpaidOrders();
       setSelectedOrders(new Map());
       setPaymentType('');

@@ -176,11 +176,16 @@ router.get('/customer/:customerId', async (req: Request, res: Response) => {
             `❌ Error calculating order total for ${order.orderId}:`,
             error
           );
-          // Fallback to shipping cost if calculation fails
-          actualOrderTotal = Number(order.shipping) || 0;
+          // FIXED: Fallback to stored payment amount (order total) instead of shipping
+          actualOrderTotal = Number(order.paymentAmount) || 0;
         }
 
         const balanceDue = Math.max(0, actualOrderTotal - paymentTotal);
+
+        // Round to 2 decimal places to avoid floating-point precision issues
+        const roundedPaymentTotal = Math.round(paymentTotal * 100) / 100;
+        const roundedOrderTotal = Math.round(actualOrderTotal * 100) / 100;
+        const roundedBalanceDue = Math.round(balanceDue * 100) / 100;
 
         return {
           id: order.id,
@@ -195,10 +200,10 @@ router.get('/customer/:customerId', async (req: Request, res: Response) => {
           paymentAmount: order.paymentAmount,
           isPaid: order.isPaid,
           customerPO: order.customerPO,
-          paymentTotal: Math.round(paymentTotal * 100) / 100,
-          orderTotal: Math.round(actualOrderTotal * 100) / 100,
-          balanceDue: Math.round(balanceDue * 100) / 100,
-          isFullyPaid: paymentTotal >= actualOrderTotal && actualOrderTotal > 0,
+          paymentTotal: roundedPaymentTotal,
+          orderTotal: roundedOrderTotal,
+          balanceDue: roundedBalanceDue,
+          isFullyPaid: roundedPaymentTotal >= roundedOrderTotal && roundedOrderTotal > 0,
         };
       })
     );

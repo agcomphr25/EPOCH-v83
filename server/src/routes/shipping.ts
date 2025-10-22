@@ -4,7 +4,7 @@ import axios from 'axios';
 
 import { storage } from '../../storage';
 import { db } from '../../db';
-import { allOrders, orderDrafts, linkedOrders, linkedOrderGroups } from '../../schema';
+import { allOrders, linkedOrders, linkedOrderGroups } from '../../schema';
 
 const router = Router();
 

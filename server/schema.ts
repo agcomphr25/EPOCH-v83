@@ -1802,6 +1802,10 @@ export type InsertStockModel = z.infer<typeof insertStockModelSchema>;
 export type StockModel = typeof stockModels.$inferSelect;
 export type InsertAllOrder = z.infer<typeof insertAllOrderSchema>;
 export type AllOrder = typeof allOrders.$inferSelect;
+
+// Backward compatibility aliases (order_drafts table removed, now using all_orders with PENDING_SIGNATURE status)
+export type InsertOrderDraft = InsertAllOrder;
+export type OrderDraft = AllOrder;
 export type InsertLinkedOrderGroup = z.infer<typeof insertLinkedOrderGroupSchema>;
 export type LinkedOrderGroup = typeof linkedOrderGroups.$inferSelect;
 export type InsertLinkedOrder = z.infer<typeof insertLinkedOrderSchema>;

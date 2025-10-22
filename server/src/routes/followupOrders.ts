@@ -287,12 +287,15 @@ router.post('/:id/sign', async (req, res) => {
       movedToProductionAt: new Date(),
     });
 
-    // Finalize the draft order and move it to production queue
+    // Update order status from PENDING_SIGNATURE to FINALIZED and move to production queue
     console.log(`✅ Customer signed order ${followupOrder.orderId} - finalizing and moving to production...`);
     
     try {
-      // Finalize the order (moves from draft to all_orders table)
-      await storage.finalizeOrder(followupOrder.orderId, 'customer_signature');
+      // Update the order status to FINALIZED and set current department
+      await storage.updateFinalizedOrder(followupOrder.orderId, {
+        status: 'FINALIZED',
+        currentDepartment: 'P1 Production Queue'
+      });
       
       console.log(`🎯 Order ${followupOrder.orderId} finalized and in production queue`);
     } catch (finalizeError) {

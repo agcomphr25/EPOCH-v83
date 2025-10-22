@@ -1,4 +1,4 @@
-import { orderDrafts, customers } from '@shared/schema';
+import { customers } from '@shared/schema';
 import { eq } from 'drizzle-orm';
 
 import { db } from '../db.js';

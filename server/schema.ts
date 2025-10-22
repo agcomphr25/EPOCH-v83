@@ -2295,6 +2295,7 @@ export const vendorContacts = pgTable('vendor_contacts', {
 export const communicationLogs = pgTable('communication_logs', {
   id: serial('id').primaryKey(),
   orderId: text('order_id'), // Made nullable for general communications
+  messageType: text('message_type').notNull().default('transactional'), // transactional, marketing, notification
   customerId: text('customer_id').notNull(),
   type: text('type').notNull(), // order-confirmation, shipping-notification, quality-alert
   method: text('method').notNull(), // email, sms
@@ -2483,6 +2484,7 @@ export const insertCommunicationLogSchema = createInsertSchema(
   })
   .extend({
     orderId: z.string().optional(),
+    messageType: z.enum(['transactional', 'marketing', 'notification']).default('transactional'),
     customerId: z.string().min(1, 'Customer ID is required'),
     type: z.enum([
       'order-confirmation',

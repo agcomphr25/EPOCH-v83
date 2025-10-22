@@ -380,8 +380,8 @@ router.post('/finalized', async (req: Request, res: Response) => {
     try {
       // Import dependencies
       const { nanoid } = await import('nanoid');
-      const { generateSalesOrderPDF } = await import('../utils/pdf/salesOrderPdf');
-      const { sendFollowupOrderEmail } = await import('../utils/followupOrderEmail');
+      const { generateSalesOrderPDF } = await import('../../utils/pdf/salesOrderPdf');
+      const { sendFollowupOrderEmail } = await import('../../utils/followupOrderEmail');
       const fs = await import('fs');
       const path = await import('path');
       

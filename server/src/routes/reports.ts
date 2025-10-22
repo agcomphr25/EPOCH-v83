@@ -193,9 +193,23 @@ router.get('/filter-options', authenticateToken, requireRole('ADMIN'), async (re
     const barrelInlet = allFeatures.find((f) => f.id === 'barrel_inlet');
     const barrelOptions = barrelInlet?.options as any[] || [];
 
-    // Extract action inlet options
-    const actionInlet = allFeatures.find((f) => f.id === 'action_inlet');
-    const actionInletOptions = actionInlet?.options as any[] || [];
+    // Get distinct action inlet options from actual orders (dynamic)
+    const actionInletResult = await db
+      .select({ actionInlet: sql<string>`${allOrders.features}->>'action_inlet'` })
+      .from(allOrders)
+      .where(sql`${allOrders.features}->>'action_inlet' IS NOT NULL`);
+    
+    const uniqueActionInlets = Array.from(new Set(
+      actionInletResult
+        .map((r) => r.actionInlet)
+        .filter((val): val is string => val !== null && val !== '' && val !== 'none')
+    )).sort();
+
+    // Map to options format with value and label
+    const actionInletOptions = uniqueActionInlets.map((value) => ({
+      value,
+      label: value.split('_').map((word: string) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')
+    }));
 
     // Extract action length options
     const actionLength = allFeatures.find((f) => f.id === 'action_length');

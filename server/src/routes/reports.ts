@@ -193,6 +193,14 @@ router.get('/filter-options', authenticateToken, requireRole('ADMIN'), async (re
     const barrelInlet = allFeatures.find((f) => f.id === 'barrel_inlet');
     const barrelOptions = barrelInlet?.options as any[] || [];
 
+    // Extract action inlet options
+    const actionInlet = allFeatures.find((f) => f.id === 'action_inlet');
+    const actionInletOptions = actionInlet?.options as any[] || [];
+
+    // Extract action length options
+    const actionLength = allFeatures.find((f) => f.id === 'action_length');
+    const actionLengthOptions = actionLength?.options as any[] || [];
+
     // Extract paint options by category
     const paintFeatures = allFeatures.filter((f) =>
       ['base_colors', 'custom_graphics', 'special_effects', 'camo_patterns', 'premium_patterns', 'protective_coatings'].includes(f.id)
@@ -241,6 +249,8 @@ router.get('/filter-options', authenticateToken, requireRole('ADMIN'), async (re
     res.json({
       stockModels: models,
       barrelInlets: barrelOptions,
+      actionInlets: actionInletOptions,
+      actionLengths: actionLengthOptions,
       paintOptions,
       railAccessories: railOptions,
       departments,
@@ -258,6 +268,8 @@ router.post('/query', authenticateToken, requireRole('ADMIN'), async (req, res) 
     const {
       stockModels: selectedModels,
       barrelInlets,
+      actionInlets,
+      actionLengths,
       paintOptions: selectedPaints,
       railAccessories,
       departments,
@@ -299,6 +311,22 @@ router.post('/query', authenticateToken, requireRole('ADMIN'), async (req, res) 
       barrelInlets.forEach((barrel: string) => {
         featureConditions.push(
           sql`${allOrders.features}->>'barrel_inlet' = ${barrel}`
+        );
+      });
+    }
+
+    if (actionInlets && actionInlets.length > 0) {
+      actionInlets.forEach((action: string) => {
+        featureConditions.push(
+          sql`${allOrders.features}->>'action_inlet' = ${action}`
+        );
+      });
+    }
+
+    if (actionLengths && actionLengths.length > 0) {
+      actionLengths.forEach((length: string) => {
+        featureConditions.push(
+          sql`${allOrders.features}->>'action_length' = ${length}`
         );
       });
     }

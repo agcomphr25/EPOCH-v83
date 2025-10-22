@@ -61,6 +61,8 @@ import { format } from 'date-fns';
 interface FilterOptions {
   stockModels: { id: string; name: string; displayName: string }[];
   barrelInlets: { value: string; label: string }[];
+  actionInlets: { value: string; label: string }[];
+  actionLengths: { value: string; label: string }[];
   paintOptions: {
     category: string;
     displayName: string;
@@ -74,6 +76,8 @@ interface FilterOptions {
 interface Filters {
   stockModels: string[];
   barrelInlets: string[];
+  actionInlets: string[];
+  actionLengths: string[];
   paintOptions: string[];
   railAccessories: string[];
   departments: string[];
@@ -98,6 +102,8 @@ export default function OrderReports() {
   const [filters, setFilters] = useState<Filters>({
     stockModels: [],
     barrelInlets: [],
+    actionInlets: [],
+    actionLengths: [],
     paintOptions: [],
     railAccessories: [],
     departments: [],
@@ -264,6 +270,8 @@ export default function OrderReports() {
     setFilters({
       stockModels: [],
       barrelInlets: [],
+      actionInlets: [],
+      actionLengths: [],
       paintOptions: [],
       railAccessories: [],
       departments: [],
@@ -284,6 +292,8 @@ export default function OrderReports() {
   const hasActiveFilters =
     filters.stockModels.length > 0 ||
     filters.barrelInlets.length > 0 ||
+    filters.actionInlets.length > 0 ||
+    filters.actionLengths.length > 0 ||
     filters.paintOptions.length > 0 ||
     filters.railAccessories.length > 0 ||
     filters.departments.length > 0 ||
@@ -433,6 +443,76 @@ export default function OrderReports() {
                 {filters.barrelInlets.length > 0 && (
                   <div className="text-xs text-gray-600">
                     {filters.barrelInlets.length} selected
+                  </div>
+                )}
+              </div>
+
+              {/* Action Inlets */}
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Action Inlets</Label>
+                <div className="border rounded-lg p-3 max-h-48 overflow-y-auto space-y-2">
+                  {filterOptions?.actionInlets.map((action) => (
+                    <label
+                      key={action.value}
+                      className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 p-1 rounded"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={filters.actionInlets.includes(action.value)}
+                        onChange={() =>
+                          setFilters({
+                            ...filters,
+                            actionInlets: toggleArrayValue(
+                              filters.actionInlets,
+                              action.value
+                            ),
+                          })
+                        }
+                        className="rounded"
+                        data-testid={`checkbox-action-inlet-${action.value}`}
+                      />
+                      <span className="text-sm">{action.label}</span>
+                    </label>
+                  ))}
+                </div>
+                {filters.actionInlets.length > 0 && (
+                  <div className="text-xs text-gray-600">
+                    {filters.actionInlets.length} selected
+                  </div>
+                )}
+              </div>
+
+              {/* Action Lengths */}
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Action Lengths</Label>
+                <div className="border rounded-lg p-3 max-h-48 overflow-y-auto space-y-2">
+                  {filterOptions?.actionLengths.map((length) => (
+                    <label
+                      key={length.value}
+                      className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 p-1 rounded"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={filters.actionLengths.includes(length.value)}
+                        onChange={() =>
+                          setFilters({
+                            ...filters,
+                            actionLengths: toggleArrayValue(
+                              filters.actionLengths,
+                              length.value
+                            ),
+                          })
+                        }
+                        className="rounded"
+                        data-testid={`checkbox-action-length-${length.value}`}
+                      />
+                      <span className="text-sm">{length.label}</span>
+                    </label>
+                  ))}
+                </div>
+                {filters.actionLengths.length > 0 && (
+                  <div className="text-xs text-gray-600">
+                    {filters.actionLengths.length} selected
                   </div>
                 )}
               </div>

@@ -10,9 +10,13 @@ const storage = new DatabaseStorage();
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
-const REDIRECT_URI = process.env.REPLIT_DEV_DOMAIN 
-  ? `https://${process.env.REPLIT_DEV_DOMAIN}/api/oauth/google/callback`
-  : 'http://localhost:5000/api/oauth/google/callback';
+
+// Redirect URI - use production domain if available, fallback to dev domain
+const REDIRECT_URI = process.env.PRODUCTION_DOMAIN
+  ? `https://${process.env.PRODUCTION_DOMAIN}/api/oauth/google/callback`
+  : process.env.REPLIT_DEV_DOMAIN 
+    ? `https://${process.env.REPLIT_DEV_DOMAIN}/api/oauth/google/callback`
+    : 'http://localhost:5000/api/oauth/google/callback';
 
 // SECURITY FIX: Create a new OAuth2Client instance for each request
 // to prevent credential leakage between users

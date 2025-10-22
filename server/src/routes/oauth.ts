@@ -22,10 +22,19 @@ setInterval(() => {
 
 // Helper to get base URL
 function getBaseUrl(): string {
+  // Use production domain if available (for published deployments)
+  const productionDomain = process.env.PRODUCTION_DOMAIN;
+  if (productionDomain) {
+    return `https://${productionDomain}`;
+  }
+  
+  // Use Replit dev domain for development
   const replitDomain = process.env.REPLIT_DEV_DOMAIN;
   if (replitDomain) {
     return `https://${replitDomain}`;
   }
+  
+  // Fallback to localhost for local development
   return `http://localhost:${process.env.PORT || 5000}`;
 }
 

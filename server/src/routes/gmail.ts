@@ -1,6 +1,6 @@
 import { Router, type Request, type Response } from 'express';
 import { authenticateToken } from '../../middleware/auth';
-import { listMessages, getMessage, searchMessages, sendEmail } from '../lib/gmail';
+import { listMessages, getMessage, searchMessages, sendEmail, getAttachment } from '../lib/gmail';
 
 const router = Router();
 
@@ -105,6 +105,30 @@ router.post('/send', authenticateToken, async (req: Request, res: Response) => {
     
     res.status(500).json({ 
       error: error.message || 'Failed to send email',
+      needsConnection: error.message?.includes('not connected')
+    });
+  }
+});
+
+router.get('/attachments/:messageId/:attachmentId', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const userId = req.user!.id;
+    const { messageId, attachmentId } = req.params;
+
+    const attachment = await getAttachment(userId, messageId, attachmentId);
+    res.json(attachment);
+  } catch (error: any) {
+    console.error('Error fetching attachment:', error);
+    
+    if (error.needsReauth) {
+      return res.status(409).json({ 
+        error: error.message,
+        needsReauth: true
+      });
+    }
+    
+    res.status(500).json({ 
+      error: error.message || 'Failed to fetch attachment',
       needsConnection: error.message?.includes('not connected')
     });
   }

@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import { Mail, Search, RefreshCw, AlertCircle, Inbox, Star, X, Reply, Send } from 'lucide-react';
+import { Mail, Search, RefreshCw, AlertCircle, Inbox, Star, X, Reply, Send, Paperclip, Download } from 'lucide-react';
 import { Link } from 'wouter';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 
@@ -105,6 +105,83 @@ export default function EmailInbox() {
     }
 
     return body || message.snippet || '';
+  };
+
+  const getAttachments = (message: GmailMessage): Array<{filename: string; mimeType: string; size: number; attachmentId: string}> => {
+    if (!message.payload?.parts) return [];
+    
+    const attachments: Array<{filename: string; mimeType: string; size: number; attachmentId: string}> = [];
+    
+    const findAttachments = (parts: any[]) => {
+      parts.forEach((part: any) => {
+        if (part.filename && part.body?.attachmentId) {
+          attachments.push({
+            filename: part.filename,
+            mimeType: part.mimeType,
+            size: part.body.size || 0,
+            attachmentId: part.body.attachmentId,
+          });
+        }
+        if (part.parts) {
+          findAttachments(part.parts);
+        }
+      });
+    };
+    
+    findAttachments(message.payload.parts);
+    return attachments;
+  };
+
+  const formatFileSize = (bytes: number): string => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+  };
+
+  const downloadAttachment = async (messageId: string, attachmentId: string, filename: string) => {
+    try {
+      const response = await fetch(`/api/gmail/attachments/${messageId}/${attachmentId}`, {
+        credentials: 'include',
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to download attachment');
+      }
+      
+      const data = await response.json();
+      
+      // Decode base64url data
+      const base64Data = data.data.replace(/-/g, '+').replace(/_/g, '/');
+      const binaryString = atob(base64Data);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      
+      // Create blob and download
+      const blob = new Blob([bytes]);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      
+      toast({
+        title: 'Downloaded',
+        description: `${filename} downloaded successfully`,
+      });
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to download attachment',
+        variant: 'destructive',
+      });
+    }
   };
 
   const formatDate = (internalDate?: string): string => {
@@ -384,6 +461,45 @@ export default function EmailInbox() {
                     </div>
                   </div>
                   <hr className="dark:border-gray-800" />
+                  
+                  {getAttachments(selectedMessage).length > 0 && (
+                    <div className="mb-4">
+                      <h4 className="font-semibold text-foreground dark:text-white mb-2 flex items-center gap-2">
+                        <Paperclip className="h-4 w-4" />
+                        Attachments ({getAttachments(selectedMessage).length})
+                      </h4>
+                      <div className="space-y-2">
+                        {getAttachments(selectedMessage).map((attachment, index) => (
+                          <div
+                            key={index}
+                            className="flex items-center justify-between p-3 bg-muted dark:bg-gray-800 rounded-lg"
+                            data-testid={`attachment-${index}`}
+                          >
+                            <div className="flex items-center gap-2 flex-1 min-w-0">
+                              <Paperclip className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                              <div className="min-w-0">
+                                <p className="text-sm font-medium text-foreground dark:text-white truncate">
+                                  {attachment.filename}
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                  {formatFileSize(attachment.size)}
+                                </p>
+                              </div>
+                            </div>
+                            <Button
+                              onClick={() => downloadAttachment(selectedMessage.id, attachment.attachmentId, attachment.filename)}
+                              variant="outline"
+                              size="sm"
+                              data-testid={`button-download-${index}`}
+                            >
+                              <Download className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  
                   <div 
                     className="prose dark:prose-invert max-w-none"
                     data-testid="text-body"

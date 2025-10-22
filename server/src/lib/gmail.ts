@@ -139,6 +139,18 @@ export async function getMessage(userId: number, messageId: string) {
   return response.data;
 }
 
+export async function getAttachment(userId: number, messageId: string, attachmentId: string) {
+  const { client } = await getGmailClient(userId);
+  
+  const response = await client.users.messages.attachments.get({
+    userId: 'me',
+    messageId: messageId,
+    id: attachmentId,
+  });
+
+  return response.data;
+}
+
 export async function searchMessages(userId: number, query: string, maxResults: number = 20) {
   const { client } = await getGmailClient(userId);
   

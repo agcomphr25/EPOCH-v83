@@ -520,68 +520,92 @@ router.post('/modules/:moduleId/complete', async (req, res) => {
     });
 
     // Update training matrix with completion data
+    let matrixUpdated = false;
+    let matrixUpdateError = null;
+    
     if (passed) {
-      const trainingName = module[0].title;
+      try {
+        const trainingName = module[0].title;
 
-      // Look up the actual employee numeric ID from username if employeeId is a username
-      let numericEmployeeId: number | null = null;
+        // Look up the actual employee numeric ID from username if employeeId is a username
+        let numericEmployeeId: number | null = null;
 
-      if (employeeId) {
-        const parsedId = parseInt(employeeId);
-        if (!isNaN(parsedId)) {
-          numericEmployeeId = parsedId;
-        } else {
-          // employeeId is a username, look up the user's employee ID
-          const user = await db
-            .select({
-              employeeId: users.employeeId,
-            })
-            .from(users)
-            .where(eq(users.username, employeeId))
-            .limit(1);
+        if (employeeId) {
+          const parsedId = parseInt(employeeId);
+          if (!isNaN(parsedId)) {
+            numericEmployeeId = parsedId;
+          } else {
+            // employeeId is a username, look up the user's employee ID
+            const user = await db
+              .select({
+                employeeId: users.employeeId,
+              })
+              .from(users)
+              .where(eq(users.username, employeeId))
+              .limit(1);
 
-          if (user && user.length > 0 && user[0].employeeId) {
-            numericEmployeeId = user[0].employeeId;
+            if (user && user.length > 0 && user[0].employeeId) {
+              numericEmployeeId = user[0].employeeId;
+            }
           }
         }
-      }
 
-      // Find existing training matrix entry
-      const existingEntry = await db
-        .select()
-        .from(trainingMatrix)
-        .where(
-          and(
-            numericEmployeeId !== null
-              ? eq(trainingMatrix.employeeId, numericEmployeeId)
-              : eq(trainingMatrix.employeeName, employeeName),
-            eq(trainingMatrix.trainingName, trainingName)
+        console.log('📊 Updating Training Matrix:', {
+          employeeId: numericEmployeeId,
+          employeeName,
+          trainingName,
+          score: scorePercentage
+        });
+
+        // Find existing training matrix entry
+        const existingEntry = await db
+          .select()
+          .from(trainingMatrix)
+          .where(
+            and(
+              numericEmployeeId !== null
+                ? eq(trainingMatrix.employeeId, numericEmployeeId)
+                : eq(trainingMatrix.employeeName, employeeName),
+              eq(trainingMatrix.trainingName, trainingName)
+            )
           )
-        )
-        .limit(1);
+          .limit(1);
 
-      if (existingEntry && existingEntry.length > 0) {
-        // Update existing entry
-        await db
-          .update(trainingMatrix)
-          .set({
+        if (existingEntry && existingEntry.length > 0) {
+          // Update existing entry
+          await db
+            .update(trainingMatrix)
+            .set({
+              lastCompleted: new Date(),
+              lastScore: scorePercentage,
+              status: 'COMPLETED',
+              updatedAt: new Date(),
+            })
+            .where(eq(trainingMatrix.id, existingEntry[0].id));
+          
+          console.log('✅ Training Matrix UPDATED - Entry ID:', existingEntry[0].id);
+          matrixUpdated = true;
+        } else {
+          // Create new entry if it doesn't exist
+          const [newEntry] = await db.insert(trainingMatrix).values({
+            employeeId: numericEmployeeId,
+            employeeName: employeeName,
+            trainingName: trainingName,
             lastCompleted: new Date(),
             lastScore: scorePercentage,
             status: 'COMPLETED',
-            updatedAt: new Date(),
-          })
-          .where(eq(trainingMatrix.id, existingEntry[0].id));
-      } else {
-        // Create new entry if it doesn't exist
-        await db.insert(trainingMatrix).values({
-          employeeId: numericEmployeeId,
-          employeeName: employeeName,
-          trainingName: trainingName,
-          lastCompleted: new Date(),
-          lastScore: scorePercentage,
-          status: 'COMPLETED',
-        });
+          }).returning();
+          
+          console.log('✅ Training Matrix CREATED - Entry ID:', newEntry.id);
+          matrixUpdated = true;
+        }
+      } catch (matrixError: any) {
+        console.error('❌ ERROR updating Training Matrix:', matrixError);
+        matrixUpdateError = matrixError.message;
+        // Don't fail the entire request if matrix update fails
       }
+    } else {
+      console.log('⚠️ Training Matrix NOT updated - Quiz not passed (score: ' + scorePercentage + '%)');
     }
 
     const results = {
@@ -594,6 +618,8 @@ router.post('/modules/:moduleId/complete', async (req, res) => {
       employeeName,
       moduleId,
       moduleTitle: module[0].title,
+      trainingMatrixUpdated: matrixUpdated,
+      trainingMatrixError: matrixUpdateError,
     };
 
     res.json(results);

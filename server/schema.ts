@@ -141,6 +141,9 @@ export const allOrders = pgTable('all_orders', {
   ).default(false),
   // Technician Assignment
   assignedTechnician: text('assigned_technician'),
+  // Customer Signature Data
+  signatureData: text('signature_data'), // Base64 signature image from customer
+  signedAt: timestamp('signed_at'), // When customer signed the order
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });

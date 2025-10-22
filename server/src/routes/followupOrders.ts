@@ -291,13 +291,15 @@ router.post('/:id/sign', async (req, res) => {
     console.log(`✅ Customer signed order ${followupOrder.orderId} - finalizing and moving to production...`);
     
     try {
-      // Update the order status to FINALIZED and set current department
+      // Update the order status to FINALIZED, set current department, and copy signature data
       await storage.updateFinalizedOrder(followupOrder.orderId, {
         status: 'FINALIZED',
-        currentDepartment: 'P1 Production Queue'
+        currentDepartment: 'P1 Production Queue',
+        signatureData,
+        signedAt: new Date()
       });
       
-      console.log(`🎯 Order ${followupOrder.orderId} finalized and in production queue`);
+      console.log(`🎯 Order ${followupOrder.orderId} finalized and in production queue with signature`);
     } catch (finalizeError) {
       console.error('Error finalizing order:', finalizeError);
       throw new Error('Failed to finalize order after signature');

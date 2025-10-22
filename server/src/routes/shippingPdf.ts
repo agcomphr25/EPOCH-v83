@@ -2540,12 +2540,57 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       font: boldFont,
     });
 
-    page2.drawLine({
-      start: { x: margin + 120, y: page2Y - 5 },
-      end: { x: margin + 300, y: page2Y - 5 },
-      thickness: 1,
-      color: rgb(0, 0, 0),
-    });
+    // Check if order has signature data - safely access via optional chaining
+    const orderSignature = order && 'signatureData' in order ? order.signatureData : null;
+    const orderSignedAt = order && 'signedAt' in order ? order.signedAt : null;
+    
+    if (orderSignature && orderSignedAt) {
+      try {
+        // Extract base64 data from data URL
+        const base64Data = String(orderSignature).replace(/^data:image\/\w+;base64,/, '');
+        const signatureBuffer = Buffer.from(base64Data, 'base64');
+        
+        // Embed signature image
+        const signatureImage = await pdfDoc.embedPng(signatureBuffer);
+        const sigWidth = 150;
+        const sigHeight = 50;
+        
+        page2.drawImage(signatureImage, {
+          x: margin + 130,
+          y: page2Y - 50,
+          width: sigWidth,
+          height: sigHeight,
+        });
+        
+        // Draw signed date
+        const signedDate = new Date(orderSignedAt).toLocaleDateString();
+        page2.drawText(signedDate, {
+          x: margin + 350,
+          y: page2Y,
+          size: 10,
+          font: font,
+        });
+        
+        console.log(`✅ Signature embedded in sales order PDF for ${orderId}`);
+      } catch (signatureError) {
+        console.error('Error embedding signature:', signatureError);
+        // Fall back to blank lines if signature fails to load
+        page2.drawLine({
+          start: { x: margin + 120, y: page2Y - 5 },
+          end: { x: margin + 300, y: page2Y - 5 },
+          thickness: 1,
+          color: rgb(0, 0, 0),
+        });
+      }
+    } else {
+      // No signature yet - draw blank line
+      page2.drawLine({
+        start: { x: margin + 120, y: page2Y - 5 },
+        end: { x: margin + 300, y: page2Y - 5 },
+        thickness: 1,
+        color: rgb(0, 0, 0),
+      });
+    }
 
     page2.drawText('Date:', {
       x: margin + 320,
@@ -2554,12 +2599,15 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       font: boldFont,
     });
 
-    page2.drawLine({
-      start: { x: margin + 350, y: page2Y - 5 },
-      end: { x: margin + 450, y: page2Y - 5 },
-      thickness: 1,
-      color: rgb(0, 0, 0),
-    });
+    // Draw date line only if no signature
+    if (!orderSignature || !orderSignedAt) {
+      page2.drawLine({
+        start: { x: margin + 350, y: page2Y - 5 },
+        end: { x: margin + 450, y: page2Y - 5 },
+        thickness: 1,
+        color: rgb(0, 0, 0),
+      });
+    }
 
     // Company footer on page 2
     page2Y -= 50;

@@ -2777,6 +2777,7 @@ export class DatabaseStorage implements IStorage {
               : 0;
           const balanceDue = Math.max(0, orderTotal - totalPaid);
 
+          // Round all monetary values to 2 decimal places for clean display
           return {
             id: order.id.toString(),
             orderId: order.orderId,
@@ -2785,9 +2786,9 @@ export class DatabaseStorage implements IStorage {
             orderDate: order.orderDate.toISOString(),
             dueDate: order.dueDate.toISOString(),
             status: order.status,
-            totalAmount: orderTotal,
-            totalPaid: totalPaid,
-            balanceDue: balanceDue,
+            totalAmount: Math.round(orderTotal * 100) / 100,
+            totalPaid: Math.round(totalPaid * 100) / 100,
+            balanceDue: Math.round(balanceDue * 100) / 100,
           };
         })
       );

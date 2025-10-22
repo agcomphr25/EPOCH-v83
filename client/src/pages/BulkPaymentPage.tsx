@@ -277,6 +277,7 @@ export default function BulkPaymentPage() {
                                     type="number"
                                     step="0.01"
                                     min="0"
+
                                     value={paymentAmount.toFixed(2)}
                                     onChange={(e) =>
                                       handleAmountChange(order.orderId, e.target.value, order.totalAmount)

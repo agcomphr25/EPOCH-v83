@@ -107,6 +107,7 @@ router.post('/email', async (req, res) => {
         .values({
           customerId: data.customerId,
           orderId: data.orderId || null,
+          messageType: 'transactional',
           type: 'shipping-notification',
           method: 'email',
           direction: 'outbound',
@@ -180,6 +181,7 @@ router.post('/sms', async (req, res) => {
       .values({
         customerId: data.customerId,
         orderId: data.orderId || null,
+        messageType: 'transactional',
         type: 'sms-notification',
         method: 'sms',
         direction: 'outbound',

@@ -201,6 +201,10 @@ router.get('/filter-options', authenticateToken, requireRole('ADMIN'), async (re
     const actionLength = allFeatures.find((f) => f.id === 'action_length');
     const actionLengthOptions = actionLength?.options as any[] || [];
 
+    // Extract rail accessory options
+    const railAccessory = allFeatures.find((f) => f.id === 'rail_accessory');
+    const railOptions = railAccessory?.options as any[] || [];
+
     // Extract paint options by category
     const paintFeatures = allFeatures.filter((f) =>
       ['base_colors', 'custom_graphics', 'special_effects', 'camo_patterns', 'premium_patterns', 'protective_coatings'].includes(f.id)
@@ -233,18 +237,6 @@ router.get('/filter-options', authenticateToken, requireRole('ADMIN'), async (re
       .map((s) => s.status)
       .filter((s): s is string => s !== null)
       .sort();
-
-    // Rail accessory options (extracted from features JSON)
-    const railOptions = [
-      { value: 'no_rail', label: 'No Rail' },
-      { value: 'pic_rail', label: 'AG Pic Rail' },
-      { value: 'arca_4', label: 'ARCA 4"' },
-      { value: 'arca_6', label: 'ARCA 6"' },
-      { value: 'arca_8', label: 'ARCA 8"' },
-      { value: 'arca_10', label: 'ARCA 10"' },
-      { value: 'arca_12', label: 'ARCA 12"' },
-      { value: 'arca_15', label: 'ARCA 15"' },
-    ];
 
     res.json({
       stockModels: models,

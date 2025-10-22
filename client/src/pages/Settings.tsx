@@ -97,7 +97,7 @@ export default function Settings() {
     return integrations.find((i) => i.integrationType === type);
   };
 
-  const handleConnect = (type: string) => {
+  const handleConnect = async (type: string) => {
     // Determine OAuth provider based on integration type
     let oauthProvider = '';
     if (type.startsWith('google-')) {
@@ -115,62 +115,86 @@ export default function Settings() {
       return;
     }
 
-    // Open OAuth popup window
-    const width = 600;
-    const height = 700;
-    const left = window.screen.width / 2 - width / 2;
-    const top = window.screen.height / 2 - height / 2;
-
-    const popup = window.open(
-      `/api/oauth/${oauthProvider}/initiate?type=${type}`,
-      'OAuth Authentication',
-      `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
-    );
-
-    if (!popup) {
-      toast({
-        title: 'Error',
-        description: 'Please allow popups for this site',
-        variant: 'destructive',
+    // Fetch the OAuth URL from the backend
+    try {
+      const response = await fetch(`/api/oauth/${oauthProvider}/initiate?type=${type}`, {
+        credentials: 'include',
       });
-      return;
-    }
+      
+      if (!response.ok) {
+        throw new Error('Failed to get OAuth URL');
+      }
 
-    // Listen for OAuth callback messages
-    const handleMessage = (event: MessageEvent) => {
-      // Verify origin for security
-      const allowedOrigin = window.location.origin;
-      if (event.origin !== allowedOrigin) {
-        console.warn('Received message from unauthorized origin:', event.origin);
+      const data = await response.json();
+      
+      if (!data.authUrl) {
+        throw new Error('No auth URL received');
+      }
+
+      // Open OAuth popup window with the actual Google/Microsoft auth URL
+      const width = 600;
+      const height = 700;
+      const left = window.screen.width / 2 - width / 2;
+      const top = window.screen.height / 2 - height / 2;
+
+      const popup = window.open(
+        data.authUrl,
+        'OAuth Authentication',
+        `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
+      );
+
+      if (!popup) {
+        toast({
+          title: 'Error',
+          description: 'Please allow popups for this site',
+          variant: 'destructive',
+        });
         return;
       }
 
-      if (event.data.success) {
-        queryClient.invalidateQueries({ queryKey: ['/api/user-integrations'] });
-        toast({
-          title: 'Success',
-          description: `Successfully connected ${event.data.accountEmail}`,
-        });
-        window.removeEventListener('message', handleMessage);
-      } else if (event.data.error) {
-        toast({
-          title: 'Error',
-          description: event.data.error,
-          variant: 'destructive',
-        });
-        window.removeEventListener('message', handleMessage);
-      }
-    };
+      // Listen for OAuth callback messages
+      const handleMessage = (event: MessageEvent) => {
+        // Verify origin for security
+        const allowedOrigin = window.location.origin;
+        if (event.origin !== allowedOrigin) {
+          console.warn('Received message from unauthorized origin:', event.origin);
+          return;
+        }
 
-    window.addEventListener('message', handleMessage);
+        if (event.data.success) {
+          queryClient.invalidateQueries({ queryKey: ['/api/user-integrations'] });
+          toast({
+            title: 'Success',
+            description: `Successfully connected ${event.data.accountEmail}`,
+          });
+          window.removeEventListener('message', handleMessage);
+        } else if (event.data.error) {
+          toast({
+            title: 'Error',
+            description: event.data.error,
+            variant: 'destructive',
+          });
+          window.removeEventListener('message', handleMessage);
+        }
+      };
 
-    // Clean up if popup is closed without completing OAuth
-    const checkPopup = setInterval(() => {
-      if (popup.closed) {
-        clearInterval(checkPopup);
-        window.removeEventListener('message', handleMessage);
-      }
-    }, 500);
+      window.addEventListener('message', handleMessage);
+
+      // Clean up if popup is closed without completing OAuth
+      const checkPopup = setInterval(() => {
+        if (popup.closed) {
+          clearInterval(checkPopup);
+          window.removeEventListener('message', handleMessage);
+        }
+      }, 500);
+    } catch (error) {
+      console.error('Error initiating OAuth:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to start authentication',
+        variant: 'destructive',
+      });
+    }
   };
 
   const handleDisconnect = (type: string) => {

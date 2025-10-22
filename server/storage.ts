@@ -88,6 +88,8 @@ import {
   // Vendors table
   vendors,
   vendorContacts,
+  // Follow-up orders table
+  followupOrders,
 
   // Types
   type Order,
@@ -123,6 +125,8 @@ import {
   type InventoryItem,
   type InsertInventoryItem,
   type InventoryScan,
+  type FollowupOrder,
+  type InsertFollowupOrder,
   type InsertInventoryScan,
   type PartsRequest,
   type InsertPartsRequest,
@@ -749,6 +753,15 @@ export interface IStorage {
   createVendor(data: InsertVendor): Promise<Vendor>;
   updateVendor(id: number, data: Partial<InsertVendor>): Promise<Vendor>;
   deleteVendor(id: number): Promise<void>;
+
+  // Follow-up order methods
+  createFollowupOrder(data: InsertFollowupOrder): Promise<FollowupOrder>;
+  getFollowupOrder(id: number): Promise<FollowupOrder | undefined>;
+  getFollowupOrderByToken(token: string): Promise<FollowupOrder | undefined>;
+  getFollowupOrderByOrderId(orderId: string): Promise<FollowupOrder | undefined>;
+  updateFollowupOrder(id: number, data: Partial<InsertFollowupOrder>): Promise<FollowupOrder>;
+  getAllFollowupOrders(): Promise<FollowupOrder[]>;
+  getPendingFollowupOrders(): Promise<FollowupOrder[]>;
 
   // Module 8: Customer Addresses CRUD
   getAllAddresses(): Promise<CustomerAddress[]>;
@@ -5251,6 +5264,63 @@ export class DatabaseStorage implements IStorage {
       .update(vendorContacts)
       .set({ isActive: false })
       .where(eq(vendorContacts.id, id));
+  }
+
+  // Follow-up order methods
+  async createFollowupOrder(data: InsertFollowupOrder): Promise<FollowupOrder> {
+    const [followupOrder] = await db
+      .insert(followupOrders)
+      .values(data)
+      .returning();
+    return followupOrder;
+  }
+
+  async getFollowupOrder(id: number): Promise<FollowupOrder | undefined> {
+    const [followupOrder] = await db
+      .select()
+      .from(followupOrders)
+      .where(eq(followupOrders.id, id));
+    return followupOrder;
+  }
+
+  async getFollowupOrderByToken(token: string): Promise<FollowupOrder | undefined> {
+    const [followupOrder] = await db
+      .select()
+      .from(followupOrders)
+      .where(eq(followupOrders.signatureToken, token));
+    return followupOrder;
+  }
+
+  async getFollowupOrderByOrderId(orderId: string): Promise<FollowupOrder | undefined> {
+    const [followupOrder] = await db
+      .select()
+      .from(followupOrders)
+      .where(eq(followupOrders.orderId, orderId));
+    return followupOrder;
+  }
+
+  async updateFollowupOrder(
+    id: number,
+    data: Partial<InsertFollowupOrder>
+  ): Promise<FollowupOrder> {
+    const [updated] = await db
+      .update(followupOrders)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(followupOrders.id, id))
+      .returning();
+    return updated;
+  }
+
+  async getAllFollowupOrders(): Promise<FollowupOrder[]> {
+    return await db.select().from(followupOrders).orderBy(desc(followupOrders.createdAt));
+  }
+
+  async getPendingFollowupOrders(): Promise<FollowupOrder[]> {
+    return await db
+      .select()
+      .from(followupOrders)
+      .where(eq(followupOrders.signatureSigned, false))
+      .orderBy(desc(followupOrders.createdAt));
   }
 
   // Module 8: Customer Addresses CRUD

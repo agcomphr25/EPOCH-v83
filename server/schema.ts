@@ -212,6 +212,35 @@ export const linkedOrders = pgTable('linked_orders', {
   addedAt: timestamp('added_at').defaultNow(),
 });
 
+// Follow-up Orders - New orders that require customer signature before production
+export const followupOrders = pgTable('followup_orders', {
+  id: serial('id').primaryKey(),
+  orderId: text('order_id').notNull().unique(),
+  customerId: text('customer_id').notNull(),
+  customerEmail: text('customer_email').notNull(),
+  // Email Tracking
+  emailSent: boolean('email_sent').default(false),
+  emailSentAt: timestamp('email_sent_at'),
+  emailError: text('email_error'),
+  // PDF Generation
+  pdfGenerated: boolean('pdf_generated').default(false),
+  pdfPath: text('pdf_path'),
+  pdfGeneratedAt: timestamp('pdf_generated_at'),
+  // Signature Tracking
+  signatureToken: text('signature_token').unique(), // Unique token for signature link
+  signatureSigned: boolean('signature_signed').default(false),
+  signatureData: text('signature_data'), // Base64 signature image
+  signedAt: timestamp('signed_at'),
+  signedPdfPath: text('signed_pdf_path'), // Path to PDF with embedded signature
+  // Production Status
+  movedToProduction: boolean('moved_to_production').default(false),
+  movedToProductionAt: timestamp('moved_to_production_at'),
+  // Order Summary for Email Display
+  orderSummary: jsonb('order_summary'), // Contains order details for email body
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
 // Order Filter Presets - Save custom filter combinations for reporting
 export const orderFilterPresets = pgTable('order_filter_presets', {
   id: serial('id').primaryKey(),
@@ -1285,6 +1314,20 @@ export const insertLinkedOrderSchema = createInsertSchema(linkedOrders)
     orderId: z.string().min(1, 'Order ID is required'),
   });
 
+export const insertFollowupOrderSchema = createInsertSchema(followupOrders)
+  .omit({
+    id: true,
+    createdAt: true,
+    updatedAt: true,
+  })
+  .extend({
+    orderId: z.string().min(1, 'Order ID is required'),
+    customerId: z.string().min(1, 'Customer ID is required'),
+    customerEmail: z.string().email('Valid email is required'),
+    signatureToken: z.string().min(1, 'Signature token is required'),
+    orderSummary: z.record(z.any()).optional().nullable(),
+  });
+
 export const insertOrderFilterPresetSchema = createInsertSchema(orderFilterPresets)
   .omit({
     id: true,
@@ -1895,6 +1938,8 @@ export type InsertLinkedOrderGroup = z.infer<typeof insertLinkedOrderGroupSchema
 export type LinkedOrderGroup = typeof linkedOrderGroups.$inferSelect;
 export type InsertLinkedOrder = z.infer<typeof insertLinkedOrderSchema>;
 export type LinkedOrder = typeof linkedOrders.$inferSelect;
+export type InsertFollowupOrder = z.infer<typeof insertFollowupOrderSchema>;
+export type FollowupOrder = typeof followupOrders.$inferSelect;
 export type InsertOrderFilterPreset = z.infer<typeof insertOrderFilterPresetSchema>;
 export type OrderFilterPreset = typeof orderFilterPresets.$inferSelect;
 export type InsertForm = z.infer<typeof insertFormSchema>;

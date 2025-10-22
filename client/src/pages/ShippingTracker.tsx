@@ -136,6 +136,33 @@ export default function ShippingTracker() {
     });
   }, [orders, searchTerm, customers]);
 
+  // Group orders by tracking number to identify consolidated shipments
+  const trackingGroups = useMemo(() => {
+    const groups = new Map<string, string[]>();
+    
+    filteredOrders.forEach((order) => {
+      if (order.trackingNumber) {
+        const existing = groups.get(order.trackingNumber) || [];
+        existing.push(order.orderId);
+        groups.set(order.trackingNumber, existing);
+      }
+    });
+    
+    return groups;
+  }, [filteredOrders]);
+
+  // Check if an order is part of a consolidated shipment
+  const isConsolidated = (trackingNumber: string) => {
+    if (!trackingNumber) return false;
+    const group = trackingGroups.get(trackingNumber);
+    return group && group.length > 1;
+  };
+
+  // Get consolidated order IDs for a tracking number
+  const getConsolidatedOrders = (trackingNumber: string) => {
+    return trackingGroups.get(trackingNumber) || [];
+  };
+
   // Calculate weekly stats
   const weeklyStats: WeeklyStats[] = [];
 
@@ -393,39 +420,62 @@ export default function ShippingTracker() {
                       const customer = customers?.find(
                         (c) => String(c.id) === String(order.customerId)
                       );
+                      const consolidated = order.trackingNumber && isConsolidated(order.trackingNumber);
+                      const consolidatedOrders = order.trackingNumber ? getConsolidatedOrders(order.trackingNumber) : [];
+                      
                       return (
                         <TableRow
                           key={order.id}
                           data-testid={`row-shipment-${order.orderId}`}
+                          className={consolidated ? 'bg-amber-50 hover:bg-amber-100' : ''}
                         >
                           <TableCell className="font-medium">
-                            {order.orderId}
+                            <div className="flex items-center gap-2">
+                              {order.orderId}
+                              {consolidated && (
+                                <Badge 
+                                  variant="secondary" 
+                                  className="bg-amber-200 text-amber-800 text-xs"
+                                  data-testid={`badge-consolidated-${order.orderId}`}
+                                >
+                                  <Package className="h-3 w-3 mr-1" />
+                                  Consolidated
+                                </Badge>
+                              )}
+                            </div>
                           </TableCell>
                           <TableCell>
                             {customer?.name || 'Unknown Customer'}
                           </TableCell>
                           <TableCell>
                             {order.trackingNumber ? (
-                              <div className="flex items-center gap-2">
-                                <span className="font-mono text-sm">
-                                  {order.trackingNumber}
-                                </span>
-                                <Button
-                                  size="sm"
-                                  variant="default"
-                                  className="bg-blue-600 hover:bg-blue-700 text-white h-7 px-2"
-                                  onClick={() =>
-                                    window.open(
-                                      `https://www.ups.com/track?loc=en_US&tracknum=${encodeURIComponent(order.trackingNumber || '')}`,
-                                      '_blank',
-                                      'noopener,noreferrer'
-                                    )
-                                  }
-                                  data-testid={`button-track-${order.orderId}`}
-                                >
-                                  <ExternalLink className="h-3 w-3 mr-1" />
-                                  Track
-                                </Button>
+                              <div className="flex flex-col gap-1">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-mono text-sm">
+                                    {order.trackingNumber}
+                                  </span>
+                                  <Button
+                                    size="sm"
+                                    variant="default"
+                                    className="bg-blue-600 hover:bg-blue-700 text-white h-7 px-2"
+                                    onClick={() =>
+                                      window.open(
+                                        `https://www.ups.com/track?loc=en_US&tracknum=${encodeURIComponent(order.trackingNumber || '')}`,
+                                        '_blank',
+                                        'noopener,noreferrer'
+                                      )
+                                    }
+                                    data-testid={`button-track-${order.orderId}`}
+                                  >
+                                    <ExternalLink className="h-3 w-3 mr-1" />
+                                    Track
+                                  </Button>
+                                </div>
+                                {consolidated && (
+                                  <div className="text-xs text-amber-700">
+                                    Shipped with: {consolidatedOrders.filter(id => id !== order.orderId).join(', ')}
+                                  </div>
+                                )}
                               </div>
                             ) : (
                               <span className="text-gray-400">-</span>

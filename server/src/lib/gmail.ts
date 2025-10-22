@@ -96,12 +96,19 @@ export async function getGmailClient(userId: number): Promise<GmailClient> {
 }
 
 export async function listMessages(userId: number, maxResults: number = 20, pageToken?: string) {
+  console.log('📬 Fetching Gmail messages for user:', userId, 'maxResults:', maxResults);
   const { client } = await getGmailClient(userId);
   
   const listResponse = await client.users.messages.list({
     userId: 'me',
     maxResults,
     pageToken,
+  });
+
+  console.log('📨 Gmail API response:', {
+    messageCount: listResponse.data.messages?.length || 0,
+    resultSizeEstimate: listResponse.data.resultSizeEstimate,
+    hasNextPageToken: !!listResponse.data.nextPageToken,
   });
 
   // Fetch metadata for each message to get sender and subject
@@ -118,12 +125,15 @@ export async function listMessages(userId: number, maxResults: number = 20, page
       })
     );
     
+    console.log('✉️ Fetched metadata for', messagesWithMetadata.length, 'messages');
+    
     return {
       ...listResponse.data,
       messages: messagesWithMetadata,
     };
   }
 
+  console.log('⚠️ No messages found in Gmail response');
   return listResponse.data;
 }
 

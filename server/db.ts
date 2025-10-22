@@ -20,18 +20,18 @@ export async function testDatabaseConnection() {
   try {
     console.log('Testing database connection...');
 
-    // Add 5 second timeout to prevent hanging
+    // Add 30 second timeout to prevent hanging (Neon serverless may need time to wake up)
     const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('Database connection timeout')), 5000)
+      setTimeout(() => reject(new Error('Database connection timeout')), 30000)
     );
 
     await Promise.race([sql`SELECT 1`, timeoutPromise]);
 
-    console.log('Database connection successful');
+    console.log('✅ Database connection successful');
     return true;
   } catch (error) {
-    console.error('Database connection failed:', error);
-    console.log('Server will start anyway - database operations may fail');
+    console.error('❌ Database connection failed:', error);
+    console.log('⚠️  Server will start anyway - database operations may fail');
     return false;
   }
 }

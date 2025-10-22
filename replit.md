@@ -72,6 +72,25 @@ The application utilizes a monorepo structure with a full-stack TypeScript appro
 
 ## Recent Changes
 
+### October 22, 2025 - Bulk Payment Enhancements & Floating-Point Precision Fixes
+
+#### Bulk Payment Feature Improvements
+- **Check/Confirmation Number Field**: Added text input field for check numbers or confirmation numbers
+  - Positioned beside payment type selection for easy access
+  - Saved in payment notes field for record keeping
+  - Professional 3-column layout: Payment Type | Check/Confirmation # | Payment Date
+- **Currency Formatting Fixes**: Resolved all decimal display issues
+  - Backend now rounds all monetary values to 2 decimal places before sending to frontend
+  - Fixed floating-point precision issues (946.1500000000001 → $946.15)
+  - Comma separators already working via Intl.NumberFormat
+  - Applied to: totalAmount, totalPaid, balanceDue
+- **Floating-Point Comparison Fix**: Fixed payment completion logic
+  - Bulk payment endpoint now rounds both totalPaid and orderTotal before comparison
+  - Prevents false negatives when marking orders as paid in full
+  - Formula: `Math.round(value * 100) / 100` ensures 2-decimal precision
+- **Impact**: Professional-looking Bulk Payment page with accurate financial calculations
+- **Architect Reviewed**: All fixes verified and approved
+
 ### October 21, 2025 - Deployment Crash Loop Fix
 
 #### Critical Fix: MSAL Client Initialization

@@ -987,11 +987,16 @@ router.post('/bulk-payment', async (req: Request, res: Response) => {
           0
         );
 
-        const isPaidInFull = totalPaid >= orderTotal;
+        // Round to 2 decimal places to avoid floating-point precision issues
+        const roundedTotalPaid = Math.round(totalPaid * 100) / 100;
+        const roundedOrderTotal = Math.round(orderTotal * 100) / 100;
+        const isPaidInFull = roundedTotalPaid >= roundedOrderTotal;
 
         console.log(`📊 Payment summary for ${orderId}:`, {
           orderTotal,
+          roundedOrderTotal,
           totalPaid,
+          roundedTotalPaid,
           isPaidInFull,
           newPaymentAmount: paymentAmount,
         });

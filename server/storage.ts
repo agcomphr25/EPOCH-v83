@@ -2708,6 +2708,11 @@ export class DatabaseStorage implements IStorage {
   // Method to get unpaid orders for a specific customer
   async getUnpaidOrdersByCustomer(customerId: string) {
     try {
+      // Load cached data for order total calculations
+      const stockModelsData = await this.getAllStockModels();
+      const features = await this.getAllFeatures();
+      const persistentDiscounts = await this.getAllPersistentDiscounts();
+
       const orders = await db
         .select({
           id: allOrders.id,
@@ -2753,27 +2758,43 @@ export class DatabaseStorage implements IStorage {
           const totalPaid =
             paymentSums.length > 0 ? paymentSums[0].totalPaid : 0;
 
-          // For now, assume a default order total of $1000 if not specified
-          // TODO: Calculate actual order total from features and pricing
-          const orderTotal = 1000; // This should be calculated from order details
-          const remainingBalance = Math.max(0, orderTotal - totalPaid);
+          // Get full order data to calculate total
+          const fullOrder = await db
+            .select()
+            .from(allOrders)
+            .where(eq(allOrders.orderId, order.orderId))
+            .limit(1);
 
+          // Calculate actual order total using the optimized calculation function
+          const orderTotal =
+            fullOrder.length > 0
+              ? await this.calculateOrderTotalOptimized(
+                  fullOrder[0],
+                  stockModelsData,
+                  features,
+                  persistentDiscounts
+                )
+              : 0;
+          const balanceDue = Math.max(0, orderTotal - totalPaid);
+
+          // Round all monetary values to 2 decimal places for clean display
           return {
             id: order.id.toString(),
             orderId: order.orderId,
             customerName,
+            customerPO: fullOrder[0]?.customerPO || '',
             orderDate: order.orderDate.toISOString(),
             dueDate: order.dueDate.toISOString(),
             status: order.status,
-            totalAmount: orderTotal,
-            paidAmount: totalPaid,
-            remainingBalance,
+            totalAmount: Math.round(orderTotal * 100) / 100,
+            totalPaid: Math.round(totalPaid * 100) / 100,
+            balanceDue: Math.round(balanceDue * 100) / 100,
           };
         })
       );
 
-      // Only return orders with remaining balance > 0
-      return ordersWithDetails.filter((order) => order.remainingBalance > 0);
+      // Only return orders with balance due > 0
+      return ordersWithDetails.filter((order) => order.balanceDue > 0);
     } catch (error) {
       console.error('Error fetching unpaid orders by customer:', error);
       throw error;

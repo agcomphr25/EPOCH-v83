@@ -3,8 +3,10 @@ import { QueryClient, QueryFunction } from '@tanstack/react-query';
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
     let errorMessage = res.statusText;
+    let errorData: any = null;
+    
     try {
-      const errorData = await res.json();
+      errorData = await res.json();
       if (errorData.error) {
         errorMessage = errorData.error;
       }
@@ -19,7 +21,13 @@ async function throwIfResNotOk(res: Response) {
         // Keep the default statusText
       }
     }
-    throw new Error(errorMessage);
+    
+    // Create error with additional data
+    const error: any = new Error(errorMessage);
+    if (errorData) {
+      Object.assign(error, errorData);
+    }
+    throw error;
   }
 }
 

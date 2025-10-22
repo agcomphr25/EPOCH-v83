@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { queryClient, apiRequest } from '@/lib/queryClient';
 import { CheckCircle2, XCircle, Mail, Calendar, FileText, HardDrive, Sheet } from 'lucide-react';
+import { Link } from 'wouter';
 
 interface UserIntegration {
   id: number;
@@ -222,6 +223,22 @@ export default function Settings() {
           </TabsList>
 
           <TabsContent value="integrations" className="space-y-6">
+            <Card className="bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-900 mb-6">
+              <CardHeader>
+                <CardTitle className="text-blue-900 dark:text-blue-100">Quick Access</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-blue-800 dark:text-blue-200 mb-3">
+                  Once you connect Gmail, you can view your emails here:
+                </p>
+                <Link href="/email-inbox">
+                  <Button variant="outline" className="border-blue-300 dark:border-blue-700" data-testid="link-email-inbox">
+                    <Mail className="mr-2 h-4 w-4" />
+                    View Email Inbox
+                  </Button>
+                </Link>
+              </CardContent>
+            </Card>
             <div className="mb-4">
               <h2 className="text-xl font-semibold text-foreground dark:text-white mb-2">
                 Connected Services

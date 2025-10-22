@@ -5,7 +5,8 @@ import {
   insertCalendarEventAttendeeSchema,
 } from '../../schema';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
-import { getUncachableGoogleCalendarClient } from '../lib/googleCalendar';
+import { getGoogleCalendarClient } from '../lib/googleCalendar';
+import { authenticateToken } from '../../middleware/auth';
 
 const router = Router();
 
@@ -22,9 +23,10 @@ router.get('/events', async (req: Request, res: Response) => {
 });
 
 // GET /api/calendar/google-events - Get Google Calendar events
-router.get('/google-events', async (req: Request, res: Response) => {
+router.get('/google-events', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const calendar = await getUncachableGoogleCalendarClient();
+    const userId = req.user!.id;
+    const calendar = await getGoogleCalendarClient(userId);
 
     const now = new Date();
     const oneYearAgo = new Date(
@@ -222,8 +224,16 @@ router.get('/google-events', async (req: Request, res: Response) => {
     console.log('📅 Sample events with colors:', sampleWithColors);
 
     res.json(formattedEvents);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Get Google Calendar events error:', error);
+    
+    if (error.needsReauth) {
+      return res.status(409).json({ 
+        error: error.message,
+        needsReauth: true
+      });
+    }
+    
     res.status(500).json({ error: 'Failed to fetch Google Calendar events' });
   }
 });

@@ -585,15 +585,16 @@ export default function AllOrdersPage() {
             <Download className="h-4 w-4" />
             Export CSV (Active)
           </Button>
-          <Button
-            onClick={handleExportAllCSV}
-            variant="outline"
-            className="flex items-center gap-2"
-            data-testid="export-all-csv-button"
-          >
-            <Download className="h-4 w-4" />
-            Export All CSV
-          </Button>
+          <Link href="/order-reports">
+            <Button
+              variant="outline"
+              className="flex items-center gap-2"
+              data-testid="link-advanced-reports"
+            >
+              <FileText className="h-4 w-4" />
+              Advanced Reports
+            </Button>
+          </Link>
         </div>
       </div>
 

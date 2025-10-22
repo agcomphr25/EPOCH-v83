@@ -1,6 +1,6 @@
 import { Router, type Request, type Response } from 'express';
 import { authenticateToken } from '../../middleware/auth';
-import { listMessages, getMessage, searchMessages } from '../lib/gmail';
+import { listMessages, getMessage, searchMessages, sendEmail } from '../lib/gmail';
 
 const router = Router();
 
@@ -77,6 +77,34 @@ router.get('/search', authenticateToken, async (req: Request, res: Response) => 
     
     res.status(500).json({ 
       error: error.message || 'Failed to search messages',
+      needsConnection: error.message?.includes('not connected')
+    });
+  }
+});
+
+router.post('/send', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const userId = req.user!.id;
+    const { to, subject, body, threadId } = req.body;
+
+    if (!to || !subject || !body) {
+      return res.status(400).json({ error: 'Missing required fields: to, subject, body' });
+    }
+
+    const result = await sendEmail(userId, to, subject, body, threadId);
+    res.json(result);
+  } catch (error: any) {
+    console.error('Error sending email:', error);
+    
+    if (error.needsReauth) {
+      return res.status(409).json({ 
+        error: error.message,
+        needsReauth: true
+      });
+    }
+    
+    res.status(500).json({ 
+      error: error.message || 'Failed to send email',
       needsConnection: error.message?.includes('not connected')
     });
   }

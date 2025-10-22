@@ -103,23 +103,36 @@ export default function ShippingTracker() {
 
     const fulfilled = orders.filter((order) => order.status === 'FULFILLED');
 
-    if (!searchTerm) return fulfilled;
+    let filtered = fulfilled;
+    
+    if (searchTerm) {
+      const searchLower = searchTerm.toLowerCase();
+      filtered = fulfilled.filter((order) => {
+        // Search by order number
+        if (order.orderId.toLowerCase().includes(searchLower)) return true;
 
-    const searchLower = searchTerm.toLowerCase();
-    return fulfilled.filter((order) => {
-      // Search by order number
-      if (order.orderId.toLowerCase().includes(searchLower)) return true;
+        // Search by customer name
+        if (order.customerId && customers) {
+          const customer = customers.find(
+            (c) => String(c.id) === String(order.customerId)
+          );
+          if (customer && customer.name.toLowerCase().includes(searchLower))
+            return true;
+        }
 
-      // Search by customer name
-      if (order.customerId && customers) {
-        const customer = customers.find(
-          (c) => String(c.id) === String(order.customerId)
-        );
-        if (customer && customer.name.toLowerCase().includes(searchLower))
-          return true;
-      }
+        return false;
+      });
+    }
 
-      return false;
+    // Sort by shipped date (most recent first)
+    return filtered.sort((a, b) => {
+      // Orders without a shipped date go to the end
+      if (!a.shippedDate && !b.shippedDate) return 0;
+      if (!a.shippedDate) return 1;
+      if (!b.shippedDate) return -1;
+      
+      // Sort by shipped date descending (most recent first)
+      return new Date(b.shippedDate).getTime() - new Date(a.shippedDate).getTime();
     });
   }, [orders, searchTerm, customers]);
 

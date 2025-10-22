@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Table,
@@ -34,6 +34,8 @@ import {
   CheckCircle,
   XCircle,
   ExternalLink,
+  Mail,
+  Send,
 } from 'lucide-react';
 import {
   getCurrentCompanyWeek,
@@ -42,6 +44,8 @@ import {
 } from '@shared/weekUtils';
 import { format } from 'date-fns';
 import { ManualTrackingEntry } from '@/components/ManualTrackingEntry';
+import { useToast } from '@/hooks/use-toast';
+import { queryClient } from '@/lib/queryClient';
 
 interface Order {
   id: number;
@@ -77,10 +81,45 @@ interface WeeklyStats {
 export default function ShippingTracker() {
   const currentYear = new Date().getFullYear();
   const currentWeek = getCurrentCompanyWeek();
+  const { toast } = useToast();
 
   const [selectedYear, setSelectedYear] = useState<number>(currentYear);
   const [selectedWeek, setSelectedWeek] = useState<number>(currentWeek);
   const [searchTerm, setSearchTerm] = useState('');
+
+  // Mutation to send notification to customer
+  const sendNotificationMutation = useMutation({
+    mutationFn: async (orderId: string) => {
+      const response = await fetch(`/api/shipping/notify-customer/${orderId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to send notification');
+      }
+
+      return response.json();
+    },
+    onSuccess: (data, orderId) => {
+      toast({
+        title: 'Notification Sent',
+        description: data.message || `Customer notified via ${data.methods?.join(' and ')}`,
+      });
+      // Invalidate queries to refresh the data
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
+    },
+    onError: (error: Error, orderId) => {
+      toast({
+        title: 'Failed to Send Notification',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+  });
 
   // Fetch all fulfilled orders
   const { data: orders, isLoading } = useQuery<Order[]>({
@@ -498,23 +537,44 @@ export default function ShippingTracker() {
                             )}
                           </TableCell>
                           <TableCell>
-                            {order.customerNotified ? (
-                              <div className="flex items-center gap-1 text-green-600">
-                                <CheckCircle className="h-4 w-4" />
-                                <span className="text-xs">
-                                  {order.notificationSentAt &&
-                                    format(
-                                      new Date(order.notificationSentAt),
-                                      'MMM d'
-                                    )}
-                                </span>
-                              </div>
-                            ) : (
-                              <div className="flex items-center gap-1 text-gray-400">
-                                <XCircle className="h-4 w-4" />
-                                <span className="text-xs">No</span>
-                              </div>
-                            )}
+                            <div className="flex items-center gap-2">
+                              {order.customerNotified ? (
+                                <div className="flex items-center gap-1 text-green-600">
+                                  <CheckCircle className="h-4 w-4" />
+                                  <span className="text-xs">
+                                    {order.notificationSentAt &&
+                                      format(
+                                        new Date(order.notificationSentAt),
+                                        'MMM d'
+                                      )}
+                                  </span>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-1 text-gray-400">
+                                  <XCircle className="h-4 w-4" />
+                                  <span className="text-xs">No</span>
+                                </div>
+                              )}
+                              {order.trackingNumber && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7 px-2"
+                                  onClick={() => sendNotificationMutation.mutate(order.orderId)}
+                                  disabled={sendNotificationMutation.isPending}
+                                  data-testid={`button-notify-${order.orderId}`}
+                                >
+                                  {sendNotificationMutation.isPending ? (
+                                    <span className="text-xs">Sending...</span>
+                                  ) : (
+                                    <>
+                                      <Send className="h-3 w-3 mr-1" />
+                                      <span className="text-xs">Notify</span>
+                                    </>
+                                  )}
+                                </Button>
+                              )}
+                            </div>
                           </TableCell>
                           <TableCell>
                             <ManualTrackingEntry orderId={order.orderId} />

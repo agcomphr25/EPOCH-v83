@@ -439,23 +439,42 @@ router.post('/modules/:moduleId/complete', async (req, res) => {
       return res.status(401).json({ error: 'Invalid employee ID or password' });
     }
 
-    // Get employee name from employees table
+    // Get employee name and details from employees table or user table
     let employeeName = user.username; // Default to username
+    let employeeJobTitle: string | null = null;
+    let employeeDepartment: string | null = null;
+    let numericEmployeeId: number | null = null;
+
     if (user.employeeId) {
+      // User has a linked employee record - use that
       const [employee] = await db
         .select()
         .from(employees)
         .where(eq(employees.id, user.employeeId))
         .limit(1);
       
-      if (employee && employee.name) {
-        employeeName = employee.name;
+      if (employee) {
+        employeeName = employee.name || employeeName;
+        employeeJobTitle = employee.jobTitle;
+        employeeDepartment = employee.department;
+        numericEmployeeId = employee.id;
+      }
+    } else if (user.firstName || user.lastName) {
+      // No employee record, but user has name fields
+      const parts = [];
+      if (user.firstName) parts.push(user.firstName);
+      if (user.lastName) parts.push(user.lastName);
+      if (parts.length > 0) {
+        employeeName = parts.join(' ');
       }
     }
 
     console.log('User authenticated:', {
       username: user.username,
+      employeeId: numericEmployeeId,
       employeeName,
+      jobTitle: employeeJobTitle,
+      department: employeeDepartment,
     });
 
     // Fetch module with questions and options
@@ -527,32 +546,12 @@ router.post('/modules/:moduleId/complete', async (req, res) => {
       try {
         const trainingName = module[0].title;
 
-        // Look up the actual employee numeric ID from username if employeeId is a username
-        let numericEmployeeId: number | null = null;
-
-        if (employeeId) {
-          const parsedId = parseInt(employeeId);
-          if (!isNaN(parsedId)) {
-            numericEmployeeId = parsedId;
-          } else {
-            // employeeId is a username, look up the user's employee ID
-            const user = await db
-              .select({
-                employeeId: users.employeeId,
-              })
-              .from(users)
-              .where(eq(users.username, employeeId))
-              .limit(1);
-
-            if (user && user.length > 0 && user[0].employeeId) {
-              numericEmployeeId = user[0].employeeId;
-            }
-          }
-        }
-
         console.log('📊 Updating Training Matrix:', {
+          username: user.username,
           employeeId: numericEmployeeId,
           employeeName,
+          jobTitle: employeeJobTitle,
+          department: employeeDepartment,
           trainingName,
           score: scorePercentage
         });
@@ -572,10 +571,14 @@ router.post('/modules/:moduleId/complete', async (req, res) => {
           .limit(1);
 
         if (existingEntry && existingEntry.length > 0) {
-          // Update existing entry
+          // Update existing entry with full employee details
           await db
             .update(trainingMatrix)
             .set({
+              employeeId: numericEmployeeId,
+              employeeName: employeeName,
+              jobTitle: employeeJobTitle,
+              department: employeeDepartment,
               lastCompleted: new Date(),
               lastScore: scorePercentage,
               status: 'COMPLETED',
@@ -586,10 +589,12 @@ router.post('/modules/:moduleId/complete', async (req, res) => {
           console.log('✅ Training Matrix UPDATED - Entry ID:', existingEntry[0].id);
           matrixUpdated = true;
         } else {
-          // Create new entry if it doesn't exist
+          // Create new entry with full employee details
           const [newEntry] = await db.insert(trainingMatrix).values({
             employeeId: numericEmployeeId,
             employeeName: employeeName,
+            jobTitle: employeeJobTitle,
+            department: employeeDepartment,
             trainingName: trainingName,
             lastCompleted: new Date(),
             lastScore: scorePercentage,

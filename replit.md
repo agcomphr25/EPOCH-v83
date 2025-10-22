@@ -1,7 +1,7 @@
 # EPOCH v8 - Manufacturing ERP System
 
 ## Overview
-EPOCH v8 is a comprehensive Manufacturing ERP system designed for small manufacturing companies specializing in customizable products. Its primary purpose is to streamline operations, enhance efficiency, and improve scalability through end-to-end order management, inventory tracking, an employee portal, and quality control workflows. The project aims to become a leading ERP solution for small-to-medium customizable product manufacturers, offering a full-stack TypeScript PWA with a React frontend and Express backend, deployable to web and mobile platforms.
+EPOCH v8 is a comprehensive Manufacturing ERP system for small manufacturing companies specializing in customizable products. Its purpose is to streamline operations, enhance efficiency, and improve scalability through end-to-end order management, inventory tracking, an employee portal, and quality control workflows. The project aims to be a leading ERP solution for small-to-medium customizable product manufacturers, offering a full-stack TypeScript PWA with a React frontend and Express backend, deployable to web and mobile platforms.
 
 ## User Preferences
 Preferred communication style: Simple, everyday language.
@@ -22,23 +22,23 @@ The application utilizes a monorepo structure with a full-stack TypeScript appro
 -   **Type Safety**: Shared TypeScript schemas using Drizzle and Zod ensure type safety across the stack.
 -   **Cross-Platform Deployment**: PWA capabilities with Capacitor enable deployment to web and mobile (iOS/Android).
 -   **Dynamic Form Generation**: Includes a dynamic form builder with signature capture.
--   **Authentication**: Hybrid JWT + Session authentication with capability-based access control and account lockout. A simplified 3-role system (ADMIN, EMPLOYEE, OWNER) is used with individual capability assignments.
+-   **Authentication**: Hybrid JWT + Session authentication with capability-based access control and account lockout, utilizing a simplified 3-role system (ADMIN, EMPLOYEE, OWNER).
 -   **Data Consistency**: A `features` object acts as the single source of truth for all feature data in order entry.
--   **Modular Routing**: Backend routes are organized into specialized modules for maintainability.
+-   **Modular Routing**: Backend routes are organized into specialized modules.
 -   **Atomic Order ID Reservation**: A database-based atomic reservation system ensures unique, sequential Order ID generation.
--   **UI/UX**: Leverages ShadCN UI components with Tailwind CSS for design and Framer Motion for animations.
--   **CI/CD**: Implemented with pre-commit hooks (Husky + lint-staged) and GitHub Actions for automated quality checks.
--   **BOM System**: Robust Bill of Materials system with UUID-based architecture, revision control, and comprehensive CRUD operations for parts, BOMs, revisions, and lines, including recursive BOM explosion and where-used analysis.
--   **Google OAuth Integration**: Production-ready OAuth 2.0 flow with CSRF protection, secure state management, comprehensive Google API scopes, and secure token storage for user integrations.
--   **Global Search System**: Multi-entity search across Customers, Orders, Vendors, Employees, and Inventory Items with smart results display and keyboard navigation.
--   **Vendor Evaluation System**: Question-based evaluation with 4 criteria, automatic evaluation status, auto-dating, and a monthly reset cron job.
--   **Linked Orders Management**: Functionality to link multiple orders that must ship or be processed together, including an approval code system for unlinking.
+-   **UI/UX**: Leverages ShadCN UI components with Tailwind CSS and Framer Motion for animations.
+-   **CI/CD**: Implemented with pre-commit hooks (Husky + lint-staged) and GitHub Actions.
+-   **BOM System**: Robust Bill of Materials system with UUID-based architecture, revision control, and comprehensive CRUD operations, including recursive BOM explosion and where-used analysis.
+-   **Google OAuth Integration**: Production-ready OAuth 2.0 flow with CSRF protection, secure state management, and secure token storage.
+-   **Global Search System**: Multi-entity search across Customers, Orders, Vendors, Employees, and Inventory Items.
+-   **Vendor Evaluation System**: Question-based evaluation with 4 criteria, automatic status, auto-dating, and a monthly reset.
+-   **Linked Orders Management**: Functionality to link multiple orders for combined processing/shipping, including an approval code system for unlinking.
 
 ### Technical Implementations
 -   **Frontend**: React 18, TypeScript, Vite, ShadCN UI, Tailwind CSS, Framer Motion, Wouter.
 -   **Backend**: Express.js, TypeScript, TanStack Query, Zod, Axios.
 -   **Database**: PostgreSQL (Neon serverless), Drizzle ORM, Drizzle-kit.
--   **Key Features**: Order Management (dynamic configuration, vendor contact, linked orders), Layup Scheduler, Production Queue Manager, Department Manager, Customer Management (CRM, CSV import, address autocomplete), Inventory Management (BOM integration, vendor management), Metal Accessories Tracker, Barcode System, Employee Management (CRUD, portal, time clock), Quality Control (digital signature, checklists), Reporting, Payment Tracking, Shipping Integration, Communications System (inbox, email, SMS), Personalized Dashboards, Training Management System (modules, quizzes, certifications, matrix, enhanced analytics), AI-Powered Smart Sorting, Calendar Integration, Magic Link Authentication, and Global Search.
+-   **Key Features**: Order Management (dynamic configuration, linked orders), Layup Scheduler, Production Queue Manager, Department Manager, Customer Management (CRM, CSV import, address autocomplete), Inventory Management (BOM integration), Metal Accessories Tracker, Barcode System, Employee Management (CRUD, portal, time clock), Quality Control (digital signature, checklists), Reporting, Payment Tracking, Shipping Integration, Communications System (inbox, email, SMS), Personalized Dashboards, Training Management System, AI-Powered Smart Sorting, Calendar Integration, Magic Link Authentication, and Global Search.
 
 ## External Dependencies
 
@@ -69,163 +69,3 @@ The application utilizes a monorepo structure with a full-stack TypeScript appro
 -   Google APIs (`googleapis` package)
 -   Azure Document Intelligence (AI-powered document analysis)
 -   Microsoft Azure AD / MSAL (`@azure/msal-node` - OAuth authentication)
-
-## Recent Changes
-
-### October 22, 2025 - Dashboard Redirect Fix & Refund Balance Due Fix
-
-#### Dashboard Redirect Reliability (Router-Level Solution)
-- **Issue**: User "glennj" would sometimes land on generic dashboard (/) instead of /admin-dashboard when opening new tabs
-- **Root Cause**: Dashboard.tsx used useQuery with localStorage tokens, but cookie-based auth (Microsoft login) stores no token
-  - Query would resolve to null and prevent redirect
-  - Component-level redirect happened too late (after rendering generic dashboard)
-  - Stale query cache could persist null user data
-- **Solution**: Moved redirect logic to router-level guard in App.tsx
-  - Created `RootRedirect` component that intercepts "/" route
-  - Calls `/api/auth/session` with `credentials: 'include'` for cookie-based auth
-  - Redirects BEFORE Dashboard component renders
-  - Shows loading state during session check
-  - Falls back to generic dashboard only if no personalized route exists
-- **Impact**: glennj now always lands on /admin-dashboard reliably, regardless of auth method
-- **Technical Details**:
-  - Removed redirect logic from Dashboard.tsx (now dead-end fallback)
-  - Router decides correct landing page synchronously once session responds
-  - Works with both token-based (localStorage) and cookie-based (Microsoft) authentication
-
-#### Refund Request Balance Due Calculation Fix
-- **Issue**: Refund Request page showed $0.00 balance due for all orders
-- **Root Cause**: `/api/orders/customer/:customerId` endpoint was calling non-existent `storage.calculateOrderTotal()` method
-  - Would fail and default orderTotal to shipping cost (often $0)
-  - Balance due = orderTotal - payments would show incorrect values
-- **Solution**: Updated endpoint to use proven `calculateOrderTotalOptimized` method
-  - Loads stock models, features, and persistent discounts (same as `getUnpaidOrdersByCustomer`)
-  - Calls internal `calculateOrderTotalOptimized` for accurate totals
-  - Includes all order components: base model, features, bottom metal, paint, rail accessories, discounts
-  - Rounds all monetary values to 2 decimal places
-- **Impact**: Refund Request page now shows correct balance due amounts matching Order Summary
-- **Technical Details**:
-  - Added `desc` import from drizzle-orm for proper order sorting
-  - Consistent calculation logic across all order total endpoints
-  - Balance due calculation: `Math.max(0, orderTotal - totalPaid)`
-
-### October 22, 2025 - Bulk Payment Enhancements & Floating-Point Precision Fixes
-
-#### Bulk Payment Feature Improvements
-- **Check/Confirmation Number Field**: Added text input field for check numbers or confirmation numbers
-  - Positioned beside payment type selection for easy access
-  - Saved in payment notes field for record keeping
-  - Professional 3-column layout: Payment Type | Check/Confirmation # | Payment Date
-- **Currency Formatting Fixes**: Resolved all decimal display issues
-  - Backend now rounds all monetary values to 2 decimal places before sending to frontend
-  - Fixed floating-point precision issues (946.1500000000001 → $946.15)
-  - Comma separators already working via Intl.NumberFormat
-  - Applied to: totalAmount, totalPaid, balanceDue
-- **Floating-Point Comparison Fix**: Fixed payment completion logic
-  - Bulk payment endpoint now rounds both totalPaid and orderTotal before comparison
-  - Prevents false negatives when marking orders as paid in full
-  - Formula: `Math.round(value * 100) / 100` ensures 2-decimal precision
-- **Impact**: Professional-looking Bulk Payment page with accurate financial calculations
-- **Architect Reviewed**: All fixes verified and approved
-
-### October 21, 2025 - Deployment Crash Loop Fix
-
-#### Critical Fix: MSAL Client Initialization
-- **Issue**: Deployment crashed with error "Client credential must not be empty when creating a confidential client"
-- **Root Cause**: MSAL confidential client was being initialized at module load time without checking for environment variables
-- **Solution**: Implemented lazy initialization pattern
-  - Created `getMsalClient()` function that checks for credentials before creating client
-  - Client is only created when needed (at request time) and credentials are available
-  - Throws clear error message if credentials are missing
-  - Caches single instance for reuse
-- **Impact**: Application can now start successfully even when Microsoft OAuth credentials are not configured
-- **Deployment Ready**: Safe to deploy without crash loops
-
-#### TypeScript Compilation Fix
-- **Issue**: TypeScript error "Type 'MapIterator' can only be iterated through when using '--downlevelIteration' flag"
-- **Solution**: Converted `Map.entries()` to `Array.from(stateStore.entries())` for compatibility
-- **Impact**: Code now compiles without TypeScript configuration changes
-
-#### Communication Logs Schema Fix
-- **Issue**: Database insert errors in communications routes (3 LSP diagnostics)
-- **Root Cause**: Code was inserting non-existent `messageType` field into `communication_logs` table
-- **Solution**: Removed `messageType` field from all inserts and ensured all required fields are populated
-  - Email outbound: Added proper `direction`, `sender`, `recipient`, `sentAt`
-  - SMS outbound: Added proper `direction`, `sender`, `externalId`
-  - Email inbound webhook: Added `direction: 'inbound'`, `sender`, `receivedAt`
-- **Impact**: All communication log inserts now match database schema, preventing runtime errors
-- **Architect Reviewed**: All fixes verified and approved
-
-### October 21, 2025 - Microsoft OAuth Login, Security Fix, P1 Queue Bug Fix & Customer Notifications
-
-#### Microsoft OAuth User Authentication
-- **Production-Ready OAuth 2.0**: Full OAuth implementation for user login with Microsoft accounts
-  - Routes: `/api/auth/microsoft/login` (initiate), `/callback` (exchange code for tokens)
-  - Uses `@azure/msal-node` (Microsoft Authentication Library) for OAuth client
-  - Scopes: `user.read`, `openid`, `profile`, `email`
-- **Security**: Cryptographically secure OAuth flow with CSRF protection
-  - Random 64-character hex state tokens using crypto.randomBytes(32)
-  - In-memory state store with 5-minute expiration and automatic cleanup
-  - Single-use tokens that are deleted after validation
-  - State validation in callback prevents token replay attacks
-- **Auto-User Provisioning**: Seamless onboarding for new Microsoft users
-  - Checks if user exists by email address in database
-  - Auto-creates new user accounts on first Microsoft sign-in:
-    - Username derived from email (part before @)
-    - Random secure password (64-character hex, user won't need it)
-    - Default 'EMPLOYEE' role assigned
-    - Account marked as active
-  - Respects `is_active` flag - blocks deactivated accounts
-- **Session Management**: Consistent with existing authentication system
-  - Creates 7-day session in user_sessions table
-  - Sets HTTP-only cookie with production-safe settings
-  - Uses same session infrastructure as username/password login
-- **Frontend Integration**: "Sign in with Microsoft" button on login page
-  - Microsoft logo (4-color Windows icon as inline SVG)
-  - Clean "OR CONTINUE WITH" divider
-  - Full-page redirect to OAuth endpoint
-  - Styled success/error pages for all callback scenarios
-- **UX Flow**: Professional OAuth experience
-  - Redirects to Microsoft login page
-  - User authenticates with Microsoft account
-  - Returns to app with success page and auto-redirect to dashboard
-  - Error pages for: invalid state, expired state, inactive account, generic failures
-- **Architect Reviewed**: Passed security review after critical fix applied
-
-#### Critical Security Fix: Session Token Generation
-- **Vulnerability Fixed**: Replaced insecure Math.random() session tokens with cryptographically secure generation
-  - **Affected Routes**: Both `auth.ts` (username/password) and `microsoftAuth.ts` (OAuth) had this vulnerability
-  - **Old Method**: `Math.random().toString(36) + Date.now().toString(36)` (predictable, low entropy, brute-forceable)
-  - **New Method**: `crypto.randomBytes(32).toString('hex')` (256-bit cryptographically secure)
-- **Impact**: All user sessions now use 64-character hex tokens with 256-bit entropy
-- **Scope**: System-wide security improvement affecting all authentication methods
-- **Verification**: Architect-approved, no remaining Math.random() usage in security-critical code
-
-#### P1 Production Queue Bug Fix
-- **Issue Fixed**: Confusing naming in P1 Production Queue progression button
-  - Button text said "Progress to Barcode" but actually progressed to "Layup/Plugging" (correct flow)
-  - Renamed mutation from `progressToBarcodeMutation` to `progressToLayupPluggingMutation`
-  - Updated button text to accurately show "Progress to Layup/Plugging"
-- **Correct Department Flow Confirmed**: P1 Production Queue → Layup/Plugging → Barcode → CNC
-- **Scope**: UI clarity improvement - routing was already correct, only naming was misleading
-
-#### UPS Shipping Label API Fixes
-- **Issue Fixed**: 500 error when creating shipping labels via UPS API
-  - Missing required phone number in ShipTo (recipient) section of UPS shipment payload
-  - Added Phone field to ShipTo object with customer phone or fallback to company phone (256-723-8381)
-- **Consolidated Shipping Fix**: Missing service code validation
-  - Added validation to ensure service code is provided before creating consolidated shipping labels
-  - Provides clear error message: "Missing or invalid shipping service code. Please select a shipping service."
-- **Impact**: Shipping label creation and consolidated shipping now work correctly with UPS API
-- **Scope**: Production bug fixes for shipping functionality
-
-#### Customer Shipping Notification Fix
-- **Issue Fixed**: Customers were not being notified when orders shipped
-  - System was only attempting SMS notifications (not email)
-  - No notification sent at all if customer had no phone number
-- **Solution**: Enhanced notification system to send both email AND SMS
-  - Sends email notification if customer email available
-  - Sends SMS notification if customer phone available
-  - Sends both if both are available
-  - Updated to use intelligent fallback (send whatever is available)
-- **Impact**: Customers now receive shipping notifications via all available contact methods
-- **Scope**: Critical communication bug fix

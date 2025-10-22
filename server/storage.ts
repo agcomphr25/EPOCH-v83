@@ -2962,9 +2962,13 @@ export class DatabaseStorage implements IStorage {
           persistentDiscounts
         );
 
-        // Fixed payment status logic using real current order total
+        // Round to 2 decimal places to avoid floating-point precision issues
+        const roundedPaymentTotal = Math.round(paymentTotal * 100) / 100;
+        const roundedOrderTotal = Math.round(actualOrderTotal * 100) / 100;
+
+        // Fixed payment status logic using real current order total with precision rounding
         const isFullyPaid =
-          paymentTotal >= actualOrderTotal && actualOrderTotal > 0;
+          roundedPaymentTotal >= roundedOrderTotal && roundedOrderTotal > 0;
 
         return {
           ...order,

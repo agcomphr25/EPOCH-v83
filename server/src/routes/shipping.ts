@@ -55,7 +55,7 @@ router.get('/order/:orderId', async (req: Request, res: Response) => {
     const { orderId } = req.params;
 
     // Try finalized orders first
-    let order = await storage.getFinalizedOrderById(orderId);
+    let order = await storage.getFinalizedOrderById(orderId) as any;
 
     // If not found, try draft orders
     if (!order) {
@@ -1441,7 +1441,7 @@ router.post('/bulk/create-consolidated-label', async (req: Request, res: Respons
     // Fetch all orders and validate same shipping address
     const orders = [];
     for (const orderId of orderIds) {
-      let order = await storage.getFinalizedOrderById(orderId);
+      let order = await storage.getFinalizedOrderById(orderId) as any;
       if (!order) {
         order = await storage.getOrderDraft(orderId);
       }
@@ -1666,7 +1666,7 @@ router.post('/bulk/rates', async (req: Request, res: Response) => {
     for (const orderId of orderIds) {
       try {
         // Get order data
-        let order = await storage.getFinalizedOrderById(orderId);
+        let order = await storage.getFinalizedOrderById(orderId) as any;
         if (!order) {
           order = await storage.getOrderDraft(orderId);
         }
@@ -1841,7 +1841,7 @@ router.post('/bulk/create-labels', async (req: Request, res: Response) => {
         const { orderId, serviceCode, billingOption, receiverAccount, declaredValue } = shipment;
 
         // Get order data
-        let order = await storage.getFinalizedOrderById(orderId);
+        let order = await storage.getFinalizedOrderById(orderId) as any;
         if (!order) {
           order = await storage.getOrderDraft(orderId);
         }
@@ -2047,7 +2047,7 @@ router.post('/notify-customer/:orderId', async (req: Request, res: Response) => 
     const { orderId } = req.params;
 
     // Get order data
-    let order = await storage.getFinalizedOrderById(orderId);
+    let order = await storage.getFinalizedOrderById(orderId) as any;
     if (!order) {
       order = await storage.getOrderDraft(orderId);
     }
@@ -2091,7 +2091,10 @@ router.post('/notify-customer/:orderId', async (req: Request, res: Response) => 
       preferredMethods,
     });
 
-    if (notificationResult.success || notificationResult.methods.length > 0) {
+    // Consider it successful if at least ONE method worked
+    const hasSuccessfulNotification = notificationResult.methods.length > 0;
+
+    if (hasSuccessfulNotification) {
       // Update order with notification status
       const updateData = {
         customerNotified: true,
@@ -2105,15 +2108,22 @@ router.post('/notify-customer/:orderId', async (req: Request, res: Response) => 
         await storage.updateOrderDraft(orderId, updateData);
       }
 
+      // Return success with warnings if some methods failed
+      const responseMessage = (notificationResult.errors && notificationResult.errors.length > 0)
+        ? `Customer notified via ${notificationResult.methods.join(' and ')}, but some methods failed`
+        : `Customer notified successfully via ${notificationResult.methods.join(' and ')}`;
+
       res.json({
         success: true,
-        message: `Notification sent via ${notificationResult.methods.join(' and ')}`,
+        message: responseMessage,
         methods: notificationResult.methods,
+        warnings: notificationResult.errors,
       });
     } else {
+      // All methods failed
       res.status(500).json({
         success: false,
-        error: 'Failed to send notification',
+        error: 'All notification methods failed. Check SendGrid sender verification or configure Microsoft Graph API.',
         details: notificationResult.errors,
       });
     }

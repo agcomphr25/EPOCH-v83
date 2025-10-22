@@ -98,13 +98,33 @@ export async function getGmailClient(userId: number): Promise<GmailClient> {
 export async function listMessages(userId: number, maxResults: number = 20, pageToken?: string) {
   const { client } = await getGmailClient(userId);
   
-  const response = await client.users.messages.list({
+  const listResponse = await client.users.messages.list({
     userId: 'me',
     maxResults,
     pageToken,
   });
 
-  return response.data;
+  // Fetch metadata for each message to get sender and subject
+  if (listResponse.data.messages) {
+    const messagesWithMetadata = await Promise.all(
+      listResponse.data.messages.map(async (msg: any) => {
+        const messageData = await client.users.messages.get({
+          userId: 'me',
+          id: msg.id,
+          format: 'metadata',
+          metadataHeaders: ['From', 'Subject', 'Date'],
+        });
+        return messageData.data;
+      })
+    );
+    
+    return {
+      ...listResponse.data,
+      messages: messagesWithMetadata,
+    };
+  }
+
+  return listResponse.data;
 }
 
 export async function getMessage(userId: number, messageId: string) {
@@ -122,10 +142,65 @@ export async function getMessage(userId: number, messageId: string) {
 export async function searchMessages(userId: number, query: string, maxResults: number = 20) {
   const { client } = await getGmailClient(userId);
   
-  const response = await client.users.messages.list({
+  const listResponse = await client.users.messages.list({
     userId: 'me',
     q: query,
     maxResults,
+  });
+
+  // Fetch metadata for each message to get sender and subject
+  if (listResponse.data.messages) {
+    const messagesWithMetadata = await Promise.all(
+      listResponse.data.messages.map(async (msg: any) => {
+        const messageData = await client.users.messages.get({
+          userId: 'me',
+          id: msg.id,
+          format: 'metadata',
+          metadataHeaders: ['From', 'Subject', 'Date'],
+        });
+        return messageData.data;
+      })
+    );
+    
+    return {
+      ...listResponse.data,
+      messages: messagesWithMetadata,
+    };
+  }
+
+  return listResponse.data;
+}
+
+export async function sendEmail(userId: number, to: string, subject: string, body: string, threadId?: string) {
+  const { client } = await getGmailClient(userId);
+  
+  // Create the email in RFC 2822 format
+  const email = [
+    `To: ${to}`,
+    `Subject: ${subject}`,
+    'Content-Type: text/plain; charset=utf-8',
+    '',
+    body
+  ].join('\n');
+
+  // Encode to base64url
+  const encodedEmail = Buffer.from(email)
+    .toString('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+
+  const requestBody: any = {
+    raw: encodedEmail,
+  };
+
+  if (threadId) {
+    requestBody.threadId = threadId;
+  }
+
+  const response = await client.users.messages.send({
+    userId: 'me',
+    requestBody,
   });
 
   return response.data;

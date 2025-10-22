@@ -1,13 +1,15 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import { Mail, Search, RefreshCw, AlertCircle, Inbox, Star, X } from 'lucide-react';
+import { Mail, Search, RefreshCw, AlertCircle, Inbox, Star, X, Reply, Send } from 'lucide-react';
 import { Link } from 'wouter';
+import { apiRequest, queryClient } from '@/lib/queryClient';
 
 interface GmailMessage {
   id: string;
@@ -25,7 +27,7 @@ interface GmailMessage {
 }
 
 interface GmailListResponse {
-  messages?: Array<{ id: string; threadId: string }>;
+  messages?: Array<GmailMessage>;
   nextPageToken?: string;
   resultSizeEstimate?: number;
 }
@@ -35,6 +37,8 @@ export default function EmailInbox() {
   const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeSearchQuery, setActiveSearchQuery] = useState<string | null>(null);
+  const [isReplying, setIsReplying] = useState(false);
+  const [replyBody, setReplyBody] = useState('');
 
   const { data: messageList, isLoading: isLoadingList, refetch: refetchList, error: listError } = useQuery<GmailListResponse>({
     queryKey: activeSearchQuery ? ['/api/gmail/search', { q: activeSearchQuery }] : ['/api/gmail/messages'],
@@ -121,6 +125,61 @@ export default function EmailInbox() {
 
   const isUnread = (labels?: string[]): boolean => {
     return labels?.includes('UNREAD') || false;
+  };
+
+  const sendEmailMutation = useMutation({
+    mutationFn: async (data: { to: string; subject: string; body: string; threadId?: string }) => {
+      return apiRequest('/api/gmail/send', {
+        method: 'POST',
+        body: data,
+      });
+    },
+    onSuccess: () => {
+      toast({
+        title: 'Email Sent',
+        description: 'Your reply has been sent successfully',
+      });
+      setIsReplying(false);
+      setReplyBody('');
+      queryClient.invalidateQueries({ queryKey: ['/api/gmail/messages'] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to send email',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const handleReply = () => {
+    if (!selectedMessage) return;
+
+    const from = getHeader(selectedMessage.payload?.headers, 'From');
+    const subject = getHeader(selectedMessage.payload?.headers, 'Subject');
+    
+    // Extract email address from "Name <email>" format
+    const emailMatch = from.match(/<(.+)>/);
+    const toEmail = emailMatch ? emailMatch[1] : from;
+    
+    // Add "Re: " prefix if not already present
+    const replySubject = subject.startsWith('Re:') ? subject : `Re: ${subject}`;
+
+    if (!replyBody.trim()) {
+      toast({
+        title: 'Error',
+        description: 'Please enter a message',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    sendEmailMutation.mutate({
+      to: toEmail,
+      subject: replySubject,
+      body: replyBody,
+      threadId: selectedMessage.threadId,
+    });
   };
 
   if (listError) {
@@ -225,27 +284,43 @@ export default function EmailInbox() {
                 </div>
               ) : (
                 <div className="divide-y dark:divide-gray-800 max-h-[600px] overflow-y-auto">
-                  {messageList?.messages?.map((msg) => (
-                    <div
-                      key={msg.id}
-                      onClick={() => setSelectedMessageId(msg.id)}
-                      className={`p-4 cursor-pointer hover:bg-accent dark:hover:bg-gray-800 transition-colors ${
-                        selectedMessageId === msg.id ? 'bg-accent dark:bg-gray-800' : ''
-                      }`}
-                      data-testid={`message-item-${msg.id}`}
-                    >
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-foreground dark:text-white truncate">
-                            Message
-                          </p>
-                          <p className="text-sm text-muted-foreground dark:text-gray-400 truncate">
-                            {msg.threadId}
-                          </p>
+                  {messageList?.messages?.map((msg) => {
+                    const from = getHeader(msg.payload?.headers, 'From');
+                    const subject = getHeader(msg.payload?.headers, 'Subject');
+                    const date = getHeader(msg.payload?.headers, 'Date');
+                    const unread = isUnread(msg.labelIds);
+                    
+                    return (
+                      <div
+                        key={msg.id}
+                        onClick={() => setSelectedMessageId(msg.id)}
+                        className={`p-4 cursor-pointer hover:bg-accent dark:hover:bg-gray-800 transition-colors ${
+                          selectedMessageId === msg.id ? 'bg-accent dark:bg-gray-800' : ''
+                        } ${unread ? 'bg-blue-50 dark:bg-blue-950/20' : ''}`}
+                        data-testid={`message-item-${msg.id}`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              {unread && <div className="h-2 w-2 bg-blue-500 rounded-full" />}
+                              <p className={`text-sm ${unread ? 'font-semibold' : 'font-medium'} text-foreground dark:text-white truncate`}>
+                                {from || 'Unknown Sender'}
+                              </p>
+                            </div>
+                            <p className={`text-sm ${unread ? 'font-medium' : ''} text-foreground dark:text-gray-300 truncate mb-1`}>
+                              {subject || '(No Subject)'}
+                            </p>
+                            <p className="text-xs text-muted-foreground dark:text-gray-500 truncate">
+                              {msg.snippet}
+                            </p>
+                          </div>
+                          <div className="text-xs text-muted-foreground dark:text-gray-500 whitespace-nowrap">
+                            {formatDate(msg.internalDate)}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                   {!messageList?.messages?.length && (
                     <div className="p-8 text-center text-muted-foreground">
                       <Inbox className="h-12 w-12 mx-auto mb-2 opacity-50" />
@@ -281,9 +356,20 @@ export default function EmailInbox() {
                       <h3 className="text-xl font-semibold text-foreground dark:text-white">
                         {getHeader(selectedMessage.payload?.headers, 'Subject') || '(No Subject)'}
                       </h3>
-                      {isUnread(selectedMessage.labelIds) && (
-                        <Badge variant="default" data-testid="badge-unread">Unread</Badge>
-                      )}
+                      <div className="flex items-center gap-2">
+                        {isUnread(selectedMessage.labelIds) && (
+                          <Badge variant="default" data-testid="badge-unread">Unread</Badge>
+                        )}
+                        <Button
+                          onClick={() => setIsReplying(!isReplying)}
+                          variant="outline"
+                          size="sm"
+                          data-testid="button-reply"
+                        >
+                          <Reply className="mr-2 h-4 w-4" />
+                          Reply
+                        </Button>
+                      </div>
                     </div>
                     <div className="space-y-1 text-sm text-muted-foreground dark:text-gray-400">
                       <p data-testid="text-from">
@@ -303,6 +389,41 @@ export default function EmailInbox() {
                     data-testid="text-body"
                     dangerouslySetInnerHTML={{ __html: getMessageBody(selectedMessage).replace(/\n/g, '<br>') }}
                   />
+                  
+                  {isReplying && (
+                    <div className="mt-6 space-y-4 border-t dark:border-gray-800 pt-4">
+                      <h4 className="font-semibold text-foreground dark:text-white">Reply</h4>
+                      <Textarea
+                        placeholder="Type your reply..."
+                        value={replyBody}
+                        onChange={(e) => setReplyBody(e.target.value)}
+                        rows={6}
+                        data-testid="textarea-reply"
+                        className="w-full"
+                      />
+                      <div className="flex gap-2">
+                        <Button
+                          onClick={handleReply}
+                          disabled={sendEmailMutation.isPending}
+                          data-testid="button-send-reply"
+                        >
+                          <Send className="mr-2 h-4 w-4" />
+                          {sendEmailMutation.isPending ? 'Sending...' : 'Send Reply'}
+                        </Button>
+                        <Button
+                          onClick={() => {
+                            setIsReplying(false);
+                            setReplyBody('');
+                          }}
+                          variant="outline"
+                          disabled={sendEmailMutation.isPending}
+                          data-testid="button-cancel-reply"
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ) : null}
             </CardContent>

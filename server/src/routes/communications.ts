@@ -10,6 +10,7 @@ import {
 } from '../../schema';
 import { eq, desc, and, sql } from 'drizzle-orm';
 import { sendEmailViaGraphAPI } from '../../utils/microsoftGraph';
+import { getUncachableSendGridClient } from '../../utils/sendgridClient';
 
 const router = Router();
 
@@ -73,25 +74,29 @@ router.post('/email', async (req, res) => {
       externalId = result.messageId;
       senderEmail = process.env.MICROSOFT_SENDER_EMAIL || senderEmail;
     } else {
-      // Send via SendGrid (default)
-      const apiKey = process.env.SENDGRID_API_KEY;
+      // Send via SendGrid (default) using Replit integration
+      try {
+        const { client, fromEmail } = await getUncachableSendGridClient();
+        senderEmail = fromEmail; // Use verified sender from integration
 
-      if (!apiKey) {
-        return res.status(500).json({ error: 'SendGrid API key not configured' });
+        const msg = {
+          to: data.to,
+          from: senderEmail,
+          subject: data.subject,
+          text: data.message,
+          html: data.html || data.message.replace(/\n/g, '<br>'),
+        };
+
+        const emailResult = await client.send(msg);
+        externalId = emailResult[0].headers['x-message-id'] as string;
+      } catch (error: any) {
+        console.error('SendGrid integration error:', error);
+        return res.status(500).json({ 
+          error: 'SendGrid not configured',
+          details: error.message,
+          hint: 'Make sure SendGrid integration is set up with a verified sender email'
+        });
       }
-
-      sgMail.setApiKey(apiKey);
-
-      const msg = {
-        to: data.to,
-        from: senderEmail,
-        subject: data.subject,
-        text: data.message,
-        html: data.html || data.message.replace(/\n/g, '<br>'),
-      };
-
-      const emailResult = await sgMail.send(msg);
-      externalId = emailResult[0].headers['x-message-id'] as string;
     }
 
     // Store in database with new columns (only if customerId is provided)

@@ -105,8 +105,10 @@ router.get('/initiate', authenticateToken, async (req: Request, res: Response) =
       scope: scopes,
       state, // Use cryptographically random state
       prompt: 'consent', // Force consent screen to get refresh token
+      redirect_uri: REDIRECT_URI, // Explicitly set redirect URI
     });
 
+    console.log('Generated OAuth URL with redirect_uri:', REDIRECT_URI);
     res.json({ authUrl });
   } catch (error) {
     console.error('Error initiating OAuth:', error);

@@ -1486,12 +1486,12 @@ export default function Navigation() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={handleLogout}
+                onClick={currentUser?.username ? handleLogout : () => setLocation('/login')}
                 className="gap-2"
-                data-testid="button-logout"
+                data-testid={currentUser?.username ? "button-logout" : "button-login"}
               >
                 <LogOut className="h-4 w-4" />
-                Logout
+                {currentUser?.username ? 'Logout' : 'Login'}
               </Button>
             )}
             <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center">

@@ -2041,4 +2041,89 @@ router.post('/bulk/create-labels', async (req: Request, res: Response) => {
   }
 });
 
+// Send shipping notification to customer
+router.post('/notify-customer/:orderId', async (req: Request, res: Response) => {
+  try {
+    const { orderId } = req.params;
+
+    // Get order data
+    let order = await storage.getFinalizedOrderById(orderId);
+    if (!order) {
+      order = await storage.getOrderDraft(orderId);
+    }
+
+    if (!order) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+
+    if (!order.trackingNumber) {
+      return res.status(400).json({ error: 'Order does not have a tracking number' });
+    }
+
+    // Get customer data
+    if (!order.customerId) {
+      return res.status(400).json({ error: 'Order does not have a customer' });
+    }
+
+    const customer = await storage.getCustomerById(order.customerId);
+    if (!customer) {
+      return res.status(404).json({ error: 'Customer not found' });
+    }
+
+    if (!customer.email && !customer.phone) {
+      return res.status(400).json({ 
+        error: 'Customer has no email or phone number for notifications' 
+      });
+    }
+
+    // Send notification
+    const { sendCustomerNotification } = await import('../../utils/notifications');
+    
+    const preferredMethods: string[] = [];
+    if (customer.email) preferredMethods.push('email');
+    if (customer.phone) preferredMethods.push('sms');
+    
+    const notificationResult = await sendCustomerNotification({
+      orderId: order.orderId,
+      trackingNumber: order.trackingNumber,
+      carrier: order.shippingCarrier || 'UPS',
+      estimatedDelivery: order.estimatedDelivery ? new Date(order.estimatedDelivery) : undefined,
+      preferredMethods,
+    });
+
+    if (notificationResult.success || notificationResult.methods.length > 0) {
+      // Update order with notification status
+      const updateData = {
+        customerNotified: true,
+        notificationMethod: notificationResult.methods.join(', '),
+        notificationSentAt: new Date(),
+      };
+
+      try {
+        await storage.updateFinalizedOrder(orderId, updateData);
+      } catch {
+        await storage.updateOrderDraft(orderId, updateData);
+      }
+
+      res.json({
+        success: true,
+        message: `Notification sent via ${notificationResult.methods.join(' and ')}`,
+        methods: notificationResult.methods,
+      });
+    } else {
+      res.status(500).json({
+        success: false,
+        error: 'Failed to send notification',
+        details: notificationResult.errors,
+      });
+    }
+  } catch (error) {
+    console.error('Error sending customer notification:', error);
+    res.status(500).json({ 
+      error: 'Failed to send notification',
+      details: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+});
+
 export default router;

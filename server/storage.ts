@@ -8,7 +8,6 @@ import {
   features,
   stockModels,
   orders,
-  orderDrafts,
   payments,
   forms,
   formSubmissions,

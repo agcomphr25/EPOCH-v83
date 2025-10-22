@@ -3080,7 +3080,7 @@ router.post(
       // Get order, customer, and address data directly from database
       const { db } = await import('../../db');
       const { eq } = await import('drizzle-orm');
-      const { orderDrafts, customers, customerAddresses } = await import(
+      const { customers, customerAddresses } = await import(
         '../../schema'
       );
 
@@ -3228,7 +3228,7 @@ router.post(
 
           const { db } = await import('../../db');
           const { eq } = await import('drizzle-orm');
-          const { orderDrafts, allOrders } = await import('../../schema');
+          const { allOrders } = await import('../../schema');
 
           try {
             // Try updating finalized orders table first
@@ -3391,7 +3391,7 @@ router.post(
 
           const { db } = await import('../../db');
           const { eq } = await import('drizzle-orm');
-          const { orderDrafts, allOrders } = await import('../../schema');
+          const { allOrders } = await import('../../schema');
 
           try {
             // Try updating finalized orders table first
@@ -3834,7 +3834,7 @@ router.post('/bulk-shipping-labels', async (req: Request, res: Response) => {
             // Update the order with tracking information using direct database calls
             const { db } = await import('../../db');
             const { eq } = await import('drizzle-orm');
-            const { orderDrafts, allOrders } = await import('../../schema');
+            const { allOrders } = await import('../../schema');
 
             try {
               // Try updating finalized orders table first

@@ -390,7 +390,7 @@ router.post('/finalized', async (req: Request, res: Response) => {
       const customer = await storage.getCustomerById(orderData.customerId || '');
       if (!customer || !customer.email) {
         console.warn(`⚠️  No email found for customer ${orderData.customerId} - skipping follow-up email`);
-        return res.status(201).json(draftOrder);
+        return res.status(201).json(order);
       }
       
       // Get customer address
@@ -476,8 +476,8 @@ router.post('/finalized', async (req: Request, res: Response) => {
         customerEmail: customer.email,
         customerPO: order.customerPO || '',
         modelId: order.modelId || 'Custom Order',
-        orderDate: order.orderDate,
-        dueDate: order.dueDate,
+        orderDate: new Date(order.orderDate).toISOString().split('T')[0],
+        dueDate: new Date(order.dueDate).toISOString().split('T')[0],
         signatureLink: `${baseUrl}/sign-order/${signatureToken}`,
       };
       
@@ -552,21 +552,9 @@ router.put('/draft/:id', async (req: Request, res: Response) => {
     }
 
     // Update the order in all_orders table
-    let updatedOrder;
-    try {
-      console.log('Updating order in all_orders table...');
-      updatedOrder = await storage.updateFinalizedOrder(orderId, updates);
-      console.log('Updated order successfully:', updatedOrder);
-      return res.json(updatedOrder);
-    } catch (error) {
-      console.error('Order update failed:', (error as Error).message);
-      return res
-        .status(404)
-        .json({
-            error: `Order ${orderId} not found in drafts or finalized orders`,
-          });
-      }
-    }
+    const updatedOrder = await storage.updateFinalizedOrder(orderId, updates);
+    console.log('Updated order successfully:', updatedOrder);
+    return res.json(updatedOrder);
   } catch (error) {
     console.error('Update order error:', error);
     if (error instanceof Error) {

@@ -87,6 +87,14 @@ router.get('/initiate', authenticateToken, async (req: Request, res: Response) =
     const integrationType = req.query.type as string || 'google-gmail';
     const userId = req.user!.id;
 
+    console.log('🔐 Google OAuth Initiate:', {
+      integrationType,
+      userId,
+      redirectUri: REDIRECT_URI,
+      productionDomain: process.env.PRODUCTION_DOMAIN,
+      devDomain: process.env.REPLIT_DEV_DOMAIN,
+    });
+
     // Generate cryptographically random state token (SECURITY FIX)
     const state = crypto.randomBytes(32).toString('hex');
     

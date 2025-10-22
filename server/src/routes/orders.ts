@@ -176,11 +176,16 @@ router.get('/customer/:customerId', async (req: Request, res: Response) => {
             `❌ Error calculating order total for ${order.orderId}:`,
             error
           );
-          // Fallback to shipping cost if calculation fails
-          actualOrderTotal = Number(order.shipping) || 0;
+          // FIXED: Fallback to stored payment amount (order total) instead of shipping
+          actualOrderTotal = Number(order.paymentAmount) || 0;
         }
 
         const balanceDue = Math.max(0, actualOrderTotal - paymentTotal);
+
+        // Round to 2 decimal places to avoid floating-point precision issues
+        const roundedPaymentTotal = Math.round(paymentTotal * 100) / 100;
+        const roundedOrderTotal = Math.round(actualOrderTotal * 100) / 100;
+        const roundedBalanceDue = Math.round(balanceDue * 100) / 100;
 
         return {
           id: order.id,
@@ -195,10 +200,10 @@ router.get('/customer/:customerId', async (req: Request, res: Response) => {
           paymentAmount: order.paymentAmount,
           isPaid: order.isPaid,
           customerPO: order.customerPO,
-          paymentTotal: Math.round(paymentTotal * 100) / 100,
-          orderTotal: Math.round(actualOrderTotal * 100) / 100,
-          balanceDue: Math.round(balanceDue * 100) / 100,
-          isFullyPaid: paymentTotal >= actualOrderTotal && actualOrderTotal > 0,
+          paymentTotal: roundedPaymentTotal,
+          orderTotal: roundedOrderTotal,
+          balanceDue: roundedBalanceDue,
+          isFullyPaid: roundedPaymentTotal >= roundedOrderTotal && roundedOrderTotal > 0,
         };
       })
     );
@@ -737,6 +742,7 @@ router.post('/:id/move-to-draft', async (req: Request, res: Response) => {
       handedness: currentOrder.handedness,
       notes: currentOrder.notes,
       status: 'DRAFT',
+      currentDepartment: currentOrder.currentDepartment || 'Draft',
       paymentAmount: currentOrder.paymentAmount,
       paymentDate: currentOrder.paymentDate,
       paymentType: currentOrder.paymentType,
@@ -752,7 +758,7 @@ router.post('/:id/move-to-draft', async (req: Request, res: Response) => {
     };
 
     // Create draft order
-    const draftOrder = await storage.createOrderDraft(draftData);
+    const draftOrder = await storage.createOrderDraft(draftData as any);
 
     // Remove from finalized orders (allOrders table) - commented out for now
     // await storage.deleteFinalizedOrderById(orderId);
@@ -921,13 +927,13 @@ router.delete('/payments/:paymentId', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Delete payment error:', error);
     console.error('Error details:', {
-      message: error.message,
-      stack: error.stack,
+      message: (error as Error).message,
+      stack: (error as Error).stack,
       paymentId: req.params.paymentId,
     });
     res.status(500).json({
       error: 'Failed to delete payment',
-      details: error.message,
+      details: (error as Error).message,
     });
   }
 });
@@ -1067,7 +1073,7 @@ router.post('/:orderId/progress', async (req: Request, res: Response) => {
       // Try P1 draft orders
       const draftOrder = await storage.getOrderDraft(orderId);
       if (draftOrder) {
-        existingOrder = draftOrder;
+        existingOrder = draftOrder as any;
         isFinalized = false;
         console.log(`📋 Found P1 draft order: ${orderId}`);
       }
@@ -1078,7 +1084,7 @@ router.post('/:orderId/progress', async (req: Request, res: Response) => {
       try {
         const p2DraftOrder = await storage.getOrderDraft(orderId);
         if (p2DraftOrder) {
-          existingOrder = p2DraftOrder;
+          existingOrder = p2DraftOrder as any;
           isFinalized = false;
           isP2Order = true;
           console.log(`📋 Found P2 draft order: ${orderId}`);
@@ -1157,7 +1163,7 @@ router.post('/:orderId/progress', async (req: Request, res: Response) => {
 
     // CRITICAL SAFEGUARD: Prevent backwards department progression
     if (nextDepartment) {
-      const currentIndex = departments.indexOf(existingOrder.currentDepartment);
+      const currentIndex = departments.indexOf(existingOrder.currentDepartment || '');
       const targetIndex = departments.indexOf(nextDepartment);
 
       // Allow backwards movement only for specific administrative cases
@@ -1241,7 +1247,7 @@ router.post('/:orderId/progress', async (req: Request, res: Response) => {
       // Regular progression for all other cases
       else {
         const currentIndex = departments.indexOf(
-          existingOrder.currentDepartment
+          existingOrder.currentDepartment || ''
         );
         if (currentIndex >= 0 && currentIndex < departments.length - 1) {
           targetDepartment = departments[currentIndex + 1];
@@ -1267,7 +1273,7 @@ router.post('/:orderId/progress', async (req: Request, res: Response) => {
 
     if (shouldMarkFulfilled) {
       updateData.status = 'FULFILLED';
-      updateData.currentDepartment = null; // Clear department when fulfilled
+      updateData.currentDepartment = undefined; // Clear department when fulfilled
       console.log(`📦 Marking order as FULFILLED with no department`);
     } else {
       updateData.currentDepartment = targetDepartment;
@@ -1417,7 +1423,7 @@ router.post('/undo-cancel/:orderId', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Order not found' });
     }
 
-    if (!order.isCancelled) {
+    if (!(order as any).isCancelled) {
       console.log('🔄 Order is not cancelled:', orderId);
       return res.status(400).json({ error: 'Order is not cancelled' });
     }
@@ -1484,7 +1490,7 @@ router.post('/cancel/:orderId', async (req: Request, res: Response) => {
       cancelledAt: new Date(),
       cancelReason: reason || 'No reason provided',
       status: 'CANCELLED',
-      currentDepartment: null, // Remove from all department queues
+      currentDepartment: undefined, // Remove from all department queues
       updatedAt: new Date(),
     };
 

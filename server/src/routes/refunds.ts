@@ -139,8 +139,36 @@ router.get('/', async (req: Request, res: Response) => {
     console.log('🔍 Getting all refund requests');
 
     const requests = await db
-      .select()
+      .select({
+        id: refundRequests.id,
+        orderId: refundRequests.orderId,
+        refundType: refundRequests.refundType,
+        amount: refundRequests.amount,
+        reason: refundRequests.reason,
+        notes: refundRequests.notes,
+        status: refundRequests.status,
+        requestedBy: refundRequests.requestedBy,
+        requestedAt: refundRequests.requestedAt,
+        approvedBy: refundRequests.approvedBy,
+        approvedAt: refundRequests.approvedAt,
+        processedBy: refundRequests.processedBy,
+        processedAt: refundRequests.processedAt,
+        transactionId: refundRequests.transactionId,
+        createdAt: refundRequests.createdAt,
+        updatedAt: refundRequests.updatedAt,
+        customerId: refundRequests.customerId,
+        refundAmount: refundRequests.refundAmount,
+        rejectionReason: refundRequests.rejectionReason,
+        authNetTransactionId: refundRequests.authNetTransactionId,
+        authNetRefundId: refundRequests.authNetRefundId,
+        originalTransactionId: refundRequests.originalTransactionId,
+        customerName: customers.name,
+      })
       .from(refundRequests)
+      .leftJoin(
+        customers,
+        sql`CAST(${refundRequests.customerId} AS INTEGER) = ${customers.id}`
+      )
       .orderBy(desc(refundRequests.createdAt));
 
     console.log(`✅ Found ${requests.length} refund requests`);

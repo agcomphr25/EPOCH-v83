@@ -34,7 +34,8 @@ const stateStore = new Map<string, StateData>();
 // Cleanup expired states every minute
 setInterval(() => {
   const now = Date.now();
-  for (const [state, data] of stateStore.entries()) {
+  const entries = Array.from(stateStore.entries());
+  for (const [state, data] of entries) {
     if (data.expiresAt < now) {
       stateStore.delete(state);
     }
@@ -110,9 +111,23 @@ router.get('/initiate', authenticateToken, async (req: Request, res: Response) =
 // OAuth callback handler
 router.get('/callback', async (req: Request, res: Response) => {
   try {
-    const { code, state } = req.query;
+    const { code, state, error } = req.query;
+
+    // Log the callback for debugging
+    console.log('OAuth callback received:', { 
+      hasCode: !!code, 
+      hasState: !!state, 
+      error: error || 'none',
+      query: req.query 
+    });
+
+    if (error) {
+      console.error('OAuth error from Google:', error);
+      return res.status(400).send(`OAuth error: ${error}`);
+    }
 
     if (!code || !state) {
+      console.error('Missing code or state in callback');
       return res.status(400).send('Missing code or state parameter');
     }
 

@@ -90,6 +90,7 @@ import TrainingMatrixManage from '@/pages/TrainingMatrixManage';
 import ImportCertifications from '@/pages/ImportCertifications';
 import CertificationBacklog from '@/pages/CertificationBacklog';
 import Calendar from './pages/Calendar';
+import EmailInbox from './pages/EmailInbox';
 import LayupPluggingQueuePage from './pages/LayupPluggingQueuePage';
 import BarcodeQueuePage from './pages/BarcodeQueuePage';
 import CNCQueuePage from './pages/CNCQueuePage';
@@ -395,6 +396,9 @@ function App() {
 
                   {/* Auth Routes */}
                   <Route path="/login" component={LoginPage} />
+
+                  {/* Communication Routes */}
+                  <Route path="/email-inbox" component={EmailInbox} />
 
                   {/* User Dashboard Routes */}
                   <Route path="/ag-dashboard" component={AGTestDashboard} />

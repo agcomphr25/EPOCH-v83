@@ -48,6 +48,7 @@ import globalSearchRoutes from './globalSearch';
 import linkedOrdersRoutes from './linkedOrders';
 import googleOAuthRoutes from './googleOAuth';
 import microsoftAuthRoutes from './microsoftAuth';
+import gmailRoutes from './gmail';
 import { getAccessToken } from '../utils/upsShipping';
 
 export function registerRoutes(app: Express): Server {
@@ -74,6 +75,9 @@ export function registerRoutes(app: Express): Server {
 
   // OAuth routes
   app.use('/api/oauth', oauthRoutes);
+
+  // Gmail routes
+  app.use('/api/gmail', gmailRoutes);
 
   // Employee management routes
   app.use('/api/employees', employeesRoutes);

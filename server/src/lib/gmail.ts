@@ -6,6 +6,11 @@ const storage = new DatabaseStorage();
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
 
+interface GmailClient {
+  userId: number;
+  client: any;
+}
+
 async function refreshTokenIfNeeded(userId: number, integration: any) {
   if (!integration.tokenExpiresAt || !integration.refreshToken) {
     return integration;
@@ -19,7 +24,7 @@ async function refreshTokenIfNeeded(userId: number, integration: any) {
     return integration;
   }
 
-  console.log('🔄 Refreshing Google Calendar access token for user', userId);
+  console.log('🔄 Refreshing Gmail access token for user', userId);
 
   const oauth2Client = new google.auth.OAuth2(
     GOOGLE_CLIENT_ID,
@@ -39,7 +44,7 @@ async function refreshTokenIfNeeded(userId: number, integration: any) {
 
     await storage.createOrUpdateUserIntegration({
       userId,
-      integrationType: 'google-calendar',
+      integrationType: 'google-gmail',
       isConnected: true,
       accessToken: credentials.access_token!,
       refreshToken: credentials.refresh_token || integration.refreshToken,
@@ -56,18 +61,18 @@ async function refreshTokenIfNeeded(userId: number, integration: any) {
       tokenExpiresAt,
     };
   } catch (error) {
-    console.error('Failed to refresh Google Calendar token:', error);
+    console.error('Failed to refresh Gmail token:', error);
     const errorData: any = { needsReauth: true };
-    throw Object.assign(new Error('Google Calendar token expired. Please reconnect your account in Settings.'), errorData);
+    throw Object.assign(new Error('Gmail token expired. Please reconnect your account in Settings.'), errorData);
   }
 }
 
-export async function getGoogleCalendarClient(userId: number) {
-  let integration = await storage.getUserIntegration(userId, 'google-calendar');
+export async function getGmailClient(userId: number): Promise<GmailClient> {
+  let integration = await storage.getUserIntegration(userId, 'google-gmail');
   
   if (!integration || !integration.isConnected || !integration.accessToken) {
     const errorData: any = { needsReauth: true };
-    throw Object.assign(new Error('Google Calendar not connected. Please connect your Google Calendar in Settings.'), errorData);
+    throw Object.assign(new Error('Gmail not connected. Please connect your Gmail account in Settings.'), errorData);
   }
 
   integration = await refreshTokenIfNeeded(userId, integration);
@@ -82,5 +87,46 @@ export async function getGoogleCalendarClient(userId: number) {
     refresh_token: integration!.refreshToken || undefined,
   });
 
-  return google.calendar({ version: 'v3', auth: oauth2Client });
+  const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
+  
+  return {
+    userId,
+    client: gmail,
+  };
+}
+
+export async function listMessages(userId: number, maxResults: number = 20, pageToken?: string) {
+  const { client } = await getGmailClient(userId);
+  
+  const response = await client.users.messages.list({
+    userId: 'me',
+    maxResults,
+    pageToken,
+  });
+
+  return response.data;
+}
+
+export async function getMessage(userId: number, messageId: string) {
+  const { client } = await getGmailClient(userId);
+  
+  const response = await client.users.messages.get({
+    userId: 'me',
+    id: messageId,
+    format: 'full',
+  });
+
+  return response.data;
+}
+
+export async function searchMessages(userId: number, query: string, maxResults: number = 20) {
+  const { client } = await getGmailClient(userId);
+  
+  const response = await client.users.messages.list({
+    userId: 'me',
+    q: query,
+    maxResults,
+  });
+
+  return response.data;
 }

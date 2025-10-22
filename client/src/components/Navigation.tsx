@@ -744,7 +744,11 @@ export default function Navigation() {
     username: string | undefined
   ): T[] => {
     if (!username) {
-      return []; // No user logged in = no nav items
+      // In development mode without auth, show all navigation items
+      if (!isDeploymentEnvironment()) {
+        return items;
+      }
+      return []; // No user logged in in production = no nav items
     }
 
     if (hasFullAccess(username)) {

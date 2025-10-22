@@ -287,12 +287,18 @@ router.post('/:id/sign', async (req, res) => {
       movedToProductionAt: new Date(),
     });
 
-    // Update the order status to move it to production queue
-    // This would trigger the production process
-    await storage.updateFinalizedOrder(followupOrder.orderId, {
-      currentDepartment: 'P1 Production Queue',
-      isVerified: true,
-    });
+    // Finalize the draft order and move it to production queue
+    console.log(`✅ Customer signed order ${followupOrder.orderId} - finalizing and moving to production...`);
+    
+    try {
+      // Finalize the order (moves from draft to all_orders table)
+      await storage.finalizeOrder(followupOrder.orderId, 'customer_signature');
+      
+      console.log(`🎯 Order ${followupOrder.orderId} finalized and in production queue`);
+    } catch (finalizeError) {
+      console.error('Error finalizing order:', finalizeError);
+      throw new Error('Failed to finalize order after signature');
+    }
 
     res.json({
       success: true,

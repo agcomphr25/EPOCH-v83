@@ -762,6 +762,7 @@ export interface IStorage {
   updateFollowupOrder(id: number, data: Partial<InsertFollowupOrder>): Promise<FollowupOrder>;
   getAllFollowupOrders(): Promise<FollowupOrder[]>;
   getPendingFollowupOrders(): Promise<FollowupOrder[]>;
+  getOverdueFollowupOrders(daysOld: number): Promise<FollowupOrder[]>;
 
   // Module 8: Customer Addresses CRUD
   getAllAddresses(): Promise<CustomerAddress[]>;
@@ -5321,6 +5322,23 @@ export class DatabaseStorage implements IStorage {
       .from(followupOrders)
       .where(eq(followupOrders.signatureSigned, false))
       .orderBy(desc(followupOrders.createdAt));
+  }
+
+  async getOverdueFollowupOrders(daysOld: number): Promise<FollowupOrder[]> {
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - daysOld);
+    
+    return await db
+      .select()
+      .from(followupOrders)
+      .where(
+        and(
+          eq(followupOrders.signatureSigned, false),
+          eq(followupOrders.reminderSent, false),
+          lt(followupOrders.createdAt, cutoffDate)
+        )
+      )
+      .orderBy(followupOrders.createdAt);
   }
 
   // Module 8: Customer Addresses CRUD

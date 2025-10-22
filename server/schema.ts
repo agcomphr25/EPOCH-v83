@@ -235,6 +235,9 @@ export const followupOrders = pgTable('followup_orders', {
   // Production Status
   movedToProduction: boolean('moved_to_production').default(false),
   movedToProductionAt: timestamp('moved_to_production_at'),
+  // Reminder Tracking
+  reminderSent: boolean('reminder_sent').default(false),
+  reminderSentAt: timestamp('reminder_sent_at'),
   // Order Summary for Email Display
   orderSummary: jsonb('order_summary'), // Contains order details for email body
   createdAt: timestamp('created_at').defaultNow(),

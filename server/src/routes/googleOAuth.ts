@@ -14,12 +14,15 @@ const REDIRECT_URI = process.env.REPLIT_DEV_DOMAIN
   ? `https://${process.env.REPLIT_DEV_DOMAIN}/api/oauth/google/callback`
   : 'http://localhost:5000/api/oauth/google/callback';
 
-// Create OAuth2 client
-const oauth2Client = new OAuth2Client(
-  GOOGLE_CLIENT_ID,
-  GOOGLE_CLIENT_SECRET,
-  REDIRECT_URI
-);
+// SECURITY FIX: Create a new OAuth2Client instance for each request
+// to prevent credential leakage between users
+function createOAuth2Client(): OAuth2Client {
+  return new OAuth2Client(
+    GOOGLE_CLIENT_ID,
+    GOOGLE_CLIENT_SECRET,
+    REDIRECT_URI
+  );
+}
 
 // In-memory state store with expiration (5 minutes)
 // In production, consider using Redis or database
@@ -94,6 +97,9 @@ router.get('/initiate', authenticateToken, async (req: Request, res: Response) =
     // Get all Google scopes to allow user to connect multiple services at once
     const scopes = getAllGoogleScopes();
 
+    // Create a new OAuth2Client for this request
+    const oauth2Client = createOAuth2Client();
+    
     const authUrl = oauth2Client.generateAuthUrl({
       access_type: 'offline', // Get refresh token
       scope: scopes,
@@ -194,6 +200,9 @@ router.get('/callback', async (req: Request, res: Response) => {
 
     const { userId, integrationType } = stateData;
 
+    // Create a new OAuth2Client for this request (SECURITY FIX)
+    const oauth2Client = createOAuth2Client();
+
     // Exchange code for tokens
     const { tokens } = await oauth2Client.getToken(code as string);
     
@@ -201,7 +210,7 @@ router.get('/callback', async (req: Request, res: Response) => {
       throw new Error('No access token received');
     }
 
-    // Set credentials
+    // Set credentials on this request's OAuth2Client instance
     oauth2Client.setCredentials(tokens);
 
     let accountEmail: string | null = null;
@@ -395,6 +404,9 @@ router.post('/refresh', authenticateToken, async (req: Request, res: Response) =
     if (!integration || !integration.refreshToken) {
       return res.status(404).json({ error: 'Integration not found or no refresh token available' });
     }
+
+    // Create a new OAuth2Client for this request (SECURITY FIX)
+    const oauth2Client = createOAuth2Client();
 
     // Set credentials with refresh token
     oauth2Client.setCredentials({

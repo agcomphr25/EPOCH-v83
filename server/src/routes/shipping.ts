@@ -749,6 +749,7 @@ router.post('/create-label', async (req: Request, res: Response) => {
             shippingCost: shipmentCost ? parseFloat(shipmentCost) : null,
             labelGenerated: true,
             labelGeneratedAt: new Date(),
+            shippedDate: new Date(),
           };
 
           // Try updating finalized order first, fall back to draft
@@ -801,6 +802,19 @@ router.post('/create-label', async (req: Request, res: Response) => {
                 console.log(
                   `✅ Shipping notification sent via ${notificationResult.methods.join(', ')} for order ${orderId}`
                 );
+                
+                // Update order with notification status
+                const notificationUpdateData = {
+                  customerNotified: true,
+                  notificationMethod: notificationResult.methods.join(', '),
+                  notificationSentAt: new Date(),
+                };
+                
+                try {
+                  await storage.updateFinalizedOrder(orderId, notificationUpdateData);
+                } catch {
+                  await storage.updateOrderDraft(orderId, notificationUpdateData);
+                }
               } else {
                 console.log(
                   `⚠️ Shipping notification failed for order ${orderId}:`,

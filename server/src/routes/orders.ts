@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { db } from '../../db';
 import { payments, allOrders } from '../../../shared/schema';
-import { eq, sql } from 'drizzle-orm';
+import { eq, sql, desc } from 'drizzle-orm';
 import { storage } from '../../storage';
 import { generateP1OrderId } from '../../utils/orderIdGenerator';
 import {
@@ -135,32 +135,19 @@ router.get('/customer/:customerId', async (req: Request, res: Response) => {
     const { customerId } = req.params;
     console.log(`Getting all orders for customer ${customerId}`);
 
-    // Get orders from allOrders table with payment information
-    const orders = await db
-      .select({
-        id: allOrders.id,
-        orderId: allOrders.orderId,
-        orderDate: allOrders.orderDate,
-        dueDate: allOrders.dueDate,
-        fbOrderNumber: allOrders.fbOrderNumber,
-        currentDepartment: allOrders.currentDepartment,
-        status: allOrders.status,
-        modelId: allOrders.modelId,
-        shipping: allOrders.shipping,
-        paymentAmount: allOrders.paymentAmount,
-        isPaid: allOrders.isPaid,
-        customerPO: allOrders.customerPO,
-        discountCode: allOrders.discountCode,
-        features: allOrders.features,
-        priceOverride: allOrders.priceOverride,
-        showCustomDiscount: allOrders.showCustomDiscount,
-        customDiscountValue: allOrders.customDiscountValue,
-        customDiscountType: allOrders.customDiscountType,
-      })
-      .from(allOrders)
-      .where(eq(allOrders.customerId, customerId));
+    // Load cached data for order total calculations (same as getUnpaidOrdersByCustomer)
+    const stockModelsData = await storage.getAllStockModels();
+    const allFeatures = await storage.getAllFeatures();
+    const persistentDiscounts = await storage.getAllPersistentDiscounts();
 
-    // Calculate payment totals for each order using CORRECTED payment logic
+    // Get orders from allOrders table
+    const orders = await db
+      .select()
+      .from(allOrders)
+      .where(eq(allOrders.customerId, customerId))
+      .orderBy(desc(allOrders.orderDate));
+
+    // Calculate payment totals and order totals for each order
     const ordersWithPaymentTotals = await Promise.all(
       orders.map(async (order) => {
         // Get total payments for this order
@@ -173,41 +160,44 @@ router.get('/customer/:customerId', async (req: Request, res: Response) => {
 
         const paymentTotal = Number(paymentResults[0]?.total || 0);
 
-        // FIXED: Use the exact same calculation logic as Order Summary
-        // This ensures refund amounts match exactly what's shown in Order Summary
-        let actualOrderTotal;
+        // Use the internal calculateOrderTotal method to get accurate total
+        // This is the same approach used in getUnpaidOrdersByCustomer
+        let actualOrderTotal = 0;
         try {
-          // Use the exact same data source as Order Summary: /api/orders/:id endpoint
-          const orderSummaryData = await storage.getOrderById(order.orderId);
-          if (orderSummaryData && orderSummaryData.totalAmount) {
-            actualOrderTotal = Number(orderSummaryData.totalAmount);
-          } else {
-            // Calculate using same logic as Order Summary (includes paint, bottom metal, etc.)
-            actualOrderTotal = await storage.calculateOrderTotal(order);
-          }
-
-          // Fallback to shipping cost if calculation fails
-          if (
-            actualOrderTotal === null ||
-            actualOrderTotal === undefined ||
-            isNaN(actualOrderTotal)
-          ) {
-            actualOrderTotal = Number(order.shipping) || 0;
-          }
+          // Call the private method through the storage instance
+          actualOrderTotal = await (storage as any).calculateOrderTotalOptimized(
+            order,
+            stockModelsData,
+            allFeatures,
+            persistentDiscounts
+          );
         } catch (error) {
           console.error(
-            `❌ Error getting Order Summary data for ${order.orderId}:`,
+            `❌ Error calculating order total for ${order.orderId}:`,
             error
           );
+          // Fallback to shipping cost if calculation fails
           actualOrderTotal = Number(order.shipping) || 0;
         }
+
         const balanceDue = Math.max(0, actualOrderTotal - paymentTotal);
 
         return {
-          ...order,
-          paymentTotal,
-          orderTotal: actualOrderTotal,
-          balanceDue,
+          id: order.id,
+          orderId: order.orderId,
+          orderDate: order.orderDate,
+          dueDate: order.dueDate,
+          fbOrderNumber: order.fbOrderNumber,
+          currentDepartment: order.currentDepartment,
+          status: order.status,
+          modelId: order.modelId,
+          shipping: order.shipping,
+          paymentAmount: order.paymentAmount,
+          isPaid: order.isPaid,
+          customerPO: order.customerPO,
+          paymentTotal: Math.round(paymentTotal * 100) / 100,
+          orderTotal: Math.round(actualOrderTotal * 100) / 100,
+          balanceDue: Math.round(balanceDue * 100) / 100,
           isFullyPaid: paymentTotal >= actualOrderTotal && actualOrderTotal > 0,
         };
       })

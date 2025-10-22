@@ -5,6 +5,7 @@ import { db } from '../../db';
 import { allOrders, stockModels, features, orderFilterPresets } from '../../schema';
 import { insertOrderFilterPresetSchema } from '@shared/schema';
 import { storage } from '../../storage';
+import { authenticateToken, requireRole } from '../../middleware/auth';
 
 const router = Router();
 
@@ -161,7 +162,7 @@ router.get('/monthly-fulfilled', async (req, res) => {
 });
 
 // Get all available filter options (stock models, barrels, paints, etc.)
-router.get('/filter-options', async (req, res) => {
+router.get('/filter-options', authenticateToken, requireRole('ADMIN'), async (req, res) => {
   try {
     // Get all active stock models
     const models = await db
@@ -252,7 +253,7 @@ router.get('/filter-options', async (req, res) => {
 });
 
 // Execute custom query with filters
-router.post('/query', async (req, res) => {
+router.post('/query', authenticateToken, requireRole('ADMIN'), async (req, res) => {
   try {
     const {
       stockModels: selectedModels,
@@ -375,7 +376,7 @@ router.post('/query', async (req, res) => {
 });
 
 // Export filtered orders to CSV
-router.post('/export-csv', async (req, res) => {
+router.post('/export-csv', authenticateToken, requireRole('ADMIN'), async (req, res) => {
   try {
     const { orders } = req.body;
 
@@ -447,7 +448,7 @@ router.post('/export-csv', async (req, res) => {
 });
 
 // Get all saved filter presets
-router.get('/presets', async (req, res) => {
+router.get('/presets', authenticateToken, requireRole('ADMIN'), async (req, res) => {
   try {
     const presets = await db
       .select()
@@ -462,7 +463,7 @@ router.get('/presets', async (req, res) => {
 });
 
 // Save a new filter preset
-router.post('/presets', async (req, res) => {
+router.post('/presets', authenticateToken, requireRole('ADMIN'), async (req, res) => {
   try {
     const validatedData = insertOrderFilterPresetSchema.parse(req.body);
 
@@ -479,7 +480,7 @@ router.post('/presets', async (req, res) => {
 });
 
 // Delete a filter preset
-router.delete('/presets/:id', async (req, res) => {
+router.delete('/presets/:id', authenticateToken, requireRole('ADMIN'), async (req, res) => {
   try {
     const { id } = req.params;
 

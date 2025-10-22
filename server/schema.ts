@@ -363,108 +363,11 @@ export const customerStockModelPrices = pgTable('customer_stock_model_prices', {
   updatedAt: timestamp('updated_at').defaultNow(),
 });
 
-export const orderDrafts = pgTable('order_drafts', {
-  id: serial('id').primaryKey(),
-  orderId: text('order_id').notNull(),
-  orderDate: timestamp('order_date').notNull(),
-  dueDate: timestamp('due_date').notNull(),
-  customerId: text('customer_id'),
-  customerPO: text('customer_po'),
-  fbOrderNumber: text('fb_order_number'),
-  agrOrderDetails: text('agr_order_details'),
-  isFlattop: boolean('is_flattop').default(false),
-  isCustomOrder: text('is_custom_order'), // "yes", "no", or null
-  modelId: text('model_id'),
-  handedness: text('handedness'),
-  shankLength: text('shank_length'),
-  features: jsonb('features'),
-  featureQuantities: jsonb('feature_quantities'),
-  discountCode: text('discount_code'),
-  notes: text('notes'), // Order notes/special instructions
-  customDiscountType: text('custom_discount_type').default('percent'),
-  customDiscountValue: real('custom_discount_value').default(0),
-  showCustomDiscount: boolean('show_custom_discount').default(false),
-  priceOverride: real('price_override'), // Manual price override for stock model
-  shipping: real('shipping').default(0),
-  tikkaOption: text('tikka_option'),
-  status: text('status').default('FINALIZED'), // Legacy - will be removed after migration
-  statusId: integer('status_id').references(() => orderStatusTypes.id), // New FK reference
-  barcode: text('barcode').unique(), // Code 39 barcode for order identification
-  // Department Progression Fields
-  currentDepartment: text('current_department').default('P1 Production Queue'), // Default to P1 Production Queue until scheduled
-  currentDepartmentId: integer('current_department_id').references(
-    () => orderDepartmentTypes.id
-  ), // New FK reference
-  departmentHistory: jsonb('department_history').default('[]'),
-  scrappedQuantity: integer('scrapped_quantity').default(0),
-  totalProduced: integer('total_produced').default(0),
-  // Department Completion Timestamps
-  layupCompletedAt: timestamp('layup_completed_at'),
-  pluggingCompletedAt: timestamp('plugging_completed_at'),
-  cncCompletedAt: timestamp('cnc_completed_at'),
-  finishCompletedAt: timestamp('finish_completed_at'),
-  gunsmithCompletedAt: timestamp('gunsmith_completed_at'),
-  paintCompletedAt: timestamp('paint_completed_at'),
-  qcCompletedAt: timestamp('qc_completed_at'),
-  shippingCompletedAt: timestamp('shipping_completed_at'),
-  // Scrap Information
-  scrapDate: timestamp('scrap_date'),
-  scrapReason: text('scrap_reason'),
-  scrapDisposition: text('scrap_disposition'),
-  scrapAuthorization: text('scrap_authorization'),
-  // Replacement Information
-  isReplacement: boolean('is_replacement').default(false),
-  replacedOrderId: text('replaced_order_id'),
-  // Payment Information
-  isPaid: boolean('is_paid').default(false),
-  paymentType: text('payment_type'), // cash, credit, check, etc.
-  paymentAmount: real('payment_amount'),
-  paymentDate: timestamp('payment_date'),
-  paymentTimestamp: timestamp('payment_timestamp'),
-  // Shipping and Tracking Information
-  trackingNumber: text('tracking_number'),
-  shippingCarrier: text('shipping_carrier').default('UPS'),
-  shippingMethod: text('shipping_method').default('Ground'),
-  shippedDate: timestamp('shipped_date'),
-  estimatedDelivery: timestamp('estimated_delivery'),
-  shippingLabelGenerated: boolean('shipping_label_generated').default(false),
-  customerNotified: boolean('customer_notified').default(false),
-  notificationMethod: text('notification_method'), // email, sms, both
-  notificationSentAt: timestamp('notification_sent_at'),
-  deliveryConfirmed: boolean('delivery_confirmed').default(false),
-  deliveryConfirmedAt: timestamp('delivery_confirmed_at'),
-  // Verification Information
-  isVerified: boolean('is_verified').default(false),
-  // Date Tracking Information
-  isManualDueDate: boolean('is_manual_due_date').default(false),
-  isManualOrderDate: boolean('is_manual_order_date').default(false),
-  // Alt Ship To Address Information
-  hasAltShipTo: boolean('has_alt_ship_to').default(false),
-  altShipToCustomerId: text('alt_ship_to_customer_id'), // Reference to existing customer
-  altShipToName: text('alt_ship_to_name'), // Manual entry name
-  altShipToCompany: text('alt_ship_to_company'), // Manual entry company
-  altShipToEmail: text('alt_ship_to_email'), // Manual entry email
-  altShipToPhone: text('alt_ship_to_phone'), // Manual entry phone
-  altShipToAddress: jsonb('alt_ship_to_address'), // Manual entry address object
-  // Special Shipping Instructions
-  specialShippingInternational: boolean(
-    'special_shipping_international'
-  ).default(false),
-  specialShippingNextDayAir: boolean('special_shipping_next_day_air').default(
-    false
-  ),
-  specialShippingBillToReceiver: boolean(
-    'special_shipping_bill_to_receiver'
-  ).default(false),
-  createdAt: timestamp('created_at').defaultNow(),
-  updatedAt: timestamp('updated_at').defaultNow(),
-});
-
 // Payments table for multiple payments per order
 export const payments = pgTable('payments', {
   id: serial('id').primaryKey(),
   orderId: text('order_id')
-    .references(() => orderDrafts.orderId)
+    .references(() => allOrders.orderId)
     .notNull(),
   paymentType: text('payment_type').notNull(), // credit_card, agr, check, cash, ach
   paymentAmount: real('payment_amount').notNull(),
@@ -1221,42 +1124,6 @@ export const insertStockModelSchema = createInsertSchema(stockModels)
     sortOrder: z.number().min(0).default(0),
   });
 
-export const insertOrderDraftSchema = createInsertSchema(orderDrafts)
-  .omit({
-    id: true,
-    createdAt: true,
-    updatedAt: true,
-  })
-  .extend({
-    orderId: z.string().min(1, 'Order ID is required'),
-    orderDate: z.coerce.date(),
-    dueDate: z.coerce.date(),
-    customerId: z.string().optional().nullable(),
-    customerPO: z.string().optional().nullable(),
-    fbOrderNumber: z.string().optional().nullable(),
-    agrOrderDetails: z.string().optional().nullable(),
-    isCustomOrder: z.enum(['yes', 'no']).optional().nullable(),
-    modelId: z.string().optional().nullable(),
-    handedness: z.string().optional().nullable(),
-    features: z.record(z.any()).optional().nullable(),
-    featureQuantities: z.record(z.any()).optional().nullable(),
-    discountCode: z.string().optional().nullable(),
-    shipping: z.number().min(0).default(0),
-    tikkaOption: z.string().optional().nullable(),
-    status: z.string().default('DRAFT'), // Legacy field
-    statusId: z.number().optional().nullable(), // New FK field
-    currentDepartment: z.string().default('Layup'), // Legacy field
-    currentDepartmentId: z.number().optional().nullable(), // New FK field
-    // Payment fields
-    isPaid: z.boolean().default(false),
-    paymentType: z.string().optional().nullable(),
-    paymentAmount: z.number().min(0).optional().nullable(),
-    paymentDate: z.coerce.date().optional().nullable(),
-    paymentTimestamp: z.coerce.date().optional().nullable(),
-    // Verification field
-    isVerified: z.boolean().default(false),
-  });
-
 export const insertAllOrderSchema = createInsertSchema(allOrders)
   .omit({
     id: true,
@@ -1933,8 +1800,6 @@ export type InsertFeature = z.infer<typeof insertFeatureSchema>;
 export type Feature = typeof features.$inferSelect;
 export type InsertStockModel = z.infer<typeof insertStockModelSchema>;
 export type StockModel = typeof stockModels.$inferSelect;
-export type InsertOrderDraft = z.infer<typeof insertOrderDraftSchema>;
-export type OrderDraft = typeof orderDrafts.$inferSelect;
 export type InsertAllOrder = z.infer<typeof insertAllOrderSchema>;
 export type AllOrder = typeof allOrders.$inferSelect;
 export type InsertLinkedOrderGroup = z.infer<typeof insertLinkedOrderGroupSchema>;
@@ -3695,9 +3560,9 @@ export const insertCustomerCommunicationSchema = createInsertSchema(
 export const orderAttachmentsRelations = relations(
   orderAttachments,
   ({ one }) => ({
-    order: one(orderDrafts, {
+    order: one(allOrders, {
       fields: [orderAttachments.orderId],
-      references: [orderDrafts.orderId],
+      references: [allOrders.orderId],
     }),
   })
 );

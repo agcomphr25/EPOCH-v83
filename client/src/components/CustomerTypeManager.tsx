@@ -219,6 +219,7 @@ export default function CustomerTypeManager() {
                         <FormControl>
                           <Textarea
                             {...field}
+                            value={field.value ?? ''}
                             placeholder="Optional description"
                           />
                         </FormControl>
@@ -319,7 +320,14 @@ export default function CustomerTypeManager() {
                   <FormItem>
                     <FormLabel>Description</FormLabel>
                     <FormControl>
-                      <Textarea {...field} placeholder="Optional description" />
+                      <Textarea 
+                        onChange={field.onChange}
+                        onBlur={field.onBlur}
+                        name={field.name}
+                        ref={field.ref}
+                        value={field.value ?? ''} 
+                        placeholder="Optional description" 
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

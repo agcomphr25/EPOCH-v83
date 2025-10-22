@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import { Mail, Search, RefreshCw, AlertCircle, Inbox, Star, X, Reply, Send, Paperclip, Download } from 'lucide-react';
+import { Mail, Search, RefreshCw, AlertCircle, Inbox, Star, X, Reply, Send, Paperclip, Download, PenSquare } from 'lucide-react';
 import { Link } from 'wouter';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 
@@ -39,6 +39,10 @@ export default function EmailInbox() {
   const [activeSearchQuery, setActiveSearchQuery] = useState<string | null>(null);
   const [isReplying, setIsReplying] = useState(false);
   const [replyBody, setReplyBody] = useState('');
+  const [isComposing, setIsComposing] = useState(false);
+  const [composeTo, setComposeTo] = useState('');
+  const [composeSubject, setComposeSubject] = useState('');
+  const [composeBody, setComposeBody] = useState('');
 
   const { data: messageList, isLoading: isLoadingList, refetch: refetchList, error: listError } = useQuery<GmailListResponse>({
     queryKey: activeSearchQuery ? ['/api/gmail/search', { q: activeSearchQuery }] : ['/api/gmail/messages'],
@@ -214,10 +218,14 @@ export default function EmailInbox() {
     onSuccess: () => {
       toast({
         title: 'Email Sent',
-        description: 'Your reply has been sent successfully',
+        description: 'Your email has been sent successfully',
       });
       setIsReplying(false);
       setReplyBody('');
+      setIsComposing(false);
+      setComposeTo('');
+      setComposeSubject('');
+      setComposeBody('');
       queryClient.invalidateQueries({ queryKey: ['/api/gmail/messages'] });
     },
     onError: (error: any) => {
@@ -256,6 +264,23 @@ export default function EmailInbox() {
       subject: replySubject,
       body: replyBody,
       threadId: selectedMessage.threadId,
+    });
+  };
+
+  const handleCompose = () => {
+    if (!composeTo.trim() || !composeSubject.trim() || !composeBody.trim()) {
+      toast({
+        title: 'Error',
+        description: 'Please fill in all fields (To, Subject, and Message)',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    sendEmailMutation.mutate({
+      to: composeTo,
+      subject: composeSubject,
+      body: composeBody,
     });
   };
 
@@ -310,10 +335,16 @@ export default function EmailInbox() {
               View and manage your Gmail messages
             </p>
           </div>
-          <Button onClick={handleRefresh} variant="outline" data-testid="button-refresh">
-            <RefreshCw className="mr-2 h-4 w-4" />
-            Refresh
-          </Button>
+          <div className="flex gap-2">
+            <Button onClick={() => setIsComposing(true)} data-testid="button-compose">
+              <PenSquare className="mr-2 h-4 w-4" />
+              Compose
+            </Button>
+            <Button onClick={handleRefresh} variant="outline" data-testid="button-refresh">
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Refresh
+            </Button>
+          </div>
         </div>
 
         <div className="mb-6">
@@ -343,6 +374,88 @@ export default function EmailInbox() {
             </p>
           )}
         </div>
+
+        {isComposing && (
+          <Card className="mb-6">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle>New Message</CardTitle>
+                <Button
+                  onClick={() => {
+                    setIsComposing(false);
+                    setComposeTo('');
+                    setComposeSubject('');
+                    setComposeBody('');
+                  }}
+                  variant="ghost"
+                  size="sm"
+                  data-testid="button-close-compose"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <label className="text-sm font-medium text-foreground dark:text-white mb-1 block">
+                  To
+                </label>
+                <Input
+                  placeholder="recipient@example.com"
+                  value={composeTo}
+                  onChange={(e) => setComposeTo(e.target.value)}
+                  data-testid="input-compose-to"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-foreground dark:text-white mb-1 block">
+                  Subject
+                </label>
+                <Input
+                  placeholder="Email subject"
+                  value={composeSubject}
+                  onChange={(e) => setComposeSubject(e.target.value)}
+                  data-testid="input-compose-subject"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-foreground dark:text-white mb-1 block">
+                  Message
+                </label>
+                <Textarea
+                  placeholder="Type your message..."
+                  value={composeBody}
+                  onChange={(e) => setComposeBody(e.target.value)}
+                  rows={8}
+                  data-testid="textarea-compose-body"
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  onClick={handleCompose}
+                  disabled={sendEmailMutation.isPending}
+                  data-testid="button-send-compose"
+                >
+                  <Send className="mr-2 h-4 w-4" />
+                  {sendEmailMutation.isPending ? 'Sending...' : 'Send'}
+                </Button>
+                <Button
+                  onClick={() => {
+                    setIsComposing(false);
+                    setComposeTo('');
+                    setComposeSubject('');
+                    setComposeBody('');
+                  }}
+                  variant="outline"
+                  disabled={sendEmailMutation.isPending}
+                  data-testid="button-cancel-compose"
+                >
+                  Cancel
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <Card className="lg:col-span-1">

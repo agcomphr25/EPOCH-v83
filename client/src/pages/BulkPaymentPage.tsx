@@ -37,6 +37,7 @@ export default function BulkPaymentPage() {
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
   const [selectedOrders, setSelectedOrders] = useState<Map<string, { amount: number; total: number }>>(new Map());
   const [paymentType, setPaymentType] = useState<string>('');
+  const [confirmationNumber, setConfirmationNumber] = useState<string>('');
   const [paymentDate, setPaymentDate] = useState<string>(
     new Date().toISOString().split('T')[0]
   );
@@ -68,10 +69,13 @@ export default function BulkPaymentPage() {
         title: 'Payments Recorded',
         description: `Successfully processed ${response.processed} payment(s)${response.failed > 0 ? `, ${response.failed} failed` : ''}.`,
       });
+      // Invalidate ALL order-related caches to ensure payment status updates everywhere
       queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
       refetchUnpaidOrders();
       setSelectedOrders(new Map());
       setPaymentType('');
+      setConfirmationNumber('');
       setPaymentDate(new Date().toISOString().split('T')[0]);
     },
     onError: (error: any) => {
@@ -134,6 +138,7 @@ export default function BulkPaymentPage() {
         paymentAmount: amount,
         paymentDate,
         orderTotal: total,
+        notes: confirmationNumber || null,
       })
     );
 
@@ -272,7 +277,8 @@ export default function BulkPaymentPage() {
                                     type="number"
                                     step="0.01"
                                     min="0"
-                                    value={paymentAmount}
+
+                                    value={paymentAmount.toFixed(2)}
                                     onChange={(e) =>
                                       handleAmountChange(order.orderId, e.target.value, order.totalAmount)
                                     }
@@ -300,7 +306,7 @@ export default function BulkPaymentPage() {
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div className="space-y-2">
                           <Label htmlFor="payment-type">Payment Type</Label>
                           <Select value={paymentType} onValueChange={setPaymentType}>
@@ -319,6 +325,20 @@ export default function BulkPaymentPage() {
                               <SelectItem value="aaaa">AAAA</SelectItem>
                             </SelectContent>
                           </Select>
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="confirmation-number">
+                            Check # / Confirmation #
+                          </Label>
+                          <Input
+                            id="confirmation-number"
+                            type="text"
+                            placeholder="Enter check or confirmation number"
+                            value={confirmationNumber}
+                            onChange={(e) => setConfirmationNumber(e.target.value)}
+                            data-testid="input-confirmation-number"
+                          />
                         </div>
 
                         <div className="space-y-2">

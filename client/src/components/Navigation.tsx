@@ -469,11 +469,17 @@ export default function Navigation() {
       icon: BarChart,
       description: 'Financial overview and KPIs',
     },
+    // {
+    //   path: '/payment-management',
+    //   label: 'Payment Management',
+    //   icon: CreditCard,
+    //   description: 'Process credit card payments and view transaction history',
+    // },
     {
-      path: '/payment-management',
-      label: 'Payment Management',
+      path: '/finance/bulk-payment',
+      label: 'Bulk Payment',
       icon: CreditCard,
-      description: 'Process credit card payments and view transaction history',
+      description: 'Record payments for multiple customer orders at once',
     },
     {
       path: '/refund-request',

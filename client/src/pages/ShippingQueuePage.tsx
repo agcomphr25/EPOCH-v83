@@ -838,13 +838,51 @@ export default function ShippingQueuePage() {
         </CardContent>
       </Card>
 
-      {/* Bulk Shipping Actions */}
+      {/* Floating Bulk Fulfill Actions */}
       {selectedOrders.length > 0 && (
-        <BulkShippingActions
-          selectedOrders={selectedOrders}
-          onClearSelection={clearSelection}
-          shippingOrders={enrichedShippingOrders}
-        />
+        <div className="fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 shadow-lg">
+          <div className="container mx-auto p-4 space-y-4">
+            {/* Progress to Fulfilled Section */}
+            <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
+              <div className="flex items-center justify-between flex-wrap gap-4">
+                <div className="flex items-center gap-2">
+                  <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400" />
+                  <span className="font-medium text-green-800 dark:text-green-200">
+                    {selectedOrders.length} order{selectedOrders.length > 1 ? 's' : ''} selected
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={clearSelection}
+                    size="sm"
+                    data-testid="button-clear-selection"
+                  >
+                    Clear Selection
+                  </Button>
+                  <Button
+                    onClick={() => bulkFulfillMutation.mutate(selectedOrders)}
+                    disabled={bulkFulfillMutation.isPending}
+                    className="bg-green-600 hover:bg-green-700 text-white"
+                    data-testid="button-bulk-fulfill"
+                  >
+                    <CheckCircle className="h-4 w-4 mr-2" />
+                    {bulkFulfillMutation.isPending
+                      ? 'Progressing...'
+                      : `Progress to Fulfilled (${selectedOrders.length})`}
+                  </Button>
+                </div>
+              </div>
+            </div>
+            
+            {/* Bulk Shipping Actions */}
+            <BulkShippingActions
+              selectedOrders={selectedOrders}
+              onClearSelection={clearSelection}
+              shippingOrders={enrichedShippingOrders}
+            />
+          </div>
+        </div>
       )}
 
       {/* Department Summary Cards */}

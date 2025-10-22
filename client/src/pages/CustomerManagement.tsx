@@ -239,6 +239,7 @@ const CustomerFormFields = ({
               <SelectItem value="Gunbuilder">Gunbuilder</SelectItem>
               <SelectItem value="Distributor">Distributor</SelectItem>
               <SelectItem value="OEM">OEM</SelectItem>
+              <SelectItem value="Individual">Individual</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -2142,6 +2143,7 @@ export default function CustomerManagement() {
                     <SelectItem value="Gunbuilder">Gunbuilder</SelectItem>
                     <SelectItem value="Distributor">Distributor</SelectItem>
                     <SelectItem value="OEM">OEM</SelectItem>
+                    <SelectItem value="Individual">Individual</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Table,
@@ -34,6 +34,8 @@ import {
   CheckCircle,
   XCircle,
   ExternalLink,
+  Mail,
+  Send,
 } from 'lucide-react';
 import {
   getCurrentCompanyWeek,
@@ -42,6 +44,8 @@ import {
 } from '@shared/weekUtils';
 import { format } from 'date-fns';
 import { ManualTrackingEntry } from '@/components/ManualTrackingEntry';
+import { useToast } from '@/hooks/use-toast';
+import { queryClient } from '@/lib/queryClient';
 
 interface Order {
   id: number;
@@ -77,10 +81,45 @@ interface WeeklyStats {
 export default function ShippingTracker() {
   const currentYear = new Date().getFullYear();
   const currentWeek = getCurrentCompanyWeek();
+  const { toast } = useToast();
 
   const [selectedYear, setSelectedYear] = useState<number>(currentYear);
   const [selectedWeek, setSelectedWeek] = useState<number>(currentWeek);
   const [searchTerm, setSearchTerm] = useState('');
+
+  // Mutation to send notification to customer
+  const sendNotificationMutation = useMutation({
+    mutationFn: async (orderId: string) => {
+      const response = await fetch(`/api/shipping/notify-customer/${orderId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to send notification');
+      }
+
+      return response.json();
+    },
+    onSuccess: (data, orderId) => {
+      toast({
+        title: 'Notification Sent',
+        description: data.message || `Customer notified via ${data.methods?.join(' and ')}`,
+      });
+      // Invalidate queries to refresh the data
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
+    },
+    onError: (error: Error, orderId) => {
+      toast({
+        title: 'Failed to Send Notification',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+  });
 
   // Fetch all fulfilled orders
   const { data: orders, isLoading } = useQuery<Order[]>({
@@ -103,25 +142,65 @@ export default function ShippingTracker() {
 
     const fulfilled = orders.filter((order) => order.status === 'FULFILLED');
 
-    if (!searchTerm) return fulfilled;
+    let filtered = fulfilled;
+    
+    if (searchTerm) {
+      const searchLower = searchTerm.toLowerCase();
+      filtered = fulfilled.filter((order) => {
+        // Search by order number
+        if (order.orderId.toLowerCase().includes(searchLower)) return true;
 
-    const searchLower = searchTerm.toLowerCase();
-    return fulfilled.filter((order) => {
-      // Search by order number
-      if (order.orderId.toLowerCase().includes(searchLower)) return true;
+        // Search by customer name
+        if (order.customerId && customers) {
+          const customer = customers.find(
+            (c) => String(c.id) === String(order.customerId)
+          );
+          if (customer && customer.name.toLowerCase().includes(searchLower))
+            return true;
+        }
 
-      // Search by customer name
-      if (order.customerId && customers) {
-        const customer = customers.find(
-          (c) => String(c.id) === String(order.customerId)
-        );
-        if (customer && customer.name.toLowerCase().includes(searchLower))
-          return true;
-      }
+        return false;
+      });
+    }
 
-      return false;
+    // Sort by shipped date (most recent first)
+    return filtered.sort((a, b) => {
+      // Orders without a shipped date go to the end
+      if (!a.shippedDate && !b.shippedDate) return 0;
+      if (!a.shippedDate) return 1;
+      if (!b.shippedDate) return -1;
+      
+      // Sort by shipped date descending (most recent first)
+      return new Date(b.shippedDate).getTime() - new Date(a.shippedDate).getTime();
     });
   }, [orders, searchTerm, customers]);
+
+  // Group orders by tracking number to identify consolidated shipments
+  const trackingGroups = useMemo(() => {
+    const groups = new Map<string, string[]>();
+    
+    filteredOrders.forEach((order) => {
+      if (order.trackingNumber) {
+        const existing = groups.get(order.trackingNumber) || [];
+        existing.push(order.orderId);
+        groups.set(order.trackingNumber, existing);
+      }
+    });
+    
+    return groups;
+  }, [filteredOrders]);
+
+  // Check if an order is part of a consolidated shipment
+  const isConsolidated = (trackingNumber: string) => {
+    if (!trackingNumber) return false;
+    const group = trackingGroups.get(trackingNumber);
+    return group && group.length > 1;
+  };
+
+  // Get consolidated order IDs for a tracking number
+  const getConsolidatedOrders = (trackingNumber: string) => {
+    return trackingGroups.get(trackingNumber) || [];
+  };
 
   // Calculate weekly stats
   const weeklyStats: WeeklyStats[] = [];
@@ -380,39 +459,62 @@ export default function ShippingTracker() {
                       const customer = customers?.find(
                         (c) => String(c.id) === String(order.customerId)
                       );
+                      const consolidated = order.trackingNumber && isConsolidated(order.trackingNumber);
+                      const consolidatedOrders = order.trackingNumber ? getConsolidatedOrders(order.trackingNumber) : [];
+                      
                       return (
                         <TableRow
                           key={order.id}
                           data-testid={`row-shipment-${order.orderId}`}
+                          className={consolidated ? 'bg-amber-50 hover:bg-amber-100' : ''}
                         >
                           <TableCell className="font-medium">
-                            {order.orderId}
+                            <div className="flex items-center gap-2">
+                              {order.orderId}
+                              {consolidated && (
+                                <Badge 
+                                  variant="secondary" 
+                                  className="bg-amber-200 text-amber-800 text-xs"
+                                  data-testid={`badge-consolidated-${order.orderId}`}
+                                >
+                                  <Package className="h-3 w-3 mr-1" />
+                                  Consolidated
+                                </Badge>
+                              )}
+                            </div>
                           </TableCell>
                           <TableCell>
                             {customer?.name || 'Unknown Customer'}
                           </TableCell>
                           <TableCell>
                             {order.trackingNumber ? (
-                              <div className="flex items-center gap-2">
-                                <span className="font-mono text-sm">
-                                  {order.trackingNumber}
-                                </span>
-                                <Button
-                                  size="sm"
-                                  variant="default"
-                                  className="bg-blue-600 hover:bg-blue-700 text-white h-7 px-2"
-                                  onClick={() =>
-                                    window.open(
-                                      `https://www.ups.com/track?loc=en_US&tracknum=${encodeURIComponent(order.trackingNumber || '')}`,
-                                      '_blank',
-                                      'noopener,noreferrer'
-                                    )
-                                  }
-                                  data-testid={`button-track-${order.orderId}`}
-                                >
-                                  <ExternalLink className="h-3 w-3 mr-1" />
-                                  Track
-                                </Button>
+                              <div className="flex flex-col gap-1">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-mono text-sm">
+                                    {order.trackingNumber}
+                                  </span>
+                                  <Button
+                                    size="sm"
+                                    variant="default"
+                                    className="bg-blue-600 hover:bg-blue-700 text-white h-7 px-2"
+                                    onClick={() =>
+                                      window.open(
+                                        `https://www.ups.com/track?loc=en_US&tracknum=${encodeURIComponent(order.trackingNumber || '')}`,
+                                        '_blank',
+                                        'noopener,noreferrer'
+                                      )
+                                    }
+                                    data-testid={`button-track-${order.orderId}`}
+                                  >
+                                    <ExternalLink className="h-3 w-3 mr-1" />
+                                    Track
+                                  </Button>
+                                </div>
+                                {consolidated && (
+                                  <div className="text-xs text-amber-700">
+                                    Shipped with: {consolidatedOrders.filter(id => id !== order.orderId).join(', ')}
+                                  </div>
+                                )}
                               </div>
                             ) : (
                               <span className="text-gray-400">-</span>
@@ -435,23 +537,44 @@ export default function ShippingTracker() {
                             )}
                           </TableCell>
                           <TableCell>
-                            {order.customerNotified ? (
-                              <div className="flex items-center gap-1 text-green-600">
-                                <CheckCircle className="h-4 w-4" />
-                                <span className="text-xs">
-                                  {order.notificationSentAt &&
-                                    format(
-                                      new Date(order.notificationSentAt),
-                                      'MMM d'
-                                    )}
-                                </span>
-                              </div>
-                            ) : (
-                              <div className="flex items-center gap-1 text-gray-400">
-                                <XCircle className="h-4 w-4" />
-                                <span className="text-xs">No</span>
-                              </div>
-                            )}
+                            <div className="flex items-center gap-2">
+                              {order.customerNotified ? (
+                                <div className="flex items-center gap-1 text-green-600">
+                                  <CheckCircle className="h-4 w-4" />
+                                  <span className="text-xs">
+                                    {order.notificationSentAt &&
+                                      format(
+                                        new Date(order.notificationSentAt),
+                                        'MMM d'
+                                      )}
+                                  </span>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-1 text-gray-400">
+                                  <XCircle className="h-4 w-4" />
+                                  <span className="text-xs">No</span>
+                                </div>
+                              )}
+                              {order.trackingNumber && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7 px-2"
+                                  onClick={() => sendNotificationMutation.mutate(order.orderId)}
+                                  disabled={sendNotificationMutation.isPending}
+                                  data-testid={`button-notify-${order.orderId}`}
+                                >
+                                  {sendNotificationMutation.isPending ? (
+                                    <span className="text-xs">Sending...</span>
+                                  ) : (
+                                    <>
+                                      <Send className="h-3 w-3 mr-1" />
+                                      <span className="text-xs">Notify</span>
+                                    </>
+                                  )}
+                                </Button>
+                              )}
+                            </div>
                           </TableCell>
                           <TableCell>
                             <ManualTrackingEntry orderId={order.orderId} />

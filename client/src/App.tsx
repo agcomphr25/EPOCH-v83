@@ -122,6 +122,7 @@ import DocumentIntelligence from './pages/DocumentIntelligence';
 
 import { Toaster as HotToaster } from 'react-hot-toast';
 import DeploymentAuthWrapper from './components/DeploymentAuthWrapper';
+import { getDashboardRoute } from './config/dashboardMapping';
 
 // Component to conditionally render Navigation
 function ConditionalNavigation() {
@@ -133,6 +134,68 @@ function ConditionalNavigation() {
     location === '/login';
 
   return hideNavigation ? null : <Navigation />;
+}
+
+// Root redirect component that intercepts "/" and redirects to personalized dashboards
+function RootRedirect() {
+  const [, setLocation] = useLocation();
+  const [isRedirecting, setIsRedirecting] = React.useState(true);
+
+  React.useEffect(() => {
+    // Fetch session using credentials to work with cookie-based auth
+    fetch('/api/auth/session', {
+      credentials: 'include',
+      headers: {
+        // Also check for localStorage token as fallback
+        Authorization: `Bearer ${
+          localStorage.getItem('sessionToken') ||
+          localStorage.getItem('jwtToken') ||
+          ''
+        }`,
+      },
+    })
+      .then((res) => {
+        if (res.ok) {
+          return res.json();
+        }
+        throw new Error('Not authenticated');
+      })
+      .then((userData) => {
+        if (userData?.username) {
+          const personalizedRoute = getDashboardRoute(userData.username);
+          // If user has a personalized dashboard, redirect immediately
+          if (personalizedRoute !== '/') {
+            console.log(
+              `Redirecting ${userData.username} to ${personalizedRoute}`
+            );
+            setLocation(personalizedRoute);
+            return;
+          }
+        }
+        // If no personalized dashboard, show generic dashboard
+        setIsRedirecting(false);
+      })
+      .catch((error) => {
+        console.error('Failed to fetch session for redirect:', error);
+        // On error, show generic dashboard
+        setIsRedirecting(false);
+      });
+  }, [setLocation]);
+
+  // Show loading state while checking for redirect
+  if (isRedirecting) {
+    return (
+      <div className="flex items-center justify-center min-h-[50vh]">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading dashboard...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // If we get here, user has no personalized dashboard - render the generic one
+  return <Dashboard />;
 }
 
 function App() {
@@ -201,7 +264,7 @@ function App() {
               <OfflineIndicator />
               <main className="container mx-auto px-4 py-8">
                 <Switch>
-                  <Route path="/" component={Dashboard} />
+                  <Route path="/" component={RootRedirect} />
                   <Route path="/order-management" component={OrderManagement} />
                   <Route
                     path="/orders-management"

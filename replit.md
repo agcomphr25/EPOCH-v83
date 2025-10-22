@@ -72,6 +72,42 @@ The application utilizes a monorepo structure with a full-stack TypeScript appro
 
 ## Recent Changes
 
+### October 22, 2025 - Dashboard Redirect Fix & Refund Balance Due Fix
+
+#### Dashboard Redirect Reliability (Router-Level Solution)
+- **Issue**: User "glennj" would sometimes land on generic dashboard (/) instead of /admin-dashboard when opening new tabs
+- **Root Cause**: Dashboard.tsx used useQuery with localStorage tokens, but cookie-based auth (Microsoft login) stores no token
+  - Query would resolve to null and prevent redirect
+  - Component-level redirect happened too late (after rendering generic dashboard)
+  - Stale query cache could persist null user data
+- **Solution**: Moved redirect logic to router-level guard in App.tsx
+  - Created `RootRedirect` component that intercepts "/" route
+  - Calls `/api/auth/session` with `credentials: 'include'` for cookie-based auth
+  - Redirects BEFORE Dashboard component renders
+  - Shows loading state during session check
+  - Falls back to generic dashboard only if no personalized route exists
+- **Impact**: glennj now always lands on /admin-dashboard reliably, regardless of auth method
+- **Technical Details**:
+  - Removed redirect logic from Dashboard.tsx (now dead-end fallback)
+  - Router decides correct landing page synchronously once session responds
+  - Works with both token-based (localStorage) and cookie-based (Microsoft) authentication
+
+#### Refund Request Balance Due Calculation Fix
+- **Issue**: Refund Request page showed $0.00 balance due for all orders
+- **Root Cause**: `/api/orders/customer/:customerId` endpoint was calling non-existent `storage.calculateOrderTotal()` method
+  - Would fail and default orderTotal to shipping cost (often $0)
+  - Balance due = orderTotal - payments would show incorrect values
+- **Solution**: Updated endpoint to use proven `calculateOrderTotalOptimized` method
+  - Loads stock models, features, and persistent discounts (same as `getUnpaidOrdersByCustomer`)
+  - Calls internal `calculateOrderTotalOptimized` for accurate totals
+  - Includes all order components: base model, features, bottom metal, paint, rail accessories, discounts
+  - Rounds all monetary values to 2 decimal places
+- **Impact**: Refund Request page now shows correct balance due amounts matching Order Summary
+- **Technical Details**:
+  - Added `desc` import from drizzle-orm for proper order sorting
+  - Consistent calculation logic across all order total endpoints
+  - Balance due calculation: `Math.max(0, orderTotal - totalPaid)`
+
 ### October 22, 2025 - Bulk Payment Enhancements & Floating-Point Precision Fixes
 
 #### Bulk Payment Feature Improvements

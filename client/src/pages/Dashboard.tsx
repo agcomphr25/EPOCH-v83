@@ -1,9 +1,6 @@
-import { useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Link, useLocation } from 'wouter';
-import { useQuery } from '@tanstack/react-query';
-import { getDashboardRoute } from '@/config/dashboardMapping';
+import { Link } from 'wouter';
 import {
   Plus,
   List,
@@ -19,51 +16,8 @@ import {
 } from 'lucide-react';
 
 export default function Dashboard() {
-  const [, setLocation] = useLocation();
-
-  // Fetch current user to check for personalized dashboard
-  const { data: currentUser } = useQuery({
-    queryKey: ['currentUser'],
-    queryFn: async () => {
-      const token =
-        localStorage.getItem('sessionToken') ||
-        localStorage.getItem('jwtToken');
-
-      if (!token) {
-        return null;
-      }
-
-      try {
-        const response = await fetch('/api/auth/session', {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-
-        if (response.ok) {
-          const userData = await response.json();
-          return userData;
-        }
-        return null;
-      } catch (error) {
-        console.error('Failed to fetch user data:', error);
-        return null;
-      }
-    },
-    staleTime: 5 * 60 * 1000,
-    retry: false,
-  });
-
-  // Redirect to personalized dashboard if user has one
-  useEffect(() => {
-    if (currentUser?.username) {
-      const personalizedDashboard = getDashboardRoute(currentUser.username);
-      // Only redirect if the personalized dashboard is not the default '/'
-      if (personalizedDashboard !== '/') {
-        setLocation(personalizedDashboard);
-      }
-    }
-  }, [currentUser, setLocation]);
+  // Note: Personalized dashboard redirect now handled at router level in App.tsx
+  // This component only renders for users without a personalized dashboard
 
   return (
     <div className="container mx-auto p-6">

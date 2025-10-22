@@ -400,7 +400,44 @@ router.post('/finalized', async (req: Request, res: Response) => {
       // Generate unique signature token
       const signatureToken = nanoid(32);
       
-      // Prepare order data for PDF
+      // Get features and selections to convert IDs to display names
+      const allFeatures = await storage.getAllFeatures();
+      const allStockModels = await storage.getAllStockModels();
+      
+      // Convert feature IDs to display names for customer-friendly presentation
+      const featuresWithDisplayNames: Record<string, any> = {};
+      if (order.features && typeof order.features === 'object') {
+        for (const [featureId, value] of Object.entries(order.features)) {
+          const feature = allFeatures.find(f => f.id === featureId);
+          if (!feature) continue;
+          
+          const featureDisplayName = feature.displayName || feature.name || featureId;
+          
+          // Convert feature values to display names
+          if (Array.isArray(value)) {
+            // Array of selections
+            const displayValues = value.map((val: string) => {
+              if (!feature.options || !Array.isArray(feature.options)) return val;
+              const option = feature.options.find((opt: any) => opt.value === val);
+              return option?.displayName || option?.label || val;
+            });
+            featuresWithDisplayNames[featureDisplayName] = displayValues.join(', ');
+          } else if (value && feature.options && Array.isArray(feature.options)) {
+            // Single selection
+            const option = feature.options.find((opt: any) => opt.value === value);
+            featuresWithDisplayNames[featureDisplayName] = option?.displayName || option?.label || value;
+          } else {
+            // Raw value
+            featuresWithDisplayNames[featureDisplayName] = value;
+          }
+        }
+      }
+      
+      // Get model display name
+      const stockModel = allStockModels.find(m => m.id === order.modelId);
+      const modelDisplayName = stockModel?.displayName || order.modelId || 'Custom Order';
+      
+      // Prepare order data for PDF (using actual order from database)
       const pdfOrderData = {
         orderId: order.orderId,
         orderDate: new Date(order.orderDate),
@@ -418,9 +455,9 @@ router.post('/finalized', async (req: Request, res: Response) => {
           zipCode: defaultAddress.zipCode,
           country: defaultAddress.country,
         } : undefined,
-        modelId: order.modelId || undefined,
+        modelId: modelDisplayName,
         handedness: order.handedness || undefined,
-        features: order.features as Record<string, any> || undefined,
+        features: featuresWithDisplayNames,  // Use display names for customer-friendly PDF
         notes: order.notes || undefined,
         shipping: order.shipping || 0,
         subtotal: undefined,
@@ -475,10 +512,11 @@ router.post('/finalized', async (req: Request, res: Response) => {
         customerName: customer.name,
         customerEmail: customer.email,
         customerPO: order.customerPO || '',
-        modelId: order.modelId || 'Custom Order',
+        modelId: modelDisplayName,  // Use display name
         orderDate: new Date(order.orderDate).toISOString().split('T')[0],
         dueDate: new Date(order.dueDate).toISOString().split('T')[0],
         signatureLink: `${baseUrl}/sign-order/${signatureToken}`,
+        features: featuresWithDisplayNames,  // Add features with display names
       };
       
       // Send email

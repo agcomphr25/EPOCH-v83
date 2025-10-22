@@ -10,7 +10,7 @@ interface EmailOrderData {
   customerPO?: string;
   modelId?: string;
   handedness?: string;
-  features?: Record<string, any>;
+  features?: Record<string, string>;  // Display names (e.g. "Action Inlet": "BAT Vesper")
   subtotal?: number;
   shipping?: number;
   total?: number;

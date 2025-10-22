@@ -215,8 +215,8 @@ export default function ShippingTracker() {
     orders
       .filter((order) => order.status === 'FULFILLED')
       .forEach((order) => {
-        // Use updatedAt as the fulfillment date
-        const fulfillmentDate = new Date(order.updatedAt);
+        // Use shippedDate as the fulfillment date (fallback to updatedAt for older records)
+        const fulfillmentDate = new Date(order.shippedDate || order.updatedAt);
         const year = fulfillmentDate.getFullYear();
 
         // Find which company week this order was fulfilled in

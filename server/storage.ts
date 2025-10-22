@@ -1801,18 +1801,10 @@ export class DatabaseStorage implements IStorage {
       for (let attempt = 0; attempt < 5; attempt++) {
         try {
           // Find the highest sequence number for current year-month prefix
-          // Check draft orders, finalized orders, and active reservations
-          const [draftOrderResult, finalizedOrderResult, reservationResult] =
+          // Check finalized orders and active reservations
+          const [finalizedOrderResult, reservationResult] =
             await Promise.all([
-              // Get highest sequence from draft orders
-              db
-                .select({ orderId: orderDrafts.orderId })
-                .from(orderDrafts)
-                .where(like(orderDrafts.orderId, `${currentPrefix}%`))
-                .orderBy(desc(orderDrafts.orderId))
-                .limit(1),
-
-              // Get highest sequence from finalized orders
+              // Get highest sequence from finalized orders (includes all orders now)
               db
                 .select({ orderId: allOrders.orderId })
                 .from(allOrders)
@@ -1836,14 +1828,6 @@ export class DatabaseStorage implements IStorage {
             ]);
 
           let maxSequence = 0;
-
-          // Check highest sequence from draft orders
-          if (draftOrderResult.length > 0) {
-            const parsed = parseOrderId(draftOrderResult[0].orderId);
-            if (parsed && parsed.prefix === currentPrefix) {
-              maxSequence = Math.max(maxSequence, parsed.sequence);
-            }
-          }
 
           // Check highest sequence from finalized orders
           if (finalizedOrderResult.length > 0) {
@@ -8591,7 +8575,10 @@ export class DatabaseStorage implements IStorage {
     orderData: InsertOrderDraft,
     finalizedBy?: string
   ): Promise<AllOrder> {
-    // Special handling for orders with no stock model - route directly to Shipping QC
+    // If status is PENDING_SIGNATURE, don't auto-route to production
+    const isPendingSignature = orderData.status === 'PENDING_SIGNATURE';
+    
+    // Special handling for orders with no stock model - route directly to Shipping QC (unless pending signature)
     const hasNoStockModel =
       !orderData.modelId ||
       orderData.modelId.toLowerCase() === 'none' ||
@@ -8599,19 +8586,29 @@ export class DatabaseStorage implements IStorage {
 
     let currentDepartment: string;
     let barcode: string;
+    let status: string;
 
-    if (hasNoStockModel) {
+    if (isPendingSignature) {
+      console.log(
+        `📝 Order ${orderData.orderId} created with PENDING_SIGNATURE status - awaiting customer confirmation`
+      );
+      currentDepartment = orderData.currentDepartment || 'Awaiting Customer Signature';
+      barcode = orderData.barcode || `PENDING-${orderData.orderId}`;
+      status = 'PENDING_SIGNATURE';
+    } else if (hasNoStockModel) {
       console.log(
         `🚀 CREATE APPROVED: Order ${orderData.orderId} has no stock model - routing directly to Shipping QC`
       );
       currentDepartment = 'Shipping QC';
       barcode = orderData.barcode || `NOSTOCK-${orderData.orderId}`;
+      status = 'FINALIZED';
     } else {
       console.log(
         `✅ CREATE APPROVED: Order ${orderData.orderId} has valid stock model "${orderData.modelId}" - going directly to P1 Production Queue`
       );
       currentDepartment = 'P1 Production Queue';
       barcode = orderData.barcode || `P1-${orderData.orderId}`;
+      status = 'FINALIZED';
     }
 
     // Create the finalized order data directly - exclude id field explicitly
@@ -8638,7 +8635,7 @@ export class DatabaseStorage implements IStorage {
       priceOverride: orderData.priceOverride,
       shipping: orderData.shipping || 0,
       tikkaOption: orderData.tikkaOption,
-      status: 'FINALIZED',
+      status: status,
       barcode: barcode,
       currentDepartment: currentDepartment,
       departmentHistory: [],

@@ -363,21 +363,145 @@ router.get('/draft/:id', async (req: Request, res: Response) => {
   }
 });
 
-// Create finalized order directly (new streamlined process)
+// Create order as DRAFT and send follow-up email for customer confirmation
 router.post('/finalized', async (req: Request, res: Response) => {
   try {
     const orderData = insertOrderDraftSchema.parse(req.body);
-    const finalizedOrder = await storage.createFinalizedOrder(
-      orderData,
-      req.body.finalizedBy
-    );
-    res.status(201).json(finalizedOrder);
+    
+    // Create as DRAFT instead of finalized - order will be holding until customer signs
+    const draftOrder = await storage.createOrderDraft({
+      ...orderData,
+      status: 'HOLDING'
+    });
+    
+    console.log(`📧 Order ${draftOrder.orderId} created as DRAFT - sending confirmation email to customer...`);
+    
+    // Automatically create followup order and send email
+    try {
+      // Import dependencies
+      const { nanoid } = await import('nanoid');
+      const { generateSalesOrderPDF } = await import('../utils/pdf/salesOrderPdf');
+      const { sendFollowupOrderEmail } = await import('../utils/followupOrderEmail');
+      const fs = await import('fs');
+      const path = await import('path');
+      
+      // Get customer details
+      const customer = await storage.getCustomerById(orderData.customerId || '');
+      if (!customer || !customer.email) {
+        console.warn(`⚠️  No email found for customer ${orderData.customerId} - skipping follow-up email`);
+        return res.status(201).json(draftOrder);
+      }
+      
+      // Get customer address
+      const addresses = await storage.getCustomerAddresses(String(customer.id));
+      const defaultAddress = addresses.find(addr => addr.isDefault) || addresses[0];
+      
+      // Generate unique signature token
+      const signatureToken = nanoid(32);
+      
+      // Prepare order data for PDF
+      const pdfOrderData = {
+        orderId: draftOrder.orderId,
+        orderDate: new Date(draftOrder.orderDate),
+        dueDate: new Date(draftOrder.dueDate),
+        customerId: draftOrder.customerId || '',
+        customerPO: draftOrder.customerPO || undefined,
+        customerName: customer.name,
+        customerEmail: customer.email,
+        customerPhone: customer.phone || undefined,
+        customerAddress: defaultAddress ? {
+          street: defaultAddress.street,
+          street2: defaultAddress.street2 || undefined,
+          city: defaultAddress.city,
+          state: defaultAddress.state,
+          zipCode: defaultAddress.zipCode,
+          country: defaultAddress.country,
+        } : undefined,
+        modelId: draftOrder.modelId || undefined,
+        handedness: draftOrder.handedness || undefined,
+        features: draftOrder.features as Record<string, any> || undefined,
+        notes: draftOrder.notes || undefined,
+        shipping: draftOrder.shipping || 0,
+        subtotal: undefined,
+        total: undefined,
+      };
+      
+      // Generate PDF
+      const uploadsDir = 'uploads/followup-orders';
+      if (!fs.existsSync(uploadsDir)) {
+        fs.mkdirSync(uploadsDir, { recursive: true });
+      }
+      
+      const pdfBuffer = await generateSalesOrderPDF(pdfOrderData, true);
+      const pdfFilename = `sales_order_${draftOrder.orderId}_${Date.now()}.pdf`;
+      const pdfPath = path.join(uploadsDir, pdfFilename);
+      fs.writeFileSync(pdfPath, pdfBuffer);
+      
+      // Create order summary for email
+      const orderSummary = {
+        orderId: draftOrder.orderId,
+        orderDate: draftOrder.orderDate,
+        dueDate: draftOrder.dueDate,
+        customerPO: draftOrder.customerPO,
+        modelId: draftOrder.modelId,
+        handedness: draftOrder.handedness,
+        features: draftOrder.features,
+        notes: draftOrder.notes,
+        shipping: draftOrder.shipping,
+      };
+      
+      // Create followup order record
+      const followupOrder = await storage.createFollowupOrder({
+        orderId: draftOrder.orderId,
+        customerId: draftOrder.customerId || '',
+        customerEmail: customer.email,
+        signatureToken,
+        pdfGenerated: true,
+        pdfPath,
+        pdfGeneratedAt: new Date(),
+        orderSummary,
+      });
+      
+      console.log(`✅ Follow-up order created for ${draftOrder.orderId}, sending email...`);
+      
+      // Prepare email data
+      const baseUrl = process.env.REPLIT_DOMAINS 
+        ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}`
+        : 'http://localhost:5000';
+      
+      const emailData = {
+        orderId: draftOrder.orderId,
+        customerName: customer.name,
+        customerEmail: customer.email,
+        customerPO: draftOrder.customerPO || '',
+        modelId: draftOrder.modelId || 'Custom Order',
+        orderDate: draftOrder.orderDate,
+        dueDate: draftOrder.dueDate,
+        signatureLink: `${baseUrl}/sign-order/${signatureToken}`,
+      };
+      
+      // Send email
+      await sendFollowupOrderEmail(emailData, pdfPath);
+      
+      // Update followup order to mark email as sent
+      await storage.updateFollowupOrder(followupOrder.id, {
+        emailSent: true,
+        emailSentAt: new Date(),
+      });
+      
+      console.log(`📧 Confirmation email sent for order ${draftOrder.orderId}`);
+    } catch (emailError) {
+      console.error('Error sending follow-up email:', emailError);
+      // Don't fail the order creation if email fails
+    }
+    
+    res.status(201).json(draftOrder);
   } catch (error) {
-    console.error('Create finalized order error:', error);
+    console.error('Create order error:', error);
     if (error instanceof Error) {
       return res.status(400).json({ error: error.message });
     }
-    res.status(500).json({ error: 'Failed to create finalized order' });
+    res.status(500).json({ error: 'Failed to create order' });
   }
 });
 

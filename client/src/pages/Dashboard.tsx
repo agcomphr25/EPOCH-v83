@@ -16,6 +16,9 @@ import {
 } from 'lucide-react';
 
 export default function Dashboard() {
+  // Note: Personalized dashboard redirect now handled at router level in App.tsx
+  // This component only renders for users without a personalized dashboard
+
   return (
     <div className="container mx-auto p-6">
       <div className="mb-8">

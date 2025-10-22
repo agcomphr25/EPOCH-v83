@@ -96,15 +96,16 @@ export default function Navigation() {
         return null;
       }
 
-      if (!token) {
-        return null;
-      }
-
       try {
+        // Use credentials: 'include' to support cookie-based auth (Microsoft login)
+        // Also send Authorization header for token-based auth
         const response = await fetch('/api/auth/session', {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+          credentials: 'include',
+          headers: token
+            ? {
+                Authorization: `Bearer ${token}`,
+              }
+            : {},
         });
 
         if (response.ok) {

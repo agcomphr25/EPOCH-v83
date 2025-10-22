@@ -148,6 +148,18 @@ export class AuthService {
       .where(eq(userSessions.userId, userId));
   }
 
+  /**
+   * Clean up expired sessions from the database
+   * This should be called periodically to remove old sessions
+   */
+  static async cleanupExpiredSessions(): Promise<void> {
+    const now = new Date();
+    const result = await db
+      .delete(userSessions)
+      .where(sql`${userSessions.expiresAt} < ${now}`);
+    console.log(`🧹 Cleaned up expired sessions`);
+  }
+
   static async authenticate(
     username: string,
     password: string,

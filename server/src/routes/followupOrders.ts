@@ -52,6 +52,29 @@ router.post('/', async (req, res) => {
     const addresses = await storage.getCustomerAddresses(order.customerId || '');
     const defaultAddress = addresses.find(addr => addr.isDefault) || addresses[0];
 
+    // Get stock model information
+    const stockModels = await storage.getAllStockModels();
+    const stockModel = stockModels.find(m => m.id === order.modelId);
+
+    // Get features information for pricing and display names
+    const allFeatures = await storage.getAllFeatures();
+    
+    // Build feature prices and display names
+    const featurePrices: Record<string, number> = {};
+    const featureDisplayNames: Record<string, string> = {};
+
+    if (order.features && typeof order.features === 'object') {
+      for (const [featureKey, featureValue] of Object.entries(order.features)) {
+        if (featureValue && featureValue !== false && featureValue !== '') {
+          const featureDetail = allFeatures.find((f: any) => f.id === featureKey);
+          if (featureDetail) {
+            featurePrices[featureKey] = featureDetail.price || 0;
+            featureDisplayNames[featureKey] = featureDetail.displayName || featureDetail.name || featureKey;
+          }
+        }
+      }
+    }
+
     // Generate unique signature token
     const signatureToken = nanoid(32);
 
@@ -71,6 +94,7 @@ router.post('/', async (req, res) => {
       customerName: customer.name,
       customerEmail: customer.email,
       customerPhone: customer.phone || undefined,
+      customerCompany: customer.company || undefined,
       customerAddress: defaultAddress ? {
         street: defaultAddress.street,
         street2: defaultAddress.street2 || undefined,
@@ -80,12 +104,16 @@ router.post('/', async (req, res) => {
         country: defaultAddress.country,
       } : undefined,
       modelId: order.modelId || undefined,
+      modelName: stockModel?.name || undefined,
+      modelDisplayName: stockModel?.displayName || undefined,
+      modelPrice: stockModel?.price || 0,
       handedness: order.handedness || undefined,
       features: order.features as Record<string, any> || undefined,
+      featurePrices,
+      featureDisplayNames,
       notes: order.notes || undefined,
       shipping: order.shipping || 0,
-      subtotal: undefined, // Calculate if needed
-      total: undefined, // Calculate if needed
+      paymentStatus: 'PENDING' as const, // New orders are always pending
     };
 
     // Generate PDF

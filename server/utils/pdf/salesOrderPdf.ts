@@ -15,6 +15,7 @@ interface OrderData {
   customerName: string;
   customerEmail?: string;
   customerPhone?: string;
+  customerCompany?: string;
   customerAddress?: {
     street: string;
     street2?: string;
@@ -24,12 +25,18 @@ interface OrderData {
     country?: string;
   };
   modelId?: string;
+  modelName?: string;
+  modelDisplayName?: string;
+  modelPrice?: number;
   handedness?: string;
   features?: Record<string, any>;
+  featurePrices?: Record<string, number>;
+  featureDisplayNames?: Record<string, string>;
   notes?: string;
   shipping?: number;
   subtotal?: number;
   total?: number;
+  paymentStatus?: 'PAID' | 'PENDING';
 }
 
 async function embedCompanyLogo(pdfDoc: PDFDocument) {
@@ -45,6 +52,31 @@ async function embedCompanyLogo(pdfDoc: PDFDocument) {
   return null;
 }
 
+// Helper function to wrap text
+function wrapText(text: string, maxWidth: number, fontSize: number, font: any): string[] {
+  const words = text.split(' ');
+  const lines: string[] = [];
+  let currentLine = '';
+
+  for (const word of words) {
+    const testLine = currentLine ? `${currentLine} ${word}` : word;
+    const testWidth = font.widthOfTextAtSize(testLine, fontSize);
+    
+    if (testWidth > maxWidth && currentLine) {
+      lines.push(currentLine);
+      currentLine = word;
+    } else {
+      currentLine = testLine;
+    }
+  }
+  
+  if (currentLine) {
+    lines.push(currentLine);
+  }
+  
+  return lines;
+}
+
 export async function generateSalesOrderPDF(
   orderData: OrderData,
   includeSignatureBox: boolean = true
@@ -54,429 +86,615 @@ export async function generateSalesOrderPDF(
   const { width, height } = page.getSize();
 
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-  const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
-  let yPosition = height - 50;
+  const margin = 40;
+  const printableWidth = width - margin * 2;
 
-  // Embed and draw company logo
+  // PAGE 1
+  let currentY = height - margin - 10;
+
+  // Header: Company logo and contact info on LEFT
   const logo = await embedCompanyLogo(pdfDoc);
   if (logo) {
-    const logoWidth = 120;
-    const logoHeight = 60;
+    const logoWidth = 150;
+    const logoHeight = logoWidth * (logo.height / logo.width);
+
     page.drawImage(logo, {
-      x: 50,
-      y: yPosition - logoHeight,
+      x: margin,
+      y: currentY - logoHeight,
       width: logoWidth,
       height: logoHeight,
     });
-  }
 
-  // Company information
-  page.drawText('AG Composites', {
-    x: width - 200,
-    y: yPosition,
-    size: 14,
-    font: fontBold,
-    color: rgb(0, 0, 0),
-  });
+    currentY -= logoHeight + 15;
 
-  yPosition -= 20;
-  page.drawText('Phone: (XXX) XXX-XXXX', {
-    x: width - 200,
-    y: yPosition,
-    size: 10,
-    font,
-    color: rgb(0, 0, 0),
-  });
-
-  yPosition -= 15;
-  page.drawText('Email: info@agcomposites.com', {
-    x: width - 200,
-    y: yPosition,
-    size: 10,
-    font,
-    color: rgb(0, 0, 0),
-  });
-
-  yPosition -= 40;
-
-  // Title
-  page.drawText('SALES ORDER', {
-    x: 50,
-    y: yPosition,
-    size: 20,
-    font: fontBold,
-    color: rgb(0, 0, 0),
-  });
-
-  yPosition -= 30;
-
-  // Order Information
-  page.drawText(`Order ID: ${orderData.orderId}`, {
-    x: 50,
-    y: yPosition,
-    size: 12,
-    font: fontBold,
-    color: rgb(0, 0, 0),
-  });
-
-  page.drawText(
-    `Order Date: ${orderData.orderDate.toLocaleDateString()}`,
-    {
-      x: width - 250,
-      y: yPosition,
-      size: 12,
-      font,
-      color: rgb(0, 0, 0),
-    }
-  );
-
-  yPosition -= 18;
-
-  if (orderData.customerPO) {
-    page.drawText(`Customer PO: ${orderData.customerPO}`, {
-      x: 50,
-      y: yPosition,
-      size: 10,
-      font,
-      color: rgb(0, 0, 0),
+    page.drawText('230 Hamer Rd, Owens Crossroads, AL 35763', {
+      x: margin,
+      y: currentY,
+      size: 8,
+      font: font,
+      color: rgb(0.3, 0.3, 0.3),
     });
+
+    currentY -= 12;
+    page.drawText('Phone: (256) 723-8381 | Email: sales@agcomposites.com', {
+      x: margin,
+      y: currentY,
+      size: 8,
+      font: font,
+      color: rgb(0.3, 0.3, 0.3),
+    });
+
+    currentY -= 20;
   }
 
-  page.drawText(`Due Date: ${orderData.dueDate.toLocaleDateString()}`, {
-    x: width - 250,
-    y: yPosition,
-    size: 12,
-    font,
+  // Order info box on RIGHT
+  const orderBoxX = width - margin - 220;
+  const orderBoxY = height - margin - 95;
+  const orderBoxWidth = 220;
+  const orderBoxHeight = 75;
+
+  // "SALES ORDER" title above the box
+  page.drawText('SALES ORDER', {
+    x: orderBoxX,
+    y: orderBoxY + orderBoxHeight + 15,
+    size: 16,
+    font: boldFont,
     color: rgb(0, 0, 0),
   });
 
-  yPosition -= 30;
+  page.drawRectangle({
+    x: orderBoxX,
+    y: orderBoxY,
+    width: orderBoxWidth,
+    height: orderBoxHeight,
+    borderColor: rgb(0, 0, 0),
+    borderWidth: 1,
+  });
+
+  let boxTextY = orderBoxY + orderBoxHeight - 18;
+  const col1X = orderBoxX + 8;
+  const col2X = orderBoxX + 95;
+
+  // Row 1: Order Number and Customer PO
+  page.drawText('Order Number:', {
+    x: col1X,
+    y: boxTextY,
+    size: 8,
+    font: boldFont,
+  });
+  page.drawText(orderData.orderId, {
+    x: col1X,
+    y: boxTextY - 12,
+    size: 8,
+    font: font,
+  });
+
+  page.drawText('Customer PO:', {
+    x: col2X,
+    y: boxTextY,
+    size: 8,
+    font: boldFont,
+  });
+  page.drawText(orderData.customerPO || 'N/A', {
+    x: col2X,
+    y: boxTextY - 12,
+    size: 8,
+    font: font,
+  });
+
+  boxTextY -= 32;
+
+  // Row 2: Order Date and Estimated Completion Date
+  page.drawText('Order Date:', {
+    x: col1X,
+    y: boxTextY,
+    size: 8,
+    font: boldFont,
+  });
+  page.drawText(orderData.orderDate.toLocaleDateString(), {
+    x: col1X,
+    y: boxTextY - 12,
+    size: 8,
+    font: font,
+  });
+
+  page.drawText('Estimated Completion Date:', {
+    x: col2X,
+    y: boxTextY,
+    size: 8,
+    font: boldFont,
+  });
+  page.drawText(orderData.dueDate.toLocaleDateString(), {
+    x: col2X,
+    y: boxTextY - 12,
+    size: 8,
+    font: font,
+  });
 
   // Customer Information Section
-  page.drawText('BILL TO:', {
-    x: 50,
-    y: yPosition,
+  currentY -= 130;
+  const customerBoxY = currentY;
+  const customerBoxHeight = 100;
+
+  page.drawRectangle({
+    x: margin,
+    y: customerBoxY,
+    width: printableWidth,
+    height: customerBoxHeight,
+    borderColor: rgb(0, 0, 0),
+    borderWidth: 1,
+  });
+
+  page.drawText('CUSTOMER INFORMATION', {
+    x: margin + 8,
+    y: customerBoxY + customerBoxHeight - 20,
     size: 12,
-    font: fontBold,
-    color: rgb(0, 0, 0),
+    font: boldFont,
   });
 
-  yPosition -= 18;
-
-  page.drawText(orderData.customerName, {
-    x: 50,
-    y: yPosition,
+  // BILL TO (left side)
+  let customerTextY = customerBoxY + customerBoxHeight - 45;
+  page.drawText('BILL TO:', {
+    x: margin + 8,
+    y: customerTextY,
     size: 10,
-    font,
-    color: rgb(0, 0, 0),
+    font: boldFont,
   });
 
-  if (orderData.customerEmail) {
-    yPosition -= 15;
-    page.drawText(orderData.customerEmail, {
-      x: 50,
-      y: yPosition,
-      size: 10,
-      font,
-      color: rgb(0, 0, 0),
+  customerTextY -= 15;
+  page.drawText(orderData.customerName, {
+    x: margin + 8,
+    y: customerTextY,
+    size: 10,
+    font: font,
+  });
+
+  if (orderData.customerEmail || orderData.customerPhone) {
+    customerTextY -= 13;
+    const contactInfo = [];
+    if (orderData.customerEmail) contactInfo.push(`Email: ${orderData.customerEmail}`);
+    if (orderData.customerPhone) contactInfo.push(`Phone: ${orderData.customerPhone}`);
+    
+    page.drawText(contactInfo.join(' | '), {
+      x: margin + 8,
+      y: customerTextY,
+      size: 8,
+      font: font,
     });
   }
 
-  if (orderData.customerPhone) {
-    yPosition -= 15;
-    page.drawText(orderData.customerPhone, {
-      x: 50,
-      y: yPosition,
-      size: 10,
-      font,
-      color: rgb(0, 0, 0),
-    });
-  }
+  // SHIP TO (right side)
+  const shipToX = margin + 280;
+  let shipCurrentY = customerBoxY + customerBoxHeight - 45;
+
+  page.drawText('SHIP TO:', {
+    x: shipToX,
+    y: shipCurrentY,
+    size: 10,
+    font: boldFont,
+  });
+
+  shipCurrentY -= 15;
+  page.drawText(orderData.customerName, {
+    x: shipToX,
+    y: shipCurrentY,
+    size: 10,
+    font: font,
+  });
 
   if (orderData.customerAddress) {
-    yPosition -= 15;
+    shipCurrentY -= 13;
     page.drawText(orderData.customerAddress.street, {
-      x: 50,
-      y: yPosition,
-      size: 10,
-      font,
-      color: rgb(0, 0, 0),
+      x: shipToX,
+      y: shipCurrentY,
+      size: 8,
+      font: font,
     });
 
     if (orderData.customerAddress.street2) {
-      yPosition -= 15;
+      shipCurrentY -= 11;
       page.drawText(orderData.customerAddress.street2, {
-        x: 50,
-        y: yPosition,
-        size: 10,
-        font,
-        color: rgb(0, 0, 0),
+        x: shipToX,
+        y: shipCurrentY,
+        size: 8,
+        font: font,
       });
     }
 
-    yPosition -= 15;
+    shipCurrentY -= 11;
     page.drawText(
       `${orderData.customerAddress.city}, ${orderData.customerAddress.state} ${orderData.customerAddress.zipCode}`,
       {
-        x: 50,
-        y: yPosition,
-        size: 10,
-        font,
-        color: rgb(0, 0, 0),
+        x: shipToX,
+        y: shipCurrentY,
+        size: 8,
+        font: font,
       }
     );
   }
 
-  yPosition -= 30;
-
-  // Order Details Section
-  page.drawText('ORDER DETAILS:', {
-    x: 50,
-    y: yPosition,
-    size: 12,
-    font: fontBold,
-    color: rgb(0, 0, 0),
+  // FEATURES & CUSTOMIZATIONS Section
+  currentY = customerBoxY - 15;
+  page.drawText('FEATURES & CUSTOMIZATIONS', {
+    x: margin,
+    y: currentY,
+    size: 14,
+    font: boldFont,
   });
 
-  yPosition -= 20;
+  currentY -= 15;
 
-  // Draw table header
-  const tableStartY = yPosition;
+  const featuresTableHeight = 240;
   page.drawRectangle({
-    x: 50,
-    y: tableStartY - 20,
-    width: width - 100,
+    x: margin,
+    y: currentY - featuresTableHeight,
+    width: printableWidth,
+    height: featuresTableHeight,
+    borderColor: rgb(0, 0, 0),
+    borderWidth: 1,
+  });
+
+  // Table header
+  page.drawRectangle({
+    x: margin,
+    y: currentY - 20,
+    width: printableWidth,
     height: 20,
     color: rgb(0.9, 0.9, 0.9),
+    borderColor: rgb(0, 0, 0),
+    borderWidth: 1,
   });
 
-  page.drawText('Description', {
-    x: 60,
-    y: tableStartY - 15,
-    size: 10,
-    font: fontBold,
-    color: rgb(0, 0, 0),
+  page.drawText('Feature', {
+    x: margin + 8,
+    y: currentY - 12,
+    size: 8,
+    font: boldFont,
   });
 
-  page.drawText('Details', {
-    x: 300,
-    y: tableStartY - 15,
-    size: 10,
-    font: fontBold,
-    color: rgb(0, 0, 0),
+  page.drawText('Selection', {
+    x: margin + 140,
+    y: currentY - 12,
+    size: 8,
+    font: boldFont,
   });
 
-  yPosition = tableStartY - 40;
+  page.drawText('Price', {
+    x: margin + printableWidth - 70,
+    y: currentY - 12,
+    size: 8,
+    font: boldFont,
+  });
 
-  // Add order items
-  if (orderData.modelId) {
-    page.drawText('Model:', {
-      x: 60,
-      y: yPosition,
-      size: 10,
-      font,
-      color: rgb(0, 0, 0),
-    });
+  let summaryLineY = currentY - 35;
 
-    page.drawText(orderData.modelId, {
-      x: 300,
-      y: yPosition,
-      size: 10,
-      font,
-      color: rgb(0, 0, 0),
-    });
+  // Stock Model
+  page.drawText('Stock Model:', {
+    x: margin + 8,
+    y: summaryLineY,
+    size: 8,
+    font: font,
+  });
 
-    yPosition -= 18;
-  }
+  const modelDisplayName = orderData.modelDisplayName || orderData.modelName || 'Custom';
+  page.drawText(modelDisplayName, {
+    x: margin + 140,
+    y: summaryLineY,
+    size: 8,
+    font: font,
+  });
 
-  if (orderData.handedness) {
-    page.drawText('Handedness:', {
-      x: 60,
-      y: yPosition,
-      size: 10,
-      font,
-      color: rgb(0, 0, 0),
-    });
+  const basePrice = orderData.modelPrice || 0;
+  page.drawText(`$${basePrice.toFixed(2)}`, {
+    x: margin + printableWidth - 70,
+    y: summaryLineY,
+    size: 8,
+    font: font,
+  });
 
-    page.drawText(orderData.handedness, {
-      x: 300,
-      y: yPosition,
-      size: 10,
-      font,
-      color: rgb(0, 0, 0),
-    });
+  summaryLineY -= 15;
 
-    yPosition -= 18;
-  }
+  // Add all features
+  let calculatedSubtotal = basePrice;
 
-  // Features
   if (orderData.features) {
-    for (const [key, value] of Object.entries(orderData.features)) {
-      if (value && yPosition > 150) {
-        page.drawText(`${key}:`, {
-          x: 60,
-          y: yPosition,
-          size: 10,
-          font,
-          color: rgb(0, 0, 0),
+    const featureOrder = [
+      'handedness',
+      'action_length',
+      'shank_length',
+      'action_inlet',
+      'bottom_metal',
+      'barrel_inlet',
+      'qd_accessory',
+      'length_of_pull',
+      'rail_accessory',
+      'texture_options',
+      'swivel_studs',
+      'other_options',
+      'paint_options'
+    ];
+
+    for (const featureKey of featureOrder) {
+      const featureValue = orderData.features[featureKey];
+      if (featureValue && summaryLineY > currentY - featuresTableHeight + 50) {
+        // Get display name
+        const displayName = orderData.featureDisplayNames?.[featureKey] || featureKey;
+        const featurePrice = orderData.featurePrices?.[featureKey] || 0;
+        calculatedSubtotal += featurePrice;
+
+        page.drawText(displayName + ':', {
+          x: margin + 8,
+          y: summaryLineY,
+          size: 8,
+          font: font,
         });
 
-        const valueStr = Array.isArray(value) ? value.join(', ') : String(value);
-        page.drawText(valueStr.substring(0, 50), {
-          x: 300,
-          y: yPosition,
-          size: 10,
-          font,
-          color: rgb(0, 0, 0),
+        const valueStr = Array.isArray(featureValue) ? featureValue.join(', ') : String(featureValue);
+        page.drawText(valueStr, {
+          x: margin + 140,
+          y: summaryLineY,
+          size: 8,
+          font: font,
         });
 
-        yPosition -= 18;
+        page.drawText(`$${featurePrice.toFixed(2)}`, {
+          x: margin + printableWidth - 70,
+          y: summaryLineY,
+          size: 8,
+          font: font,
+        });
+
+        summaryLineY -= 15;
       }
     }
   }
 
-  yPosition -= 20;
+  // Separator line before totals
+  summaryLineY = currentY - featuresTableHeight + 80;
+  page.drawLine({
+    start: { x: margin + 10, y: summaryLineY },
+    end: { x: margin + printableWidth - 10, y: summaryLineY },
+    thickness: 1,
+    color: rgb(0, 0, 0),
+  });
 
-  // Pricing section
-  if (orderData.subtotal !== undefined) {
-    page.drawText('Subtotal:', {
-      x: width - 250,
-      y: yPosition,
-      size: 10,
-      font,
-      color: rgb(0, 0, 0),
+  summaryLineY -= 18;
+
+  // Subtotal
+  page.drawText('Subtotal:', {
+    x: margin + 8,
+    y: summaryLineY,
+    size: 10,
+    font: boldFont,
+  });
+
+  page.drawText(`$${calculatedSubtotal.toFixed(2)}`, {
+    x: margin + printableWidth - 70,
+    y: summaryLineY,
+    size: 10,
+    font: boldFont,
+  });
+
+  summaryLineY -= 25;
+
+  // Shipping
+  const shippingAmount = orderData.shipping || 0;
+  page.drawText('Shipping:', {
+    x: margin + 8,
+    y: summaryLineY,
+    size: 10,
+    font: boldFont,
+  });
+
+  page.drawText(`$${shippingAmount.toFixed(2)}`, {
+    x: margin + printableWidth - 70,
+    y: summaryLineY,
+    size: 10,
+    font: boldFont,
+  });
+
+  summaryLineY -= 30;
+
+  // TOTAL
+  const totalAmount = calculatedSubtotal + shippingAmount;
+  page.drawText('TOTAL:', {
+    x: margin + 8,
+    y: summaryLineY,
+    size: 12,
+    font: boldFont,
+  });
+
+  page.drawText(`$${totalAmount.toFixed(2)}`, {
+    x: margin + printableWidth - 70,
+    y: summaryLineY,
+    size: 12,
+    font: boldFont,
+  });
+
+  summaryLineY -= 25;
+
+  // Payment Status
+  const paymentStatus = orderData.paymentStatus || 'PENDING';
+  const paymentColor = paymentStatus === 'PAID' ? rgb(0, 0.6, 0) : rgb(0.8, 0.4, 0);
+
+  page.drawText(`Payment Status: ${paymentStatus}`, {
+    x: margin + printableWidth - 160,
+    y: summaryLineY,
+    size: 10,
+    font: boldFont,
+    color: paymentColor,
+  });
+
+  // PAGE 2 - Terms and Conditions
+  const page2 = pdfDoc.addPage([612, 792]);
+  let page2Y = height - margin - 10;
+
+  // Repeat order info box at top right of page 2
+  const page2OrderBoxX = width - margin - 220;
+  const page2OrderBoxY = page2Y - 85;
+
+  page2.drawRectangle({
+    x: page2OrderBoxX,
+    y: page2OrderBoxY,
+    width: orderBoxWidth,
+    height: orderBoxHeight,
+    borderColor: rgb(0, 0, 0),
+    borderWidth: 1,
+  });
+
+  let page2BoxTextY = page2OrderBoxY + orderBoxHeight - 18;
+
+  // Row 1: Order Number and Customer PO
+  page2.drawText('Order Number:', {
+    x: page2OrderBoxX + 8,
+    y: page2BoxTextY,
+    size: 8,
+    font: boldFont,
+  });
+  page2.drawText(orderData.orderId, {
+    x: page2OrderBoxX + 8,
+    y: page2BoxTextY - 12,
+    size: 8,
+    font: font,
+  });
+
+  page2.drawText('Customer PO:', {
+    x: page2OrderBoxX + 95,
+    y: page2BoxTextY,
+    size: 8,
+    font: boldFont,
+  });
+  page2.drawText(orderData.customerPO || 'N/A', {
+    x: page2OrderBoxX + 95,
+    y: page2BoxTextY - 12,
+    size: 8,
+    font: font,
+  });
+
+  page2BoxTextY -= 32;
+
+  // Row 2: Order Date and Estimated Completion Date
+  page2.drawText('Order Date:', {
+    x: page2OrderBoxX + 8,
+    y: page2BoxTextY,
+    size: 8,
+    font: boldFont,
+  });
+  page2.drawText(orderData.orderDate.toLocaleDateString(), {
+    x: page2OrderBoxX + 8,
+    y: page2BoxTextY - 12,
+    size: 8,
+    font: font,
+  });
+
+  page2.drawText('Estimated Completion Date:', {
+    x: page2OrderBoxX + 95,
+    y: page2BoxTextY,
+    size: 8,
+    font: boldFont,
+  });
+  page2.drawText(orderData.dueDate.toLocaleDateString(), {
+    x: page2OrderBoxX + 95,
+    y: page2BoxTextY - 12,
+    size: 8,
+    font: font,
+  });
+
+  // Terms and Conditions Section
+  page2Y -= 120;
+  page2.drawText('TERMS AND CONDITIONS', {
+    x: margin,
+    y: page2Y,
+    size: 12,
+    font: boldFont,
+  });
+
+  page2Y -= 20;
+  const terms = [
+    '• Payment: 50% deposit required to begin production, balance due upon completion',
+    '• Lead Time: Custom manufacturing typically 4-6 weeks from deposit',
+    '• Custom items are non-returnable unless defective',
+    '• Shipping costs additional - calculated at time of shipment',
+    '• Prices valid for 30 days from quote date',
+  ];
+
+  for (const term of terms) {
+    page2.drawText(term, {
+      x: margin,
+      y: page2Y,
+      size: 9,
+      font: font,
     });
-
-    page.drawText(`$${orderData.subtotal.toFixed(2)}`, {
-      x: width - 150,
-      y: yPosition,
-      size: 10,
-      font,
-      color: rgb(0, 0, 0),
-    });
-
-    yPosition -= 18;
+    page2Y -= 20;
   }
 
-  if (orderData.shipping !== undefined && orderData.shipping > 0) {
-    page.drawText('Shipping:', {
-      x: width - 250,
-      y: yPosition,
-      size: 10,
-      font,
-      color: rgb(0, 0, 0),
-    });
+  // Customer Approval Section
+  page2Y -= 40;
+  page2.drawText('CUSTOMER APPROVAL', {
+    x: margin,
+    y: page2Y,
+    size: 12,
+    font: boldFont,
+  });
 
-    page.drawText(`$${orderData.shipping.toFixed(2)}`, {
-      x: width - 150,
-      y: yPosition,
-      size: 10,
-      font,
-      color: rgb(0, 0, 0),
-    });
+  page2Y -= 30;
+  page2.drawText('Customer Signature:', {
+    x: margin,
+    y: page2Y,
+    size: 10,
+    font: boldFont,
+  });
 
-    yPosition -= 18;
-  }
+  // Signature line
+  page2.drawLine({
+    start: { x: margin + 120, y: page2Y - 5 },
+    end: { x: margin + 300, y: page2Y - 5 },
+    thickness: 1,
+    color: rgb(0, 0, 0),
+  });
 
-  if (orderData.total !== undefined) {
-    page.drawText('TOTAL:', {
-      x: width - 250,
-      y: yPosition,
-      size: 12,
-      font: fontBold,
-      color: rgb(0, 0, 0),
-    });
+  page2.drawText('Date:', {
+    x: margin + 320,
+    y: page2Y,
+    size: 10,
+    font: boldFont,
+  });
 
-    page.drawText(`$${orderData.total.toFixed(2)}`, {
-      x: width - 150,
-      y: yPosition,
-      size: 12,
-      font: fontBold,
-      color: rgb(0, 0, 0),
-    });
-
-    yPosition -= 25;
-  }
-
-  // Notes section
-  if (orderData.notes) {
-    yPosition -= 10;
-    page.drawText('Special Instructions:', {
-      x: 50,
-      y: yPosition,
-      size: 10,
-      font: fontBold,
-      color: rgb(0, 0, 0),
-    });
-
-    yPosition -= 15;
-    const notesLines = orderData.notes.match(/.{1,80}/g) || [];
-    for (const line of notesLines.slice(0, 3)) {
-      page.drawText(line, {
-        x: 50,
-        y: yPosition,
-        size: 9,
-        font,
-        color: rgb(0, 0, 0),
-      });
-      yPosition -= 12;
-    }
-  }
-
-  // Signature box
-  if (includeSignatureBox) {
-    yPosition = 150; // Fixed position for signature
-
-    // Draw signature box
-    page.drawRectangle({
-      x: 50,
-      y: yPosition - 60,
-      width: 250,
-      height: 60,
-      borderColor: rgb(0, 0, 0),
-      borderWidth: 1,
-    });
-
-    page.drawText('Customer Signature:', {
-      x: 50,
-      y: yPosition - 75,
-      size: 10,
-      font: fontBold,
-      color: rgb(0, 0, 0),
-    });
-
-    page.drawText('Date:', {
-      x: 320,
-      y: yPosition - 75,
-      size: 10,
-      font: fontBold,
-      color: rgb(0, 0, 0),
-    });
-
-    page.drawLine({
-      start: { x: 355, y: yPosition - 75 },
-      end: { x: 500, y: yPosition - 75 },
-      thickness: 1,
-      color: rgb(0, 0, 0),
-    });
-
-    // Add signature instruction text
-    page.drawText('Please sign above to approve this order', {
-      x: 50,
-      y: yPosition - 90,
-      size: 8,
-      font,
-      color: rgb(0.5, 0.5, 0.5),
-    });
-  }
+  // Date line
+  page2.drawLine({
+    start: { x: margin + 350, y: page2Y - 5 },
+    end: { x: margin + 450, y: page2Y - 5 },
+    thickness: 1,
+    color: rgb(0, 0, 0),
+  });
 
   // Footer
-  page.drawText('Thank you for your business!', {
-    x: 50,
-    y: 30,
+  page2Y -= 50;
+  page2.drawText('Thank you for your business!', {
+    x: margin,
+    y: page2Y,
     size: 10,
-    font,
+    font: font,
+    color: rgb(0.5, 0.5, 0.5),
+  });
+
+  page2Y -= 15;
+  page2.drawText('AG Composites | 230 Hamer Rd, Owens Crossroads, AL 35763', {
+    x: margin,
+    y: page2Y,
+    size: 8,
+    font: font,
+    color: rgb(0.5, 0.5, 0.5),
+  });
+
+  page2Y -= 12;
+  page2.drawText('Phone: (256) 723-8381 | Email: sales@agcomposites.com', {
+    x: margin,
+    y: page2Y,
+    size: 8,
+    font: font,
     color: rgb(0.5, 0.5, 0.5),
   });
 
@@ -493,7 +711,7 @@ export async function embedSignatureInPDF(
   const pdfDoc = await PDFDocument.load(existingPdfBytes);
   
   const pages = pdfDoc.getPages();
-  const firstPage = pages[0];
+  const page2 = pages[1]; // Signature is on page 2
 
   // Extract base64 signature data
   const base64Data = signatureDataUrl.replace(/^data:image\/\w+;base64,/, '');
@@ -503,26 +721,43 @@ export async function embedSignatureInPDF(
     // Try to embed as PNG
     const signatureImage = await pdfDoc.embedPng(signatureBytes);
     
-    // Draw signature in the signature box (adjusted position to match box)
-    const signatureWidth = 200;
+    // Draw signature above the signature line on page 2
+    const signatureWidth = 150;
     const signatureHeight = 50;
     
-    firstPage.drawImage(signatureImage, {
-      x: 60,
-      y: 95, // Position inside the signature box
+    page2.drawImage(signatureImage, {
+      x: 160, // Position above the signature line
+      y: 335, // Adjusted for page 2
       width: signatureWidth,
       height: signatureHeight,
+    });
+
+    // Add signed date
+    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    page2.drawText(new Date().toLocaleDateString(), {
+      x: 390,
+      y: 350,
+      size: 10,
+      font: font,
     });
   } catch (error) {
     console.error('Error embedding signature as PNG, trying JPEG:', error);
     try {
       const signatureImage = await pdfDoc.embedJpg(signatureBytes);
       
-      firstPage.drawImage(signatureImage, {
-        x: 60,
-        y: 95,
-        width: 200,
+      page2.drawImage(signatureImage, {
+        x: 160,
+        y: 335,
+        width: 150,
         height: 50,
+      });
+
+      const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+      page2.drawText(new Date().toLocaleDateString(), {
+        x: 390,
+        y: 350,
+        size: 10,
+        font: font,
       });
     } catch (jpegError) {
       console.error('Error embedding signature as JPEG:', jpegError);

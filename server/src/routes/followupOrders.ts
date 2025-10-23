@@ -491,7 +491,7 @@ router.post('/:id/sign', async (req, res) => {
   }
 });
 
-// POST /api/followup-orders/:orderId/resend-email - Resend signature email for PENDING_SIGNATURE orders
+// POST /api/followup-orders/:orderId/resend-email - Resend signature email (admin only for FINALIZED orders)
 router.post('/:orderId/resend-email', async (req, res) => {
   try {
     const { orderId } = req.params;
@@ -502,15 +502,62 @@ router.post('/:orderId/resend-email', async (req, res) => {
       return res.status(404).json({ error: 'Follow-up order not found' });
     }
 
-    // Verify order is still pending signature
+    // Verify order is still pending signature or finalized
     const order = await storage.getOrderById(orderId);
     if (!order) {
       return res.status(404).json({ error: 'Order not found' });
     }
 
-    if (order.status?.toUpperCase() !== 'PENDING_SIGNATURE') {
+    const orderStatus = order.status?.toUpperCase();
+    
+    // For FINALIZED orders, require admin authorization
+    if (orderStatus === 'FINALIZED') {
+      // Check admin authorization
+      const sessionToken = req.cookies?.sessionToken || req.headers.authorization?.replace('Bearer ', '');
+      
+      if (!sessionToken) {
+        return res.status(401).json({ error: 'Authentication required' });
+      }
+
+      // Verify session and get user role from database
+      const pool = await import('../../db').then(m => m.pool);
+      const sessionResult = await pool.query(
+        'SELECT user_id, username FROM user_sessions WHERE session_token = $1 AND expires_at > NOW()',
+        [sessionToken]
+      );
+
+      if (!sessionResult || sessionResult.length === 0) {
+        return res.status(401).json({ error: 'Invalid or expired session' });
+      }
+
+      const session = sessionResult[0];
+      
+      // Try to get user role from database first
+      const userResult = await pool.query(
+        'SELECT role FROM users WHERE username = $1 AND is_active = true',
+        [session.username.toLowerCase()]
+      );
+
+      let userRole: string | null = null;
+      
+      if (userResult && userResult.length > 0) {
+        userRole = userResult[0].role;
+      } else {
+        // Fall back to hardcoded admin users (epoch, glennj, tasham)
+        const hardcodedAdmins = ['epoch', 'glennj', 'tasham'];
+        if (hardcodedAdmins.includes(session.username.toLowerCase())) {
+          userRole = 'ADMIN';
+        }
+      }
+
+      if (userRole !== 'ADMIN') {
+        return res.status(403).json({ 
+          error: 'Admin authorization required to resend email for finalized orders' 
+        });
+      }
+    } else if (orderStatus !== 'PENDING_SIGNATURE') {
       return res.status(400).json({ 
-        error: `Order status is ${order.status}. Can only resend email for PENDING_SIGNATURE orders.` 
+        error: `Order status is ${order.status}. Can only resend email for PENDING_SIGNATURE or FINALIZED orders.` 
       });
     }
 

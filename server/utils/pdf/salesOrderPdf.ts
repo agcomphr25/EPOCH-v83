@@ -286,6 +286,21 @@ export async function generateSalesOrderPDF(
     );
   }
 
+  // Add email and phone
+  if (orderData.customerEmail || orderData.customerPhone) {
+    shipCurrentY -= 13;
+    const contactInfo = [];
+    if (orderData.customerEmail) contactInfo.push(`Email: ${orderData.customerEmail}`);
+    if (orderData.customerPhone) contactInfo.push(`Phone: ${orderData.customerPhone}`);
+    
+    page.drawText(contactInfo.join(' | '), {
+      x: shipToX,
+      y: shipCurrentY,
+      size: 8,
+      font: font,
+    });
+  }
+
   // FEATURES & CUSTOMIZATIONS Section
   currentY = customerBoxY - 15;
   page.drawText('FEATURES & CUSTOMIZATIONS', {

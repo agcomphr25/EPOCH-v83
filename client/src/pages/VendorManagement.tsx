@@ -27,6 +27,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '@/components/ui/accordion';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useToast } from '@/hooks/use-toast';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -50,6 +51,9 @@ import {
   XCircle,
   User,
   Package,
+  Upload,
+  FileText,
+  X,
 } from 'lucide-react';
 import {
   AlertDialog,
@@ -78,6 +82,8 @@ const vendorFormSchema = insertVendorSchema.extend({
     .optional()
     .or(z.literal('')),
   scope: z.string().optional(),
+  approvalSource: z.string().optional(),
+  approvalPdfUrl: z.string().optional(),
   evaluationDate: z.string().optional(),
   qualityScore: z.number().int().min(1).max(5).optional().nullable(),
   costScore: z.number().int().min(1).max(5).optional().nullable(),
@@ -115,6 +121,10 @@ export default function VendorManagement() {
   // Pending contacts for new vendors (before vendor is created)
   const [pendingContacts, setPendingContacts] = useState<PendingContact[]>([]);
 
+  // File upload state
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [uploadingFile, setUploadingFile] = useState(false);
+
   // Filter and pagination state
   const [search, setSearch] = useState('');
   const [approved, setApproved] = useState<'any' | 'true' | 'false'>('any');
@@ -142,6 +152,8 @@ export default function VendorManagement() {
       additionalEmail: '',
       phone: '',
       scope: '',
+      approvalSource: '',
+      approvalPdfUrl: '',
       approved: false,
       evaluated: false,
       evaluationDate: '',
@@ -424,6 +436,8 @@ export default function VendorManagement() {
         country: vendor.country || 'United States',
 
         scope: vendor.scope || '',
+        approvalSource: vendor.approvalSource || '',
+        approvalPdfUrl: vendor.approvalPdfUrl || '',
         approved: vendor.approved,
         evaluated: vendor.evaluated,
         evaluationDate: vendor.evaluationDate || '',
@@ -470,6 +484,53 @@ export default function VendorManagement() {
     setIsAddingContact(false);
     setEditingContact(null);
     contactForm.reset();
+    // Reset file upload state
+    setUploadedFile(null);
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.type !== 'application/pdf') {
+      toast({
+        title: 'Invalid file type',
+        description: 'Please upload a PDF file',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setUploadingFile(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const response = await fetch('/api/vendors/upload/approval', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) throw new Error('Upload failed');
+
+      const data = await response.json();
+      form.setValue('approvalPdfUrl', data.url);
+      setUploadedFile(file);
+      toast({ title: 'File uploaded successfully' });
+    } catch (error) {
+      toast({
+        title: 'Upload failed',
+        description: 'Failed to upload file',
+        variant: 'destructive',
+      });
+    } finally {
+      setUploadingFile(false);
+    }
+  };
+
+  const handleRemoveFile = () => {
+    setUploadedFile(null);
+    form.setValue('approvalPdfUrl', '');
   };
 
   const onSubmit = (data: VendorFormData) => {
@@ -1090,6 +1151,112 @@ export default function VendorManagement() {
                           </p>
                         </div>
                       </div>
+                    </div>
+
+                    <FormField
+                      control={form.control}
+                      name="approvalSource"
+                      render={({ field }) => (
+                        <FormItem className="space-y-3">
+                          <FormLabel>Approval Source</FormLabel>
+                          <FormControl>
+                            <RadioGroup
+                              onValueChange={field.onChange}
+                              value={field.value}
+                              className="flex flex-col space-y-1"
+                            >
+                              <div className="flex items-center space-x-2">
+                                <RadioGroupItem
+                                  value="Certification"
+                                  id="certification"
+                                  data-testid="radio-certification"
+                                />
+                                <Label
+                                  htmlFor="certification"
+                                  className="font-normal cursor-pointer"
+                                >
+                                  Certification
+                                </Label>
+                              </div>
+                              <div className="flex items-center space-x-2">
+                                <RadioGroupItem
+                                  value="Supplier Approval Form"
+                                  id="supplier-approval"
+                                  data-testid="radio-supplier-approval"
+                                />
+                                <Label
+                                  htmlFor="supplier-approval"
+                                  className="font-normal cursor-pointer"
+                                >
+                                  Supplier Approval Form
+                                </Label>
+                              </div>
+                            </RadioGroup>
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <div className="space-y-2">
+                      <Label>Approval Document (PDF)</Label>
+                      {!uploadedFile && !form.watch('approvalPdfUrl') ? (
+                        <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6 text-center">
+                          <Upload className="w-8 h-8 mx-auto mb-2 text-gray-400" />
+                          <Label
+                            htmlFor="file-upload"
+                            className="cursor-pointer text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400"
+                          >
+                            Click to upload PDF
+                          </Label>
+                          <Input
+                            id="file-upload"
+                            type="file"
+                            accept="application/pdf"
+                            onChange={handleFileUpload}
+                            className="hidden"
+                            data-testid="input-file-upload"
+                            disabled={uploadingFile}
+                          />
+                          <p className="text-xs text-gray-500 mt-1">
+                            PDF files only
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="border border-gray-300 dark:border-gray-600 rounded-lg p-4 bg-gray-50 dark:bg-gray-800">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <FileText className="w-5 h-5 text-blue-600" />
+                              <span className="text-sm font-medium">
+                                {uploadedFile?.name || 'Approval Document.pdf'}
+                              </span>
+                            </div>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={handleRemoveFile}
+                              data-testid="button-remove-file"
+                            >
+                              <X className="w-4 h-4" />
+                            </Button>
+                          </div>
+                          {form.watch('approvalPdfUrl') && (
+                            <a
+                              href={form.watch('approvalPdfUrl')}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 mt-2 inline-block"
+                              data-testid="link-view-pdf"
+                            >
+                              View PDF
+                            </a>
+                          )}
+                        </div>
+                      )}
+                      {uploadingFile && (
+                        <p className="text-xs text-gray-500">Uploading...</p>
+                      )}
                     </div>
 
                     <FormField

@@ -160,6 +160,10 @@ router.post('/', async (req, res) => {
       notes: order.notes || undefined,
       shipping: order.shipping || 0,
       paymentStatus: 'PENDING' as const, // New orders are always pending
+      discountCode: order.discountCode || undefined,
+      customDiscountType: order.customDiscountType || undefined,
+      customDiscountValue: order.customDiscountValue || undefined,
+      showCustomDiscount: order.showCustomDiscount || undefined,
     };
 
     console.log('📄 PDF Order Data Debug:', {

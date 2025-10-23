@@ -39,6 +39,10 @@ interface OrderData {
   subtotal?: number;
   total?: number;
   paymentStatus?: 'PAID' | 'PENDING';
+  discountCode?: string;
+  customDiscountType?: string;
+  customDiscountValue?: number;
+  showCustomDiscount?: boolean;
 }
 
 async function embedCompanyLogo(pdfDoc: PDFDocument) {
@@ -338,8 +342,10 @@ export async function generateSalesOrderPDF(
     }
   }
   
-  // Calculate height: header (20) + model line (15) + features (15 each) + separator (20) + subtotal (25) + shipping (25) + total (30) + padding (20)
-  const featuresTableHeight = 20 + (featureCount * 15) + 20 + 25 + 25 + 30 + 20;
+  // Calculate height: header (20) + model line (15) + features (15 each) + separator (20) + subtotal (25) + [discount (25)] + shipping (25) + total (30) + padding (20)
+  const hasDiscount = orderData.showCustomDiscount && orderData.customDiscountValue;
+  const discountLineHeight = hasDiscount ? 25 : 0;
+  const featuresTableHeight = 20 + (featureCount * 15) + 20 + 25 + discountLineHeight + 25 + 30 + 20;
   
   page.drawRectangle({
     x: margin,
@@ -504,6 +510,40 @@ export async function generateSalesOrderPDF(
 
   summaryLineY -= 25;
 
+  // Discount (if applicable)
+  let discountAmount = 0;
+  if (orderData.showCustomDiscount && orderData.customDiscountValue) {
+    if (orderData.customDiscountType === 'percent') {
+      discountAmount = calculatedSubtotal * (orderData.customDiscountValue / 100);
+    } else {
+      discountAmount = orderData.customDiscountValue;
+    }
+
+    const discountLabel = orderData.discountCode 
+      ? `Discount (${orderData.discountCode}):`
+      : orderData.customDiscountType === 'percent'
+        ? `Discount (${orderData.customDiscountValue}%):`
+        : 'Discount:';
+
+    page.drawText(discountLabel, {
+      x: margin + 8,
+      y: summaryLineY,
+      size: 10,
+      font: boldFont,
+      color: rgb(0.8, 0, 0),
+    });
+
+    page.drawText(`-$${discountAmount.toFixed(2)}`, {
+      x: margin + printableWidth - 70,
+      y: summaryLineY,
+      size: 10,
+      font: boldFont,
+      color: rgb(0.8, 0, 0),
+    });
+
+    summaryLineY -= 25;
+  }
+
   // Shipping
   const shippingAmount = orderData.shipping || 0;
   page.drawText('Shipping:', {
@@ -523,7 +563,7 @@ export async function generateSalesOrderPDF(
   summaryLineY -= 30;
 
   // TOTAL
-  const totalAmount = calculatedSubtotal + shippingAmount;
+  const totalAmount = calculatedSubtotal - discountAmount + shippingAmount;
   page.drawText('TOTAL:', {
     x: margin + 8,
     y: summaryLineY,

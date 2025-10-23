@@ -32,6 +32,8 @@ interface OrderData {
   features?: Record<string, any>;
   featurePrices?: Record<string, number>;
   featureDisplayNames?: Record<string, string>;
+  featureSelectionDisplayNames?: Record<string, string>;
+  featureSelectionPrices?: Record<string, number>;
   notes?: string;
   shipping?: number;
   subtotal?: number;
@@ -419,7 +421,7 @@ export async function generateSalesOrderPDF(
     for (const featureKey of featureOrder) {
       const featureValue = orderData.features[featureKey];
       if (featureValue && summaryLineY > currentY - featuresTableHeight + 50) {
-        // Get display name
+        // Get feature display name
         const displayName = orderData.featureDisplayNames?.[featureKey] || featureKey;
         const featurePrice = orderData.featurePrices?.[featureKey] || 0;
         calculatedSubtotal += featurePrice;
@@ -431,8 +433,19 @@ export async function generateSalesOrderPDF(
           font: font,
         });
 
-        const valueStr = Array.isArray(featureValue) ? featureValue.join(', ') : String(featureValue);
-        page.drawText(valueStr, {
+        // Get selection display name(s)
+        let selectionDisplayName: string;
+        if (Array.isArray(featureValue)) {
+          // For array values (like rails), map each value to its display name
+          selectionDisplayName = featureValue
+            .map(val => orderData.featureSelectionDisplayNames?.[val] || val)
+            .join(', ');
+        } else {
+          // For single values, look up the display name
+          selectionDisplayName = orderData.featureSelectionDisplayNames?.[featureValue] || String(featureValue);
+        }
+
+        page.drawText(selectionDisplayName, {
           x: margin + 140,
           y: summaryLineY,
           size: 8,

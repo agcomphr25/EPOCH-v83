@@ -404,20 +404,66 @@ router.post('/finalized', async (req: Request, res: Response) => {
       const allFeatures = await storage.getAllFeatures();
       const allStockModels = await storage.getAllStockModels();
       
+      // Debug: Check what we're getting from the database
+      console.log(`📊 Loaded ${allFeatures.length} features from database`);
+      const sampleFeature = allFeatures.find(f => f.id === 'action_inlet');
+      if (sampleFeature) {
+        console.log('📊 Sample feature (action_inlet):', {
+          id: sampleFeature.id,
+          displayName: sampleFeature.displayName,
+          hasOptions: !!sampleFeature.options,
+          optionsType: typeof sampleFeature.options,
+          optionsLength: Array.isArray(sampleFeature.options) ? sampleFeature.options.length : 'not array',
+          firstOption: Array.isArray(sampleFeature.options) && sampleFeature.options.length > 0 ? sampleFeature.options[0] : null
+        });
+      }
+      
       // Get stock model information
       const stockModel = allStockModels.find(m => m.id === order.modelId);
       
-      // Build feature prices and display names for PDF
+      // Build comprehensive feature data for PDF
       const featurePrices: Record<string, number> = {};
       const featureDisplayNames: Record<string, string> = {};
+      const featureSelectionDisplayNames: Record<string, string> = {};
+      const featureSelectionPrices: Record<string, number> = {};
       
       if (order.features && typeof order.features === 'object') {
         for (const [featureKey, featureValue] of Object.entries(order.features)) {
           if (featureValue && featureValue !== false && featureValue !== '') {
             const featureDetail = allFeatures.find((f: any) => f.id === featureKey);
             if (featureDetail) {
-              featurePrices[featureKey] = featureDetail.price || 0;
+              // Store feature-level display name
               featureDisplayNames[featureKey] = featureDetail.displayName || featureDetail.name || featureKey;
+              
+              // Process feature selections to get display names and prices
+              const featureOptions = (featureDetail as any).options || [];
+              
+              if (Array.isArray(featureValue)) {
+                // Handle array of selections (like rails)
+                let totalPrice = 0;
+                for (const selectionValue of featureValue) {
+                  const option = featureOptions.find((opt: any) => opt.value === selectionValue);
+                  if (option) {
+                    featureSelectionDisplayNames[selectionValue] = option.displayName || option.label || selectionValue;
+                    const selectionPrice = option.price || 0;
+                    featureSelectionPrices[selectionValue] = selectionPrice;
+                    totalPrice += selectionPrice;
+                  }
+                }
+                featurePrices[featureKey] = totalPrice;
+              } else {
+                // Handle single selection
+                const option = featureOptions.find((opt: any) => opt.value === featureValue);
+                if (option) {
+                  featureSelectionDisplayNames[featureValue] = option.displayName || option.label || featureValue;
+                  const selectionPrice = option.price || 0;
+                  featureSelectionPrices[featureValue] = selectionPrice;
+                  featurePrices[featureKey] = selectionPrice;
+                } else {
+                  // No option found, use feature base price
+                  featurePrices[featureKey] = featureDetail.price || 0;
+                }
+              }
             }
           }
         }
@@ -449,6 +495,8 @@ router.post('/finalized', async (req: Request, res: Response) => {
         features: order.features as Record<string, any> || undefined,
         featurePrices,
         featureDisplayNames,
+        featureSelectionDisplayNames,
+        featureSelectionPrices,
         notes: order.notes || undefined,
         shipping: order.shipping || 0,
         paymentStatus: 'PENDING' as const,

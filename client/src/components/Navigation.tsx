@@ -221,7 +221,7 @@ export default function Navigation() {
       description: 'Create single orders',
     },
     {
-      path: '/orders-list',
+      path: '/all-orders',
       label: 'All Orders',
       icon: List,
       description: 'View all created orders',

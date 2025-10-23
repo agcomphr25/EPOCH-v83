@@ -4,6 +4,7 @@ import fetch from 'node-fetch';
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
+import { resolveAssetPath } from '../utils/assetPaths';
 
 const router = Router();
 
@@ -30,16 +31,17 @@ interface OrderFeatures {
 // Helper function to load and embed company logo
 async function embedCompanyLogo(pdfDoc: PDFDocument) {
   try {
-    // Fix for ES modules - use fileURLToPath for cross-platform compatibility
-    const __filename = fileURLToPath(import.meta.url);
-    const __dirname = path.dirname(__filename);
-    const logoPath = path.join(__dirname, '../assets/logo_updated.png');
-    const logoImageBytes = fs.readFileSync(logoPath);
-    return await pdfDoc.embedPng(logoImageBytes);
+    const logoPath = resolveAssetPath('logo_updated.png');
+    if (fs.existsSync(logoPath)) {
+      const logoImageBytes = fs.readFileSync(logoPath);
+      return await pdfDoc.embedPng(logoImageBytes);
+    } else {
+      console.warn('Logo file not found at:', logoPath);
+    }
   } catch (error: unknown) {
     console.warn('Could not load company logo:', error);
-    return null;
   }
+  return null;
 }
 
 // UPS API Configuration - Use environment variable or default to test
@@ -930,7 +932,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       currentY -= logoHeight + 15; // Added spacing between logo and contact info
 
       // Company contact information under logo
-      page.drawText('230 Hamer Rd, Owens Crossroads, AL 35763', {
+      page.drawText('230 Hamer Rd, Owens Cross Roads, AL 35763', {
         x: margin,
         y: currentY,
         size: 8,
@@ -1413,8 +1415,16 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
 
     currentY -= 15;
 
-    // Create bordered container for features table
-    const featuresTableHeight = 240; // Increased height to accommodate all features
+    // Calculate dynamic table height based on features present
+    const orderFeatures = order.features as OrderFeatures | undefined;
+    
+    // All features are always displayed (even if "Not selected" or with default values)
+    // Count: Stock Model + 12 standard features
+    let featureCount = 13;
+    
+    // Calculate height: header (20) + features (15 each) + separator (20) + subtotal (25) + shipping (25) + total (30) + padding (20)
+    const featuresTableHeight = 20 + (featureCount * 15) + 20 + 25 + 25 + 30 + 20;
+    
     const boxStartY = currentY; // Mark start position for box height calculation
     page.drawRectangle({
       x: margin,
@@ -2540,12 +2550,57 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       font: boldFont,
     });
 
-    page2.drawLine({
-      start: { x: margin + 120, y: page2Y - 5 },
-      end: { x: margin + 300, y: page2Y - 5 },
-      thickness: 1,
-      color: rgb(0, 0, 0),
-    });
+    // Check if order has signature data - safely access via optional chaining
+    const orderSignature = order && 'signatureData' in order ? order.signatureData : null;
+    const orderSignedAt = order && 'signedAt' in order ? order.signedAt : null;
+    
+    if (orderSignature && orderSignedAt) {
+      try {
+        // Extract base64 data from data URL
+        const base64Data = String(orderSignature).replace(/^data:image\/\w+;base64,/, '');
+        const signatureBuffer = Buffer.from(base64Data, 'base64');
+        
+        // Embed signature image
+        const signatureImage = await pdfDoc.embedPng(signatureBuffer);
+        const sigWidth = 150;
+        const sigHeight = 50;
+        
+        page2.drawImage(signatureImage, {
+          x: margin + 130,
+          y: page2Y - 50,
+          width: sigWidth,
+          height: sigHeight,
+        });
+        
+        // Draw signed date
+        const signedDate = new Date(orderSignedAt).toLocaleDateString();
+        page2.drawText(signedDate, {
+          x: margin + 350,
+          y: page2Y,
+          size: 10,
+          font: font,
+        });
+        
+        console.log(`✅ Signature embedded in sales order PDF for ${orderId}`);
+      } catch (signatureError) {
+        console.error('Error embedding signature:', signatureError);
+        // Fall back to blank lines if signature fails to load
+        page2.drawLine({
+          start: { x: margin + 120, y: page2Y - 5 },
+          end: { x: margin + 300, y: page2Y - 5 },
+          thickness: 1,
+          color: rgb(0, 0, 0),
+        });
+      }
+    } else {
+      // No signature yet - draw blank line
+      page2.drawLine({
+        start: { x: margin + 120, y: page2Y - 5 },
+        end: { x: margin + 300, y: page2Y - 5 },
+        thickness: 1,
+        color: rgb(0, 0, 0),
+      });
+    }
 
     page2.drawText('Date:', {
       x: margin + 320,
@@ -2554,12 +2609,15 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       font: boldFont,
     });
 
-    page2.drawLine({
-      start: { x: margin + 350, y: page2Y - 5 },
-      end: { x: margin + 450, y: page2Y - 5 },
-      thickness: 1,
-      color: rgb(0, 0, 0),
-    });
+    // Draw date line only if no signature
+    if (!orderSignature || !orderSignedAt) {
+      page2.drawLine({
+        start: { x: margin + 350, y: page2Y - 5 },
+        end: { x: margin + 450, y: page2Y - 5 },
+        thickness: 1,
+        color: rgb(0, 0, 0),
+      });
+    }
 
     // Company footer on page 2
     page2Y -= 50;
@@ -2571,7 +2629,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     });
 
     page2Y -= 20;
-    page2.drawText('AG Composites | 230 Hamer Rd, Owens Crossroads, AL 35763', {
+    page2.drawText('AG Composites | 230 Hamer Rd, Owens Cross Roads, AL 35763', {
       x: margin,
       y: page2Y,
       size: 8,
@@ -3080,7 +3138,7 @@ router.post(
       // Get order, customer, and address data directly from database
       const { db } = await import('../../db');
       const { eq } = await import('drizzle-orm');
-      const { orderDrafts, customers, customerAddresses } = await import(
+      const { customers, customerAddresses } = await import(
         '../../schema'
       );
 
@@ -3228,7 +3286,7 @@ router.post(
 
           const { db } = await import('../../db');
           const { eq } = await import('drizzle-orm');
-          const { orderDrafts, allOrders } = await import('../../schema');
+          const { allOrders } = await import('../../schema');
 
           try {
             // Try updating finalized orders table first
@@ -3391,7 +3449,7 @@ router.post(
 
           const { db } = await import('../../db');
           const { eq } = await import('drizzle-orm');
-          const { orderDrafts, allOrders } = await import('../../schema');
+          const { allOrders } = await import('../../schema');
 
           try {
             // Try updating finalized orders table first
@@ -3834,7 +3892,7 @@ router.post('/bulk-shipping-labels', async (req: Request, res: Response) => {
             // Update the order with tracking information using direct database calls
             const { db } = await import('../../db');
             const { eq } = await import('drizzle-orm');
-            const { orderDrafts, allOrders } = await import('../../schema');
+            const { allOrders } = await import('../../schema');
 
             try {
               // Try updating finalized orders table first

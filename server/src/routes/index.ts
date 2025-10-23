@@ -49,6 +49,7 @@ import linkedOrdersRoutes from './linkedOrders';
 import googleOAuthRoutes from './googleOAuth';
 import microsoftAuthRoutes from './microsoftAuth';
 import gmailRoutes from './gmail';
+import followupOrdersRoutes from './followupOrders';
 import { getAccessToken } from '../utils/upsShipping';
 
 export function registerRoutes(app: Express): Server {
@@ -196,6 +197,9 @@ export function registerRoutes(app: Express): Server {
 
   // Linked orders management routes
   app.use('/api/linked-orders', linkedOrdersRoutes);
+
+  // Follow-up orders routes
+  app.use('/api/followup-orders', followupOrdersRoutes);
 
   // UPS Test endpoint
   app.post('/api/test-ups-auth', async (req, res) => {

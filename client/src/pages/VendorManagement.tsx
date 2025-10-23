@@ -549,7 +549,14 @@ export default function VendorManagement() {
 
       evaluationDate: data.evaluationDate || undefined,
       notes: data.notes || undefined,
+      approvalSource: data.approvalSource || undefined,
+      approvalPdfUrl: data.approvalPdfUrl || undefined,
     };
+
+    console.log('Submitting vendor data:', {
+      approvalSource: normalizedData.approvalSource,
+      approvalPdfUrl: normalizedData.approvalPdfUrl,
+    });
 
     if (editingVendor) {
       updateVendorMutation.mutate({

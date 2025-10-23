@@ -1,0 +1,69 @@
+injected.js:27 💥 API Request failed for /api/training/modules/10/complete: Error: Employee ID and password are required
+    at apiRequest (queryClient.ts:115:13)
+(anonymous) @ injected.js:27
+console.error @ main.tsx:33
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+apiRequest @ queryClient.ts:135
+await in apiRequest
+mutationFn @ TrainingModule.tsx:3520
+fn @ @tanstack_react-query.js?v=b41c2586:1234
+run @ @tanstack_react-query.js?v=b41c2586:507
+start @ @tanstack_react-query.js?v=b41c2586:550
+execute @ @tanstack_react-query.js?v=b41c2586:1270
+await in execute
+mutate @ @tanstack_react-query.js?v=b41c2586:2692
+(anonymous) @ @tanstack_react-query.js?v=b41c2586:3415
+handleSubmit @ TrainingModule.tsx:3577
+callCallback2 @ chunk-NFC5BX5N.js?v=b41c2586:3674
+invokeGuardedCallbackDev @ chunk-NFC5BX5N.js?v=b41c2586:3699
+invokeGuardedCallback @ chunk-NFC5BX5N.js?v=b41c2586:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-NFC5BX5N.js?v=b41c2586:3736
+executeDispatch @ chunk-NFC5BX5N.js?v=b41c2586:7014
+processDispatchQueueItemsInOrder @ chunk-NFC5BX5N.js?v=b41c2586:7034
+processDispatchQueue @ chunk-NFC5BX5N.js?v=b41c2586:7043
+dispatchEventsForPlugins @ chunk-NFC5BX5N.js?v=b41c2586:7051
+(anonymous) @ chunk-NFC5BX5N.js?v=b41c2586:7174
+batchedUpdates$1 @ chunk-NFC5BX5N.js?v=b41c2586:18913
+batchedUpdates @ chunk-NFC5BX5N.js?v=b41c2586:3579
+dispatchEventForPluginEventSystem @ chunk-NFC5BX5N.js?v=b41c2586:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-NFC5BX5N.js?v=b41c2586:5478
+dispatchEvent @ chunk-NFC5BX5N.js?v=b41c2586:5472
+dispatchDiscreteEvent @ chunk-NFC5BX5N.js?v=b41c2586:5449Understand this error
+injected.js:204  POST https://0ce1429f-ab65-4d48-bef3-611aab96e0df-00-316wz2g2s5raf.janeway.replit.dev/api/training/modules/10/complete 400 (Bad Request)
+apply @ injected.js:204
+apiRequest @ queryClient.ts:89
+mutationFn @ TrainingModule.tsx:3520
+fn @ @tanstack_react-query.js?v=b41c2586:1234
+run @ @tanstack_react-query.js?v=b41c2586:507
+start @ @tanstack_react-query.js?v=b41c2586:550
+execute @ @tanstack_react-query.js?v=b41c2586:1270
+await in execute
+mutate @ @tanstack_react-query.js?v=b41c2586:2692
+(anonymous) @ @tanstack_react-query.js?v=b41c2586:3415
+handleSubmit @ TrainingModule.tsx:3577
+callCallback2 @ chunk-NFC5BX5N.js?v=b41c2586:3674
+invokeGuardedCallbackDev @ chunk-NFC5BX5N.js?v=b41c2586:3699
+invokeGuardedCallback @ chunk-NFC5BX5N.js?v=b41c2586:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-NFC5BX5N.js?v=b41c2586:3736
+executeDispatch @ chunk-NFC5BX5N.js?v=b41c2586:7014
+processDispatchQueueItemsInOrder @ chunk-NFC5BX5N.js?v=b41c2586:7034
+processDispatchQueue @ chunk-NFC5BX5N.js?v=b41c2586:7043
+dispatchEventsForPlugins @ chunk-NFC5BX5N.js?v=b41c2586:7051
+(anonymous) @ chunk-NFC5BX5N.js?v=b41c2586:7174
+batchedUpdates$1 @ chunk-NFC5BX5N.js?v=b41c2586:18913
+batchedUpdates @ chunk-NFC5BX5N.js?v=b41c2586:3579
+dispatchEventForPluginEventSystem @ chunk-NFC5BX5N.js?v=b41c2586:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-NFC5BX5N.js?v=b41c2586:5478
+dispatchEvent @ chunk-NFC5BX5N.js?v=b41c2586:5472
+dispatchDiscreteEvent @ chunk-NFC5BX5N.js?v=b41c2586:5449Understand this error
+injected.js:27 💥 API Request failed for /api/training/modules/10/complete: Error: Employee ID and password are required
+    at apiRequest (queryClient.ts:115:13)

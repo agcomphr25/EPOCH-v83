@@ -116,6 +116,22 @@ function generateEmailHTML(orderData: EmailOrderData, logoBase64?: string): stri
     </p>
   </div>
 
+  <!-- Terms and Conditions Section -->
+  <div style="background-color: #f8f9fa; padding: 25px; border-left: 4px solid #6c757d; border-radius: 3px; margin-bottom: 25px;">
+    <h2 style="color: #2c3e50; margin: 0 0 15px 0; font-size: 18px;">Terms and Conditions - Standard</h2>
+    <p style="margin: 0 0 10px 0; font-size: 13px; color: #666; font-weight: bold;">Initial Terms and Conditions</p>
+    <p style="margin: 0 0 15px 0; font-size: 13px; color: #666; font-style: italic;">
+      Please sign and return a copy of this form, or reply to the email that you are in agreement
+    </p>
+    <ol style="margin: 0; padding-left: 20px; font-size: 14px; color: #333; line-height: 1.8;">
+      <li>Please review the specs indicated and make sure they match your intent.</li>
+      <li>Any changes to specs requested after 30 days from Order Date may result in additional charges.</li>
+      <li>Remington "clones" are not made by Remington and may not fit as exactly as Remington models do.</li>
+      <li>The Estimated Completion Date is an estimation based on our current capacity and the specs of your order. We make every effort to ship stocks by the Estimated Completion Date.</li>
+      <li>Please sign and return a copy of this form, or reply to the email that you are in agreement with the specs of your order and these terms and conditions. We are not able to place any order into production without a confirmation.</li>
+    </ol>
+  </div>
+
   <!-- Action Required Section -->
   <div style="background-color: #fff3cd; padding: 25px; border: 2px solid #ffc107; border-radius: 5px; margin-bottom: 25px;">
     <h2 style="color: #856404; margin: 0 0 15px 0; font-size: 18px;">✓ Signature Required</h2>
@@ -169,6 +185,25 @@ ${orderData.customerPO ? `Your PO Number:         ${orderData.customerPO}` : ''}
 
 Complete order details and specifications are included in the 
 attached Sales Order PDF.
+
+TERMS AND CONDITIONS - STANDARD
+─────────────────────────────────────────────────────────────
+Initial Terms and Conditions
+Please sign and return a copy of this form, or reply to the email 
+that you are in agreement
+
+1. Please review the specs indicated and make sure they match your intent.
+2. Any changes to specs requested after 30 days from Order Date may 
+   result in additional charges.
+3. Remington "clones" are not made by Remington and may not fit as 
+   exactly as Remington models do.
+4. The Estimated Completion Date is an estimation based on our current 
+   capacity and the specs of your order. We make every effort to ship 
+   stocks by the Estimated Completion Date.
+5. Please sign and return a copy of this form, or reply to the email 
+   that you are in agreement with the specs of your order and these 
+   terms and conditions. We are not able to place any order into 
+   production without a confirmation.
 
 ✓ SIGNATURE REQUIRED
 ─────────────────────────────────────────────────────────────

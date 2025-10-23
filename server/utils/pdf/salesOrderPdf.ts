@@ -645,7 +645,7 @@ export async function generateSalesOrderPDF(
 
   // Terms and Conditions Section
   page2Y -= 120;
-  page2.drawText('TERMS AND CONDITIONS', {
+  page2.drawText('TERMS AND CONDITIONS - STANDARD', {
     x: margin,
     y: page2Y,
     size: 12,
@@ -653,22 +653,44 @@ export async function generateSalesOrderPDF(
   });
 
   page2Y -= 20;
+  page2.drawText('Initial Terms and Conditions', {
+    x: margin,
+    y: page2Y,
+    size: 10,
+    font: boldFont,
+  });
+  
+  page2Y -= 15;
+  page2.drawText('Please sign and return a copy of this form, or reply to the email that you are in agreement', {
+    x: margin,
+    y: page2Y,
+    size: 8,
+    font: font,
+    color: rgb(0.3, 0.3, 0.3),
+  });
+
+  page2Y -= 20;
   const terms = [
-    '• Payment: 50% deposit required to begin production, balance due upon completion',
-    '• Lead Time: Custom manufacturing typically 4-6 weeks from deposit',
-    '• Custom items are non-returnable unless defective',
-    '• Shipping costs additional - calculated at time of shipment',
-    '• Prices valid for 30 days from quote date',
+    '1. Please review the specs indicated and make sure they match your intent.',
+    '2. Any changes to specs requested after 30 days from Order Date may result in additional',
+    '   charges.',
+    '3. Remington "clones" are not made by Remington and may not fit as exactly as Remington',
+    '   models do.',
+    '4. The Estimated Completion Date is an estimation based on our current capacity and the',
+    '   specs of your order. We make every effort to ship stocks by the Estimated Completion Date.',
+    '5. Please sign and return a copy of this form, or reply to the email that you are in agreement',
+    '   with the specs of your order and these terms and conditions. We are not able to place any',
+    '   order into production without a confirmation.',
   ];
 
   for (const term of terms) {
     page2.drawText(term, {
       x: margin,
       y: page2Y,
-      size: 9,
+      size: 8,
       font: font,
     });
-    page2Y -= 20;
+    page2Y -= 13;
   }
 
   // Customer Approval Section

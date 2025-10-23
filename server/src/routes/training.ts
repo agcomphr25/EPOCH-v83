@@ -409,34 +409,44 @@ router.get('/quiz/attempts/:trainingRecordId', async (req, res) => {
 router.post('/modules/:moduleId/complete', async (req, res) => {
   try {
     const moduleId = parseInt(req.params.moduleId);
-    const { employeeId, password, answers } = req.body;
+    const { answers } = req.body;
+
+    // Get session token from cookies or authorization header
+    const sessionToken = req.cookies?.sessionToken || req.headers.authorization?.replace('Bearer ', '');
+    
+    if (!sessionToken) {
+      return res.status(401).json({ error: 'Not authenticated. Please log in.' });
+    }
+
+    // Validate session
+    const pool = await import('../../db').then(m => m.pool);
+    const sessionResult = await pool.query(
+      'SELECT user_id, username FROM user_sessions WHERE session_token = $1 AND expires_at > NOW()',
+      [sessionToken]
+    );
+
+    if (!sessionResult || sessionResult.length === 0) {
+      return res.status(401).json({ error: 'Invalid or expired session. Please log in again.' });
+    }
+
+    const session = sessionResult[0];
+    const username = session.username;
 
     console.log('Quiz completion request:', {
       moduleId,
-      employeeId,
+      username,
       answersCount: Object.keys(answers).length,
     });
 
-    // Validate employee credentials
-    if (!employeeId || !password) {
-      return res.status(400).json({ error: 'Employee ID and password are required' });
-    }
-
-    // Look up user by username (employeeId can be username)
+    // Look up user by username from session
     const [user] = await db
       .select()
       .from(users)
-      .where(eq(users.username, employeeId))
+      .where(eq(users.username, username))
       .limit(1);
 
     if (!user) {
-      return res.status(401).json({ error: 'Invalid employee ID or password' });
-    }
-
-    // Validate password
-    const isValidPassword = await bcrypt.compare(password, user.passwordHash);
-    if (!isValidPassword) {
-      return res.status(401).json({ error: 'Invalid employee ID or password' });
+      return res.status(401).json({ error: 'User not found' });
     }
 
     // Get employee name and details from employees table or user table
@@ -619,7 +629,7 @@ router.post('/modules/:moduleId/complete', async (req, res) => {
       totalQuestions,
       passed,
       passingScore,
-      employeeId,
+      username: user.username,
       employeeName,
       moduleId,
       moduleTitle: module[0].title,

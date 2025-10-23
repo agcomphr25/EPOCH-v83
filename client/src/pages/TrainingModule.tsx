@@ -3499,11 +3499,14 @@ export default function TrainingModule() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
 
-  const [employeeId, setEmployeeId] = useState('');
-  const [password, setPassword] = useState('');
   const [answers, setAnswers] = useState<Record<number, string>>({});
   const [showResults, setShowResults] = useState(false);
   const [results, setResults] = useState<any>(null);
+
+  // Fetch current user session
+  const { data: currentUser } = useQuery<{ id: number; username: string; role: string }>({
+    queryKey: ['/api/auth/session'],
+  });
 
   const { data: module, isLoading } = useQuery({
     queryKey: [`/api/training/modules/${moduleId}`],
@@ -3512,8 +3515,6 @@ export default function TrainingModule() {
 
   const submitMutation = useMutation({
     mutationFn: async (data: {
-      employeeId: string;
-      password: string;
       answers: Record<number, string>;
     }) => {
       return apiRequest(`/api/training/modules/${moduleId}/complete`, {
@@ -3525,7 +3526,7 @@ export default function TrainingModule() {
       setResults(data);
       setShowResults(true);
       queryClient.invalidateQueries({
-        queryKey: [`/api/training/completions/${employeeId}`],
+        queryKey: [`/api/training/completions/${currentUser?.username}`],
       });
 
       if (data.passed) {
@@ -3551,10 +3552,10 @@ export default function TrainingModule() {
   });
 
   const handleSubmit = () => {
-    if (!employeeId || !password) {
+    if (!currentUser) {
       toast({
-        title: 'Missing Information',
-        description: 'Please enter your Employee ID and Password',
+        title: 'Not Authenticated',
+        description: 'Please log in to complete training modules',
         variant: 'destructive',
       });
       return;
@@ -3574,8 +3575,6 @@ export default function TrainingModule() {
     }
 
     submitMutation.mutate({
-      employeeId,
-      password,
       answers,
     });
   };
@@ -3693,30 +3692,14 @@ export default function TrainingModule() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
-            {/* Employee Information */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-gray-50 rounded-md">
-              <div>
-                <Label htmlFor="employeeId">Employee ID *</Label>
-                <Input
-                  id="employeeId"
-                  value={employeeId}
-                  onChange={(e) => setEmployeeId(e.target.value)}
-                  placeholder="Enter your employee ID"
-                  data-testid="input-employee-id"
-                />
+            {/* User Information Display */}
+            {currentUser && (
+              <div className="p-4 bg-blue-50 border border-blue-200 rounded-md">
+                <p className="text-sm text-blue-800">
+                  <span className="font-semibold">Completing as:</span> {currentUser.username}
+                </p>
               </div>
-              <div>
-                <Label htmlFor="password">Password *</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Enter your password"
-                  data-testid="input-password"
-                />
-              </div>
-            </div>
+            )}
 
             {/* Questions */}
             {moduleData.questions?.map((question: any, index: number) => (
@@ -3847,7 +3830,7 @@ export default function TrainingModule() {
                     </div>
                   </div>
                   <p className="text-sm text-gray-500 mt-6">
-                    Employee ID: {employeeId}
+                    Username: {currentUser?.username}
                   </p>
                   <Button
                     className="mt-4"

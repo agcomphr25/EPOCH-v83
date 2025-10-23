@@ -4,6 +4,7 @@ import fetch from 'node-fetch';
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
+import { resolveAssetPath } from '../utils/assetPaths';
 
 const router = Router();
 
@@ -30,16 +31,17 @@ interface OrderFeatures {
 // Helper function to load and embed company logo
 async function embedCompanyLogo(pdfDoc: PDFDocument) {
   try {
-    // Fix for ES modules - use fileURLToPath for cross-platform compatibility
-    const __filename = fileURLToPath(import.meta.url);
-    const __dirname = path.dirname(__filename);
-    const logoPath = path.join(__dirname, '../assets/logo_updated.png');
-    const logoImageBytes = fs.readFileSync(logoPath);
-    return await pdfDoc.embedPng(logoImageBytes);
+    const logoPath = resolveAssetPath('logo_updated.png');
+    if (fs.existsSync(logoPath)) {
+      const logoImageBytes = fs.readFileSync(logoPath);
+      return await pdfDoc.embedPng(logoImageBytes);
+    } else {
+      console.warn('Logo file not found at:', logoPath);
+    }
   } catch (error: unknown) {
     console.warn('Could not load company logo:', error);
-    return null;
   }
+  return null;
 }
 
 // UPS API Configuration - Use environment variable or default to test

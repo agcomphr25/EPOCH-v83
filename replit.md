@@ -16,6 +16,9 @@ Search standardization: All department queue pages use unified OrderSearchBox co
 Navigation dropdown behavior: All navbar dropdown menus close automatically after selection.
 
 ## Recent Changes
+- **Asset Path Resolution System** (Oct 23, 2025): Implemented robust asset path resolver (`server/src/utils/assetPaths.ts`) that works consistently across development and production environments. All logo loading functions now use this centralized resolver instead of fragile relative paths.
+- **Email Branding and Contact** (Oct 23, 2025): Company logo now properly appears in email header using base64 encoding. Contact email updated from info@agcomposites.com to sales@agcomposites.com throughout all email templates.
+- **Display Names on Sign Page** (Oct 23, 2025): Customer sign page now shows user-friendly display names for stock models and features instead of technical IDs (e.g., "CF Chalk Branch" instead of "cf_chalk_branch").
 - **Discount Display on Sales Order PDF** (Oct 23, 2025): Added discount information to sales order PDFs. When an order has a custom discount (percentage or fixed amount), it now appears between the subtotal and shipping with red text showing the discount code/percentage and amount deducted. The features table height dynamically adjusts to accommodate the discount line.
 - **Customer Information on Sign Page** (Oct 23, 2025): Added comprehensive customer information display to the review and sign sales order page, including customer name, email, phone number, and complete shipping address with proper formatting.
 - **Standard Terms and Conditions** (Oct 23, 2025): Updated both email and PDF to include specific standardized Terms and Conditions requiring customer review of specs, 30-day change policy, Remington clone disclaimer, estimated completion date notice, and confirmation requirement before production begins.
@@ -34,6 +37,7 @@ The application utilizes a monorepo structure with a full-stack TypeScript appro
 -   **Data Consistency**: A `features` object acts as the single source of truth for all feature data in order entry.
 -   **Modular Routing**: Backend routes are organized into specialized modules.
 -   **Atomic Order ID Reservation**: A database-based atomic reservation system ensures unique, sequential Order ID generation.
+-   **Asset Path Resolution**: Centralized asset path resolver (`server/src/utils/assetPaths.ts`) ensures consistent file access across development and production environments.
 -   **UI/UX**: Leverages ShadCN UI components with Tailwind CSS and Framer Motion for animations.
 -   **CI/CD**: Implemented with pre-commit hooks (Husky + lint-staged) and GitHub Actions.
 -   **BOM System**: Robust Bill of Materials system with UUID-based architecture, revision control, and comprehensive CRUD operations, including recursive BOM explosion and where-used analysis.

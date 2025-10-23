@@ -76,7 +76,7 @@ router.get('/', async (req, res) => {
         is_active as "isActive",
         created_at as "createdAt",
         updated_at as "updatedAt",
-        last_login_at as "lastLoginAt",
+        last_login as "lastLoginAt",
         failed_login_attempts as "failedLoginAttempts",
         account_locked_until as "accountLockedUntil",
         password_changed_at as "passwordChangedAt",

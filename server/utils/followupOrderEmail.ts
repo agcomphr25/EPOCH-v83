@@ -236,15 +236,18 @@ export async function sendFollowupOrderEmail(
     // Read and encode company logo
     let logoBase64: string | undefined;
     try {
-      const logoPath = resolveAssetPath('logo_updated.png');
+      // Simple path resolution - logo is always in server/assets
+      const logoPath = path.join(process.cwd(), 'server', 'assets', 'logo_updated.png');
+      console.log('📧 Logo path for email:', logoPath);
       if (fs.existsSync(logoPath)) {
         const logoBuffer = fs.readFileSync(logoPath);
         logoBase64 = logoBuffer.toString('base64');
+        console.log('✅ Logo loaded successfully for email');
       } else {
-        console.warn('Logo file not found at:', logoPath);
+        console.warn('❌ Logo file not found at:', logoPath);
       }
     } catch (error) {
-      console.warn('Could not load company logo for email:', error);
+      console.warn('❌ Could not load company logo for email:', error);
     }
 
     const emailHTML = generateEmailHTML(orderData, logoBase64);

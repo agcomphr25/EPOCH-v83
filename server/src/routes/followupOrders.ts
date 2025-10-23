@@ -177,6 +177,10 @@ router.post('/', async (req, res) => {
       featurePrices,
       featureDisplayNamesCount: Object.keys(featureDisplayNames).length,
       featureDisplayNames,
+      discountCode: orderData.discountCode,
+      customDiscountType: orderData.customDiscountType,
+      customDiscountValue: orderData.customDiscountValue,
+      showCustomDiscount: orderData.showCustomDiscount,
     });
 
     // Generate PDF

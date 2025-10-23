@@ -487,4 +487,99 @@ router.post('/:id/sign', async (req, res) => {
   }
 });
 
+// POST /api/followup-orders/:orderId/resend-email - Resend signature email for PENDING_SIGNATURE orders
+router.post('/:orderId/resend-email', async (req, res) => {
+  try {
+    const { orderId } = req.params;
+
+    // Get the follow-up order
+    const followupOrder = await storage.getFollowupOrderByOrderId(orderId);
+    if (!followupOrder) {
+      return res.status(404).json({ error: 'Follow-up order not found' });
+    }
+
+    // Verify order is still pending signature
+    const order = await storage.getOrderById(orderId);
+    if (!order) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+
+    if (order.status?.toUpperCase() !== 'PENDING_SIGNATURE') {
+      return res.status(400).json({ 
+        error: `Order status is ${order.status}. Can only resend email for PENDING_SIGNATURE orders.` 
+      });
+    }
+
+    // Get customer details
+    const customer = await storage.getCustomerById(order.customerId || '');
+    if (!customer || !customer.email) {
+      return res.status(400).json({ 
+        error: 'Customer email not found. Cannot resend email.' 
+      });
+    }
+
+    // Verify PDF exists
+    if (!followupOrder.pdfPath || !fs.existsSync(followupOrder.pdfPath)) {
+      return res.status(400).json({ 
+        error: 'PDF not found. Please create a new follow-up order.' 
+      });
+    }
+
+    // Generate signature link using existing token
+    const baseUrl = process.env.REPLIT_DOMAINS 
+      ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}`
+      : 'http://localhost:5000';
+    const signatureLink = `${baseUrl}/sign-order/${followupOrder.signatureToken}`;
+
+    // Send email
+    const emailData = {
+      orderId: order.orderId,
+      customerName: customer.name,
+      customerEmail: customer.email,
+      orderDate: new Date(order.orderDate).toLocaleDateString(),
+      dueDate: new Date(order.dueDate).toLocaleDateString(),
+      customerPO: order.customerPO || undefined,
+      modelId: order.modelId || undefined,
+      handedness: order.handedness || undefined,
+      features: order.features as Record<string, any> || undefined,
+      notes: order.notes || undefined,
+      shipping: order.shipping || 0,
+      signatureLink,
+    };
+
+    const emailResult = await sendFollowupOrderEmail(emailData, followupOrder.pdfPath);
+
+    if (emailResult.success) {
+      // Update email sent timestamp
+      await storage.updateFollowupOrder(followupOrder.id, {
+        emailSent: true,
+        emailSentAt: new Date(),
+      });
+
+      res.json({
+        success: true,
+        message: 'Review and sign email has been resent successfully.',
+        emailSent: true,
+        messageId: emailResult.messageId,
+      });
+    } else {
+      await storage.updateFollowupOrder(followupOrder.id, {
+        emailError: emailResult.error,
+      });
+
+      res.status(500).json({
+        success: false,
+        message: 'Failed to send email.',
+        error: emailResult.error,
+      });
+    }
+  } catch (error) {
+    console.error('Error resending follow-up order email:', error);
+    res.status(500).json({ 
+      error: 'Failed to resend email',
+      details: error instanceof Error ? error.message : 'Unknown error' 
+    });
+  }
+});
+
 export default router;

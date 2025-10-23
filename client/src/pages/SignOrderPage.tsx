@@ -17,6 +17,11 @@ interface FollowupOrder {
   signatureToken: string;
   signatureSigned: boolean;
   signedAt: string | null;
+  modelDisplayName?: string;
+  featureDisplayInfo?: Record<string, {
+    displayName: string;
+    selections: Record<string, string>;
+  }>;
   orderSummary: {
     orderId: string;
     orderDate: string;
@@ -230,19 +235,26 @@ export default function SignOrderPage() {
                 {orderSummary.modelId && (
                   <div className="flex justify-between">
                     <span className="text-gray-600 dark:text-gray-400">Model:</span>
-                    <span className="font-medium" data-testid="text-model">{orderSummary.modelId}</span>
-                  </div>
-                )}
-                {orderSummary.handedness && (
-                  <div className="flex justify-between">
-                    <span className="text-gray-600 dark:text-gray-400">Handedness:</span>
-                    <span className="font-medium" data-testid="text-handedness">{orderSummary.handedness}</span>
+                    <span className="font-medium" data-testid="text-model">
+                      {followupOrder.modelDisplayName || orderSummary.modelId}
+                    </span>
                   </div>
                 )}
                 {orderSummary.features && Object.entries(orderSummary.features).map(([key, value]) => {
-                  if (!value) return null;
-                  const displayKey = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-                  const displayValue = Array.isArray(value) ? value.join(', ') : String(value);
+                  if (!value || value === false || value === '' || (Array.isArray(value) && value.length === 0)) return null;
+                  
+                  // Get display names from featureDisplayInfo if available
+                  const featureInfo = followupOrder.featureDisplayInfo?.[key];
+                  const displayKey = featureInfo?.displayName || key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                  
+                  let displayValue: string;
+                  if (Array.isArray(value)) {
+                    // For arrays, join display names
+                    displayValue = value.map(val => featureInfo?.selections?.[val] || val).join(', ');
+                  } else {
+                    displayValue = featureInfo?.selections?.[value] || String(value);
+                  }
+                  
                   return (
                     <div key={key} className="flex justify-between">
                       <span className="text-gray-600 dark:text-gray-400">{displayKey}:</span>

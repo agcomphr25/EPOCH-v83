@@ -282,9 +282,75 @@ router.get('/by-token/:token', async (req, res) => {
       return res.status(404).json({ error: 'Followup order not found' });
     }
 
-    // Return order data but do NOT expose the signature token in response
+    // Fetch customer information if not in orderSummary
+    let enrichedOrderSummary = followupOrder.orderSummary as any;
+    
+    if (!enrichedOrderSummary.customerName && followupOrder.customerId) {
+      const customer = await storage.getCustomerById(followupOrder.customerId);
+      if (customer) {
+        const addresses = await storage.getCustomerAddresses(followupOrder.customerId);
+        const defaultAddress = addresses.find(addr => addr.isDefault) || addresses[0];
+        
+        enrichedOrderSummary = {
+          ...enrichedOrderSummary,
+          customerName: customer.name,
+          customerEmail: customer.email,
+          customerPhone: customer.phone,
+          customerAddress: defaultAddress ? {
+            street: defaultAddress.street,
+            street2: defaultAddress.street2,
+            city: defaultAddress.city,
+            state: defaultAddress.state,
+            zipCode: defaultAddress.zipCode,
+          } : undefined,
+        };
+      }
+    }
+
+    // Fetch stock model and feature information for display names
+    const stockModels = await storage.getAllStockModels();
+    const allFeatures = await storage.getAllFeatures();
+    
+    const stockModel = stockModels.find(m => m.id === enrichedOrderSummary.modelId);
+    
+    const featureDisplayInfo: Record<string, any> = {};
+    if (enrichedOrderSummary.features) {
+      for (const [featureKey, featureValue] of Object.entries(enrichedOrderSummary.features)) {
+        if (featureValue && featureValue !== false && featureValue !== '') {
+          const featureDetail = allFeatures.find((f: any) => f.id === featureKey);
+          if (featureDetail) {
+            featureDisplayInfo[featureKey] = {
+              displayName: featureDetail.displayName || featureDetail.name,
+              selections: {}
+            };
+            
+            const featureOptions = (featureDetail as any).options || [];
+            if (Array.isArray(featureValue)) {
+              for (const val of featureValue) {
+                const option = featureOptions.find((opt: any) => opt.value === val);
+                if (option) {
+                  featureDisplayInfo[featureKey].selections[val] = option.displayName || option.label || val;
+                }
+              }
+            } else {
+              const option = featureOptions.find((opt: any) => opt.value === featureValue);
+              if (option) {
+                featureDisplayInfo[featureKey].selections[String(featureValue)] = option.displayName || option.label || String(featureValue);
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // Return order data with enriched information but do NOT expose the signature token
     const { signatureToken, ...safeOrderData } = followupOrder;
-    res.json(safeOrderData);
+    res.json({
+      ...safeOrderData,
+      orderSummary: enrichedOrderSummary,
+      modelDisplayName: stockModel?.displayName || stockModel?.name,
+      featureDisplayInfo,
+    });
   } catch (error) {
     console.error('Error fetching followup order by token:', error);
     res.status(500).json({ error: 'Failed to fetch followup order' });

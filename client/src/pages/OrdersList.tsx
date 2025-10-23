@@ -617,9 +617,9 @@ export default function OrdersList() {
       refetchInterval: 60000, // Auto-refresh every 60 seconds
     });
 
-    // Fetch current user for Link Orders functionality
-    const { data: currentUser } = useQuery<any>({
-      queryKey: ['/api/user'],
+    // Fetch current user for Link Orders functionality and admin checks
+    const { data: currentUser } = useQuery<{ id: number; username: string; role: string }>({
+      queryKey: ['/api/auth/session'],
     });
 
     console.log('Orders data:', orders);
@@ -1243,6 +1243,26 @@ export default function OrdersList() {
                                   </Button>
                                 </div>
                               )}
+                              {/* Resend Email Button - Show on hover for FINALIZED (admin only) */}
+                              {order.status?.toUpperCase() === 'FINALIZED' && currentUser?.role === 'ADMIN' && (
+                                <div className="absolute left-full top-0 ml-2 hidden group-hover/status:block z-20">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-7 px-2 bg-white hover:bg-blue-50 border-blue-300 text-blue-700"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      resendSignatureEmailMutation.mutate(order.orderId);
+                                    }}
+                                    disabled={resendSignatureEmailMutation.isPending}
+                                    title="Resend Review and Confirm Email"
+                                    data-testid={`button-resend-email-finalized-${order.orderId}`}
+                                  >
+                                    <Mail className="h-3 w-3 mr-1" />
+                                    Resend Email
+                                  </Button>
+                                </div>
+                              )}
                             </div>
                           )}
                           {hasUnresolvedKickback(order.orderId) && (
@@ -1508,7 +1528,7 @@ export default function OrdersList() {
                               orderId={order.orderId}
                               isOpen={true}
                               onClose={() => setLinkOrdersDialogOpen(null)}
-                              currentUser={currentUser?.name || currentUser?.username || 'System'}
+                              currentUser={currentUser?.username || 'System'}
                             />
                           )}
                         </div>

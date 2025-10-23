@@ -1051,7 +1051,7 @@ export default function VendorManagement() {
                 )}
               </TabsContent>
 
-              {/* Tab 3: Scope - Approved Materials */}
+              {/* Tab 3: Scope - PL2 Approved Materials */}
               <TabsContent value="scope" className="space-y-4 mt-4">
                 <Form {...form}>
                   <form
@@ -1065,7 +1065,7 @@ export default function VendorManagement() {
                           <h4 className="font-semibold text-blue-900">Vendor Scope</h4>
                           <p className="text-sm text-blue-700">
                             Define which materials and products this vendor is approved to supply.
-                            Vendor will only show as "Approved" when scope is filled in.
+                            Vendor will only show as "PL2 Approved" when scope is filled in.
                           </p>
                         </div>
                       </div>
@@ -1076,7 +1076,7 @@ export default function VendorManagement() {
                       name="scope"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Approved Materials & Products *</FormLabel>
+                          <FormLabel>PL2 Approved Materials & Products *</FormLabel>
                           <FormControl>
                             <Textarea
                               {...field}
@@ -1320,7 +1320,7 @@ export default function VendorManagement() {
           </div>
 
           <div>
-            <Label htmlFor="approved-filter">Approved</Label>
+            <Label htmlFor="approved-filter">PL2 Approved</Label>
             <Select
               value={approved}
               onValueChange={(value: any) => {
@@ -1454,7 +1454,7 @@ export default function VendorManagement() {
                   data-testid="header-approved"
                 >
                   <div className="flex items-center gap-1">
-                    Approved <SortIcon field="approved" />
+                    PL2 Approved <SortIcon field="approved" />
                   </div>
                 </th>
                 <th
@@ -1475,6 +1475,12 @@ export default function VendorManagement() {
                     Eval Date <SortIcon field="evaluationDate" />
                   </div>
                 </th>
+                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  Score (/20)
+                </th>
+                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  Avg (%)
+                </th>
                 <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Actions
                 </th>
@@ -1484,7 +1490,7 @@ export default function VendorManagement() {
               {isLoading ? (
                 <tr>
                   <td
-                    colSpan={8}
+                    colSpan={10}
                     className="px-4 py-8 text-center text-gray-500 dark:text-gray-400"
                   >
                     Loading vendors...
@@ -1493,7 +1499,7 @@ export default function VendorManagement() {
               ) : vendorsData?.data.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={8}
+                    colSpan={10}
                     className="px-4 py-8 text-center text-gray-500 dark:text-gray-400"
                   >
                     No vendors found
@@ -1551,6 +1557,23 @@ export default function VendorManagement() {
                       {vendor.evaluationDate
                         ? new Date(vendor.evaluationDate).toLocaleDateString()
                         : '—'}
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400 text-center">
+                      {(() => {
+                        const hasScores = vendor.qualityScore || vendor.costScore || vendor.deliveryScore || vendor.responseScore;
+                        if (!hasScores) return '—';
+                        const totalScore = (vendor.qualityScore ?? 0) + (vendor.costScore ?? 0) + (vendor.deliveryScore ?? 0) + (vendor.responseScore ?? 0);
+                        return totalScore;
+                      })()}
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400 text-center">
+                      {(() => {
+                        const hasScores = vendor.qualityScore || vendor.costScore || vendor.deliveryScore || vendor.responseScore;
+                        if (!hasScores) return '—';
+                        const totalScore = (vendor.qualityScore ?? 0) + (vendor.costScore ?? 0) + (vendor.deliveryScore ?? 0) + (vendor.responseScore ?? 0);
+                        const avgScore = ((totalScore / 20) * 100).toFixed(0);
+                        return `${avgScore}%`;
+                      })()}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-right text-sm font-medium">
                       <div className="flex justify-end gap-2">

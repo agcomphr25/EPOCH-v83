@@ -134,7 +134,8 @@ function ConditionalNavigation() {
     location === '/darleneb-dashboard' ||
     location === '/ag-dashboard' ||
     location === '/staciw-dashboard' ||
-    location === '/login';
+    location === '/login' ||
+    location.startsWith('/sign-order/'); // Hide navigation on customer sign order page
 
   return hideNavigation ? null : <Navigation />;
 }

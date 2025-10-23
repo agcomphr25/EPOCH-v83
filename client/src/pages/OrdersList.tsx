@@ -1223,13 +1223,17 @@ export default function OrdersList() {
                               >
                                 {order.status}
                               </Badge>
-                              {/* Resend Email Button - Show on hover for PENDING_SIGNATURE */}
-                              {order.status?.toUpperCase() === 'PENDING_SIGNATURE' && (
+                              {/* Resend Email Button - Show on hover for PENDING_SIGNATURE and FINALIZED */}
+                              {(order.status?.toUpperCase() === 'PENDING_SIGNATURE' || order.status?.toUpperCase() === 'FINALIZED') && (
                                 <div className="absolute left-full top-0 ml-2 hidden group-hover/status:block z-20">
                                   <Button
                                     size="sm"
                                     variant="outline"
-                                    className="h-7 px-2 bg-white hover:bg-orange-50 border-orange-300 text-orange-700"
+                                    className={`h-7 px-2 bg-white ${
+                                      order.status?.toUpperCase() === 'PENDING_SIGNATURE'
+                                        ? 'hover:bg-orange-50 border-orange-300 text-orange-700'
+                                        : 'hover:bg-blue-50 border-blue-300 text-blue-700'
+                                    }`}
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       resendSignatureEmailMutation.mutate(order.orderId);

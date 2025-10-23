@@ -181,7 +181,7 @@ router.post('/', async (req, res) => {
     const pdfPath = path.join(uploadsDir, pdfFilename);
     fs.writeFileSync(pdfPath, pdfBuffer);
 
-    // Create order summary for email
+    // Create order summary for email and sign page
     const orderSummary = {
       orderId: order.orderId,
       orderDate: order.orderDate,
@@ -192,6 +192,17 @@ router.post('/', async (req, res) => {
       features: order.features,
       notes: order.notes,
       shipping: order.shipping,
+      // Add customer information for sign page
+      customerName: customer.name,
+      customerEmail: customer.email,
+      customerPhone: customer.phone,
+      customerAddress: defaultAddress ? {
+        street: defaultAddress.street,
+        street2: defaultAddress.street2,
+        city: defaultAddress.city,
+        state: defaultAddress.state,
+        zipCode: defaultAddress.zipCode,
+      } : undefined,
     };
 
     // Create followup order record

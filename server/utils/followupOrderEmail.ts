@@ -1,5 +1,6 @@
 import { sendEmailViaSendGrid } from './sendgrid';
 import * as fs from 'fs';
+import * as path from 'path';
 
 interface EmailOrderData {
   orderId: string;
@@ -60,7 +61,7 @@ function generateOrderDetailsHTML(orderData: EmailOrderData): string {
   `;
 }
 
-function generateEmailHTML(orderData: EmailOrderData): string {
+function generateEmailHTML(orderData: EmailOrderData, logoBase64?: string): string {
   return `
 <!DOCTYPE html>
 <html>
@@ -73,7 +74,11 @@ function generateEmailHTML(orderData: EmailOrderData): string {
   
   <!-- Header -->
   <div style="background-color: #2c3e50; padding: 30px 20px; border-radius: 5px; margin-bottom: 30px; text-align: center;">
+    ${logoBase64 ? `
+    <img src="data:image/png;base64,${logoBase64}" alt="AG Composites" style="max-width: 250px; height: auto; margin-bottom: 10px;" />
+    ` : `
     <h1 style="color: #ffffff; margin: 0 0 10px 0; font-size: 28px;">AG Composites</h1>
+    `}
     <p style="margin: 0; color: #ecf0f1; font-size: 16px;">Sales Order Confirmation</p>
   </div>
 
@@ -192,7 +197,19 @@ export async function sendFollowupOrderEmail(
     const pdfBuffer = fs.readFileSync(pdfPath);
     const pdfBase64 = pdfBuffer.toString('base64');
 
-    const emailHTML = generateEmailHTML(orderData);
+    // Read and encode company logo
+    let logoBase64: string | undefined;
+    try {
+      const logoPath = path.join(__dirname, '../src/assets/logo_updated.png');
+      if (fs.existsSync(logoPath)) {
+        const logoBuffer = fs.readFileSync(logoPath);
+        logoBase64 = logoBuffer.toString('base64');
+      }
+    } catch (error) {
+      console.warn('Could not load company logo for email:', error);
+    }
+
+    const emailHTML = generateEmailHTML(orderData, logoBase64);
     const emailText = generateEmailText(orderData);
 
     // SendGrid email with attachment
